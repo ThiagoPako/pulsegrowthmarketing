@@ -1252,105 +1252,75 @@ export default function TvDashboard() {
             {/* Schedule */}
             {visibility.show_schedule && (
               <div className="relative">
-                {/* Linha do Tempo (Clock Marker) */}
-                <div 
-                  className="absolute left-0 right-0 pointer-events-none z-[100] hidden sm:block"
-                  style={{ top: '24px', height: `${(OPERATIONAL_END - OPERATIONAL_START) * MINUTE_HEIGHT}px` }}
-                >
-                  <TimeMarker />
-                </div>
-
                 <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${schedule.length} gravações`} />
                 {schedule.length > 0 ? (
-                  <div className="relative pt-2">
-                    <AnimatePresence>
-                      {(() => {
-                        const elements: React.ReactNode[] = [];
-                        let lastMinute = OPERATIONAL_START;
-                        let lunchAdded = false;
-                        const addedBuffers = new Set<string>();
+                  <div className="relative" style={{ height: `${TIMELINE_HEIGHT}px` }}>
+                    {/* Linha do Tempo (Clock Marker) — pixel-aligned to the timeline */}
+                    <div className="absolute inset-0 pointer-events-none z-[100] hidden sm:block">
+                      <TimeMarker />
+                    </div>
 
-                        // Filter out items before OPERATIONAL_START or after OPERATIONAL_END for the timeline
-                        const timelineSchedule = schedule.filter(item => {
-                          const [h, m] = item.startTime.split(':').map(Number);
-                          const startTime = h * 60 + m;
-                          return startTime >= OPERATIONAL_START && startTime < OPERATIONAL_END;
-                        });
+                    {(() => {
+                      const items: React.ReactNode[] = [];
+                      const addedBuffers = new Set<string>();
 
-                        const sortedSchedule = [...timelineSchedule].sort((a, b) => {
-                          const [hA, mA] = a.startTime.split(':').map(Number);
-                          const [hB, mB] = b.startTime.split(':').map(Number);
-                          return (hA * 60 + mA) - (hB * 60 + mB);
-                        });
+                      // Lunch block: fixed 12:00 - 14:00
+                      const lunchStartPx = (12 * 60 - OPERATIONAL_START) * MINUTE_HEIGHT;
+                      const lunchHeightPx = 120 * MINUTE_HEIGHT;
+                      items.push(
+                        <div key="lunch-break" className="absolute left-0 right-0" style={{ top: `${lunchStartPx}px`, height: `${lunchHeightPx}px` }}>
+                          <LunchCard startTime="12:00 - 14:00" height={lunchHeightPx} />
+                        </div>
+                      );
 
-                        sortedSchedule.forEach((item, idx) => {
-                          const [h, m] = item.startTime.split(':').map(Number);
-                          const startTime = h * 60 + m;
+                      const timelineSchedule = schedule.filter(item => {
+                        const [h, m] = item.startTime.split(':').map(Number);
+                        const t = h * 60 + m;
+                        return t >= OPERATIONAL_START && t < OPERATIONAL_END && !(t >= 12 * 60 && t < 14 * 60);
+                      });
 
-                          // Handle Lunch
-                          if (!lunchAdded && startTime >= 12 * 60) {
-                            const lunchStart = 12 * 60;
-                            if (lunchStart > lastMinute) {
-                              elements.push(<TimelineSpacer key="spacer-before-lunch" minutes={lunchStart - lastMinute} />);
-                            }
-                            elements.push(<LunchCard key="lunch-break" startTime="12:00 - 14:00" height={120 * MINUTE_HEIGHT} />);
-                            lunchAdded = true;
-                            lastMinute = 14 * 60;
-                          }
+                      timelineSchedule.forEach((item) => {
+                        const [h, m] = item.startTime.split(':').map(Number);
+                        const startMin = h * 60 + m;
 
-                          // Skip items during lunch
-                          if (startTime >= 12 * 60 && startTime < 14 * 60) return;
-
-                          // Spacer for gaps (only if item is after lastMinute)
-                          if (startTime > lastMinute) {
-                            elements.push(<TimelineSpacer key={`spacer-${idx}`} minutes={startTime - lastMinute} />);
-                            lastMinute = startTime;
-                          }
-
-                          // Card Duration
-                          let duration = 90; // Default 90m
-                          if (item.endTime) {
-                            const [eh, em] = item.endTime.split(':').map(Number);
-                            const endTimeMinutes = eh * 60 + em;
-                            if (endTimeMinutes > startTime) {
-                              duration = endTimeMinutes - startTime;
-                            }
-                          }
-
-                          elements.push(<ScheduleCard key={item.id} item={item} isLive={activeRecordingIds.includes(item.id)} height={duration * MINUTE_HEIGHT} />);
-                          lastMinute = startTime + duration; // Move pointer to end of this card
-
-                          // Optional Pulse Buffer
-                          if (item.status !== 'cancelada') {
-                            const bufferMinutes = startTime + duration;
-                            const bufferTime = `${String(Math.floor(bufferMinutes / 60)).padStart(2, '0')}:${String(bufferMinutes % 60).padStart(2, '0')}`;
-                            
-                            if (bufferMinutes >= lastMinute && bufferMinutes < OPERATIONAL_END && bufferMinutes !== 12 * 60 && !addedBuffers.has(bufferTime)) {
-                              addedBuffers.add(bufferTime);
-                              const isNextPrep = bufferTime === '08:00' || bufferTime === '14:00' || bufferTime === '16:00';
-                              elements.push(<BufferCard key={`buffer-${bufferTime}`} startTime={bufferTime} type={isNextPrep ? 'prep' : 'pulse'} height={30 * MINUTE_HEIGHT} />);
-                              lastMinute = bufferMinutes + 30;
-                            }
-                          }
-                        });
-
-                        // Ensure lunch is added if no items after it
-                        if (!lunchAdded) {
-                          if (12 * 60 > lastMinute) {
-                            elements.push(<TimelineSpacer key="final-spacer-before-lunch" minutes={12 * 60 - lastMinute} />);
-                          }
-                          elements.push(<LunchCard key="lunch-break" startTime="12:00 - 14:00" height={120 * MINUTE_HEIGHT} />);
-                          lastMinute = 14 * 60;
+                        let duration = 90;
+                        if (item.endTime) {
+                          const [eh, em] = item.endTime.split(':').map(Number);
+                          const endMin = eh * 60 + em;
+                          if (endMin > startMin) duration = endMin - startMin;
                         }
 
-                        // Final filler
-                        if (lastMinute < OPERATIONAL_END) {
-                          elements.push(<TimelineSpacer key="final-spacer" minutes={OPERATIONAL_END - lastMinute} />);
-                        }
+                        const topPx = (startMin - OPERATIONAL_START) * MINUTE_HEIGHT;
+                        const heightPx = duration * MINUTE_HEIGHT;
 
-                        return elements;
-                      })()}
-                    </AnimatePresence>
+                        items.push(
+                          <div key={item.id} className="absolute left-0 right-0 pr-1" style={{ top: `${topPx}px`, height: `${heightPx}px` }}>
+                            <ScheduleCard item={item} isLive={activeRecordingIds.includes(item.id)} height={heightPx} />
+                          </div>
+                        );
+
+                        // Pulse buffer right after this recording
+                        if (item.status !== 'cancelada') {
+                          const bufferStart = startMin + duration;
+                          const bufferEnd = bufferStart + 30;
+                          const bufferTime = `${String(Math.floor(bufferStart / 60)).padStart(2, '0')}:${String(bufferStart % 60).padStart(2, '0')}`;
+                          const overlapsLunch = bufferStart < 14 * 60 && bufferEnd > 12 * 60;
+                          if (!overlapsLunch && bufferEnd <= OPERATIONAL_END && !addedBuffers.has(bufferTime)) {
+                            addedBuffers.add(bufferTime);
+                            const isPrep = bufferTime === '14:00' || bufferTime === '16:00';
+                            const bTop = (bufferStart - OPERATIONAL_START) * MINUTE_HEIGHT;
+                            const bH = 30 * MINUTE_HEIGHT;
+                            items.push(
+                              <div key={`buffer-${bufferTime}`} className="absolute left-0 right-0 pr-1" style={{ top: `${bTop}px`, height: `${bH}px` }}>
+                                <BufferCard startTime={bufferTime} type={isPrep ? 'prep' : 'pulse'} height={bH} />
+                              </div>
+                            );
+                          }
+                        }
+                      });
+
+                      return items;
+                    })()}
                   </div>
                 ) : (
                   <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>

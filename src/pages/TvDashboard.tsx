@@ -784,13 +784,23 @@ function YouTubePlayer({ url, command }: { url: string; command: TvRemoteCommand
   useEffect(() => {
     if (!command) return;
     switch (command.action) {
-      case 'play': sendYTCommand('playVideo'); break;
-      case 'pause': sendYTCommand('pauseVideo'); break;
+      case 'play': sendYTCommand('playVideo'); setIsPlaying(true); break;
+      case 'pause': sendYTCommand('pauseVideo'); setIsPlaying(false); break;
       case 'next': sendYTCommand('nextVideo'); break;
       case 'mute': sendYTCommand('mute'); setUnmuted(false); break;
       case 'unmute': sendYTCommand('unMute'); setUnmuted(true); break;
     }
   }, [command, sendYTCommand]);
+
+  // Handle interaction to start playing if needed
+  const handleInteraction = () => {
+    if (!unmuted) {
+      setUnmuted(true);
+      sendYTCommand('unMute');
+      sendYTCommand('playVideo');
+      setIsPlaying(true);
+    }
+  };
 
   if (!embedUrl) return null;
   return (

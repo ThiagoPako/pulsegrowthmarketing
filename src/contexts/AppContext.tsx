@@ -259,7 +259,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addClient, updateClient, deleteClient,
       addRecording, updateRecording, cancelRecording, deleteRecording,
       cancelAndReschedule, generateScheduleForClient, regenerateScheduleForClient,
+      autoFillVacanciesForDate,
       addTask, updateTask, deleteTask,
+
       addScript, updateScript, deleteScript,
       updateSettings, startActiveRecording, stopActiveRecording,
       hasConflict, isWithinWorkHours,

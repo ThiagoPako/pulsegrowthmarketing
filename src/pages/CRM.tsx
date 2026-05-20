@@ -373,23 +373,34 @@ export default function CRM() {
                                                         <form onSubmit={async (e) => {
                                                             e.preventDefault();
                                                             const formData = new FormData(e.currentTarget);
+                                                            const m_date = formData.get('date') as string;
+                                                            const m_time = formData.get('time') as string;
+                                                            
                                                             const { error } = await supabase.from('crm_leads').update({
                                                                 status: 'meeting',
-                                                                meeting_date: formData.get('date'),
-                                                                meeting_time: formData.get('time')
-                                                            }).eq('id', lead.id);
+                                                                meeting_date: m_date,
+                                                                meeting_time: m_time
+                                                            } as any).eq('id', lead.id);
+                                                            
                                                             if (!error) {
                                                                 queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
                                                                 toast.success('Reunião agendada!');
                                                             }
                                                         }}>
                                                             <div className="grid gap-4 py-4">
-                                                                <Input type="date" name="date" required />
-                                                                <Input type="time" name="time" required />
-                                                                <Button type="submit">Confirmar Agendamento</Button>
+                                                                <div className="grid gap-2">
+                                                                  <Label>Data da Reunião</Label>
+                                                                  <Input type="date" name="date" required />
+                                                                </div>
+                                                                <div className="grid gap-2">
+                                                                  <Label>Hora da Reunião</Label>
+                                                                  <Input type="time" name="time" required />
+                                                                </div>
+                                                                <Button type="submit" className="w-full">Confirmar Agendamento</Button>
                                                             </div>
                                                         </form>
                                                       </DialogContent>
+
                                                    </Dialog>
                                                 )}
                                                 <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />

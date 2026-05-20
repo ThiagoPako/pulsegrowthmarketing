@@ -118,7 +118,7 @@ const ROLE_CONFIG: Record<string, { label: string; color: string; icon: any }> =
 };
 
 const ACTIVITY_LABELS: Record<string, string> = {
-  recording: '🎬 Gravando',
+  recording: '🎬 Ao Vivo',
   editing: '🎞️ Editando',
   reviewing: '🔍 Revisando',
   designing: '🎨 Criando Arte',
@@ -1397,7 +1397,7 @@ export default function TvDashboard() {
                             <div key={`group-${startTime}`} className="absolute left-0 right-0 pr-1" style={{ top: `${topPx}px`, height: `${heightPx}px` }}>
                               <RotatingScheduleCard 
                                 items={itemsGroup} 
-                                isLive={(id) => activeRecordingIds.includes(id)} 
+                                isLive={(id) => activeRecordingIds.includes(id) || itemsGroup.some(it => it.id === id && it.status === 'recording')} 
                                 height={heightPx} 
                               />
                             </div>
@@ -1405,7 +1405,7 @@ export default function TvDashboard() {
                         } else {
                           items.push(
                             <div key={firstItem.id} className="absolute left-0 right-0 pr-1" style={{ top: `${topPx}px`, height: `${heightPx}px` }}>
-                              <ScheduleCard item={firstItem} isLive={activeRecordingIds.includes(firstItem.id)} height={heightPx} />
+                              <ScheduleCard item={firstItem} isLive={activeRecordingIds.includes(firstItem.id) || firstItem.status === 'recording'} height={heightPx} />
                             </div>
                           );
                         }

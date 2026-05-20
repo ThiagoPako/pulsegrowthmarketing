@@ -314,7 +314,8 @@ export function organizeRecordingsForDate(
   videomakerId: string | null | undefined,
   allRecordings: Recording[],
   settings: CompanySettings,
-  validClientIds?: Set<string>
+  validClientIds?: Set<string>,
+  cancelledClientIds?: Set<string>
 ): { toUpdate: Recording[]; toCancel: Recording[] } {
   const normalizedVmId = videomakerId || '';
   
@@ -333,10 +334,11 @@ export function organizeRecordingsForDate(
   // unless they are of type 'avulso' (which may have no clientId but should have a prospectName)
   const validRecs = dayRecordings.filter(r => {
     const isAvulso = r.type === 'avulso';
+    const isCancelledClient = cancelledClientIds && r.clientId && cancelledClientIds.has(r.clientId);
     const isInvalidClient = validClientIds && r.clientId && !validClientIds.has(r.clientId);
     const isMissingClient = !r.clientId && !isAvulso;
     
-    if (isInvalidClient || isMissingClient) {
+    if (isCancelledClient || isInvalidClient || isMissingClient) {
       toCancel.push({ ...r, status: 'cancelada' });
       return false;
     }

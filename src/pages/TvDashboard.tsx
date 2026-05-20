@@ -458,7 +458,7 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
               <motion.div className="flex items-center gap-1 rounded-full px-1.5 py-0.5" style={{ backgroundColor: `${PULSE_ORANGE}1a` }}
                 animate={{ opacity: [1, 0.5, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
                 <motion.div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: PULSE_ORANGE }}
-                  animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 1, repeat: Infinity }} />
+                  animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 2, repeat: Infinity }} />
                 <span className="text-[9px] font-bold" style={{ color: PULSE_ORANGE }}>AO VIVO</span>
               </motion.div>
             )}

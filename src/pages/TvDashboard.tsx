@@ -1325,7 +1325,7 @@ export default function TvDashboard() {
           </div>
 
           {/* CENTER COLUMN: Schedule + Posts */}
-          <div className="col-span-5 space-y-3 overflow-y-auto scrollbar-hide px-1">
+          <div className="col-span-5 space-y-2.5 overflow-y-auto scrollbar-hide px-1">
             {/* Schedule */}
             {visibility.show_schedule && (
               <div className="relative">

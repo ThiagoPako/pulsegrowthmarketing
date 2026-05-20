@@ -424,7 +424,7 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
       className="relative rounded-xl overflow-hidden"
       style={{
         border: `1px solid ${borderColor}`,
-        background: isNow ? `linear-gradient(135deg, ${PULSE_ORANGE}0c, transparent)` : isDone ? 'linear-gradient(135deg, rgba(34,197,94,0.04), transparent)' : PULSE_CARD,
+        background: isNow ? `linear-gradient(135deg, ${PULSE_ORANGE}0c, transparent)` : isRescheduled ? 'linear-gradient(135deg, rgba(245,158,11,0.06), transparent)' : isDone ? 'linear-gradient(135deg, rgba(34,197,94,0.04), transparent)' : PULSE_CARD,
         opacity: isCancelled ? 0.35 : 1,
         height: height ? `${height}px` : 'auto'
       }}

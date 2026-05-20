@@ -35,8 +35,8 @@ type PreferredShift = 'turnoA' | 'turnoB' | 'ambos';
 
 const emptyClient = (): Partial<Client> & { clientType?: string } => ({
   companyName: '', responsiblePerson: '', phone: '', whatsapp: '', email: '', city: '', color: CLIENT_COLORS[0].value,
-  fixedDay: 'segunda', fixedTime: '09:00',
-  videomaker: '', backupTime: '14:00', backupDay: 'terca', extraDay: 'quarta',
+  fixedDay: 'segunda', fixedTime: '08:30',
+  videomaker: '', backupTime: '14:30', backupDay: 'terca', extraDay: 'quarta',
   extraContentTypes: [], acceptsExtra: false, extraClientAppears: false,
   weeklyReels: 0, weeklyCreatives: 0, weeklyGoal: 0,
   hasEndomarketing: false, hasVehicleFlyer: false, weeklyStories: 0, presenceDays: 1,

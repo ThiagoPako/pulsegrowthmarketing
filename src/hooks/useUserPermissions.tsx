@@ -27,6 +27,7 @@ export const AVAILABLE_MODULES: ModuleDef[] = [
   { key: 'planos', label: 'Planos', icon: '📦', description: 'Planos de serviço', paths: ['/planos'] },
   { key: 'metas', label: 'Metas', icon: '🎯', description: 'Metas da empresa', paths: ['/metas'] },
   { key: 'crm', label: 'CRM', icon: '📋', description: 'Pipeline de vendas e CRM', paths: ['/crm'] },
+  { key: 'crm', label: 'CRM', icon: '📋', description: 'Pipeline de vendas e CRM', paths: ['/crm'] },
   { key: 'endomarketing', label: 'Endomarketing', icon: '📣', description: 'Módulo completo de endomarketing', paths: ['/endomarketing', '/endomarketing/contratos', '/endomarketing/tarefas', '/endomarketing/relatorios', '/endomarketing/calendario'] },
   { key: 'financeiro', label: 'Financeiro', icon: '💰', description: 'Módulo financeiro completo', paths: ['/financeiro', '/financeiro/contratos', '/financeiro/receitas', '/financeiro/despesas', '/financeiro/inadimplencia', '/financeiro/relatorios', '/financeiro/configuracoes', '/financeiro/caixa', '/financeiro/movimentacoes', '/financeiro/parceiros', '/financeiro/chat', '/financeiro/apis'] },
   { key: 'relatorios', label: 'Relatórios', icon: '📊', description: 'Relatórios gerais', paths: ['/relatorios'] },

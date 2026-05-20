@@ -34,6 +34,8 @@ interface ScheduleItem {
   clientColor?: string | null;
   videomakerName?: string | null;
   videomakerAvatar?: string | null;
+  scriptwriterName?: string | null;
+  scriptwriterAvatar?: string | null;
   startTime: string;
   endTime?: string;
   recordingType?: string;

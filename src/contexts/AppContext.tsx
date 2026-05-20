@@ -125,11 +125,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return h * 60 + m;
   };
 
-  const BUFFER_BETWEEN_RECORDINGS = 0;
+  const BUFFER_BETWEEN_RECORDINGS = 30;
+  const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
 
   const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType) => {
     const newStart = timeToMinutes(startTime);
-    const newEnd = newStart + data.settings.recordingDuration;
+    const duration = data.settings.recordingDuration;
+    const newEnd = newStart + duration;
 
     return data.recordings.some(r => {
       if (r.id === excludeId || r.status === 'cancelada') return false;
@@ -141,9 +143,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (isHighPriority && r.type === 'extra') return false;
 
       const existStart = timeToMinutes(r.startTime);
-      const existEnd = existStart + data.settings.recordingDuration;
+      // Existing recording occupies: its duration + buffer
+      const existEnd = existStart + duration + BUFFER_BETWEEN_RECORDINGS;
+      // New recording also needs buffer after it
+      const newEndWithBuffer = newEnd + BUFFER_BETWEEN_RECORDINGS;
 
-      return newStart < existEnd && (newStart + data.settings.recordingDuration) > existStart;
+      return newStart < existEnd && newEndWithBuffer > existStart;
     });
   }, [data.recordings, data.settings.recordingDuration]);
 

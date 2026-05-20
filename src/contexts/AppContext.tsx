@@ -48,8 +48,9 @@ interface AppContextType {
   updateSettings: (settings: CompanySettings) => void;
   startActiveRecording: (rec: ActiveRecording) => void;
   stopActiveRecording: (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]) => void;
-  hasConflict: (videomakerId: string, date: string, startTime: string, excludeId?: string) => boolean;
+  hasConflict: (videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType) => boolean;
   isWithinWorkHours: (day: DayOfWeek, startTime: string) => boolean;
+
   getSuggestionsForCancellation: (recording: Recording) => Client[];
   refetchData: () => void;
 }

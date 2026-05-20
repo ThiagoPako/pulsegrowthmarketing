@@ -8,7 +8,7 @@ import { supabase as supabaseReal } from '@/integrations/supabase/client';
 import { usePresenceHeartbeat } from '@/hooks/usePresence';
 import { generateFixedRecordings, findAvailableSlots } from '@/lib/schedulingUtils';
 import { sendRecordingScheduledNotification } from '@/services/whatsappService';
-import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek, Script, ActiveRecording, UserRole } from '@/types';
+import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek, Script, ActiveRecording, UserRole, RecordingType } from '@/types';
 
 const DATE_TO_DAY: Record<number, DayOfWeek> = {
   0: 'domingo', 1: 'segunda', 2: 'terca', 3: 'quarta', 4: 'quinta', 5: 'sexta', 6: 'sabado',

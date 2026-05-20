@@ -1257,8 +1257,8 @@ export default function TvDashboard() {
               <div className="relative">
                 {/* Linha do Tempo (Clock Marker) */}
                 <div 
-                  className="absolute left-0 right-0 pointer-events-none z-10 hidden sm:block"
-                  style={{ top: '35px', height: `${(OPERATIONAL_END - OPERATIONAL_START) * MINUTE_HEIGHT}px` }}
+                  className="absolute left-0 right-0 pointer-events-none z-[100] hidden sm:block"
+                  style={{ top: '24px', height: `${(OPERATIONAL_END - OPERATIONAL_START) * MINUTE_HEIGHT}px` }}
                 >
                   <TimeMarker />
                 </div>

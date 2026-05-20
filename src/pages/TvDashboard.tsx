@@ -440,9 +440,9 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
         />
       )}
 
-      <div className="p-2.5 flex items-center gap-2.5">
+      <div className="p-2 flex items-center gap-2">
         {/* Client Logo */}
-        <div className="flex-shrink-0 w-10 h-10 rounded-lg overflow-hidden border flex items-center justify-center"
+        <div className="flex-shrink-0 w-8 h-8 rounded-lg overflow-hidden border flex items-center justify-center"
           style={{
             borderColor: item.clientColor ? `hsl(${item.clientColor} / 0.3)` : 'rgba(255,255,255,0.1)',
             backgroundColor: item.clientColor ? `hsl(${item.clientColor} / 0.1)` : 'rgba(255,255,255,0.03)',
@@ -450,7 +450,7 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
           {item.clientLogo ? (
             <img src={item.clientLogo} alt="" className="w-full h-full object-contain p-1" />
           ) : (
-            <span className="text-[10px] font-bold text-white/40">{getInitials(item.clientName)}</span>
+            <span className="text-[9px] font-bold text-white/40">{getInitials(item.clientName)}</span>
           )}
         </div>
 

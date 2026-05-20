@@ -579,52 +579,6 @@ export default function CRM() {
             </div>
           </Card>
         </TabsContent>
-          <Card className="p-6 bg-card border-none shadow-sm">
-            <div className="flex flex-col md:flex-row gap-8">
-              <div className="flex-none">
-                <Calendar
-                  mode="single"
-                  selected={new Date()}
-                  className="rounded-md border bg-card"
-                  locale={ptBR}
-                />
-              </div>
-              <div className="flex-1 space-y-4">
-                <h3 className="text-lg font-bold flex items-center gap-2">
-                  <CalendarIcon className="h-5 w-5 text-primary" /> 
-                  Próximas Reuniões
-                </h3>
-                <div className="grid gap-3">
-                  {leads
-                    .filter(l => l.meeting_date && l.status === 'meeting')
-                    .sort((a, b) => new Date(a.meeting_date!).getTime() - new Date(b.meeting_date!).getTime())
-                    .map(lead => (
-                      <div key={lead.id} className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-muted/50 hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center gap-4">
-                          <div className="bg-primary/10 p-2 rounded-lg text-primary flex flex-col items-center min-w-[60px]">
-                            <span className="text-[10px] uppercase font-bold">{format(new Date(lead.meeting_date! + 'T12:00:00'), 'MMM', { locale: ptBR })}</span>
-                            <span className="text-xl font-black">{format(new Date(lead.meeting_date! + 'T12:00:00'), 'dd')}</span>
-                          </div>
-                          <div>
-                            <p className="font-bold">{lead.name}</p>
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Clock className="h-3 w-3" /> {lead.meeting_time?.slice(0, 5)} · {lead.company || 'Pessoa Física'}
-                            </p>
-                          </div>
-                        </div>
-                        <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
-                      </div>
-                    ))}
-                  {leads.filter(l => l.meeting_date && l.status === 'meeting').length === 0 && (
-                    <div className="py-12 text-center text-muted-foreground border-2 border-dashed rounded-xl">
-                      Nenhuma reunião agendada no momento.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </Card>
-        </TabsContent>
       </Tabs>
     </div>
   );

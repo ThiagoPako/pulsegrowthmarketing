@@ -232,7 +232,7 @@ function TimeMarker() {
 
   return (
     <motion.div 
-      className="absolute left-0 right-0 z-[60] flex items-center pointer-events-none"
+      className="absolute left-0 right-0 z-[100] flex items-center pointer-events-none"
       style={{ top: `${percent}%` }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -1257,15 +1257,15 @@ export default function TvDashboard() {
               <div className="relative">
                 {/* Linha do Tempo (Clock Marker) */}
                 <div 
-                  className="absolute left-0 right-0 pointer-events-none z-10 hidden sm:block"
-                  style={{ top: '35px', height: `${(OPERATIONAL_END - OPERATIONAL_START) * MINUTE_HEIGHT}px` }}
+                  className="absolute left-0 right-0 pointer-events-none z-[100] hidden sm:block"
+                  style={{ top: '24px', height: `${(OPERATIONAL_END - OPERATIONAL_START) * MINUTE_HEIGHT}px` }}
                 >
                   <TimeMarker />
                 </div>
 
                 <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${schedule.length} gravações`} />
                 {schedule.length > 0 ? (
-                  <div className="relative overflow-hidden">
+                  <div className="relative pt-2">
                     <AnimatePresence>
                       {(() => {
                         const elements: React.ReactNode[] = [];
@@ -1273,7 +1273,14 @@ export default function TvDashboard() {
                         let lunchAdded = false;
                         const addedBuffers = new Set<string>();
 
-                        const sortedSchedule = [...schedule].sort((a, b) => {
+                        // Filter out items before OPERATIONAL_START or after OPERATIONAL_END for the timeline
+                        const timelineSchedule = schedule.filter(item => {
+                          const [h, m] = item.startTime.split(':').map(Number);
+                          const startTime = h * 60 + m;
+                          return startTime >= OPERATIONAL_START && startTime < OPERATIONAL_END;
+                        });
+
+                        const sortedSchedule = [...timelineSchedule].sort((a, b) => {
                           const [hA, mA] = a.startTime.split(':').map(Number);
                           const [hB, mB] = b.startTime.split(':').map(Number);
                           return (hA * 60 + mA) - (hB * 60 + mB);
@@ -1297,9 +1304,10 @@ export default function TvDashboard() {
                           // Skip items during lunch
                           if (startTime >= 12 * 60 && startTime < 14 * 60) return;
 
-                          // Spacer for gaps
+                          // Spacer for gaps (only if item is after lastMinute)
                           if (startTime > lastMinute) {
                             elements.push(<TimelineSpacer key={`spacer-${idx}`} minutes={startTime - lastMinute} />);
+                            lastMinute = startTime;
                           }
 
                           // Card Duration
@@ -1313,11 +1321,11 @@ export default function TvDashboard() {
                           }
 
                           elements.push(<ScheduleCard key={item.id} item={item} isLive={activeRecordingIds.includes(item.id)} height={duration * MINUTE_HEIGHT} />);
-                          lastMinute = Math.max(lastMinute, startTime + duration);
+                          lastMinute = startTime + duration; // Move pointer to end of this card
 
                           // Optional Pulse Buffer
                           if (item.status !== 'cancelada') {
-                            const bufferMinutes = startTime + 90;
+                            const bufferMinutes = startTime + duration;
                             const bufferTime = `${String(Math.floor(bufferMinutes / 60)).padStart(2, '0')}:${String(bufferMinutes % 60).padStart(2, '0')}`;
                             
                             if (bufferMinutes >= lastMinute && bufferMinutes < OPERATIONAL_END && bufferMinutes !== 12 * 60 && !addedBuffers.has(bufferTime)) {

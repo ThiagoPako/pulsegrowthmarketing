@@ -468,6 +468,11 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
             )}
             {isDone && <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />}
             {isCancelled && <XCircle className="w-3.5 h-3.5 text-red-400" />}
+            {isRescheduled && (
+              <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                Remarcado
+              </span>
+            )}
             {item.type === 'event' && (
               <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ backgroundColor: `${PULSE_ORANGE}15`, color: PULSE_ORANGE }}>Evento</span>
             )}

@@ -179,7 +179,9 @@ export default function Schedule() {
   const [startSelectedScripts, setStartSelectedScripts] = useState<Set<string>>(new Set());
   const [plannedScriptsMap, setPlannedScriptsMap] = useState<Record<string, string[]>>({});
 
+  const [organizing, setOrganizing] = useState(false);
   // Finish recording dialog state
+
   const [finishRecOpen, setFinishRecOpen] = useState(false);
   const [finishRecording, setFinishRecordingState] = useState<Recording | null>(null);
   const [finishCompletedScripts, setFinishCompletedScripts] = useState<Set<string>>(new Set());

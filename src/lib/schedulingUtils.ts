@@ -2,7 +2,7 @@ import { format, endOfMonth, addDays, getDay, startOfMonth, differenceInCalendar
 import type { Client, Recording, DayOfWeek, CompanySettings, RecordingType } from '@/types';
 
 /** Buffer time (in minutes) between recordings for the videomaker to upload materials */
-const BUFFER_BETWEEN_RECORDINGS = 30;
+const BUFFER_BETWEEN_RECORDINGS = 0;
 
 const DAY_TO_NUM: Record<DayOfWeek, number> = {
   domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6,
@@ -124,13 +124,11 @@ export function generateFixedRecordings(
   for (const date of dates) {
     if (client.fullShiftRecording) {
       // Full-shift client: reserve both slots in the preferred shift
-      const shift = client.preferredShift === 'tarde'
-        ? [timeToMinutes(settings.shiftBStart), timeToMinutes(settings.shiftBEnd)]
-        : [timeToMinutes(settings.shiftAStart), timeToMinutes(settings.shiftAEnd)];
+      const slots = client.preferredShift === 'tarde'
+        ? ['14:30', '16:30']
+        : ['08:30', '10:30'];
       
-      const [sStart, sEnd] = shift;
-      for (let t = sStart; t + duration <= sEnd; t += duration + BUFFER_BETWEEN_RECORDINGS) {
-        const timeStr = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+      for (const timeStr of slots) {
         if (!hasConflictCheck(client.videomaker, date, timeStr, allRecs, duration)) {
           const rec: Recording = {
             id: crypto.randomUUID(),
@@ -191,32 +189,25 @@ export function generateExtraRecordings(
     const orderedVms = [client.videomaker, ...allVideomakerIds.filter(id => id !== client.videomaker)];
     
     for (const vmId of orderedVms) {
-      // Try to find a free time slot in the work shifts
-      const shifts = [
-        [timeToMinutes(settings.shiftAStart), timeToMinutes(settings.shiftAEnd)],
-        [timeToMinutes(settings.shiftBStart), timeToMinutes(settings.shiftBEnd)],
-      ];
+      // Use standard fixed slots as requested by user
+      const slots = findAvailableSlots(date, vmId, allRecs, settings);
       
-      for (const [sStart, sEnd] of shifts) {
-        for (let t = sStart; t + duration <= sEnd; t += duration + BUFFER_BETWEEN_RECORDINGS) {
-          const timeStr = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-          if (!hasConflictCheck(vmId, date, timeStr, allRecs, duration)) {
-            const rec: Recording = {
-              id: crypto.randomUUID(),
-              clientId: client.id,
-              videomakerId: vmId,
-              date,
-              startTime: timeStr,
-              type: 'extra',
-              status: 'agendada',
-            };
-            newRecordings.push(rec);
-            allRecs.push(rec);
-            placed = true;
-            break;
-          }
-        }
-        if (placed) break;
+      if (slots.length > 0) {
+        // Take the first available slot
+        const timeStr = slots[0];
+        const rec: Recording = {
+          id: crypto.randomUUID(),
+          clientId: client.id,
+          videomakerId: vmId,
+          date,
+          startTime: timeStr,
+          type: 'extra',
+          status: 'agendada',
+        };
+        newRecordings.push(rec);
+        allRecs.push(rec);
+        placed = true;
+        break;
       }
       if (placed) break;
     }
@@ -253,17 +244,12 @@ export function findAvailableSlots(
   const duration = settings.recordingDuration;
   const availableSlots: string[] = [];
   
-  const shifts = [
-    [timeToMinutes(settings.shiftAStart), timeToMinutes(settings.shiftAEnd)],
-    [timeToMinutes(settings.shiftBStart), timeToMinutes(settings.shiftBEnd)],
-  ];
+  // Custom fixed slots as requested by user: 08:30, 10:30, 14:30, 16:30
+  const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
 
-  for (const [sStart, sEnd] of shifts) {
-    for (let t = sStart; t + duration <= sEnd; t += duration + BUFFER_BETWEEN_RECORDINGS) {
-      const timeStr = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-      if (!hasConflictCheck(videomakerId, date, timeStr, recordings, duration)) {
-        availableSlots.push(timeStr);
-      }
+  for (const timeStr of FIXED_SLOTS) {
+    if (!hasConflictCheck(videomakerId, date, timeStr, recordings, duration)) {
+      availableSlots.push(timeStr);
     }
   }
   

@@ -204,37 +204,33 @@ function FloatingParticles() {
 
 /* ─── Time Marker Line ───────────────────────────────────── */
 function TimeMarker() {
-  const [percent, setPercent] = useState(0);
+  const [topPx, setTopPx] = useState(-1);
   const [currentTime, setCurrentTime] = useState('');
 
   useEffect(() => {
     const update = () => {
       const now = new Date();
-      const hours = now.getHours();
-      const minutes = now.getMinutes();
-      const totalMinutes = hours * 60 + minutes;
-      
-      if (totalMinutes < OPERATIONAL_START) setPercent(0);
-      else if (totalMinutes > OPERATIONAL_END) setPercent(100);
-      else {
-        const p = ((totalMinutes - OPERATIONAL_START) / (OPERATIONAL_END - OPERATIONAL_START)) * 100;
-        setPercent(p);
+      const totalMinutes = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+
+      if (totalMinutes < OPERATIONAL_START || totalMinutes > OPERATIONAL_END) {
+        setTopPx(-1);
+      } else {
+        setTopPx((totalMinutes - OPERATIONAL_START) * MINUTE_HEIGHT);
       }
-      
       setCurrentTime(now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
     };
 
     update();
-    const interval = setInterval(update, 30000);
+    const interval = setInterval(update, 30_000);
     return () => clearInterval(interval);
   }, []);
 
-  if (percent <= 0 || percent >= 100) return null;
+  if (topPx < 0) return null;
 
   return (
     <motion.div 
       className="absolute left-0 right-0 z-[100] flex items-center pointer-events-none"
-      style={{ top: `${percent}%` }}
+      style={{ top: `${topPx}px` }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >

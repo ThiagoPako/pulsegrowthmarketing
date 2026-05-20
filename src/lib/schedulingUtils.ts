@@ -348,7 +348,7 @@ export function organizeRecordingsForDate(
       }
     } else {
       // Exceeded capacity of 4 slots
-      toCancel.push(rec);
+      toCancel.push({ ...rec, status: 'cancelada' });
     }
   });
 

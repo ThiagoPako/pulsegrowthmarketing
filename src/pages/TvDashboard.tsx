@@ -537,6 +537,25 @@ function RotatingScheduleCard({ items, isLive, height }: { items: ScheduleItem[]
 
   return (
     <div className="relative w-full h-full overflow-hidden">
+      {/* Top Pagination Bar */}
+      {items.length > 1 && (
+        <div className="absolute top-0 left-0 right-0 z-[60] flex h-1.5 gap-1.5 px-3 pt-1">
+          {items.map((_, i) => (
+            <div key={i} className="flex-1 h-1 overflow-hidden rounded-full bg-white/10">
+              <motion.div 
+                className="h-full bg-orange-500"
+                initial={{ width: "0%" }}
+                animate={{ width: i === index ? "100%" : i < index ? "100%" : "0%" }}
+                transition={{ 
+                  duration: i === index ? 6 : 0.4, 
+                  ease: i === index ? "linear" : "easeInOut" 
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
       <AnimatePresence mode="wait">
         <motion.div
           key={items[index]?.id || 'empty'}
@@ -550,17 +569,6 @@ function RotatingScheduleCard({ items, isLive, height }: { items: ScheduleItem[]
           className="absolute inset-0"
         >
           <ScheduleCard item={items[index]} isLive={isLive(items[index].id)} height={height} />
-          
-          {items.length > 1 && (
-            <div className="absolute top-2 right-2 z-50 flex gap-1">
-              {items.map((_, i) => (
-                <div 
-                  key={i} 
-                  className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${i === index ? 'bg-orange-500 w-4' : 'bg-white/20'}`}
-                />
-              ))}
-            </div>
-          )}
         </motion.div>
       </AnimatePresence>
     </div>

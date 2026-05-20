@@ -37,7 +37,10 @@ interface Lead {
   contract_value: number;
   status: LeadStatus;
   tag: LeadTag | null;
+  meeting_date: string | null;
+  meeting_time: string | null;
 }
+
 
 interface Goal {
   id: string;

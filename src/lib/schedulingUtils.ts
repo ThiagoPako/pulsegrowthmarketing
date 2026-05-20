@@ -110,7 +110,11 @@ export function generateFixedRecordings(
   existingRecordings: Recording[],
   settings: CompanySettings
 ): Recording[] {
-  // Guard: cannot generate without a videomaker
+  // Guard: cannot generate if client is cancelled or has no videomaker
+  if (client.status === 'cancelado') {
+    return [];
+  }
+
   if (!client.videomaker) {
     console.warn(`[generateFixedRecordings] Client "${client.companyName}" has no videomaker assigned — skipping.`);
     return [];
@@ -171,6 +175,7 @@ export function generateExtraRecordings(
   settings: CompanySettings,
   allVideomakerIds: string[]
 ): Recording[] {
+  if (client.status === 'cancelado') return [];
   if (!client.acceptsExtra) return [];
   if (!client.videomaker) return [];
   
@@ -269,6 +274,8 @@ export function findRescheduleSlot(
 ): { date: string; startTime: string; videomakerId: string; type: 'secundaria' | 'extra' } | null {
   const today = format(new Date(), 'yyyy-MM-dd');
   const duration = settings.recordingDuration;
+
+  if (client.status === 'cancelado') return null;
 
   // Priority 1: Backup day/time with responsible videomaker
   const backupDate = findNextDateForDay(client.backupDay, today);

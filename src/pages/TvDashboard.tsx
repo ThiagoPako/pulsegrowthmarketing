@@ -1,3 +1,4 @@
+// Last Updated: 2026-05-20T14:45:00Z
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion';
 import {

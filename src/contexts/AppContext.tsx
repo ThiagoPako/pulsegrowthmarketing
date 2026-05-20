@@ -284,7 +284,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
 
         for (const rec of toCancel) {
-          await data.cancelRecording(rec.id);
+          await data.deleteRecording(rec.id);
           cancelledCount++;
           const idx = currentRecs.findIndex(r => r.id === rec.id);
           if (idx !== -1) currentRecs[idx].status = 'cancelada';

@@ -183,6 +183,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return { deleted, created: fixedRecs.length };
   }, [data, users]);
 
+  const autoFillVacanciesForDate = useCallback(async (date: string): Promise<number> => {
+    const today = new Date();
+    const isToday = date === today.toISOString().split('T')[0];
+    const extraClients = data.clients.filter(c => c.acceptsExtra && (c.extraDay === date || !isToday)); // Prioritize extraDay but allow others if today
+    
+    let createdCount = 0;
+    const currentRecs = [...data.recordings];
+    const allVmIds = users.filter(u => u.role === 'videomaker').map(u => u.id);
+
+    for (const vmId of allVmIds) {
+      const slots = findAvailableSlots(date, vmId, currentRecs, data.settings);
+      for (const slot of slots) {
+        // Find a client who accepts extra and is not already recording today
+        const eligibleClient = extraClients.find(c => 
+          !currentRecs.some(r => r.clientId === c.id && r.date === date && r.status !== 'cancelada')
+        );
+
+        if (eligibleClient) {
+          const newRec: Recording = {
+            id: crypto.randomUUID(),
+            clientId: eligibleClient.id,
+            videomakerId: vmId,
+            date,
+            startTime: slot,
+            type: 'extra',
+            status: 'agendada',
+          };
+          const ok = await data.addRecording(newRec);
+          if (ok) {
+            createdCount++;
+            currentRecs.push(newRec);
+          }
+        }
+      }
+    }
+    return createdCount;
+  }, [data, users]);
+
+
   /** Cancel a recording — backup slots are only created manually via the backup dialog */
   const cancelAndReschedule = useCallback((recording: Recording) => {
     data.cancelRecording(recording.id);

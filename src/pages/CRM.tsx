@@ -341,6 +341,16 @@ export default function CRM() {
                                                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.contract_value)}
                                                 </span>
                                               </div>
+                                              
+                                              {lead.status === 'meeting' && lead.meeting_date && (
+                                                <div className="flex flex-col items-end">
+                                                  <span className="text-[9px] uppercase font-semibold text-muted-foreground tracking-tighter">Agendado</span>
+                                                  <div className="flex items-center gap-1 text-[10px] font-bold text-blue-600">
+                                                    <CalendarIcon className="h-3 w-3" /> {format(new Date(lead.meeting_date + 'T12:00:00'), 'dd/MM')} às {lead.meeting_time?.slice(0, 5)}
+                                                  </div>
+                                                </div>
+                                              )}
+
 
                                               <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all">
                                                 {stage.id === 'contacted' && (

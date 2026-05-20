@@ -987,7 +987,7 @@ export default function Schedule() {
   };
 
   // Generate backup & extra recordings for eligible clients into available slots
-  const handleGenerateBackupExtra = async () => {
+  const handleGenerateBackup = async () => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const endStr = format(endOfMonth(addMonths(new Date(), 1)), 'yyyy-MM-dd');
     let created = 0;
@@ -1000,7 +1000,64 @@ export default function Schedule() {
       d = addDays(d, 1);
     }
 
-    // Local copy of recordings to track changes during generation
+    let currentRecsLocal = [...recordings];
+
+    for (const day of days) {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const dayNum = getDay(day);
+      const dayName = DATE_TO_DAY[dayNum];
+      if (!settings.workDays.includes(dayName)) continue;
+
+      const backupClients = clients.filter(c => c.backupDay === dayName && c.acceptsExtra && c.status === 'ativo');
+      for (const client of backupClients) {
+        const vmId = client.videomaker;
+        if (!vmId) continue;
+
+        const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
+        if (vmDayRecsCount >= 4) continue;
+
+        if (!hasConflict(vmId, dateStr, client.backupTime)) {
+          const exists = currentRecsLocal.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'backup' && r.status !== 'cancelada');
+          if (!exists) {
+            const rec: Recording = {
+              id: crypto.randomUUID(),
+              clientId: client.id,
+              videomakerId: vmId,
+              date: dateStr,
+              startTime: client.backupTime,
+              type: 'backup',
+              status: 'agendada',
+            };
+            const ok = await addRecording(rec);
+            if (ok) {
+              created++;
+              currentRecsLocal.push(rec);
+            }
+          }
+        }
+      }
+    }
+
+    if (created > 0) {
+      toast.success(`${created} gravação(ões) de backup gerada(s) com sucesso`);
+    } else {
+      toast.info('Nenhuma vaga disponível para gerar gravações de backup');
+    }
+  };
+
+  const handleGenerateExtra = async () => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const endStr = format(endOfMonth(addMonths(new Date(), 1)), 'yyyy-MM-dd');
+    let created = 0;
+
+    const days: Date[] = [];
+    let d = new Date();
+    const end = new Date(endStr);
+    while (d <= end) {
+      days.push(new Date(d));
+      d = addDays(d, 1);
+    }
+
     let currentRecsLocal = [...recordings];
     const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
 
@@ -1010,73 +1067,36 @@ export default function Schedule() {
       const dayName = DATE_TO_DAY[dayNum];
       if (!settings.workDays.includes(dayName)) continue;
 
-      // Try backup clients first (they have higher priority for their assigned days)
-      if (showBackup) {
-        const backupClients = clients.filter(c => c.backupDay === dayName && c.acceptsExtra && c.status === 'ativo');
-        for (const client of backupClients) {
-          const vmId = client.videomaker;
-          if (!vmId) continue;
+      const extraClients = clients.filter(c => c.acceptsExtra && c.extraDay === dayName && c.status === 'ativo');
+      if (extraClients.length > 0) {
+        for (const slot of FIXED_SLOTS) {
+          for (const vmId of videomakers.map(v => v.id)) {
+            const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
+            if (vmDayRecsCount >= 4) continue;
 
-          const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
-          if (vmDayRecsCount >= 4) continue;
+            if (!hasConflict(vmId, dateStr, slot)) {
+              const eligibleClient = extraClients.find(c => 
+                !currentRecsLocal.some(r => r.clientId === c.id && r.date === dateStr && r.status !== 'cancelada')
+              );
 
-          if (!hasConflict(vmId, dateStr, client.backupTime)) {
-            const exists = currentRecsLocal.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'backup' && r.status !== 'cancelada');
-            if (!exists) {
-              const rec: Recording = {
-                id: crypto.randomUUID(),
-                clientId: client.id,
-                videomakerId: vmId,
-                date: dateStr,
-                startTime: client.backupTime,
-                type: 'backup',
-                status: 'agendada',
-              };
-              const ok = await addRecording(rec);
-              if (ok) {
-                created++;
-                currentRecsLocal.push(rec);
-              }
-            }
-          }
-        }
-      }
-
-      // Try extra clients with round-robin distribution across videomakers and slots
-      if (showExtra) {
-        const extraClients = clients.filter(c => c.acceptsExtra && c.extraDay === dayName && c.status === 'ativo');
-        if (extraClients.length > 0) {
-          for (const slot of FIXED_SLOTS) {
-            for (const vmId of videomakers.map(v => v.id)) {
-              const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
-              if (vmDayRecsCount >= 4) continue;
-
-              if (!hasConflict(vmId, dateStr, slot)) {
-                // Find a client who isn't already recording on this day
-                const eligibleClient = extraClients.find(c => 
-                  !currentRecsLocal.some(r => r.clientId === c.id && r.date === dateStr && r.status !== 'cancelada')
-                );
-
-                if (eligibleClient) {
-                  const rec: Recording = {
-                    id: crypto.randomUUID(),
-                    clientId: eligibleClient.id,
-                    videomakerId: vmId,
-                    date: dateStr,
-                    startTime: slot,
-                    type: 'extra',
-                    status: 'agendada',
-                  };
-                  const ok = await addRecording(rec);
-                  if (ok) {
-                    created++;
-                    currentRecsLocal.push(rec);
-                    // Rotate clients
-                    const idx = extraClients.indexOf(eligibleClient);
-                    if (idx > -1) {
-                      extraClients.splice(idx, 1);
-                      extraClients.push(eligibleClient);
-                    }
+              if (eligibleClient) {
+                const rec: Recording = {
+                  id: crypto.randomUUID(),
+                  clientId: eligibleClient.id,
+                  videomakerId: vmId,
+                  date: dateStr,
+                  startTime: slot,
+                  type: 'extra',
+                  status: 'agendada',
+                };
+                const ok = await addRecording(rec);
+                if (ok) {
+                  created++;
+                  currentRecsLocal.push(rec);
+                  const idx = extraClients.indexOf(eligibleClient);
+                  if (idx > -1) {
+                    extraClients.splice(idx, 1);
+                    extraClients.push(eligibleClient);
                   }
                 }
               }
@@ -1087,9 +1107,9 @@ export default function Schedule() {
     }
 
     if (created > 0) {
-      toast.success(`${created} gravação(ões) backup/extra gerada(s) com sucesso`);
+      toast.success(`${created} gravação(ões) extra gerada(s) com sucesso`);
     } else {
-      toast.info('Nenhuma vaga disponível para gerar gravações backup/extra');
+      toast.info('Nenhuma vaga disponível para gerar gravações extras');
     }
   };
 

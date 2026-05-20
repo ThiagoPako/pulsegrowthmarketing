@@ -100,7 +100,7 @@ const PULSE_ORANGE = 'hsl(16, 82%, 51%)';
 const PULSE_DARK = '#0c0a14';
 const PULSE_CARD = 'rgba(255,255,255,0.035)';
 const SPACE = "'Space Grotesk', sans-serif";
-const MINUTE_HEIGHT = 1.6; // Reduzido de 2 para 1.6 para compactar o visual
+const MINUTE_HEIGHT = 1.3; // Reduzido de 1.6 para 1.3 para compactar ainda mais o visual
 const OPERATIONAL_START = 8 * 60; // 08:00
 const OPERATIONAL_END = 19 * 60;   // 19:00
 const TIMELINE_HEIGHT = (OPERATIONAL_END - OPERATIONAL_START) * MINUTE_HEIGHT;
@@ -1177,7 +1177,7 @@ export default function TvDashboard() {
   const dateStr = clock.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 
   return (
-    <div className="h-screen text-white overflow-hidden relative flex flex-col" style={{ fontFamily: `${SPACE}, 'Inter', sans-serif`, backgroundColor: PULSE_DARK }}>
+    <div className="h-screen text-white overflow-hidden relative flex flex-col p-2" style={{ fontFamily: `${SPACE}, 'Inter', sans-serif`, backgroundColor: PULSE_DARK }}>
       <FloatingParticles />
       <div className="fixed inset-0 pointer-events-none z-0" style={{ background: `radial-gradient(ellipse 80% 50% at 50% -10%, ${PULSE_ORANGE}06, transparent 70%)` }} />
 
@@ -1261,9 +1261,9 @@ export default function TvDashboard() {
         )}
 
         {/* ─── Main Grid: 3 columns ────────────────────── */}
-        <div className="grid grid-cols-12 gap-4 flex-1 min-h-0 overflow-hidden">
+        <div className="grid grid-cols-12 gap-3 flex-1 min-h-0 overflow-hidden">
           {/* LEFT COLUMN: Team Online + Offline */}
-          <div className="col-span-3 space-y-3 overflow-y-auto scrollbar-hide pr-1">
+          <div className="col-span-3 space-y-2.5 overflow-y-auto scrollbar-hide pr-1">
             {/* Online */}
             {visibility.show_team && (
               <div>
@@ -1325,7 +1325,7 @@ export default function TvDashboard() {
           </div>
 
           {/* CENTER COLUMN: Schedule + Posts */}
-          <div className="col-span-5 space-y-3 overflow-y-auto scrollbar-hide px-1">
+          <div className="col-span-5 space-y-2.5 overflow-y-auto scrollbar-hide px-1">
             {/* Schedule */}
             {visibility.show_schedule && (
               <div className="relative">
@@ -1484,7 +1484,7 @@ export default function TvDashboard() {
           </div>
 
           {/* RIGHT COLUMN: Designer + Editing */}
-          <div className="col-span-4 space-y-3 overflow-y-auto scrollbar-hide pl-1">
+          <div className="col-span-4 space-y-2.5 overflow-y-auto scrollbar-hide pl-1">
             {visibility.show_pipeline && (
               <>
                 <div>

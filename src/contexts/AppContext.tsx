@@ -303,6 +303,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    data.refetch();
     return { updated: updatedCount, cancelled: cancelledCount };
   }, [data, users]);
 

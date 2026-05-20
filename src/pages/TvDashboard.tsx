@@ -504,15 +504,15 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
 
         {/* Videomaker Avatar */}
         {item.videomakerName && (
-          <div className="flex-shrink-0 flex flex-col items-center gap-0.5">
-            <div className="w-8 h-8 rounded-full overflow-hidden border border-blue-500/30 bg-blue-500/10 flex items-center justify-center">
+          <div className="flex-shrink-0 flex flex-col items-center gap-1">
+            <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-blue-500/40 bg-blue-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.2)]">
               {item.videomakerAvatar ? (
                 <img src={item.videomakerAvatar} alt="" className="w-full h-full object-cover" />
               ) : (
-                <Camera className="w-3.5 h-3.5 text-blue-400/60" />
+                <Camera className="w-5 h-5 text-blue-400/60" />
               )}
             </div>
-            <span className="text-[9px] text-white/30 truncate max-w-[60px]">{item.videomakerName.split(' ')[0]}</span>
+            <span className="text-[10px] font-bold text-white/40 truncate max-w-[70px] uppercase tracking-tighter">{item.videomakerName.split(' ')[0]}</span>
           </div>
         )}
       </div>

@@ -1142,7 +1142,12 @@ export default function TvDashboard() {
           <div className="col-span-5 space-y-3 overflow-y-auto scrollbar-hide px-1">
             {/* Schedule */}
             {visibility.show_schedule && (
-              <div>
+              <div className="relative">
+                {/* Linha do Tempo (Clock Marker) */}
+                <div className="absolute left-[-4px] right-[-4px] top-[60px] bottom-[10px] pointer-events-none z-10 hidden sm:block">
+                  <TimeMarker />
+                </div>
+
                 <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${schedule.length} gravações`} />
                 {schedule.length > 0 ? (
                   <div className="space-y-2">

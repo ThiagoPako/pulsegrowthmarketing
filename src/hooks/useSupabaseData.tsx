@@ -417,11 +417,43 @@ export function useSupabaseData() {
 
   // ── Recording CRUD ──
   const addRecording = useCallback(async (recording: Recording): Promise<boolean> => {
+    // Hierarchy Rule: Fixed/Avulso take precedence over Extra.
+    // If we're adding a Fixed/Avulso recording, we cancel any Extra recording at the same time/videomaker.
+    const isHighPriority = recording.type === 'fixa' || recording.type === 'avulso';
+    
+    if (isHighPriority) {
+      const timeToMinutes = (t: string) => {
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+      };
+      const BUFFER = 30;
+      const newStart = timeToMinutes(recording.startTime);
+      const newEnd = newStart + settings.recordingDuration + BUFFER;
+
+      const conflictingExtras = recordings.filter(r => 
+        r.videomakerId === recording.videomakerId && 
+        r.date === recording.date && 
+        r.type === 'extra' && 
+        r.status !== 'cancelada' &&
+        (() => {
+          const existStart = timeToMinutes(r.startTime);
+          const existEnd = existStart + settings.recordingDuration + BUFFER;
+          return newStart < existEnd && newEnd > existStart;
+        })()
+      );
+
+      for (const extra of conflictingExtras) {
+        console.log(`Cancelling extra recording ${extra.id} due to hierarchy (new ${recording.type} scheduled)`);
+        await cancelRecording(extra.id);
+      }
+    }
+
     const { error } = await invokeVpsFunction('recordings', { body: recordingToRow(recording) });
     if (error) { console.error('addRecording error:', error); return false; }
     setRecordings(prev => [...prev, recording]);
     return true;
-  }, []);
+  }, [recordings, settings, cancelRecording]);
+
 
   const updateRecording = useCallback(async (recording: Recording) => {
     const { id, ...rest } = recordingToRow(recording);

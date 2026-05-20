@@ -238,14 +238,15 @@ function TimeMarker() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
-      <div className="flex-1 h-[2px] bg-gradient-to-r from-transparent via-orange-500 to-transparent shadow-[0_0_10px_rgba(249,115,22,0.5)]" />
-      <div className="absolute right-0 flex items-center gap-1 bg-orange-500 px-1.5 py-0.5 rounded-l-md shadow-lg">
+      <div className="flex-1 h-[2px] bg-gradient-to-r from-transparent via-orange-500/50 to-transparent" />
+      <div className="absolute right-0 flex items-center gap-1 bg-orange-500 px-1.5 py-0.5 rounded-l-md shadow-[0_0_15px_rgba(249,115,22,0.4)]">
         <Clock className="w-2.5 h-2.5 text-white animate-pulse" />
         <span className="text-[10px] font-bold text-white tabular-nums">{currentTime}</span>
       </div>
     </motion.div>
   );
 }
+
 
 /* ─── Status Summary ────────────────────────────────────── */
 

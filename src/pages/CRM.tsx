@@ -353,7 +353,39 @@ export default function CRM() {
                                                     <Briefcase size={14} />
                                                   </Button>
                                                 )}
+                                                {stage.id === 'contacted' && (
+                                                   <Dialog>
+                                                      <DialogTrigger asChild>
+                                                        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100" title="Agendar Reunião">
+                                                          <Calendar className="h-4 w-4" />
+                                                        </Button>
+                                                      </DialogTrigger>
+                                                      <DialogContent>
+                                                        <DialogHeader><DialogTitle>Agendar Reunião - {lead.name}</DialogTitle></DialogHeader>
+                                                        <form onSubmit={async (e) => {
+                                                            e.preventDefault();
+                                                            const formData = new FormData(e.currentTarget);
+                                                            const { error } = await supabase.from('crm_leads').update({
+                                                                status: 'meeting',
+                                                                meeting_date: formData.get('date'),
+                                                                meeting_time: formData.get('time')
+                                                            }).eq('id', lead.id);
+                                                            if (!error) {
+                                                                queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
+                                                                toast.success('Reunião agendada!');
+                                                            }
+                                                        }}>
+                                                            <div className="grid gap-4 py-4">
+                                                                <Input type="date" name="date" required />
+                                                                <Input type="time" name="time" required />
+                                                                <Button type="submit">Confirmar Agendamento</Button>
+                                                            </div>
+                                                        </form>
+                                                      </DialogContent>
+                                                   </Dialog>
+                                                )}
                                                 <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+
                                               </div>
                                             </div>
                                             

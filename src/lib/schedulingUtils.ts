@@ -2,7 +2,7 @@ import { format, endOfMonth, addDays, getDay, startOfMonth, differenceInCalendar
 import type { Client, Recording, DayOfWeek, CompanySettings, RecordingType } from '@/types';
 
 /** Buffer time (in minutes) between recordings for the videomaker to upload materials */
-const BUFFER_BETWEEN_RECORDINGS = 0;
+const BUFFER_BETWEEN_RECORDINGS = 30;
 
 const DAY_TO_NUM: Record<DayOfWeek, number> = {
   domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6,

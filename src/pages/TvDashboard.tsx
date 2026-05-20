@@ -246,12 +246,16 @@ function TimeMarker() {
   );
 }
 
-function BufferCard({ startTime, type = 'pulse' }: { startTime: string; type?: 'pulse' | 'prep' }) {
+function BufferCard({ startTime, type = 'pulse', height }: { startTime: string; type?: 'pulse' | 'prep'; height?: number }) {
   const isPulse = type === 'pulse';
   return (
     <motion.div
-      className="relative rounded-xl border border-dashed border-orange-500/20 p-3 flex items-center justify-center gap-2 overflow-hidden"
-      style={{ background: 'rgba(249,115,22,0.03)' }}
+      className="relative rounded-xl border border-dashed border-orange-500/20 px-3 flex items-center justify-center gap-2 overflow-hidden"
+      style={{ 
+        background: 'rgba(249,115,22,0.03)',
+        height: height ? `${height}px` : 'auto',
+        minHeight: isPulse ? '40px' : '36px'
+      }}
       layout
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -268,7 +272,7 @@ function BufferCard({ startTime, type = 'pulse' }: { startTime: string; type?: '
         <Rocket className="w-3.5 h-3.5 text-orange-500 animate-bounce" />
         <span className="text-[10px] font-black text-orange-500 uppercase tracking-[0.3em] font-mono">PULSE</span>
         <span className="text-[9px] font-bold text-white/30 uppercase tracking-wider font-mono">
-          {isPulse ? 'Organização de Material' : 'Preparação e Roteiros'}
+          {isPulse ? 'Organização' : 'Preparação'}
         </span>
         <span className="text-[9px] font-bold text-orange-500/40 px-1.5 py-0.5 rounded border border-orange-500/20">{startTime}</span>
       </div>
@@ -276,13 +280,14 @@ function BufferCard({ startTime, type = 'pulse' }: { startTime: string; type?: '
   );
 }
 
-
-
-function LunchCard({ startTime }: { startTime: string }) {
+function LunchCard({ startTime, height }: { startTime: string; height?: number }) {
   return (
     <motion.div
       className="relative rounded-xl border border-dashed border-amber-500/20 p-2.5 flex items-center justify-center gap-2 overflow-hidden"
-      style={{ background: 'rgba(245,158,11,0.03)' }}
+      style={{ 
+        background: 'rgba(245,158,11,0.03)',
+        height: height ? `${height}px` : 'auto'
+      }}
       layout
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -292,6 +297,11 @@ function LunchCard({ startTime }: { startTime: string }) {
       <span className="text-[9px] font-bold text-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/10 font-mono">{startTime}</span>
     </motion.div>
   );
+}
+
+function TimelineSpacer({ minutes }: { minutes: number }) {
+  if (minutes <= 0) return null;
+  return <div style={{ height: `${minutes * MINUTE_HEIGHT}px` }} className="w-full" />;
 }
 
 

@@ -760,8 +760,10 @@ function PostCard({ post }: { post: ScheduledPost }) {
 
 /* ─── YouTube Player (com controle remoto via postMessage) ────────────── */
 function YouTubePlayer({ url, command }: { url: string; command: TvRemoteCommand | null }) {
-  const [unmuted, setUnmuted] = useState(true);
+  const [unmuted, setUnmuted] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  
   const embedUrl = useMemo(() => {
     if (!url) return '';
     const mute = unmuted ? 0 : 1;
@@ -782,37 +784,71 @@ function YouTubePlayer({ url, command }: { url: string; command: TvRemoteCommand
   useEffect(() => {
     if (!command) return;
     switch (command.action) {
-      case 'play': sendYTCommand('playVideo'); break;
-      case 'pause': sendYTCommand('pauseVideo'); break;
+      case 'play': sendYTCommand('playVideo'); setIsPlaying(true); break;
+      case 'pause': sendYTCommand('pauseVideo'); setIsPlaying(false); break;
       case 'next': sendYTCommand('nextVideo'); break;
       case 'mute': sendYTCommand('mute'); setUnmuted(false); break;
       case 'unmute': sendYTCommand('unMute'); setUnmuted(true); break;
     }
   }, [command, sendYTCommand]);
 
+  // Handle interaction to start playing if needed
+  const handleInteraction = () => {
+    if (!unmuted) {
+      setUnmuted(true);
+      sendYTCommand('unMute');
+      sendYTCommand('playVideo');
+      setIsPlaying(true);
+    }
+  };
+
   if (!embedUrl) return null;
   return (
-    <motion.div className="rounded-xl overflow-hidden border" style={{ borderColor: `${PULSE_ORANGE}22` }}
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
+    <motion.div 
+      className="rounded-xl overflow-hidden border cursor-pointer group relative" 
+      style={{ borderColor: `${PULSE_ORANGE}22` }}
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      transition={{ duration: 0.5 }}
+      onClick={handleInteraction}
+    >
       <div className="flex items-center gap-2 px-3 py-1.5" style={{ background: 'rgba(255,255,255,0.02)' }}>
         <Music className="w-3 h-3" style={{ color: PULSE_ORANGE }} />
         <span className="text-[10px] font-bold text-white/35 uppercase tracking-[0.15em]">Pulse Radio</span>
-        <motion.div className="flex gap-0.5 ml-1" animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.5, repeat: Infinity }}>
+        <motion.div className="flex gap-0.5 ml-1" animate={{ opacity: isPlaying ? [0.4, 1, 0.4] : 0.4 }} transition={{ duration: 1.5, repeat: Infinity }}>
           {[3, 5, 2, 4, 3].map((h, i) => (
             <motion.div key={i} className="w-[2px] rounded-full" style={{ backgroundColor: PULSE_ORANGE, height: h * 2 }}
-              animate={{ height: [h * 2, h * 3.5, h * 2] }}
+              animate={isPlaying ? { height: [h * 2, h * 3.5, h * 2] } : { height: h * 2 }}
               transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.12 }} />
           ))}
         </motion.div>
         <div className="flex-1" />
-        <button onClick={() => setUnmuted(prev => !prev)}
+        <button onClick={(e) => { e.stopPropagation(); setUnmuted(prev => !prev); }}
           className="flex items-center gap-1 text-[9px] font-bold uppercase px-2 py-0.5 rounded-full transition-all hover:scale-105"
           style={{ backgroundColor: `${PULSE_ORANGE}1a`, color: PULSE_ORANGE, border: `1px solid ${PULSE_ORANGE}33` }}>
-          {unmuted ? '🔊 Mudo' : '🔇 Ativar Som'}
+          {unmuted ? '🔊 Ativado' : '🔇 Mudo'}
         </button>
       </div>
-      <div className="aspect-video">
-        <iframe ref={iframeRef} key={unmuted ? 'unmuted' : 'muted'} src={embedUrl} className="w-full h-full" allow="autoplay; encrypted-media" allowFullScreen style={{ border: 0 }} />
+
+      <div className="aspect-video relative">
+        <iframe 
+          ref={iframeRef} 
+          key={unmuted ? 'unmuted' : 'muted'} 
+          src={embedUrl} 
+          className="w-full h-full" 
+          allow="autoplay; encrypted-media" 
+          allowFullScreen 
+          style={{ border: 0 }} 
+        />
+        
+        {!unmuted && (
+          <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-3 transition-colors group-hover:bg-black/40">
+            <div className="w-12 h-12 rounded-full bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/20">
+              <Play className="w-6 h-6 text-white fill-white ml-1" />
+            </div>
+            <p className="text-[10px] font-bold text-white/80 uppercase tracking-widest">Clique para ativar o áudio</p>
+          </div>
+        )}
       </div>
     </motion.div>
   );

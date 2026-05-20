@@ -370,10 +370,10 @@ export default function DiscountAdmin() {
                         selected={expiresDate}
                         onSelect={setExpiresDate}
                         disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                        initialFocus
                         locale={ptBR}
                         className={cn("p-3 pointer-events-auto")}
                       />
+
                       {expiresDate && (
                         <div className="p-2 border-t">
                           <Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => setExpiresDate(undefined)}>

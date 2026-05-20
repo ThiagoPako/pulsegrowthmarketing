@@ -1050,6 +1050,7 @@ export type Database = {
           alteration_deadline_hours: number
           approval_deadline_enabled: boolean
           approval_deadline_hours: number
+          auto_fill_vacancies: boolean
           cost_allocation_rule:
             | Database["public"]["Enums"]["cost_allocation_rule"]
             | null
@@ -1071,6 +1072,7 @@ export type Database = {
           alteration_deadline_hours?: number
           approval_deadline_enabled?: boolean
           approval_deadline_hours?: number
+          auto_fill_vacancies?: boolean
           cost_allocation_rule?:
             | Database["public"]["Enums"]["cost_allocation_rule"]
             | null
@@ -1092,6 +1094,7 @@ export type Database = {
           alteration_deadline_hours?: number
           approval_deadline_enabled?: boolean
           approval_deadline_hours?: number
+          auto_fill_vacancies?: boolean
           cost_allocation_rule?:
             | Database["public"]["Enums"]["cost_allocation_rule"]
             | null

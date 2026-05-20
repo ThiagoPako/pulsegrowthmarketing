@@ -1,0 +1,1 @@
+ALTER TABLE public.company_settings ADD COLUMN auto_fill_vacancies BOOLEAN NOT NULL DEFAULT false;

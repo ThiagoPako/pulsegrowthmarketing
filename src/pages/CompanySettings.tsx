@@ -344,7 +344,21 @@ export default function CompanySettings() {
           />
           <p className="text-xs text-muted-foreground">Duração padrão de cada sessão de gravação</p>
         </div>
+
+        <Separator />
+
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <Label>Auto-preencher Vagas</Label>
+            <p className="text-xs text-muted-foreground">Preencher automaticamente vagas canceladas com gravações extras</p>
+          </div>
+          <Switch
+            checked={form.autoFillVacancies}
+            onCheckedChange={v => setForm({ ...form, autoFillVacancies: v })}
+          />
+        </div>
       </div>
+
 
       {/* Prazos de Tarefas */}
       <div className="glass-card p-6 space-y-5">

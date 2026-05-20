@@ -5,6 +5,8 @@ import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import type { Recording, RecordingType, Script, DayOfWeek, Client, EventRecording } from '@/types';
 import { SCRIPT_VIDEO_TYPE_LABELS, DAY_LABELS } from '@/types';
 import { useEndoClientes, useEndoAgendamentos, useEndoContracts } from '@/hooks/useEndomarketing';
+import { findAvailableSlots } from '@/lib/schedulingUtils';
+
 import AgencyCapacityWidget from '@/components/AgencyCapacityWidget';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -94,8 +96,9 @@ export default function Schedule() {
   const {
     clients, users, recordings, scripts, settings, activeRecordings,
     currentUser, updateScript, addRecording, updateRecording, cancelRecording, deleteRecording, cancelAndReschedule,
-    regenerateScheduleForClient, generateScheduleForClient, startActiveRecording, stopActiveRecording,
+    regenerateScheduleForClient, generateScheduleForClient, autoFillVacanciesForDate, startActiveRecording, stopActiveRecording,
     hasConflict, isWithinWorkHours,
+
   } = useApp();
 
   // Endomarketing data
@@ -1018,8 +1021,12 @@ export default function Schedule() {
         for (const client of extraClients) {
           const vmId = client.videomaker;
           if (!vmId) continue;
-          const extraTime = client.fixedTime; // Use fixed time for extra
-          if (!hasConflict(vmId, dateStr, extraTime)) {
+          
+          // Use any available slot on that day, not just fixedTime
+          const availableSlots = findAvailableSlots(dateStr, vmId, recordings, settings);
+          if (availableSlots.length > 0) {
+            const extraTime = availableSlots[0];
+
             const exists = recordings.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'extra' && r.status !== 'cancelada');
             if (!exists) {
               const rec: Recording = {
@@ -1083,8 +1090,12 @@ export default function Schedule() {
           {(showBackup || showExtra) && (
             <>
               <Button variant="outline" className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateBackupExtra}>
-                <RefreshCw size={16} className="mr-2" /> Gerar Backup/Extra
+                <RefreshCw size={16} className="mr-2" /> Gerar Backup/Extra Mensal
               </Button>
+              <Button variant="outline" className="border-emerald-500/50 text-emerald-600 hover:bg-emerald-500/10" onClick={() => autoFillVacanciesForDate(format(new Date(), 'yyyy-MM-dd'))}>
+                <Sparkles size={16} className="mr-2" /> Preencher Vagas de Hoje
+              </Button>
+
               {showBackup && (
                 <Button variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllBackup}>
                   <Trash2 size={16} className="mr-2" /> Apagar Backups

@@ -219,6 +219,7 @@ function rowToSettings(r: any): CompanySettings {
     alterationDeadlineEnabled: r.alteration_deadline_enabled ?? true,
     approvalDeadlineEnabled: r.approval_deadline_enabled ?? true,
     costAllocationRule: r.cost_allocation_rule || 'approved',
+    autoFillVacancies: r.auto_fill_vacancies ?? false,
   };
 }
 
@@ -248,7 +249,9 @@ const defaultSettings: CompanySettings = {
   alterationDeadlineEnabled: true,
   approvalDeadlineEnabled: true,
   costAllocationRule: 'approved',
+  autoFillVacancies: false,
 };
+
 
 export function useSupabaseData() {
   const [clients, setClients] = useState<Client[]>([]);

@@ -1,5 +1,5 @@
 import { format, endOfMonth, addDays, getDay, startOfMonth, differenceInCalendarWeeks } from 'date-fns';
-import type { Client, Recording, DayOfWeek, CompanySettings } from '@/types';
+import type { Client, Recording, DayOfWeek, CompanySettings, RecordingType } from '@/types';
 
 /** Buffer time (in minutes) between recordings for the videomaker to upload materials */
 const BUFFER_BETWEEN_RECORDINGS = 30;

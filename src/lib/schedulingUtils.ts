@@ -321,9 +321,10 @@ export function organizeRecordingsForDate(
     fixa: 1,
     avulso: 2,
     secundaria: 3,
-    extra: 4,
+    endomarketing: 4,
     backup: 5,
-    endomarketing: 6
+    extra: 6
+
   };
 
   const sortedRecs = [...dayRecordings].sort((a, b) => {

@@ -414,8 +414,9 @@ function RecordingCard({
           {client && (
             <ClientLogo
               client={{ companyName: client.companyName, color: client.color, logoUrl: client.logoUrl }}
-              size="xs"
+              size="sm"
             />
+
           )}
           <div className="flex-1 min-w-0">
             <p className="text-[11px] font-bold truncate leading-tight">

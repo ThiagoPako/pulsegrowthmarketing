@@ -332,7 +332,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           currentRecsLocal, 
           data.settings, 
           activeClientIds,
-          cancelledClientIds
+          cancelledClientIds,
+          data.clients
         );
         
         // Add to our bulk lists

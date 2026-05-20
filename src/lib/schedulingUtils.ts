@@ -322,7 +322,8 @@ export function organizeRecordingsForDate(
   allRecordings: Recording[],
   settings: CompanySettings,
   validClientIds?: Set<string>,
-  cancelledClientIds?: Set<string>
+  cancelledClientIds?: Set<string>,
+  clients?: Client[]
 ): { toUpdate: Recording[]; toCancel: Recording[] } {
   const normalizedVmId = videomakerId || '';
   
@@ -377,19 +378,37 @@ export function organizeRecordingsForDate(
   });
 
   const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
+  const usedSlots = new Set<string>();
 
-  // Count existing completed or in-progress recordings for this videomaker/date 
-  // to ensure we don't accidentally "overwrite" capacity if some were already done outside standard slots
-  let assignedCount = 0;
-
-  // Assign to slots
-  sortedRecs.forEach((rec) => {
-    if (assignedCount < FIXED_SLOTS.length) {
-      const targetTime = FIXED_SLOTS[assignedCount];
+  // 1. First Pass: Keep "fixa" recordings at their defined client schedule if possible
+  const highPriority = sortedRecs.filter(r => r.type === 'fixa');
+  highPriority.forEach(rec => {
+    const client = clients?.find(c => c.id === rec.clientId);
+    const targetTime = client?.fixedTime;
+    
+    // If client has a specific time and it's one of the standard slots and not used yet
+    if (targetTime && FIXED_SLOTS.includes(targetTime) && !usedSlots.has(targetTime)) {
       if (rec.startTime !== targetTime) {
         toUpdate.push({ ...rec, startTime: targetTime });
       }
-      assignedCount++;
+      usedSlots.add(targetTime);
+      // Remove from pool of recs to be assigned in second pass
+      const idx = sortedRecs.indexOf(rec);
+      if (idx > -1) sortedRecs.splice(idx, 1);
+    }
+  });
+
+  // 2. Second Pass: Assign remaining recordings to remaining available slots
+  const remainingSlots = FIXED_SLOTS.filter(slot => !usedSlots.has(slot));
+  let slotIdx = 0;
+
+  sortedRecs.forEach((rec) => {
+    if (slotIdx < remainingSlots.length) {
+      const targetTime = remainingSlots[slotIdx];
+      if (rec.startTime !== targetTime) {
+        toUpdate.push({ ...rec, startTime: targetTime });
+      }
+      slotIdx++;
     } else {
       // Exceeded capacity of 4 slots per videomaker
       toCancel.push({ ...rec, status: 'cancelada' });

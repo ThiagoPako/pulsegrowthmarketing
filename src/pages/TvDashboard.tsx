@@ -34,6 +34,8 @@ interface ScheduleItem {
   clientColor?: string | null;
   videomakerName?: string | null;
   videomakerAvatar?: string | null;
+  scriptwriterName?: string | null;
+  scriptwriterAvatar?: string | null;
   startTime: string;
   endTime?: string;
   recordingType?: string;
@@ -413,15 +415,16 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
   const isNow = isLive;
   const isDone = item.status === 'concluida';
   const isCancelled = item.status === 'cancelada';
+  const isRescheduled = item.status === 'remarcada' || item.status === 'remarcado';
 
-  const borderColor = isCancelled ? 'rgba(239,68,68,0.2)' : isDone ? 'rgba(34,197,94,0.2)' : isNow ? `${PULSE_ORANGE}44` : 'rgba(255,255,255,0.06)';
+  const borderColor = isCancelled ? 'rgba(239,68,68,0.2)' : isRescheduled ? 'rgba(245,158,11,0.3)' : isDone ? 'rgba(34,197,94,0.2)' : isNow ? `${PULSE_ORANGE}44` : 'rgba(255,255,255,0.06)';
 
   return (
     <motion.div
       className="relative rounded-xl overflow-hidden"
       style={{
         border: `1px solid ${borderColor}`,
-        background: isNow ? `linear-gradient(135deg, ${PULSE_ORANGE}0c, transparent)` : isDone ? 'linear-gradient(135deg, rgba(34,197,94,0.04), transparent)' : PULSE_CARD,
+        background: isNow ? `linear-gradient(135deg, ${PULSE_ORANGE}0c, transparent)` : isRescheduled ? 'linear-gradient(135deg, rgba(245,158,11,0.06), transparent)' : isDone ? 'linear-gradient(135deg, rgba(34,197,94,0.04), transparent)' : PULSE_CARD,
         opacity: isCancelled ? 0.35 : 1,
         height: height ? `${height}px` : 'auto'
       }}
@@ -465,14 +468,33 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
             )}
             {isDone && <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />}
             {isCancelled && <XCircle className="w-3.5 h-3.5 text-red-400" />}
+            {isRescheduled && (
+              <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                Remarcado
+              </span>
+            )}
             {item.type === 'event' && (
               <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ backgroundColor: `${PULSE_ORANGE}15`, color: PULSE_ORANGE }}>Evento</span>
             )}
             {item.recordingType === 'extra' && <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-300">Extra</span>}
             {item.recordingType === 'backup' && <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300">Backup</span>}
           </div>
-          <p className="text-sm font-semibold text-white truncate">{item.clientName}</p>
-          {item.address && (
+          <p className="text-sm font-semibold text-white truncate">
+            {isRescheduled && <span className="text-amber-500 mr-1">REMARCADO:</span>}
+            {item.clientName}
+          </p>
+          
+          {isNow && item.scriptwriterName && (
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/5 border border-white/10">
+                <Users className="w-2.5 h-2.5 text-white/40" />
+                <span className="text-[9px] font-bold text-white/50 uppercase tracking-wider">Roteiro:</span>
+                <span className="text-[10px] font-bold text-white/80">{item.scriptwriterName}</span>
+              </div>
+            </div>
+          )}
+
+          {item.address && !isNow && (
             <div className="flex items-center gap-1 mt-0.5">
               <MapPin className="w-2.5 h-2.5" style={{ color: `${PULSE_ORANGE}55` }} />
               <span className="text-[10px] text-white/30 truncate">{item.address}</span>

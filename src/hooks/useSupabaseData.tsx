@@ -383,6 +383,29 @@ export function useSupabaseData() {
     setRecordings(prev => [...prev, ...recs]);
     return true;
   }, []);
+386: 
+387:   const deleteRecordingsBulk = useCallback(async (ids: string[]): Promise<boolean> => {
+388:     if (ids.length === 0) return true;
+389:     const { error } = await invokeVpsFunction('recordings', { 
+390:       method: 'DELETE', 
+391:       filters: [{ column: 'id', op: 'in', value: ids }] 
+392:     });
+393:     if (error) { console.error('deleteRecordingsBulk error:', error); return false; }
+394:     setRecordings(prev => prev.filter(r => !ids.includes(r.id)));
+395:     return true;
+396:   }, []);
+397: 
+398:   const cancelRecordingsBulk = useCallback(async (ids: string[]): Promise<boolean> => {
+399:     if (ids.length === 0) return true;
+400:     const { error } = await invokeVpsFunction('recordings', { 
+401:       method: 'PUT', 
+402:       body: { status: 'cancelada' },
+403:       filters: [{ column: 'id', op: 'in', value: ids }] 
+404:     });
+405:     if (error) { console.error('cancelRecordingsBulk error:', error); return false; }
+406:     setRecordings(prev => prev.map(r => ids.includes(r.id) ? { ...r, status: 'cancelada' as const } : r));
+407:     return true;
+408:   }, []);
 
   // ── Client CRUD ──
   const addClient = useCallback(async (client: Client): Promise<boolean> => {

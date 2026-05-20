@@ -386,10 +386,7 @@ export function useSupabaseData() {
 
   const deleteRecordingsBulk = useCallback(async (ids: string[]): Promise<boolean> => {
     if (ids.length === 0) return true;
-    const { error } = await invokeVpsFunction('recordings', { 
-      method: 'DELETE', 
-      filters: [{ column: 'id', op: 'in', value: ids }] 
-    });
+    const { error } = await supabase.from('recordings').delete().in('id', ids);
     if (error) { console.error('deleteRecordingsBulk error:', error); return false; }
     setRecordings(prev => prev.filter(r => !ids.includes(r.id)));
     return true;
@@ -397,11 +394,7 @@ export function useSupabaseData() {
 
   const cancelRecordingsBulk = useCallback(async (ids: string[]): Promise<boolean> => {
     if (ids.length === 0) return true;
-    const { error } = await invokeVpsFunction('recordings', { 
-      method: 'PUT', 
-      body: { status: 'cancelada' },
-      filters: [{ column: 'id', op: 'in', value: ids }] 
-    });
+    const { error } = await supabase.from('recordings').update({ status: 'cancelada' }).in('id', ids);
     if (error) { console.error('cancelRecordingsBulk error:', error); return false; }
     setRecordings(prev => prev.map(r => ids.includes(r.id) ? { ...r, status: 'cancelada' as const } : r));
     return true;

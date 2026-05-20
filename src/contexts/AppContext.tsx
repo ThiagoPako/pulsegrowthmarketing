@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useCallback, useState, useEffect } from 'react'; // refreshed
+import { getDay } from 'date-fns';
+
 import { useAuth, type Profile } from '@/hooks/useAuth';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { supabase } from '@/lib/vpsDb';

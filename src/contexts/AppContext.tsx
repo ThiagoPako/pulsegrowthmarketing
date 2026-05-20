@@ -195,17 +195,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const dateObj = new Date(date + 'T12:00:00');
     const dayName = DATE_TO_DAY[getDay(dateObj)];
     const isToday = date === today.toISOString().split('T')[0];
-    const extraClients = data.clients.filter(c => c.acceptsExtra && (c.extraDay === dayName || !isToday)); 
-
+    
+    // Sort clients: priority to those who have extraDay today, then those who just accept extras
+    const extraClients = data.clients
+      .filter(c => c.acceptsExtra && c.status === 'ativo')
+      .sort((a, b) => {
+        const aMatchesDay = a.extraDay === dayName;
+        const bMatchesDay = b.extraDay === dayName;
+        if (aMatchesDay && !bMatchesDay) return -1;
+        if (!aMatchesDay && bMatchesDay) return 1;
+        return 0;
+      });
     
     let createdCount = 0;
     const currentRecs = [...data.recordings];
     const allVmIds = users.filter(u => u.role === 'videomaker').map(u => u.id);
 
+    // Analyze each videomaker's agenda for the day
     for (const vmId of allVmIds) {
       const slots = findAvailableSlots(date, vmId, currentRecs, data.settings);
+      
       for (const slot of slots) {
-        // Find a client who accepts extra and is not already recording today
+        // Find an eligible client who isn't already recording on this day
         const eligibleClient = extraClients.find(c => 
           !currentRecs.some(r => r.clientId === c.id && r.date === date && r.status !== 'cancelada')
         );
@@ -220,16 +231,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             type: 'extra',
             status: 'agendada',
           };
+          
           const ok = await data.addRecording(newRec);
           if (ok) {
             createdCount++;
             currentRecs.push(newRec);
+            // Rotate clients to distribute work
+            const index = extraClients.indexOf(eligibleClient);
+            if (index > -1) {
+              extraClients.splice(index, 1);
+              extraClients.push(eligibleClient);
+            }
           }
         }
       }
     }
     return createdCount;
   }, [data, users]);
+
 
 
   /** Cancel a recording — backup slots are only created manually via the backup dialog */

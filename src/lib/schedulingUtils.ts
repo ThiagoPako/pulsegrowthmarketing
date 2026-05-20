@@ -127,6 +127,7 @@ export function generateFixedRecordings(
 
   for (const date of dates) {
     const vmDayRecs = allRecs.filter(r => r.videomakerId === client.videomaker && r.date === date && r.status !== 'cancelada');
+    const clientDayRecs = allRecs.filter(r => r.clientId === client.id && r.date === date && r.status !== 'cancelada');
     
     if (client.fullShiftRecording) {
       // Full-shift client: reserve both slots in the preferred shift
@@ -135,7 +136,8 @@ export function generateFixedRecordings(
         : ['08:30', '10:30'];
       
       for (const timeStr of slots) {
-        if (vmDayRecs.length < 4 && !hasConflictCheck(client.videomaker, date, timeStr, allRecs, duration)) {
+        const alreadyAtTime = clientDayRecs.some(r => r.startTime === timeStr);
+        if (vmDayRecs.length < 4 && !alreadyAtTime && !hasConflictCheck(client.videomaker, date, timeStr, allRecs, duration)) {
           const rec: Recording = {
             id: crypto.randomUUID(),
             clientId: client.id,
@@ -148,12 +150,15 @@ export function generateFixedRecordings(
           newRecordings.push(rec);
           allRecs.push(rec);
           vmDayRecs.push(rec);
+          clientDayRecs.push(rec);
         }
       }
     } else {
       // Normal client: single slot at fixedTime
       const targetTime = client.fixedTime || '08:30'; // fallback
-      if (vmDayRecs.length < 4 && !hasConflictCheck(client.videomaker, date, targetTime, allRecs, duration)) {
+      const alreadyScheduled = clientDayRecs.length > 0;
+      
+      if (!alreadyScheduled && vmDayRecs.length < 4 && !hasConflictCheck(client.videomaker, date, targetTime, allRecs, duration)) {
         const rec: Recording = {
           id: crypto.randomUUID(),
           clientId: client.id,
@@ -191,6 +196,10 @@ export function generateExtraRecordings(
   for (const date of dates) {
     const day = NUM_TO_DAY[getDay(new Date(date + 'T12:00:00'))];
     
+    // Skip if client already has a recording on this day
+    const alreadyScheduled = allRecs.some(r => r.clientId === client.id && r.date === date && r.status !== 'cancelada');
+    if (alreadyScheduled) continue;
+
     // Find any available videomaker with a free slot
     let placed = false;
     

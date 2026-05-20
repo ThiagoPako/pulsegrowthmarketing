@@ -509,7 +509,7 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
               {item.videomakerAvatar ? (
                 <img src={item.videomakerAvatar} alt="" className="w-full h-full object-cover" />
               ) : (
-                <Camera className="w-5 h-5 text-blue-400/60" />
+                <Camera className="w-4 h-4 text-blue-400/60" />
               )}
             </div>
             <span className="text-[10px] font-bold text-white/40 truncate max-w-[70px] uppercase tracking-tighter">{item.videomakerName.split(' ')[0]}</span>

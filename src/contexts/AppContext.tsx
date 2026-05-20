@@ -268,17 +268,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     let updatedCount = 0;
     let cancelledCount = 0;
-    const allVmIds = users.filter(u => u.role === 'videomaker').map(u => u.id);
     const currentRecs = [...data.recordings];
+    
+    // Get all videomaker IDs that have recordings in this range, plus the active videomakers
+    const recordingsInRange = currentRecs.filter(r => r.date >= startDate && r.date <= endDate);
+    const uniqueVmIds = new Set([
+      ...users.filter(u => u.role === 'videomaker').map(u => u.id),
+      ...recordingsInRange.map(r => r.videomakerId).filter(Boolean)
+    ]);
 
     for (const date of dates) {
-      for (const vmId of allVmIds) {
+      for (const vmId of Array.from(uniqueVmIds)) {
         const { toUpdate, toCancel } = organizeRecordingsForDate(date, vmId, currentRecs, data.settings);
         
         for (const rec of toUpdate) {
           await data.updateRecording(rec);
           updatedCount++;
-          // Update local state to reflect changes for subsequent calculations in the same loop
           const idx = currentRecs.findIndex(r => r.id === rec.id);
           if (idx !== -1) currentRecs[idx] = rec;
         }
@@ -287,7 +292,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           await data.deleteRecording(rec.id);
           cancelledCount++;
           const idx = currentRecs.findIndex(r => r.id === rec.id);
-          if (idx !== -1) currentRecs[idx].status = 'cancelada';
+          if (idx !== -1) {
+            currentRecs.splice(idx, 1); // Remove it completely so it doesn't appear in next iterations
+          }
         }
       }
     }

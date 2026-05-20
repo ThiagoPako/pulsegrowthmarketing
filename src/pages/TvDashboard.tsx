@@ -1258,6 +1258,7 @@ export default function TvDashboard() {
                       {(() => {
                         const elements: React.ReactNode[] = [];
                         let lunchAdded = false;
+                        const addedBuffers = new Set<string>();
 
                         schedule.forEach((item, idx) => {
                           const [h, m] = item.startTime.split(':').map(Number);
@@ -1287,14 +1288,16 @@ export default function TvDashboard() {
                             const bufferMinutes = totalMinutes + 90; // Assume 90min duration
                             const bufferTime = `${String(Math.floor(bufferMinutes / 60)).padStart(2, '0')}:${String(bufferMinutes % 60).padStart(2, '0')}`;
                             
-                            // Only add buffer if it doesn't start exactly at 12:00 (lunch start)
-                            if (bufferTime !== '12:00') {
+                            // Only add buffer if it doesn't start exactly at 12:00 (lunch start) and hasn't been added yet
+                            if (bufferTime !== '12:00' && !addedBuffers.has(bufferTime)) {
+                              addedBuffers.add(bufferTime);
                               const isNextPrep = bufferTime === '08:00' || bufferTime === '14:00' || bufferTime === '16:00';
-                              elements.push(<BufferCard key={`buffer-${item.id}`} startTime={`${bufferTime} - ${String(Math.floor((bufferMinutes + 30) / 60)).padStart(2, '0')}:${String((bufferMinutes + 30) % 60).padStart(2, '0')}`} type={isNextPrep ? 'prep' : 'pulse'} />);
+                              elements.push(<BufferCard key={`buffer-${bufferTime}`} startTime={`${bufferTime} - ${String(Math.floor((bufferMinutes + 30) / 60)).padStart(2, '0')}:${String((bufferMinutes + 30) % 60).padStart(2, '0')}`} type={isNextPrep ? 'prep' : 'pulse'} />);
                             }
                           }
 
                         });
+
 
                         // Ensure basic slots are shown if schedule is short
                         if (!lunchAdded) elements.push(<LunchCard key="lunch-break" startTime="12:00 - 14:00" />);

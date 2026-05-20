@@ -1010,14 +1010,13 @@ export default function Schedule() {
       const dayName = DATE_TO_DAY[dayNum];
       if (!settings.workDays.includes(dayName)) continue;
 
-      // Try backup clients
+      // Try backup clients first (they have higher priority for their assigned days)
       if (showBackup) {
         const backupClients = clients.filter(c => c.backupDay === dayName && c.acceptsExtra && c.status === 'ativo');
         for (const client of backupClients) {
           const vmId = client.videomaker;
           if (!vmId) continue;
 
-          // Capacity check
           const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
           if (vmDayRecsCount >= 4) continue;
 
@@ -1043,36 +1042,43 @@ export default function Schedule() {
         }
       }
 
-      // Try extra clients
+      // Try extra clients with round-robin distribution across videomakers and slots
       if (showExtra) {
         const extraClients = clients.filter(c => c.acceptsExtra && c.extraDay === dayName && c.status === 'ativo');
-        for (const client of extraClients) {
-          const vmId = client.videomaker;
-          if (!vmId) continue;
-          
-          // Capacity check
-          const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
-          if (vmDayRecsCount >= 4) continue;
+        if (extraClients.length > 0) {
+          for (const slot of FIXED_SLOTS) {
+            for (const vmId of videomakers.map(v => v.id)) {
+              const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
+              if (vmDayRecsCount >= 4) continue;
 
-          const availableSlots = findAvailableSlots(dateStr, vmId, currentRecsLocal, settings);
-          if (availableSlots.length > 0) {
-            const extraTime = availableSlots[0];
+              if (!hasConflict(vmId, dateStr, slot)) {
+                // Find a client who isn't already recording on this day
+                const eligibleClient = extraClients.find(c => 
+                  !currentRecsLocal.some(r => r.clientId === c.id && r.date === dateStr && r.status !== 'cancelada')
+                );
 
-            const exists = currentRecsLocal.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'extra' && r.status !== 'cancelada');
-            if (!exists) {
-              const rec: Recording = {
-                id: crypto.randomUUID(),
-                clientId: client.id,
-                videomakerId: vmId,
-                date: dateStr,
-                startTime: extraTime,
-                type: 'extra',
-                status: 'agendada',
-              };
-              const ok = await addRecording(rec);
-              if (ok) {
-                created++;
-                currentRecsLocal.push(rec);
+                if (eligibleClient) {
+                  const rec: Recording = {
+                    id: crypto.randomUUID(),
+                    clientId: eligibleClient.id,
+                    videomakerId: vmId,
+                    date: dateStr,
+                    startTime: slot,
+                    type: 'extra',
+                    status: 'agendada',
+                  };
+                  const ok = await addRecording(rec);
+                  if (ok) {
+                    created++;
+                    currentRecsLocal.push(rec);
+                    // Rotate clients
+                    const idx = extraClients.indexOf(eligibleClient);
+                    if (idx > -1) {
+                      extraClients.splice(idx, 1);
+                      extraClients.push(eligibleClient);
+                    }
+                  }
+                }
               }
             }
           }

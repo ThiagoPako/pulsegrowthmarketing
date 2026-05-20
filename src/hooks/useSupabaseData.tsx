@@ -239,7 +239,7 @@ const defaultSettings: CompanySettings = {
   shiftBStart: '14:30',
   shiftBEnd: '18:00',
   workDays: ['segunda', 'terca', 'quarta', 'quinta', 'sexta'],
-  recordingDuration: 120,
+  recordingDuration: 90,
   editingDeadlineHours: 48,
   reviewDeadlineHours: 24,
   alterationDeadlineHours: 24,

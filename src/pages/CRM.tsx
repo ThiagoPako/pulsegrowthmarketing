@@ -206,7 +206,7 @@ export default function CRM() {
                   company: formData.get('company') as string,
                   phone: formData.get('phone') as string,
                   contract_value: Number(formData.get('value')),
-                  status: 'lead'
+                  status: (formData.get('status') as LeadStatus) || 'lead'
                 });
               }} className="space-y-4 py-4">
                 <div className="grid gap-2">
@@ -229,6 +229,22 @@ export default function CRM() {
                     <Label htmlFor="phone">WhatsApp</Label>
                     <Input id="phone" name="phone" placeholder="(00) 00000-0000" className="bg-muted/50" />
                   </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="status">Status Inicial</Label>
+                  <Select name="status" defaultValue="lead">
+                    <SelectTrigger className="bg-muted/50">
+                      <SelectValue placeholder="Selecione o status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STAGES.map(s => (
+                        <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                      ))}
+                      {RECOVERY_STAGES.map(s => (
+                        <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <Button type="submit" className="w-full mt-4" disabled={createLead.isPending}>
                   {createLead.isPending ? 'Cadastrando...' : 'Criar Oportunidade'}

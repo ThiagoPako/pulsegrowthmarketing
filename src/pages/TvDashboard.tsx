@@ -1326,13 +1326,23 @@ export default function TvDashboard() {
                         return t >= OPERATIONAL_START && t < OPERATIONAL_END && !(t >= 12 * 60 && t < 14 * 60);
                       });
 
-                      timelineSchedule.forEach((item) => {
-                        const [h, m] = item.startTime.split(':').map(Number);
+                      // Group by startTime to handle simultaneous recordings (different videomakers)
+                      const groupedSchedule = timelineSchedule.reduce((acc, item) => {
+                        const key = item.startTime;
+                        if (!acc[key]) acc[key] = [];
+                        acc[key].push(item);
+                        return acc;
+                      }, {} as Record<string, ScheduleItem[]>);
+
+                      Object.entries(groupedSchedule).forEach(([startTime, itemsGroup]) => {
+                        const [h, m] = startTime.split(':').map(Number);
                         const startMin = h * 60 + m;
 
+                        // Use duration of first item in group
                         let duration = 90;
-                        if (item.endTime) {
-                          const [eh, em] = item.endTime.split(':').map(Number);
+                        const firstItem = itemsGroup[0];
+                        if (firstItem.endTime) {
+                          const [eh, em] = firstItem.endTime.split(':').map(Number);
                           const endMin = eh * 60 + em;
                           if (endMin > startMin) duration = endMin - startMin;
                         }
@@ -1340,14 +1350,27 @@ export default function TvDashboard() {
                         const topPx = (startMin - OPERATIONAL_START) * MINUTE_HEIGHT;
                         const heightPx = duration * MINUTE_HEIGHT;
 
-                        items.push(
-                          <div key={item.id} className="absolute left-0 right-0 pr-1" style={{ top: `${topPx}px`, height: `${heightPx}px` }}>
-                            <ScheduleCard item={item} isLive={activeRecordingIds.includes(item.id)} height={heightPx} />
-                          </div>
-                        );
+                        if (itemsGroup.length > 1) {
+                          items.push(
+                            <div key={`group-${startTime}`} className="absolute left-0 right-0 pr-1" style={{ top: `${topPx}px`, height: `${heightPx}px` }}>
+                              <RotatingScheduleCard 
+                                items={itemsGroup} 
+                                isLive={(id) => activeRecordingIds.includes(id)} 
+                                height={heightPx} 
+                              />
+                            </div>
+                          );
+                        } else {
+                          items.push(
+                            <div key={firstItem.id} className="absolute left-0 right-0 pr-1" style={{ top: `${topPx}px`, height: `${heightPx}px` }}>
+                              <ScheduleCard item={firstItem} isLive={activeRecordingIds.includes(firstItem.id)} height={heightPx} />
+                            </div>
+                          );
+                        }
 
-                        // Pulse buffer right after this recording
-                        if (item.status !== 'cancelada') {
+                        // Pulse buffer right after this recording (if at least one in group is not cancelled)
+                        const hasActiveInGroup = itemsGroup.some(it => it.status !== 'cancelada');
+                        if (hasActiveInGroup) {
                           const bufferStart = startMin + duration;
                           const bufferEnd = bufferStart + 30;
                           const bufferTime = `${String(Math.floor(bufferStart / 60)).padStart(2, '0')}:${String(bufferStart % 60).padStart(2, '0')}`;
@@ -1365,6 +1388,7 @@ export default function TvDashboard() {
                           }
                         }
                       });
+
 
                       return items;
                     })()}

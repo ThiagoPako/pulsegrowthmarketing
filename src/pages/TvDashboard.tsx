@@ -1239,22 +1239,41 @@ export default function TvDashboard() {
                 {schedule.length > 0 ? (
                   <div className="space-y-2">
                     <AnimatePresence>
-                      {schedule.map((item, idx) => {
-                        const elements = [<ScheduleCard key={item.id} item={item} isLive={activeRecordingIds.includes(item.id)} />];
-                        
-                        // Add buffer after recording if it's not the last one and status is not cancelled
-                        if (item.status !== 'cancelada') {
+                      {(() => {
+                        const elements: React.ReactNode[] = [];
+                        let lunchAdded = false;
+
+                        schedule.forEach((item, idx) => {
                           const [h, m] = item.startTime.split(':').map(Number);
-                          let totalMinutes = h * 60 + m + 90; // Assume 90min duration
-                          const bufferTime = `${String(Math.floor(totalMinutes / 60)).padStart(2, '0')}:${String(totalMinutes % 60).padStart(2, '0')}`;
-                          elements.push(<BufferCard key={`buffer-${item.id}`} startTime={bufferTime} />);
+                          const totalMinutes = h * 60 + m;
+
+                          // Add lunch break if we passed 12:00
+                          if (!lunchAdded && totalMinutes >= 12 * 60) {
+                            elements.push(<LunchCard key="lunch-break" startTime="12:00 - 14:00" />);
+                            lunchAdded = true;
+                          }
+
+                          elements.push(<ScheduleCard key={item.id} item={item} isLive={activeRecordingIds.includes(item.id)} />);
+                          
+                          // Add buffer after recording if it's not cancelled
+                          if (item.status !== 'cancelada') {
+                            const bufferMinutes = totalMinutes + 90; // Assume 90min duration
+                            const bufferTime = `${String(Math.floor(bufferMinutes / 60)).padStart(2, '0')}:${String(bufferMinutes % 60).padStart(2, '0')}`;
+                            elements.push(<BufferCard key={`buffer-${item.id}`} startTime={bufferTime} />);
+                          }
+                        });
+
+                        // If lunch hasn't been added yet (all recordings before 12:00 or no recordings after)
+                        if (!lunchAdded) {
+                           elements.push(<LunchCard key="lunch-break" startTime="12:00 - 14:00" />);
                         }
-                        
+
                         return elements;
-                      })}
+                      })()}
                     </AnimatePresence>
                   </div>
                 ) : (
+
 
                   <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
                     <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />

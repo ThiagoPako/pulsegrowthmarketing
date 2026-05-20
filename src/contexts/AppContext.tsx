@@ -189,7 +189,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
 
   const addRecording = useCallback(async (recording: Recording): Promise<boolean> => {
-    if (hasConflict(recording.videomakerId, recording.date, recording.startTime)) return false;
+    if (hasConflict(recording.videomakerId, recording.date, recording.startTime, undefined, recording.type, recording.clientId).hasConflict) return false;
     const ok = await data.addRecording(recording);
     if (!ok) {
       console.error('addRecording: VPS insert failed for recording', recording);
@@ -266,7 +266,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (vmDayRecsCount >= 4) continue;
 
         // Check if slot is available for this VM
-        if (!hasConflict(vmId, date, slot)) {
+        if (!hasConflict(vmId, date, slot).hasConflict) {
           // Find an eligible client who isn't already recording on this day
           const eligibleClient = extraClients.find(c => 
             !currentRecs.some(r => r.clientId === c.id && r.date === date && r.status !== 'cancelada')
@@ -435,7 +435,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return data.clients.filter(c => {
       if (c.id === recording.clientId) return false;
       if (!c.acceptsExtra) return false;
-      return !hasConflict(recording.videomakerId, recording.date, c.backupTime, recording.id);
+      return !hasConflict(recording.videomakerId, recording.date, c.backupTime, recording.id, undefined, c.id).hasConflict;
     });
   }, [data.clients, hasConflict]);
 

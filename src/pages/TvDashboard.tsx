@@ -1321,11 +1321,11 @@ export default function TvDashboard() {
                           }
 
                           elements.push(<ScheduleCard key={item.id} item={item} isLive={activeRecordingIds.includes(item.id)} height={duration * MINUTE_HEIGHT} />);
-                          lastMinute = Math.max(lastMinute, startTime + duration);
+                          lastMinute = startTime + duration; // Move pointer to end of this card
 
                           // Optional Pulse Buffer
                           if (item.status !== 'cancelada') {
-                            const bufferMinutes = startTime + 90;
+                            const bufferMinutes = startTime + duration;
                             const bufferTime = `${String(Math.floor(bufferMinutes / 60)).padStart(2, '0')}:${String(bufferMinutes % 60).padStart(2, '0')}`;
                             
                             if (bufferMinutes >= lastMinute && bufferMinutes < OPERATIONAL_END && bufferMinutes !== 12 * 60 && !addedBuffers.has(bufferTime)) {

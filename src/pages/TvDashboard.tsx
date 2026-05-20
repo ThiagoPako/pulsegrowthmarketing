@@ -457,7 +457,7 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-base font-mono font-bold text-white/85 tabular-nums">{item.startTime}</span>
+            <span className="text-sm font-mono font-bold text-white/85 tabular-nums">{item.startTime}</span>
             {isNow && (
               <motion.div className="flex items-center gap-1 rounded-full px-1.5 py-0.5" style={{ backgroundColor: `${PULSE_ORANGE}1a` }}
                 animate={{ opacity: [1, 0.5, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>

@@ -1177,7 +1177,7 @@ export default function TvDashboard() {
             <div className="flex items-center gap-3">
               <motion.div className="w-9 h-9 rounded-xl flex items-center justify-center"
                 style={{ background: `linear-gradient(135deg, ${PULSE_ORANGE}, hsl(16, 82%, 40%))`, boxShadow: `0 4px 15px ${PULSE_ORANGE}40` }}
-                animate={{ rotate: [0, 3, -3, 0] }} transition={{ duration: 6, repeat: Infinity }}>
+                style={{ background: `linear-gradient(135deg, ${PULSE_ORANGE}, hsl(16, 82%, 40%))`, boxShadow: `0 4px 15px ${PULSE_ORANGE}40` }}>
                 <Rocket className="w-5 h-5 text-white" />
               </motion.div>
               <div>
@@ -1197,9 +1197,9 @@ export default function TvDashboard() {
             <div className="h-7 w-px bg-white/8" />
             <motion.div className="flex items-center gap-1.5" animate={{ opacity: connected ? 1 : 0.5 }}>
               {connected ? (
-                <motion.div animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 2, repeat: Infinity }}>
+                <div>
                   <Wifi className="w-3.5 h-3.5 text-green-400" />
-                </motion.div>
+                </div>
               ) : <WifiOff className="w-3.5 h-3.5 text-red-400" />}
               <span className="text-[9px] text-white/25 font-medium">{connected ? 'LIVE' : 'OFF'}</span>
             </motion.div>
@@ -1221,19 +1221,14 @@ export default function TvDashboard() {
               style={{
                 borderColor: alert.tone === 'warning' ? '#ef4444' : alert.tone === 'success' ? '#22c55e' : PULSE_ORANGE,
                 background: `linear-gradient(135deg, ${alert.tone === 'warning' ? 'rgba(239,68,68,0.18)' : alert.tone === 'success' ? 'rgba(34,197,94,0.18)' : `${PULSE_ORANGE}30`}, transparent 80%)`,
-                boxShadow: `0 0 50px ${alert.tone === 'warning' ? 'rgba(239,68,68,0.4)' : alert.tone === 'success' ? 'rgba(34,197,94,0.4)' : `${PULSE_ORANGE}55`}`,
+                boxShadow: `0 10px 30px rgba(0,0,0,0.5)`,
               }}
             >
-              <motion.div
-                className="absolute inset-0 pointer-events-none"
-                animate={{ opacity: [0.3, 0.7, 0.3] }}
-                transition={{ duration: 2, repeat: Infinity }}
-                style={{ background: `radial-gradient(circle at 50% 50%, ${alert.tone === 'warning' ? 'rgba(239,68,68,0.2)' : alert.tone === 'success' ? 'rgba(34,197,94,0.2)' : `${PULSE_ORANGE}30`}, transparent 70%)` }}
-              />
+              <div className="absolute inset-0 bg-white/5 pointer-events-none" />
               <div className="relative px-6 py-4 flex items-center gap-4">
-                <motion.div animate={{ scale: [1, 1.15, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                <div>
                   <Megaphone className="w-7 h-7" style={{ color: alert.tone === 'warning' ? '#ef4444' : alert.tone === 'success' ? '#22c55e' : PULSE_ORANGE }} />
-                </motion.div>
+                </div>
                 <p className="text-lg font-bold text-white flex-1" style={{ fontFamily: SPACE }}>{alert.message}</p>
                 <span className="text-[10px] uppercase font-bold tracking-widest text-white/40">Mensagem ao vivo</span>
               </div>

@@ -620,28 +620,70 @@ async function fetchDbApiKey(supabase, aiProvider) {
 }
 
 async function callAi(ai, model, messages, options = {}) {
-  const { temperature = 0.3, max_tokens = 2000 } = options;
-  if (ai.provider === 'claude') {
-    const systemMsg = messages.find(m => m.role === 'system');
-    const otherMsgs = messages.filter(m => m.role !== 'system');
-    const res = await fetch(ai.url, {
-      method: 'POST',
-      headers: { 'x-api-key': ai.key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, max_tokens, ...(systemMsg ? { system: systemMsg.content } : {}), messages: otherMsgs }),
-    });
-    if (!res.ok) throw new Error(`Claude error [${res.status}]: ${await res.text()}`);
-    const data = await res.json();
-    return data.content?.[0]?.text || '';
+  const { temperature = 0.3, max_tokens = 2000, retries = 2 } = options;
+  
+  // Fallback chain: se o modelo falhar com 429, tenta modelos com cotas mais altas
+  const FALLBACK_MODELS = {
+    'gemini-2.5-flash': ['gemini-2.5-flash-lite', 'gemini-2.0-flash-lite', 'gemini-1.5-flash-8b'],
+    'gemini-2.5-pro': ['gemini-2.5-flash', 'gemini-2.5-flash-lite'],
+  };
+  const modelsToTry = ai.provider === 'gemini' 
+    ? [model, ...(FALLBACK_MODELS[model] || [])]
+    : [model];
+
+  let lastError;
+  for (const tryModel of modelsToTry) {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        if (ai.provider === 'claude') {
+          const systemMsg = messages.find(m => m.role === 'system');
+          const otherMsgs = messages.filter(m => m.role !== 'system');
+          const res = await fetch(ai.url, {
+            method: 'POST',
+            headers: { 'x-api-key': ai.key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: tryModel, max_tokens, ...(systemMsg ? { system: systemMsg.content } : {}), messages: otherMsgs }),
+          });
+          if (!res.ok) throw new Error(`Claude error [${res.status}]: ${await res.text()}`);
+          const data = await res.json();
+          return data.content?.[0]?.text || '';
+        }
+        const res = await fetch(ai.url, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${ai.key}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: tryModel, messages, temperature, max_tokens }),
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          const err = new Error(`AI error [${res.status}]: ${errText}`);
+          err.status = res.status;
+          
+          // 429 = rate limit: tenta próximo modelo na chain de fallback imediatamente
+          if (res.status === 429) {
+            console.warn(`[callAi] Rate limit em ${tryModel}, tentando próximo modelo...`);
+            lastError = err;
+            break; // sai do loop de retries, vai pro próximo modelo
+          }
+          // 5xx = retry com backoff exponencial
+          if (res.status >= 500 && attempt < retries) {
+            const delay = Math.pow(2, attempt) * 1000;
+            console.warn(`[callAi] ${res.status} em ${tryModel}, retry em ${delay}ms...`);
+            await new Promise(r => setTimeout(r, delay));
+            continue;
+          }
+          throw err;
+        }
+        const data = await res.json();
+        return data.choices?.[0]?.message?.content || '';
+      } catch (err) {
+        lastError = err;
+        if (err.status === 429) break; // próximo modelo
+        if (attempt === retries) throw err;
+      }
+    }
   }
-  const res = await fetch(ai.url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${ai.key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages, temperature, max_tokens }),
-  });
-  if (!res.ok) throw new Error(`AI error [${res.status}]: ${await res.text()}`);
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content || '';
+  throw lastError || new Error('AI: todos modelos falharam');
 }
+
 
 // WhatsApp helper
 const WHATSAPP_API_URL = 'https://api.atendeclique.com.br/api/messages/send';

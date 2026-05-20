@@ -1341,6 +1341,16 @@ export default function TvDashboard() {
                       const items: React.ReactNode[] = [];
                       const addedBuffers = new Set<string>();
 
+                      // Initial Prep block: 08:00 - 08:30
+                      const initialPrepStartPx = (8 * 60 - OPERATIONAL_START) * MINUTE_HEIGHT;
+                      const initialPrepHeightPx = 30 * MINUTE_HEIGHT;
+                      items.push(
+                        <div key="prep-08-break" className="absolute left-0 right-0 pr-1" style={{ top: `${initialPrepStartPx}px`, height: `${initialPrepHeightPx}px` }}>
+                          <BufferCard startTime="08:00" type="prep" height={initialPrepHeightPx} />
+                        </div>
+                      );
+                      addedBuffers.add("08:00");
+
                       // Lunch block: fixed 12:00 - 14:00
                       const lunchStartPx = (12 * 60 - OPERATIONAL_START) * MINUTE_HEIGHT;
                       const lunchHeightPx = 120 * MINUTE_HEIGHT;

@@ -98,9 +98,10 @@ const PULSE_ORANGE = 'hsl(16, 82%, 51%)';
 const PULSE_DARK = '#0c0a14';
 const PULSE_CARD = 'rgba(255,255,255,0.035)';
 const SPACE = "'Space Grotesk', sans-serif";
-const MINUTE_HEIGHT = 1.5;
+const MINUTE_HEIGHT = 2; // pixels per minute on the schedule timeline
 const OPERATIONAL_START = 8 * 60; // 08:00
 const OPERATIONAL_END = 19 * 60;   // 19:00
+const TIMELINE_HEIGHT = (OPERATIONAL_END - OPERATIONAL_START) * MINUTE_HEIGHT;
 
 const ROLE_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
   admin:         { label: 'ADMINISTRAÇÃO',  color: PULSE_ORANGE, icon: Monitor },

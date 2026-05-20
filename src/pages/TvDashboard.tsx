@@ -1349,14 +1349,6 @@ export default function TvDashboard() {
             )}
 
 
-                  <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                    <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
-                    <p className="text-[10px] text-white/20">Nenhuma gravação hoje</p>
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Scheduled Posts */}
             {visibility.show_posts && (
               <div>

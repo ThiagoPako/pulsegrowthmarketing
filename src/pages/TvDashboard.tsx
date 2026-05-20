@@ -1265,7 +1265,7 @@ export default function TvDashboard() {
 
                 <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${schedule.length} gravações`} />
                 {schedule.length > 0 ? (
-                  <div className="relative overflow-hidden">
+                  <div className="relative pt-2">
                     <AnimatePresence>
                       {(() => {
                         const elements: React.ReactNode[] = [];

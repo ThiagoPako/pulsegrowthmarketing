@@ -358,7 +358,7 @@ function MemberCard({ member }: { member: TeamMember }) {
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.2 }} // Reduzido de 0.4 para 0.2
     >
       {isWorking && (
         <motion.div className="absolute top-0 left-0 right-0 h-[2px]"

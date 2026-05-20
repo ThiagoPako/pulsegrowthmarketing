@@ -294,6 +294,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     const activeClientIds = new Set(data.clients.filter(c => c.status !== 'cancelado').map(c => c.id));
+    const cancelledClientIds = new Set(data.clients.filter(c => c.status === 'cancelado').map(c => c.id));
     const allVideomakerIds = new Set([
       ...users.filter(u => u.role === 'videomaker').map(u => u.id),
       ...allRecs.map(r => r.videomakerId).filter(Boolean)
@@ -313,7 +314,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           vmId, 
           currentRecsLocal, 
           data.settings, 
-          activeClientIds
+          activeClientIds,
+          cancelledClientIds
         );
         
         // Add to our bulk lists

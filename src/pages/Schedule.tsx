@@ -1076,7 +1076,7 @@ export default function Schedule() {
             const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
             if (vmDayRecsCount >= 4) continue;
 
-            if (!hasConflict(vmId, dateStr, slot, undefined, undefined, client.id).hasConflict) {
+            if (!hasConflict(vmId, dateStr, slot).hasConflict) {
               const eligibleClient = extraClients.find(c => 
                 !currentRecsLocal.some(r => r.clientId === c.id && r.date === dateStr && r.status !== 'cancelada')
               );

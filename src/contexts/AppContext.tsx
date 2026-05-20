@@ -6,7 +6,7 @@ import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { supabase } from '@/lib/vpsDb';
 import { supabase as supabaseReal } from '@/integrations/supabase/client';
 import { usePresenceHeartbeat } from '@/hooks/usePresence';
-import { generateFixedRecordings, findAvailableSlots } from '@/lib/schedulingUtils';
+import { generateFixedRecordings, findAvailableSlots, organizeRecordingsForDate } from '@/lib/schedulingUtils';
 import { sendRecordingScheduledNotification } from '@/services/whatsappService';
 import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek, Script, ActiveRecording, UserRole, RecordingType } from '@/types';
 

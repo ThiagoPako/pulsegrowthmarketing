@@ -1130,7 +1130,7 @@ export default function Schedule() {
           <Button variant="outline" className="border-primary/50 text-primary hover:bg-primary/10" onClick={handleGenerateAllFixed} disabled={generatingAll}>
             <CalendarDays size={16} className="mr-2" /> {generatingAll ? 'Gerando...' : 'Gerar Todas Fixas'}
           </Button>
-          <Button onClick={() => { setForm({ clientId: '', videomakerId: '', date: format(new Date(), 'yyyy-MM-dd'), startTime: '08:00', type: 'fixa', prospectName: '' }); setNewOpen(true); }}>
+          <Button onClick={() => { setForm({ clientId: '', videomakerId: '', date: format(new Date(), 'yyyy-MM-dd'), startTime: '08:30', type: 'fixa', prospectName: '' }); setNewOpen(true); }}>
             <Plus size={16} className="mr-2" /> Nova Gravação
           </Button>
           <Button variant="outline" className="border-orange-500/50 text-orange-600 hover:bg-orange-500/10" onClick={() => {

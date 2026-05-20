@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { Calendar } from '@/components/ui/calendar';
 import { 
@@ -206,7 +207,7 @@ export default function CRM() {
                   company: formData.get('company') as string,
                   phone: formData.get('phone') as string,
                   contract_value: Number(formData.get('value')),
-                  status: 'lead'
+                  status: (formData.get('status') as LeadStatus) || 'lead'
                 });
               }} className="space-y-4 py-4">
                 <div className="grid gap-2">
@@ -229,6 +230,22 @@ export default function CRM() {
                     <Label htmlFor="phone">WhatsApp</Label>
                     <Input id="phone" name="phone" placeholder="(00) 00000-0000" className="bg-muted/50" />
                   </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="status">Status Inicial</Label>
+                  <Select name="status" defaultValue="lead">
+                    <SelectTrigger className="bg-muted/50">
+                      <SelectValue placeholder="Selecione o status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STAGES.map(s => (
+                        <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                      ))}
+                      {RECOVERY_STAGES.map(s => (
+                        <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <Button type="submit" className="w-full mt-4" disabled={createLead.isPending}>
                   {createLead.isPending ? 'Cadastrando...' : 'Criar Oportunidade'}
@@ -507,7 +524,11 @@ export default function CRM() {
           </div>
         </TabsContent>
         <TabsContent value="calendar" className="m-0">
-          <Card className="p-6 bg-card border-none shadow-sm">
+          <Card className="p-6 bg-card border-none shadow-sm mb-6">
+            <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
+              <CalendarIcon className="h-5 w-5 text-primary" /> 
+              Calendário de Reuniões
+            </h3>
             <div className="flex flex-col md:flex-row gap-8">
               <div className="flex-none">
                 <Calendar
@@ -515,21 +536,23 @@ export default function CRM() {
                   selected={new Date()}
                   className="rounded-md border bg-card"
                   locale={ptBR}
+                  modifiers={{
+                    meeting: (date) => leads.some(l => l.meeting_date && isSameDay(new Date(l.meeting_date + 'T12:00:00'), date))
+                  }}
+                  modifiersStyles={{
+                    meeting: { fontWeight: 'bold', color: 'var(--primary)', textDecoration: 'underline' }
+                  }}
                 />
               </div>
               <div className="flex-1 space-y-4">
-                <h3 className="text-lg font-bold flex items-center gap-2">
-                  <CalendarIcon className="h-5 w-5 text-primary" /> 
-                  Próximas Reuniões
-                </h3>
                 <div className="grid gap-3">
                   {leads
-                    .filter(l => l.meeting_date && l.status === 'meeting')
+                    .filter(l => l.meeting_date)
                     .sort((a, b) => new Date(a.meeting_date!).getTime() - new Date(b.meeting_date!).getTime())
                     .map(lead => (
                       <div key={lead.id} className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-muted/50 hover:bg-muted/50 transition-colors">
                         <div className="flex items-center gap-4">
-                          <div className="bg-primary/10 p-2 rounded-lg text-primary flex flex-col items-center min-w-[60px]">
+                          <div className={`p-2 rounded-lg flex flex-col items-center min-w-[60px] ${lead.status === 'meeting' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
                             <span className="text-[10px] uppercase font-bold">{format(new Date(lead.meeting_date! + 'T12:00:00'), 'MMM', { locale: ptBR })}</span>
                             <span className="text-xl font-black">{format(new Date(lead.meeting_date! + 'T12:00:00'), 'dd')}</span>
                           </div>
@@ -538,14 +561,17 @@ export default function CRM() {
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                               <Clock className="h-3 w-3" /> {lead.meeting_time?.slice(0, 5)} · {lead.company || 'Pessoa Física'}
                             </p>
+                            <Badge variant="outline" className="mt-1 text-[10px] h-4">
+                              {STAGES.find(s => s.id === lead.status)?.label || lead.status}
+                            </Badge>
                           </div>
                         </div>
                         <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
                       </div>
                     ))}
-                  {leads.filter(l => l.meeting_date && l.status === 'meeting').length === 0 && (
+                  {leads.filter(l => l.meeting_date).length === 0 && (
                     <div className="py-12 text-center text-muted-foreground border-2 border-dashed rounded-xl">
-                      Nenhuma reunião agendada no momento.
+                      Nenhuma reunião registrada no momento.
                     </div>
                   )}
                 </div>

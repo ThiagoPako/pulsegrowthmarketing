@@ -11,14 +11,19 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import { Calendar } from '@/components/ui/calendar';
 import { 
   Plus, Flame, Snowflake, RotateCcw, MessageSquare, 
   Briefcase, Phone, UserPlus, Target, TrendingUp, 
-  DollarSign, Users, LayoutDashboard, Filter, Search
+  DollarSign, Users, LayoutDashboard, Filter, Search,
+  Calendar as CalendarIcon, Clock
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import { format, isSameDay } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+
 
 type LeadStatus = 'lead' | 'contacted' | 'meeting' | 'contracted' | 'recovery_followup_1' | 'recovery_followup_2';
 type LeadTag = 'hot' | 'cold';

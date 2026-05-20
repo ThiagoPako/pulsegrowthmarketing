@@ -304,20 +304,28 @@ export function findRescheduleSlot(
  */
 export function organizeRecordingsForDate(
   date: string,
-  videomakerId: string,
+  videomakerId: string | null | undefined,
   allRecordings: Recording[],
   settings: CompanySettings
 ): { toUpdate: Recording[]; toCancel: Recording[] } {
+  const normalizedVmId = videomakerId || '';
+  
   const dayRecordings = allRecordings.filter(r => 
     r.date === date && 
-    r.videomakerId === videomakerId && 
+    (r.videomakerId || '') === normalizedVmId && 
     r.status !== 'cancelada'
   );
 
   if (dayRecordings.length === 0) return { toUpdate: [], toCancel: [] };
 
+  // If there's no videomaker assigned, all these recordings should be cancelled/removed
+  // because they cannot fit into the 4 slots of a videomaker.
+  if (!normalizedVmId) {
+    return { toUpdate: [], toCancel: dayRecordings.map(r => ({ ...r, status: 'cancelada' })) };
+  }
+
   // Hierarchy sorting: fixa > avulso > secundaria > backup > endomarketing > extra
-  const priorityMap: Record<RecordingType, number> = {
+  const priorityMap: Record<string, number> = {
     fixa: 1,
     avulso: 2,
     secundaria: 3,
@@ -330,7 +338,6 @@ export function organizeRecordingsForDate(
     const pA = priorityMap[a.type] || 99;
     const pB = priorityMap[b.type] || 99;
     if (pA !== pB) return pA - pB;
-    // If same priority, keep original order (or sort by existing startTime)
     return timeToMinutes(a.startTime) - timeToMinutes(b.startTime);
   });
 
@@ -346,7 +353,7 @@ export function organizeRecordingsForDate(
         toUpdate.push({ ...rec, startTime: targetTime });
       }
     } else {
-      // Exceeded capacity of 4 slots
+      // Exceeded capacity of 4 slots per videomaker
       toCancel.push({ ...rec, status: 'cancelada' });
     }
   });

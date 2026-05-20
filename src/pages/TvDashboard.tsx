@@ -442,8 +442,8 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
     >
       {isNow && (
         <motion.div className="absolute inset-0 rounded-xl pointer-events-none"
-          animate={{ boxShadow: [`inset 0 0 15px ${PULSE_ORANGE}0a`, `inset 0 0 25px ${PULSE_ORANGE}18`, `inset 0 0 15px ${PULSE_ORANGE}0a`] }}
-          transition={{ duration: 2.5, repeat: Infinity }}
+          animate={{ opacity: [0.1, 0.4, 0.1] }}
+          transition={{ duration: 3, repeat: Infinity }}
         />
       )}
 
@@ -563,15 +563,15 @@ function RotatingScheduleCard({ items, isLive, height }: { items: ScheduleItem[]
         </div>
       )}
 
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={items[index]?.id || 'empty'}
-          initial={{ opacity: 0, scale: 0.95, x: 20 }}
-          animate={{ opacity: 1, scale: 1, x: 0 }}
-          exit={{ opacity: 0, scale: 1.05, x: -20 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
           transition={{ 
-            duration: 0.8, 
-            ease: [0.4, 0, 0.2, 1]
+            duration: 0.3, // Reduzido de 0.8 para 0.3
+            ease: "easeOut" // Simplificado para easeOut
           }}
           className="absolute inset-0"
         >

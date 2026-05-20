@@ -198,7 +198,58 @@ function FloatingParticles() {
   );
 }
 
+/* ─── Time Marker Line ───────────────────────────────────── */
+function TimeMarker() {
+  const [percent, setPercent] = useState(0);
+  const [currentTime, setCurrentTime] = useState('');
+
+  useEffect(() => {
+    const update = () => {
+      const now = new Date();
+      const hours = now.getHours();
+      const minutes = now.getMinutes();
+      const totalMinutes = hours * 60 + minutes;
+      
+      // Assume o dia operacional das 07:00 às 20:00 (13 horas)
+      const start = 7 * 60;
+      const end = 20 * 60;
+      
+      if (totalMinutes < start) setPercent(0);
+      else if (totalMinutes > end) setPercent(100);
+      else {
+        const p = ((totalMinutes - start) / (end - start)) * 100;
+        setPercent(p);
+      }
+      
+      setCurrentTime(now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+    };
+
+    update();
+    const interval = setInterval(update, 30000); // Atualiza a cada 30s
+    return () => clearInterval(interval);
+  }, []);
+
+  if (percent <= 0 || percent >= 100) return null;
+
+  return (
+    <motion.div 
+      className="absolute left-0 right-0 z-50 flex items-center pointer-events-none"
+      style={{ top: `${percent}%` }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+    >
+      <div className="flex-1 h-[2px] bg-gradient-to-r from-transparent via-orange-500/50 to-transparent" />
+      <div className="absolute right-0 flex items-center gap-1 bg-orange-500 px-1.5 py-0.5 rounded-l-md shadow-[0_0_15px_rgba(249,115,22,0.4)]">
+        <Clock className="w-2.5 h-2.5 text-white animate-pulse" />
+        <span className="text-[10px] font-bold text-white tabular-nums">{currentTime}</span>
+      </div>
+    </motion.div>
+  );
+}
+
+
 /* ─── Status Summary ────────────────────────────────────── */
+
 function StatusSummary({ members }: { members: TeamMember[] }) {
   const online = members.filter(m => m.isOnline).length;
   const working = members.filter(m => m.isOnline && m.activity && m.activity !== 'idle' && m.activity !== 'paused').length;
@@ -1142,7 +1193,13 @@ export default function TvDashboard() {
           <div className="col-span-5 space-y-3 overflow-y-auto scrollbar-hide px-1">
             {/* Schedule */}
             {visibility.show_schedule && (
-              <div>
+              <div className="relative">
+                {/* Linha do Tempo (Clock Marker) */}
+                <div className="absolute inset-y-[35px] left-0 right-0 pointer-events-none z-10 hidden sm:block">
+                  <TimeMarker />
+                </div>
+
+
                 <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${schedule.length} gravações`} />
                 {schedule.length > 0 ? (
                   <div className="space-y-2">

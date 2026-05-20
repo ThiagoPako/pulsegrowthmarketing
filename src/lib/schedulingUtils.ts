@@ -110,7 +110,11 @@ export function generateFixedRecordings(
   existingRecordings: Recording[],
   settings: CompanySettings
 ): Recording[] {
-  // Guard: cannot generate without a videomaker
+  // Guard: cannot generate if client is cancelled or has no videomaker
+  if (client.status === 'cancelado') {
+    return [];
+  }
+
   if (!client.videomaker) {
     console.warn(`[generateFixedRecordings] Client "${client.companyName}" has no videomaker assigned — skipping.`);
     return [];
@@ -171,6 +175,7 @@ export function generateExtraRecordings(
   settings: CompanySettings,
   allVideomakerIds: string[]
 ): Recording[] {
+  if (client.status === 'cancelado') return [];
   if (!client.acceptsExtra) return [];
   if (!client.videomaker) return [];
   
@@ -270,6 +275,8 @@ export function findRescheduleSlot(
   const today = format(new Date(), 'yyyy-MM-dd');
   const duration = settings.recordingDuration;
 
+  if (client.status === 'cancelado') return null;
+
   // Priority 1: Backup day/time with responsible videomaker
   const backupDate = findNextDateForDay(client.backupDay, today);
   const backupDay = NUM_TO_DAY[getDay(new Date(backupDate + 'T12:00:00'))];
@@ -307,7 +314,8 @@ export function organizeRecordingsForDate(
   videomakerId: string | null | undefined,
   allRecordings: Recording[],
   settings: CompanySettings,
-  validClientIds?: Set<string>
+  validClientIds?: Set<string>,
+  cancelledClientIds?: Set<string>
 ): { toUpdate: Recording[]; toCancel: Recording[] } {
   const normalizedVmId = videomakerId || '';
   
@@ -326,10 +334,11 @@ export function organizeRecordingsForDate(
   // unless they are of type 'avulso' (which may have no clientId but should have a prospectName)
   const validRecs = dayRecordings.filter(r => {
     const isAvulso = r.type === 'avulso';
+    const isCancelledClient = cancelledClientIds && r.clientId && cancelledClientIds.has(r.clientId);
     const isInvalidClient = validClientIds && r.clientId && !validClientIds.has(r.clientId);
     const isMissingClient = !r.clientId && !isAvulso;
     
-    if (isInvalidClient || isMissingClient) {
+    if (isCancelledClient || isInvalidClient || isMissingClient) {
       toCancel.push({ ...r, status: 'cancelada' });
       return false;
     }

@@ -1281,6 +1281,9 @@ export type Database = {
           email: string | null
           id: string
           last_interaction: string | null
+          meeting_date: string | null
+          meeting_link: string | null
+          meeting_time: string | null
           name: string
           phone: string | null
           status: Database["public"]["Enums"]["crm_lead_status"]
@@ -1295,6 +1298,9 @@ export type Database = {
           email?: string | null
           id?: string
           last_interaction?: string | null
+          meeting_date?: string | null
+          meeting_link?: string | null
+          meeting_time?: string | null
           name: string
           phone?: string | null
           status?: Database["public"]["Enums"]["crm_lead_status"]
@@ -1309,6 +1315,9 @@ export type Database = {
           email?: string | null
           id?: string
           last_interaction?: string | null
+          meeting_date?: string | null
+          meeting_link?: string | null
+          meeting_time?: string | null
           name?: string
           phone?: string | null
           status?: Database["public"]["Enums"]["crm_lead_status"]

@@ -11,14 +11,19 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import { Calendar } from '@/components/ui/calendar';
 import { 
   Plus, Flame, Snowflake, RotateCcw, MessageSquare, 
   Briefcase, Phone, UserPlus, Target, TrendingUp, 
-  DollarSign, Users, LayoutDashboard, Filter, Search
+  DollarSign, Users, LayoutDashboard, Filter, Search,
+  Calendar as CalendarIcon, Clock
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import { format, isSameDay } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+
 
 type LeadStatus = 'lead' | 'contacted' | 'meeting' | 'contracted' | 'recovery_followup_1' | 'recovery_followup_2';
 type LeadTag = 'hot' | 'cold';
@@ -32,7 +37,10 @@ interface Lead {
   contract_value: number;
   status: LeadStatus;
   tag: LeadTag | null;
+  meeting_date: string | null;
+  meeting_time: string | null;
 }
+
 
 interface Goal {
   id: string;
@@ -240,8 +248,12 @@ export default function CRM() {
             <TabsTrigger value="goals" className="gap-2 px-6">
               <Target className="h-4 w-4" /> Metas de Vendas
             </TabsTrigger>
+            <TabsTrigger value="calendar" className="gap-2 px-6">
+              <CalendarIcon className="h-4 w-4" /> Calendário
+            </TabsTrigger>
           </TabsList>
         </div>
+
 
         <TabsContent value="pipeline" className="flex-1 overflow-hidden m-0">
           <div className="h-full overflow-x-auto custom-scrollbar">
@@ -329,6 +341,16 @@ export default function CRM() {
                                                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.contract_value)}
                                                 </span>
                                               </div>
+                                              
+                                              {lead.status === 'meeting' && lead.meeting_date && (
+                                                <div className="flex flex-col items-end">
+                                                  <span className="text-[9px] uppercase font-semibold text-muted-foreground tracking-tighter">Agendado</span>
+                                                  <div className="flex items-center gap-1 text-[10px] font-bold text-blue-600">
+                                                    <CalendarIcon className="h-3 w-3" /> {format(new Date(lead.meeting_date + 'T12:00:00'), 'dd/MM')} às {lead.meeting_time?.slice(0, 5)}
+                                                  </div>
+                                                </div>
+                                              )}
+
 
                                               <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all">
                                                 {stage.id === 'contacted' && (
@@ -353,7 +375,50 @@ export default function CRM() {
                                                     <Briefcase size={14} />
                                                   </Button>
                                                 )}
+                                                {stage.id === 'contacted' && (
+                                                   <Dialog>
+                                                      <DialogTrigger asChild>
+                                                        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100" title="Agendar Reunião">
+                                                          <CalendarIcon className="h-4 w-4" />
+                                                        </Button>
+                                                      </DialogTrigger>
+                                                      <DialogContent>
+                                                        <DialogHeader><DialogTitle>Agendar Reunião - {lead.name}</DialogTitle></DialogHeader>
+                                                        <form onSubmit={async (e) => {
+                                                            e.preventDefault();
+                                                            const formData = new FormData(e.currentTarget);
+                                                            const m_date = formData.get('date') as string;
+                                                            const m_time = formData.get('time') as string;
+                                                            
+                                                            const { error } = await supabase.from('crm_leads').update({
+                                                                status: 'meeting',
+                                                                meeting_date: m_date,
+                                                                meeting_time: m_time
+                                                            } as any).eq('id', lead.id);
+                                                            
+                                                            if (!error) {
+                                                                queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
+                                                                toast.success('Reunião agendada!');
+                                                            }
+                                                        }}>
+                                                            <div className="grid gap-4 py-4">
+                                                                <div className="grid gap-2">
+                                                                  <Label>Data da Reunião</Label>
+                                                                  <Input type="date" name="date" required />
+                                                                </div>
+                                                                <div className="grid gap-2">
+                                                                  <Label>Hora da Reunião</Label>
+                                                                  <Input type="time" name="time" required />
+                                                                </div>
+                                                                <Button type="submit" className="w-full">Confirmar Agendamento</Button>
+                                                            </div>
+                                                        </form>
+                                                      </DialogContent>
+
+                                                   </Dialog>
+                                                )}
                                                 <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+
                                               </div>
                                             </div>
                                             
@@ -441,10 +506,58 @@ export default function CRM() {
             </AnimatePresence>
           </div>
         </TabsContent>
+        <TabsContent value="calendar" className="m-0">
+          <Card className="p-6 bg-card border-none shadow-sm">
+            <div className="flex flex-col md:flex-row gap-8">
+              <div className="flex-none">
+                <Calendar
+                  mode="single"
+                  selected={new Date()}
+                  className="rounded-md border bg-card"
+                  locale={ptBR}
+                />
+              </div>
+              <div className="flex-1 space-y-4">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <CalendarIcon className="h-5 w-5 text-primary" /> 
+                  Próximas Reuniões
+                </h3>
+                <div className="grid gap-3">
+                  {leads
+                    .filter(l => l.meeting_date && l.status === 'meeting')
+                    .sort((a, b) => new Date(a.meeting_date!).getTime() - new Date(b.meeting_date!).getTime())
+                    .map(lead => (
+                      <div key={lead.id} className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-muted/50 hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center gap-4">
+                          <div className="bg-primary/10 p-2 rounded-lg text-primary flex flex-col items-center min-w-[60px]">
+                            <span className="text-[10px] uppercase font-bold">{format(new Date(lead.meeting_date! + 'T12:00:00'), 'MMM', { locale: ptBR })}</span>
+                            <span className="text-xl font-black">{format(new Date(lead.meeting_date! + 'T12:00:00'), 'dd')}</span>
+                          </div>
+                          <div>
+                            <p className="font-bold">{lead.name}</p>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Clock className="h-3 w-3" /> {lead.meeting_time?.slice(0, 5)} · {lead.company || 'Pessoa Física'}
+                            </p>
+                          </div>
+                        </div>
+                        <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                      </div>
+                    ))}
+                  {leads.filter(l => l.meeting_date && l.status === 'meeting').length === 0 && (
+                    <div className="py-12 text-center text-muted-foreground border-2 border-dashed rounded-xl">
+                      Nenhuma reunião agendada no momento.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   );
 }
+
 
 function TagSelector({ leadId, currentTag }: { leadId: string, currentTag: LeadTag | null }) {
   const queryClient = useQueryClient();

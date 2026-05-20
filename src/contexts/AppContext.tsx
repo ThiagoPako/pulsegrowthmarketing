@@ -230,7 +230,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [data]);
 
   const updateRecording = useCallback((recording: Recording) => { data.updateRecording(recording); }, [data]);
-  const cancelRecording = useCallback((id: string) => { data.cancelRecording(id); }, [data]);
+  const cancelRecording = useCallback(async (id: string) => { 
+    const rec = data.recordings.find(r => r.id === id);
+    await data.cancelRecording(id); 
+    if (data.settings.autoFillVacancies && rec) {
+      autoFillVacanciesForDate(rec.date);
+    }
+  }, [data, autoFillVacanciesForDate]);
+
   const deleteRecording = useCallback(async (id: string) => { return data.deleteRecording(id); }, [data]);
   const addTask = useCallback((task: KanbanTask) => { data.addTask(task); }, [data]);
   const updateTask = useCallback((task: KanbanTask) => { data.updateTask(task); }, [data]);

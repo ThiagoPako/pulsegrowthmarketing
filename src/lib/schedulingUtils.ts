@@ -371,13 +371,18 @@ export function organizeRecordingsForDate(
 
   const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
 
+  // Count existing completed or in-progress recordings for this videomaker/date 
+  // to ensure we don't accidentally "overwrite" capacity if some were already done outside standard slots
+  let assignedCount = 0;
+
   // Assign to slots
-  sortedRecs.forEach((rec, index) => {
-    if (index < FIXED_SLOTS.length) {
-      const targetTime = FIXED_SLOTS[index];
+  sortedRecs.forEach((rec) => {
+    if (assignedCount < FIXED_SLOTS.length) {
+      const targetTime = FIXED_SLOTS[assignedCount];
       if (rec.startTime !== targetTime) {
         toUpdate.push({ ...rec, startTime: targetTime });
       }
+      assignedCount++;
     } else {
       // Exceeded capacity of 4 slots per videomaker
       toCancel.push({ ...rec, status: 'cancelada' });

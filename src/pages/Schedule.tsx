@@ -1105,28 +1105,10 @@ export default function Schedule() {
         <h1 className="text-2xl font-display font-bold">Agenda</h1>
         <div className="flex gap-2 flex-wrap">
           {(showBackup || showExtra) && (
-            <>
+            <div className="flex gap-2 flex-wrap">
               <Button variant="outline" className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateBackupExtra}>
                 <RefreshCw size={16} className="mr-2" /> Gerar Backup/Extra Mensal
               </Button>
-              <Button 
-                variant="outline" 
-                className="border-emerald-500/50 text-emerald-600 hover:bg-emerald-500/10 shadow-sm animate-in fade-in slide-in-from-right-4 duration-500" 
-                onClick={async () => {
-                  const todayStr = format(new Date(), 'yyyy-MM-dd');
-                  toast.loading('Analisando vagas e preenchendo agenda...', { id: 'autofill' });
-                  const count = await autoFillVacanciesForDate(todayStr);
-                  if (count > 0) {
-                    toast.success(`${count} vaga(s) preenchida(s) com gravações extras!`, { id: 'autofill' });
-                  } else {
-                    toast.info('Não foram encontradas vagas ou clientes extras disponíveis para hoje.', { id: 'autofill' });
-                  }
-                }}
-              >
-                <Sparkles size={16} className="mr-2 animate-pulse" /> Otimizar Videomakers
-              </Button>
-
-
               {showBackup && (
                 <Button variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllBackup}>
                   <Trash2 size={16} className="mr-2" /> Apagar Backups
@@ -1137,8 +1119,24 @@ export default function Schedule() {
                   <Trash2 size={16} className="mr-2" /> Apagar Extras
                 </Button>
               )}
-            </>
+            </div>
           )}
+          <Button 
+            variant="outline" 
+            className="border-emerald-500/50 text-emerald-600 hover:bg-emerald-500/10 shadow-sm" 
+            onClick={async () => {
+              const todayStr = format(new Date(), 'yyyy-MM-dd');
+              toast.loading('Analisando vagas e preenchendo agenda...', { id: 'autofill' });
+              const count = await autoFillVacanciesForDate(todayStr);
+              if (count > 0) {
+                toast.success(`${count} vaga(s) preenchida(s) com gravações extras!`, { id: 'autofill' });
+              } else {
+                toast.info('Não foram encontradas vagas ou clientes extras disponíveis para hoje.', { id: 'autofill' });
+              }
+            }}
+          >
+            <Sparkles size={16} className="mr-2 animate-pulse" /> Otimizar Videomakers
+          </Button>
           <Button 
             variant="outline" 
             className="border-indigo-500/50 text-indigo-600 hover:bg-indigo-500/10" 

@@ -183,7 +183,7 @@ function AnimatedNumber({ value }: { value: number }) {
       setD(value);
       return;
     }
-    const c = animate(mv, value, { duration: 0.5, ease: 'easeOut' }); // Reduzido de 0.8 para 0.5
+    const c = animate(mv, value, { duration: 0.2, ease: 'easeOut' }); // Reduzido drasticamente para TV
     const u = rounded.on('change', v => setD(v));
     return () => { c.stop(); u(); };
   }, [value, shouldReduceMotion]);
@@ -193,18 +193,18 @@ function AnimatedNumber({ value }: { value: number }) {
 /* ─── Floating Particles ────────────────────────────────── */
 function FloatingParticles() {
   const particles = useMemo(() =>
-    Array.from({ length: 15 }, (_, i) => ({
+    Array.from({ length: 5 }, (_, i) => ({ // Reduzido de 15 para 5
       id: i, x: Math.random() * 100, y: Math.random() * 100,
-      size: Math.random() * 2.5 + 1, duration: Math.random() * 25 + 15, delay: Math.random() * 10,
+      size: Math.random() * 2 + 1, duration: Math.random() * 20 + 20, delay: Math.random() * 10,
     })), []);
 
   return (
     <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
       {particles.map(p => (
         <motion.div key={p.id} className="absolute rounded-full"
-          style={{ left: `${p.x}%`, top: `${p.y}%`, width: p.size, height: p.size, background: PULSE_ORANGE }}
-          animate={{ y: [0, -30, 0], x: [0, 10, -8, 0], opacity: [0, 0.2, 0.1, 0] }}
-          transition={{ duration: p.duration, delay: p.delay, repeat: Infinity, ease: 'linear' }} // Alterado de easeInOut para linear para evitar cálculos de curva complexos
+          style={{ left: `${p.x}%`, top: `${p.y}%`, width: p.size, height: p.size, background: PULSE_ORANGE, willChange: 'transform' }}
+          animate={{ y: [0, -40, 0] }}
+          transition={{ duration: p.duration, delay: p.delay, repeat: Infinity, ease: 'linear' }}
         />
       ))}
     </div>
@@ -243,9 +243,9 @@ function TimeMarker() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
-      <div className="flex-1 h-[2px] bg-gradient-to-r from-transparent via-red-500 to-transparent shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
-      <div className="absolute right-0 flex items-center gap-1 bg-red-600 px-2 py-1 rounded-l-md shadow-[0_0_15px_rgba(220,38,38,0.6)] border-l border-y border-red-400/30">
-        <Clock className="w-3 h-3 text-white animate-pulse" />
+      <div className="flex-1 h-[2px] bg-red-500/30" />
+      <div className="absolute right-0 flex items-center gap-1 bg-red-600 px-2 py-1 rounded-l-md shadow-lg">
+        <Clock className="w-3 h-3 text-white" />
         <span className="text-[10px] font-bold text-white tabular-nums tracking-wider">{currentTime}</span>
       </div>
     </motion.div>
@@ -262,18 +262,10 @@ function BufferCard({ startTime, type = 'pulse', height }: { startTime: string; 
         height: height ? `${height}px` : 'auto',
         minHeight: isPulse ? '40px' : '36px'
       }}
-      layout
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
     >
-      <motion.div 
-        className="absolute inset-0 bg-orange-500/5 pointer-events-none"
-        animate={{ 
-          opacity: [0.1, 0.3, 0.1],
-          scale: [1, 1.05, 1]
-        }}
-        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-      />
+      <div className="absolute inset-0 bg-orange-500/5 pointer-events-none" />
       <div className="flex items-center gap-2 relative z-10">
         <Rocket className="w-3.5 h-3.5 text-orange-500 animate-bounce" />
         <span className="text-[10px] font-black text-orange-500 uppercase tracking-[0.3em] font-mono">PULSE</span>
@@ -294,7 +286,6 @@ function LunchCard({ startTime, height }: { startTime: string; height?: number }
         background: 'rgba(245,158,11,0.03)',
         height: height ? `${height}px` : 'auto'
       }}
-      layout
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
     >
@@ -354,7 +345,6 @@ function MemberCard({ member }: { member: TeamMember }) {
         borderColor: `${config.color}25`,
         background: `linear-gradient(135deg, ${config.color}0a, transparent 70%)`,
       }}
-      layout
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
@@ -383,8 +373,8 @@ function MemberCard({ member }: { member: TeamMember }) {
           )}
           <motion.div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
             style={{ borderColor: PULSE_DARK, backgroundColor: member.isOnline ? '#22c55e' : '#6b7280' }}
-            animate={member.isOnline ? { scale: [1, 1.2, 1] } : {}}
-            transition={{ duration: 2, repeat: Infinity }}
+            animate={member.isOnline ? { scale: [1, 1.1, 1] } : {}}
+            transition={{ duration: 3, repeat: Infinity }}
           />
         </div>
 
@@ -435,10 +425,9 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
         opacity: isCancelled ? 0.35 : 1,
         height: height ? `${height}px` : 'auto'
       }}
-      layout="position"
       initial={false}
       animate={{ opacity: isCancelled ? 0.35 : 1, y: 0 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: 0.1 }}
     >
       {isNow && (
         <motion.div className="absolute inset-0 rounded-xl pointer-events-none"
@@ -469,7 +458,7 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
               <motion.div className="flex items-center gap-1 rounded-full px-1.5 py-0.5" style={{ backgroundColor: `${PULSE_ORANGE}1a` }}
                 animate={{ opacity: [1, 0.5, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
                 <motion.div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: PULSE_ORANGE }}
-                  animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 1, repeat: Infinity }} />
+                  animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 2, repeat: Infinity }} />
                 <span className="text-[9px] font-bold" style={{ color: PULSE_ORANGE }}>AO VIVO</span>
               </motion.div>
             )}
@@ -596,11 +585,10 @@ function EditingCard({ task }: { task: EditingTask }) {
         borderColor: `${col.color}22`,
         background: `linear-gradient(135deg, ${col.color}08, transparent 70%)`,
       }}
-      layout
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.2 }}
     >
       <div className="p-2.5">
         <div className="flex items-center gap-2 mb-2">
@@ -677,11 +665,10 @@ function DesignActivityCard({ task }: { task: DesignActivityTask }) {
         borderColor: `${col.color}33`,
         background: `linear-gradient(135deg, ${col.color}12, transparent 72%)`,
       }}
-      layout
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      transition={{ duration: 0.35 }}
+      transition={{ duration: 0.2 }}
     >
       <div className="p-3">
         <div className="flex items-center gap-2 mb-2">
@@ -747,7 +734,7 @@ function PostCard({ post }: { post: ScheduledPost }) {
   return (
     <motion.div className="rounded-lg border p-2.5 flex items-center gap-2.5"
       style={{ borderColor: 'rgba(255,255,255,0.06)', background: PULSE_CARD }}
-      layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
       {post.clientLogo ? (
         <img src={post.clientLogo} alt="" className="w-7 h-7 rounded object-contain flex-shrink-0" />
       ) : (
@@ -889,22 +876,19 @@ function SeasonalBanner({ slides }: { slides: SeasonalSlide[] }) {
     <motion.div className="relative overflow-hidden rounded-2xl"
       style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}
       initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.5 }}>
-      <motion.div className="absolute top-0 left-0 right-0 h-[2px]"
-        style={{ background: `linear-gradient(90deg, transparent, ${PULSE_ORANGE}, transparent)` }}
-        animate={{ opacity: [0.2, 0.7, 0.2] }}
-        transition={{ duration: 4, repeat: Infinity }} />
+      <div className="absolute top-0 left-0 right-0 h-[1px] bg-orange-500/20" />
 
       <div className="flex items-center gap-3 px-5 pt-3 pb-1.5">
-        <motion.div animate={{ rotate: [0, 12, -12, 0] }} transition={{ duration: 3, repeat: Infinity }}>
+        <div>
           <Sparkles className="w-3.5 h-3.5" style={{ color: PULSE_ORANGE }} />
-        </motion.div>
+        </div>
         <h2 className="text-[10px] font-bold text-white/45 uppercase tracking-[0.2em]" style={{ fontFamily: SPACE }}>Datas Sazonais</h2>
         <div className="flex-1 h-px bg-gradient-to-r from-white/8 to-transparent" />
         <div className="flex gap-1">
           {slides.map((_, i) => (
             <motion.div key={i} className="rounded-full cursor-pointer"
               style={{ width: current === i ? 14 : 5, height: 5, backgroundColor: current === i ? PULSE_ORANGE : 'rgba(255,255,255,0.12)' }}
-              animate={{ width: current === i ? 14 : 5 }} transition={{ duration: 0.3 }}
+              animate={{ width: current === i ? 14 : 5 }} transition={{ duration: 0.2 }}
               onClick={() => setCurrent(i)} />
           ))}
         </div>
@@ -919,18 +903,15 @@ function SeasonalBanner({ slides }: { slides: SeasonalSlide[] }) {
 
             return (
               <motion.div key={`${slide.label}-${i}`} className="absolute inset-x-5 top-0 bottom-3 flex gap-4"
-                initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }}
-                transition={{ duration: 0.45, ease: 'easeInOut' }}>
+                initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                style={{ willChange: 'transform, opacity' }}
+                transition={{ duration: 0.3, ease: 'easeOut' }}>
                 {/* Countdown */}
                 <motion.div className="flex-shrink-0 w-[110px] rounded-xl flex flex-col items-center justify-center"
-                  style={{ background: urg.bg, border: `1px solid ${urg.color}28`, boxShadow: `0 0 25px ${urg.glow}` }}
-                  animate={{ boxShadow: [`0 0 15px ${urg.glow}`, `0 0 35px ${urg.glow}`, `0 0 15px ${urg.glow}`] }}
-                  transition={{ duration: 3, repeat: Infinity }}>
-                  <motion.span className="text-3xl font-black tabular-nums" style={{ color: urg.color, fontFamily: SPACE }}
-                    animate={slide.urgency === 'high' ? { scale: [1, 1.08, 1] } : {}}
-                    transition={{ duration: 1.5, repeat: Infinity }}>
+                  style={{ background: urg.bg, border: `1px solid ${urg.color}28` }}>
+                  <span className="text-3xl font-black tabular-nums" style={{ color: urg.color, fontFamily: SPACE }}>
                     {slide.daysUntil}
-                  </motion.span>
+                  </span>
                   <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5" style={{ color: `${urg.color}bb` }}>
                     {slide.daysUntil === 1 ? 'dia' : 'dias'}
                   </span>
@@ -959,7 +940,7 @@ function SeasonalBanner({ slides }: { slides: SeasonalSlide[] }) {
                       <motion.div key={`${c.name}-${ci}`} className="rounded-xl px-2.5 py-2 flex items-center gap-2"
                         style={{ background: `${urg.color}0c`, border: `1px solid ${urg.color}1a` }}
                         initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.15 + ci * 0.06 }}>
+                        transition={{ duration: 0.2 }}>
                         {c.logoUrl ? (
                           <div className="w-8 h-8 rounded-lg overflow-hidden border flex items-center justify-center"
                             style={{ borderColor: c.color ? `hsl(${c.color} / 0.26)` : `${urg.color}33`, backgroundColor: c.color ? `hsl(${c.color} / 0.12)` : `${urg.color}14` }}>
@@ -1194,11 +1175,10 @@ export default function TvDashboard() {
           initial={{ opacity: 0, y: -15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
-              <motion.div className="w-9 h-9 rounded-xl flex items-center justify-center"
-                style={{ background: `linear-gradient(135deg, ${PULSE_ORANGE}, hsl(16, 82%, 40%))`, boxShadow: `0 4px 15px ${PULSE_ORANGE}40` }}
-                animate={{ rotate: [0, 3, -3, 0] }} transition={{ duration: 6, repeat: Infinity }}>
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                style={{ background: `linear-gradient(135deg, ${PULSE_ORANGE}, hsl(16, 82%, 40%))`, boxShadow: `0 4px 15px ${PULSE_ORANGE}40` }}>
                 <Rocket className="w-5 h-5 text-white" />
-              </motion.div>
+              </div>
               <div>
                 <h1 className="text-xl font-black tracking-tight" style={{ color: PULSE_ORANGE }}>PULSE</h1>
                 <p className="text-[9px] uppercase tracking-[0.3em] text-white/25 font-medium -mt-0.5">Growth Marketing</p>
@@ -1216,9 +1196,9 @@ export default function TvDashboard() {
             <div className="h-7 w-px bg-white/8" />
             <motion.div className="flex items-center gap-1.5" animate={{ opacity: connected ? 1 : 0.5 }}>
               {connected ? (
-                <motion.div animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 2, repeat: Infinity }}>
+                <div>
                   <Wifi className="w-3.5 h-3.5 text-green-400" />
-                </motion.div>
+                </div>
               ) : <WifiOff className="w-3.5 h-3.5 text-red-400" />}
               <span className="text-[9px] text-white/25 font-medium">{connected ? 'LIVE' : 'OFF'}</span>
             </motion.div>
@@ -1240,19 +1220,14 @@ export default function TvDashboard() {
               style={{
                 borderColor: alert.tone === 'warning' ? '#ef4444' : alert.tone === 'success' ? '#22c55e' : PULSE_ORANGE,
                 background: `linear-gradient(135deg, ${alert.tone === 'warning' ? 'rgba(239,68,68,0.18)' : alert.tone === 'success' ? 'rgba(34,197,94,0.18)' : `${PULSE_ORANGE}30`}, transparent 80%)`,
-                boxShadow: `0 0 50px ${alert.tone === 'warning' ? 'rgba(239,68,68,0.4)' : alert.tone === 'success' ? 'rgba(34,197,94,0.4)' : `${PULSE_ORANGE}55`}`,
+                boxShadow: `0 10px 30px rgba(0,0,0,0.5)`,
               }}
             >
-              <motion.div
-                className="absolute inset-0 pointer-events-none"
-                animate={{ opacity: [0.3, 0.7, 0.3] }}
-                transition={{ duration: 2, repeat: Infinity }}
-                style={{ background: `radial-gradient(circle at 50% 50%, ${alert.tone === 'warning' ? 'rgba(239,68,68,0.2)' : alert.tone === 'success' ? 'rgba(34,197,94,0.2)' : `${PULSE_ORANGE}30`}, transparent 70%)` }}
-              />
+              <div className="absolute inset-0 bg-white/5 pointer-events-none" />
               <div className="relative px-6 py-4 flex items-center gap-4">
-                <motion.div animate={{ scale: [1, 1.15, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                <div>
                   <Megaphone className="w-7 h-7" style={{ color: alert.tone === 'warning' ? '#ef4444' : alert.tone === 'success' ? '#22c55e' : PULSE_ORANGE }} />
-                </motion.div>
+                </div>
                 <p className="text-lg font-bold text-white flex-1" style={{ fontFamily: SPACE }}>{alert.message}</p>
                 <span className="text-[10px] uppercase font-bold tracking-widest text-white/40">Mensagem ao vivo</span>
               </div>

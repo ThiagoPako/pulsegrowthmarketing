@@ -409,7 +409,7 @@ function MemberCard({ member }: { member: TeamMember }) {
 }
 
 /* ─── Schedule Card (enhanced with logo + avatar) ───────── */
-function ScheduleCard({ item, isLive }: { item: ScheduleItem; isLive: boolean }) {
+function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: boolean; height?: number }) {
   const now = new Date();
   const [h, m] = item.startTime.split(':').map(Number);
   const startDate = new Date(); startDate.setHours(h, m, 0, 0);
@@ -426,6 +426,7 @@ function ScheduleCard({ item, isLive }: { item: ScheduleItem; isLive: boolean })
         border: `1px solid ${borderColor}`,
         background: isNow ? `linear-gradient(135deg, ${PULSE_ORANGE}0c, transparent)` : isDone ? 'linear-gradient(135deg, rgba(34,197,94,0.04), transparent)' : PULSE_CARD,
         opacity: isCancelled ? 0.35 : 1,
+        height: height ? `${height}px` : 'auto'
       }}
       layout
       initial={{ opacity: 0, y: 10 }}

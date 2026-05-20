@@ -498,6 +498,53 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
   );
 }
 
+/* ─── Rotating Schedule Card for overlaps ───────────────── */
+function RotatingScheduleCard({ items, isLive, height }: { items: ScheduleItem[]; isLive: (id: string) => boolean; height?: number }) {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (items.length <= 1) {
+      setIndex(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setIndex(prev => (prev + 1) % items.length);
+    }, 6000); // 6 seconds per slide
+    return () => clearInterval(interval);
+  }, [items.length]);
+
+  return (
+    <div className="relative w-full h-full overflow-hidden">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={items[index]?.id || 'empty'}
+          initial={{ opacity: 0, scale: 0.95, x: 20 }}
+          animate={{ opacity: 1, scale: 1, x: 0 }}
+          exit={{ opacity: 0, scale: 1.05, x: -20 }}
+          transition={{ 
+            duration: 0.8, 
+            ease: [0.4, 0, 0.2, 1]
+          }}
+          className="absolute inset-0"
+        >
+          <ScheduleCard item={items[index]} isLive={isLive(items[index].id)} height={height} />
+          
+          {items.length > 1 && (
+            <div className="absolute top-2 right-2 z-50 flex gap-1">
+              {items.map((_, i) => (
+                <div 
+                  key={i} 
+                  className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${i === index ? 'bg-orange-500 w-4' : 'bg-white/20'}`}
+                />
+              ))}
+            </div>
+          )}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+}
+
 /* ─── Editing Pipeline Card ─────────────────────────────── */
 function EditingCard({ task }: { task: EditingTask }) {
   const col = COLUMN_CONFIG[task.column] || COLUMN_CONFIG.edicao;

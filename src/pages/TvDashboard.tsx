@@ -1256,68 +1256,97 @@ export default function TvDashboard() {
             {visibility.show_schedule && (
               <div className="relative">
                 {/* Linha do Tempo (Clock Marker) */}
-                <div className="absolute inset-y-[35px] left-0 right-0 pointer-events-none z-10 hidden sm:block">
+                <div 
+                  className="absolute left-0 right-0 pointer-events-none z-10 hidden sm:block"
+                  style={{ top: '35px', height: `${(OPERATIONAL_END - OPERATIONAL_START) * MINUTE_HEIGHT}px` }}
+                >
                   <TimeMarker />
                 </div>
 
-
                 <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${schedule.length} gravações`} />
                 {schedule.length > 0 ? (
-                  <div className="space-y-2">
+                  <div className="relative overflow-hidden">
                     <AnimatePresence>
                       {(() => {
                         const elements: React.ReactNode[] = [];
+                        let lastMinute = OPERATIONAL_START;
                         let lunchAdded = false;
                         const addedBuffers = new Set<string>();
 
-                        schedule.forEach((item, idx) => {
-                          const [h, m] = item.startTime.split(':').map(Number);
-                          const totalMinutes = h * 60 + m;
-
-                          // Initial morning prep if it's the first item
-                          if (idx === 0 && totalMinutes > 8 * 60) {
-                            elements.push(<BufferCard key="morning-prep" startTime="08:00 - 08:30" type="prep" />);
-                          }
-
-                          // Add lunch break if we passed 12:00
-                          if (!lunchAdded && totalMinutes >= 12 * 60) {
-                            elements.push(<LunchCard key="lunch-break" startTime="12:00 - 14:00" />);
-                            lunchAdded = true;
-                          }
-
-                          // Skip rendering cards that start during lunch time
-                          if (totalMinutes >= 12 * 60 && totalMinutes < 14 * 60) {
-                            return;
-                          }
-
-                          elements.push(<ScheduleCard key={item.id} item={item} isLive={activeRecordingIds.includes(item.id)} />);
-
-                          
-                          // Add pulse buffer after recording if it's not cancelled
-                          if (item.status !== 'cancelada') {
-                            const bufferMinutes = totalMinutes + 90; // Assume 90min duration
-                            const bufferTime = `${String(Math.floor(bufferMinutes / 60)).padStart(2, '0')}:${String(bufferMinutes % 60).padStart(2, '0')}`;
-                            
-                            // Only add buffer if it doesn't start exactly at 12:00 (lunch start) and hasn't been added yet
-                            if (bufferTime !== '12:00' && !addedBuffers.has(bufferTime)) {
-                              addedBuffers.add(bufferTime);
-                              const isNextPrep = bufferTime === '08:00' || bufferTime === '14:00' || bufferTime === '16:00';
-                              elements.push(<BufferCard key={`buffer-${bufferTime}`} startTime={`${bufferTime} - ${String(Math.floor((bufferMinutes + 30) / 60)).padStart(2, '0')}:${String((bufferMinutes + 30) % 60).padStart(2, '0')}`} type={isNextPrep ? 'prep' : 'pulse'} />);
-                            }
-                          }
-
+                        const sortedSchedule = [...schedule].sort((a, b) => {
+                          const [hA, mA] = a.startTime.split(':').map(Number);
+                          const [hB, mB] = b.startTime.split(':').map(Number);
+                          return (hA * 60 + mA) - (hB * 60 + mB);
                         });
 
+                        sortedSchedule.forEach((item, idx) => {
+                          const [h, m] = item.startTime.split(':').map(Number);
+                          const startTime = h * 60 + m;
 
-                        // Ensure basic slots are shown if schedule is short
-                        if (!lunchAdded) elements.push(<LunchCard key="lunch-break" startTime="12:00 - 14:00" />);
+                          // Handle Lunch
+                          if (!lunchAdded && startTime >= 12 * 60) {
+                            const lunchStart = 12 * 60;
+                            if (lunchStart > lastMinute) {
+                              elements.push(<TimelineSpacer key="spacer-before-lunch" minutes={lunchStart - lastMinute} />);
+                            }
+                            elements.push(<LunchCard key="lunch-break" startTime="12:00 - 14:00" height={120 * MINUTE_HEIGHT} />);
+                            lunchAdded = true;
+                            lastMinute = 14 * 60;
+                          }
+
+                          // Skip items during lunch
+                          if (startTime >= 12 * 60 && startTime < 14 * 60) return;
+
+                          // Spacer for gaps
+                          if (startTime > lastMinute) {
+                            elements.push(<TimelineSpacer key={`spacer-${idx}`} minutes={startTime - lastMinute} />);
+                          }
+
+                          // Card
+                          const duration = 90;
+                          elements.push(<ScheduleCard key={item.id} item={item} isLive={activeRecordingIds.includes(item.id)} height={duration * MINUTE_HEIGHT} />);
+                          lastMinute = Math.max(lastMinute, startTime + duration);
+
+                          // Optional Pulse Buffer
+                          if (item.status !== 'cancelada') {
+                            const bufferMinutes = startTime + 90;
+                            const bufferTime = `${String(Math.floor(bufferMinutes / 60)).padStart(2, '0')}:${String(bufferMinutes % 60).padStart(2, '0')}`;
+                            
+                            if (bufferMinutes >= lastMinute && bufferMinutes < OPERATIONAL_END && bufferMinutes !== 12 * 60 && !addedBuffers.has(bufferTime)) {
+                              addedBuffers.add(bufferTime);
+                              const isNextPrep = bufferTime === '08:00' || bufferTime === '14:00' || bufferTime === '16:00';
+                              elements.push(<BufferCard key={`buffer-${bufferTime}`} startTime={bufferTime} type={isNextPrep ? 'prep' : 'pulse'} height={30 * MINUTE_HEIGHT} />);
+                              lastMinute = bufferMinutes + 30;
+                            }
+                          }
+                        });
+
+                        // Ensure lunch is added if no items after it
+                        if (!lunchAdded) {
+                          if (12 * 60 > lastMinute) {
+                            elements.push(<TimelineSpacer key="final-spacer-before-lunch" minutes={12 * 60 - lastMinute} />);
+                          }
+                          elements.push(<LunchCard key="lunch-break" startTime="12:00 - 14:00" height={120 * MINUTE_HEIGHT} />);
+                          lastMinute = 14 * 60;
+                        }
+
+                        // Final filler
+                        if (lastMinute < OPERATIONAL_END) {
+                          elements.push(<TimelineSpacer key="final-spacer" minutes={OPERATIONAL_END - lastMinute} />);
+                        }
 
                         return elements;
                       })()}
-
                     </AnimatePresence>
                   </div>
                 ) : (
+                  <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                    <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                    <p className="text-[10px] text-white/20">Nenhuma gravação hoje</p>
+                  </div>
+                )}
+              </div>
+            )}
 
 
                   <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>

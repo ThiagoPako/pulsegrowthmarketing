@@ -104,16 +104,19 @@ export function useMyPermissions() {
   const hasModuleAccess = (path: string): boolean => {
     const data = query.data;
     if (!data) return true; // loading state: allow
-    if (data.role === 'admin') return true; // admin always has full access
+    
+    // admin always has full access
+    if (data.role === 'admin') return true;
 
     // If user has custom permissions set, use those
-    if (data.modules.length > 0) {
-      const mod = AVAILABLE_MODULES.find(m => m.paths.some(p => path.startsWith(p)));
+    if (data.modules && data.modules.length > 0) {
+      const mod = AVAILABLE_MODULES.find(m => m.paths.some(p => path === p || path.startsWith(p + '/')));
       if (!mod) return true; // dashboard and unknown paths are always allowed
       return data.modules.includes(mod.key);
     }
 
-    // No custom permissions = use default role-based access (return true to let Layout handle it)
+    // Default access for other roles can be defined here if needed
+    // For now, if no custom permissions, allow access (roles are already filtered in Sidebar/AppRoutes)
     return true;
   };
 

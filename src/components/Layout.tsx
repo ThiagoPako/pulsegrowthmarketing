@@ -153,8 +153,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       ...cat,
       items: cat.items.filter(item => {
         if (!currentUser) return false;
-        if (!item.roles.includes(currentUser.role)) return false;
+        
+        // Check role first
+        const hasRole = item.roles.includes(currentUser.role);
+        if (!hasRole) return false;
+
+        // Admin has full access to everything in their roles
         if (currentUser.role === 'admin') return true;
+
+        // For others, check custom module permissions
         return hasModuleAccess(item.path);
       }),
     }))

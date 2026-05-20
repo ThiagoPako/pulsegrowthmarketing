@@ -131,7 +131,7 @@ export default function Schedule() {
   const [scriptsOpen, setScriptsOpen] = useState(false);
   const [scriptsClientId, setScriptsClientId] = useState('');
   const [selectedScriptIds, setSelectedScriptIds] = useState<Set<string>>(new Set());
-  const [form, setForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '09:00', type: 'fixa' as RecordingType, prospectName: '' });
+  const [form, setForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '08:30', type: 'fixa' as RecordingType, prospectName: '' });
   const [editForm, setEditForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '', type: 'fixa' as RecordingType, status: 'agendada' as Recording['status'] });
   const [filterVideomaker, setFilterVideomaker] = useState('all');
   const [weekOffset, setWeekOffset] = useState(0);

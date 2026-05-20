@@ -1299,9 +1299,14 @@ export default function TvDashboard() {
                           if (item.status !== 'cancelada') {
                             const bufferMinutes = totalMinutes + 90; // Assume 90min duration
                             const bufferTime = `${String(Math.floor(bufferMinutes / 60)).padStart(2, '0')}:${String(bufferMinutes % 60).padStart(2, '0')}`;
-                            const isNextPrep = bufferTime === '08:00' || bufferTime === '14:00' || bufferTime === '16:00';
-                            elements.push(<BufferCard key={`buffer-${item.id}`} startTime={`${bufferTime} - ${String(Math.floor((bufferMinutes + 30) / 60)).padStart(2, '0')}:${String((bufferMinutes + 30) % 60).padStart(2, '0')}`} type={isNextPrep ? 'prep' : 'pulse'} />);
+                            
+                            // Only add buffer if it doesn't start exactly at 12:00 (lunch start)
+                            if (bufferTime !== '12:00') {
+                              const isNextPrep = bufferTime === '08:00' || bufferTime === '14:00' || bufferTime === '16:00';
+                              elements.push(<BufferCard key={`buffer-${item.id}`} startTime={`${bufferTime} - ${String(Math.floor((bufferMinutes + 30) / 60)).padStart(2, '0')}:${String((bufferMinutes + 30) % 60).padStart(2, '0')}`} type={isNextPrep ? 'prep' : 'pulse'} />);
+                            }
                           }
+
                         });
 
                         // Ensure basic slots are shown if schedule is short

@@ -298,3 +298,61 @@ export function findRescheduleSlot(
   return null;
 }
 
+/** 
+ * Organize recordings for a specific date and videomaker to fit into the 4 standard slots
+ * according to the hierarchy rules.
+ */
+export function organizeRecordingsForDate(
+  date: string,
+  videomakerId: string,
+  allRecordings: Recording[],
+  settings: CompanySettings
+): { toUpdate: Recording[]; toCancel: Recording[] } {
+  const dayRecordings = allRecordings.filter(r => 
+    r.date === date && 
+    r.videomakerId === videomakerId && 
+    r.status !== 'cancelada'
+  );
+
+  if (dayRecordings.length === 0) return { toUpdate: [], toCancel: [] };
+
+  // Hierarchy sorting: fixa > avulso > secundaria > extra
+  const priorityMap: Record<RecordingType, number> = {
+    fixa: 1,
+    avulso: 2,
+    secundaria: 3,
+    endomarketing: 4,
+    backup: 5,
+    extra: 6
+
+  };
+
+  const sortedRecs = [...dayRecordings].sort((a, b) => {
+    const pA = priorityMap[a.type] || 99;
+    const pB = priorityMap[b.type] || 99;
+    if (pA !== pB) return pA - pB;
+    // If same priority, keep original order (or sort by existing startTime)
+    return timeToMinutes(a.startTime) - timeToMinutes(b.startTime);
+  });
+
+  const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
+  const toUpdate: Recording[] = [];
+  const toCancel: Recording[] = [];
+
+  // Assign to slots
+  sortedRecs.forEach((rec, index) => {
+    if (index < FIXED_SLOTS.length) {
+      const targetTime = FIXED_SLOTS[index];
+      if (rec.startTime !== targetTime) {
+        toUpdate.push({ ...rec, startTime: targetTime });
+      }
+    } else {
+      // Exceeded capacity of 4 slots
+      toCancel.push(rec);
+    }
+  });
+
+  return { toUpdate, toCancel };
+}
+
+

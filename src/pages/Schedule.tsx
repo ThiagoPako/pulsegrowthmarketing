@@ -96,8 +96,9 @@ export default function Schedule() {
   const {
     clients, users, recordings, scripts, settings, activeRecordings,
     currentUser, updateScript, addRecording, updateRecording, cancelRecording, deleteRecording, cancelAndReschedule,
-    regenerateScheduleForClient, generateScheduleForClient, autoFillVacanciesForDate, startActiveRecording, stopActiveRecording,
+    regenerateScheduleForClient, generateScheduleForClient, autoFillVacanciesForDate, organizeSchedule, startActiveRecording, stopActiveRecording,
     hasConflict, isWithinWorkHours,
+
 
   } = useApp();
 
@@ -179,7 +180,9 @@ export default function Schedule() {
   const [startSelectedScripts, setStartSelectedScripts] = useState<Set<string>>(new Set());
   const [plannedScriptsMap, setPlannedScriptsMap] = useState<Record<string, string[]>>({});
 
+  const [organizing, setOrganizing] = useState(false);
   // Finish recording dialog state
+
   const [finishRecOpen, setFinishRecOpen] = useState(false);
   const [finishRecording, setFinishRecordingState] = useState<Recording | null>(null);
   const [finishCompletedScripts, setFinishCompletedScripts] = useState<Set<string>>(new Set());
@@ -1124,12 +1127,39 @@ export default function Schedule() {
               )}
             </>
           )}
+          <Button 
+            variant="outline" 
+            className="border-indigo-500/50 text-indigo-600 hover:bg-indigo-500/10" 
+            onClick={async () => {
+              const confirm = window.confirm("Deseja organizar a agenda de todo o mês? Isso irá reajustar horários para os slots padrão (08:30, 10:30, 14:30, 16:30) e cancelar o que exceder a capacidade de 4 por videomaker.");
+              if (!confirm) return;
+              
+              setOrganizing(true);
+              const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
+              const end = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
+              
+              toast.loading('Organizando agenda...', { id: 'organize' });
+              try {
+                const { updated, cancelled } = await organizeSchedule(start, end);
+                toast.success(`Agenda organizada: ${updated} ajustada(s), ${cancelled} cancelada(s) por excesso de capacidade.`, { id: 'organize' });
+              } catch (err) {
+                console.error(err);
+                toast.error('Erro ao organizar agenda', { id: 'organize' });
+              } finally {
+                setOrganizing(false);
+              }
+            }}
+            disabled={organizing}
+          >
+            <Columns3 size={16} className="mr-2" /> {organizing ? 'Organizando...' : 'Organizar Agenda'}
+          </Button>
           <Button variant="outline" onClick={() => { setRegenClientId(''); setRegenOpen(true); }}>
             <RefreshCw size={16} className="mr-2" /> Regenerar Agenda
           </Button>
           <Button variant="outline" className="border-primary/50 text-primary hover:bg-primary/10" onClick={handleGenerateAllFixed} disabled={generatingAll}>
             <CalendarDays size={16} className="mr-2" /> {generatingAll ? 'Gerando...' : 'Gerar Todas Fixas'}
           </Button>
+
           <Button onClick={() => { setForm({ clientId: '', videomakerId: '', date: format(new Date(), 'yyyy-MM-dd'), startTime: '08:30', type: 'fixa', prospectName: '' }); setNewOpen(true); }}>
             <Plus size={16} className="mr-2" /> Nova Gravação
           </Button>

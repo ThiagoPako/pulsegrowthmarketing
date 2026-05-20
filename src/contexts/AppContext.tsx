@@ -6,7 +6,7 @@ import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { supabase } from '@/lib/vpsDb';
 import { supabase as supabaseReal } from '@/integrations/supabase/client';
 import { usePresenceHeartbeat } from '@/hooks/usePresence';
-import { generateFixedRecordings, findAvailableSlots } from '@/lib/schedulingUtils';
+import { generateFixedRecordings, findAvailableSlots, organizeRecordingsForDate } from '@/lib/schedulingUtils';
 import { sendRecordingScheduledNotification } from '@/services/whatsappService';
 import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek, Script, ActiveRecording, UserRole, RecordingType } from '@/types';
 
@@ -39,6 +39,8 @@ interface AppContextType {
   generateScheduleForClient: (client: Client) => Promise<number>;
   regenerateScheduleForClient: (client: Client) => Promise<{ deleted: number; created: number }>;
   autoFillVacanciesForDate: (date: string) => Promise<number>;
+  organizeSchedule: (startDate: string, endDate: string) => Promise<{ updated: number; cancelled: number }>;
+
   addTask: (task: KanbanTask) => void;
   updateTask: (task: KanbanTask) => void;
   deleteTask: (id: string) => void;
@@ -255,10 +257,47 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     return createdCount;
   }, [data, users]);
+  const organizeSchedule = useCallback(async (startDate: string, endDate: string): Promise<{ updated: number; cancelled: number }> => {
+    const dates: string[] = [];
+    let curr = new Date(startDate + 'T12:00:00');
+    const end = new Date(endDate + 'T12:00:00');
+    while (curr <= end) {
+      dates.push(curr.toISOString().split('T')[0]);
+      curr.setDate(curr.getDate() + 1);
+    }
 
+    let updatedCount = 0;
+    let cancelledCount = 0;
+    const allVmIds = users.filter(u => u.role === 'videomaker').map(u => u.id);
+    const currentRecs = [...data.recordings];
+
+    for (const date of dates) {
+      for (const vmId of allVmIds) {
+        const { toUpdate, toCancel } = organizeRecordingsForDate(date, vmId, currentRecs, data.settings);
+        
+        for (const rec of toUpdate) {
+          await data.updateRecording(rec);
+          updatedCount++;
+          // Update local state to reflect changes for subsequent calculations in the same loop
+          const idx = currentRecs.findIndex(r => r.id === rec.id);
+          if (idx !== -1) currentRecs[idx] = rec;
+        }
+
+        for (const rec of toCancel) {
+          await data.cancelRecording(rec.id);
+          cancelledCount++;
+          const idx = currentRecs.findIndex(r => r.id === rec.id);
+          if (idx !== -1) currentRecs[idx].status = 'cancelada';
+        }
+      }
+    }
+
+    return { updated: updatedCount, cancelled: cancelledCount };
+  }, [data, users]);
 
 
   /** Cancel a recording — backup slots are only created manually via the backup dialog */
+
   const cancelAndReschedule = useCallback((recording: Recording) => {
     data.cancelRecording(recording.id);
     // No automatic rescheduling to backup day — admin chooses via backup dialog
@@ -302,7 +341,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addClient, updateClient, deleteClient,
       addRecording, updateRecording, cancelRecording, deleteRecording,
       cancelAndReschedule, generateScheduleForClient, regenerateScheduleForClient,
-      autoFillVacanciesForDate,
+      autoFillVacanciesForDate, organizeSchedule,
+
       addTask, updateTask, deleteTask,
 
       addScript, updateScript, deleteScript,

@@ -1263,7 +1263,7 @@ export default function TvDashboard() {
         {/* ─── Main Grid: 3 columns ────────────────────── */}
         <div className="grid grid-cols-12 gap-3 flex-1 min-h-0 overflow-hidden">
           {/* LEFT COLUMN: Team Online + Offline */}
-          <div className="col-span-3 space-y-3 overflow-y-auto scrollbar-hide pr-1">
+          <div className="col-span-3 space-y-2.5 overflow-y-auto scrollbar-hide pr-1">
             {/* Online */}
             {visibility.show_team && (
               <div>

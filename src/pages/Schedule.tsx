@@ -309,6 +309,12 @@ export default function Schedule() {
 
   // Event CRUD
   const handleAddEvent = async () => {
+    const client = clients.find(c => c.id === eventForm.clientId);
+    if (client?.status === 'cancelado') {
+      toast.error('Não é possível agendar eventos para clientes cancelados');
+      return;
+    }
+
     if (!eventForm.clientId || !eventForm.videomakerId || !eventForm.date || !eventForm.title) {
       toast.error('Preencha todos os campos obrigatórios'); return;
     }
@@ -415,6 +421,11 @@ export default function Schedule() {
 
   const handleAdd = async () => {
     const isAvulso = form.type === 'avulso';
+    const client = clients.find(c => c.id === form.clientId);
+    if (!isAvulso && client?.status === 'cancelado') {
+      toast.error('Não é possível agendar para clientes cancelados');
+      return;
+    }
     if (!isAvulso && !form.clientId) { toast.error('Selecione um cliente'); return; }
     if (isAvulso && !form.prospectName.trim()) { toast.error('Informe o nome do prospect'); return; }
     if (!form.videomakerId || !form.date || !form.startTime) { toast.error('Preencha todos os campos'); return; }
@@ -447,6 +458,7 @@ export default function Schedule() {
     const recDayOfWeek = dayMap[dayNum];
     return clients.filter(c => {
       if (c.id === cancellingRec.clientId) return false;
+      if (c.status === 'cancelado') return false;
       // Client must have this day as their backup day
       if (c.backupDay !== recDayOfWeek) return false;
       // Check if the backup time fits in the cancelled slot's time

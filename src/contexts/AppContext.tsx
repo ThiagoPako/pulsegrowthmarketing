@@ -52,7 +52,7 @@ interface AppContextType {
   updateSettings: (settings: CompanySettings) => void;
   startActiveRecording: (rec: ActiveRecording) => void;
   stopActiveRecording: (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]) => void;
-  hasConflict: (videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType) => boolean;
+  hasConflict: (videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType, clientId?: string) => { hasConflict: boolean; message?: string };
   isWithinWorkHours: (day: DayOfWeek, startTime: string) => boolean;
 
   getSuggestionsForCancellation: (recording: Recording) => Client[];
@@ -129,29 +129,51 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const BUFFER_BETWEEN_RECORDINGS = 30;
   const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
 
-  const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType) => {
+  const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType, clientId?: string) => {
     const newStart = timeToMinutes(startTime);
-    const duration = data.settings.recordingDuration;
+    const duration = data.settings.recordingDuration || 90;
     const newEnd = newStart + duration;
 
-    return data.recordings.some(r => {
+    // 1. Check if client already has a recording on this day (unless full-shift)
+    if (clientId) {
+      const client = data.clients.find(c => c.id === clientId);
+      const clientDayRecs = data.recordings.filter(r => r.clientId === clientId && r.date === date && r.status !== 'cancelada' && r.id !== excludeId);
+      
+      if (client) {
+        if (client.fullShiftRecording) {
+          if (clientDayRecs.length >= 2) {
+            return { hasConflict: true, message: "Este cliente já possui 2 gravações (limite turno integral) neste dia." };
+          }
+          if (clientDayRecs.some(r => r.startTime === startTime)) {
+            return { hasConflict: true, message: "Este cliente já possui uma gravação exatamente neste horário." };
+          }
+        } else if (clientDayRecs.length > 0) {
+          return { hasConflict: true, message: "Este cliente já possui uma gravação agendada para este dia." };
+        }
+      }
+    }
+
+    // 2. Check videomaker availability
+    const conflict = data.recordings.find(r => {
       if (r.id === excludeId || r.status === 'cancelada') return false;
       if (r.videomakerId !== videomakerId || r.date !== date) return false;
 
-      // Se o novo agendamento for fixa ou avulso (hierarquia superior), 
-      // ele ignora conflitos com gravações do tipo 'extra'.
       const isHighPriority = newType === 'fixa' || newType === 'avulso';
       if (isHighPriority && r.type === 'extra') return false;
 
       const existStart = timeToMinutes(r.startTime);
-      // Existing recording occupies: its duration + buffer
       const existEnd = existStart + duration + BUFFER_BETWEEN_RECORDINGS;
-      // New recording also needs buffer after it
       const newEndWithBuffer = newEnd + BUFFER_BETWEEN_RECORDINGS;
 
       return newStart < existEnd && newEndWithBuffer > existStart;
     });
-  }, [data.recordings, data.settings.recordingDuration]);
+
+    if (conflict) {
+      return { hasConflict: true, message: "Conflito de horário com outra gravação deste videomaker." };
+    }
+
+    return { hasConflict: false };
+  }, [data.recordings, data.settings.recordingDuration, data.clients]);
 
 
   const isWithinWorkHours = useCallback((day: DayOfWeek, startTime: string) => {
@@ -167,7 +189,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
 
   const addRecording = useCallback(async (recording: Recording): Promise<boolean> => {
-    if (hasConflict(recording.videomakerId, recording.date, recording.startTime)) return false;
+    if (hasConflict(recording.videomakerId, recording.date, recording.startTime, undefined, recording.type, recording.clientId).hasConflict) return false;
     const ok = await data.addRecording(recording);
     if (!ok) {
       console.error('addRecording: VPS insert failed for recording', recording);
@@ -244,7 +266,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (vmDayRecsCount >= 4) continue;
 
         // Check if slot is available for this VM
-        if (!hasConflict(vmId, date, slot)) {
+        if (!hasConflict(vmId, date, slot).hasConflict) {
           // Find an eligible client who isn't already recording on this day
           const eligibleClient = extraClients.find(c => 
             !currentRecs.some(r => r.clientId === c.id && r.date === date && r.status !== 'cancelada')
@@ -413,7 +435,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return data.clients.filter(c => {
       if (c.id === recording.clientId) return false;
       if (!c.acceptsExtra) return false;
-      return !hasConflict(recording.videomakerId, recording.date, c.backupTime, recording.id);
+      return !hasConflict(recording.videomakerId, recording.date, c.backupTime, recording.id, undefined, c.id).hasConflict;
     });
   }, [data.clients, hasConflict]);
 

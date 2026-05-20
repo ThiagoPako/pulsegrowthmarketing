@@ -1175,11 +1175,10 @@ export default function TvDashboard() {
           initial={{ opacity: 0, y: -15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
-              <motion.div className="w-9 h-9 rounded-xl flex items-center justify-center"
-                style={{ background: `linear-gradient(135deg, ${PULSE_ORANGE}, hsl(16, 82%, 40%))`, boxShadow: `0 4px 15px ${PULSE_ORANGE}40` }}
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center"
                 style={{ background: `linear-gradient(135deg, ${PULSE_ORANGE}, hsl(16, 82%, 40%))`, boxShadow: `0 4px 15px ${PULSE_ORANGE}40` }}>
                 <Rocket className="w-5 h-5 text-white" />
-              </motion.div>
+              </div>
               <div>
                 <h1 className="text-xl font-black tracking-tight" style={{ color: PULSE_ORANGE }}>PULSE</h1>
                 <p className="text-[9px] uppercase tracking-[0.3em] text-white/25 font-medium -mt-0.5">Growth Marketing</p>

@@ -1273,6 +1273,86 @@ export type Database = {
           },
         ]
       }
+      crm_leads: {
+        Row: {
+          company: string | null
+          contract_value: number | null
+          created_at: string
+          email: string | null
+          id: string
+          last_interaction: string | null
+          name: string
+          phone: string | null
+          status: Database["public"]["Enums"]["crm_lead_status"]
+          tag: Database["public"]["Enums"]["crm_lead_tag"] | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company?: string | null
+          contract_value?: number | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          last_interaction?: string | null
+          name: string
+          phone?: string | null
+          status?: Database["public"]["Enums"]["crm_lead_status"]
+          tag?: Database["public"]["Enums"]["crm_lead_tag"] | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          company?: string | null
+          contract_value?: number | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          last_interaction?: string | null
+          name?: string
+          phone?: string | null
+          status?: Database["public"]["Enums"]["crm_lead_status"]
+          tag?: Database["public"]["Enums"]["crm_lead_tag"] | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      crm_notes: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          lead_id: string
+          stage: Database["public"]["Enums"]["crm_lead_status"]
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          lead_id: string
+          stage: Database["public"]["Enums"]["crm_lead_status"]
+          user_id?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          lead_id?: string
+          stage?: Database["public"]["Enums"]["crm_lead_status"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_notes_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "crm_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       delivery_records: {
         Row: {
           arts_produced: number
@@ -4233,6 +4313,14 @@ export type Database = {
         | "fotografo"
         | "designer"
       cost_allocation_rule: "approved" | "recorded" | "posted"
+      crm_lead_status:
+        | "lead"
+        | "contacted"
+        | "meeting"
+        | "contracted"
+        | "recovery_followup_1"
+        | "recovery_followup_2"
+      crm_lead_tag: "hot" | "cold"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -4371,6 +4459,15 @@ export const Constants = {
         "designer",
       ],
       cost_allocation_rule: ["approved", "recorded", "posted"],
+      crm_lead_status: [
+        "lead",
+        "contacted",
+        "meeting",
+        "contracted",
+        "recovery_followup_1",
+        "recovery_followup_2",
+      ],
+      crm_lead_tag: ["hot", "cold"],
     },
   },
 } as const

@@ -185,8 +185,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const autoFillVacanciesForDate = useCallback(async (date: string): Promise<number> => {
     const today = new Date();
+    const dateObj = new Date(date + 'T12:00:00');
+    const dayName = DATE_TO_DAY[getDay(dateObj)];
     const isToday = date === today.toISOString().split('T')[0];
-    const extraClients = data.clients.filter(c => c.acceptsExtra && (c.extraDay === date || !isToday)); // Prioritize extraDay but allow others if today
+    const extraClients = data.clients.filter(c => c.acceptsExtra && (c.extraDay === dayName || !isToday)); 
+
     
     let createdCount = 0;
     const currentRecs = [...data.recordings];

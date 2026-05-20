@@ -75,11 +75,20 @@ export default function CRM() {
 
   const createLead = useMutation({
     mutationFn: async (newLead: Partial<Lead>) => {
+      if (!newLead.name) throw new Error('Nome é obrigatório');
       const { error } = await supabase
         .from('crm_leads')
-        .insert([{ ...newLead, user_id: user?.id }]);
+        .insert([{ 
+          name: newLead.name,
+          company: newLead.company,
+          phone: newLead.phone,
+          contract_value: newLead.contract_value,
+          status: newLead.status || 'lead',
+          user_id: user?.id 
+        }]);
       if (error) throw error;
     },
+
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
       setIsAddDialogOpen(false);

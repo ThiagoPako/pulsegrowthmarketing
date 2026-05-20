@@ -402,6 +402,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       logout, addUser, updateUser, deleteUser,
       addClient, updateClient, deleteClient,
       addRecording, updateRecording, cancelRecording, deleteRecording,
+      deleteRecordingsBulk: data.deleteRecordingsBulk, cancelRecordingsBulk: data.cancelRecordingsBulk,
       cancelAndReschedule, generateScheduleForClient, regenerateScheduleForClient,
       autoFillVacanciesForDate, organizeSchedule,
 

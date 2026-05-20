@@ -479,7 +479,10 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
             {item.recordingType === 'extra' && <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-300">Extra</span>}
             {item.recordingType === 'backup' && <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300">Backup</span>}
           </div>
-          <p className="text-sm font-semibold text-white truncate">{item.clientName}</p>
+          <p className="text-sm font-semibold text-white truncate">
+            {isRescheduled && <span className="text-amber-500 mr-1">REMARCADO:</span>}
+            {item.clientName}
+          </p>
           
           {isNow && item.scriptwriterName && (
             <div className="flex items-center gap-1.5 mt-0.5">

@@ -1115,7 +1115,7 @@ export default function Schedule() {
 
   const [generatingAll, setGeneratingAll] = useState(false);
   const handleGenerateAllFixed = async () => {
-    const fixedClients = clients.filter(c => c.fixedDay && c.fixedTime && c.videomaker);
+    const fixedClients = clients.filter(c => c.fixedDay && c.fixedTime && c.videomaker && c.status === 'ativo');
     if (fixedClients.length === 0) {
       toast.info('Nenhum cliente com agenda fixa configurada');
       return;

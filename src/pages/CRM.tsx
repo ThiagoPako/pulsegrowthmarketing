@@ -379,7 +379,7 @@ export default function CRM() {
                                                    <Dialog>
                                                       <DialogTrigger asChild>
                                                         <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100" title="Agendar Reunião">
-                                                          <Calendar className="h-4 w-4" />
+                                                          <CalendarIcon className="h-4 w-4" />
                                                         </Button>
                                                       </DialogTrigger>
                                                       <DialogContent>

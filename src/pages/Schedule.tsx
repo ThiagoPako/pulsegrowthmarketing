@@ -96,8 +96,9 @@ export default function Schedule() {
   const {
     clients, users, recordings, scripts, settings, activeRecordings,
     currentUser, updateScript, addRecording, updateRecording, cancelRecording, deleteRecording, cancelAndReschedule,
-    regenerateScheduleForClient, generateScheduleForClient, startActiveRecording, stopActiveRecording,
+    regenerateScheduleForClient, generateScheduleForClient, autoFillVacanciesForDate, startActiveRecording, stopActiveRecording,
     hasConflict, isWithinWorkHours,
+
   } = useApp();
 
   // Endomarketing data

@@ -210,9 +210,9 @@ function TimeMarker() {
       const minutes = now.getMinutes();
       const totalMinutes = hours * 60 + minutes;
       
-      // Assume o dia operacional das 07:00 às 20:00 (13 horas)
-      const start = 7 * 60;
-      const end = 20 * 60;
+      // Assume o dia operacional das 08:00 às 19:00 (11 horas)
+      const start = 8 * 60;
+      const end = 19 * 60;
       
       if (totalMinutes < start) setPercent(0);
       else if (totalMinutes > end) setPercent(100);
@@ -247,22 +247,36 @@ function TimeMarker() {
   );
 }
 
-function BufferCard({ startTime }: { startTime: string }) {
+function BufferCard({ startTime, type = 'pulse' }: { startTime: string; type?: 'pulse' | 'prep' }) {
+  const isPulse = type === 'pulse';
   return (
     <motion.div
-      className="relative rounded-xl border border-dashed border-white/5 p-3 flex items-center justify-center gap-2 overflow-hidden"
-      style={{ background: 'rgba(255,255,255,0.015)' }}
+      className="relative rounded-xl border border-dashed border-orange-500/20 p-3 flex items-center justify-center gap-2 overflow-hidden"
+      style={{ background: 'rgba(249,115,22,0.03)' }}
       layout
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
     >
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-pulse" style={{ animationDuration: '4s' }} />
-      <Clock className="w-3.5 h-3.5 text-white/10" />
-      <span className="text-[10px] font-bold text-white/15 uppercase tracking-[0.2em] font-mono">Intervalo de Upload / Buffer</span>
-      <span className="text-[9px] font-bold text-white/10 px-1.5 py-0.5 rounded border border-white/5">{startTime}</span>
+      <motion.div 
+        className="absolute inset-0 bg-orange-500/5 pointer-events-none"
+        animate={{ 
+          opacity: [0.1, 0.3, 0.1],
+          scale: [1, 1.05, 1]
+        }}
+        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <div className="flex items-center gap-2 relative z-10">
+        <Rocket className="w-3.5 h-3.5 text-orange-500 animate-bounce" />
+        <span className="text-[10px] font-black text-orange-500 uppercase tracking-[0.3em] font-mono">PULSE</span>
+        <span className="text-[9px] font-bold text-white/30 uppercase tracking-wider font-mono">
+          {isPulse ? 'Organização de Material' : 'Preparação e Roteiros'}
+        </span>
+        <span className="text-[9px] font-bold text-orange-500/40 px-1.5 py-0.5 rounded border border-orange-500/20">{startTime}</span>
+      </div>
     </motion.div>
   );
 }
+
 
 
 function LunchCard({ startTime }: { startTime: string }) {
@@ -1247,6 +1261,11 @@ export default function TvDashboard() {
                           const [h, m] = item.startTime.split(':').map(Number);
                           const totalMinutes = h * 60 + m;
 
+                          // Initial morning prep if it's the first item
+                          if (idx === 0 && totalMinutes > 8 * 60) {
+                            elements.push(<BufferCard key="morning-prep" startTime="08:00 - 08:30" type="prep" />);
+                          }
+
                           // Add lunch break if we passed 12:00
                           if (!lunchAdded && totalMinutes >= 12 * 60) {
                             elements.push(<LunchCard key="lunch-break" startTime="12:00 - 14:00" />);
@@ -1255,21 +1274,21 @@ export default function TvDashboard() {
 
                           elements.push(<ScheduleCard key={item.id} item={item} isLive={activeRecordingIds.includes(item.id)} />);
                           
-                          // Add buffer after recording if it's not cancelled
+                          // Add pulse buffer after recording if it's not cancelled
                           if (item.status !== 'cancelada') {
                             const bufferMinutes = totalMinutes + 90; // Assume 90min duration
                             const bufferTime = `${String(Math.floor(bufferMinutes / 60)).padStart(2, '0')}:${String(bufferMinutes % 60).padStart(2, '0')}`;
-                            elements.push(<BufferCard key={`buffer-${item.id}`} startTime={bufferTime} />);
+                            const isNextPrep = bufferTime === '08:00' || bufferTime === '14:00' || bufferTime === '16:00';
+                            elements.push(<BufferCard key={`buffer-${item.id}`} startTime={`${bufferTime} - ${String(Math.floor((bufferMinutes + 30) / 60)).padStart(2, '0')}:${String((bufferMinutes + 30) % 60).padStart(2, '0')}`} type={isNextPrep ? 'prep' : 'pulse'} />);
                           }
                         });
 
-                        // If lunch hasn't been added yet (all recordings before 12:00 or no recordings after)
-                        if (!lunchAdded) {
-                           elements.push(<LunchCard key="lunch-break" startTime="12:00 - 14:00" />);
-                        }
+                        // Ensure basic slots are shown if schedule is short
+                        if (!lunchAdded) elements.push(<LunchCard key="lunch-break" startTime="12:00 - 14:00" />);
 
                         return elements;
                       })()}
+
                     </AnimatePresence>
                   </div>
                 ) : (

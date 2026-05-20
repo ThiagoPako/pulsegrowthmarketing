@@ -1304,9 +1304,10 @@ export default function TvDashboard() {
                           // Skip items during lunch
                           if (startTime >= 12 * 60 && startTime < 14 * 60) return;
 
-                          // Spacer for gaps
+                          // Spacer for gaps (only if item is after lastMinute)
                           if (startTime > lastMinute) {
                             elements.push(<TimelineSpacer key={`spacer-${idx}`} minutes={startTime - lastMinute} />);
+                            lastMinute = startTime;
                           }
 
                           // Card Duration

@@ -276,10 +276,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...users.filter(u => u.role === 'videomaker').map(u => u.id),
       ...recordingsInRange.map(r => r.videomakerId).filter(Boolean)
     ]);
+    
+    // Also include a null/empty case to catch unassigned recordings
+    const vmIdsToProcess = [...Array.from(uniqueVmIds), "unassigned"];
 
     for (const date of dates) {
-      for (const vmId of Array.from(uniqueVmIds)) {
-        const { toUpdate, toCancel } = organizeRecordingsForDate(date, vmId, currentRecs, data.settings);
+      for (const vmId of vmIdsToProcess) {
+        const actualVmId = vmId === "unassigned" ? "" : vmId;
+        const { toUpdate, toCancel } = organizeRecordingsForDate(date, actualVmId, currentRecs, data.settings);
         
         for (const rec of toUpdate) {
           await data.updateRecording(rec);

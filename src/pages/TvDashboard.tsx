@@ -100,7 +100,7 @@ const PULSE_ORANGE = 'hsl(16, 82%, 51%)';
 const PULSE_DARK = '#0c0a14';
 const PULSE_CARD = 'rgba(255,255,255,0.035)';
 const SPACE = "'Space Grotesk', sans-serif";
-const MINUTE_HEIGHT = 2; // pixels per minute on the schedule timeline
+const MINUTE_HEIGHT = 1.6; // Reduzido de 2 para 1.6 para compactar o visual
 const OPERATIONAL_START = 8 * 60; // 08:00
 const OPERATIONAL_END = 19 * 60;   // 19:00
 const TIMELINE_HEIGHT = (OPERATIONAL_END - OPERATIONAL_START) * MINUTE_HEIGHT;
@@ -440,9 +440,9 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
         />
       )}
 
-      <div className="p-2.5 flex items-center gap-2.5">
+      <div className="p-2 flex items-center gap-2">
         {/* Client Logo */}
-        <div className="flex-shrink-0 w-10 h-10 rounded-lg overflow-hidden border flex items-center justify-center"
+        <div className="flex-shrink-0 w-8 h-8 rounded-lg overflow-hidden border flex items-center justify-center"
           style={{
             borderColor: item.clientColor ? `hsl(${item.clientColor} / 0.3)` : 'rgba(255,255,255,0.1)',
             backgroundColor: item.clientColor ? `hsl(${item.clientColor} / 0.1)` : 'rgba(255,255,255,0.03)',
@@ -450,14 +450,14 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
           {item.clientLogo ? (
             <img src={item.clientLogo} alt="" className="w-full h-full object-contain p-1" />
           ) : (
-            <span className="text-[10px] font-bold text-white/40">{getInitials(item.clientName)}</span>
+            <span className="text-[9px] font-bold text-white/40">{getInitials(item.clientName)}</span>
           )}
         </div>
 
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-base font-mono font-bold text-white/85 tabular-nums">{item.startTime}</span>
+            <span className="text-sm font-mono font-bold text-white/85 tabular-nums">{item.startTime}</span>
             {isNow && (
               <motion.div className="flex items-center gap-1 rounded-full px-1.5 py-0.5" style={{ backgroundColor: `${PULSE_ORANGE}1a` }}
                 animate={{ opacity: [1, 0.5, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
@@ -479,7 +479,7 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
             {item.recordingType === 'extra' && <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-300">Extra</span>}
             {item.recordingType === 'backup' && <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300">Backup</span>}
           </div>
-          <p className="text-sm font-semibold text-white truncate">
+          <p className="text-[13px] font-semibold text-white truncate leading-tight">
             {isRescheduled && <span className="text-amber-500 mr-1">REMARCADO:</span>}
             {item.clientName}
           </p>
@@ -504,12 +504,12 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
 
         {/* Videomaker Avatar */}
         {item.videomakerName && (
-          <div className="flex-shrink-0 flex flex-col items-center gap-1">
-            <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-blue-500/40 bg-blue-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.2)]">
+          <div className="flex-shrink-0 flex flex-col items-center gap-0.5">
+            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-blue-500/40 bg-blue-500/10 flex items-center justify-center shadow-[0_0_12px_rgba(59,130,246,0.15)]">
               {item.videomakerAvatar ? (
                 <img src={item.videomakerAvatar} alt="" className="w-full h-full object-cover" />
               ) : (
-                <Camera className="w-5 h-5 text-blue-400/60" />
+                <Camera className="w-4 h-4 text-blue-400/60" />
               )}
             </div>
             <span className="text-[10px] font-bold text-white/40 truncate max-w-[70px] uppercase tracking-tighter">{item.videomakerName.split(' ')[0]}</span>

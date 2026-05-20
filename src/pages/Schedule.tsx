@@ -992,7 +992,6 @@ export default function Schedule() {
     const endStr = format(endOfMonth(addMonths(new Date(), 1)), 'yyyy-MM-dd');
     let created = 0;
 
-    // Get all future dates from today to end of next month
     const days: Date[] = [];
     let d = new Date();
     const end = new Date(endStr);
@@ -1000,6 +999,10 @@ export default function Schedule() {
       days.push(new Date(d));
       d = addDays(d, 1);
     }
+
+    // Local copy of recordings to track changes during generation
+    let currentRecsLocal = [...recordings];
+    const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
 
     for (const day of days) {
       const dateStr = format(day, 'yyyy-MM-dd');
@@ -1009,12 +1012,17 @@ export default function Schedule() {
 
       // Try backup clients
       if (showBackup) {
-        const backupClients = clients.filter(c => c.backupDay === dayName && c.acceptsExtra);
+        const backupClients = clients.filter(c => c.backupDay === dayName && c.acceptsExtra && c.status === 'ativo');
         for (const client of backupClients) {
           const vmId = client.videomaker;
           if (!vmId) continue;
+
+          // Capacity check
+          const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
+          if (vmDayRecsCount >= 4) continue;
+
           if (!hasConflict(vmId, dateStr, client.backupTime)) {
-            const exists = recordings.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'backup' && r.status !== 'cancelada');
+            const exists = currentRecsLocal.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'backup' && r.status !== 'cancelada');
             if (!exists) {
               const rec: Recording = {
                 id: crypto.randomUUID(),
@@ -1025,8 +1033,11 @@ export default function Schedule() {
                 type: 'backup',
                 status: 'agendada',
               };
-              await addRecording(rec);
-              created++;
+              const ok = await addRecording(rec);
+              if (ok) {
+                created++;
+                currentRecsLocal.push(rec);
+              }
             }
           }
         }
@@ -1034,17 +1045,20 @@ export default function Schedule() {
 
       // Try extra clients
       if (showExtra) {
-        const extraClients = clients.filter(c => c.acceptsExtra && c.extraDay === dayName);
+        const extraClients = clients.filter(c => c.acceptsExtra && c.extraDay === dayName && c.status === 'ativo');
         for (const client of extraClients) {
           const vmId = client.videomaker;
           if (!vmId) continue;
           
-          // Use any available slot on that day, not just fixedTime
-          const availableSlots = findAvailableSlots(dateStr, vmId, recordings, settings);
+          // Capacity check
+          const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
+          if (vmDayRecsCount >= 4) continue;
+
+          const availableSlots = findAvailableSlots(dateStr, vmId, currentRecsLocal, settings);
           if (availableSlots.length > 0) {
             const extraTime = availableSlots[0];
 
-            const exists = recordings.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'extra' && r.status !== 'cancelada');
+            const exists = currentRecsLocal.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'extra' && r.status !== 'cancelada');
             if (!exists) {
               const rec: Recording = {
                 id: crypto.randomUUID(),
@@ -1055,8 +1069,11 @@ export default function Schedule() {
                 type: 'extra',
                 status: 'agendada',
               };
-              await addRecording(rec);
-              created++;
+              const ok = await addRecording(rec);
+              if (ok) {
+                created++;
+                currentRecsLocal.push(rec);
+              }
             }
           }
         }

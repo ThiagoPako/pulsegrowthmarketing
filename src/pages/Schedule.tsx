@@ -552,9 +552,10 @@ export default function Schedule() {
     }
     // Check conflict only if date/time/videomaker changed
     const changed = editForm.date !== editingRec.date || editForm.startTime !== editingRec.startTime || editForm.videomakerId !== editingRec.videomakerId;
-    if (changed && editForm.status !== 'cancelada' && hasConflict(editForm.videomakerId, editForm.date, editForm.startTime, editingRec.id)) {
+    if (changed && editForm.status !== 'cancelada' && hasConflict(editForm.videomakerId, editForm.date, editForm.startTime, editingRec.id, editForm.type as RecordingType)) {
       toast.error('Conflito de horário!'); return;
     }
+
     const updated = { ...editingRec, ...editForm };
     updateRecording(updated);
     

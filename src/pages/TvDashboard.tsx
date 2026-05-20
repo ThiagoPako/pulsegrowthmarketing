@@ -1273,7 +1273,14 @@ export default function TvDashboard() {
                         let lunchAdded = false;
                         const addedBuffers = new Set<string>();
 
-                        const sortedSchedule = [...schedule].sort((a, b) => {
+                        // Filter out items before OPERATIONAL_START or after OPERATIONAL_END for the timeline
+                        const timelineSchedule = schedule.filter(item => {
+                          const [h, m] = item.startTime.split(':').map(Number);
+                          const startTime = h * 60 + m;
+                          return startTime >= OPERATIONAL_START && startTime < OPERATIONAL_END;
+                        });
+
+                        const sortedSchedule = [...timelineSchedule].sort((a, b) => {
                           const [hA, mA] = a.startTime.split(':').map(Number);
                           const [hB, mB] = b.startTime.split(':').map(Number);
                           return (hA * 60 + mA) - (hB * 60 + mB);

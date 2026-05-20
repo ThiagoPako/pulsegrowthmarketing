@@ -919,7 +919,7 @@ function SeasonalBanner({ slides }: { slides: SeasonalSlide[] }) {
                     <UrgIcon className="w-2.5 h-2.5" style={{ color: urg.color }} />
                     <span className="text-[8px] font-bold uppercase" style={{ color: urg.color }}>{urg.label}</span>
                   </div>
-                </div>
+                </motion.div>
 
                 {/* Info */}
                 <div className="flex-1 flex flex-col justify-center min-w-0">

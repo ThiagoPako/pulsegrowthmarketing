@@ -30,9 +30,9 @@ export default function AgencyCapacityWidget({ clients, users, recordings, setti
     const workDaysCount = settings.workDays.length;
 
     // Calculate slots per day per videomaker
-    let slotsPerDay = 0;
-    for (let t = shiftAStart; t + duration <= shiftAEnd; t += duration + 30) slotsPerDay++;
-    for (let t = shiftBStart; t + duration <= shiftBEnd; t += duration + 30) slotsPerDay++;
+    // As per user request, we have 4 specific slots: 08:30, 10:30, 14:30, 16:30
+    const slotsPerDay = 4;
+
 
     // Total monthly slots (approx 4.3 weeks/month)
     const weeksPerMonth = 4.3;

@@ -1697,7 +1697,7 @@ export default function Schedule() {
                           <p className="text-xs font-semibold text-muted-foreground">Selecione o Período</p>
                           <div className="grid grid-cols-2 gap-2">
                             {shifts.map(s => {
-                              const occupied = hasConflict(form.videomakerId, form.date, s.start);
+                              const occupied = hasConflict(form.videomakerId, form.date, s.start, undefined, form.type as RecordingType);
                               return (
                                 <button key={s.key} disabled={occupied}
                                   onClick={() => setForm({ ...form, startTime: s.start })}

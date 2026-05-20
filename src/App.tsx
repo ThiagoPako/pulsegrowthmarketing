@@ -78,6 +78,8 @@ const TvPanelControl = lazy(() => import("@/pages/TvPanelControl"));
 const CancellationReports = lazy(() => import("@/pages/CancellationReports"));
 const EventRegistration = lazy(() => import("@/pages/EventRegistration"));
 const TrainingManager = lazy(() => import("@/pages/TrainingManager"));
+const CRM = lazy(() => import("@/pages/CRM"));
+
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -194,6 +196,8 @@ function AppRoutes() {
         <Route path="/cancelamentos" element={<ProtectedRoute><CancellationReports /></ProtectedRoute>} />
         <Route path="/treinamento" element={<ProtectedRoute><TrainingManager /></ProtectedRoute>} />
         <Route path="/evento/:token" element={<EventRegistration />} />
+        <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
+
         <Route path="/tv" element={<Suspense fallback={<PageLoader />}><TvDashboard /></Suspense>} />
         <Route path="*" element={<NotFound />} />
       </Routes>

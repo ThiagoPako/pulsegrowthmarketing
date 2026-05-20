@@ -1147,23 +1147,28 @@ export default function Schedule() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-display font-bold">Agenda</h1>
         <div className="flex gap-2 flex-wrap">
-          {(showBackup || showExtra) && (
-            <div className="flex gap-2 flex-wrap">
-              <Button variant="outline" className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateBackupExtra}>
-                <RefreshCw size={16} className="mr-2" /> Gerar Backup/Extra Mensal
-              </Button>
-              {showBackup && (
+          <div className="flex gap-2 flex-wrap">
+            {showBackup && (
+              <>
+                <Button variant="outline" className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateBackup}>
+                  <RefreshCw size={16} className="mr-2" /> Gerar Backups Mensais
+                </Button>
                 <Button variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllBackup}>
                   <Trash2 size={16} className="mr-2" /> Apagar Backups
                 </Button>
-              )}
-              {showExtra && (
+              </>
+            )}
+            {showExtra && (
+              <>
+                <Button variant="outline" className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateExtra}>
+                  <RefreshCw size={16} className="mr-2" /> Gerar Extras Mensais
+                </Button>
                 <Button variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllExtra}>
                   <Trash2 size={16} className="mr-2" /> Apagar Extras
                 </Button>
-              )}
-            </div>
-          )}
+              </>
+            )}
+          </div>
           {currentUser?.role === 'admin' && (
             <>
               <Button 

@@ -987,7 +987,7 @@ export default function Schedule() {
   };
 
   // Generate backup & extra recordings for eligible clients into available slots
-  const handleGenerateBackupExtra = async () => {
+  const handleGenerateBackup = async () => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const endStr = format(endOfMonth(addMonths(new Date(), 1)), 'yyyy-MM-dd');
     let created = 0;
@@ -1000,7 +1000,64 @@ export default function Schedule() {
       d = addDays(d, 1);
     }
 
-    // Local copy of recordings to track changes during generation
+    let currentRecsLocal = [...recordings];
+
+    for (const day of days) {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const dayNum = getDay(day);
+      const dayName = DATE_TO_DAY[dayNum];
+      if (!settings.workDays.includes(dayName)) continue;
+
+      const backupClients = clients.filter(c => c.backupDay === dayName && c.acceptsExtra && c.status === 'ativo');
+      for (const client of backupClients) {
+        const vmId = client.videomaker;
+        if (!vmId) continue;
+
+        const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
+        if (vmDayRecsCount >= 4) continue;
+
+        if (!hasConflict(vmId, dateStr, client.backupTime)) {
+          const exists = currentRecsLocal.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'backup' && r.status !== 'cancelada');
+          if (!exists) {
+            const rec: Recording = {
+              id: crypto.randomUUID(),
+              clientId: client.id,
+              videomakerId: vmId,
+              date: dateStr,
+              startTime: client.backupTime,
+              type: 'backup',
+              status: 'agendada',
+            };
+            const ok = await addRecording(rec);
+            if (ok) {
+              created++;
+              currentRecsLocal.push(rec);
+            }
+          }
+        }
+      }
+    }
+
+    if (created > 0) {
+      toast.success(`${created} gravação(ões) de backup gerada(s) com sucesso`);
+    } else {
+      toast.info('Nenhuma vaga disponível para gerar gravações de backup');
+    }
+  };
+
+  const handleGenerateExtra = async () => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const endStr = format(endOfMonth(addMonths(new Date(), 1)), 'yyyy-MM-dd');
+    let created = 0;
+
+    const days: Date[] = [];
+    let d = new Date();
+    const end = new Date(endStr);
+    while (d <= end) {
+      days.push(new Date(d));
+      d = addDays(d, 1);
+    }
+
     let currentRecsLocal = [...recordings];
     const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
 
@@ -1010,73 +1067,36 @@ export default function Schedule() {
       const dayName = DATE_TO_DAY[dayNum];
       if (!settings.workDays.includes(dayName)) continue;
 
-      // Try backup clients first (they have higher priority for their assigned days)
-      if (showBackup) {
-        const backupClients = clients.filter(c => c.backupDay === dayName && c.acceptsExtra && c.status === 'ativo');
-        for (const client of backupClients) {
-          const vmId = client.videomaker;
-          if (!vmId) continue;
+      const extraClients = clients.filter(c => c.acceptsExtra && c.extraDay === dayName && c.status === 'ativo');
+      if (extraClients.length > 0) {
+        for (const slot of FIXED_SLOTS) {
+          for (const vmId of videomakers.map(v => v.id)) {
+            const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
+            if (vmDayRecsCount >= 4) continue;
 
-          const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
-          if (vmDayRecsCount >= 4) continue;
+            if (!hasConflict(vmId, dateStr, slot)) {
+              const eligibleClient = extraClients.find(c => 
+                !currentRecsLocal.some(r => r.clientId === c.id && r.date === dateStr && r.status !== 'cancelada')
+              );
 
-          if (!hasConflict(vmId, dateStr, client.backupTime)) {
-            const exists = currentRecsLocal.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'backup' && r.status !== 'cancelada');
-            if (!exists) {
-              const rec: Recording = {
-                id: crypto.randomUUID(),
-                clientId: client.id,
-                videomakerId: vmId,
-                date: dateStr,
-                startTime: client.backupTime,
-                type: 'backup',
-                status: 'agendada',
-              };
-              const ok = await addRecording(rec);
-              if (ok) {
-                created++;
-                currentRecsLocal.push(rec);
-              }
-            }
-          }
-        }
-      }
-
-      // Try extra clients with round-robin distribution across videomakers and slots
-      if (showExtra) {
-        const extraClients = clients.filter(c => c.acceptsExtra && c.extraDay === dayName && c.status === 'ativo');
-        if (extraClients.length > 0) {
-          for (const slot of FIXED_SLOTS) {
-            for (const vmId of videomakers.map(v => v.id)) {
-              const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
-              if (vmDayRecsCount >= 4) continue;
-
-              if (!hasConflict(vmId, dateStr, slot)) {
-                // Find a client who isn't already recording on this day
-                const eligibleClient = extraClients.find(c => 
-                  !currentRecsLocal.some(r => r.clientId === c.id && r.date === dateStr && r.status !== 'cancelada')
-                );
-
-                if (eligibleClient) {
-                  const rec: Recording = {
-                    id: crypto.randomUUID(),
-                    clientId: eligibleClient.id,
-                    videomakerId: vmId,
-                    date: dateStr,
-                    startTime: slot,
-                    type: 'extra',
-                    status: 'agendada',
-                  };
-                  const ok = await addRecording(rec);
-                  if (ok) {
-                    created++;
-                    currentRecsLocal.push(rec);
-                    // Rotate clients
-                    const idx = extraClients.indexOf(eligibleClient);
-                    if (idx > -1) {
-                      extraClients.splice(idx, 1);
-                      extraClients.push(eligibleClient);
-                    }
+              if (eligibleClient) {
+                const rec: Recording = {
+                  id: crypto.randomUUID(),
+                  clientId: eligibleClient.id,
+                  videomakerId: vmId,
+                  date: dateStr,
+                  startTime: slot,
+                  type: 'extra',
+                  status: 'agendada',
+                };
+                const ok = await addRecording(rec);
+                if (ok) {
+                  created++;
+                  currentRecsLocal.push(rec);
+                  const idx = extraClients.indexOf(eligibleClient);
+                  if (idx > -1) {
+                    extraClients.splice(idx, 1);
+                    extraClients.push(eligibleClient);
                   }
                 }
               }
@@ -1087,15 +1107,15 @@ export default function Schedule() {
     }
 
     if (created > 0) {
-      toast.success(`${created} gravação(ões) backup/extra gerada(s) com sucesso`);
+      toast.success(`${created} gravação(ões) extra gerada(s) com sucesso`);
     } else {
-      toast.info('Nenhuma vaga disponível para gerar gravações backup/extra');
+      toast.info('Nenhuma vaga disponível para gerar gravações extras');
     }
   };
 
   const [generatingAll, setGeneratingAll] = useState(false);
   const handleGenerateAllFixed = async () => {
-    const fixedClients = clients.filter(c => c.fixedDay && c.fixedTime && c.videomaker);
+    const fixedClients = clients.filter(c => c.fixedDay && c.fixedTime && c.videomaker && c.status === 'ativo');
     if (fixedClients.length === 0) {
       toast.info('Nenhum cliente com agenda fixa configurada');
       return;
@@ -1127,23 +1147,28 @@ export default function Schedule() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-display font-bold">Agenda</h1>
         <div className="flex gap-2 flex-wrap">
-          {(showBackup || showExtra) && (
-            <div className="flex gap-2 flex-wrap">
-              <Button variant="outline" className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateBackupExtra}>
-                <RefreshCw size={16} className="mr-2" /> Gerar Backup/Extra Mensal
-              </Button>
-              {showBackup && (
+          <div className="flex gap-2 flex-wrap">
+            {showBackup && (
+              <>
+                <Button variant="outline" className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateBackup}>
+                  <RefreshCw size={16} className="mr-2" /> Gerar Backups Mensais
+                </Button>
                 <Button variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllBackup}>
                   <Trash2 size={16} className="mr-2" /> Apagar Backups
                 </Button>
-              )}
-              {showExtra && (
+              </>
+            )}
+            {showExtra && (
+              <>
+                <Button variant="outline" className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateExtra}>
+                  <RefreshCw size={16} className="mr-2" /> Gerar Extras Mensais
+                </Button>
                 <Button variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllExtra}>
                   <Trash2 size={16} className="mr-2" /> Apagar Extras
                 </Button>
-              )}
-            </div>
-          )}
+              </>
+            )}
+          </div>
           {currentUser?.role === 'admin' && (
             <>
               <Button 

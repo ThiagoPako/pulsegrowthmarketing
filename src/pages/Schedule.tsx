@@ -1121,48 +1121,52 @@ export default function Schedule() {
               )}
             </div>
           )}
-          <Button 
-            variant="outline" 
-            className="border-emerald-500/50 text-emerald-600 hover:bg-emerald-500/10 shadow-sm" 
-            onClick={async () => {
-              const todayStr = format(new Date(), 'yyyy-MM-dd');
-              toast.loading('Analisando vagas e preenchendo agenda...', { id: 'autofill' });
-              const count = await autoFillVacanciesForDate(todayStr);
-              if (count > 0) {
-                toast.success(`${count} vaga(s) preenchida(s) com gravações extras!`, { id: 'autofill' });
-              } else {
-                toast.info('Não foram encontradas vagas ou clientes extras disponíveis para hoje.', { id: 'autofill' });
-              }
-            }}
-          >
-            <Sparkles size={16} className="mr-2 animate-pulse" /> Otimizar Videomakers
-          </Button>
-          <Button 
-            variant="outline" 
-            className="border-indigo-500/50 text-indigo-600 hover:bg-indigo-500/10" 
-            onClick={async () => {
-              const confirm = window.confirm("Deseja organizar a agenda de todo o mês? Isso irá reajustar horários para os slots padrão (08:30, 10:30, 14:30, 16:30) e APAGAR o que exceder a capacidade de 4 por videomaker.");
-              if (!confirm) return;
-              
-              setOrganizing(true);
-              const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
-              const end = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
-              
-              toast.loading('Organizando agenda...', { id: 'organize' });
-              try {
-                const { updated, cancelled } = await organizeSchedule(start, end);
-                toast.success(`Agenda organizada: ${updated} ajustada(s), ${cancelled} apagada(s) por excesso de capacidade.`, { id: 'organize' });
-              } catch (err) {
-                console.error(err);
-                toast.error('Erro ao organizar agenda', { id: 'organize' });
-              } finally {
-                setOrganizing(false);
-              }
-            }}
-            disabled={organizing}
-          >
-            <Columns3 size={16} className="mr-2" /> {organizing ? 'Organizando...' : 'Organizar Agenda'}
-          </Button>
+          {currentUser?.role === 'admin' && (
+            <>
+              <Button 
+                variant="outline" 
+                className="border-emerald-500/50 text-emerald-600 hover:bg-emerald-500/10 shadow-sm" 
+                onClick={async () => {
+                  const todayStr = format(new Date(), 'yyyy-MM-dd');
+                  toast.loading('Analisando vagas e distribuindo gravações...', { id: 'autofill' });
+                  const count = await autoFillVacanciesForDate(todayStr);
+                  if (count > 0) {
+                    toast.success(`${count} vaga(s) preenchida(s) com gravações extras!`, { id: 'autofill' });
+                  } else {
+                    toast.info('Não foram encontradas vagas ou clientes extras disponíveis para hoje.', { id: 'autofill' });
+                  }
+                }}
+              >
+                <Sparkles size={16} className="mr-2 animate-pulse" /> Otimizar Videomakers
+              </Button>
+              <Button 
+                variant="outline" 
+                className="border-indigo-500/50 text-indigo-600 hover:bg-indigo-500/10" 
+                onClick={async () => {
+                  const confirm = window.confirm("Deseja organizar a agenda de todo o mês? Isso irá reajustar horários para os slots padrão (08:30, 10:30, 14:30, 16:30) e APAGAR o que exceder a capacidade de 4 por videomaker.");
+                  if (!confirm) return;
+                  
+                  setOrganizing(true);
+                  const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
+                  const end = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
+                  
+                  toast.loading('Organizando agenda...', { id: 'organize' });
+                  try {
+                    const { updated, cancelled } = await organizeSchedule(start, end);
+                    toast.success(`Agenda organizada: ${updated} ajustada(s), ${cancelled} apagada(s) por excesso de capacidade.`, { id: 'organize' });
+                  } catch (err) {
+                    console.error(err);
+                    toast.error('Erro ao organizar agenda', { id: 'organize' });
+                  } finally {
+                    setOrganizing(false);
+                  }
+                }}
+                disabled={organizing}
+              >
+                <Columns3 size={16} className="mr-2" /> {organizing ? 'Organizando...' : 'Organizar Agenda'}
+              </Button>
+            </>
+          )}
           <Button variant="outline" onClick={() => { setRegenClientId(''); setRegenOpen(true); }}>
             <RefreshCw size={16} className="mr-2" /> Regenerar Agenda
           </Button>

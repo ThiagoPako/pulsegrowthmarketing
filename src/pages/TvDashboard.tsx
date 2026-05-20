@@ -232,7 +232,7 @@ function TimeMarker() {
 
   return (
     <motion.div 
-      className="absolute left-0 right-0 z-[60] flex items-center pointer-events-none"
+      className="absolute left-0 right-0 z-[100] flex items-center pointer-events-none"
       style={{ top: `${percent}%` }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}

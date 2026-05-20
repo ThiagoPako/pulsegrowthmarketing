@@ -125,11 +125,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return h * 60 + m;
   };
 
-  const BUFFER_BETWEEN_RECORDINGS = 0;
+  const BUFFER_BETWEEN_RECORDINGS = 30;
+  const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
 
   const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType) => {
     const newStart = timeToMinutes(startTime);
-    const newEnd = newStart + data.settings.recordingDuration;
+    const duration = data.settings.recordingDuration;
+    const newEnd = newStart + duration;
 
     return data.recordings.some(r => {
       if (r.id === excludeId || r.status === 'cancelada') return false;
@@ -141,9 +143,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (isHighPriority && r.type === 'extra') return false;
 
       const existStart = timeToMinutes(r.startTime);
-      const existEnd = existStart + data.settings.recordingDuration;
+      // Existing recording occupies: its duration + buffer
+      const existEnd = existStart + duration + BUFFER_BETWEEN_RECORDINGS;
+      // New recording also needs buffer after it
+      const newEndWithBuffer = newEnd + BUFFER_BETWEEN_RECORDINGS;
 
-      return newStart < existEnd && (newStart + data.settings.recordingDuration) > existStart;
+      return newStart < existEnd && newEndWithBuffer > existStart;
     });
   }, [data.recordings, data.settings.recordingDuration]);
 
@@ -202,10 +207,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [data, users]);
 
   const autoFillVacanciesForDate = useCallback(async (date: string): Promise<number> => {
-    const today = new Date();
+    const todayStr = new Date().toISOString().split('T')[0];
     const dateObj = new Date(date + 'T12:00:00');
     const dayName = DATE_TO_DAY[getDay(dateObj)];
-    const isToday = date === today.toISOString().split('T')[0];
     
     // Sort clients: priority to those who have extraDay today, then those who just accept extras
     const extraClients = data.clients
@@ -218,47 +222,60 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return 0;
       });
     
+    if (extraClients.length === 0) return 0;
+
     let createdCount = 0;
     const currentRecs = [...data.recordings];
     const allVmIds = users.filter(u => u.role === 'videomaker').map(u => u.id);
 
-    // Analyze each videomaker's agenda for the day
-    for (const vmId of allVmIds) {
-      const slots = findAvailableSlots(date, vmId, currentRecs, data.settings);
-      
-      for (const slot of slots) {
-        // Find an eligible client who isn't already recording on this day
-        const eligibleClient = extraClients.find(c => 
-          !currentRecs.some(r => r.clientId === c.id && r.date === date && r.status !== 'cancelada')
-        );
+    // Distribution among videomakers: iterate slots first, then videomakers
+    for (const slot of FIXED_SLOTS) {
+      for (const vmId of allVmIds) {
+        // Strict capacity check: ensure VM doesn't exceed 4 recordings already
+        const vmDayRecsCount = currentRecs.filter(r => 
+          r.videomakerId === vmId && 
+          r.date === date && 
+          r.status !== 'cancelada'
+        ).length;
 
-        if (eligibleClient) {
-          const newRec: Recording = {
-            id: crypto.randomUUID(),
-            clientId: eligibleClient.id,
-            videomakerId: vmId,
-            date,
-            startTime: slot,
-            type: 'extra',
-            status: 'agendada',
-          };
-          
-          const ok = await data.addRecording(newRec);
-          if (ok) {
-            createdCount++;
-            currentRecs.push(newRec);
-            // Rotate clients to distribute work
-            const index = extraClients.indexOf(eligibleClient);
-            if (index > -1) {
-              extraClients.splice(index, 1);
-              extraClients.push(eligibleClient);
+        if (vmDayRecsCount >= 4) continue;
+
+        // Check if slot is available for this VM
+        if (!hasConflict(vmId, date, slot)) {
+          // Find an eligible client who isn't already recording on this day
+          const eligibleClient = extraClients.find(c => 
+            !currentRecs.some(r => r.clientId === c.id && r.date === date && r.status !== 'cancelada')
+          );
+
+          if (eligibleClient) {
+            const newRec: Recording = {
+              id: crypto.randomUUID(),
+              clientId: eligibleClient.id,
+              videomakerId: vmId,
+              date,
+              startTime: slot,
+              type: 'extra',
+              status: 'agendada',
+            };
+            
+            const ok = await data.addRecording(newRec);
+            if (ok) {
+              createdCount++;
+              currentRecs.push(newRec);
+              
+              // Move used client to the end of the list to distribute among clients too
+              const index = extraClients.indexOf(eligibleClient);
+              if (index > -1) {
+                extraClients.splice(index, 1);
+                extraClients.push(eligibleClient);
+              }
             }
           }
         }
       }
     }
     return createdCount;
-  }, [data, users]);
+  }, [data, users, hasConflict]);
   const organizeSchedule = useCallback(async (startDate: string, endDate: string): Promise<{ updated: number; cancelled: number }> => {
     // 1. Fetch ALL recordings for the range directly from the VPS to catch "ghost" recordings
     const { data: allRawRecs, error } = await supabase

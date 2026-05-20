@@ -992,7 +992,6 @@ export default function Schedule() {
     const endStr = format(endOfMonth(addMonths(new Date(), 1)), 'yyyy-MM-dd');
     let created = 0;
 
-    // Get all future dates from today to end of next month
     const days: Date[] = [];
     let d = new Date();
     const end = new Date(endStr);
@@ -1001,20 +1000,28 @@ export default function Schedule() {
       d = addDays(d, 1);
     }
 
+    // Local copy of recordings to track changes during generation
+    let currentRecsLocal = [...recordings];
+    const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
+
     for (const day of days) {
       const dateStr = format(day, 'yyyy-MM-dd');
       const dayNum = getDay(day);
       const dayName = DATE_TO_DAY[dayNum];
       if (!settings.workDays.includes(dayName)) continue;
 
-      // Try backup clients
+      // Try backup clients first (they have higher priority for their assigned days)
       if (showBackup) {
-        const backupClients = clients.filter(c => c.backupDay === dayName && c.acceptsExtra);
+        const backupClients = clients.filter(c => c.backupDay === dayName && c.acceptsExtra && c.status === 'ativo');
         for (const client of backupClients) {
           const vmId = client.videomaker;
           if (!vmId) continue;
+
+          const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
+          if (vmDayRecsCount >= 4) continue;
+
           if (!hasConflict(vmId, dateStr, client.backupTime)) {
-            const exists = recordings.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'backup' && r.status !== 'cancelada');
+            const exists = currentRecsLocal.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'backup' && r.status !== 'cancelada');
             if (!exists) {
               const rec: Recording = {
                 id: crypto.randomUUID(),
@@ -1025,38 +1032,54 @@ export default function Schedule() {
                 type: 'backup',
                 status: 'agendada',
               };
-              await addRecording(rec);
-              created++;
+              const ok = await addRecording(rec);
+              if (ok) {
+                created++;
+                currentRecsLocal.push(rec);
+              }
             }
           }
         }
       }
 
-      // Try extra clients
+      // Try extra clients with round-robin distribution across videomakers and slots
       if (showExtra) {
-        const extraClients = clients.filter(c => c.acceptsExtra && c.extraDay === dayName);
-        for (const client of extraClients) {
-          const vmId = client.videomaker;
-          if (!vmId) continue;
-          
-          // Use any available slot on that day, not just fixedTime
-          const availableSlots = findAvailableSlots(dateStr, vmId, recordings, settings);
-          if (availableSlots.length > 0) {
-            const extraTime = availableSlots[0];
+        const extraClients = clients.filter(c => c.acceptsExtra && c.extraDay === dayName && c.status === 'ativo');
+        if (extraClients.length > 0) {
+          for (const slot of FIXED_SLOTS) {
+            for (const vmId of videomakers.map(v => v.id)) {
+              const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
+              if (vmDayRecsCount >= 4) continue;
 
-            const exists = recordings.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'extra' && r.status !== 'cancelada');
-            if (!exists) {
-              const rec: Recording = {
-                id: crypto.randomUUID(),
-                clientId: client.id,
-                videomakerId: vmId,
-                date: dateStr,
-                startTime: extraTime,
-                type: 'extra',
-                status: 'agendada',
-              };
-              await addRecording(rec);
-              created++;
+              if (!hasConflict(vmId, dateStr, slot)) {
+                // Find a client who isn't already recording on this day
+                const eligibleClient = extraClients.find(c => 
+                  !currentRecsLocal.some(r => r.clientId === c.id && r.date === dateStr && r.status !== 'cancelada')
+                );
+
+                if (eligibleClient) {
+                  const rec: Recording = {
+                    id: crypto.randomUUID(),
+                    clientId: eligibleClient.id,
+                    videomakerId: vmId,
+                    date: dateStr,
+                    startTime: slot,
+                    type: 'extra',
+                    status: 'agendada',
+                  };
+                  const ok = await addRecording(rec);
+                  if (ok) {
+                    created++;
+                    currentRecsLocal.push(rec);
+                    // Rotate clients
+                    const idx = extraClients.indexOf(eligibleClient);
+                    if (idx > -1) {
+                      extraClients.splice(idx, 1);
+                      extraClients.push(eligibleClient);
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -1121,48 +1144,52 @@ export default function Schedule() {
               )}
             </div>
           )}
-          <Button 
-            variant="outline" 
-            className="border-emerald-500/50 text-emerald-600 hover:bg-emerald-500/10 shadow-sm" 
-            onClick={async () => {
-              const todayStr = format(new Date(), 'yyyy-MM-dd');
-              toast.loading('Analisando vagas e preenchendo agenda...', { id: 'autofill' });
-              const count = await autoFillVacanciesForDate(todayStr);
-              if (count > 0) {
-                toast.success(`${count} vaga(s) preenchida(s) com gravações extras!`, { id: 'autofill' });
-              } else {
-                toast.info('Não foram encontradas vagas ou clientes extras disponíveis para hoje.', { id: 'autofill' });
-              }
-            }}
-          >
-            <Sparkles size={16} className="mr-2 animate-pulse" /> Otimizar Videomakers
-          </Button>
-          <Button 
-            variant="outline" 
-            className="border-indigo-500/50 text-indigo-600 hover:bg-indigo-500/10" 
-            onClick={async () => {
-              const confirm = window.confirm("Deseja organizar a agenda de todo o mês? Isso irá reajustar horários para os slots padrão (08:30, 10:30, 14:30, 16:30) e APAGAR o que exceder a capacidade de 4 por videomaker.");
-              if (!confirm) return;
-              
-              setOrganizing(true);
-              const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
-              const end = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
-              
-              toast.loading('Organizando agenda...', { id: 'organize' });
-              try {
-                const { updated, cancelled } = await organizeSchedule(start, end);
-                toast.success(`Agenda organizada: ${updated} ajustada(s), ${cancelled} apagada(s) por excesso de capacidade.`, { id: 'organize' });
-              } catch (err) {
-                console.error(err);
-                toast.error('Erro ao organizar agenda', { id: 'organize' });
-              } finally {
-                setOrganizing(false);
-              }
-            }}
-            disabled={organizing}
-          >
-            <Columns3 size={16} className="mr-2" /> {organizing ? 'Organizando...' : 'Organizar Agenda'}
-          </Button>
+          {currentUser?.role === 'admin' && (
+            <>
+              <Button 
+                variant="outline" 
+                className="border-emerald-500/50 text-emerald-600 hover:bg-emerald-500/10 shadow-sm" 
+                onClick={async () => {
+                  const todayStr = format(new Date(), 'yyyy-MM-dd');
+                  toast.loading('Analisando vagas e distribuindo gravações...', { id: 'autofill' });
+                  const count = await autoFillVacanciesForDate(todayStr);
+                  if (count > 0) {
+                    toast.success(`${count} vaga(s) preenchida(s) com gravações extras!`, { id: 'autofill' });
+                  } else {
+                    toast.info('Não foram encontradas vagas ou clientes extras disponíveis para hoje.', { id: 'autofill' });
+                  }
+                }}
+              >
+                <Sparkles size={16} className="mr-2 animate-pulse" /> Otimizar Videomakers
+              </Button>
+              <Button 
+                variant="outline" 
+                className="border-indigo-500/50 text-indigo-600 hover:bg-indigo-500/10" 
+                onClick={async () => {
+                  const confirm = window.confirm("Deseja organizar a agenda de todo o mês? Isso irá reajustar horários para os slots padrão (08:30, 10:30, 14:30, 16:30) e APAGAR o que exceder a capacidade de 4 por videomaker.");
+                  if (!confirm) return;
+                  
+                  setOrganizing(true);
+                  const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
+                  const end = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
+                  
+                  toast.loading('Organizando agenda...', { id: 'organize' });
+                  try {
+                    const { updated, cancelled } = await organizeSchedule(start, end);
+                    toast.success(`Agenda organizada: ${updated} ajustada(s), ${cancelled} apagada(s) por excesso de capacidade.`, { id: 'organize' });
+                  } catch (err) {
+                    console.error(err);
+                    toast.error('Erro ao organizar agenda', { id: 'organize' });
+                  } finally {
+                    setOrganizing(false);
+                  }
+                }}
+                disabled={organizing}
+              >
+                <Columns3 size={16} className="mr-2" /> {organizing ? 'Organizando...' : 'Organizar Agenda'}
+              </Button>
+            </>
+          )}
           <Button variant="outline" onClick={() => { setRegenClientId(''); setRegenOpen(true); }}>
             <RefreshCw size={16} className="mr-2" /> Regenerar Agenda
           </Button>

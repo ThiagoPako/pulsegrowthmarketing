@@ -5,6 +5,8 @@ import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import type { Recording, RecordingType, Script, DayOfWeek, Client, EventRecording } from '@/types';
 import { SCRIPT_VIDEO_TYPE_LABELS, DAY_LABELS } from '@/types';
 import { useEndoClientes, useEndoAgendamentos, useEndoContracts } from '@/hooks/useEndomarketing';
+import { findAvailableSlots } from '@/lib/schedulingUtils';
+
 import AgencyCapacityWidget from '@/components/AgencyCapacityWidget';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

@@ -1484,7 +1484,7 @@ export default function TvDashboard() {
           </div>
 
           {/* RIGHT COLUMN: Designer + Editing */}
-          <div className="col-span-4 space-y-3 overflow-y-auto scrollbar-hide pl-1">
+          <div className="col-span-4 space-y-2.5 overflow-y-auto scrollbar-hide pl-1">
             {visibility.show_pipeline && (
               <>
                 <div>

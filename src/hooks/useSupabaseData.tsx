@@ -416,6 +416,12 @@ export function useSupabaseData() {
   }, []);
 
   // ── Recording CRUD ──
+  const cancelRecording = useCallback(async (id: string) => {
+    await invokeVpsFunction(`recordings/${id}`, { body: { status: 'cancelada' }, method: 'PUT' });
+    setRecordings(prev => prev.map(r => r.id === id ? { ...r, status: 'cancelada' as const } : r));
+  }, []);
+
+  // ── Recording CRUD ──
   const addRecording = useCallback(async (recording: Recording): Promise<boolean> => {
     // Hierarchy Rule: Fixed/Avulso take precedence over Extra.
     // If we're adding a Fixed/Avulso recording, we cancel any Extra recording at the same time/videomaker.
@@ -461,10 +467,6 @@ export function useSupabaseData() {
     setRecordings(prev => prev.map(r => r.id === recording.id ? recording : r));
   }, []);
 
-  const cancelRecording = useCallback(async (id: string) => {
-    await invokeVpsFunction(`recordings/${id}`, { body: { status: 'cancelada' }, method: 'PUT' });
-    setRecordings(prev => prev.map(r => r.id === id ? { ...r, status: 'cancelada' as const } : r));
-  }, []);
 
   const deleteRecording = useCallback(async (id: string): Promise<boolean> => {
     try {

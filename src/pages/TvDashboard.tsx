@@ -1302,8 +1302,16 @@ export default function TvDashboard() {
                             elements.push(<TimelineSpacer key={`spacer-${idx}`} minutes={startTime - lastMinute} />);
                           }
 
-                          // Card
-                          const duration = 90;
+                          // Card Duration
+                          let duration = 90; // Default 90m
+                          if (item.endTime) {
+                            const [eh, em] = item.endTime.split(':').map(Number);
+                            const endTimeMinutes = eh * 60 + em;
+                            if (endTimeMinutes > startTime) {
+                              duration = endTimeMinutes - startTime;
+                            }
+                          }
+
                           elements.push(<ScheduleCard key={item.id} item={item} isLive={activeRecordingIds.includes(item.id)} height={duration * MINUTE_HEIGHT} />);
                           lastMinute = Math.max(lastMinute, startTime + duration);
 

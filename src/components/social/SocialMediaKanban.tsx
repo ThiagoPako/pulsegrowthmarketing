@@ -5,11 +5,12 @@ import { Button } from '@/components/ui/button';
 import {
   Film, Palette, Image, Megaphone, CheckCircle2, Clock, CalendarClock,
   Send, Zap, Eye, MessageSquare, AlertTriangle, ExternalLink, Link2,
-  Scissors, Flame, Rocket, Sparkles, ChevronLeft, ChevronRight
+  Scissors, Flame, Rocket, Sparkles, ChevronLeft, ChevronRight, Download
 } from 'lucide-react';
 import DeadlineBadge from '@/components/DeadlineBadge';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/vpsDb';
+import { toast } from 'sonner';
 
 // Drag-to-scroll container
 function DragScrollContainer({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -159,20 +160,36 @@ function RocketBurst({ onComplete }: { onComplete: () => void }) {
 }
 
 // Video link inline component
-function ReviewVideoLink({ contentTaskId, clientId }: { contentTaskId: string | null; clientId: string | null }) {
+function ReviewVideoLink({ contentTaskId, clientId, showDownload = false }: { contentTaskId: string | null; clientId: string | null; showDownload?: boolean }) {
   const [isAltered, setIsAltered] = useState(false);
-  const [hasVideo, setHasVideo] = useState(false);
+  const [videoData, setVideoData] = useState<{ edited_video_link: string | null; drive_link: string | null } | null>(null);
 
   useEffect(() => {
     if (!contentTaskId) return;
     supabase.from('content_tasks').select('edited_video_link, drive_link, adjustment_notes').eq('id', contentTaskId).single()
       .then(({ data }) => {
-        setHasVideo(!!(data?.edited_video_link || data?.drive_link));
+        setVideoData(data);
         setIsAltered(!!data?.adjustment_notes);
       });
   }, [contentTaskId]);
 
+  const hasVideo = !!(videoData?.edited_video_link || videoData?.drive_link);
   if (!hasVideo && !isAltered) return null;
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const link = videoData?.edited_video_link || videoData?.drive_link;
+    if (!link) return;
+
+    try {
+      window.open(link, '_blank');
+      toast.success('Abrindo link para download...');
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Erro ao abrir link de download');
+    }
+  };
 
   return (
     <div className="mt-2 space-y-1">
@@ -180,12 +197,26 @@ function ReviewVideoLink({ contentTaskId, clientId }: { contentTaskId: string | 
         <Badge className="text-[9px] font-bold px-1.5 py-0 border-0 bg-amber-500 text-white">🔄 Alterado</Badge>
       )}
       {hasVideo && (
-        <a href={clientId ? `/portal/${clientId}` : `/video-avulso/${contentTaskId}`}
-          className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline bg-primary/5 border border-primary/15 rounded-md px-2 py-1.5 transition-colors hover:bg-primary/10">
-          <Eye size={12} className="shrink-0" />
-          <span className="truncate">Assistir no Portal</span>
-          <ExternalLink size={10} className="shrink-0 ml-auto" />
-        </a>
+        <div className="flex flex-col gap-1">
+          <a href={clientId ? `/portal/${clientId}` : `/video-avulso/${contentTaskId}`}
+            className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline bg-primary/5 border border-primary/15 rounded-md px-2 py-1.5 transition-colors hover:bg-primary/10">
+            <Eye size={12} className="shrink-0" />
+            <span className="truncate">Assistir no Portal</span>
+            <ExternalLink size={10} className="shrink-0 ml-auto" />
+          </a>
+          
+          {showDownload && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleDownload}
+              className="h-8 w-full gap-1.5 text-xs font-medium border-primary/20 hover:bg-primary/5 hover:text-primary transition-all"
+            >
+              <Download size={12} />
+              Baixar Vídeo
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -614,11 +645,16 @@ function DeliveryCard({
                 </Button>
               </div>
             )}
-            {columnId === 'postado' && d.posted_at && (
-              <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-                <CheckCircle2 size={10} className="text-green-500" />
-                Postado em {new Date(d.posted_at + 'T12:00:00').toLocaleDateString('pt-BR')}
-                {d.platform && ` · ${d.platform}`}
+            {columnId === 'postado' && (
+              <div className="space-y-2">
+                {d.posted_at && (
+                  <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    <CheckCircle2 size={10} className="text-green-500" />
+                    Postado em {new Date(d.posted_at + 'T12:00:00').toLocaleDateString('pt-BR')}
+                    {d.platform && ` · ${d.platform}`}
+                  </div>
+                )}
+                <ReviewVideoLink contentTaskId={d.content_task_id} clientId={d.client_id} showDownload={true} />
               </div>
             )}
           </div>

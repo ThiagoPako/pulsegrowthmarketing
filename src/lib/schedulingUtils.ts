@@ -152,13 +152,14 @@ export function generateFixedRecordings(
       }
     } else {
       // Normal client: single slot at fixedTime
-      if (vmDayRecs.length < 4 && !hasConflictCheck(client.videomaker, date, client.fixedTime, allRecs, duration)) {
+      const targetTime = client.fixedTime || '08:30'; // fallback
+      if (vmDayRecs.length < 4 && !hasConflictCheck(client.videomaker, date, targetTime, allRecs, duration)) {
         const rec: Recording = {
           id: crypto.randomUUID(),
           clientId: client.id,
           videomakerId: client.videomaker,
           date,
-          startTime: client.fixedTime,
+          startTime: targetTime,
           type: 'fixa',
           status: 'agendada',
         };

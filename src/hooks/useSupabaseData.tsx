@@ -302,9 +302,11 @@ export function useSupabaseData() {
       setScripts((Array.isArray(sRes.data) ? sRes.data : []).map(rowToScript).filter(s => activeClientIds.has(s.clientId)));
     }
     if (setRes.data && !setRes.error && setRes.data) {
-      setSettings(rowToSettings(setRes.data));
-      setSettingsId(setRes.data.id);
+      const settingsData = Array.isArray(setRes.data) ? setRes.data[0] : setRes.data;
+      setSettings(rowToSettings(settingsData));
+      setSettingsId(settingsData.id);
     }
+
     if (arRes.data && !arRes.error) setActiveRecordings((Array.isArray(arRes.data) ? arRes.data : []).map(rowToActiveRecording));
     setLoading(false);
     hasFetched.current = true;

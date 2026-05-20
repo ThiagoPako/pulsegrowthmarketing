@@ -96,7 +96,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [users, setUsers] = useState<User[]>([]);
   useEffect(() => {
     const hasVpsToken = typeof window !== 'undefined' && !!localStorage.getItem('pulse_jwt');
-    const profileClient = hasVpsToken ? supabase : supabaseReal;
+    const profileClient = hasVpsToken ? (supabase as any) : supabaseReal;
+
 
     profileClient.from('profiles').select('*').then(({ data: profiles }) => {
       if (profiles) setUsers(profiles.map((p: any) => profileToUser(p as Profile)));
@@ -156,12 +157,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const isWithinWorkHours = useCallback((day: DayOfWeek, startTime: string) => {
     if (!data.settings.workDays.includes(day)) return false;
     const start = timeToMinutes(startTime);
-    const end = start + data.settings.recordingDuration;
+    const duration = data.settings.recordingDuration || 90;
+    const end = start + duration;
     const s = data.settings;
-    const inA = start >= timeToMinutes(s.shiftAStart) && end <= timeToMinutes(s.shiftAEnd);
-    const inB = start >= timeToMinutes(s.shiftBStart) && end <= timeToMinutes(s.shiftBEnd);
+    const inA = start >= timeToMinutes(s.shiftAStart || '08:30') && end <= timeToMinutes(s.shiftAEnd || '12:00');
+    const inB = start >= timeToMinutes(s.shiftBStart || '14:30') && end <= timeToMinutes(s.shiftBEnd || '18:00');
     return inA || inB;
   }, [data.settings]);
+
 
   const addRecording = useCallback(async (recording: Recording): Promise<boolean> => {
     if (hasConflict(recording.videomakerId, recording.date, recording.startTime)) return false;

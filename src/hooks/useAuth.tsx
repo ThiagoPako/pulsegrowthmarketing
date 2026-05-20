@@ -5,15 +5,20 @@ import { supabase as supabaseReal } from '@/integrations/supabase/client';
 async function logLoginEntry(userId: string) {
   try {
     const hasVpsToken = typeof window !== 'undefined' && !!localStorage.getItem(TOKEN_KEY);
-    const profileClient = hasVpsToken ? supabase : supabaseReal;
-    const { data: prof } = await profileClient.from('profiles').select('name, role').eq('id', userId).single() as any;
-    await supabaseReal.from('login_logs').insert({
-      user_id: userId,
-      user_name: prof?.name || '',
-      user_role: prof?.role || '',
-    });
-  } catch { /* silent */ }
+    const profileClient = hasVpsToken ? (supabase as any) : supabaseReal;
+    const { data: prof } = await profileClient.from('profiles').select('name, role').eq('id', userId).maybeSingle();
+    if (prof) {
+      await supabaseReal.from('login_logs').insert({
+        user_id: userId,
+        user_name: (prof as any)?.name || '',
+        user_role: (prof as any)?.role || '',
+      });
+    }
+  } catch (err) {
+    console.warn('logLoginEntry failed:', err);
+  }
 }
+
 
 export type AppRole = 'admin' | 'videomaker' | 'social_media' | 'editor' | 'endomarketing' | 'parceiro' | 'fotografo' | 'designer';
 

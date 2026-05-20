@@ -233,19 +233,37 @@ function TimeMarker() {
 
   return (
     <motion.div 
-      className="absolute left-0 right-0 z-50 flex items-center pointer-events-none"
+      className="absolute left-0 right-0 z-[60] flex items-center pointer-events-none"
       style={{ top: `${percent}%` }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
-      <div className="flex-1 h-[2px] bg-gradient-to-r from-transparent via-orange-500/50 to-transparent" />
-      <div className="absolute right-0 flex items-center gap-1 bg-orange-500 px-1.5 py-0.5 rounded-l-md shadow-[0_0_15px_rgba(249,115,22,0.4)]">
-        <Clock className="w-2.5 h-2.5 text-white animate-pulse" />
-        <span className="text-[10px] font-bold text-white tabular-nums">{currentTime}</span>
+      <div className="flex-1 h-[2.5px] bg-gradient-to-r from-transparent via-orange-500/80 to-transparent" />
+      <div className="absolute right-0 flex items-center gap-1 bg-orange-500 px-2 py-1 rounded-l-md shadow-[0_0_20px_rgba(249,115,22,0.6)]">
+        <Clock className="w-3 h-3 text-white animate-pulse" />
+        <span className="text-[11px] font-bold text-white tabular-nums">{currentTime}</span>
       </div>
     </motion.div>
   );
 }
+
+function BufferCard({ startTime }: { startTime: string }) {
+  return (
+    <motion.div
+      className="relative rounded-xl border border-dashed border-white/5 p-3 flex items-center justify-center gap-2 overflow-hidden"
+      style={{ background: 'rgba(255,255,255,0.015)' }}
+      layout
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+    >
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-pulse" style={{ animationDuration: '4s' }} />
+      <Clock className="w-3.5 h-3.5 text-white/10" />
+      <span className="text-[10px] font-bold text-white/15 uppercase tracking-[0.2em] font-mono">Intervalo de Upload / Buffer</span>
+      <span className="text-[9px] font-bold text-white/10 px-1.5 py-0.5 rounded border border-white/5">{startTime}</span>
+    </motion.div>
+  );
+}
+
 
 
 /* ─── Status Summary ────────────────────────────────────── */
@@ -1204,10 +1222,23 @@ export default function TvDashboard() {
                 {schedule.length > 0 ? (
                   <div className="space-y-2">
                     <AnimatePresence>
-                      {schedule.map(item => <ScheduleCard key={item.id} item={item} isLive={activeRecordingIds.includes(item.id)} />)}
+                      {schedule.map((item, idx) => {
+                        const elements = [<ScheduleCard key={item.id} item={item} isLive={activeRecordingIds.includes(item.id)} />];
+                        
+                        // Add buffer after recording if it's not the last one and status is not cancelled
+                        if (item.status !== 'cancelada') {
+                          const [h, m] = item.startTime.split(':').map(Number);
+                          let totalMinutes = h * 60 + m + 90; // Assume 90min duration
+                          const bufferTime = `${String(Math.floor(totalMinutes / 60)).padStart(2, '0')}:${String(totalMinutes % 60).padStart(2, '0')}`;
+                          elements.push(<BufferCard key={`buffer-${item.id}`} startTime={bufferTime} />);
+                        }
+                        
+                        return elements;
+                      })}
                     </AnimatePresence>
                   </div>
                 ) : (
+
                   <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
                     <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
                     <p className="text-[10px] text-white/20">Nenhuma gravação hoje</p>

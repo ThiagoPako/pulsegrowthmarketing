@@ -316,15 +316,14 @@ export function organizeRecordingsForDate(
 
   if (dayRecordings.length === 0) return { toUpdate: [], toCancel: [] };
 
-  // Hierarchy sorting: fixa > avulso > secundaria > extra
+  // Hierarchy sorting: fixa > avulso > secundaria > backup > endomarketing > extra
   const priorityMap: Record<RecordingType, number> = {
     fixa: 1,
     avulso: 2,
     secundaria: 3,
-    endomarketing: 4,
-    backup: 5,
+    backup: 4,
+    endomarketing: 5,
     extra: 6
-
   };
 
   const sortedRecs = [...dayRecordings].sort((a, b) => {

@@ -415,9 +415,10 @@ export default function Schedule() {
     if (!isAvulso && !form.clientId) { toast.error('Selecione um cliente'); return; }
     if (isAvulso && !form.prospectName.trim()) { toast.error('Informe o nome do prospect'); return; }
     if (!form.videomakerId || !form.date || !form.startTime) { toast.error('Preencha todos os campos'); return; }
-    if (hasConflict(form.videomakerId, form.date, form.startTime)) {
+    if (hasConflict(form.videomakerId, form.date, form.startTime, undefined, form.type as RecordingType)) {
       toast.error('Conflito de horário!'); return;
     }
+
     const rec: Recording = {
       id: crypto.randomUUID(),
       clientId: isAvulso ? '' : form.clientId,

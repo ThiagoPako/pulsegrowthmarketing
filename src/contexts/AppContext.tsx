@@ -8,7 +8,7 @@ import { supabase as supabaseReal } from '@/integrations/supabase/client';
 import { usePresenceHeartbeat } from '@/hooks/usePresence';
 import { generateFixedRecordings, findAvailableSlots } from '@/lib/schedulingUtils';
 import { sendRecordingScheduledNotification } from '@/services/whatsappService';
-import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek, Script, ActiveRecording, UserRole } from '@/types';
+import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek, Script, ActiveRecording, UserRole, RecordingType } from '@/types';
 
 const DATE_TO_DAY: Record<number, DayOfWeek> = {
   0: 'domingo', 1: 'segunda', 2: 'terca', 3: 'quarta', 4: 'quinta', 5: 'sexta', 6: 'sabado',
@@ -48,8 +48,9 @@ interface AppContextType {
   updateSettings: (settings: CompanySettings) => void;
   startActiveRecording: (rec: ActiveRecording) => void;
   stopActiveRecording: (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]) => void;
-  hasConflict: (videomakerId: string, date: string, startTime: string, excludeId?: string) => boolean;
+  hasConflict: (videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType) => boolean;
   isWithinWorkHours: (day: DayOfWeek, startTime: string) => boolean;
+
   getSuggestionsForCancellation: (recording: Recording) => Client[];
   refetchData: () => void;
 }
@@ -122,7 +123,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const BUFFER_BETWEEN_RECORDINGS = 30;
 
-  const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string) => {
+  const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType) => {
     const newStart = timeToMinutes(startTime);
     const newEndWithBuffer = newStart + data.settings.recordingDuration + BUFFER_BETWEEN_RECORDINGS;
 
@@ -130,12 +131,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (r.id === excludeId || r.status === 'cancelada') return false;
       if (r.videomakerId !== videomakerId || r.date !== date) return false;
 
+      // Se o novo agendamento for fixa ou avulso (hierarquia superior), 
+      // ele ignora conflitos com gravações do tipo 'extra'.
+      const isHighPriority = newType === 'fixa' || newType === 'avulso';
+      if (isHighPriority && r.type === 'extra') return false;
+
       const existStart = timeToMinutes(r.startTime);
       const existEndWithBuffer = existStart + data.settings.recordingDuration + BUFFER_BETWEEN_RECORDINGS;
 
       return newStart < existEndWithBuffer && newEndWithBuffer > existStart;
     });
   }, [data.recordings, data.settings.recordingDuration]);
+
 
   const isWithinWorkHours = useCallback((day: DayOfWeek, startTime: string) => {
     if (!data.settings.workDays.includes(day)) return false;

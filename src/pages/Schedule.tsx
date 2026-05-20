@@ -415,9 +415,10 @@ export default function Schedule() {
     if (!isAvulso && !form.clientId) { toast.error('Selecione um cliente'); return; }
     if (isAvulso && !form.prospectName.trim()) { toast.error('Informe o nome do prospect'); return; }
     if (!form.videomakerId || !form.date || !form.startTime) { toast.error('Preencha todos os campos'); return; }
-    if (hasConflict(form.videomakerId, form.date, form.startTime)) {
+    if (hasConflict(form.videomakerId, form.date, form.startTime, undefined, form.type as RecordingType)) {
       toast.error('Conflito de horário!'); return;
     }
+
     const rec: Recording = {
       id: crypto.randomUUID(),
       clientId: isAvulso ? '' : form.clientId,
@@ -551,9 +552,10 @@ export default function Schedule() {
     }
     // Check conflict only if date/time/videomaker changed
     const changed = editForm.date !== editingRec.date || editForm.startTime !== editingRec.startTime || editForm.videomakerId !== editingRec.videomakerId;
-    if (changed && editForm.status !== 'cancelada' && hasConflict(editForm.videomakerId, editForm.date, editForm.startTime, editingRec.id)) {
+    if (changed && editForm.status !== 'cancelada' && hasConflict(editForm.videomakerId, editForm.date, editForm.startTime, editingRec.id, editForm.type as RecordingType)) {
       toast.error('Conflito de horário!'); return;
     }
+
     const updated = { ...editingRec, ...editForm };
     updateRecording(updated);
     
@@ -1697,7 +1699,7 @@ export default function Schedule() {
                           <p className="text-xs font-semibold text-muted-foreground">Selecione o Período</p>
                           <div className="grid grid-cols-2 gap-2">
                             {shifts.map(s => {
-                              const occupied = hasConflict(form.videomakerId, form.date, s.start);
+                              const occupied = hasConflict(form.videomakerId, form.date, s.start, undefined, form.type as RecordingType);
                               return (
                                 <button key={s.key} disabled={occupied}
                                   onClick={() => setForm({ ...form, startTime: s.start })}
@@ -1740,7 +1742,7 @@ export default function Schedule() {
                         <p className="text-xs font-semibold text-muted-foreground">Horários Disponíveis</p>
                         <div className="grid grid-cols-3 gap-1.5">
                           {slots.map(slot => {
-                            const conflict = hasConflict(form.videomakerId, form.date, slot);
+                            const conflict = hasConflict(form.videomakerId, form.date, slot, undefined, form.type as RecordingType);
                             return (
                               <button key={slot} disabled={conflict}
                                 onClick={() => setForm({ ...form, startTime: slot })}

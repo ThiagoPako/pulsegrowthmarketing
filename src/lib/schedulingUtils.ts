@@ -1,5 +1,5 @@
 import { format, endOfMonth, addDays, getDay, startOfMonth, differenceInCalendarWeeks } from 'date-fns';
-import type { Client, Recording, DayOfWeek, CompanySettings } from '@/types';
+import type { Client, Recording, DayOfWeek, CompanySettings, RecordingType } from '@/types';
 
 /** Buffer time (in minutes) between recordings for the videomaker to upload materials */
 const BUFFER_BETWEEN_RECORDINGS = 30;
@@ -54,20 +54,31 @@ export function getDatesUntilEndOfMonth(dayOfWeek: DayOfWeek, selectedWeeks?: nu
   return dates;
 }
 
-/** Check if a videomaker has conflict at a specific date/time */
+/** Check if a videomaker has conflict at a specific date/time 
+ * Hierarquia: fixa/avulso > extra. 
+ * Se o novo agendamento for fixa/avulso, ignoramos conflitos com 'extra' (eles serão cancelados/removidos).
+ */
 export function hasConflictCheck(
   videomakerId: string,
   date: string,
   startTime: string,
   recordings: Recording[],
   duration: number,
-  excludeId?: string
+  excludeId?: string,
+  newType?: RecordingType
 ): boolean {
   const newStart = timeToMinutes(startTime);
   const newEnd = newStart + duration;
+  
   return recordings.some(r => {
     if (r.id === excludeId || r.status === 'cancelada') return false;
     if (r.videomakerId !== videomakerId || r.date !== date) return false;
+    
+    // Se o novo agendamento for fixa ou avulso (hierarquia superior), 
+    // ele ignora conflitos com gravações do tipo 'extra'.
+    const isHighPriority = newType === 'fixa' || newType === 'avulso';
+    if (isHighPriority && r.type === 'extra') return false;
+
     const existStart = timeToMinutes(r.startTime);
     // Existing recording occupies: its duration + 30min buffer for upload
     const existEnd = existStart + duration + BUFFER_BETWEEN_RECORDINGS;
@@ -77,6 +88,7 @@ export function hasConflictCheck(
     return newStart < existEnd && newEndWithBuffer > existStart;
   });
 }
+
 
 /** Check if time fits within work shifts */
 export function isWithinWorkHoursCheck(

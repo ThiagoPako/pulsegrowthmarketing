@@ -282,18 +282,33 @@ function BufferCard({ startTime, type = 'pulse' }: { startTime: string; type?: '
 function LunchCard({ startTime }: { startTime: string }) {
   return (
     <motion.div
-      className="relative rounded-xl border border-dashed border-amber-500/10 p-3 flex items-center justify-center gap-2 overflow-hidden"
-      style={{ background: 'rgba(245,158,11,0.03)' }}
+      className="relative rounded-xl border border-dashed border-amber-500/20 p-4 flex flex-col items-center justify-center gap-3 overflow-hidden min-h-[100px]"
+      style={{ background: 'rgba(245,158,11,0.05)' }}
       layout
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
     >
-      <Coffee className="w-3.5 h-3.5 text-amber-500/30" />
-      <span className="text-[10px] font-bold text-amber-500/20 uppercase tracking-[0.2em] font-mono">Horário de Almoço</span>
-      <span className="text-[9px] font-bold text-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/10">{startTime}</span>
+      <motion.div 
+        className="absolute inset-0 bg-amber-500/5 pointer-events-none"
+        animate={{ 
+          opacity: [0.1, 0.2, 0.1],
+        }}
+        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <div className="flex flex-col items-center gap-2 relative z-10 text-center">
+        <div className="flex items-center gap-3">
+          <Coffee className="w-5 h-5 text-amber-500 animate-bounce" />
+          <span className="text-sm font-black text-amber-500 uppercase tracking-[0.4em] font-mono">HORÁRIO DE ALMOÇO</span>
+        </div>
+        <p className="text-[10px] font-bold text-amber-500/40 uppercase tracking-widest max-w-[250px]">
+          Pausa obrigatória: Recarregar energias e focar apenas no descanso.
+        </p>
+        <span className="text-[11px] font-bold text-white/20 px-2 py-1 rounded-full border border-amber-500/10 mt-1">{startTime}</span>
+      </div>
     </motion.div>
   );
 }
+
 
 
 /* ─── Status Summary ────────────────────────────────────── */
@@ -1272,7 +1287,13 @@ export default function TvDashboard() {
                             lunchAdded = true;
                           }
 
+                          // Skip rendering cards that start during lunch time
+                          if (totalMinutes >= 12 * 60 && totalMinutes < 14 * 60) {
+                            return;
+                          }
+
                           elements.push(<ScheduleCard key={item.id} item={item} isLive={activeRecordingIds.includes(item.id)} />);
+
                           
                           // Add pulse buffer after recording if it's not cancelled
                           if (item.status !== 'cancelada') {

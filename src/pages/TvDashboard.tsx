@@ -480,7 +480,18 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
             {item.recordingType === 'backup' && <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300">Backup</span>}
           </div>
           <p className="text-sm font-semibold text-white truncate">{item.clientName}</p>
-          {item.address && (
+          
+          {isNow && item.scriptwriterName && (
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/5 border border-white/10">
+                <Users className="w-2.5 h-2.5 text-white/40" />
+                <span className="text-[9px] font-bold text-white/50 uppercase tracking-wider">Roteiro:</span>
+                <span className="text-[10px] font-bold text-white/80">{item.scriptwriterName}</span>
+              </div>
+            </div>
+          )}
+
+          {item.address && !isNow && (
             <div className="flex items-center gap-1 mt-0.5">
               <MapPin className="w-2.5 h-2.5" style={{ color: `${PULSE_ORANGE}55` }} />
               <span className="text-[10px] text-white/30 truncate">{item.address}</span>

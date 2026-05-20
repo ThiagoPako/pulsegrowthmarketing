@@ -1089,8 +1089,12 @@ export default function Schedule() {
           {(showBackup || showExtra) && (
             <>
               <Button variant="outline" className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateBackupExtra}>
-                <RefreshCw size={16} className="mr-2" /> Gerar Backup/Extra
+                <RefreshCw size={16} className="mr-2" /> Gerar Backup/Extra Mensal
               </Button>
+              <Button variant="outline" className="border-emerald-500/50 text-emerald-600 hover:bg-emerald-500/10" onClick={() => autoFillVacanciesForDate(format(new Date(), 'yyyy-MM-dd'))}>
+                <Sparkles size={16} className="mr-2" /> Preencher Vagas de Hoje
+              </Button>
+
               {showBackup && (
                 <Button variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllBackup}>
                   <Trash2 size={16} className="mr-2" /> Apagar Backups

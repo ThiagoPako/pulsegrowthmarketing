@@ -3580,6 +3580,7 @@ app.post('/api/endo-daily-tasks-notify', async (req, res) => {
 const ALLOWED_TABLES = [
   'clients','recordings','kanban_tasks','scripts','company_settings','active_recordings',
   'profiles','user_roles','plans','goals','notifications','content_tasks','task_history',
+  'crm_leads','crm_notes',
   'task_comments','design_tasks','design_task_history','delivery_records','revenues',
   'expenses','expense_categories','financial_contracts','financial_activity_log',
   'financial_chat_messages','cash_reserve_movements','billing_messages','payment_config',

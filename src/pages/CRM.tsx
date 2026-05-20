@@ -79,11 +79,12 @@ export default function CRM() {
     queryKey: ['crm_goals'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('goals' as any)
+        .from('goals')
         .select('*')
         .order('created_at', { ascending: false });
       if (error) return [];
-      return data as Goal[];
+      return (data as any) as Goal[];
+
     },
   });
 
@@ -352,7 +353,7 @@ export default function CRM() {
                                                     <Briefcase size={14} />
                                                   </Button>
                                                 )}
-                                                <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ key: ['crm_leads'] })} />
+                                                <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
                                               </div>
                                             </div>
                                             

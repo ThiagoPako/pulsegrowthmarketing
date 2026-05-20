@@ -126,6 +126,8 @@ export function generateFixedRecordings(
   const duration = settings.recordingDuration;
 
   for (const date of dates) {
+    const vmDayRecs = allRecs.filter(r => r.videomakerId === client.videomaker && r.date === date && r.status !== 'cancelada');
+    
     if (client.fullShiftRecording) {
       // Full-shift client: reserve both slots in the preferred shift
       const slots = client.preferredShift === 'tarde'
@@ -133,7 +135,7 @@ export function generateFixedRecordings(
         : ['08:30', '10:30'];
       
       for (const timeStr of slots) {
-        if (!hasConflictCheck(client.videomaker, date, timeStr, allRecs, duration)) {
+        if (vmDayRecs.length < 4 && !hasConflictCheck(client.videomaker, date, timeStr, allRecs, duration)) {
           const rec: Recording = {
             id: crypto.randomUUID(),
             clientId: client.id,
@@ -145,11 +147,12 @@ export function generateFixedRecordings(
           };
           newRecordings.push(rec);
           allRecs.push(rec);
+          vmDayRecs.push(rec);
         }
       }
     } else {
       // Normal client: single slot at fixedTime
-      if (!hasConflictCheck(client.videomaker, date, client.fixedTime, allRecs, duration)) {
+      if (vmDayRecs.length < 4 && !hasConflictCheck(client.videomaker, date, client.fixedTime, allRecs, duration)) {
         const rec: Recording = {
           id: crypto.randomUUID(),
           clientId: client.id,

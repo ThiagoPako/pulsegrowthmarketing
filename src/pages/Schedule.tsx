@@ -1147,26 +1147,28 @@ export default function Schedule() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-display font-bold">Agenda</h1>
         <div className="flex gap-2 flex-wrap">
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap items-center">
             {showBackup && (
-              <>
-                <Button variant="outline" className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateBackup}>
-                  <RefreshCw size={16} className="mr-2" /> Gerar Backups Mensais
+              <div className="flex gap-2 items-center bg-amber-500/5 p-1 rounded-md border border-amber-500/20">
+                <span className="text-[10px] font-bold text-amber-600 uppercase ml-1 px-1">Backup</span>
+                <Button variant="outline" size="sm" className="h-8 border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateBackup}>
+                  <RefreshCw size={14} className="mr-1.5" /> Gerar Mensal
                 </Button>
-                <Button variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllBackup}>
-                  <Trash2 size={16} className="mr-2" /> Apagar Backups
+                <Button variant="outline" size="sm" className="h-8 border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllBackup}>
+                  <Trash2 size={14} className="mr-1.5" /> Apagar
                 </Button>
-              </>
+              </div>
             )}
             {showExtra && (
-              <>
-                <Button variant="outline" className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateExtra}>
-                  <RefreshCw size={16} className="mr-2" /> Gerar Extras Mensais
+              <div className="flex gap-2 items-center bg-blue-500/5 p-1 rounded-md border border-blue-500/20">
+                <span className="text-[10px] font-bold text-blue-600 uppercase ml-1 px-1">Extra</span>
+                <Button variant="outline" size="sm" className="h-8 border-blue-500/50 text-blue-600 hover:bg-blue-500/10" onClick={handleGenerateExtra}>
+                  <RefreshCw size={14} className="mr-1.5" /> Gerar Mensal
                 </Button>
-                <Button variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllExtra}>
-                  <Trash2 size={16} className="mr-2" /> Apagar Extras
+                <Button variant="outline" size="sm" className="h-8 border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllExtra}>
+                  <Trash2 size={14} className="mr-1.5" /> Apagar
                 </Button>
-              </>
+              </div>
             )}
           </div>
           {currentUser?.role === 'admin' && (

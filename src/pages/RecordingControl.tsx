@@ -31,6 +31,8 @@ const TYPE_LABELS: Record<string, string> = {
 
 const STANDARD_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
 const BUFFER_SLOTS = ['10:00', '12:00', '16:00', '18:00'];
+const LUNCH_SLOTS = ['12:30', '13:30'];
+
 
 export default function RecordingControl() {
   const { recordings, clients, users, updateRecording, settings, refetchData } = useApp();
@@ -167,9 +169,10 @@ export default function RecordingControl() {
     : `${format(startOfWeek(selectedDate, { weekStartsOn: 1 }), "dd/MM")} - ${format(endOfWeek(selectedDate, { weekStartsOn: 1 }), "dd/MM")}`;
 
   const allSlots = useMemo(() => {
-    const combined = [...STANDARD_SLOTS, ...BUFFER_SLOTS].sort();
+    const combined = [...STANDARD_SLOTS, ...BUFFER_SLOTS, ...LUNCH_SLOTS].sort();
     return combined;
   }, []);
+
 
   return (
     <div className="space-y-6">
@@ -280,14 +283,17 @@ export default function RecordingControl() {
           {/* Slots Rows */}
           {allSlots.map(time => {
             const isBuffer = BUFFER_SLOTS.includes(time);
+            const isLunch = LUNCH_SLOTS.includes(time);
+            const isRestricted = isBuffer || isLunch;
+            
             return (
-              <div key={time} className={`flex border-b last:border-b-0 ${isBuffer ? 'h-12 bg-muted/5' : 'h-32'}`}>
+              <div key={time} className={`flex border-b last:border-b-0 ${isRestricted ? 'h-12 bg-muted/5' : 'h-32'}`}>
                 {/* Time Label */}
-                <div className={`w-20 shrink-0 border-r flex flex-col items-center justify-center ${isBuffer ? 'bg-muted/10' : 'bg-background'}`}>
-                  <span className={`text-xs font-mono font-bold ${isBuffer ? 'text-muted-foreground/40' : 'text-foreground'}`}>
+                <div className={`w-20 shrink-0 border-r flex flex-col items-center justify-center ${isRestricted ? 'bg-muted/10' : 'bg-background'}`}>
+                  <span className={`text-xs font-mono font-bold ${isRestricted ? 'text-muted-foreground/40' : 'text-foreground'}`}>
                     {time}
                   </span>
-                  {isBuffer && <Coffee size={12} className="text-muted-foreground/20 mt-1" />}
+                  {isLunch ? <Coffee size={12} className="text-amber-500/20 mt-1" /> : isBuffer ? <div className="mt-1" /> : null}
                 </div>
 
                 {/* Videomaker Cells */}
@@ -300,10 +306,10 @@ export default function RecordingControl() {
                       key={`${vm.id}-${time}`}
                       className={`flex-1 min-w-[200px] border-r last:border-r-0 relative p-1.5 transition-colors ${
                         isOver ? 'bg-primary/10 ring-2 ring-primary/30 ring-inset z-10' : ''
-                      } ${isBuffer ? 'bg-muted/5' : 'bg-background/40 hover:bg-muted/5'}`}
-                      onDragOver={e => !isBuffer && handleDragOver(e, vm.id, time)}
+                      } ${isRestricted ? 'bg-muted/5' : 'bg-background/40 hover:bg-muted/5'}`}
+                      onDragOver={e => !isRestricted && handleDragOver(e, vm.id, time)}
                       onDragLeave={handleDragLeave}
-                      onDrop={e => !isBuffer && handleDrop(e, vm.id, time)}
+                      onDrop={e => !isRestricted && handleDrop(e, vm.id, time)}
                     >
                       {recording ? (
                         <RecordingCard
@@ -312,13 +318,17 @@ export default function RecordingControl() {
                           isDragging={draggedRecording?.id === recording.id}
                           onDragStart={handleDragStart}
                         />
+                      ) : isLunch ? (
+                        <div className="h-full flex items-center justify-center bg-amber-500/5">
+                          <span className="text-[9px] font-bold text-amber-500/20 uppercase tracking-[0.2em] font-mono">Almoço</span>
+                        </div>
                       ) : isBuffer ? (
                         <div className="h-full flex items-center justify-center">
                           <span className="text-[9px] font-bold text-muted-foreground/10 uppercase tracking-[0.2em] font-mono">Buffer</span>
                         </div>
                       ) : (
                         <div className="h-full w-full rounded-lg border-2 border-dashed border-transparent hover:border-muted-foreground/10 flex items-center justify-center transition-colors group">
-                           {draggedRecording && !isBuffer && (
+                           {draggedRecording && !isRestricted && (
                              <div className="opacity-0 group-hover:opacity-100 flex flex-col items-center gap-1">
                                <ArrowLeftRight size={14} className="text-primary/40" />
                                <span className="text-[10px] text-primary/40 font-medium">Soltar aqui</span>
@@ -332,6 +342,7 @@ export default function RecordingControl() {
               </div>
             );
           })}
+
         </div>
       </div>
 

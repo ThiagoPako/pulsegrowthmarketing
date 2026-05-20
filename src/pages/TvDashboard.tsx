@@ -265,8 +265,25 @@ function BufferCard({ startTime }: { startTime: string }) {
 }
 
 
+function LunchCard({ startTime }: { startTime: string }) {
+  return (
+    <motion.div
+      className="relative rounded-xl border border-dashed border-amber-500/10 p-3 flex items-center justify-center gap-2 overflow-hidden"
+      style={{ background: 'rgba(245,158,11,0.03)' }}
+      layout
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+    >
+      <Coffee className="w-3.5 h-3.5 text-amber-500/30" />
+      <span className="text-[10px] font-bold text-amber-500/20 uppercase tracking-[0.2em] font-mono">Horário de Almoço</span>
+      <span className="text-[9px] font-bold text-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/10">{startTime}</span>
+    </motion.div>
+  );
+}
+
 
 /* ─── Status Summary ────────────────────────────────────── */
+
 
 function StatusSummary({ members }: { members: TeamMember[] }) {
   const online = members.filter(m => m.isOnline).length;

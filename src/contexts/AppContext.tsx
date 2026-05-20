@@ -31,6 +31,7 @@ interface AppContextType {
   cancelAndReschedule: (recording: Recording) => { success: boolean; rescheduled?: { date: string; startTime: string; videomakerId: string; type: string } };
   generateScheduleForClient: (client: Client) => Promise<number>;
   regenerateScheduleForClient: (client: Client) => Promise<{ deleted: number; created: number }>;
+  autoFillVacanciesForDate: (date: string) => Promise<number>;
   addTask: (task: KanbanTask) => void;
   updateTask: (task: KanbanTask) => void;
   deleteTask: (id: string) => void;
@@ -45,6 +46,7 @@ interface AppContextType {
   getSuggestionsForCancellation: (recording: Recording) => Client[];
   refetchData: () => void;
 }
+
 
 function profileToUser(profile: Profile): User {
   return {

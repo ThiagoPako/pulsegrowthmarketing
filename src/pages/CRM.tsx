@@ -248,8 +248,12 @@ export default function CRM() {
             <TabsTrigger value="goals" className="gap-2 px-6">
               <Target className="h-4 w-4" /> Metas de Vendas
             </TabsTrigger>
+            <TabsTrigger value="calendar" className="gap-2 px-6">
+              <CalendarIcon className="h-4 w-4" /> Calendário
+            </TabsTrigger>
           </TabsList>
         </div>
+
 
         <TabsContent value="pipeline" className="flex-1 overflow-hidden m-0">
           <div className="h-full overflow-x-auto custom-scrollbar">

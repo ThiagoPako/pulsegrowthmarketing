@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -6,13 +6,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Flame, Snowflake, RotateCcw, MessageSquare, Briefcase, Phone, UserPlus } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Progress } from '@/components/ui/progress';
+import { 
+  Plus, Flame, Snowflake, RotateCcw, MessageSquare, 
+  Briefcase, Phone, UserPlus, Target, TrendingUp, 
+  DollarSign, Users, LayoutDashboard, Filter, Search
+} from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'framer-motion';
 
 type LeadStatus = 'lead' | 'contacted' | 'meeting' | 'contracted' | 'recovery_followup_1' | 'recovery_followup_2';
 type LeadTag = 'hot' | 'cold';
@@ -28,26 +34,36 @@ interface Lead {
   tag: LeadTag | null;
 }
 
-const STAGES: { id: LeadStatus; label: string; color: string }[] = [
-  { id: 'lead', label: 'Possíveis Clientes', color: 'bg-slate-100' },
-  { id: 'contacted', label: 'Contato Efetuado', color: 'bg-blue-50' },
-  { id: 'meeting', label: 'Reunião Agendada', color: 'bg-purple-50' },
-  { id: 'contracted', label: 'Contrato Fechado', color: 'bg-green-50' },
+interface Goal {
+  id: string;
+  type: 'clients' | 'faturamento' | 'lucro';
+  title: string;
+  target_value: number;
+  current_value: number;
+  status: 'em_andamento' | 'concluida' | 'cancelada';
+}
+
+const STAGES: { id: LeadStatus; label: string; color: string; icon: any }[] = [
+  { id: 'lead', label: 'Possíveis Clientes', color: 'border-t-slate-400', icon: Users },
+  { id: 'contacted', label: 'Contato Efetuado', color: 'border-t-blue-400', icon: Phone },
+  { id: 'meeting', label: 'Reunião Agendada', color: 'border-t-purple-400', icon: Briefcase },
+  { id: 'contracted', label: 'Contrato Fechado', color: 'border-t-green-400', icon: Target },
 ];
 
-const RECOVERY_STAGES: { id: LeadStatus; label: string; color: string }[] = [
-  { id: 'recovery_followup_1', label: 'Follow-up 1', color: 'bg-orange-50' },
-  { id: 'recovery_followup_2', label: 'Follow-up 2', color: 'bg-red-50' },
+const RECOVERY_STAGES: { id: LeadStatus; label: string; color: string; icon: any }[] = [
+  { id: 'recovery_followup_1', label: 'Follow-up 1', color: 'border-t-orange-400', icon: RotateCcw },
+  { id: 'recovery_followup_2', label: 'Follow-up 2', color: 'border-t-red-400', icon: RotateCcw },
 ];
 
 export default function CRM() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'goals'>('pipeline');
   const [isRecoveryView, setIsRecoveryView] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
-  const { data: leads = [], isLoading } = useQuery({
+  const { data: leads = [], isLoading: leadsLoading } = useQuery({
     queryKey: ['crm_leads'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -56,6 +72,19 @@ export default function CRM() {
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data as Lead[];
+    },
+  });
+
+  const { data: goals = [], isLoading: goalsLoading } = useQuery({
+    queryKey: ['crm_goals'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('goals')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) return [];
+      return (data as any) as Goal[];
+
     },
   });
 
@@ -69,7 +98,7 @@ export default function CRM() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
-      toast.success('Lead atualizado com sucesso!');
+      toast.success('Lead atualizado!');
     },
   });
 
@@ -88,7 +117,6 @@ export default function CRM() {
         }]);
       if (error) throw error;
     },
-
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
       setIsAddDialogOpen(false);
@@ -99,8 +127,16 @@ export default function CRM() {
   const onDragEnd = (result: any) => {
     if (!result.destination) return;
     const { draggableId, destination } = result;
+    if (destination.droppableId === result.source.droppableId) return;
     updateLeadStatus.mutate({ id: draggableId, status: destination.droppableId as LeadStatus });
   };
+
+  const filteredLeads = useMemo(() => {
+    return leads.filter(lead => 
+      lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (lead.company?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+    );
+  }, [leads, searchTerm]);
 
   const totals = useMemo(() => {
     const stats: Record<string, number> = {};
@@ -113,35 +149,46 @@ export default function CRM() {
   const currentStages = isRecoveryView ? RECOVERY_STAGES : STAGES;
 
   return (
-    <div className="p-6 h-full flex flex-col gap-6 bg-background">
-      <div className="flex justify-between items-center">
+    <div className="p-4 md:p-6 h-full flex flex-col gap-6 bg-background/50">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            CRM - {isRecoveryView ? 'Recuperação de Vendas' : 'Pipeline Principal'}
+          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+            <LayoutDashboard className="text-primary" />
+            CRM Inteligente
           </h1>
-          <p className="text-muted-foreground text-sm">Gerencie seus leads e oportunidades</p>
+          <p className="text-muted-foreground">Pipeline de vendas integrado com metas reais</p>
         </div>
-        
-        <div className="flex gap-3">
+
+        <div className="flex flex-wrap gap-2 w-full md:w-auto">
+          <div className="relative flex-1 md:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input 
+              placeholder="Buscar leads..." 
+              className="pl-9 h-10 bg-card border-none shadow-sm"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          
           <Button 
             variant="outline" 
             onClick={() => setIsRecoveryView(!isRecoveryView)}
-            className="flex items-center gap-2"
+            className={`h-10 transition-all ${isRecoveryView ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-card'}`}
           >
-            {isRecoveryView ? <RotateCcw size={16} /> : <RotateCcw size={16} />}
-            {isRecoveryView ? 'Ver Pipeline Principal' : 'Ver Recuperação'}
+            <RotateCcw className={`mr-2 h-4 w-4 ${isRecoveryView ? 'animate-spin-slow' : ''}`} />
+            {isRecoveryView ? 'Pipeline Principal' : 'Recuperação'}
           </Button>
 
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="flex items-center gap-2">
-                <UserPlus size={16} />
+              <Button className="h-10 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 transition-all active:scale-95">
+                <UserPlus className="mr-2 h-4 w-4" />
                 Novo Lead
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
-                <DialogTitle>Cadastrar Novo Lead</DialogTitle>
+                <DialogTitle>Novo Lead Comercial</DialogTitle>
               </DialogHeader>
               <form onSubmit={(e) => {
                 e.preventDefault();
@@ -153,134 +200,253 @@ export default function CRM() {
                   contract_value: Number(formData.get('value')),
                   status: 'lead'
                 });
-              }} className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Nome do Contato</Label>
-                  <Input name="name" required placeholder="Ex: João Silva" />
+              }} className="space-y-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="name">Nome do Decisor</Label>
+                  <Input id="name" name="name" required placeholder="Ex: Rodrigo Pulse" className="bg-muted/50" />
                 </div>
-                <div className="space-y-2">
-                  <Label>Empresa</Label>
-                  <Input name="company" placeholder="Ex: Pulse Agency" />
+                <div className="grid gap-2">
+                  <Label htmlFor="company">Empresa / Negócio</Label>
+                  <Input id="company" name="company" placeholder="Ex: Pulse Agency" className="bg-muted/50" />
                 </div>
-                <div className="space-y-2">
-                  <Label>Valor do Contrato Possível</Label>
-                  <Input name="value" type="number" step="0.01" placeholder="0.00" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="value">Valor Possível</Label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input id="value" name="value" type="number" step="0.01" placeholder="0.00" className="pl-9 bg-muted/50" />
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="phone">WhatsApp</Label>
+                    <Input id="phone" name="phone" placeholder="(00) 00000-0000" className="bg-muted/50" />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>WhatsApp / Telefone</Label>
-                  <Input name="phone" placeholder="(00) 00000-0000" />
-                </div>
-                <Button type="submit" className="w-full" disabled={createLead.isPending}>
-                  Cadastrar Lead
+                <Button type="submit" className="w-full mt-4" disabled={createLead.isPending}>
+                  {createLead.isPending ? 'Cadastrando...' : 'Criar Oportunidade'}
                 </Button>
               </form>
             </DialogContent>
           </Dialog>
         </div>
-      </div>
+      </header>
 
-      <div className="flex-1 overflow-x-auto">
-        <DragDropContext onDragEnd={onDragEnd}>
-          <div className="flex gap-4 h-full min-w-max pb-4">
-            {currentStages.map((stage) => (
-              <div key={stage.id} className={`w-80 flex flex-col rounded-lg border bg-slate-50/50 p-3 h-full`}>
-                <div className="flex flex-col mb-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="font-semibold text-sm">{stage.label}</h3>
-                    <Badge variant="secondary" className="text-[10px]">
-                      {leads.filter(l => l.status === stage.id).length}
-                    </Badge>
-                  </div>
-                  <p className="text-xs font-bold text-primary">
-                    Total: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totals[stage.id] || 0)}
-                  </p>
-                </div>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full flex-1 flex flex-col gap-4">
+        <div className="flex items-center justify-between bg-card/50 p-1 rounded-lg border w-fit self-center md:self-start">
+          <TabsList className="bg-transparent h-9">
+            <TabsTrigger value="pipeline" className="gap-2 px-6">
+              <Filter className="h-4 w-4" /> Pipeline
+            </TabsTrigger>
+            <TabsTrigger value="goals" className="gap-2 px-6">
+              <Target className="h-4 w-4" /> Metas de Vendas
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-                <Droppable droppableId={stage.id}>
-                  {(provided) => (
-                    <div
-                      {...provided.droppableProps}
-                      ref={provided.innerRef}
-                      className="flex-1 space-y-3 overflow-y-auto"
-                    >
-                      {leads
-                        .filter((lead) => lead.status === stage.id)
-                        .map((lead, index) => (
-                          <Draggable key={lead.id} draggableId={lead.id} index={index}>
-                            {(provided) => (
-                              <Card
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                                className="p-3 shadow-sm border-l-4 border-l-primary hover:shadow-md transition-shadow group relative"
-                              >
-                                <div className="flex flex-col gap-2">
-                                  <div className="flex justify-between items-start">
-                                    <span className="font-medium text-sm truncate pr-6">{lead.name}</span>
-                                    <div className="absolute top-2 right-2 flex gap-1">
-                                      {lead.tag === 'hot' && <Flame className="text-orange-500" size={14} />}
-                                      {lead.tag === 'cold' && <Snowflake className="text-blue-500" size={14} />}
-                                    </div>
-                                  </div>
-                                  
-                                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                                    <Briefcase size={12} />
-                                    <span className="truncate">{lead.company || 'N/A'}</span>
-                                  </div>
-
-                                  <div className="flex items-center justify-between mt-1">
-                                    <span className="text-xs font-bold text-primary">
-                                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.contract_value)}
-                                    </span>
-                                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      {stage.id === 'contacted' && (
-                                        <Button
-                                          size="icon"
-                                          variant="ghost"
-                                          className="h-7 w-7 text-orange-500 hover:text-orange-600 hover:bg-orange-50"
-                                          title="Enviar para Recuperação"
-                                          onClick={() => updateLeadStatus.mutate({ id: lead.id, status: 'recovery_followup_1' })}
-                                        >
-                                          <RotateCcw size={14} />
-                                        </Button>
-                                      )}
-                                      {(stage.id === 'recovery_followup_1' || stage.id === 'recovery_followup_2') && (
-                                        <Button
-                                          size="icon"
-                                          variant="ghost"
-                                          className="h-7 w-7 text-purple-500 hover:text-purple-600 hover:bg-purple-50"
-                                          title="Voltar para Reunião"
-                                          onClick={() => updateLeadStatus.mutate({ id: lead.id, status: 'meeting' })}
-                                        >
-                                          <Briefcase size={14} />
-                                        </Button>
-                                      )}
-                                      <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
-                                    </div>
-                                  </div>
-
-                                  <div className="flex gap-1 mt-1">
-                                    <TagSelector leadId={lead.id} currentTag={lead.tag} />
-                                  </div>
-                                </div>
-                              </Card>
-                            )}
-                          </Draggable>
-                        ))}
-                      {provided.placeholder}
+        <TabsContent value="pipeline" className="flex-1 overflow-hidden m-0">
+          <div className="h-full overflow-x-auto custom-scrollbar">
+            <DragDropContext onDragEnd={onDragEnd}>
+              <div className="flex gap-6 h-full min-w-max pb-4">
+                {currentStages.map((stage) => (
+                  <div key={stage.id} className="w-[320px] flex flex-col gap-4">
+                    <div className={`p-4 rounded-xl border-t-4 ${stage.color} bg-card shadow-sm flex flex-col gap-2 relative overflow-hidden group`}>
+                      <div className="flex items-center justify-between relative z-10">
+                        <div className="flex items-center gap-2">
+                          <div className={`p-1.5 rounded-md bg-muted group-hover:bg-primary/10 transition-colors`}>
+                            <stage.icon className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                          </div>
+                          <h3 className="font-bold text-sm text-foreground/80">{stage.label}</h3>
+                        </div>
+                        <Badge variant="secondary" className="rounded-full h-5 min-w-[20px] flex items-center justify-center bg-muted text-muted-foreground">
+                          {leads.filter(l => l.status === stage.id).length}
+                        </Badge>
+                      </div>
+                      <div className="flex items-baseline gap-1 relative z-10">
+                        <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Volume Total</span>
+                        <p className="text-sm font-bold text-primary">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totals[stage.id] || 0)}
+                        </p>
+                      </div>
+                      <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                         <stage.icon className="h-12 w-12" />
+                      </div>
                     </div>
-                  )}
-                </Droppable>
+
+                    <Droppable droppableId={stage.id}>
+                      {(provided, snapshot) => (
+                        <div
+                          {...provided.droppableProps}
+                          ref={provided.innerRef}
+                          className={`flex-1 flex flex-col gap-3 p-2 rounded-xl transition-colors min-h-[200px] ${
+                            snapshot.isDraggingOver ? 'bg-primary/5 border-2 border-dashed border-primary/20' : 'bg-transparent'
+                          }`}
+                        >
+                          <AnimatePresence>
+                            {filteredLeads
+                              .filter((lead) => lead.status === stage.id)
+                              .map((lead, index) => (
+                                <Draggable key={lead.id} draggableId={lead.id} index={index}>
+                                  {(provided, snapshot) => (
+                                    <div
+                                      ref={provided.innerRef}
+                                      {...provided.draggableProps}
+                                      {...provided.dragHandleProps}
+                                      className="z-10"
+                                    >
+                                      <motion.div
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.9 }}
+                                        transition={{ duration: 0.2 }}
+                                      >
+                                        <Card className={`group border-none shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden ${snapshot.isDragging ? 'rotate-3 scale-105 shadow-xl' : ''}`}>
+                                          <div className="p-4 space-y-3 relative">
+                                            <div className="flex justify-between items-start gap-2">
+                                              <div className="flex-1 min-w-0">
+                                                <h4 className="font-bold text-sm truncate group-hover:text-primary transition-colors">{lead.name}</h4>
+                                                <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                                                  <Briefcase className="h-3 w-3" /> {lead.company || 'Pessoa Física'}
+                                                </p>
+                                              </div>
+                                              <div className="shrink-0 flex gap-1">
+                                                {lead.tag === 'hot' && (
+                                                  <div className="p-1 rounded-full bg-orange-100 text-orange-600 animate-pulse">
+                                                    <Flame size={12} fill="currentColor" />
+                                                  </div>
+                                                )}
+                                                {lead.tag === 'cold' && (
+                                                  <div className="p-1 rounded-full bg-blue-100 text-blue-600">
+                                                    <Snowflake size={12} />
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </div>
+
+                                            <div className="flex items-center justify-between pt-2 border-t border-muted/50">
+                                              <div className="flex flex-col">
+                                                <span className="text-[9px] uppercase font-semibold text-muted-foreground tracking-tighter">Budget Est.</span>
+                                                <span className="text-xs font-bold text-primary">
+                                                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.contract_value)}
+                                                </span>
+                                              </div>
+
+                                              <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all">
+                                                {stage.id === 'contacted' && (
+                                                  <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    className="h-8 w-8 rounded-full bg-orange-50 text-orange-600 hover:bg-orange-100"
+                                                    title="Mover p/ Recuperação"
+                                                    onClick={() => updateLeadStatus.mutate({ id: lead.id, status: 'recovery_followup_1' })}
+                                                  >
+                                                    <RotateCcw size={14} />
+                                                  </Button>
+                                                )}
+                                                {(stage.id === 'recovery_followup_1' || stage.id === 'recovery_followup_2') && (
+                                                  <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    className="h-8 w-8 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100"
+                                                    title="Reativar Reunião"
+                                                    onClick={() => updateLeadStatus.mutate({ id: lead.id, status: 'meeting' })}
+                                                  >
+                                                    <Briefcase size={14} />
+                                                  </Button>
+                                                )}
+                                                <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                                              </div>
+                                            </div>
+                                            
+                                            <div className="flex gap-2">
+                                              <TagSelector leadId={lead.id} currentTag={lead.tag} />
+                                            </div>
+                                          </div>
+                                        </Card>
+                                      </motion.div>
+                                    </div>
+                                  )}
+                                </Draggable>
+                              ))}
+                          </AnimatePresence>
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
+                  </div>
+                ))}
               </div>
-            ))}
+            </DragDropContext>
           </div>
-        </DragDropContext>
-      </div>
+        </TabsContent>
+
+        <TabsContent value="goals" className="m-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Card className="bg-primary text-primary-foreground p-6 flex flex-col justify-between overflow-hidden relative">
+              <div className="relative z-10">
+                <p className="text-primary-foreground/70 text-sm font-medium">Faturamento Potencial (CRM)</p>
+                <h3 className="text-3xl font-bold mt-1">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                    leads.reduce((sum, l) => sum + (l.status !== 'contracted' ? Number(l.contract_value) : 0), 0)
+                  )}
+                </h3>
+                <p className="text-xs mt-2 opacity-80 flex items-center gap-1">
+                   <TrendingUp className="h-3 w-3" /> Volume em negociação aberta
+                </p>
+              </div>
+              <DollarSign className="absolute -right-4 -bottom-4 h-32 w-32 opacity-10" />
+            </Card>
+
+            <AnimatePresence>
+              {goalsLoading ? (
+                Array(2).fill(0).map((_, i) => (
+                  <Card key={i} className="animate-pulse bg-muted h-[160px]" />
+                ))
+              ) : goals.length > 0 ? (
+                goals.filter(g => g.status === 'em_andamento').map((goal) => (
+                  <motion.div
+                    key={goal.id}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                  >
+                    <Card className="p-6 space-y-4 hover:shadow-lg transition-all border-none shadow-sm relative overflow-hidden group">
+                      <div className="flex justify-between items-start relative z-10">
+                        <div className="space-y-1">
+                          <p className="text-xs font-bold text-primary uppercase tracking-wider">{goal.type === 'faturamento' ? 'Faturamento' : 'Volume de Clientes'}</p>
+                          <h4 className="font-bold text-lg group-hover:text-primary transition-colors">{goal.title}</h4>
+                        </div>
+                        <div className="bg-primary/10 p-2 rounded-lg text-primary">
+                          {goal.type === 'faturamento' ? <DollarSign className="h-5 w-5" /> : <Users className="h-5 w-5" />}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 relative z-10">
+                        <div className="flex justify-between text-xs font-medium">
+                          <span>Progresso: {Math.round((goal.current_value / goal.target_value) * 100)}%</span>
+                          <span>Alvo: {goal.type === 'faturamento' ? `R$ ${goal.target_value.toLocaleString()}` : goal.target_value}</span>
+                        </div>
+                        <Progress value={(goal.current_value / goal.target_value) * 100} className="h-2 rounded-full" />
+                      </div>
+                      
+                      <div className="absolute top-0 right-0 p-8 opacity-0 group-hover:opacity-5 transition-opacity">
+                         <Target className="h-24 w-24" />
+                      </div>
+                    </Card>
+                  </motion.div>
+                ))
+              ) : (
+                <div className="col-span-full py-12 text-center text-muted-foreground bg-card rounded-xl border-2 border-dashed">
+                  Nenhuma meta ativa vinculada ao financeiro.
+                </div>
+              )}
+            </AnimatePresence>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
 
-function TagSelector({ leadId, currentTag, onUpdate }: { leadId: string, currentTag: LeadTag | null, onUpdate?: () => void }) {
+function TagSelector({ leadId, currentTag }: { leadId: string, currentTag: LeadTag | null }) {
   const queryClient = useQueryClient();
   const updateTag = useMutation({
     mutationFn: async (tag: LeadTag | null) => {
@@ -293,17 +459,21 @@ function TagSelector({ leadId, currentTag, onUpdate }: { leadId: string, current
   });
 
   return (
-    <div className="flex gap-1">
+    <div className="flex gap-1.5 mt-2">
       <Badge 
-        variant={currentTag === 'hot' ? 'default' : 'outline'} 
-        className={`text-[9px] cursor-pointer hover:bg-orange-100 ${currentTag === 'hot' ? 'bg-orange-500 text-white' : ''}`}
+        variant="outline" 
+        className={`text-[9px] px-2 py-0.5 cursor-pointer transition-all border-none ${
+          currentTag === 'hot' ? 'bg-orange-500 text-white shadow-md shadow-orange-200' : 'bg-orange-50 text-orange-600 hover:bg-orange-100'
+        }`}
         onClick={() => updateTag.mutate(currentTag === 'hot' ? null : 'hot')}
       >
         Quente
       </Badge>
       <Badge 
-        variant={currentTag === 'cold' ? 'default' : 'outline'} 
-        className={`text-[9px] cursor-pointer hover:bg-blue-100 ${currentTag === 'cold' ? 'bg-blue-500 text-white' : ''}`}
+        variant="outline" 
+        className={`text-[9px] px-2 py-0.5 cursor-pointer transition-all border-none ${
+          currentTag === 'cold' ? 'bg-blue-500 text-white shadow-md shadow-blue-200' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+        }`}
         onClick={() => updateTag.mutate(currentTag === 'cold' ? null : 'cold')}
       >
         Frio
@@ -339,64 +509,90 @@ function LeadDetailsDialog({ lead, onUpdate }: { lead: Lead, onUpdate: () => voi
     onSuccess: () => {
       setNote('');
       onUpdate();
-      toast.success('Informação adicionada!');
+      toast.success('Nota registrada no histórico!');
     }
   });
 
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-primary">
+        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/5">
           <MessageSquare size={14} />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Informações do Lead: {lead.name}</DialogTitle>
-        </DialogHeader>
-        <div className="grid grid-cols-2 gap-6 mt-4">
-          <div className="space-y-4">
-            <div className="p-3 bg-secondary rounded-lg space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase">Dados Gerais</p>
-              <div className="flex items-center gap-2 text-sm">
-                <Briefcase size={14} className="text-primary" />
-                <span>{lead.company || 'Não informado'}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Phone size={14} className="text-primary" />
-                <span>{lead.phone || 'Não informado'}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <span className="font-bold text-primary">Valor: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.contract_value)}</span>
+      <DialogContent className="max-w-3xl p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
+        <div className="flex h-[600px]">
+          {/* Coluna Esquerda: Dados */}
+          <div className="w-2/5 bg-muted/30 p-8 flex flex-col gap-6">
+            <div>
+              <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-4">Dados da Oportunidade</h3>
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-primary uppercase">Contato</p>
+                  <p className="font-bold text-lg">{lead.name}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-primary uppercase">Empresa</p>
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Briefcase className="h-4 w-4 text-muted-foreground" />
+                    {lead.company || 'Pessoa Física'}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-primary uppercase">Valor Negociado</p>
+                  <p className="text-2xl font-black text-primary">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.contract_value)}
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Adicionar Observação Relevante</Label>
-              <Textarea 
-                placeholder="Descreva o que aconteceu nesta etapa..." 
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-              />
-              <Button onClick={() => addNote.mutate()} disabled={!note} className="w-full">Salvar Informação</Button>
+            <div className="mt-auto space-y-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-bold uppercase text-muted-foreground">Nova Atualização</Label>
+                <Textarea 
+                  placeholder="Registre pontos relevantes da conversa..." 
+                  className="bg-card border-none min-h-[120px] shadow-inner resize-none"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+                <Button onClick={() => addNote.mutate()} disabled={!note} className="w-full h-11 shadow-lg shadow-primary/20">
+                  Salvar Observação
+                </Button>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-4">
-            <Label>Histórico da Jornada</Label>
-            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+          {/* Coluna Direita: Histórico */}
+          <div className="flex-1 p-8 overflow-y-auto flex flex-col gap-6 bg-card">
+            <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" /> Jornada do Cliente
+            </h3>
+            <div className="space-y-6 relative before:absolute before:left-3 before:top-2 before:bottom-0 before:w-0.5 before:bg-muted">
               {notes.map((n: any) => (
-                <div key={n.id} className="p-3 border rounded-lg bg-slate-50 relative">
-                  <Badge variant="outline" className="text-[9px] absolute top-2 right-2 uppercase">
-                    {n.stage}
-                  </Badge>
-                  <p className="text-xs whitespace-pre-wrap mt-1">{n.content}</p>
-                  <p className="text-[10px] text-muted-foreground mt-2">
-                    {new Date(n.created_at).toLocaleString('pt-BR')}
-                  </p>
+                <div key={n.id} className="pl-10 relative">
+                  <div className="absolute left-[7px] top-1.5 h-3 w-3 rounded-full bg-primary border-4 border-card z-10" />
+                  <div className="bg-muted/50 p-4 rounded-xl border-l-2 border-primary space-y-2 group hover:bg-muted transition-colors">
+                    <div className="flex justify-between items-center">
+                      <Badge variant="outline" className="text-[9px] uppercase font-bold py-0 h-4 bg-card">
+                        {n.stage}
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground font-medium">
+                        {new Date(n.created_at).toLocaleDateString('pt-BR')}
+                      </span>
+                    </div>
+                    <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">{n.content}</p>
+                  </div>
                 </div>
               ))}
-              {notes.length === 0 && <p className="text-center text-muted-foreground text-xs py-10">Nenhuma observação registrada.</p>}
+              {notes.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-3">
+                  <div className="p-4 rounded-full bg-muted/50">
+                    <MessageSquare className="h-8 w-8 opacity-20" />
+                  </div>
+                  <p className="text-sm italic">Nenhuma interação registrada ainda.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -197,6 +197,10 @@ export function generateExtraRecordings(
     const orderedVms = [client.videomaker, ...allVideomakerIds.filter(id => id !== client.videomaker)];
     
     for (const vmId of orderedVms) {
+      // Capacity check
+      const vmDayRecsCount = allRecs.filter(r => r.videomakerId === vmId && r.date === date && r.status !== 'cancelada').length;
+      if (vmDayRecsCount >= 4) continue;
+
       // Use standard fixed slots as requested by user
       const slots = findAvailableSlots(date, vmId, allRecs, settings);
       
@@ -217,7 +221,6 @@ export function generateExtraRecordings(
         placed = true;
         break;
       }
-      if (placed) break;
     }
   }
 

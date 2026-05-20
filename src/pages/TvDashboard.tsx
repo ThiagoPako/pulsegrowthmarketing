@@ -98,6 +98,9 @@ const PULSE_ORANGE = 'hsl(16, 82%, 51%)';
 const PULSE_DARK = '#0c0a14';
 const PULSE_CARD = 'rgba(255,255,255,0.035)';
 const SPACE = "'Space Grotesk', sans-serif";
+const MINUTE_HEIGHT = 1.5;
+const OPERATIONAL_START = 8 * 60; // 08:00
+const OPERATIONAL_END = 19 * 60;   // 19:00
 
 const ROLE_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
   admin:         { label: 'ADMINISTRAÇÃO',  color: PULSE_ORANGE, icon: Monitor },
@@ -210,14 +213,10 @@ function TimeMarker() {
       const minutes = now.getMinutes();
       const totalMinutes = hours * 60 + minutes;
       
-      // Assume o dia operacional das 08:00 às 19:00 (11 horas)
-      const start = 8 * 60;
-      const end = 19 * 60;
-      
-      if (totalMinutes < start) setPercent(0);
-      else if (totalMinutes > end) setPercent(100);
+      if (totalMinutes < OPERATIONAL_START) setPercent(0);
+      else if (totalMinutes > OPERATIONAL_END) setPercent(100);
       else {
-        const p = ((totalMinutes - start) / (end - start)) * 100;
+        const p = ((totalMinutes - OPERATIONAL_START) / (OPERATIONAL_END - OPERATIONAL_START)) * 100;
         setPercent(p);
       }
       
@@ -225,7 +224,7 @@ function TimeMarker() {
     };
 
     update();
-    const interval = setInterval(update, 30000); // Atualiza a cada 30s
+    const interval = setInterval(update, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -238,21 +237,25 @@ function TimeMarker() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
-      <div className="flex-1 h-[2.5px] bg-gradient-to-r from-transparent via-orange-500/80 to-transparent" />
-      <div className="absolute right-0 flex items-center gap-1 bg-orange-500 px-2 py-1 rounded-l-md shadow-[0_0_20px_rgba(249,115,22,0.6)]">
+      <div className="flex-1 h-[2px] bg-gradient-to-r from-transparent via-red-500 to-transparent shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
+      <div className="absolute right-0 flex items-center gap-1 bg-red-600 px-2 py-1 rounded-l-md shadow-[0_0_15px_rgba(220,38,38,0.6)] border-l border-y border-red-400/30">
         <Clock className="w-3 h-3 text-white animate-pulse" />
-        <span className="text-[11px] font-bold text-white tabular-nums">{currentTime}</span>
+        <span className="text-[10px] font-bold text-white tabular-nums tracking-wider">{currentTime}</span>
       </div>
     </motion.div>
   );
 }
 
-function BufferCard({ startTime, type = 'pulse' }: { startTime: string; type?: 'pulse' | 'prep' }) {
+function BufferCard({ startTime, type = 'pulse', height }: { startTime: string; type?: 'pulse' | 'prep'; height?: number }) {
   const isPulse = type === 'pulse';
   return (
     <motion.div
-      className="relative rounded-xl border border-dashed border-orange-500/20 p-3 flex items-center justify-center gap-2 overflow-hidden"
-      style={{ background: 'rgba(249,115,22,0.03)' }}
+      className="relative rounded-xl border border-dashed border-orange-500/20 px-3 flex items-center justify-center gap-2 overflow-hidden"
+      style={{ 
+        background: 'rgba(249,115,22,0.03)',
+        height: height ? `${height}px` : 'auto',
+        minHeight: isPulse ? '40px' : '36px'
+      }}
       layout
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -269,7 +272,7 @@ function BufferCard({ startTime, type = 'pulse' }: { startTime: string; type?: '
         <Rocket className="w-3.5 h-3.5 text-orange-500 animate-bounce" />
         <span className="text-[10px] font-black text-orange-500 uppercase tracking-[0.3em] font-mono">PULSE</span>
         <span className="text-[9px] font-bold text-white/30 uppercase tracking-wider font-mono">
-          {isPulse ? 'Organização de Material' : 'Preparação e Roteiros'}
+          {isPulse ? 'Organização' : 'Preparação'}
         </span>
         <span className="text-[9px] font-bold text-orange-500/40 px-1.5 py-0.5 rounded border border-orange-500/20">{startTime}</span>
       </div>
@@ -277,13 +280,14 @@ function BufferCard({ startTime, type = 'pulse' }: { startTime: string; type?: '
   );
 }
 
-
-
-function LunchCard({ startTime }: { startTime: string }) {
+function LunchCard({ startTime, height }: { startTime: string; height?: number }) {
   return (
     <motion.div
       className="relative rounded-xl border border-dashed border-amber-500/20 p-2.5 flex items-center justify-center gap-2 overflow-hidden"
-      style={{ background: 'rgba(245,158,11,0.03)' }}
+      style={{ 
+        background: 'rgba(245,158,11,0.03)',
+        height: height ? `${height}px` : 'auto'
+      }}
       layout
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -293,6 +297,11 @@ function LunchCard({ startTime }: { startTime: string }) {
       <span className="text-[9px] font-bold text-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/10 font-mono">{startTime}</span>
     </motion.div>
   );
+}
+
+function TimelineSpacer({ minutes }: { minutes: number }) {
+  if (minutes <= 0) return null;
+  return <div style={{ height: `${minutes * MINUTE_HEIGHT}px` }} className="w-full" />;
 }
 
 
@@ -400,7 +409,7 @@ function MemberCard({ member }: { member: TeamMember }) {
 }
 
 /* ─── Schedule Card (enhanced with logo + avatar) ───────── */
-function ScheduleCard({ item, isLive }: { item: ScheduleItem; isLive: boolean }) {
+function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: boolean; height?: number }) {
   const now = new Date();
   const [h, m] = item.startTime.split(':').map(Number);
   const startDate = new Date(); startDate.setHours(h, m, 0, 0);
@@ -417,6 +426,7 @@ function ScheduleCard({ item, isLive }: { item: ScheduleItem; isLive: boolean })
         border: `1px solid ${borderColor}`,
         background: isNow ? `linear-gradient(135deg, ${PULSE_ORANGE}0c, transparent)` : isDone ? 'linear-gradient(135deg, rgba(34,197,94,0.04), transparent)' : PULSE_CARD,
         opacity: isCancelled ? 0.35 : 1,
+        height: height ? `${height}px` : 'auto'
       }}
       layout
       initial={{ opacity: 0, y: 10 }}
@@ -1246,70 +1256,98 @@ export default function TvDashboard() {
             {visibility.show_schedule && (
               <div className="relative">
                 {/* Linha do Tempo (Clock Marker) */}
-                <div className="absolute inset-y-[35px] left-0 right-0 pointer-events-none z-10 hidden sm:block">
+                <div 
+                  className="absolute left-0 right-0 pointer-events-none z-10 hidden sm:block"
+                  style={{ top: '35px', height: `${(OPERATIONAL_END - OPERATIONAL_START) * MINUTE_HEIGHT}px` }}
+                >
                   <TimeMarker />
                 </div>
 
-
                 <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${schedule.length} gravações`} />
                 {schedule.length > 0 ? (
-                  <div className="space-y-2">
+                  <div className="relative overflow-hidden">
                     <AnimatePresence>
                       {(() => {
                         const elements: React.ReactNode[] = [];
+                        let lastMinute = OPERATIONAL_START;
                         let lunchAdded = false;
                         const addedBuffers = new Set<string>();
 
-                        schedule.forEach((item, idx) => {
+                        const sortedSchedule = [...schedule].sort((a, b) => {
+                          const [hA, mA] = a.startTime.split(':').map(Number);
+                          const [hB, mB] = b.startTime.split(':').map(Number);
+                          return (hA * 60 + mA) - (hB * 60 + mB);
+                        });
+
+                        sortedSchedule.forEach((item, idx) => {
                           const [h, m] = item.startTime.split(':').map(Number);
-                          const totalMinutes = h * 60 + m;
+                          const startTime = h * 60 + m;
 
-                          // Initial morning prep if it's the first item
-                          if (idx === 0 && totalMinutes > 8 * 60) {
-                            elements.push(<BufferCard key="morning-prep" startTime="08:00 - 08:30" type="prep" />);
-                          }
-
-                          // Add lunch break if we passed 12:00
-                          if (!lunchAdded && totalMinutes >= 12 * 60) {
-                            elements.push(<LunchCard key="lunch-break" startTime="12:00 - 14:00" />);
+                          // Handle Lunch
+                          if (!lunchAdded && startTime >= 12 * 60) {
+                            const lunchStart = 12 * 60;
+                            if (lunchStart > lastMinute) {
+                              elements.push(<TimelineSpacer key="spacer-before-lunch" minutes={lunchStart - lastMinute} />);
+                            }
+                            elements.push(<LunchCard key="lunch-break" startTime="12:00 - 14:00" height={120 * MINUTE_HEIGHT} />);
                             lunchAdded = true;
+                            lastMinute = 14 * 60;
                           }
 
-                          // Skip rendering cards that start during lunch time
-                          if (totalMinutes >= 12 * 60 && totalMinutes < 14 * 60) {
-                            return;
+                          // Skip items during lunch
+                          if (startTime >= 12 * 60 && startTime < 14 * 60) return;
+
+                          // Spacer for gaps
+                          if (startTime > lastMinute) {
+                            elements.push(<TimelineSpacer key={`spacer-${idx}`} minutes={startTime - lastMinute} />);
                           }
 
-                          elements.push(<ScheduleCard key={item.id} item={item} isLive={activeRecordingIds.includes(item.id)} />);
-
-                          
-                          // Add pulse buffer after recording if it's not cancelled
-                          if (item.status !== 'cancelada') {
-                            const bufferMinutes = totalMinutes + 90; // Assume 90min duration
-                            const bufferTime = `${String(Math.floor(bufferMinutes / 60)).padStart(2, '0')}:${String(bufferMinutes % 60).padStart(2, '0')}`;
-                            
-                            // Only add buffer if it doesn't start exactly at 12:00 (lunch start) and hasn't been added yet
-                            if (bufferTime !== '12:00' && !addedBuffers.has(bufferTime)) {
-                              addedBuffers.add(bufferTime);
-                              const isNextPrep = bufferTime === '08:00' || bufferTime === '14:00' || bufferTime === '16:00';
-                              elements.push(<BufferCard key={`buffer-${bufferTime}`} startTime={`${bufferTime} - ${String(Math.floor((bufferMinutes + 30) / 60)).padStart(2, '0')}:${String((bufferMinutes + 30) % 60).padStart(2, '0')}`} type={isNextPrep ? 'prep' : 'pulse'} />);
+                          // Card Duration
+                          let duration = 90; // Default 90m
+                          if (item.endTime) {
+                            const [eh, em] = item.endTime.split(':').map(Number);
+                            const endTimeMinutes = eh * 60 + em;
+                            if (endTimeMinutes > startTime) {
+                              duration = endTimeMinutes - startTime;
                             }
                           }
 
+                          elements.push(<ScheduleCard key={item.id} item={item} isLive={activeRecordingIds.includes(item.id)} height={duration * MINUTE_HEIGHT} />);
+                          lastMinute = Math.max(lastMinute, startTime + duration);
+
+                          // Optional Pulse Buffer
+                          if (item.status !== 'cancelada') {
+                            const bufferMinutes = startTime + 90;
+                            const bufferTime = `${String(Math.floor(bufferMinutes / 60)).padStart(2, '0')}:${String(bufferMinutes % 60).padStart(2, '0')}`;
+                            
+                            if (bufferMinutes >= lastMinute && bufferMinutes < OPERATIONAL_END && bufferMinutes !== 12 * 60 && !addedBuffers.has(bufferTime)) {
+                              addedBuffers.add(bufferTime);
+                              const isNextPrep = bufferTime === '08:00' || bufferTime === '14:00' || bufferTime === '16:00';
+                              elements.push(<BufferCard key={`buffer-${bufferTime}`} startTime={bufferTime} type={isNextPrep ? 'prep' : 'pulse'} height={30 * MINUTE_HEIGHT} />);
+                              lastMinute = bufferMinutes + 30;
+                            }
+                          }
                         });
 
+                        // Ensure lunch is added if no items after it
+                        if (!lunchAdded) {
+                          if (12 * 60 > lastMinute) {
+                            elements.push(<TimelineSpacer key="final-spacer-before-lunch" minutes={12 * 60 - lastMinute} />);
+                          }
+                          elements.push(<LunchCard key="lunch-break" startTime="12:00 - 14:00" height={120 * MINUTE_HEIGHT} />);
+                          lastMinute = 14 * 60;
+                        }
 
-                        // Ensure basic slots are shown if schedule is short
-                        if (!lunchAdded) elements.push(<LunchCard key="lunch-break" startTime="12:00 - 14:00" />);
+                        // Final filler
+                        if (lastMinute < OPERATIONAL_END) {
+                          elements.push(<TimelineSpacer key="final-spacer" minutes={OPERATIONAL_END - lastMinute} />);
+                        }
 
                         return elements;
                       })()}
-
                     </AnimatePresence>
                   </div>
                 ) : (
-
-
                   <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
                     <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
                     <p className="text-[10px] text-white/20">Nenhuma gravação hoje</p>
@@ -1317,6 +1355,7 @@ export default function TvDashboard() {
                 )}
               </div>
             )}
+
 
             {/* Scheduled Posts */}
             {visibility.show_posts && (

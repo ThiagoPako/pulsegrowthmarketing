@@ -123,7 +123,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const BUFFER_BETWEEN_RECORDINGS = 30;
 
-  const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string) => {
+  const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType) => {
     const newStart = timeToMinutes(startTime);
     const newEndWithBuffer = newStart + data.settings.recordingDuration + BUFFER_BETWEEN_RECORDINGS;
 
@@ -131,12 +131,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (r.id === excludeId || r.status === 'cancelada') return false;
       if (r.videomakerId !== videomakerId || r.date !== date) return false;
 
+      // Se o novo agendamento for fixa ou avulso (hierarquia superior), 
+      // ele ignora conflitos com gravações do tipo 'extra'.
+      const isHighPriority = newType === 'fixa' || newType === 'avulso';
+      if (isHighPriority && r.type === 'extra') return false;
+
       const existStart = timeToMinutes(r.startTime);
       const existEndWithBuffer = existStart + data.settings.recordingDuration + BUFFER_BETWEEN_RECORDINGS;
 
       return newStart < existEndWithBuffer && newEndWithBuffer > existStart;
     });
   }, [data.recordings, data.settings.recordingDuration]);
+
 
   const isWithinWorkHours = useCallback((day: DayOfWeek, startTime: string) => {
     if (!data.settings.workDays.includes(day)) return false;

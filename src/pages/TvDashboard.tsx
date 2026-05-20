@@ -213,14 +213,10 @@ function TimeMarker() {
       const minutes = now.getMinutes();
       const totalMinutes = hours * 60 + minutes;
       
-      // Assume o dia operacional das 08:00 às 19:00 (11 horas)
-      const start = 8 * 60;
-      const end = 19 * 60;
-      
-      if (totalMinutes < start) setPercent(0);
-      else if (totalMinutes > end) setPercent(100);
+      if (totalMinutes < OPERATIONAL_START) setPercent(0);
+      else if (totalMinutes > OPERATIONAL_END) setPercent(100);
       else {
-        const p = ((totalMinutes - start) / (end - start)) * 100;
+        const p = ((totalMinutes - OPERATIONAL_START) / (OPERATIONAL_END - OPERATIONAL_START)) * 100;
         setPercent(p);
       }
       
@@ -228,7 +224,7 @@ function TimeMarker() {
     };
 
     update();
-    const interval = setInterval(update, 30000); // Atualiza a cada 30s
+    const interval = setInterval(update, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -241,10 +237,10 @@ function TimeMarker() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
-      <div className="flex-1 h-[2.5px] bg-gradient-to-r from-transparent via-orange-500/80 to-transparent" />
-      <div className="absolute right-0 flex items-center gap-1 bg-orange-500 px-2 py-1 rounded-l-md shadow-[0_0_20px_rgba(249,115,22,0.6)]">
+      <div className="flex-1 h-[2px] bg-gradient-to-r from-transparent via-red-500 to-transparent shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
+      <div className="absolute right-0 flex items-center gap-1 bg-red-600 px-2 py-1 rounded-l-md shadow-[0_0_15px_rgba(220,38,38,0.6)] border-l border-y border-red-400/30">
         <Clock className="w-3 h-3 text-white animate-pulse" />
-        <span className="text-[11px] font-bold text-white tabular-nums">{currentTime}</span>
+        <span className="text-[10px] font-bold text-white tabular-nums tracking-wider">{currentTime}</span>
       </div>
     </motion.div>
   );

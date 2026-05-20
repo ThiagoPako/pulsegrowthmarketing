@@ -1177,7 +1177,7 @@ export default function TvDashboard() {
   const dateStr = clock.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 
   return (
-    <div className="h-screen text-white overflow-hidden relative flex flex-col" style={{ fontFamily: `${SPACE}, 'Inter', sans-serif`, backgroundColor: PULSE_DARK }}>
+    <div className="h-screen text-white overflow-hidden relative flex flex-col p-2" style={{ fontFamily: `${SPACE}, 'Inter', sans-serif`, backgroundColor: PULSE_DARK }}>
       <FloatingParticles />
       <div className="fixed inset-0 pointer-events-none z-0" style={{ background: `radial-gradient(ellipse 80% 50% at 50% -10%, ${PULSE_ORANGE}06, transparent 70%)` }} />
 

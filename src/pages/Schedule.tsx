@@ -1131,7 +1131,7 @@ export default function Schedule() {
             variant="outline" 
             className="border-indigo-500/50 text-indigo-600 hover:bg-indigo-500/10" 
             onClick={async () => {
-              const confirm = window.confirm("Deseja organizar a agenda de todo o mês? Isso irá reajustar horários para os slots padrão (08:30, 10:30, 14:30, 16:30) e cancelar o que exceder a capacidade de 4 por videomaker.");
+              const confirm = window.confirm("Deseja organizar a agenda de todo o mês? Isso irá reajustar horários para os slots padrão (08:30, 10:30, 14:30, 16:30) e APAGAR o que exceder a capacidade de 4 por videomaker.");
               if (!confirm) return;
               
               setOrganizing(true);
@@ -1141,7 +1141,7 @@ export default function Schedule() {
               toast.loading('Organizando agenda...', { id: 'organize' });
               try {
                 const { updated, cancelled } = await organizeSchedule(start, end);
-                toast.success(`Agenda organizada: ${updated} ajustada(s), ${cancelled} cancelada(s) por excesso de capacidade.`, { id: 'organize' });
+                toast.success(`Agenda organizada: ${updated} ajustada(s), ${cancelled} apagada(s) por excesso de capacidade.`, { id: 'organize' });
               } catch (err) {
                 console.error(err);
                 toast.error('Erro ao organizar agenda', { id: 'organize' });

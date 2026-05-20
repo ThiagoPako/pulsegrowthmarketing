@@ -35,6 +35,8 @@ interface AppContextType {
   updateRecording: (recording: Recording) => void;
   cancelRecording: (id: string) => void;
   deleteRecording: (id: string) => Promise<boolean>;
+  deleteRecordingsBulk: (ids: string[]) => Promise<boolean>;
+  cancelRecordingsBulk: (ids: string[]) => Promise<boolean>;
   cancelAndReschedule: (recording: Recording) => { success: boolean; rescheduled?: { date: string; startTime: string; videomakerId: string; type: string } };
   generateScheduleForClient: (client: Client) => Promise<number>;
   regenerateScheduleForClient: (client: Client) => Promise<{ deleted: number; created: number }>;
@@ -258,6 +260,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return createdCount;
   }, [data, users]);
   const organizeSchedule = useCallback(async (startDate: string, endDate: string): Promise<{ updated: number; cancelled: number }> => {
+    // 1. Fetch ALL recordings for the range directly from the VPS to catch "ghost" recordings
+    const { data: allRawRecs, error } = await supabase
+      .from('recordings')
+      .select('*')
+      .gte('date', startDate)
+      .lte('date', endDate);
+
+    if (error || !allRawRecs) {
+      console.error('Error fetching recordings for organization:', error);
+      throw new Error('Erro ao carregar dados para organização');
+    }
+
+    // Re-map raw rows to app types (similar to rowToRecording in useSupabaseData)
+    const allRecs: Recording[] = allRawRecs.map((r: any) => ({
+      id: r.id,
+      clientId: r.client_id || '',
+      videomakerId: r.videomaker_id || '',
+      date: r.date.split('T')[0],
+      startTime: r.start_time,
+      type: r.type,
+      status: r.status,
+      confirmationStatus: r.confirmation_status || 'pendente',
+      prospectName: r.prospect_name,
+    }));
+
     const dates: string[] = [];
     let curr = new Date(startDate + 'T12:00:00');
     const end = new Date(endDate + 'T12:00:00');
@@ -266,45 +293,68 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       curr.setDate(curr.getDate() + 1);
     }
 
-    let updatedCount = 0;
-    let cancelledCount = 0;
-    const currentRecs = [...data.recordings];
-    
-    // Get all videomaker IDs that have recordings in this range, plus the active videomakers
-    const recordingsInRange = currentRecs.filter(r => r.date >= startDate && r.date <= endDate);
-    const uniqueVmIds = new Set([
+    const activeClientIds = new Set(data.clients.filter(c => c.status !== 'cancelado').map(c => c.id));
+    const allVideomakerIds = new Set([
       ...users.filter(u => u.role === 'videomaker').map(u => u.id),
-      ...recordingsInRange.map(r => r.videomakerId).filter(Boolean)
+      ...allRecs.map(r => r.videomakerId).filter(Boolean)
     ]);
+    const vmIdsToProcess = [...Array.from(allVideomakerIds), ""];
+
+    const recordingsToUpdate: Recording[] = [];
+    const idsToDelete: string[] = [];
     
-    // Also include a null/empty case to catch unassigned recordings
-    const vmIdsToProcess = [...Array.from(uniqueVmIds), "unassigned"];
+    // We work on a local copy to track changes across iterations
+    let currentRecsLocal = [...allRecs];
 
     for (const date of dates) {
       for (const vmId of vmIdsToProcess) {
-        const actualVmId = vmId === "unassigned" ? "" : vmId;
-        const { toUpdate, toCancel } = organizeRecordingsForDate(date, actualVmId, currentRecs, data.settings);
+        const { toUpdate, toCancel } = organizeRecordingsForDate(
+          date, 
+          vmId, 
+          currentRecsLocal, 
+          data.settings, 
+          activeClientIds
+        );
         
-        for (const rec of toUpdate) {
-          await data.updateRecording(rec);
-          updatedCount++;
-          const idx = currentRecs.findIndex(r => r.id === rec.id);
-          if (idx !== -1) currentRecs[idx] = rec;
-        }
+        // Add to our bulk lists
+        recordingsToUpdate.push(...toUpdate);
+        
+        // For cancellations, we'll actually DELETE them if they were generated incorrectly
+        // or just mark as cancelled. The user said "apagar" (delete).
+        toCancel.forEach(rec => {
+          idsToDelete.push(rec.id);
+          // Remove from local copy so it doesn't affect other iterations
+          const idx = currentRecsLocal.findIndex(r => r.id === rec.id);
+          if (idx !== -1) currentRecsLocal.splice(idx, 1);
+        });
 
-        for (const rec of toCancel) {
-          await data.deleteRecording(rec.id);
-          cancelledCount++;
-          const idx = currentRecs.findIndex(r => r.id === rec.id);
-          if (idx !== -1) {
-            currentRecs.splice(idx, 1); // Remove it completely so it doesn't appear in next iterations
-          }
-        }
+        // Update local copy for toUpdate items too
+        toUpdate.forEach(rec => {
+          const idx = currentRecsLocal.findIndex(r => r.id === rec.id);
+          if (idx !== -1) currentRecsLocal[idx] = rec;
+        });
       }
     }
 
-    data.refetch();
-    return { updated: updatedCount, cancelled: cancelledCount };
+    // 3. Perform bulk operations
+    if (idsToDelete.length > 0) {
+      // Chunk deletions to avoid URL length limits in some proxies
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < idsToDelete.length; i += CHUNK_SIZE) {
+        const chunk = idsToDelete.slice(i, i + CHUNK_SIZE);
+        await data.deleteRecordingsBulk(chunk);
+      }
+    }
+
+    if (recordingsToUpdate.length > 0) {
+      // Updates are still row-by-row unless we add a bulk update endpoint
+      // But we can at least do them in parallel
+      const updatePromises = recordingsToUpdate.map(rec => data.updateRecording(rec));
+      await Promise.all(updatePromises);
+    }
+
+    await data.refetch();
+    return { updated: recordingsToUpdate.length, cancelled: idsToDelete.length };
   }, [data, users]);
 
 
@@ -352,6 +402,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       logout, addUser, updateUser, deleteUser,
       addClient, updateClient, deleteClient,
       addRecording, updateRecording, cancelRecording, deleteRecording,
+      deleteRecordingsBulk: data.deleteRecordingsBulk, cancelRecordingsBulk: data.cancelRecordingsBulk,
       cancelAndReschedule, generateScheduleForClient, regenerateScheduleForClient,
       autoFillVacanciesForDate, organizeSchedule,
 

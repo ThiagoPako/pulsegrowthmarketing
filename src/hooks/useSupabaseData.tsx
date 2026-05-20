@@ -384,6 +384,22 @@ export function useSupabaseData() {
     return true;
   }, []);
 
+  const deleteRecordingsBulk = useCallback(async (ids: string[]): Promise<boolean> => {
+    if (ids.length === 0) return true;
+    const { error } = await supabase.from('recordings').delete().in('id', ids);
+    if (error) { console.error('deleteRecordingsBulk error:', error); return false; }
+    setRecordings(prev => prev.filter(r => !ids.includes(r.id)));
+    return true;
+  }, []);
+
+  const cancelRecordingsBulk = useCallback(async (ids: string[]): Promise<boolean> => {
+    if (ids.length === 0) return true;
+    const { error } = await supabase.from('recordings').update({ status: 'cancelada' }).in('id', ids);
+    if (error) { console.error('cancelRecordingsBulk error:', error); return false; }
+    setRecordings(prev => prev.map(r => ids.includes(r.id) ? { ...r, status: 'cancelada' as const } : r));
+    return true;
+  }, []);
+
   // ── Client CRUD ──
   const addClient = useCallback(async (client: Client): Promise<boolean> => {
     if (clients.some(c => c.companyName.toLowerCase() === client.companyName.toLowerCase())) return false;
@@ -577,6 +593,7 @@ export function useSupabaseData() {
     clients, recordings, tasks, scripts, settings, activeRecordings, loading,
     addClient, updateClient, deleteClient,
     addRecording, addRecordingsBulk, updateRecording, cancelRecording, deleteRecording, deleteFutureRecordingsForClient,
+    deleteRecordingsBulk, cancelRecordingsBulk,
     addTask, updateTask, deleteTask,
     addScript, updateScript, deleteScript,
     updateSettings, startActiveRecording, stopActiveRecording,

@@ -306,7 +306,8 @@ export function organizeRecordingsForDate(
   date: string,
   videomakerId: string | null | undefined,
   allRecordings: Recording[],
-  settings: CompanySettings
+  settings: CompanySettings,
+  validClientIds?: Set<string>
 ): { toUpdate: Recording[]; toCancel: Recording[] } {
   const normalizedVmId = videomakerId || '';
   
@@ -318,10 +319,27 @@ export function organizeRecordingsForDate(
 
   if (dayRecordings.length === 0) return { toUpdate: [], toCancel: [] };
 
-  // If there's no videomaker assigned, all these recordings should be cancelled/removed
-  // because they cannot fit into the 4 slots of a videomaker.
+  const toUpdate: Recording[] = [];
+  const toCancel: Recording[] = [];
+
+  // Filter out invalid recordings (no client or inactive client)
+  // unless they are of type 'avulso' (which may have no clientId but should have a prospectName)
+  const validRecs = dayRecordings.filter(r => {
+    const isAvulso = r.type === 'avulso';
+    const isInvalidClient = validClientIds && r.clientId && !validClientIds.has(r.clientId);
+    const isMissingClient = !r.clientId && !isAvulso;
+    
+    if (isInvalidClient || isMissingClient) {
+      toCancel.push({ ...r, status: 'cancelada' });
+      return false;
+    }
+    return true;
+  });
+
+  // If there's no videomaker assigned, all remaining valid recordings should also be cancelled
   if (!normalizedVmId) {
-    return { toUpdate: [], toCancel: dayRecordings.map(r => ({ ...r, status: 'cancelada' })) };
+    validRecs.forEach(r => toCancel.push({ ...r, status: 'cancelada' }));
+    return { toUpdate, toCancel };
   }
 
   // Hierarchy sorting: fixa > avulso > secundaria > backup > endomarketing > extra
@@ -334,16 +352,15 @@ export function organizeRecordingsForDate(
     extra: 6
   };
 
-  const sortedRecs = [...dayRecordings].sort((a, b) => {
+  const sortedRecs = [...validRecs].sort((a, b) => {
     const pA = priorityMap[a.type] || 99;
     const pB = priorityMap[b.type] || 99;
     if (pA !== pB) return pA - pB;
+    // For same priority, keep the original time order
     return timeToMinutes(a.startTime) - timeToMinutes(b.startTime);
   });
 
   const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
-  const toUpdate: Recording[] = [];
-  const toCancel: Recording[] = [];
 
   // Assign to slots
   sortedRecs.forEach((rec, index) => {

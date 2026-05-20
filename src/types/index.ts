@@ -31,6 +31,7 @@ export interface CompanySettings {
   alterationDeadlineEnabled: boolean;
   approvalDeadlineEnabled: boolean;
   costAllocationRule?: 'approved' | 'recorded' | 'posted';
+  autoFillVacancies?: boolean;
 }
 
 export type ContentType = 'reels' | 'story' | 'produto';

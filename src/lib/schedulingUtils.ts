@@ -226,6 +226,38 @@ export function findNextDateForDay(dayOfWeek: DayOfWeek, afterDate: string): str
   return afterDate;
 }
 
+/** 
+ * Find all available time slots for a specific date and videomaker.
+ */
+export function findAvailableSlots(
+  date: string,
+  videomakerId: string,
+  recordings: Recording[],
+  settings: CompanySettings
+): string[] {
+  const day = NUM_TO_DAY[getDay(new Date(date + 'T12:00:00'))];
+  if (!settings.workDays.includes(day)) return [];
+
+  const duration = settings.recordingDuration;
+  const availableSlots: string[] = [];
+  
+  const shifts = [
+    [timeToMinutes(settings.shiftAStart), timeToMinutes(settings.shiftAEnd)],
+    [timeToMinutes(settings.shiftBStart), timeToMinutes(settings.shiftBEnd)],
+  ];
+
+  for (const [sStart, sEnd] of shifts) {
+    for (let t = sStart; t + duration <= sEnd; t += duration + BUFFER_BETWEEN_RECORDINGS) {
+      const timeStr = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+      if (!hasConflictCheck(videomakerId, date, timeStr, recordings, duration)) {
+        availableSlots.push(timeStr);
+      }
+    }
+  }
+  
+  return availableSlots;
+}
+
 /** Try to reschedule a cancelled recording:
  * 1. Backup day/time with responsible videomaker
  * 2. Extra day with ANY available videomaker
@@ -258,21 +290,13 @@ export function findRescheduleSlot(
     const orderedVms = [client.videomaker, ...allVideomakerIds.filter(id => id !== client.videomaker)];
     
     for (const vmId of orderedVms) {
-      const shifts = [
-        [timeToMinutes(settings.shiftAStart), timeToMinutes(settings.shiftAEnd)],
-        [timeToMinutes(settings.shiftBStart), timeToMinutes(settings.shiftBEnd)],
-      ];
-      
-      for (const [sStart, sEnd] of shifts) {
-        for (let t = sStart; t + duration <= sEnd; t += duration + BUFFER_BETWEEN_RECORDINGS) {
-          const timeStr = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-          if (isWithinWorkHoursCheck(extraDay, timeStr, settings) && !hasConflictCheck(vmId, extraDate, timeStr, existingRecordings, duration)) {
-            return { date: extraDate, startTime: timeStr, videomakerId: vmId, type: 'extra' };
-          }
-        }
+      const slots = findAvailableSlots(extraDate, vmId, existingRecordings, settings);
+      if (slots.length > 0) {
+        return { date: extraDate, startTime: slots[0], videomakerId: vmId, type: 'extra' };
       }
     }
   }
 
   return null;
 }
+

@@ -1018,8 +1018,12 @@ export default function Schedule() {
         for (const client of extraClients) {
           const vmId = client.videomaker;
           if (!vmId) continue;
-          const extraTime = client.fixedTime; // Use fixed time for extra
-          if (!hasConflict(vmId, dateStr, extraTime)) {
+          
+          // Use any available slot on that day, not just fixedTime
+          const availableSlots = findAvailableSlots(dateStr, vmId, recordings, settings);
+          if (availableSlots.length > 0) {
+            const extraTime = availableSlots[0];
+
             const exists = recordings.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'extra' && r.status !== 'cancelada');
             if (!exists) {
               const rec: Recording = {

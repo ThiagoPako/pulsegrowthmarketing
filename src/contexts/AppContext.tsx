@@ -342,7 +342,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const CHUNK_SIZE = 50;
       for (let i = 0; i < idsToDelete.length; i += CHUNK_SIZE) {
         const chunk = idsToDelete.slice(i, i + CHUNK_SIZE);
-        await (data as any).deleteRecordingsBulk(chunk);
+        await data.deleteRecordingsBulk(chunk);
       }
     }
 

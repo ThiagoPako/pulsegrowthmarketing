@@ -383,29 +383,29 @@ export function useSupabaseData() {
     setRecordings(prev => [...prev, ...recs]);
     return true;
   }, []);
-386: 
-387:   const deleteRecordingsBulk = useCallback(async (ids: string[]): Promise<boolean> => {
-388:     if (ids.length === 0) return true;
-389:     const { error } = await invokeVpsFunction('recordings', { 
-390:       method: 'DELETE', 
-391:       filters: [{ column: 'id', op: 'in', value: ids }] 
-392:     });
-393:     if (error) { console.error('deleteRecordingsBulk error:', error); return false; }
-394:     setRecordings(prev => prev.filter(r => !ids.includes(r.id)));
-395:     return true;
-396:   }, []);
-397: 
-398:   const cancelRecordingsBulk = useCallback(async (ids: string[]): Promise<boolean> => {
-399:     if (ids.length === 0) return true;
-400:     const { error } = await invokeVpsFunction('recordings', { 
-401:       method: 'PUT', 
-402:       body: { status: 'cancelada' },
-403:       filters: [{ column: 'id', op: 'in', value: ids }] 
-404:     });
-405:     if (error) { console.error('cancelRecordingsBulk error:', error); return false; }
-406:     setRecordings(prev => prev.map(r => ids.includes(r.id) ? { ...r, status: 'cancelada' as const } : r));
-407:     return true;
-408:   }, []);
+
+  const deleteRecordingsBulk = useCallback(async (ids: string[]): Promise<boolean> => {
+    if (ids.length === 0) return true;
+    const { error } = await invokeVpsFunction('recordings', { 
+      method: 'DELETE', 
+      filters: [{ column: 'id', op: 'in', value: ids }] 
+    });
+    if (error) { console.error('deleteRecordingsBulk error:', error); return false; }
+    setRecordings(prev => prev.filter(r => !ids.includes(r.id)));
+    return true;
+  }, []);
+
+  const cancelRecordingsBulk = useCallback(async (ids: string[]): Promise<boolean> => {
+    if (ids.length === 0) return true;
+    const { error } = await invokeVpsFunction('recordings', { 
+      method: 'PUT', 
+      body: { status: 'cancelada' },
+      filters: [{ column: 'id', op: 'in', value: ids }] 
+    });
+    if (error) { console.error('cancelRecordingsBulk error:', error); return false; }
+    setRecordings(prev => prev.map(r => ids.includes(r.id) ? { ...r, status: 'cancelada' as const } : r));
+    return true;
+  }, []);
 
   // ── Client CRUD ──
   const addClient = useCallback(async (client: Client): Promise<boolean> => {
@@ -600,6 +600,7 @@ export function useSupabaseData() {
     clients, recordings, tasks, scripts, settings, activeRecordings, loading,
     addClient, updateClient, deleteClient,
     addRecording, addRecordingsBulk, updateRecording, cancelRecording, deleteRecording, deleteFutureRecordingsForClient,
+    deleteRecordingsBulk, cancelRecordingsBulk,
     addTask, updateTask, deleteTask,
     addScript, updateScript, deleteScript,
     updateSettings, startActiveRecording, stopActiveRecording,

@@ -39,6 +39,8 @@ interface AppContextType {
   generateScheduleForClient: (client: Client) => Promise<number>;
   regenerateScheduleForClient: (client: Client) => Promise<{ deleted: number; created: number }>;
   autoFillVacanciesForDate: (date: string) => Promise<number>;
+  organizeSchedule: (startDate: string, endDate: string) => Promise<{ updated: number; cancelled: number }>;
+
   addTask: (task: KanbanTask) => void;
   updateTask: (task: KanbanTask) => void;
   deleteTask: (id: string) => void;

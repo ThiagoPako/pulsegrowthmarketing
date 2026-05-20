@@ -1,6 +1,6 @@
 // Last Updated: 2026-05-20T14:45:00Z
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform, animate, useReducedMotion } from 'framer-motion';
 import {
   Monitor, Clock, Coffee, Camera, Film, Palette, Megaphone, Image, Users,
   Wifi, WifiOff, Activity, CalendarDays, MapPin, CheckCircle2, Circle,
@@ -173,14 +173,20 @@ function SectionHeader({ icon: Icon, iconColor, title, badge, children }: {
 
 /* ─── Animated Number ───────────────────────────────────── */
 function AnimatedNumber({ value }: { value: number }) {
+  const shouldReduceMotion = useReducedMotion();
   const mv = useMotionValue(value);
   const rounded = useTransform(mv, v => Math.round(v));
   const [d, setD] = useState(value);
+
   useEffect(() => {
-    const c = animate(mv, value, { duration: 0.8, ease: 'easeOut' });
+    if (shouldReduceMotion) {
+      setD(value);
+      return;
+    }
+    const c = animate(mv, value, { duration: 0.5, ease: 'easeOut' }); // Reduzido de 0.8 para 0.5
     const u = rounded.on('change', v => setD(v));
     return () => { c.stop(); u(); };
-  }, [value]);
+  }, [value, shouldReduceMotion]);
   return <span>{d}</span>;
 }
 
@@ -198,7 +204,7 @@ function FloatingParticles() {
         <motion.div key={p.id} className="absolute rounded-full"
           style={{ left: `${p.x}%`, top: `${p.y}%`, width: p.size, height: p.size, background: PULSE_ORANGE }}
           animate={{ y: [0, -30, 0], x: [0, 10, -8, 0], opacity: [0, 0.2, 0.1, 0] }}
-          transition={{ duration: p.duration, delay: p.delay, repeat: Infinity, ease: 'easeInOut' }}
+          transition={{ duration: p.duration, delay: p.delay, repeat: Infinity, ease: 'linear' }} // Alterado de easeInOut para linear para evitar cálculos de curva complexos
         />
       ))}
     </div>
@@ -429,10 +435,10 @@ function ScheduleCard({ item, isLive, height }: { item: ScheduleItem; isLive: bo
         opacity: isCancelled ? 0.35 : 1,
         height: height ? `${height}px` : 'auto'
       }}
-      layout
-      initial={{ opacity: 0, y: 10 }}
+      layout="position"
+      initial={false}
       animate={{ opacity: isCancelled ? 0.35 : 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.2 }}
     >
       {isNow && (
         <motion.div className="absolute inset-0 rounded-xl pointer-events-none"

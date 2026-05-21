@@ -17,7 +17,7 @@ import {
   Plus, Flame, Snowflake, RotateCcw, MessageSquare, 
   Briefcase, Phone, UserPlus, Target, TrendingUp, 
   DollarSign, Users, LayoutDashboard, Filter, Search,
-  Calendar as CalendarIcon, Clock
+  Calendar as CalendarIcon, Clock, Pencil, Trash2
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { toast } from 'sonner';

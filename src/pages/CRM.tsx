@@ -71,6 +71,7 @@ export default function CRM() {
   const [isRecoveryView, setIsRecoveryView] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [newLeadStatus, setNewLeadStatus] = useState<LeadStatus>('lead');
 
   const { data: leads = [], isLoading: leadsLoading } = useQuery({
     queryKey: ['crm_leads'],
@@ -129,6 +130,7 @@ export default function CRM() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
       setIsAddDialogOpen(false);
+      setNewLeadStatus('lead');
       toast.success('Novo lead cadastrado!');
     },
   });
@@ -207,7 +209,7 @@ export default function CRM() {
                   company: formData.get('company') as string,
                   phone: formData.get('phone') as string,
                   contract_value: Number(formData.get('value')),
-                  status: (formData.get('status') as LeadStatus) || 'lead'
+                  status: newLeadStatus
                 });
               }} className="space-y-4 py-4">
                 <div className="grid gap-2">
@@ -233,7 +235,7 @@ export default function CRM() {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="status">Status Inicial</Label>
-                  <Select name="status" defaultValue="lead">
+                  <Select value={newLeadStatus} onValueChange={(value) => setNewLeadStatus(value as LeadStatus)}>
                     <SelectTrigger className="bg-muted/50">
                       <SelectValue placeholder="Selecione o status" />
                     </SelectTrigger>

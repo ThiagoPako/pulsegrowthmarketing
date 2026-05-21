@@ -115,15 +115,18 @@ export default function CRM() {
   const createLead = useMutation({
     mutationFn: async (newLead: Partial<Lead>) => {
       if (!newLead.name) throw new Error('Nome é obrigatório');
+      if (!user?.id) throw new Error('Sua sessão expirou. Faça login novamente para cadastrar o lead.');
+
       const { error } = await supabase
         .from('crm_leads')
         .insert([{ 
           name: newLead.name,
-          company: newLead.company,
-          phone: newLead.phone,
-          contract_value: newLead.contract_value,
+          company: newLead.company?.trim() || null,
+          email: newLead.email?.trim() || null,
+          phone: newLead.phone?.trim() || null,
+          contract_value: Number.isFinite(newLead.contract_value) ? newLead.contract_value : 0,
           status: newLead.status || 'lead',
-          user_id: user?.id 
+          user_id: user.id,
         }]);
       if (error) throw error;
     },
@@ -132,6 +135,9 @@ export default function CRM() {
       setIsAddDialogOpen(false);
       setNewLeadStatus('lead');
       toast.success('Novo lead cadastrado!');
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Não foi possível cadastrar o lead.');
     },
   });
 
@@ -207,6 +213,7 @@ export default function CRM() {
                 createLead.mutate({
                   name: formData.get('name') as string,
                   company: formData.get('company') as string,
+                  email: formData.get('email') as string,
                   phone: formData.get('phone') as string,
                   contract_value: Number(formData.get('value')),
                   status: newLeadStatus
@@ -219,6 +226,10 @@ export default function CRM() {
                 <div className="grid gap-2">
                   <Label htmlFor="company">Empresa / Negócio</Label>
                   <Input id="company" name="company" placeholder="Ex: Pulse Agency" className="bg-muted/50" />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input id="email" name="email" type="email" placeholder="contato@empresa.com" className="bg-muted/50" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">

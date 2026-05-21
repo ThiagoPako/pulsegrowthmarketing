@@ -7,9 +7,51 @@
 const VPS_API_BASE = 'https://agenciapulse.tech/api';
 const TOKEN_KEY = 'pulse_jwt';
 
+function getSupabaseFallbackToken(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (!key || !key.includes('auth-token')) continue;
+
+      const rawValue = localStorage.getItem(key);
+      if (!rawValue) continue;
+
+      const parsedValue = JSON.parse(rawValue);
+
+      if (typeof parsedValue?.access_token === 'string') {
+        return parsedValue.access_token;
+      }
+
+      if (typeof parsedValue?.currentSession?.access_token === 'string') {
+        return parsedValue.currentSession.access_token;
+      }
+
+      if (Array.isArray(parsedValue)) {
+        const sessionCandidate = parsedValue.find(
+          (entry) => typeof entry?.access_token === 'string' || typeof entry?.currentSession?.access_token === 'string',
+        );
+
+        if (typeof sessionCandidate?.access_token === 'string') {
+          return sessionCandidate.access_token;
+        }
+
+        if (typeof sessionCandidate?.currentSession?.access_token === 'string') {
+          return sessionCandidate.currentSession.access_token;
+        }
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const token = localStorage.getItem(TOKEN_KEY);
+  const token = localStorage.getItem(TOKEN_KEY) || getSupabaseFallbackToken();
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }

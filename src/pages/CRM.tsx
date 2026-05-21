@@ -25,6 +25,23 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { format, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
+function parseMeetingDate(value?: string | null) {
+  if (!value || typeof value !== 'string') return null;
+
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? `${value}T12:00:00`
+    : value;
+
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatMeetingDate(value: string | null | undefined, pattern: string, fallback = '—') {
+  const parsed = parseMeetingDate(value);
+  if (!parsed) return fallback;
+  return format(parsed, pattern, { locale: ptBR });
+}
+
 
 type LeadStatus = 'lead' | 'contacted' | 'meeting' | 'contracted' | 'recovery_followup_1' | 'recovery_followup_2';
 type LeadTag = 'hot' | 'cold';
@@ -372,11 +389,11 @@ export default function CRM() {
                                                 </span>
                                               </div>
                                               
-                                              {lead.status === 'meeting' && lead.meeting_date && (
+                                              {lead.status === 'meeting' && parseMeetingDate(lead.meeting_date) && (
                                                 <div className="flex flex-col items-end">
                                                   <span className="text-[9px] uppercase font-semibold text-muted-foreground tracking-tighter">Agendado</span>
                                                   <div className="flex items-center gap-1 text-[10px] font-bold text-blue-600">
-                                                    <CalendarIcon className="h-3 w-3" /> {format(new Date(lead.meeting_date + 'T12:00:00'), 'dd/MM')} às {lead.meeting_time?.slice(0, 5)}
+                                                    <CalendarIcon className="h-3 w-3" /> {formatMeetingDate(lead.meeting_date, 'dd/MM')} às {lead.meeting_time?.slice(0, 5) || '—'}
                                                   </div>
                                                 </div>
                                               )}
@@ -550,7 +567,10 @@ export default function CRM() {
                   className="rounded-md border bg-card"
                   locale={ptBR}
                   modifiers={{
-                    meeting: (date) => leads.some(l => l.meeting_date && isSameDay(new Date(l.meeting_date + 'T12:00:00'), date))
+                    meeting: (date) => leads.some((l) => {
+                      const meetingDate = parseMeetingDate(l.meeting_date);
+                      return meetingDate ? isSameDay(meetingDate, date) : false;
+                    })
                   }}
                   modifiersStyles={{
                     meeting: { fontWeight: 'bold', color: 'var(--primary)', textDecoration: 'underline' }
@@ -560,19 +580,27 @@ export default function CRM() {
               <div className="flex-1 space-y-4">
                 <div className="grid gap-3">
                   {leads
-                    .filter(l => l.meeting_date)
-                    .sort((a, b) => new Date(a.meeting_date!).getTime() - new Date(b.meeting_date!).getTime())
-                    .map(lead => (
+                    .filter((l) => parseMeetingDate(l.meeting_date))
+                    .sort((a, b) => {
+                      const aTime = parseMeetingDate(a.meeting_date)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+                      const bTime = parseMeetingDate(b.meeting_date)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+                      return aTime - bTime;
+                    })
+                    .map((lead) => {
+                      const meetingDate = parseMeetingDate(lead.meeting_date);
+                      if (!meetingDate) return null;
+
+                      return (
                       <div key={lead.id} className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-muted/50 hover:bg-muted/50 transition-colors">
                         <div className="flex items-center gap-4">
                           <div className={`p-2 rounded-lg flex flex-col items-center min-w-[60px] ${lead.status === 'meeting' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                            <span className="text-[10px] uppercase font-bold">{format(new Date(lead.meeting_date! + 'T12:00:00'), 'MMM', { locale: ptBR })}</span>
-                            <span className="text-xl font-black">{format(new Date(lead.meeting_date! + 'T12:00:00'), 'dd')}</span>
+                            <span className="text-[10px] uppercase font-bold">{format(meetingDate, 'MMM', { locale: ptBR })}</span>
+                            <span className="text-xl font-black">{format(meetingDate, 'dd')}</span>
                           </div>
                           <div>
                             <p className="font-bold">{lead.name}</p>
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Clock className="h-3 w-3" /> {lead.meeting_time?.slice(0, 5)} · {lead.company || 'Pessoa Física'}
+                              <Clock className="h-3 w-3" /> {lead.meeting_time?.slice(0, 5) || '—'} · {lead.company || 'Pessoa Física'}
                             </p>
                             <Badge variant="outline" className="mt-1 text-[10px] h-4">
                               {STAGES.find(s => s.id === lead.status)?.label || lead.status}
@@ -581,8 +609,8 @@ export default function CRM() {
                         </div>
                         <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
                       </div>
-                    ))}
-                  {leads.filter(l => l.meeting_date).length === 0 && (
+                    )})}
+                  {leads.filter((l) => parseMeetingDate(l.meeting_date)).length === 0 && (
                     <div className="py-12 text-center text-muted-foreground border-2 border-dashed rounded-xl">
                       Nenhuma reunião registrada no momento.
                     </div>

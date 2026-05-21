@@ -14,6 +14,17 @@ import FacebookPixel from '@/components/FacebookPixel';
 const WHATSAPP_LINK = 'https://wa.me/5562985382981?text=Olá!%20Vim%20pelo%20site%20e%20gostaria%20de%20saber%20mais%20sobre%20os%20serviços%20da%20Pulse.';
 const INSTAGRAM_LINK = 'https://instagram.com/ag.pulse';
 
+const openExternalLink = (url: string) => {
+  const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
+
+  if (newWindow) {
+    newWindow.opener = null;
+    return;
+  }
+
+  window.location.href = url;
+};
+
 // ─── Animation variants ────────────────────────────────────
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -109,7 +120,7 @@ function FloatingCTA() {
         >
           <Button
             size="lg"
-            onClick={() => window.open(WHATSAPP_LINK, '_blank')}
+            onClick={() => openExternalLink(WHATSAPP_LINK)}
             className="gap-2 rounded-full shadow-2xl shadow-primary/30 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-6 animate-[pulse_3s_ease-in-out_infinite]"
           >
             <MessageCircle size={20} /> Fale conosco
@@ -228,7 +239,7 @@ function Navbar() {
                 Área da Equipe
               </Button>
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Button size="sm" onClick={() => window.open(WHATSAPP_LINK, '_blank')} className="gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shadow-primary/20 h-8 sm:h-9 text-xs sm:text-sm px-3 sm:px-4">
+                <Button size="sm" onClick={() => openExternalLink(WHATSAPP_LINK)} className="gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shadow-primary/20 h-8 sm:h-9 text-xs sm:text-sm px-3 sm:px-4">
                   <MessageCircle size={14} /> <span className="hidden xs:inline">Falar conosco</span><span className="xs:hidden">WhatsApp</span>
                 </Button>
               </motion.div>
@@ -302,7 +313,7 @@ function Navbar() {
               >
                 <Button
                   size="lg"
-                  onClick={() => { setOpen(false); window.open(WHATSAPP_LINK, '_blank'); }}
+                  onClick={() => { setOpen(false); openExternalLink(WHATSAPP_LINK); }}
                   className="w-full gap-2 bg-primary hover:bg-primary/90 text-primary-foreground py-6"
                 >
                   <MessageCircle size={18} /> Falar pelo WhatsApp
@@ -409,7 +420,7 @@ function Hero() {
             <motion.div whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }}>
               <Button
                 size="lg"
-                onClick={() => window.open(WHATSAPP_LINK, '_blank')}
+                onClick={() => openExternalLink(WHATSAPP_LINK)}
                 className="gap-2 text-sm sm:text-base px-6 sm:px-8 py-5 sm:py-6 w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground shadow-xl shadow-primary/25 hover:shadow-2xl hover:shadow-primary/35 transition-all duration-300 relative overflow-hidden group"
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
@@ -899,7 +910,7 @@ function Planos() {
                 </ul>
                 <Button
                   size="sm"
-                  onClick={() => window.open(WHATSAPP_LINK, '_blank')}
+                  onClick={() => openExternalLink(WHATSAPP_LINK)}
                   className={`w-full gap-1.5 ${p.popular ? 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shadow-primary/20' : (p as any).isNew ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/20' : ''}`}
                   variant={p.popular || (p as any).isNew ? 'default' : 'outline'}
                 >
@@ -987,7 +998,7 @@ function Planos() {
               </ul>
               <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="space-y-2">
                 <Button
-                  onClick={() => window.open(WHATSAPP_LINK, '_blank')}
+                  onClick={() => openExternalLink(WHATSAPP_LINK)}
                   className={`w-full gap-2 ${p.popular ? 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shadow-primary/20' : (p as any).isNew ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/20' : ''}`}
                   variant={p.popular || (p as any).isNew ? 'default' : 'outline'}
                 >
@@ -1051,7 +1062,7 @@ function Planos() {
                 )}
               </div>
               <div className="p-4 flex justify-center">
-                <Button onClick={() => { setActiveVideo(null); window.open(WHATSAPP_LINK, '_blank'); }} className="gap-2">
+                <Button onClick={() => { setActiveVideo(null); openExternalLink(WHATSAPP_LINK); }} className="gap-2">
                   <MessageCircle size={14} /> Quero esse plano
                 </Button>
               </div>
@@ -1317,7 +1328,7 @@ function Contato() {
             <motion.div whileHover={{ scale: 1.05, y: -2 }} whileTap={{ scale: 0.95 }}>
               <Button
                 size="lg"
-                onClick={() => window.open(WHATSAPP_LINK, '_blank')}
+                onClick={() => openExternalLink(WHATSAPP_LINK)}
                 className="gap-2 text-sm sm:text-base px-8 sm:px-10 py-6 sm:py-7 bg-primary hover:bg-primary/90 text-primary-foreground shadow-2xl shadow-primary/30 relative overflow-hidden group w-full sm:w-auto"
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />

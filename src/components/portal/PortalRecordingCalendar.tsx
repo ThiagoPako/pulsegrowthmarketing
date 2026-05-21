@@ -11,6 +11,18 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+function safeParsePortalDate(value?: string | null) {
+  if (!value || typeof value !== 'string') return null;
+  const parsed = parseISO(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function safeFormatPortalDate(value: string | null | undefined, pattern: string, fallback = '—') {
+  const parsed = safeParsePortalDate(value);
+  if (!parsed) return fallback;
+  return format(parsed, pattern, { locale: pt });
+}
+
 interface Recording {
   id: string;
   client_id: string;
@@ -635,8 +647,8 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                       </div>
                       {isConfirmed && <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">✓ Confirmada</span>}
                     </div>
-                    <p className="text-xl font-extrabold capitalize leading-tight">{format(parseISO(rec.date), "dd MMM", { locale: pt })}</p>
-                    <p className="text-[11px] text-white/40 capitalize mt-0.5">{format(parseISO(rec.date), "EEEE", { locale: pt })}</p>
+                    <p className="text-xl font-extrabold capitalize leading-tight">{safeFormatPortalDate(rec.date, 'dd MMM')}</p>
+                    <p className="text-[11px] text-white/40 capitalize mt-0.5">{safeFormatPortalDate(rec.date, 'EEEE')}</p>
                     <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/[0.06]">
                       <div className="flex items-center gap-1.5 text-sm font-semibold" style={{ color: `hsl(${clientColor})` }}>
                         <Clock size={13} /><span className="tabular-nums">{rec.start_time}</span>
@@ -877,7 +889,8 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                       {dayRecordings.map((rec, i) => {
                         const st = STATUS_MAP[rec.status] || STATUS_MAP.agendada;
                         const typeInfo = TYPE_MAP[rec.type] || { label: rec.type, emoji: '🎬' };
-                        const canAct = isScheduled(rec.status) && isAfter(parseISO(rec.date), new Date());
+                        const parsedRecDate = safeParsePortalDate(rec.date);
+                        const canAct = isScheduled(rec.status) && !!parsedRecDate && isAfter(parsedRecDate, new Date());
                         const isConfirmed = rec.confirmation_status === 'confirmada';
                         
                         // Find related content tasks for this recording
@@ -1086,7 +1099,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                     <h3 className="text-lg font-bold">Cancelar gravação?</h3>
                   </div>
                   <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-4 mb-6">
-                    <p className="text-sm font-bold capitalize">{format(parseISO(cancelFlow.rec.date), "EEEE, dd 'de' MMMM", { locale: pt })}</p>
+                    <p className="text-sm font-bold capitalize">{safeFormatPortalDate(cancelFlow.rec.date, "EEEE, dd 'de' MMMM")}</p>
                     <p className="text-xs text-white/40 mt-1">🕐 {cancelFlow.rec.start_time} • 🎬 {cancelFlow.rec.videomaker_name}</p>
                   </div>
                   <p className="text-sm text-white/50 mb-6">Ao cancelar, verificaremos se há vaga disponível no seu dia de backup.</p>
@@ -1112,7 +1125,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                       <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
                         <p className="text-sm font-bold text-emerald-300 flex items-center gap-2 mb-2">🎉 Vaga disponível no seu backup!</p>
                         <p className="text-xs text-white/50">
-                          <strong className="text-white/70">{format(parseISO(cancelFlow.backupSlot.date), "EEEE, dd/MM", { locale: pt })}</strong> às <strong className="text-white/70">{cancelFlow.backupSlot.time}</strong>
+                          <strong className="text-white/70">{safeFormatPortalDate(cancelFlow.backupSlot.date, 'EEEE, dd/MM')}</strong> às <strong className="text-white/70">{cancelFlow.backupSlot.time}</strong>
                         </p>
                       </div>
                       <div className="flex gap-3">
@@ -1173,7 +1186,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
                         <p className="text-xs text-white/40 mb-2">Ou prefira aguardar:</p>
                         {cancelFlow.nextFixedDate && (
                           <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 mb-3">
-                            <p className="text-xs text-white/50">Próxima gravação fixa: <strong className="text-white/70 capitalize">{format(parseISO(cancelFlow.nextFixedDate), "EEEE, dd/MM", { locale: pt })}</strong></p>
+                            <p className="text-xs text-white/50">Próxima gravação fixa: <strong className="text-white/70 capitalize">{safeFormatPortalDate(cancelFlow.nextFixedDate, 'EEEE, dd/MM')}</strong></p>
                           </div>
                         )}
                         <motion.button whileTap={{ scale: 0.95 }} onClick={() => { setCancelFlow(null); setSelectedAltVm(null); setSelectedAltTime(''); }}

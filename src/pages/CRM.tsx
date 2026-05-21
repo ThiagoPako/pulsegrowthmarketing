@@ -607,7 +607,10 @@ export default function CRM() {
                             </Badge>
                           </div>
                         </div>
-                        <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                        <div className="flex items-center gap-1">
+                          <MeetingActions lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                          <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                        </div>
                       </div>
                     )})}
                   {leads.filter((l) => parseMeetingDate(l.meeting_date)).length === 0 && (

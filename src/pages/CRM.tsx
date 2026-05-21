@@ -783,3 +783,100 @@ function LeadDetailsDialog({ lead, onUpdate }: { lead: Lead, onUpdate: () => voi
     </Dialog>
   );
 }
+
+function MeetingActions({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const handleReschedule = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const m_date = formData.get('date') as string;
+    const m_time = formData.get('time') as string;
+    const { error } = await supabase
+      .from('crm_leads')
+      .update({ meeting_date: m_date, meeting_time: m_time, status: 'meeting' } as any)
+      .eq('id', lead.id);
+    if (error) {
+      toast.error('Não foi possível reagendar.');
+      return;
+    }
+    setOpen(false);
+    onUpdate();
+    toast.success('Reunião reagendada!');
+  };
+
+  const handleDelete = async () => {
+    const { error } = await supabase
+      .from('crm_leads')
+      .update({ meeting_date: null, meeting_time: null, status: 'contacted' } as any)
+      .eq('id', lead.id);
+    if (error) {
+      toast.error('Não foi possível apagar a reunião.');
+      return;
+    }
+    setConfirmDelete(false);
+    onUpdate();
+    toast.success('Reunião removida. Lead voltou para Contato Efetuado.');
+  };
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full text-blue-600 hover:bg-blue-50" title="Reagendar reunião">
+            <Pencil size={14} />
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reagendar Reunião - {lead.name}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleReschedule}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label>Nova Data</Label>
+                <Input
+                  type="date"
+                  name="date"
+                  required
+                  defaultValue={lead.meeting_date ?? ''}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Novo Horário</Label>
+                <Input
+                  type="time"
+                  name="time"
+                  required
+                  defaultValue={lead.meeting_time?.slice(0, 5) ?? ''}
+                />
+              </div>
+              <Button type="submit" className="w-full">Confirmar Reagendamento</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogTrigger asChild>
+          <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full text-red-600 hover:bg-red-50" title="Apagar reunião">
+            <Trash2 size={14} />
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Apagar reunião?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            A reunião de <strong>{lead.name}</strong> será removida do calendário e o lead voltará para "Contato Efetuado". Você pode agendar novamente depois.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setConfirmDelete(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleDelete}>Apagar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}

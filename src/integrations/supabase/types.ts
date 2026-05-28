@@ -2708,6 +2708,53 @@ export type Database = {
         }
         Relationships: []
       }
+      manual_video_tasks: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          id: string
+          material_link: string | null
+          prospect_name: string | null
+          script: string | null
+          status: string
+          title: string
+          updated_at: string
+          videomaker_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          material_link?: string | null
+          prospect_name?: string | null
+          script?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          videomaker_id: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          material_link?: string | null
+          prospect_name?: string | null
+          script?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          videomaker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manual_video_tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mural_desabafo: {
         Row: {
           author_id: string | null

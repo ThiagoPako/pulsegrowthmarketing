@@ -85,6 +85,7 @@ export default function DesignerKanban() {
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
   const [createOpen, setCreateOpen] = useState(false);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [copyPreviewTask, setCopyPreviewTask] = useState<DesignTask | null>(null);

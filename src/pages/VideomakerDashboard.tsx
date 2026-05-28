@@ -160,7 +160,100 @@ export default function VideomakerDashboard() {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  const fetchManualVideos = useCallback(async () => {
+    if (!vmId) return;
+    const { data, error } = await supabase
+      .from('manual_video_tasks')
+      .select('*')
+      .eq('videomaker_id', vmId)
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('Error fetching manual videos:', error);
+      return;
+    }
+    setManualVideos(data || []);
+  }, [vmId]);
+
+  useEffect(() => {
+    fetchManualVideos();
+  }, [fetchManualVideos]);
+
+  const handleCreateManualVideo = async () => {
+    if (!manualVideoTitle.trim() || !manualVideoLink.trim()) {
+      toast.error('Título e link do material são obrigatórios');
+      return;
+    }
+    if (manualVideoClientId === 'prospect' && !manualVideoProspectName.trim()) {
+      toast.error('Nome do cliente avulso é obrigatório');
+      return;
+    }
+
+    setManualVideoSubmitting(true);
+    try {
+      const isFixedClient = manualVideoClientId !== 'prospect';
+      const clientId = isFixedClient ? manualVideoClientId : null;
+      const prospectName = isFixedClient ? null : manualVideoProspectName;
+
+      // 1. Insert into manual_video_tasks
+      const { error } = await supabase.from('manual_video_tasks').insert({
+        videomaker_id: vmId,
+        client_id: clientId,
+        prospect_name: prospectName,
+        title: manualVideoTitle,
+        script: manualVideoScript,
+        material_link: manualVideoLink,
+        status: 'concluido'
+      } as any);
+
+      if (error) throw error;
+
+      // 2. Create content_task for editor/portal
+      const taskId = crypto.randomUUID();
+      const taskTitle = `📹 [IND] ${manualVideoTitle}`;
+      const description = `Vídeo independente (fora da agenda).\n\nRoteiro: ${manualVideoScript}\n\nLink do material: ${manualVideoLink}`;
+
+      await supabase.from('content_tasks').insert({
+        id: taskId,
+        client_id: clientId,
+        prospect_name: prospectName,
+        title: taskTitle,
+        content_type: 'reels',
+        kanban_column: isFixedClient ? 'aprovacao' : 'avulso',
+        description,
+        drive_link: manualVideoLink,
+        created_by: vmId,
+      } as any);
+
+      // 3. If fixed client, send to portal
+      if (isFixedClient) {
+        await supabase.from('client_portal_contents').insert({
+          client_id: clientId,
+          title: manualVideoTitle,
+          content_type: 'reels',
+          file_url: manualVideoLink,
+          status: 'pendente',
+          season_month: new Date().getMonth() + 1,
+          season_year: new Date().getFullYear(),
+          uploaded_by: vmId,
+        } as any);
+      }
+
+      toast.success('Vídeo independente enviado com sucesso!');
+      setManualVideosOpen(false);
+      setManualVideoTitle('');
+      setManualVideoScript('');
+      setManualVideoLink('');
+      setManualVideoProspectName('');
+      fetchManualVideos();
+    } catch (err: any) {
+      toast.error(`Erro ao criar vídeo: ${err.message}`);
+    } finally {
+      setManualVideoSubmitting(false);
+    }
+  };
+
   const vmId = currentUser?.id || '';
+
   const today = new Date();
   const todayStr = format(today, 'yyyy-MM-dd');
   const normalizeDateKey = (value: string) => value?.slice(0, 10) || '';

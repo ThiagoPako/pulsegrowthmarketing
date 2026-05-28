@@ -127,6 +127,7 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
       setCopyText('');
       setReferencesLinks('');
       setDescription('');
+      setDueDate('');
       setReferenceImages([]);
       onOpenChange(false);
     } finally {

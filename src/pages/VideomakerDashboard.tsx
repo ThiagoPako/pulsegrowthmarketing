@@ -1288,8 +1288,8 @@ export default function VideomakerDashboard() {
     <div className="space-y-4 sm:space-y-5 max-w-[1400px] px-1 sm:px-0">
       <BonusCongratsBanner />
       
-      <div className="flex justify-center sm:justify-start mb-2 overflow-x-auto">
-        <div className="bg-secondary/50 p-1 rounded-xl flex gap-1 border border-border/50">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+        <div className="bg-secondary/50 p-1 rounded-xl flex gap-1 border border-border/50 w-fit">
           <Button
             variant={activeTab === 'recordings' ? 'default' : 'ghost'}
             size="sm"
@@ -1304,7 +1304,7 @@ export default function VideomakerDashboard() {
             onClick={() => setActiveTab('editing')}
             className="gap-2 text-xs font-semibold rounded-lg h-9 px-4"
           >
-            <Scissors size={14} /> Minhas Edições
+            <Scissors size={14} /> Edições
           </Button>
           <Button
             variant={activeTab === 'kanban' ? 'default' : 'ghost'}
@@ -1312,10 +1312,107 @@ export default function VideomakerDashboard() {
             onClick={() => setActiveTab('kanban')}
             className="gap-2 text-xs font-semibold rounded-lg h-9 px-4"
           >
-            <BarChart3 size={14} /> Kanban de Edição
+            <BarChart3 size={14} /> Kanban
           </Button>
         </div>
+
+        <Button 
+          onClick={() => setManualVideosOpen(true)}
+          className="bg-primary hover:bg-primary/90 gap-2 h-9 text-xs font-bold shadow-lg shadow-primary/20"
+        >
+          <PlusCircle size={16} /> Gravação Independente
+        </Button>
       </div>
+
+      {/* Manual Video Modal */}
+      <Dialog open={manualVideosOpen} onOpenChange={setManualVideosOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Video className="text-primary" /> Nova Gravação Independente
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Tipo de Cliente</label>
+              <Select value={manualVideoClientId} onValueChange={setManualVideoClientId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="prospect">👤 Cliente Avulso</SelectItem>
+                  {clients.map(client => (
+                    <SelectItem key={client.id} value={client.id}>🏢 {client.companyName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {manualVideoClientId === 'prospect' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Nome do Cliente</label>
+                <Input 
+                  placeholder="Ex: João da Silva" 
+                  value={manualVideoProspectName}
+                  onChange={e => setManualVideoProspectName(e.target.value)}
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Título do Vídeo</label>
+              <Input 
+                placeholder="Ex: Reels Comercial v1" 
+                value={manualVideoTitle}
+                onChange={e => setManualVideoTitle(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Link do Material (Drive/Dropbox)</label>
+              <div className="relative">
+                <Link className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  className="pl-9"
+                  placeholder="https://drive.google.com/..." 
+                  value={manualVideoLink}
+                  onChange={e => setManualVideoLink(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Roteiro</label>
+              <Textarea 
+                placeholder="Cole o roteiro ou descrição aqui..." 
+                className="min-h-[100px]"
+                value={manualVideoScript}
+                onChange={e => setManualVideoScript(e.target.value)}
+              />
+            </div>
+
+            <Alert className="bg-primary/5 border-primary/20">
+              <Rocket size={16} className="text-primary" />
+              <AlertDescription className="text-xs">
+                {manualVideoClientId === 'prospect' 
+                  ? 'Este vídeo irá para a página de aprovação de avulsos.' 
+                  : 'Este vídeo irá diretamente para o Portal do Cliente.'}
+              </AlertDescription>
+            </Alert>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setManualVideosOpen(false)}>Cancelar</Button>
+            <Button 
+              onClick={handleCreateManualVideo} 
+              disabled={manualVideoSubmitting}
+              className="bg-primary hover:bg-primary/90"
+            >
+              {manualVideoSubmitting ? 'Enviando...' : 'Confirmar Envio'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       <AnimatePresence mode="wait">
         {activeTab === 'recordings' ? (

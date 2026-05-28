@@ -160,6 +160,8 @@ export default function VideomakerDashboard() {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  const vmId = currentUser?.id || '';
+
   const fetchManualVideos = useCallback(async () => {
     if (!vmId) return;
     const { data, error } = await supabase
@@ -252,7 +254,6 @@ export default function VideomakerDashboard() {
     }
   };
 
-  const vmId = currentUser?.id || '';
 
   const today = new Date();
   const todayStr = format(today, 'yyyy-MM-dd');

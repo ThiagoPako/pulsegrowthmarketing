@@ -91,6 +91,7 @@ export default function DesignerKanban() {
   const [copyPreviewTask, setCopyPreviewTask] = useState<DesignTask | null>(null);
 
   const tasks = tasksQuery.data || [];
+  const error = tasksQuery.error as any;
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
   const canDelete = currentUser?.role === 'admin';
 
@@ -238,6 +239,13 @@ export default function DesignerKanban() {
           )}
         </div>
       </div>
+
+      {error && (
+        <div className="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400" role="alert">
+          <span className="font-medium">Erro ao carregar tarefas:</span> {error.message || 'Erro desconhecido'}
+          <p className="mt-1 text-xs">Verifique se as colunas 'position' e 'due_date' foram criadas no banco de dados da VPS.</p>
+        </div>
+      )}
 
       {view === 'kanban' ? (
         <DragScrollContainer className="pb-4">

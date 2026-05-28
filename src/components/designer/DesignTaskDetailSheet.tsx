@@ -376,6 +376,44 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
               >
                 {currentCol?.label}
               </Badge>
+              
+              <div className="flex items-center gap-1.5 ml-2">
+                <Calendar size={13} className="text-muted-foreground" />
+                {editingDueDate ? (
+                  <div className="flex items-center gap-1">
+                    <Input
+                      type="date"
+                      value={dueDate}
+                      onChange={e => setDueDate(e.target.value)}
+                      className="h-7 text-[10px] w-28 p-1"
+                    />
+                    <Button
+                      size="sm"
+                      className="h-7 px-2 text-[10px]"
+                      onClick={async () => {
+                        await updateTask.mutateAsync({ id: task.id, due_date: dueDate || null } as any);
+                        await addHistory.mutateAsync({
+                          task_id: task.id,
+                          action: 'Data de vencimento alterada',
+                          details: dueDate || 'Removida',
+                          user_id: user?.id || undefined
+                        });
+                        setEditingDueDate(false);
+                        toast.success('Vencimento atualizado!');
+                      }}
+                    >
+                      Ok
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setEditingDueDate(true)}
+                    className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {task.due_date ? new Date(task.due_date).toLocaleDateString('pt-BR') : 'Sem prazo'}
+                  </button>
+                )}
+              </div>
               {(() => {
                 const downloadable = [
                   task.attachment_url,

@@ -103,7 +103,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
     setEditableFileUrl(task.editable_file_url || '');
     setMockupUrl((task as any).mockup_url || '');
     setChecklist((task as any).checklist || []);
-  }, [task.id, task.kanban_column, task.observations, task.attachment_url, task.editable_file_url, (task as any).mockup_url, (task as any).attachment_urls]);
+    setDueDate(task.due_date ? task.due_date.slice(0, 10) : '');
+  }, [task.id, task.kanban_column, task.observations, task.attachment_url, task.editable_file_url, (task as any).mockup_url, (task as any).attachment_urls, task.due_date]);
 
   const taskCategory = getTaskCategory(task);
   const hasChecklist = taskCategory !== 'normal';

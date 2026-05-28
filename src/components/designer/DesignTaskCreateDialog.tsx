@@ -215,6 +215,19 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
           </div>
 
           <div>
+            <Label>Data de Vencimento</Label>
+            <div className="relative">
+              <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="date"
+                value={dueDate}
+                onChange={e => setDueDate(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          </div>
+
+          <div>
             <Label>Copy (texto para a arte)</Label>
             <Textarea value={copyText} onChange={e => setCopyText(e.target.value)} placeholder="Texto que será usado na arte..." rows={3} />
           </div>

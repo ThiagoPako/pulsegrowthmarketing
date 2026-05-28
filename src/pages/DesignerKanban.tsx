@@ -329,7 +329,7 @@ export default function DesignerKanban() {
                   </motion.div>
 
                   {/* Cards - scrollable */}
-                  <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 space-y-2 min-h-[60px] px-1 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+                  <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 space-y-2 min-h-[100px] px-1 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
                     <AnimatePresence mode="popLayout">
                       {colTasks.map((task, i) => (
                         <motion.div
@@ -339,6 +339,7 @@ export default function DesignerKanban() {
                           animate={{ opacity: 1, scale: 1, y: 0 }}
                           exit={{ opacity: 0, scale: 0.9, y: -8 }}
                           transition={{ delay: i * 0.03, type: 'spring', stiffness: 400, damping: 25 }}
+                          onDragOver={e => handleDragOver(e, col.key, task.id)}
                         >
                           <TaskCard
                             task={task}

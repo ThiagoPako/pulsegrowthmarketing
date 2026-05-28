@@ -41,6 +41,7 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
   const [copyText, setCopyText] = useState('');
   const [referencesLinks, setReferencesLinks] = useState('');
   const [description, setDescription] = useState('');
+  const [dueDate, setDueDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // Reference images state

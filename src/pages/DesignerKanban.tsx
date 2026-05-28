@@ -621,6 +621,11 @@ function TaskCard({ task, isDragging, onClick, onOpenDetail, onDelete, canDelete
       <div className="flex items-center gap-1.5 flex-wrap">
         <Badge variant="outline" className="text-[10px]">{FORMAT_LABELS[task.format_type] || task.format_type}</Badge>
         <Badge className={`text-[10px] ${priorityCfg.color}`}>{priorityCfg.label}</Badge>
+        {formattedDueDate && (
+          <Badge variant="outline" className={`text-[10px] gap-1 ${isOverdue ? 'border-red-500 text-red-600 bg-red-50 dark:bg-red-950/30' : ''}`}>
+            <Calendar size={10} /> {formattedDueDate}
+          </Badge>
+        )}
         {task.timer_running && (
           <Badge variant="secondary" className="text-[10px] gap-0.5 animate-pulse"><Clock size={10} /> Em andamento</Badge>
         )}

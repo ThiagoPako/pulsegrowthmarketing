@@ -196,6 +196,7 @@ export default function DesignerKanban() {
   const handleDragEnd = useCallback(() => {
     setDraggingTaskId(null);
     setDragOverColumn(null);
+    setDragOverTaskId(null);
   }, []);
 
   const handleQuickStart = async (task: DesignTask) => {

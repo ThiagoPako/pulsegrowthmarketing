@@ -60,30 +60,38 @@ export default function VideomakerDashboard() {
 
   // Track planned scripts per active recording (recordingId -> script IDs)
   const [plannedScripts, setPlannedScripts] = useState<Record<string, string[]>>({});
-// ... keep existing code
+  // Finish dialog state - multi-step wizard
+  const [finishDialogOpen, setFinishDialogOpen] = useState(false);
+  const [finishRecordingId, setFinishRecordingId] = useState('');
+  const [completedScriptIds, setCompletedScriptIds] = useState<Set<string>>(new Set());
+  const [finishStep, setFinishStep] = useState<'scripts' | 'alterations' | 'drive'>('scripts');
+  const [selectedEditorId, setSelectedEditorId] = useState<string>('__auto__');
+  const [driveLinks, setDriveLinks] = useState<Record<string, string>>({});
+  // Script status tracking
+  const [rejectedScripts, setRejectedScripts] = useState<Set<string>>(new Set());
+  const [alteredScripts, setAlteredScripts] = useState<Set<string>>(new Set());
+  const [verbalScripts, setVerbalScripts] = useState<Set<string>>(new Set());
+  const [alterationNotes, setAlterationNotes] = useState<Record<string, string>>({});
+  
+  // Celebration state
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationScore, setCelebrationScore] = useState(0);
 
-  // ── Event recordings (Agenda → Eventos) ──
-  const [eventRecordings, setEventRecordings] = useState<EventRecording[]>([]);
-  const [eventFinishOpen, setEventFinishOpen] = useState(false);
-  const [eventFinishId, setEventFinishId] = useState<string | null>(null);
-  const [eventDriveLink, setEventDriveLink] = useState('');
-  const [eventEditorId, setEventEditorId] = useState<string>('__auto__');
-  const [eventNotes, setEventNotes] = useState('');
-  const [eventDriveLinkError, setEventDriveLinkError] = useState<string | null>(null);
-  const [eventFinishSubmitting, setEventFinishSubmitting] = useState(false);
-  const [drivePreviewStatus, setDrivePreviewStatus] = useState<'idle' | 'checking' | 'ok' | 'private' | 'notfound' | 'unknown'>('idle');
-  const [drivePreviewKind, setDrivePreviewKind] = useState<'file' | 'folder' | null>(null);
-  const [drivePreviewId, setDrivePreviewId] = useState<string | null>(null);
-  const [drivePreviewConfirmed, setDrivePreviewConfirmed] = useState(false);
+  // Story upload state
+  const [storyClientId, setStoryClientId] = useState('');
+  const [storyUploading, setStoryUploading] = useState(false);
+  const [storyUploadProgress, setStoryUploadProgress] = useState('');
+  const [storyTitle, setStoryTitle] = useState('');
+  const [storiesUploaded, setStoriesUploaded] = useState(0);
+  const storyFileRef = useRef<HTMLInputElement>(null);
 
-  // Timer for waiting elapsed
-  useEffect(() => {
-    if (!waitingStartedAt) return;
-    const interval = setInterval(() => {
-      setWaitingElapsed(Math.floor((Date.now() - waitingStartedAt.getTime()) / 1000));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [waitingStartedAt]);
+  // ── Waiting for client state ──
+  const [waitingRecordingId, setWaitingRecordingId] = useState<string | null>(null);
+  const [waitingLogId, setWaitingLogId] = useState<string | null>(null);
+  const [waitingStartedAt, setWaitingStartedAt] = useState<Date | null>(null);
+  const [waitingElapsed, setWaitingElapsed] = useState(0);
+  const [deliveredRecordingIds, setDeliveredRecordingIds] = useState<Set<string>>(new Set());
+
 
   const handleStartWaiting = async (rec: Recording) => {
     const logId = crypto.randomUUID();

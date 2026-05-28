@@ -13,7 +13,7 @@ import ClientLogo from '@/components/ClientLogo';
 import { supabase } from '@/lib/vpsDb';
 import { uploadFileToVps } from '@/services/vpsApi';
 import { toast } from 'sonner';
-import { Upload, Link2, X, Image, Loader2, Plus } from 'lucide-react';
+import { Upload, Link2, X, Image, Loader2, Plus, Calendar } from 'lucide-react';
 
 interface Props {
   open: boolean;

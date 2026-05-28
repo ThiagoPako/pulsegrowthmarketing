@@ -13,7 +13,7 @@ import ClientLogo from '@/components/ClientLogo';
 import { supabase } from '@/lib/vpsDb';
 import { uploadFileToVps } from '@/services/vpsApi';
 import { toast } from 'sonner';
-import { Upload, Link2, X, Image, Loader2, Plus } from 'lucide-react';
+import { Upload, Link2, X, Image, Loader2, Plus, Calendar } from 'lucide-react';
 
 interface Props {
   open: boolean;
@@ -41,6 +41,7 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
   const [copyText, setCopyText] = useState('');
   const [referencesLinks, setReferencesLinks] = useState('');
   const [description, setDescription] = useState('');
+  const [dueDate, setDueDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // Reference images state
@@ -104,8 +105,10 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
         references_links: links,
         reference_images: referenceImages,
         description: fullDescription || null,
+        due_date: dueDate || null,
         created_by: user?.id || null,
         kanban_column: 'nova_tarefa',
+        position: Date.now(), // High initial position
       } as any);
 
       // Notify designers
@@ -124,6 +127,7 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
       setCopyText('');
       setReferencesLinks('');
       setDescription('');
+      setDueDate('');
       setReferenceImages([]);
       onOpenChange(false);
     } finally {
@@ -208,6 +212,19 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
                 <SelectItem value="urgente">🔥 Urgente</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div>
+            <Label>Data de Vencimento</Label>
+            <div className="relative">
+              <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="date"
+                value={dueDate}
+                onChange={e => setDueDate(e.target.value)}
+                className="pl-9"
+              />
+            </div>
           </div>
 
           <div>

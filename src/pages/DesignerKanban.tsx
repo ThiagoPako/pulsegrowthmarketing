@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2, Play, Image as ImageIcon, Upload, Download, FileDown } from 'lucide-react';
+import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2, Play, Image as ImageIcon, Upload, Download, FileDown, Calendar } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DesignTaskCreateDialog from '@/components/designer/DesignTaskCreateDialog';
 import DesignTaskDetailSheet from '@/components/designer/DesignTaskDetailSheet';
@@ -85,6 +85,7 @@ export default function DesignerKanban() {
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
   const [createOpen, setCreateOpen] = useState(false);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [copyPreviewTask, setCopyPreviewTask] = useState<DesignTask | null>(null);
@@ -108,25 +109,51 @@ export default function DesignerKanban() {
     setDraggingTaskId(task.id);
   }, []);
 
-  const handleDragOver = useCallback((e: DragEvent, colKey: string) => {
+  const handleDragOver = useCallback((e: DragEvent, colKey: string, overTaskId?: string) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDragOverColumn(colKey);
+    if (overTaskId) setDragOverTaskId(overTaskId);
   }, []);
 
-  const handleDragLeave = useCallback(() => { setDragOverColumn(null); }, []);
+  const handleDragLeave = useCallback(() => { 
+    setDragOverColumn(null); 
+    setDragOverTaskId(null);
+  }, []);
 
-  const handleDrop = useCallback(async (e: DragEvent, targetColumn: DesignTaskColumn) => {
+  const handleDrop = useCallback(async (e: DragEvent, targetColumn: DesignTaskColumn, overTaskId?: string) => {
     e.preventDefault();
     setDragOverColumn(null);
+    setDragOverTaskId(null);
     setDraggingTaskId(null);
 
     const taskId = e.dataTransfer.getData('text/plain');
     const task = tasks.find(t => t.id === taskId);
-    if (!task || task.kanban_column === targetColumn) return;
+    if (!task) return;
+
+    // Se mudou de coluna ou se mudou de posição na mesma coluna
+    const isChangingColumn = task.kanban_column !== targetColumn;
+    const isChangingPosition = overTaskId && overTaskId !== taskId;
+
+    if (!isChangingColumn && !isChangingPosition) return;
 
     const targetLabel = DESIGN_COLUMNS.find(c => c.key === targetColumn)?.label || targetColumn;
     const extraFields: Record<string, any> = {};
+
+    // Calculate new position
+    const colTasks = [...(tasksByColumn[targetColumn] || [])].filter(t => t.id !== taskId);
+    let newPosition = 0;
+    
+    if (overTaskId) {
+      const overIdx = colTasks.findIndex(t => t.id === overTaskId);
+      // Insert BEFORE the card we are hovering over
+      newPosition = overIdx === 0 ? (colTasks[0]?.position || 1000) - 100 : ((colTasks[overIdx-1]?.position || 0) + (colTasks[overIdx]?.position || 0)) / 2;
+    } else {
+      // If no overTaskId, append to the end
+      newPosition = colTasks.length > 0 ? (colTasks[colTasks.length-1]?.position || 0) + 100 : 1000;
+    }
+    
+    extraFields.position = newPosition;
 
     if (targetColumn === 'executando') {
       if (!task.started_at) extraFields.started_at = new Date().toISOString();
@@ -169,6 +196,7 @@ export default function DesignerKanban() {
   const handleDragEnd = useCallback(() => {
     setDraggingTaskId(null);
     setDragOverColumn(null);
+    setDragOverTaskId(null);
   }, []);
 
   const handleQuickStart = async (task: DesignTask) => {
@@ -301,7 +329,7 @@ export default function DesignerKanban() {
                   </motion.div>
 
                   {/* Cards - scrollable */}
-                  <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 space-y-2 min-h-[60px] px-1 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+                  <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 space-y-2 min-h-[100px] px-1 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
                     <AnimatePresence mode="popLayout">
                       {colTasks.map((task, i) => (
                         <motion.div
@@ -311,6 +339,7 @@ export default function DesignerKanban() {
                           animate={{ opacity: 1, scale: 1, y: 0 }}
                           exit={{ opacity: 0, scale: 0.9, y: -8 }}
                           transition={{ delay: i * 0.03, type: 'spring', stiffness: 400, damping: 25 }}
+                          onDragOver={e => handleDragOver(e, col.key, task.id)}
                         >
                           <TaskCard
                             task={task}
@@ -541,6 +570,10 @@ interface TaskCardProps {
 
 function TaskCard({ task, isDragging, onClick, onOpenDetail, onDelete, canDelete, onQuickStart, onDragStart, onDragEnd }: TaskCardProps) {
   const priorityCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.media;
+  
+  const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.kanban_column !== 'aprovado';
+  const formattedDueDate = task.due_date ? new Date(task.due_date).toLocaleDateString('pt-BR') : null;
+
   return (
     <div
       draggable
@@ -549,7 +582,7 @@ function TaskCard({ task, isDragging, onClick, onOpenDetail, onDelete, canDelete
       onClick={onClick}
       className={`relative bg-card border border-border/60 rounded-xl p-3 cursor-grab active:cursor-grabbing hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200 space-y-2.5 group ${
         isDragging ? 'opacity-40 scale-95 ring-2 ring-primary/40' : ''
-      }`}
+      } ${isOverdue ? 'border-red-500/50 bg-red-50/10 dark:bg-red-950/5 animate-[pulse_2s_infinite]' : ''}`}
     >
       {/* Quick action buttons - positioned away from top-right close area */}
       <div className="absolute top-2 left-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
@@ -588,6 +621,11 @@ function TaskCard({ task, isDragging, onClick, onOpenDetail, onDelete, canDelete
       <div className="flex items-center gap-1.5 flex-wrap">
         <Badge variant="outline" className="text-[10px]">{FORMAT_LABELS[task.format_type] || task.format_type}</Badge>
         <Badge className={`text-[10px] ${priorityCfg.color}`}>{priorityCfg.label}</Badge>
+        {formattedDueDate && (
+          <Badge variant="outline" className={`text-[10px] gap-1 ${isOverdue ? 'border-red-500 text-red-600 bg-red-50 dark:bg-red-950/30' : ''}`}>
+            <Calendar size={10} /> {formattedDueDate}
+          </Badge>
+        )}
         {task.timer_running && (
           <Badge variant="secondary" className="text-[10px] gap-0.5 animate-pulse"><Clock size={10} /> Em andamento</Badge>
         )}

@@ -40,6 +40,8 @@ export interface DesignTask {
   timer_started_at: string | null;
   version: number;
   mockup_url: string | null;
+  due_date: string | null;
+  position: number;
   created_at: string;
   updated_at: string;
   clients?: { company_name: string; color: string; logo_url: string | null; whatsapp: string; responsible_person: string };
@@ -55,6 +57,7 @@ export function useDesignTasks() {
       const { data, error } = await supabase
         .from('design_tasks')
         .select('*, clients(company_name, color, logo_url, whatsapp, responsible_person), profiles!design_tasks_assigned_to_fkey(name, display_name, avatar_url)')
+        .order('position', { ascending: true })
         .order('created_at', { ascending: false });
       if (error) throw error;
       return (data || []) as unknown as DesignTask[];

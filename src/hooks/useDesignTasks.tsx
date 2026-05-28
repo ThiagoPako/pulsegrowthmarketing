@@ -57,6 +57,7 @@ export function useDesignTasks() {
       const { data, error } = await supabase
         .from('design_tasks')
         .select('*, clients(company_name, color, logo_url, whatsapp, responsible_person), profiles!design_tasks_assigned_to_fkey(name, display_name, avatar_url)')
+        .order('position', { ascending: true })
         .order('created_at', { ascending: false });
       if (error) throw error;
       return (data || []) as unknown as DesignTask[];

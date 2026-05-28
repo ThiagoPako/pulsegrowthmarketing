@@ -54,13 +54,22 @@ export function useDesignTasks() {
   const tasksQuery = useQuery({
     queryKey: ['design-tasks'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('design_tasks')
-        .select('*, clients(company_name, color, logo_url, whatsapp, responsible_person), profiles!design_tasks_assigned_to_fkey(name, display_name, avatar_url)')
-        .order('position', { ascending: true })
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data || []) as unknown as DesignTask[];
+      try {
+        const { data, error } = await supabase
+          .from('design_tasks')
+          .select('*, clients(company_name, color, logo_url, whatsapp, responsible_person), profiles!design_tasks_assigned_to_fkey(name, display_name, avatar_url)')
+          .order('position', { ascending: true })
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          console.error('Error fetching design tasks:', error);
+          throw error;
+        }
+        return (data || []) as unknown as DesignTask[];
+      } catch (err) {
+        console.error('Exception in tasksQuery:', err);
+        throw err;
+      }
     },
     refetchInterval: 8000,
     refetchOnWindowFocus: true,

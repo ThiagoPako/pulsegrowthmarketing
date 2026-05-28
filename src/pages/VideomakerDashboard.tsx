@@ -92,8 +92,31 @@ export default function VideomakerDashboard() {
   const [waitingElapsed, setWaitingElapsed] = useState(0);
   const [deliveredRecordingIds, setDeliveredRecordingIds] = useState<Set<string>>(new Set());
 
+  // ── Event recordings (Agenda → Eventos) ──
+  const [eventRecordings, setEventRecordings] = useState<EventRecording[]>([]);
+  const [eventFinishOpen, setEventFinishOpen] = useState(false);
+  const [eventFinishId, setEventFinishId] = useState<string | null>(null);
+  const [eventDriveLink, setEventDriveLink] = useState('');
+  const [eventEditorId, setEventEditorId] = useState<string>('__auto__');
+  const [eventNotes, setEventNotes] = useState('');
+  const [eventDriveLinkError, setEventDriveLinkError] = useState<string | null>(null);
+  const [eventFinishSubmitting, setEventFinishSubmitting] = useState(false);
+  const [drivePreviewStatus, setDrivePreviewStatus] = useState<'idle' | 'checking' | 'ok' | 'private' | 'notfound' | 'unknown'>('idle');
+  const [drivePreviewKind, setDrivePreviewKind] = useState<'file' | 'folder' | null>(null);
+  const [drivePreviewId, setDrivePreviewId] = useState<string | null>(null);
+  const [drivePreviewConfirmed, setDrivePreviewConfirmed] = useState(false);
+
+  // Timer for waiting elapsed
+  useEffect(() => {
+    if (!waitingStartedAt) return;
+    const interval = setInterval(() => {
+      setWaitingElapsed(Math.floor((Date.now() - waitingStartedAt.getTime()) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [waitingStartedAt]);
 
   const handleStartWaiting = async (rec: Recording) => {
+
     const logId = crypto.randomUUID();
     const now = new Date();
     const { error } = await supabase.from('recording_wait_logs').insert({

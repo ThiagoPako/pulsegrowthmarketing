@@ -9,7 +9,7 @@ import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS, ROLE_LABELS } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,7 +17,7 @@ import {
   Play, Square, FileText, Check, Clock, Video, Users as UsersIcon,
   TrendingUp, BarChart3, Undo2, AlertTriangle, Star, Eye, ChevronLeft, Download, Link, ArrowRight,
   ThumbsDown, Pencil, MessageCircle, Send, UserCheck, Rocket, Hourglass, RefreshCw, Upload, Camera,
-  Scissors
+  Scissors, PlusCircle, ExternalLink
 } from 'lucide-react';
 import LiveRecordingCard from '@/components/videomaker/LiveRecordingCard';
 import FieldworkButton from '@/components/videomaker/FieldworkButton';
@@ -48,40 +48,19 @@ export default function VideomakerDashboard() {
   const [selectedScriptIds, setSelectedScriptIds] = useState<Set<string>>(new Set());
   const [viewingScript, setViewingScript] = useState<Script | null>(null);
 
+  // Manual video state
+  const [manualVideosOpen, setManualVideosOpen] = useState(false);
+  const [manualVideoTitle, setManualVideoTitle] = useState('');
+  const [manualVideoClientId, setManualVideoClientId] = useState<string>('prospect');
+  const [manualVideoProspectName, setManualVideoProspectName] = useState('');
+  const [manualVideoScript, setManualVideoScript] = useState('');
+  const [manualVideoLink, setManualVideoLink] = useState('');
+  const [manualVideoSubmitting, setManualVideoSubmitting] = useState(false);
+  const [manualVideos, setManualVideos] = useState<any[]>([]);
+
   // Track planned scripts per active recording (recordingId -> script IDs)
   const [plannedScripts, setPlannedScripts] = useState<Record<string, string[]>>({});
-
-  // Finish dialog state - multi-step wizard
-  const [finishDialogOpen, setFinishDialogOpen] = useState(false);
-  const [finishRecordingId, setFinishRecordingId] = useState('');
-  const [completedScriptIds, setCompletedScriptIds] = useState<Set<string>>(new Set());
-  const [finishStep, setFinishStep] = useState<'scripts' | 'alterations' | 'drive'>('scripts');
-  const [selectedEditorId, setSelectedEditorId] = useState<string>('__auto__');
-  const [driveLinks, setDriveLinks] = useState<Record<string, string>>({});
-  // Script status tracking
-  const [rejectedScripts, setRejectedScripts] = useState<Set<string>>(new Set());
-  const [alteredScripts, setAlteredScripts] = useState<Set<string>>(new Set());
-  const [verbalScripts, setVerbalScripts] = useState<Set<string>>(new Set());
-  const [alterationNotes, setAlterationNotes] = useState<Record<string, string>>({});
-  
-  // Celebration state
-  const [showCelebration, setShowCelebration] = useState(false);
-  const [celebrationScore, setCelebrationScore] = useState(0);
-
-  // Story upload state
-  const [storyClientId, setStoryClientId] = useState('');
-  const [storyUploading, setStoryUploading] = useState(false);
-  const [storyUploadProgress, setStoryUploadProgress] = useState('');
-  const [storyTitle, setStoryTitle] = useState('');
-  const [storiesUploaded, setStoriesUploaded] = useState(0);
-  const storyFileRef = useRef<HTMLInputElement>(null);
-
-  // ── Waiting for client state ──
-  const [waitingRecordingId, setWaitingRecordingId] = useState<string | null>(null);
-  const [waitingLogId, setWaitingLogId] = useState<string | null>(null);
-  const [waitingStartedAt, setWaitingStartedAt] = useState<Date | null>(null);
-  const [waitingElapsed, setWaitingElapsed] = useState(0);
-  const [deliveredRecordingIds, setDeliveredRecordingIds] = useState<Set<string>>(new Set());
+// ... keep existing code
 
   // ── Event recordings (Agenda → Eventos) ──
   const [eventRecordings, setEventRecordings] = useState<EventRecording[]>([]);

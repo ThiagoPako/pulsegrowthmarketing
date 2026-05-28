@@ -109,25 +109,51 @@ export default function DesignerKanban() {
     setDraggingTaskId(task.id);
   }, []);
 
-  const handleDragOver = useCallback((e: DragEvent, colKey: string) => {
+  const handleDragOver = useCallback((e: DragEvent, colKey: string, overTaskId?: string) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDragOverColumn(colKey);
+    if (overTaskId) setDragOverTaskId(overTaskId);
   }, []);
 
-  const handleDragLeave = useCallback(() => { setDragOverColumn(null); }, []);
+  const handleDragLeave = useCallback(() => { 
+    setDragOverColumn(null); 
+    setDragOverTaskId(null);
+  }, []);
 
-  const handleDrop = useCallback(async (e: DragEvent, targetColumn: DesignTaskColumn) => {
+  const handleDrop = useCallback(async (e: DragEvent, targetColumn: DesignTaskColumn, overTaskId?: string) => {
     e.preventDefault();
     setDragOverColumn(null);
+    setDragOverTaskId(null);
     setDraggingTaskId(null);
 
     const taskId = e.dataTransfer.getData('text/plain');
     const task = tasks.find(t => t.id === taskId);
-    if (!task || task.kanban_column === targetColumn) return;
+    if (!task) return;
+
+    // Se mudou de coluna ou se mudou de posição na mesma coluna
+    const isChangingColumn = task.kanban_column !== targetColumn;
+    const isChangingPosition = overTaskId && overTaskId !== taskId;
+
+    if (!isChangingColumn && !isChangingPosition) return;
 
     const targetLabel = DESIGN_COLUMNS.find(c => c.key === targetColumn)?.label || targetColumn;
     const extraFields: Record<string, any> = {};
+
+    // Calculate new position
+    const colTasks = [...(tasksByColumn[targetColumn] || [])].filter(t => t.id !== taskId);
+    let newPosition = 0;
+    
+    if (overTaskId) {
+      const overIdx = colTasks.findIndex(t => t.id === overTaskId);
+      // Insert BEFORE the card we are hovering over
+      newPosition = overIdx === 0 ? (colTasks[0]?.position || 1000) - 100 : ((colTasks[overIdx-1]?.position || 0) + (colTasks[overIdx]?.position || 0)) / 2;
+    } else {
+      // If no overTaskId, append to the end
+      newPosition = colTasks.length > 0 ? (colTasks[colTasks.length-1]?.position || 0) + 100 : 1000;
+    }
+    
+    extraFields.position = newPosition;
 
     if (targetColumn === 'executando') {
       if (!task.started_at) extraFields.started_at = new Date().toISOString();

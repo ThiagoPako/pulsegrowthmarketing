@@ -1504,12 +1504,14 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          due_date: string | null
           editable_file_url: string | null
           format_type: string
           id: string
           kanban_column: string
           mockup_url: string | null
           observations: string | null
+          position: number | null
           priority: string
           reference_images: string[] | null
           references_links: string[] | null
@@ -1535,12 +1537,14 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          due_date?: string | null
           editable_file_url?: string | null
           format_type?: string
           id?: string
           kanban_column?: string
           mockup_url?: string | null
           observations?: string | null
+          position?: number | null
           priority?: string
           reference_images?: string[] | null
           references_links?: string[] | null
@@ -1566,12 +1570,14 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          due_date?: string | null
           editable_file_url?: string | null
           format_type?: string
           id?: string
           kanban_column?: string
           mockup_url?: string | null
           observations?: string | null
+          position?: number | null
           priority?: string
           reference_images?: string[] | null
           references_links?: string[] | null

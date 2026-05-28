@@ -570,6 +570,10 @@ interface TaskCardProps {
 
 function TaskCard({ task, isDragging, onClick, onOpenDetail, onDelete, canDelete, onQuickStart, onDragStart, onDragEnd }: TaskCardProps) {
   const priorityCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.media;
+  
+  const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.kanban_column !== 'aprovado';
+  const formattedDueDate = task.due_date ? new Date(task.due_date).toLocaleDateString('pt-BR') : null;
+
   return (
     <div
       draggable
@@ -578,7 +582,7 @@ function TaskCard({ task, isDragging, onClick, onOpenDetail, onDelete, canDelete
       onClick={onClick}
       className={`relative bg-card border border-border/60 rounded-xl p-3 cursor-grab active:cursor-grabbing hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200 space-y-2.5 group ${
         isDragging ? 'opacity-40 scale-95 ring-2 ring-primary/40' : ''
-      }`}
+      } ${isOverdue ? 'border-red-500/50 bg-red-50/10 dark:bg-red-950/5 animate-[pulse_2s_infinite]' : ''}`}
     >
       {/* Quick action buttons - positioned away from top-right close area */}
       <div className="absolute top-2 left-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">

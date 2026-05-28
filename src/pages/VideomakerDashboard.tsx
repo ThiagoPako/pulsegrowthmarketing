@@ -9,7 +9,7 @@ import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_PRIORITY_LABELS, ROLE_LABELS } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,7 +17,7 @@ import {
   Play, Square, FileText, Check, Clock, Video, Users as UsersIcon,
   TrendingUp, BarChart3, Undo2, AlertTriangle, Star, Eye, ChevronLeft, Download, Link, ArrowRight,
   ThumbsDown, Pencil, MessageCircle, Send, UserCheck, Rocket, Hourglass, RefreshCw, Upload, Camera,
-  Scissors
+  Scissors, PlusCircle, ExternalLink
 } from 'lucide-react';
 import LiveRecordingCard from '@/components/videomaker/LiveRecordingCard';
 import FieldworkButton from '@/components/videomaker/FieldworkButton';
@@ -48,9 +48,18 @@ export default function VideomakerDashboard() {
   const [selectedScriptIds, setSelectedScriptIds] = useState<Set<string>>(new Set());
   const [viewingScript, setViewingScript] = useState<Script | null>(null);
 
+  // Manual video state
+  const [manualVideosOpen, setManualVideosOpen] = useState(false);
+  const [manualVideoTitle, setManualVideoTitle] = useState('');
+  const [manualVideoClientId, setManualVideoClientId] = useState<string>('prospect');
+  const [manualVideoProspectName, setManualVideoProspectName] = useState('');
+  const [manualVideoScript, setManualVideoScript] = useState('');
+  const [manualVideoLink, setManualVideoLink] = useState('');
+  const [manualVideoSubmitting, setManualVideoSubmitting] = useState(false);
+  const [manualVideos, setManualVideos] = useState<any[]>([]);
+
   // Track planned scripts per active recording (recordingId -> script IDs)
   const [plannedScripts, setPlannedScripts] = useState<Record<string, string[]>>({});
-
   // Finish dialog state - multi-step wizard
   const [finishDialogOpen, setFinishDialogOpen] = useState(false);
   const [finishRecordingId, setFinishRecordingId] = useState('');
@@ -107,6 +116,7 @@ export default function VideomakerDashboard() {
   }, [waitingStartedAt]);
 
   const handleStartWaiting = async (rec: Recording) => {
+
     const logId = crypto.randomUUID();
     const now = new Date();
     const { error } = await supabase.from('recording_wait_logs').insert({
@@ -151,6 +161,100 @@ export default function VideomakerDashboard() {
   };
 
   const vmId = currentUser?.id || '';
+
+  const fetchManualVideos = useCallback(async () => {
+    if (!vmId) return;
+    const { data, error } = await supabase
+      .from('manual_video_tasks')
+      .select('*')
+      .eq('videomaker_id', vmId)
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('Error fetching manual videos:', error);
+      return;
+    }
+    setManualVideos(data || []);
+  }, [vmId]);
+
+  useEffect(() => {
+    fetchManualVideos();
+  }, [fetchManualVideos]);
+
+  const handleCreateManualVideo = async () => {
+    if (!manualVideoTitle.trim() || !manualVideoLink.trim()) {
+      toast.error('Título e link do material são obrigatórios');
+      return;
+    }
+    if (manualVideoClientId === 'prospect' && !manualVideoProspectName.trim()) {
+      toast.error('Nome do cliente avulso é obrigatório');
+      return;
+    }
+
+    setManualVideoSubmitting(true);
+    try {
+      const isFixedClient = manualVideoClientId !== 'prospect';
+      const clientId = isFixedClient ? manualVideoClientId : null;
+      const prospectName = isFixedClient ? null : manualVideoProspectName;
+
+      // 1. Insert into manual_video_tasks
+      const { error } = await supabase.from('manual_video_tasks').insert({
+        videomaker_id: vmId,
+        client_id: clientId,
+        prospect_name: prospectName,
+        title: manualVideoTitle,
+        script: manualVideoScript,
+        material_link: manualVideoLink,
+        status: 'concluido'
+      } as any);
+
+      if (error) throw error;
+
+      // 2. Create content_task for editor/portal
+      const taskId = crypto.randomUUID();
+      const taskTitle = `📹 [IND] ${manualVideoTitle}`;
+      const description = `Vídeo independente (fora da agenda).\n\nRoteiro: ${manualVideoScript}\n\nLink do material: ${manualVideoLink}`;
+
+      await supabase.from('content_tasks').insert({
+        id: taskId,
+        client_id: clientId,
+        prospect_name: prospectName,
+        title: taskTitle,
+        content_type: 'reels',
+        kanban_column: isFixedClient ? 'aprovacao' : 'avulso',
+        description,
+        drive_link: manualVideoLink,
+        created_by: vmId,
+      } as any);
+
+      // 3. If fixed client, send to portal
+      if (isFixedClient) {
+        await supabase.from('client_portal_contents').insert({
+          client_id: clientId,
+          title: manualVideoTitle,
+          content_type: 'reels',
+          file_url: manualVideoLink,
+          status: 'pendente',
+          season_month: new Date().getMonth() + 1,
+          season_year: new Date().getFullYear(),
+          uploaded_by: vmId,
+        } as any);
+      }
+
+      toast.success('Vídeo independente enviado com sucesso!');
+      setManualVideosOpen(false);
+      setManualVideoTitle('');
+      setManualVideoScript('');
+      setManualVideoLink('');
+      setManualVideoProspectName('');
+      fetchManualVideos();
+    } catch (err: any) {
+      toast.error(`Erro ao criar vídeo: ${err.message}`);
+    } finally {
+      setManualVideoSubmitting(false);
+    }
+  };
+
+
   const today = new Date();
   const todayStr = format(today, 'yyyy-MM-dd');
   const normalizeDateKey = (value: string) => value?.slice(0, 10) || '';
@@ -1184,8 +1288,8 @@ export default function VideomakerDashboard() {
     <div className="space-y-4 sm:space-y-5 max-w-[1400px] px-1 sm:px-0">
       <BonusCongratsBanner />
       
-      <div className="flex justify-center sm:justify-start mb-2 overflow-x-auto">
-        <div className="bg-secondary/50 p-1 rounded-xl flex gap-1 border border-border/50">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+        <div className="bg-secondary/50 p-1 rounded-xl flex gap-1 border border-border/50 w-fit">
           <Button
             variant={activeTab === 'recordings' ? 'default' : 'ghost'}
             size="sm"
@@ -1200,7 +1304,7 @@ export default function VideomakerDashboard() {
             onClick={() => setActiveTab('editing')}
             className="gap-2 text-xs font-semibold rounded-lg h-9 px-4"
           >
-            <Scissors size={14} /> Minhas Edições
+            <Scissors size={14} /> Edições
           </Button>
           <Button
             variant={activeTab === 'kanban' ? 'default' : 'ghost'}
@@ -1208,10 +1312,107 @@ export default function VideomakerDashboard() {
             onClick={() => setActiveTab('kanban')}
             className="gap-2 text-xs font-semibold rounded-lg h-9 px-4"
           >
-            <BarChart3 size={14} /> Kanban de Edição
+            <BarChart3 size={14} /> Kanban
           </Button>
         </div>
+
+        <Button 
+          onClick={() => setManualVideosOpen(true)}
+          className="bg-primary hover:bg-primary/90 gap-2 h-9 text-xs font-bold shadow-lg shadow-primary/20"
+        >
+          <PlusCircle size={16} /> Gravação Independente
+        </Button>
       </div>
+
+      {/* Manual Video Modal */}
+      <Dialog open={manualVideosOpen} onOpenChange={setManualVideosOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Video className="text-primary" /> Nova Gravação Independente
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Tipo de Cliente</label>
+              <Select value={manualVideoClientId} onValueChange={setManualVideoClientId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="prospect">👤 Cliente Avulso</SelectItem>
+                  {clients.map(client => (
+                    <SelectItem key={client.id} value={client.id}>🏢 {client.companyName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {manualVideoClientId === 'prospect' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Nome do Cliente</label>
+                <Input 
+                  placeholder="Ex: João da Silva" 
+                  value={manualVideoProspectName}
+                  onChange={e => setManualVideoProspectName(e.target.value)}
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Título do Vídeo</label>
+              <Input 
+                placeholder="Ex: Reels Comercial v1" 
+                value={manualVideoTitle}
+                onChange={e => setManualVideoTitle(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Link do Material (Drive/Dropbox)</label>
+              <div className="relative">
+                <Link className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  className="pl-9"
+                  placeholder="https://drive.google.com/..." 
+                  value={manualVideoLink}
+                  onChange={e => setManualVideoLink(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Roteiro</label>
+              <Textarea 
+                placeholder="Cole o roteiro ou descrição aqui..." 
+                className="min-h-[100px]"
+                value={manualVideoScript}
+                onChange={e => setManualVideoScript(e.target.value)}
+              />
+            </div>
+
+            <Alert className="bg-primary/5 border-primary/20">
+              <Rocket size={16} className="text-primary" />
+              <AlertDescription className="text-xs">
+                {manualVideoClientId === 'prospect' 
+                  ? 'Este vídeo irá para a página de aprovação de avulsos.' 
+                  : 'Este vídeo irá diretamente para o Portal do Cliente.'}
+              </AlertDescription>
+            </Alert>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setManualVideosOpen(false)}>Cancelar</Button>
+            <Button 
+              onClick={handleCreateManualVideo} 
+              disabled={manualVideoSubmitting}
+              className="bg-primary hover:bg-primary/90"
+            >
+              {manualVideoSubmitting ? 'Enviando...' : 'Confirmar Envio'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       <AnimatePresence mode="wait">
         {activeTab === 'recordings' ? (

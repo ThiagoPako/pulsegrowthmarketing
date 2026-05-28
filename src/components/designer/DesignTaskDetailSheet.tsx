@@ -1102,16 +1102,25 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                               if (!files.length) return;
                               setUploadingArt(true);
                               try {
-                                const newUrls = [...attachmentUrls];
+                                // Se estiver na coluna de ajustes, substitui a arte anterior pela nova
+                                const isAjustes = task.kanban_column === 'ajustes';
+                                const newUrls = isAjustes ? [] : [...attachmentUrls];
+                                
                                 for (const file of files) {
                                   const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
                                   newUrls.push(publicUrl);
-                                  await addHistory.mutateAsync({ task_id: task.id, action: 'Arte enviada por upload', details: file.name, user_id: user?.id });
+                                  await addHistory.mutateAsync({ 
+                                    task_id: task.id, 
+                                    action: isAjustes ? 'Arte corrigida enviada (substituiu anterior)' : 'Arte enviada por upload', 
+                                    details: file.name, 
+                                    user_id: user?.id 
+                                  });
                                 }
+                                
                                 setAttachmentUrls(newUrls);
                                 const primary = newUrls[0] || attachmentUrl;
                                 await updateTask.mutateAsync({ id: task.id, attachment_urls: newUrls, attachment_url: primary } as any);
-                                toast.success(`${files.length} arte(s) enviada(s) com sucesso! 🎉`);
+                                toast.success(isAjustes ? 'Arte anterior substituída pela nova arte corrigida! 🎉' : `${files.length} arte(s) enviada(s) com sucesso! 🎉`);
                               } catch (err: any) { toast.error(err.message || 'Erro ao enviar arquivo'); }
                               finally { setUploadingArt(false); }
                             }}
@@ -1121,16 +1130,25 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                               if (!files.length) return;
                               setUploadingArt(true);
                               try {
-                                const newUrls = [...attachmentUrls];
+                                // Se estiver na coluna de ajustes, substitui a arte anterior pela nova
+                                const isAjustes = task.kanban_column === 'ajustes';
+                                const newUrls = isAjustes ? [] : [...attachmentUrls];
+                                
                                 for (const file of files) {
                                   const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
                                   newUrls.push(publicUrl);
-                                  await addHistory.mutateAsync({ task_id: task.id, action: 'Arte enviada por upload', details: file.name, user_id: user?.id });
+                                  await addHistory.mutateAsync({ 
+                                    task_id: task.id, 
+                                    action: isAjustes ? 'Arte corrigida enviada (substituiu anterior)' : 'Arte enviada por upload', 
+                                    details: file.name, 
+                                    user_id: user?.id 
+                                  });
                                 }
+                                
                                 setAttachmentUrls(newUrls);
                                 const primary = newUrls[0] || attachmentUrl;
                                 await updateTask.mutateAsync({ id: task.id, attachment_urls: newUrls, attachment_url: primary } as any);
-                                toast.success(`${files.length} arte(s) enviada(s) com sucesso! 🎉`);
+                                toast.success(isAjustes ? 'Arte anterior substituída pela nova arte corrigida! 🎉' : `${files.length} arte(s) enviada(s) com sucesso! 🎉`);
                               } catch (err: any) { toast.error(err.message || 'Erro ao enviar arquivo'); }
                               finally { setUploadingArt(false); }
                             }} />

@@ -105,8 +105,10 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
         references_links: links,
         reference_images: referenceImages,
         description: fullDescription || null,
+        due_date: dueDate || null,
         created_by: user?.id || null,
         kanban_column: 'nova_tarefa',
+        position: Date.now(), // High initial position
       } as any);
 
       // Notify designers

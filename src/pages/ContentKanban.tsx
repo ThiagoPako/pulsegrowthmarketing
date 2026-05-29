@@ -544,7 +544,8 @@ export default function ContentKanban() {
       return;
     }
     const payload: any = {
-      client_id: formClientId,
+      client_id: isUnregistered ? null : formClientId,
+      prospect_name: isUnregistered ? formProspectName : null,
       title: formTitle,
       content_type: formType,
       kanban_column: formColumn,

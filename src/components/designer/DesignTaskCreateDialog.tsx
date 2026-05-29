@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useDesignTasks } from '@/hooks/useDesignTasks';
 import { useApp } from '@/contexts/AppContext';
@@ -34,7 +35,9 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
   const { clients } = useApp();
   const { user } = useAuth();
   const { createTask, addHistory } = useDesignTasks();
-  const [clientId, setClientId] = useState('');
+  const [clientId, setClientId] = useState<string | null>('');
+  const [prospectName, setProspectName] = useState('');
+  const [isUnregistered, setIsUnregistered] = useState(false);
   const [title, setTitle] = useState('');
   const [selectedFormats, setSelectedFormats] = useState<string[]>(['feed']);
   const [priority, setPriority] = useState('media');
@@ -86,7 +89,12 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
   };
 
   const handleSubmit = async () => {
-    if (!clientId || !title) return;
+    if ((!clientId && !isUnregistered) || (!title)) return;
+    if (isUnregistered && !prospectName.trim()) {
+      toast.error('Informe o nome do cliente');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const links = referencesLinks.split('\n').map(l => l.trim()).filter(Boolean);
@@ -97,7 +105,8 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
       const fullDescription = [description, formatDesc].filter(Boolean).join('\n\n');
 
       await createTask.mutateAsync({
-        client_id: clientId,
+        client_id: isUnregistered ? null : clientId,
+        prospect_name: isUnregistered ? prospectName : null,
         title,
         format_type: primaryFormat,
         priority,
@@ -121,6 +130,8 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
       });
 
       setClientId('');
+      setProspectName('');
+      setIsUnregistered(false);
       setTitle('');
       setSelectedFormats(['feed']);
       setPriority('media');
@@ -146,20 +157,40 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
 
         <div className="space-y-4">
           <div>
-            <Label>Cliente *</Label>
-            <Select value={clientId} onValueChange={setClientId}>
-              <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
-              <SelectContent>
-                {clients.map(c => (
-                  <SelectItem key={c.id} value={c.id}>
-                    <div className="flex items-center gap-2">
-                      <ClientLogo client={{ companyName: c.companyName, color: c.color, logoUrl: c.logoUrl }} size="sm" />
-                      {c.companyName}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center justify-between mb-2">
+              <Label>Cliente *</Label>
+              <div className="flex items-center gap-2">
+                <Checkbox 
+                  id="isUnregistered" 
+                  checked={isUnregistered} 
+                  onCheckedChange={(checked) => setIsUnregistered(checked === true)} 
+                />
+                <label htmlFor="isUnregistered" className="text-xs font-medium cursor-pointer">Cliente não cadastrado</label>
+              </div>
+            </div>
+            
+            {!isUnregistered ? (
+              <Select value={clientId || ''} onValueChange={setClientId}>
+                <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
+                <SelectContent>
+                  {clients.map(c => (
+                    <SelectItem key={c.id} value={c.id}>
+                      <div className="flex items-center gap-2">
+                        <ClientLogo client={{ companyName: c.companyName, color: c.color, logoUrl: c.logoUrl }} size="sm" />
+                        {c.companyName}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input 
+                value={prospectName} 
+                onChange={e => setProspectName(e.target.value)} 
+                placeholder="Nome da empresa/cliente" 
+              />
+            )}
+
           </div>
 
           {selectedClient?.niche && (
@@ -296,7 +327,7 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
             <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Detalhes adicionais..." rows={2} />
           </div>
 
-          <Button onClick={handleSubmit} disabled={!clientId || !title || submitting} className="w-full">
+          <Button onClick={handleSubmit} disabled={(!clientId && !isUnregistered) || !title || submitting} className="w-full">
             {submitting ? 'Criando...' : 'Criar Demanda'}
           </Button>
         </div>

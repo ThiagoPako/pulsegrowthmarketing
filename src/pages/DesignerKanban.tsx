@@ -614,8 +614,8 @@ function TaskCard({ task, isDragging, onClick, onOpenDetail, onDelete, canDelete
 
       <div className="flex items-center gap-2">
         <GripVertical size={12} className="text-muted-foreground/30 shrink-0 group-hover:text-muted-foreground/60 transition-colors" />
-        <ClientLogo client={{ companyName: task.clients?.company_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="sm" />
-        <span className="text-[11px] text-muted-foreground truncate">{task.clients?.company_name}</span>
+        <ClientLogo client={{ companyName: task.clients?.company_name || task.prospect_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="sm" />
+        <span className="text-[11px] text-muted-foreground truncate">{task.clients?.company_name || task.prospect_name}</span>
       </div>
       <p className="text-sm font-medium line-clamp-2 group-hover:text-primary/90 transition-colors">{task.title}</p>
       

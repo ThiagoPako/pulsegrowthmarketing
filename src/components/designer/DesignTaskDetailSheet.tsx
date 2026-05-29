@@ -264,7 +264,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
       if (fileUrl && task.clients?.whatsapp) {
         const fileName = fileUrl.split('/').pop() || 'arte.png';
         const result = await sendWhatsAppMediaMessage({
-          number: task.clients.whatsapp,
+          number: task.clients?.whatsapp || '',
           message: msg,
           mediaUrl: fileUrl,
           mediaFileName: fileName,
@@ -277,7 +277,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
         }
       } else if (task.clients?.whatsapp) {
         await sendWhatsAppMessage({
-          number: task.clients.whatsapp,
+          number: task.clients?.whatsapp || '',
           message: msg,
           clientId: task.client_id,
           triggerType: 'auto_design_approved',
@@ -351,9 +351,9 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
         <div className="border-b border-border px-5 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 min-w-0">
-              <ClientLogo client={{ companyName: task.clients?.company_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="md" />
+              <ClientLogo client={{ companyName: task.clients?.company_name || task.prospect_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="md" />
               <div className="min-w-0">
-                <h2 className="text-base font-semibold truncate">{task.clients?.company_name}</h2>
+                <h2 className="text-base font-semibold truncate">{task.clients?.company_name || task.prospect_name}</h2>
                 <p className="text-xs text-muted-foreground truncate">{task.title}</p>
               </div>
             </div>
@@ -557,11 +557,11 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                     </Label>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <ClientLogo client={{ companyName: task.clients?.company_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="sm" />
+                        <ClientLogo client={{ companyName: task.clients?.company_name || task.prospect_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="sm" />
                         <div>
-                          <p className="text-sm font-medium">{task.clients?.company_name || '—'}</p>
-                          {task.clients?.responsible_person && (
-                            <p className="text-xs text-muted-foreground">{task.clients.responsible_person}</p>
+                          <p className="text-sm font-medium">{task.clients?.company_name || task.prospect_name || '—'}</p>
+                          {(task.clients?.responsible_person || !task.client_id) && (
+                            <p className="text-xs text-muted-foreground">{task.clients?.responsible_person || (task.client_id ? 'N/A' : 'Cliente Avulso')}</p>
                           )}
                         </div>
                       </div>

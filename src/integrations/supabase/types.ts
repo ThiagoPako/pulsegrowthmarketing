@@ -1498,7 +1498,7 @@ export type Database = {
           auto_approved: boolean
           checklist: Json | null
           client_approved_at: string | null
-          client_id: string
+          client_id: string | null
           completed_at: string | null
           copy_text: string | null
           created_at: string
@@ -1513,6 +1513,7 @@ export type Database = {
           observations: string | null
           position: number | null
           priority: string
+          prospect_name: string | null
           reference_images: string[] | null
           references_links: string[] | null
           sent_to_client_at: string | null
@@ -1531,7 +1532,7 @@ export type Database = {
           auto_approved?: boolean
           checklist?: Json | null
           client_approved_at?: string | null
-          client_id: string
+          client_id?: string | null
           completed_at?: string | null
           copy_text?: string | null
           created_at?: string
@@ -1546,6 +1547,7 @@ export type Database = {
           observations?: string | null
           position?: number | null
           priority?: string
+          prospect_name?: string | null
           reference_images?: string[] | null
           references_links?: string[] | null
           sent_to_client_at?: string | null
@@ -1564,7 +1566,7 @@ export type Database = {
           auto_approved?: boolean
           checklist?: Json | null
           client_approved_at?: string | null
-          client_id?: string
+          client_id?: string | null
           completed_at?: string | null
           copy_text?: string | null
           created_at?: string
@@ -1579,6 +1581,7 @@ export type Database = {
           observations?: string | null
           position?: number | null
           priority?: string
+          prospect_name?: string | null
           reference_images?: string[] | null
           references_links?: string[] | null
           sent_to_client_at?: string | null

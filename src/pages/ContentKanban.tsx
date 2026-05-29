@@ -1318,17 +1318,39 @@ export default function ContentKanban() {
             <DialogTitle>{editingTask ? 'Editar Cartão' : 'Novo Conteúdo'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="flex items-center justify-between mb-1">
+              <Label className="text-xs">Cliente *</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isUnregisteredContent"
+                  checked={isUnregistered}
+                  onChange={(e) => setIsUnregistered(e.target.checked)}
+                  className="h-3 w-3 rounded border-gray-300"
+                />
+                <label htmlFor="isUnregisteredContent" className="text-[10px] font-medium cursor-pointer">Não cadastrado</label>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs">Cliente *</Label>
-                <Select value={formClientId} onValueChange={v => { setFormClientId(v); setFormRecordingId(''); setFormScriptId(''); }}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    {clients.map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {!isUnregistered ? (
+                  <Select value={formClientId || ''} onValueChange={v => { setFormClientId(v); setFormRecordingId(''); setFormScriptId(''); }}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      {clients.map(c => (
+                        <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    value={formProspectName}
+                    onChange={e => setFormProspectName(e.target.value)}
+                    placeholder="Nome do cliente"
+                    className="h-9"
+                  />
+                )}
               </div>
               <div>
                 <Label className="text-xs">Tipo</Label>

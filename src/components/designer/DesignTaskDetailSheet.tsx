@@ -557,11 +557,11 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                     </Label>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <ClientLogo client={{ companyName: task.clients?.company_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="sm" />
+                        <ClientLogo client={{ companyName: task.clients?.company_name || task.prospect_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="sm" />
                         <div>
-                          <p className="text-sm font-medium">{task.clients?.company_name || '—'}</p>
-                          {task.clients?.responsible_person && (
-                            <p className="text-xs text-muted-foreground">{task.clients?.responsible_person || 'N/A'}</p>
+                          <p className="text-sm font-medium">{task.clients?.company_name || task.prospect_name || '—'}</p>
+                          {(task.clients?.responsible_person || !task.client_id) && (
+                            <p className="text-xs text-muted-foreground">{task.clients?.responsible_person || (task.client_id ? 'N/A' : 'Cliente Avulso')}</p>
                           )}
                         </div>
                       </div>

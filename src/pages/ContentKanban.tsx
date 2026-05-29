@@ -190,7 +190,9 @@ export default function ContentKanban() {
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
 
   // Form state
-  const [formClientId, setFormClientId] = useState('');
+  const [formClientId, setFormClientId] = useState<string | null>('');
+  const [formProspectName, setFormProspectName] = useState('');
+  const [isUnregistered, setIsUnregistered] = useState(false);
   const [formTitle, setFormTitle] = useState('');
   const [formType, setFormType] = useState('reels');
   const [formDescription, setFormDescription] = useState('');

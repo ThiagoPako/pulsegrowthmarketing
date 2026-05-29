@@ -146,7 +146,8 @@ const RocketLaunchButton = ({ label, onClick, disabled }: { label: string; onCli
 
 interface ContentTask {
   id: string;
-  client_id: string;
+  client_id: string | null;
+  prospect_name: string | null;
   title: string;
   content_type: string;
   kanban_column: string;

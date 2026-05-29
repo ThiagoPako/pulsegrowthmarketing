@@ -535,8 +535,12 @@ export default function ContentKanban() {
   };
 
   const handleSave = async () => {
-    if (!formClientId || !formTitle) {
+    if ((!formClientId && !isUnregistered) || !formTitle) {
       toast.error('Preencha cliente e título');
+      return;
+    }
+    if (isUnregistered && !formProspectName.trim()) {
+      toast.error('Informe o nome do cliente');
       return;
     }
     const payload: any = {

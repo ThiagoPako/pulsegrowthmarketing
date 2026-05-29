@@ -351,9 +351,9 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
         <div className="border-b border-border px-5 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 min-w-0">
-              <ClientLogo client={{ companyName: task.clients?.company_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="md" />
+              <ClientLogo client={{ companyName: task.clients?.company_name || task.prospect_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="md" />
               <div className="min-w-0">
-                <h2 className="text-base font-semibold truncate">{task.clients?.company_name}</h2>
+                <h2 className="text-base font-semibold truncate">{task.clients?.company_name || task.prospect_name}</h2>
                 <p className="text-xs text-muted-foreground truncate">{task.title}</p>
               </div>
             </div>

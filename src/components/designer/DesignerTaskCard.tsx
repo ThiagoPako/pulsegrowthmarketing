@@ -340,7 +340,7 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="relative">
-                  <ClientLogo client={{ companyName: task.clients?.company_name || '', color, logoUrl: task.clients?.logo_url }} size="md" />
+                  <ClientLogo client={{ companyName: task.clients?.company_name || task.prospect_name || '', color, logoUrl: task.clients?.logo_url }} size="md" />
                   {task.timer_running && (
                     <motion.div
                       animate={{ scale: [1, 1.4, 1], opacity: [0.6, 0, 0.6] }}
@@ -350,7 +350,7 @@ export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
                   )}
                 </div>
               </TooltipTrigger>
-              <TooltipContent><p className="text-xs">{task.clients?.company_name}</p></TooltipContent>
+              <TooltipContent><p className="text-xs">{task.clients?.company_name || task.prospect_name || 'Cliente avulso'}</p></TooltipContent>
             </Tooltip>
           </TooltipProvider>
 

@@ -15,7 +15,8 @@ export const DESIGN_COLUMNS: { key: DesignTaskColumn; label: string; color: stri
 
 export interface DesignTask {
   id: string;
-  client_id: string;
+  client_id: string | null;
+  prospect_name: string | null;
   title: string;
   description: string | null;
   format_type: string;

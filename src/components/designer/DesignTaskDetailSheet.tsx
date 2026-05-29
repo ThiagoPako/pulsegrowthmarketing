@@ -561,7 +561,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                         <div>
                           <p className="text-sm font-medium">{task.clients?.company_name || '—'}</p>
                           {task.clients?.responsible_person && (
-                            <p className="text-xs text-muted-foreground">{task.clients.responsible_person}</p>
+                            <p className="text-xs text-muted-foreground">{task.clients?.responsible_person || 'N/A'}</p>
                           )}
                         </div>
                       </div>

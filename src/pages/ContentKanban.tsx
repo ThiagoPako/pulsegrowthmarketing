@@ -500,7 +500,8 @@ export default function ContentKanban() {
 
   // ─── CRUD ──────────────────────────────────────────────────
   const resetForm = () => {
-    setFormClientId(''); setFormTitle(''); setFormType('reels');
+    setFormClientId(''); setFormProspectName(''); setIsUnregistered(false);
+    setFormTitle(''); setFormType('reels');
     setFormDescription(''); setFormColumn('ideias'); setFormAssignedTo('');
     setFormRecordingId(''); setFormScriptId('');
     setFormSchedDate(''); setFormSchedTime('');

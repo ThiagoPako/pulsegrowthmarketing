@@ -1139,6 +1139,7 @@ export type Database = {
           immediate_alteration: boolean
           kanban_column: string
           position: number
+          prospect_name: string | null
           recording_id: string | null
           review_deadline: string | null
           reviewing_at: string | null
@@ -1177,6 +1178,7 @@ export type Database = {
           immediate_alteration?: boolean
           kanban_column?: string
           position?: number
+          prospect_name?: string | null
           recording_id?: string | null
           review_deadline?: string | null
           reviewing_at?: string | null
@@ -1215,6 +1217,7 @@ export type Database = {
           immediate_alteration?: boolean
           kanban_column?: string
           position?: number
+          prospect_name?: string | null
           recording_id?: string | null
           review_deadline?: string | null
           reviewing_at?: string | null

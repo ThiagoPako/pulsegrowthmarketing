@@ -169,6 +169,7 @@ interface ContentTask {
   reviewing_by: string | null;
   reviewing_by_name: string | null;
   reviewing_at: string | null;
+  prospect_name: string | null;
 }
 
 export default function ContentKanban() {
@@ -189,7 +190,9 @@ export default function ContentKanban() {
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
 
   // Form state
-  const [formClientId, setFormClientId] = useState('');
+  const [formClientId, setFormClientId] = useState<string | null>('');
+  const [formProspectName, setFormProspectName] = useState('');
+  const [isUnregistered, setIsUnregistered] = useState(false);
   const [formTitle, setFormTitle] = useState('');
   const [formType, setFormType] = useState('reels');
   const [formDescription, setFormDescription] = useState('');
@@ -497,7 +500,8 @@ export default function ContentKanban() {
 
   // ─── CRUD ──────────────────────────────────────────────────
   const resetForm = () => {
-    setFormClientId(''); setFormTitle(''); setFormType('reels');
+    setFormClientId(''); setFormProspectName(''); setIsUnregistered(false);
+    setFormTitle(''); setFormType('reels');
     setFormDescription(''); setFormColumn('ideias'); setFormAssignedTo('');
     setFormRecordingId(''); setFormScriptId('');
     setFormSchedDate(''); setFormSchedTime('');
@@ -513,7 +517,9 @@ export default function ContentKanban() {
 
   const openEdit = (task: ContentTask) => {
     setEditingTask(task);
-    setFormClientId(task.client_id);
+    setFormClientId(task.client_id || '');
+    setFormProspectName(task.prospect_name || '');
+    setIsUnregistered(!task.client_id && !!task.prospect_name);
     setFormTitle(task.title);
     setFormType(task.content_type);
     setFormDescription(task.description || '');
@@ -529,12 +535,17 @@ export default function ContentKanban() {
   };
 
   const handleSave = async () => {
-    if (!formClientId || !formTitle) {
+    if ((!formClientId && !isUnregistered) || !formTitle) {
       toast.error('Preencha cliente e título');
       return;
     }
+    if (isUnregistered && !formProspectName.trim()) {
+      toast.error('Informe o nome do cliente');
+      return;
+    }
     const payload: any = {
-      client_id: formClientId,
+      client_id: isUnregistered ? null : formClientId,
+      prospect_name: isUnregistered ? formProspectName : null,
       title: formTitle,
       content_type: formType,
       kanban_column: formColumn,
@@ -1307,17 +1318,39 @@ export default function ContentKanban() {
             <DialogTitle>{editingTask ? 'Editar Cartão' : 'Novo Conteúdo'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="flex items-center justify-between mb-1">
+              <Label className="text-xs">Cliente *</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isUnregisteredContent"
+                  checked={isUnregistered}
+                  onChange={(e) => setIsUnregistered(e.target.checked)}
+                  className="h-3 w-3 rounded border-gray-300"
+                />
+                <label htmlFor="isUnregisteredContent" className="text-[10px] font-medium cursor-pointer">Não cadastrado</label>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs">Cliente *</Label>
-                <Select value={formClientId} onValueChange={v => { setFormClientId(v); setFormRecordingId(''); setFormScriptId(''); }}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    {clients.map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {!isUnregistered ? (
+                  <Select value={formClientId || ''} onValueChange={v => { setFormClientId(v); setFormRecordingId(''); setFormScriptId(''); }}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      {clients.map(c => (
+                        <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    value={formProspectName}
+                    onChange={e => setFormProspectName(e.target.value)}
+                    placeholder="Nome do cliente"
+                    className="h-9"
+                  />
+                )}
               </div>
               <div>
                 <Label className="text-xs">Tipo</Label>

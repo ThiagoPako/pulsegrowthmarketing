@@ -517,7 +517,9 @@ export default function ContentKanban() {
 
   const openEdit = (task: ContentTask) => {
     setEditingTask(task);
-    setFormClientId(task.client_id);
+    setFormClientId(task.client_id || '');
+    setFormProspectName(task.prospect_name || '');
+    setIsUnregistered(!task.client_id && !!task.prospect_name);
     setFormTitle(task.title);
     setFormType(task.content_type);
     setFormDescription(task.description || '');

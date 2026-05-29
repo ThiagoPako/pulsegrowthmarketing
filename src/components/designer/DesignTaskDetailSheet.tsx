@@ -264,7 +264,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
       if (fileUrl && task.clients?.whatsapp) {
         const fileName = fileUrl.split('/').pop() || 'arte.png';
         const result = await sendWhatsAppMediaMessage({
-          number: task.clients.whatsapp,
+          number: task.clients?.whatsapp || '',
           message: msg,
           mediaUrl: fileUrl,
           mediaFileName: fileName,
@@ -277,7 +277,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
         }
       } else if (task.clients?.whatsapp) {
         await sendWhatsAppMessage({
-          number: task.clients.whatsapp,
+          number: task.clients?.whatsapp || '',
           message: msg,
           clientId: task.client_id,
           triggerType: 'auto_design_approved',

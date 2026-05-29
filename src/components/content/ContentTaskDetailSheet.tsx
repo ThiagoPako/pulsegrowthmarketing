@@ -1006,7 +1006,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
             {client && <ClientLogo client={client} size="md" />}
             <div className="flex-1 min-w-0">
               <h2 className="text-base font-bold text-foreground truncate" style={{ fontFamily: 'var(--font-display)' }}>
-                {client?.companyName || 'Cliente'}
+                {client?.companyName || task.prospect_name || 'Cliente'}
               </h2>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className="text-lg leading-none">{colConfig?.icon}</span>

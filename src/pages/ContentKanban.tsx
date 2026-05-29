@@ -169,6 +169,7 @@ interface ContentTask {
   reviewing_by: string | null;
   reviewing_by_name: string | null;
   reviewing_at: string | null;
+  prospect_name: string | null;
 }
 
 export default function ContentKanban() {

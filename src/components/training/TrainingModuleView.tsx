@@ -93,9 +93,10 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   const loadTrackDetails = async (trackId: string) => {
     setLoading(true);
     try {
+      console.log('Loading track details for:', trackId);
       const { data: modData, error: modErr } = await supabase
         .from('training_modules')
-        .select('*')
+        .select('id, title, description, display_order')
         .eq('track_id', trackId)
         .order('display_order', { ascending: true });
 
@@ -108,18 +109,17 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
         if (moduleIds.length > 0) {
           const { data: lessData, error: lessErr } = await supabase
             .from('training_lessons')
-            .select('*')
+            .select('id, module_id, title, description, video_url, video_path, methodology_name, duration, display_order, content_markdown')
             .in('module_id', moduleIds)
             .order('display_order', { ascending: true });
 
           if (lessErr) throw lessErr;
 
-          const { data: progressData, error: progErr } = await supabase
+          const { data: progressData } = await supabase
             .from('user_training_progress')
             .select('lesson_id, status')
             .eq('user_id', userId);
 
-          // We don't throw for progress error, just fallback to not_started
           const progressMap = new Map((progressData || []).map(p => [p.lesson_id, p.status]));
 
           if (lessData) {
@@ -139,6 +139,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
       setLoading(false);
     }
   };
+
 
 
   const updateProgress = async (lessonId: string, newStatus: 'not_started' | 'in_progress' | 'completed') => {

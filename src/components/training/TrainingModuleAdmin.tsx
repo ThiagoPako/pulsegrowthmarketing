@@ -107,7 +107,7 @@ export default function TrainingModuleAdmin() {
     }).select().single();
     if (error) { toast.error('Erro ao adicionar aula'); return; }
     setLessons([...lessons, data]);
-    setLessonForm({ title: '', description: '', video_url: '', methodology_name: '', duration: '10s' });
+    setLessonForm({ title: '', description: '', video_url: '', methodology_name: '', duration: '10s', content_markdown: '' });
     toast.success('Vídeo/Aula adicionada ao slot!');
   };
 

@@ -40,7 +40,9 @@ interface Lesson {
   display_order: number;
   status?: 'not_started' | 'in_progress' | 'completed';
   content_markdown?: string;
+  thumbnail_url?: string;
 }
+
 
 export default function TrainingModuleView({ userId }: { userId: string }) {
   const [tracks, setTracks] = useState<Track[]>([]);

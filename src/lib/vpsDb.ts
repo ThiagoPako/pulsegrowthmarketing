@@ -69,10 +69,19 @@ async function executeQuery(body: any): Promise<{ data: any; error: any; count?:
     
     if (!response.ok) {
       console.error('VPS Query Error:', result.error || result.message || 'Unknown error');
-      const normalizedError = typeof result.error === 'string'
-        ? { message: result.error }
-        : (result.error || { message: result.message || `HTTP ${response.status}` });
-      return { data: null, error: normalizedError };
+      
+      // Special handling for the "Table not allowed" error to guide the user
+      const errorMessage = typeof result.error === 'string' ? result.error : (result.error?.message || result.message || `HTTP ${response.status}`);
+      if (errorMessage.includes('not allowed')) {
+        return { 
+          data: null, 
+          error: { 
+            message: `A tabela "${body.table}" não está liberada na API da sua VPS. Adicione-a ao ALLOWED_TABLES no arquivo server.mjs da VPS e reinicie a API.` 
+          } 
+        };
+      }
+      
+      return { data: null, error: { message: errorMessage } };
     }
     
     return { data: result.data, error: result.error || null, count: result.count ?? null };
@@ -81,6 +90,7 @@ async function executeQuery(body: any): Promise<{ data: any; error: any; count?:
     return { data: null, error: { message: error.message || 'Network error' } };
   }
 }
+
 
 
 type FilterOp = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'like' | 'ilike' | 'is' | 'in' | 'contains' | 'not' | 'or';

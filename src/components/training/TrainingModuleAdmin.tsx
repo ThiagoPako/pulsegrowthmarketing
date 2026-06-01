@@ -229,7 +229,8 @@ export default function TrainingModuleAdmin() {
                             <div className="grid grid-cols-2 gap-4">
                                 <Input placeholder="Duração (ex: 5-10s)" value={lessonForm.duration} onChange={e => setLessonForm({...lessonForm, duration: e.target.value})} />
                             </div>
-                            <Textarea placeholder="Instruções para o colaborador" value={lessonForm.description} onChange={e => setLessonForm({...lessonForm, description: e.target.value})} />
+                            <Textarea placeholder="Instruções curtas" value={lessonForm.description} onChange={e => setLessonForm({...lessonForm, description: e.target.value})} />
+                            <Textarea placeholder="Conteúdo detalhado (Markdown)" value={lessonForm.content_markdown} onChange={e => setLessonForm({...lessonForm, content_markdown: e.target.value})} rows={6} />
                             <Button className="w-full" onClick={() => createLesson(mod.id)}>Salvar Slot</Button>
                           </div>
                         </DialogContent>

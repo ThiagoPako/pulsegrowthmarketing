@@ -435,11 +435,12 @@ export default function TrainingModuleAdmin() {
                               </div>
                             ) : (
                               <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center">
-                                <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:scale-110 transition-transform duration-300">
+                                <div className="w-16 h-16 rounded-2xl bg-red-600/10 flex items-center justify-center mb-3 text-red-600 group-hover:scale-110 transition-transform duration-300">
                                   <Upload size={32} />
                                 </div>
-                                <p className="text-xs font-bold text-primary/60 uppercase tracking-tighter mb-1">Slot Vazio</p>
-                                <p className="text-[10px] text-muted-foreground leading-tight px-4">Arraste um vídeo aqui ou clique para selecionar</p>
+                                <p className="text-xs font-bold text-red-600/60 uppercase tracking-tighter mb-1">Slot Vazio</p>
+                                <p className="text-[10px] text-muted-foreground leading-tight px-4 font-bold uppercase tracking-widest">Clique para subir vídeo</p>
+
                                 
                                 <Button 
                                   variant="outline" 

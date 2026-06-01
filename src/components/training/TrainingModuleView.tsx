@@ -31,6 +31,7 @@ interface Lesson {
   title: string;
   description: string;
   video_url: string;
+  video_path?: string;
   methodology_name: string;
   duration: string;
   display_order: number;
@@ -269,6 +270,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                     src={currentVideo.video_url.includes('youtube') ? currentVideo.video_url.replace('watch?v=', 'embed/') : currentVideo.video_url} 
                     className="w-full h-full" 
                     allowFullScreen 
+                    key={currentVideo.video_url}
                   />
                 ) : (
                   <div className="w-full h-full relative">

@@ -55,13 +55,14 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
 
   useEffect(() => {
     loadTracks();
-  }, []);
+  }, [forceUpdate]);
 
   useEffect(() => {
     if (selectedTrack) {
       loadTrackDetails(selectedTrack.id);
     }
-  }, [selectedTrack]);
+  }, [selectedTrack, forceUpdate]);
+
 
   const loadTracks = async () => {
     try {

@@ -155,7 +155,72 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
     } finally {
       setLoading(false);
     }
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, lessonId: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('video/')) {
+      toast.error('Selecione um arquivo de vídeo.');
+      return;
+    }
+
+    setUploading(lessonId);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('path', 'training-videos');
+
+      const token = localStorage.getItem('pulse_jwt');
+      const response = await fetch('https://agenciapulse.tech/api/upload', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Erro no upload');
+
+      const videoUrl = result.url;
+      const { error: updateError } = await supabase
+        .from('training_lessons')
+        .update({ video_url: videoUrl, video_path: result.path || videoUrl } as any)
+        .eq('id', lessonId);
+
+      if (updateError) throw updateError;
+
+      setLessons(prev => prev.map(l => 
+        l.id === lessonId ? { ...l, video_url: videoUrl, video_path: result.path || videoUrl } : l
+      ));
+
+      toast.success('Vídeo enviado com sucesso!');
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      toast.error('Erro no upload: ' + error.message);
+    } finally {
+      setUploading(null);
+      setSelectedFile(null);
+      setUploadModalLesson(null);
+      if (modalFileInputRef.current) modalFileInputRef.current.value = '';
+    }
   };
+
+  const handleModalFileUpload = () => {
+    if (selectedFile && uploadModalLesson) {
+      const mockEvent = {
+        target: { files: [selectedFile] }
+      } as unknown as React.ChangeEvent<HTMLInputElement>;
+      handleFileUpload(mockEvent, uploadModalLesson.id);
+    }
+  };
+
+  const deleteLesson = async (id: string) => {
+    if (!confirm('Excluir este vídeo (limpar o slot)?')) return;
+    const { error } = await supabase.from('training_lessons').update({ video_url: null, video_path: null } as any).eq('id', id);
+    if (!error) {
+      setLessons(prev => prev.map(l => l.id === id ? { ...l, video_url: '', video_path: undefined } : l));
+      toast.success('Vídeo removido do slot');
+    }
+  };
+
 
 
 

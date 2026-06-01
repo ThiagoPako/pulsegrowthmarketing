@@ -117,7 +117,7 @@ export default function DesignTaskCreateDialog({ open, onOpenChange }: Props) {
         due_date: dueDate || null,
         created_by: user?.id || null,
         kanban_column: 'nova_tarefa',
-        position: Date.now(), // High initial position
+        position: 0, // Posicionamento inicial seguro no topo
       } as any);
 
       // Notify designers

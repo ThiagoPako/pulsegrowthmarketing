@@ -352,30 +352,57 @@ export default function TrainingModuleAdmin() {
                 </Dialog>
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-8">
+                {modules.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-20 bg-zinc-900/30 rounded-[2.5rem] border border-dashed border-white/5">
+                    <FolderPlus size={40} className="text-zinc-700 mb-4" />
+                    <p className="text-sm font-bold uppercase tracking-widest text-zinc-500 italic">Nenhum módulo nesta trilha</p>
+                  </div>
+                )}
                 {modules.map(mod => (
-                  <div key={mod.id} className="border border-border rounded-xl p-4 space-y-4 bg-card shadow-sm">
+                  <div key={mod.id} className="bg-zinc-900/40 border border-white/5 rounded-[2.5rem] p-8 space-y-6 shadow-2xl relative overflow-hidden group/mod">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-red-600/40 group-hover/mod:bg-red-600 transition-colors" />
                     <div className="flex justify-between items-center">
-                      <h4 className="font-bold flex items-center gap-2">
-                        <Badge variant="outline">{mod.display_order + 1}</Badge>
-                        {mod.title}
-                      </h4>
+                      <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-2xl bg-red-600/10 border border-red-600/20 flex items-center justify-center text-red-600 font-black text-xl italic shadow-lg shadow-red-600/5">
+                          {mod.display_order + 1}
+                        </div>
+                        <h4 className="font-black italic uppercase tracking-tighter text-xl text-white">
+                          {mod.title}
+                        </h4>
+                      </div>
                       <Dialog>
                         <DialogTrigger asChild>
-                          <Button size="sm" variant="ghost" className="text-primary h-8"><Plus size={14} className="mr-1" /> Add Vídeo Slot</Button>
+                          <Button size="sm" variant="ghost" className="text-red-600 hover:bg-red-600 hover:text-white rounded-full font-black uppercase italic tracking-widest text-[10px] h-10 px-6 border border-red-600/10 transition-all shadow-xl"><Plus size={14} className="mr-2" /> Add Vídeo Slot</Button>
                         </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader><DialogTitle>Novo Slot de Vídeo/Metodologia</DialogTitle></DialogHeader>
-                          <div className="space-y-4 pt-4">
-                            <Input placeholder="Título (ex: Caminhada Dinâmica)" value={lessonForm.title} onChange={e => setLessonForm({...lessonForm, title: e.target.value})} />
-                            <Input placeholder="Nome da Metodologia (ex: Dynamic Entry)" value={lessonForm.methodology_name} onChange={e => setLessonForm({...lessonForm, methodology_name: e.target.value})} />
-                            <Input placeholder="URL do Vídeo (YouTube/Vimeo ou Direto)" value={lessonForm.video_url} onChange={e => setLessonForm({...lessonForm, video_url: e.target.value})} />
-                            <div className="grid grid-cols-2 gap-4">
-                                <Input placeholder="Duração (ex: 5-10s)" value={lessonForm.duration} onChange={e => setLessonForm({...lessonForm, duration: e.target.value})} />
+                        <DialogContent className="bg-[#1a1a1a] border-white/10 text-white rounded-[2rem] sm:max-w-xl">
+                          <DialogHeader><DialogTitle className="italic uppercase font-black">Novo Slot de Vídeo Elite</DialogTitle></DialogHeader>
+                          <div className="space-y-4 pt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="md:col-span-2 space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 ml-2">Título da Aula</label>
+                              <Input placeholder="Caminhada Dinâmica" value={lessonForm.title} onChange={e => setLessonForm({...lessonForm, title: e.target.value})} className="bg-zinc-900 border-white/10 h-12 rounded-2xl" />
                             </div>
-                            <Textarea placeholder="Instruções curtas" value={lessonForm.description} onChange={e => setLessonForm({...lessonForm, description: e.target.value})} />
-                            <Textarea placeholder="Conteúdo detalhado (Markdown)" value={lessonForm.content_markdown} onChange={e => setLessonForm({...lessonForm, content_markdown: e.target.value})} rows={6} />
-                            <Button className="w-full" onClick={() => createLesson(mod.id)}>Salvar Slot</Button>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 ml-2">Método (Subtítulo)</label>
+                              <Input placeholder="Dynamic Entry" value={lessonForm.methodology_name} onChange={e => setLessonForm({...lessonForm, methodology_name: e.target.value})} className="bg-zinc-900 border-white/10 h-12 rounded-2xl" />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 ml-2">Duração (S)</label>
+                              <Input placeholder="10s" value={lessonForm.duration} onChange={e => setLessonForm({...lessonForm, duration: e.target.value})} className="bg-zinc-900 border-white/10 h-12 rounded-2xl" />
+                            </div>
+                            <div className="md:col-span-2 space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 ml-2">Vídeo URL (Opcional)</label>
+                              <Input placeholder="URL do Vídeo" value={lessonForm.video_url} onChange={e => setLessonForm({...lessonForm, video_url: e.target.value})} className="bg-zinc-900 border-white/10 h-12 rounded-2xl" />
+                            </div>
+                            <div className="md:col-span-2 space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 ml-2">Descrição Curta</label>
+                              <Textarea placeholder="Instruções para o treinamento..." value={lessonForm.description} onChange={e => setLessonForm({...lessonForm, description: e.target.value})} className="bg-zinc-900 border-white/10 rounded-2xl resize-none" rows={3} />
+                            </div>
+                            <div className="md:col-span-2 space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 ml-2">Guia de Apoio (Markdown)</label>
+                              <Textarea placeholder="Conteúdo detalhado..." value={lessonForm.content_markdown} onChange={e => setLessonForm({...lessonForm, content_markdown: e.target.value})} className="bg-zinc-900 border-white/10 rounded-2xl min-h-[150px]" rows={6} />
+                            </div>
+                            <Button className="md:col-span-2 bg-red-600 hover:bg-red-700 h-12 rounded-2xl font-black uppercase italic tracking-widest mt-4" onClick={() => createLesson(mod.id)}>Salvar Slot de Elite</Button>
                           </div>
                         </DialogContent>
                       </Dialog>

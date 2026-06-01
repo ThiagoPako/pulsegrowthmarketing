@@ -583,10 +583,11 @@ export default function TrainingModuleAdmin() {
               </div>
             ) : (
               <>
-                <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:scale-110 transition-transform duration-300">
+                <div className="w-16 h-16 rounded-2xl bg-red-600/10 flex items-center justify-center mb-3 text-red-600 group-hover:scale-110 transition-transform duration-300">
                   <Upload size={32} />
                 </div>
-                <p className="text-sm font-bold text-white mb-1">Clique para selecionar</p>
+                <p className="text-sm font-black italic uppercase tracking-widest text-white mb-1">Clique para selecionar</p>
+
                 <p className="text-[10px] text-gray-500 uppercase tracking-widest">Formatos aceitos: MP4, MOV, WEBM</p>
               </>
             )}

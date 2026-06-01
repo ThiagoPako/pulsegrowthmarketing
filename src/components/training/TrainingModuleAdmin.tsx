@@ -142,7 +142,22 @@ export default function TrainingModuleAdmin() {
             <div className="space-y-4 pt-4">
               <Input placeholder="Título da Trilha (ex: Metodologia de Captação)" value={trackForm.title} onChange={e => setTrackForm({...trackForm, title: e.target.value})} />
               <Textarea placeholder="Descrição curta" value={trackForm.description} onChange={e => setTrackForm({...trackForm, description: e.target.value})} />
-              <Input placeholder="Categoria (ex: Videomaker, Social Media)" value={trackForm.category} onChange={e => setTrackForm({...trackForm, category: e.target.value})} />
+              <div className="grid grid-cols-2 gap-4">
+                <Input placeholder="Categoria" value={trackForm.category} onChange={e => setTrackForm({...trackForm, category: e.target.value})} />
+                <Input placeholder="Tempo Estimado (ex: 2h)" value={trackForm.estimated_time} onChange={e => setTrackForm({...trackForm, estimated_time: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Dificuldade</label>
+                <Select value={trackForm.difficulty} onValueChange={val => setTrackForm({...trackForm, difficulty: val})}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Iniciante">Iniciante</SelectItem>
+                    <SelectItem value="Intermediário">Intermediário</SelectItem>
+                    <SelectItem value="Avançado">Avançado</SelectItem>
+                    <SelectItem value="Especialista">Especialista</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <Button className="w-full" onClick={createTrack}>Criar Trilha</Button>
             </div>
           </DialogContent>

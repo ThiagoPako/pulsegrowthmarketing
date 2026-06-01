@@ -86,38 +86,54 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
 
   const loadTrackDetails = async (trackId: string) => {
     setLoading(true);
-    const { data: modData } = await supabase
-      .from('training_modules')
-      .select('*')
-      .eq('track_id', trackId)
-      .order('display_order', { ascending: true });
-
-    if (modData) {
-      setModules(modData);
-      const moduleIds = modData.map(m => m.id);
-      
-      const { data: lessData } = await supabase
-        .from('training_lessons')
+    try {
+      const { data: modData, error: modErr } = await supabase
+        .from('training_modules')
         .select('*')
-        .in('module_id', moduleIds)
+        .eq('track_id', trackId)
         .order('display_order', { ascending: true });
 
-      const { data: progressData } = await supabase
-        .from('user_training_progress')
-        .select('lesson_id, status')
-        .eq('user_id', userId);
+      if (modErr) throw modErr;
 
-      const progressMap = new Map((progressData || []).map(p => [p.lesson_id, p.status]));
+      if (modData) {
+        setModules(modData);
+        const moduleIds = modData.map(m => m.id);
+        
+        if (moduleIds.length > 0) {
+          const { data: lessData, error: lessErr } = await supabase
+            .from('training_lessons')
+            .select('*')
+            .in('module_id', moduleIds)
+            .order('display_order', { ascending: true });
 
-      if (lessData) {
-        setLessons(lessData.map(l => ({
-          ...l,
-          status: progressMap.get(l.id) || 'not_started'
-        })));
+          if (lessErr) throw lessErr;
+
+          const { data: progressData, error: progErr } = await supabase
+            .from('user_training_progress')
+            .select('lesson_id, status')
+            .eq('user_id', userId);
+
+          // We don't throw for progress error, just fallback to not_started
+          const progressMap = new Map((progressData || []).map(p => [p.lesson_id, p.status]));
+
+          if (lessData) {
+            setLessons(lessData.map(l => ({
+              ...l,
+              status: progressMap.get(l.id) || 'not_started'
+            })));
+          }
+        } else {
+          setLessons([]);
+        }
       }
+    } catch (error: any) {
+      console.error('Error loading track details:', error);
+      toast.error('Erro ao carregar detalhes do treinamento');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
+
 
   const updateProgress = async (lessonId: string, newStatus: 'not_started' | 'in_progress' | 'completed') => {
     const { data: existing } = await supabase

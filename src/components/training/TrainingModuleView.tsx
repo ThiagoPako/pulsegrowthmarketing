@@ -48,18 +48,21 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   const [currentVideo, setCurrentVideo] = useState<Lesson | null>(null);
   const [showPlayer, setShowPlayer] = useState(false);
   const [hoveredTrack, setHoveredTrack] = useState<string | null>(null);
+  const [forceUpdate, setForceUpdate] = useState(0);
+
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadTracks();
-  }, []);
+  }, [forceUpdate]);
 
   useEffect(() => {
     if (selectedTrack) {
       loadTrackDetails(selectedTrack.id);
     }
-  }, [selectedTrack]);
+  }, [selectedTrack, forceUpdate]);
+
 
   const loadTracks = async () => {
     try {
@@ -75,11 +78,13 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
         return;
       }
       
-      console.log('Tracks loaded:', data?.length);
+      console.log('Tracks loaded:', data);
       if (data) {
-        // Fallback filter in JS if eq('is_active', true) was problematic
-        const activeTracks = data.filter(t => t.is_active !== false);
-        setTracks(activeTracks);
+        setTracks(data);
+        if (data.length > 0 && !selectedTrack) {
+           // Auto-select first track to show content if it's empty
+           console.log('Auto-selecting track:', data[0].title);
+        }
       }
     } catch (err) {
       console.error('Unexpected error loading tracks:', err);
@@ -87,6 +92,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
       setLoading(false);
     }
   };
+
 
 
 
@@ -196,12 +202,15 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
         <div className="space-y-12 pb-20">
           {/* Billboard */}
           <div className="relative h-[80vh] -mt-6 -mx-6 mb-12 overflow-hidden">
-            <div className="absolute top-6 left-12 z-50">
+            <div className="absolute top-6 left-12 z-50 flex items-center gap-4">
               <h2 className="text-2xl font-black italic uppercase tracking-tighter text-red-600">Pulse <span className="text-white">Academy</span></h2>
+              <Button size="sm" variant="ghost" className="text-[10px] text-white/20 hover:text-white h-7" onClick={() => setForceUpdate(p => p + 1)}>Recarregar Dados</Button>
             </div>
+
             
             <div className="absolute top-6 right-12 z-50 flex items-center gap-6">
                <button onClick={() => window.location.href = '/dashboard'} className="text-sm font-bold text-white/70 hover:text-white transition-colors">Dashboard</button>
+
                <div className="w-10 h-10 rounded bg-red-600 flex items-center justify-center font-bold text-sm">P</div>
             </div>
 

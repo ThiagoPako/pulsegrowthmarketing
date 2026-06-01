@@ -382,13 +382,7 @@ export default function TrainingModuleAdmin() {
                                   variant="outline" 
                                   size="sm" 
                                   className="mt-4 h-8 bg-transparent border-primary/20 text-primary hover:bg-primary hover:text-white transition-all text-[10px] font-bold uppercase tracking-widest"
-                                  onClick={() => {
-                                    const input = document.createElement('input');
-                                    input.type = 'file';
-                                    input.accept = 'video/*';
-                                    input.onchange = (e) => handleFileUpload(e as any, lesson.id);
-                                    input.click();
-                                  }}
+                                  onClick={() => setUploadModalLesson(lesson)}
                                   disabled={uploading === lesson.id}
                                 >
                                   {uploading === lesson.id ? <Loader2 size={12} className="animate-spin mr-2" /> : <Plus size={12} className="mr-2" />}

@@ -6,14 +6,17 @@ import { invokeCloudFunction } from '@/services/vpsEdgeFunctions';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import {
   Plus, Trash2, Save, BookOpen, Eye, ArrowUp, ArrowDown,
   Loader2, Presentation, ChevronLeft, Sparkles, Wand2,
-  Play, ChevronRight, X
+  Play, ChevronRight, X, GraduationCap, Video
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { CLIENT_COLORS } from '@/types';
+import TrainingModuleView from '@/components/training/TrainingModuleView';
+import TrainingModuleAdmin from '@/components/training/TrainingModuleAdmin';
 
 interface PresentationData {
   id: string;
@@ -203,33 +206,72 @@ export default function TrainingManager() {
   };
 
   return (
-      <div className="p-6 max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {selectedPres && (
-              <Button variant="ghost" size="icon" onClick={() => { setSelectedPres(null); setEditingSlide(null); }}>
-                <ChevronLeft size={18} />
-              </Button>
-            )}
-            <BookOpen size={24} className="text-primary" />
-            <h1 className="text-xl font-bold">{selectedPres ? selectedPres.title : 'Treinamento Comercial'}</h1>
-          </div>
-          {selectedPres && (
-            <div className="flex gap-2">
-              {slides.length > 0 && (
-                <Button variant="default" size="sm" onClick={() => { setCurrentSlideIndex(0); setPresenting(true); }}>
-                  <Play size={14} className="mr-1" /> Apresentar
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <GraduationCap size={24} className="text-primary" />
+          <h1 className="text-2xl font-bold">Módulo de Treinamento</h1>
+        </div>
+      </div>
+
+      <Tabs defaultValue="structured" className="w-full">
+        <TabsList className="grid w-full max-w-md grid-cols-2 mb-8">
+          <TabsTrigger value="structured" className="flex items-center gap-2">
+            <Video size={16} /> Metodologia
+          </TabsTrigger>
+          <TabsTrigger value="presentations" className="flex items-center gap-2">
+            <Presentation size={16} /> Apresentações
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="structured" className="mt-0">
+          {currentUser?.role === 'admin' ? (
+            <Tabs defaultValue="view" className="space-y-4">
+              <div className="flex justify-end mb-4">
+                <TabsList>
+                  <TabsTrigger value="view">Visualizar</TabsTrigger>
+                  <TabsTrigger value="admin">Gerenciar Slots</TabsTrigger>
+                </TabsList>
+              </div>
+              <TabsContent value="view">
+                <TrainingModuleView userId={user?.id || ''} />
+              </TabsContent>
+              <TabsContent value="admin">
+                <TrainingModuleAdmin />
+              </TabsContent>
+            </Tabs>
+          ) : (
+            <TrainingModuleView userId={user?.id || ''} />
+          )}
+        </TabsContent>
+
+        <TabsContent value="presentations" className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {selectedPres && (
+                <Button variant="ghost" size="icon" onClick={() => { setSelectedPres(null); setEditingSlide(null); }}>
+                  <ChevronLeft size={18} />
                 </Button>
               )}
-              <Button variant={selectedPres.status === 'publicado' ? 'secondary' : 'default'} size="sm" onClick={togglePublish}>
-                <Eye size={14} className="mr-1" />
-                {selectedPres.status === 'publicado' ? 'Despublicar' : 'Publicar'}
-              </Button>
-              <Button variant="destructive" size="sm" onClick={deletePresentation}><Trash2 size={14} /></Button>
+              <BookOpen size={24} className="text-primary" />
+              <h1 className="text-xl font-bold">{selectedPres ? selectedPres.title : 'Treinamento Comercial (Slides)'}</h1>
             </div>
-          )}
-        </div>
+            {selectedPres && (
+              <div className="flex gap-2">
+                {slides.length > 0 && (
+                  <Button variant="default" size="sm" onClick={() => { setCurrentSlideIndex(0); setPresenting(true); }}>
+                    <Play size={14} className="mr-1" /> Apresentar
+                  </Button>
+                )}
+                <Button variant={selectedPres.status === 'publicado' ? 'secondary' : 'default'} size="sm" onClick={togglePublish}>
+                  <Eye size={14} className="mr-1" />
+                  {selectedPres.status === 'publicado' ? 'Despublicar' : 'Publicar'}
+                </Button>
+                <Button variant="destructive" size="sm" onClick={deletePresentation}><Trash2 size={14} /></Button>
+              </div>
+            )}
+          </div>
 
         {!selectedPres ? (
           <>

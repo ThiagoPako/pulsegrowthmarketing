@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Trash2, Edit2, GripVertical, Video, FolderPlus, BookOpen } from 'lucide-react';
+import { Plus, Trash2, Edit2, GripVertical, Video, FolderPlus, BookOpen, Upload, Loader2, Play } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Track {
@@ -34,6 +34,7 @@ interface Lesson {
   title: string;
   description: string;
   video_url: string;
+  video_path?: string;
   methodology_name: string;
   duration: string;
   display_order: number;
@@ -45,6 +46,8 @@ export default function TrainingModuleAdmin() {
   const [modules, setModules] = useState<Module[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form states
   const [trackForm, setTrackForm] = useState({ title: '', description: '', category: 'Metodologia', estimated_time: '', difficulty: 'Iniciante' });
@@ -126,6 +129,59 @@ export default function TrainingModuleAdmin() {
     if (!error) {
       setLessons(lessons.filter(l => l.id !== id));
       toast.success('Aula removida');
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, lessonId: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check if it's a video
+    if (!file.type.startsWith('video/')) {
+      toast.error('Por favor, selecione um arquivo de vídeo.');
+      return;
+    }
+
+    setUploading(lessonId);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+      const filePath = `lessons/${fileName}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('training-videos')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('training-videos')
+        .getPublicUrl(filePath);
+
+      // Update lesson in DB
+      const { error: updateError } = await supabase
+        .from('training_lessons')
+        .update({ 
+          video_url: publicUrl,
+          video_path: filePath 
+        } as any)
+        .eq('id', lessonId);
+
+      if (updateError) throw updateError;
+
+      // Update local state
+      setLessons(prev => prev.map(l => 
+        l.id === lessonId ? { ...l, video_url: publicUrl, video_path: filePath } : l
+      ));
+
+      toast.success('Vídeo enviado com sucesso!');
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      toast.error('Erro ao fazer upload do vídeo: ' + error.message);
+    } finally {
+      setUploading(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -239,19 +295,44 @@ export default function TrainingModuleAdmin() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {lessons.filter(l => l.module_id === mod.id).map(lesson => (
-                        <div key={lesson.id} className="p-3 bg-secondary/20 rounded-lg flex items-center justify-between group">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center text-primary">
-                              <Video size={18} />
+                        <div key={lesson.id} className="p-3 bg-secondary/20 rounded-lg flex flex-col gap-3 group">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center text-primary">
+                                {lesson.video_url ? <Play size={18} /> : <Video size={18} />}
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold">{lesson.title}</p>
+                                <p className="text-[10px] text-muted-foreground">{lesson.methodology_name} • {lesson.duration}</p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="text-sm font-semibold">{lesson.title}</p>
-                              <p className="text-[10px] text-muted-foreground">{lesson.methodology_name} • {lesson.duration}</p>
+                            <div className="flex items-center gap-1">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 text-primary hover:bg-primary/10"
+                                onClick={() => {
+                                  const input = document.createElement('input');
+                                  input.type = 'file';
+                                  input.accept = 'video/*';
+                                  input.onchange = (e) => handleFileUpload(e as any, lesson.id);
+                                  input.click();
+                                }}
+                                disabled={uploading === lesson.id}
+                              >
+                                {uploading === lesson.id ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => deleteLesson(lesson.id)}>
+                                <Trash2 size={14} />
+                              </Button>
                             </div>
                           </div>
-                          <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 h-8 w-8 text-destructive" onClick={() => deleteLesson(lesson.id)}>
-                            <Trash2 size={14} />
-                          </Button>
+                          
+                          {lesson.video_url && (
+                            <div className="text-[10px] text-muted-foreground truncate bg-background/50 p-1 px-2 rounded">
+                              Link: <a href={lesson.video_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{lesson.video_url}</a>
+                            </div>
+                          )}
                         </div>
                       ))}
                       {lessons.filter(l => l.module_id === mod.id).length === 0 && (

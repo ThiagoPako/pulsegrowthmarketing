@@ -220,7 +220,21 @@ export default function TrainingModuleAdmin() {
       toast.error('Erro ao fazer upload do vídeo: ' + error.message);
     } finally {
       setUploading(null);
+      setSelectedFile(null);
+      setUploadModalLesson(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
+      if (modalFileInputRef.current) modalFileInputRef.current.value = '';
+    }
+  };
+
+  const handleModalFileUpload = () => {
+    if (selectedFile && uploadModalLesson) {
+      const mockEvent = {
+        target: {
+          files: [selectedFile]
+        }
+      } as unknown as React.ChangeEvent<HTMLInputElement>;
+      handleFileUpload(mockEvent, uploadModalLesson.id);
     }
   };
 

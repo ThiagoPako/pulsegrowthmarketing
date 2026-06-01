@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Play, CheckCircle2, Circle, Clock, ChevronRight, ChevronLeft, Info, X } from 'lucide-react';
+import { Play, CheckCircle2, Circle, Clock, ChevronRight, ChevronLeft, Info, X, Video } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 

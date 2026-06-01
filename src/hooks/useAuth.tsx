@@ -40,7 +40,7 @@ interface AuthContextType {
   session: { access_token: string } | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, name: string, role: AppRole) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, name: string, role: AppRole, isSelfRegister?: boolean) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<void>;
   refreshProfile: () => Promise<void>;

@@ -302,20 +302,25 @@ export default function TrainingModuleAdmin() {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {/* Track List */}
-        <div className="md:col-span-1 space-y-2">
+        <div className="md:col-span-1 space-y-2 overflow-y-auto max-h-[70vh] pr-2">
+          {tracks.length === 0 && !loading && (
+            <div className="p-4 text-center border border-dashed rounded-lg text-muted-foreground text-xs">
+              Nenhuma trilha encontrada
+            </div>
+          )}
           {tracks.map(track => (
             <div 
               key={track.id} 
               onClick={() => setSelectedTrack(track)}
-              className={`p-3 rounded-lg border cursor-pointer transition-all group relative ${selectedTrack?.id === track.id ? 'border-primary bg-primary/5 shadow-sm' : 'border-border hover:border-primary/50'}`}
+              className={`p-4 rounded-xl border cursor-pointer transition-all group relative ${selectedTrack?.id === track.id ? 'border-red-600 bg-red-600/5 shadow-[0_0_15px_rgba(220,38,38,0.1)]' : 'border-white/5 hover:border-white/20 bg-zinc-900/40'}`}
             >
-              <p className="font-semibold text-sm truncate">{track.title}</p>
-              <p className="text-[10px] text-muted-foreground">{track.category}</p>
+              <p className="font-black italic uppercase tracking-tighter text-sm truncate">{track.title}</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-1">{track.category}</p>
               <button 
                 onClick={(e) => { e.stopPropagation(); deleteTrack(track.id); }}
-                className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 p-1 text-destructive hover:bg-destructive/10 rounded transition-opacity"
+                className="absolute right-3 top-4 opacity-0 group-hover:opacity-100 p-1.5 text-red-500 hover:bg-red-500/10 rounded-full transition-all"
               >
-                <Trash2 size={12} />
+                <Trash2 size={14} />
               </button>
             </div>
           ))}

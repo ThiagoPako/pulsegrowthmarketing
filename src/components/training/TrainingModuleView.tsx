@@ -204,8 +204,9 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
           <div className="relative h-[80vh] -mt-6 -mx-6 mb-12 overflow-hidden">
             <div className="absolute top-6 left-12 z-50 flex items-center gap-4">
               <h2 className="text-2xl font-black italic uppercase tracking-tighter text-red-600">Pulse <span className="text-white">Academy</span></h2>
-              <Button size="xs" variant="ghost" className="text-[10px] text-white/20 hover:text-white" onClick={() => setForceUpdate(p => p + 1)}>Recarregar Dados</Button>
+              <Button size="sm" variant="ghost" className="text-[10px] text-white/20 hover:text-white h-7" onClick={() => setForceUpdate(p => p + 1)}>Recarregar Dados</Button>
             </div>
+
             
             <div className="absolute top-6 right-12 z-50 flex items-center gap-6">
                <button onClick={() => window.location.href = '/dashboard'} className="text-sm font-bold text-white/70 hover:text-white transition-colors">Dashboard</button>

@@ -81,7 +81,7 @@ export default function TrainingModuleAdmin() {
     const { data, error } = await supabase.from('training_tracks').insert(trackForm).select().single();
     if (error) { toast.error('Erro ao criar trilha'); return; }
     setTracks([data, ...tracks]);
-    setTrackForm({ title: '', description: '', category: 'Metodologia' });
+    setTrackForm({ title: '', description: '', category: 'Metodologia', estimated_time: '', difficulty: 'Iniciante' });
     toast.success('Trilha criada com sucesso!');
   };
 

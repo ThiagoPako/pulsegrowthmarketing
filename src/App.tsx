@@ -79,6 +79,7 @@ const CancellationReports = lazy(() => import("@/pages/CancellationReports"));
 const EventRegistration = lazy(() => import("@/pages/EventRegistration"));
 const TrainingManager = lazy(() => import("@/pages/TrainingManager"));
 const CRM = lazy(() => import("@/pages/CRM"));
+const Training = lazy(() => import("@/pages/Training"));
 
 
 const queryClient = new QueryClient({

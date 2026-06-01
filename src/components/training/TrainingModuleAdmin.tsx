@@ -81,15 +81,23 @@ export default function TrainingModuleAdmin() {
   };
 
   const createTrack = async () => {
+    if (!trackForm.title.trim()) {
+      toast.error('O título da trilha é obrigatório');
+      return;
+    }
     const { data, error } = await supabase.from('training_tracks').insert(trackForm).select().single();
     if (error) { toast.error('Erro ao criar trilha'); return; }
     setTracks([data, ...tracks]);
+    setSelectedTrack(data);
     setTrackForm({ title: '', description: '', category: 'Metodologia', estimated_time: '', difficulty: 'Iniciante' });
-    toast.success('Trilha criada com sucesso!');
+    toast.success('Trilha/Curso criado com sucesso!');
   };
 
   const createModule = async () => {
-    if (!selectedTrack) return;
+    if (!selectedTrack || !moduleForm.title.trim()) {
+      toast.error('O título do módulo é obrigatório');
+      return;
+    }
     const { data, error } = await supabase.from('training_modules').insert({ 
       ...moduleForm, 
       track_id: selectedTrack.id,
@@ -98,10 +106,14 @@ export default function TrainingModuleAdmin() {
     if (error) { toast.error('Erro ao criar módulo'); return; }
     setModules([...modules, data]);
     setModuleForm({ title: '' });
-    toast.success('Módulo criado!');
+    toast.success('Módulo adicionado!');
   };
 
   const createLesson = async (moduleId: string) => {
+    if (!lessonForm.title.trim()) {
+      toast.error('O título da aula é obrigatório');
+      return;
+    }
     const moduleLessons = lessons.filter(l => l.module_id === moduleId);
     const { data, error } = await supabase.from('training_lessons').insert({ 
       ...lessonForm, 
@@ -111,7 +123,7 @@ export default function TrainingModuleAdmin() {
     if (error) { toast.error('Erro ao adicionar aula'); return; }
     setLessons([...lessons, data]);
     setLessonForm({ title: '', description: '', video_url: '', methodology_name: '', duration: '10s', content_markdown: '' });
-    toast.success('Vídeo/Aula adicionada ao slot!');
+    toast.success('Aula adicionada ao módulo!');
   };
 
   const deleteTrack = async (id: string) => {

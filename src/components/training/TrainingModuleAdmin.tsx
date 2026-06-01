@@ -445,10 +445,11 @@ export default function TrainingModuleAdmin() {
                                 <Button 
                                   variant="outline" 
                                   size="sm" 
-                                  className="mt-4 h-8 bg-transparent border-primary/20 text-primary hover:bg-primary hover:text-white transition-all text-[10px] font-bold uppercase tracking-widest"
+                                  className="mt-4 h-8 bg-transparent border-red-600/20 text-red-600 hover:bg-red-600 hover:text-white transition-all text-[10px] font-black uppercase italic tracking-widest px-6 rounded-full"
                                   onClick={() => setUploadModalLesson(lesson)}
                                   disabled={uploading === lesson.id}
                                 >
+
                                   {uploading === lesson.id ? <Loader2 size={12} className="animate-spin mr-2" /> : <Plus size={12} className="mr-2" />}
                                   Selecionar Vídeo
                                 </Button>

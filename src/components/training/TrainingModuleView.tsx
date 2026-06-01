@@ -1,14 +1,17 @@
-
 import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Play, CheckCircle2, Circle, Clock, ChevronRight, ChevronLeft, Info, X, Video, FileText } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Play, CheckCircle2, Circle, Clock, ChevronRight, ChevronLeft, Info, X, Video, FileText, Plus, Trash2, FolderPlus, Loader2, FileVideo, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 
+
 interface Track {
+
   id: string;
   title: string;
   description: string;
@@ -37,7 +40,9 @@ interface Lesson {
   display_order: number;
   status?: 'not_started' | 'in_progress' | 'completed';
   content_markdown?: string;
+  thumbnail_url?: string;
 }
+
 
 export default function TrainingModuleView({ userId }: { userId: string }) {
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -49,9 +54,14 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   const [showPlayer, setShowPlayer] = useState(false);
   const [hoveredTrack, setHoveredTrack] = useState<string | null>(null);
   const [forceUpdate, setForceUpdate] = useState(0);
-
-
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [uploadModalLesson, setUploadModalLesson] = useState<Lesson | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const modalFileInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
+
 
   useEffect(() => {
     loadTracks();
@@ -140,11 +150,78 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
       }
     } catch (error: any) {
       console.error('Error loading track details:', error);
-      toast.error('Erro ao carregar detalhes do treinamento');
+      toast.error('Erro ao carregar detalhes: ' + (error.message || 'Falha na API'));
     } finally {
       setLoading(false);
     }
   };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, lessonId: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('video/')) {
+      toast.error('Selecione um arquivo de vídeo.');
+      return;
+    }
+
+    setUploading(lessonId);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('path', 'training-videos');
+
+      const token = localStorage.getItem('pulse_jwt');
+      const response = await fetch('https://agenciapulse.tech/api/upload', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Erro no upload');
+
+      const videoUrl = result.url;
+      const { error: updateError } = await supabase
+        .from('training_lessons')
+        .update({ video_url: videoUrl, video_path: result.path || videoUrl } as any)
+        .eq('id', lessonId);
+
+      if (updateError) throw updateError;
+
+      setLessons(prev => prev.map(l => 
+        l.id === lessonId ? { ...l, video_url: videoUrl, video_path: result.path || videoUrl } : l
+      ));
+
+      toast.success('Vídeo enviado com sucesso!');
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      toast.error('Erro no upload: ' + error.message);
+    } finally {
+      setUploading(null);
+      setSelectedFile(null);
+      setUploadModalLesson(null);
+      if (modalFileInputRef.current) modalFileInputRef.current.value = '';
+    }
+  };
+
+  const handleModalFileUpload = () => {
+    if (selectedFile && uploadModalLesson) {
+      const mockEvent = {
+        target: { files: [selectedFile] }
+      } as unknown as React.ChangeEvent<HTMLInputElement>;
+      handleFileUpload(mockEvent, uploadModalLesson.id);
+    }
+  };
+
+  const deleteLesson = async (id: string) => {
+    if (!confirm('Excluir este vídeo (limpar o slot)?')) return;
+    const { error } = await supabase.from('training_lessons').update({ video_url: null, video_path: null } as any).eq('id', id);
+    if (!error) {
+      setLessons(prev => prev.map(l => l.id === id ? { ...l, video_url: '', video_path: undefined } : l));
+      toast.success('Vídeo removido do slot');
+    }
+  };
+
 
 
 
@@ -464,7 +541,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                                   )}
                                   <div className="relative w-24 aspect-video shrink-0 bg-zinc-800 rounded-xl overflow-hidden border border-white/5 shadow-xl transition-transform duration-500 group-hover:scale-105">
                                     <div className={cn(
-                                      "absolute inset-0 z-10 flex items-center justify-center transition-all duration-500",
+                                      "absolute inset-0 z-10 flex items-center justify-center transition-all duration-300",
                                       currentVideo?.id === lesson.id ? 'bg-red-600/40 opacity-100' : 'bg-black/60 opacity-0 group-hover:opacity-100'
                                     )}>
                                       <Play size={20} className={cn("text-white fill-current", currentVideo?.id === lesson.id && "animate-pulse")} />
@@ -475,7 +552,11 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                                       </div>
                                     )}
                                     <div className="w-full h-full bg-zinc-950 flex items-center justify-center">
-                                      <Video size={24} className="text-zinc-800" />
+                                      {lesson.thumbnail_url ? (
+                                        <img src={lesson.thumbnail_url} className="w-full h-full object-cover" alt={lesson.title} />
+                                      ) : (
+                                        <Video size={24} className="text-zinc-800" />
+                                      )}
                                     </div>
                                   </div>
                                   <div className="flex-1 min-w-0">
@@ -495,9 +576,27 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                                       )}
                                     </div>
                                   </div>
+                                  
+                                  {isAdmin && (
+                                    <div className="absolute right-2 top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                       <Button 
+                                          variant="ghost" size="icon" 
+                                          className="h-7 w-7 rounded-full bg-black/60 backdrop-blur-md hover:bg-red-600 text-white"
+                                          onClick={(e) => { e.stopPropagation(); setUploadModalLesson(lesson); }}
+                                       ><Upload size={12} /></Button>
+                                       {lesson.video_url && (
+                                         <Button 
+                                            variant="ghost" size="icon" 
+                                            className="h-7 w-7 rounded-full bg-black/60 backdrop-blur-md hover:bg-destructive text-white"
+                                            onClick={(e) => { e.stopPropagation(); deleteLesson(lesson.id); }}
+                                         ><Trash2 size={12} /></Button>
+                                       )}
+                                    </div>
+                                  )}
                                 </button>
                               ))}
                           </div>
+
                         </div>
                       ))}
                     </div>
@@ -508,6 +607,51 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
           </div>
         </div>
       )}
+
+      {/* Modal de Upload para Administrador */}
+      <Dialog open={!!uploadModalLesson} onOpenChange={(open) => !open && setUploadModalLesson(null)}>
+        <DialogContent className="sm:max-w-md bg-[#111] border-white/5 text-white rounded-[2.5rem] shadow-2xl p-8">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3 text-2xl font-black italic uppercase tracking-tighter text-white">
+              <FileVideo className="text-red-600" />
+              Upload Elite
+            </DialogTitle>
+            <DialogDescription className="text-zinc-500 font-bold uppercase tracking-widest text-[10px] mt-2">
+              Vídeo para: <span className="text-red-500 italic">{uploadModalLesson?.title}</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-10 mt-6 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-[2rem] bg-white/[0.01] hover:bg-white/[0.03] transition-all group cursor-pointer"
+               onClick={() => modalFileInputRef.current?.click()}>
+            <input type="file" ref={modalFileInputRef} className="hidden" accept="video/*" onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} />
+            
+            {selectedFile ? (
+              <div className="flex flex-col items-center animate-in zoom-in duration-500">
+                <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4 text-emerald-500 shadow-2xl shadow-emerald-500/10">
+                  <CheckCircle2 size={40} />
+                </div>
+                <p className="text-sm font-black italic text-white mb-1 truncate max-w-[280px]">{selectedFile.name}</p>
+                <p className="text-[9px] text-zinc-500 font-black uppercase tracking-[0.2em]">{(selectedFile.size / (1024 * 1024)).toFixed(2)} MB • Pronto</p>
+              </div>
+            ) : (
+              <>
+                <div className="w-20 h-20 rounded-3xl bg-red-600/10 flex items-center justify-center mb-4 text-red-600 group-hover:scale-110 group-hover:bg-red-600 group-hover:text-white transition-all duration-500 shadow-xl">
+                  <Upload size={38} />
+                </div>
+                <p className="text-sm font-black italic uppercase tracking-[0.2em] text-white">Clique para selecionar</p>
+                <p className="text-[9px] text-zinc-600 font-bold uppercase tracking-[0.1em] mt-2">MP4, MOV OU WEBM</p>
+              </>
+            )}
+          </div>
+
+          <DialogFooter className="flex gap-3 mt-8">
+            <Button variant="ghost" onClick={() => setUploadModalLesson(null)} className="flex-1 text-zinc-600 hover:text-white hover:bg-white/5 font-black uppercase italic tracking-widest h-12 rounded-2xl">Cancelar</Button>
+            <Button onClick={handleModalFileUpload} disabled={!selectedFile || uploading === uploadModalLesson?.id} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black uppercase italic tracking-widest h-12 rounded-2xl shadow-xl shadow-red-600/10">
+              {uploading === uploadModalLesson?.id ? (<><Loader2 size={16} className="animate-spin mr-2" />Enviando...</>) : 'Confirmar Upload'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -515,3 +659,5 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
 function cn(...classes: any[]) {
   return classes.filter(Boolean).join(' ');
 }
+
+

@@ -471,6 +471,86 @@ export default function TrainingModuleAdmin() {
           )}
         </div>
       </div>
+
+      {/* Modal de Upload de Vídeo */}
+      <Dialog open={!!uploadModalLesson} onOpenChange={(open) => !open && setUploadModalLesson(null)}>
+        <DialogContent className="sm:max-w-md bg-[#1a1a1a] border-white/10 text-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl italic uppercase tracking-tighter">
+              <FileVideo className="text-primary" />
+              Upload de Vídeo
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Escolha o vídeo para a aula: <span className="text-white font-bold">{uploadModalLesson?.title}</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-6 flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-2xl bg-white/[0.02] hover:bg-white/[0.04] transition-colors group cursor-pointer"
+               onClick={() => modalFileInputRef.current?.click()}>
+            <input 
+              type="file" 
+              ref={modalFileInputRef} 
+              className="hidden" 
+              accept="video/*" 
+              onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+            />
+            
+            {selectedFile ? (
+              <div className="flex flex-col items-center animate-in zoom-in duration-300">
+                <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mb-3 text-emerald-500">
+                  <CheckCircle2 size={32} />
+                </div>
+                <p className="text-sm font-bold text-white mb-1 truncate max-w-[250px]">{selectedFile.name}</p>
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest">{(selectedFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="mt-3 text-red-400 hover:text-red-300 hover:bg-red-400/10 h-7 text-[10px] uppercase font-bold"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedFile(null);
+                    if (modalFileInputRef.current) modalFileInputRef.current.value = '';
+                  }}
+                >
+                  Remover
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:scale-110 transition-transform duration-300">
+                  <Upload size={32} />
+                </div>
+                <p className="text-sm font-bold text-white mb-1">Clique para selecionar</p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest">Formatos aceitos: MP4, MOV, WEBM</p>
+              </>
+            )}
+          </div>
+
+          <DialogFooter className="flex gap-2">
+            <Button 
+              variant="ghost" 
+              onClick={() => setUploadModalLesson(null)}
+              className="flex-1 text-gray-400 hover:text-white hover:bg-white/5 uppercase text-xs font-bold tracking-widest"
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleModalFileUpload}
+              disabled={!selectedFile || uploading === uploadModalLesson?.id}
+              className="flex-1 bg-primary text-white hover:bg-primary/90 uppercase text-xs font-bold tracking-widest"
+            >
+              {uploading === uploadModalLesson?.id ? (
+                <>
+                  <Loader2 size={14} className="animate-spin mr-2" />
+                  Enviando...
+                </>
+              ) : (
+                'Confirmar Upload'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

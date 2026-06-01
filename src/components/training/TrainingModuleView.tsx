@@ -651,7 +651,6 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
     </div>
   );
 }
@@ -659,3 +658,4 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
 function cn(...classes: any[]) {
   return classes.filter(Boolean).join(' ');
 }
+

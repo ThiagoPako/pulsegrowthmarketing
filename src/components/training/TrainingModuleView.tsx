@@ -35,7 +35,7 @@ interface Lesson {
   methodology_name: string;
   duration: string;
   display_order: number;
-  completed?: boolean;
+  status?: 'not_started' | 'in_progress' | 'completed';
   content_markdown?: string;
 }
 
@@ -92,39 +92,53 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
 
       const { data: progressData } = await supabase
         .from('user_training_progress')
-        .select('lesson_id')
+        .select('lesson_id, status')
         .eq('user_id', userId);
 
-      const completedIds = progressData?.map(p => p.lesson_id) || [];
+      const progressMap = new Map((progressData || []).map(p => [p.lesson_id, p.status]));
 
       if (lessData) {
         setLessons(lessData.map(l => ({
           ...l,
-          completed: completedIds.includes(l.id)
+          status: progressMap.get(l.id) || 'not_started'
         })));
       }
     }
     setLoading(false);
   };
 
-  const toggleComplete = async (lessonId: string, currentStatus: boolean) => {
-    if (!currentStatus) {
-      const { error } = await supabase
+  const updateProgress = async (lessonId: string, newStatus: 'not_started' | 'in_progress' | 'completed') => {
+    const { data: existing } = await supabase
+      .from('user_training_progress')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('lesson_id', lessonId)
+      .maybeSingle();
+
+    if (existing) {
+      await supabase
         .from('user_training_progress')
-        .insert({ user_id: userId, lesson_id: lessonId });
-      
-      if (!error) {
-        setLessons(lessons.map(l => l.id === lessonId ? { ...l, completed: true } : l));
-        toast.success('Aula concluída!');
-      }
+        .update({ status: newStatus, completed_at: newStatus === 'completed' ? new Date().toISOString() : null } as any)
+        .eq('id', existing.id);
     } else {
       await supabase
         .from('user_training_progress')
-        .delete()
-        .eq('user_id', userId)
-        .eq('lesson_id', lessonId);
-      setLessons(lessons.map(l => l.id === lessonId ? { ...l, completed: false } : l));
+        .insert({ 
+          user_id: userId, 
+          lesson_id: lessonId, 
+          status: newStatus,
+          completed_at: newStatus === 'completed' ? new Date().toISOString() : null
+        } as any);
     }
+    
+    setLessons(lessons.map(l => l.id === lessonId ? { ...l, status: newStatus } : l));
+    if (newStatus === 'completed') toast.success('Aula concluída!');
+  };
+
+  const getCourseProgress = () => {
+    if (lessons.length === 0) return 0;
+    const completed = lessons.filter(l => l.status === 'completed').length;
+    return Math.round((completed / lessons.length) * 100);
   };
 
   const scroll = (direction: 'left' | 'right') => {
@@ -271,6 +285,11 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                     className="w-full h-full" 
                     allowFullScreen 
                     key={currentVideo.video_url}
+                    onLoad={() => {
+                      if (currentVideo.status === 'not_started') {
+                        updateProgress(currentVideo.id, 'in_progress');
+                      }
+                    }}
                   />
                 ) : (
                   <div className="w-full h-full relative">
@@ -281,7 +300,12 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                         className="rounded-full w-20 h-20 bg-white text-black hover:scale-110 transition-transform p-0"
                         onClick={() => {
                           const firstLesson = lessons[0];
-                          if (firstLesson) setCurrentVideo(firstLesson);
+                          if (firstLesson) {
+                            setCurrentVideo(firstLesson);
+                            if (firstLesson.status === 'not_started') {
+                              updateProgress(firstLesson.id, 'in_progress');
+                            }
+                          }
                         }}
                       >
                         <Play size={40} className="ml-2 fill-current" />
@@ -304,12 +328,12 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                   </div>
                   {currentVideo && (
                     <Button 
-                      variant={currentVideo.completed ? "secondary" : "destructive"}
-                      className={`rounded-full h-12 gap-2 ${currentVideo.completed ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-white text-black hover:bg-gray-200'}`}
-                      onClick={() => toggleComplete(currentVideo.id, !!currentVideo.completed)}
+                      variant={currentVideo.status === 'completed' ? "secondary" : "destructive"}
+                      className={`rounded-full h-12 gap-2 ${currentVideo.status === 'completed' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-white text-black hover:bg-gray-200'}`}
+                      onClick={() => updateProgress(currentVideo.id, currentVideo.status === 'completed' ? 'in_progress' : 'completed')}
                     >
-                      {currentVideo.completed ? <CheckCircle2 size={20} /> : <Circle size={20} />}
-                      {currentVideo.completed ? 'Concluído' : 'Concluir'}
+                      {currentVideo.status === 'completed' ? <CheckCircle2 size={20} /> : <Circle size={20} />}
+                      {currentVideo.status === 'completed' ? 'Concluído' : 'Marcar como concluído'}
                     </Button>
                   )}
                 </div>
@@ -345,6 +369,16 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                           <span className="font-bold text-white">{selectedTrack.estimated_time || '2h 30min'}</span>
                         </div>
                         <div className="flex justify-between text-sm">
+                          <span className="text-gray-400">Progresso</span>
+                          <span className="font-bold text-emerald-500">{getCourseProgress()}%</span>
+                        </div>
+                        <div className="w-full bg-white/10 rounded-full h-1.5 mt-1">
+                          <div 
+                            className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500" 
+                            style={{ width: `${getCourseProgress()}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-sm mt-3">
                           <span className="text-gray-400">Total de Aulas</span>
                           <span className="font-bold text-white">{lessons.length}</span>
                         </div>
@@ -375,10 +409,17 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                             onClick={() => setCurrentVideo(lesson)}
                             className={`group flex items-center gap-4 p-4 rounded-md transition-all cursor-pointer border ${currentVideo?.id === lesson.id ? 'bg-[#333] border-white/20' : 'bg-transparent border-transparent hover:bg-[#222]'}`}
                           >
-                            <span className="text-xl font-bold text-gray-600 group-hover:text-white transition-colors">{idx + 1}</span>
+                            <div className="flex flex-col items-center">
+                              <span className="text-xl font-bold text-gray-600 group-hover:text-white transition-colors">{idx + 1}</span>
+                              {lesson.status === 'completed' ? (
+                                <CheckCircle2 size={12} className="text-emerald-500" />
+                              ) : lesson.status === 'in_progress' ? (
+                                <Clock size={12} className="text-blue-400" />
+                              ) : null}
+                            </div>
                             <div className="relative w-24 aspect-video shrink-0 bg-[#222] rounded overflow-hidden">
                               <Play size={16} className={`absolute inset-0 m-auto z-10 ${currentVideo?.id === lesson.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`} />
-                              {lesson.completed && (
+                              {lesson.status === 'completed' && (
                                 <div className="absolute inset-0 bg-emerald-500/20 z-10 flex items-center justify-center">
                                   <CheckCircle2 size={16} className="text-emerald-500" />
                                 </div>

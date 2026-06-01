@@ -8,7 +8,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 
+import { Plus, Trash2, FolderPlus, Loader2, FileVideo } from 'lucide-react';
+
 interface Track {
+
   id: string;
   title: string;
   description: string;

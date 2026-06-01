@@ -4236,18 +4236,21 @@ export type Database = {
           completed_at: string
           id: string
           lesson_id: string | null
+          status: string | null
           user_id: string | null
         }
         Insert: {
           completed_at?: string
           id?: string
           lesson_id?: string | null
+          status?: string | null
           user_id?: string | null
         }
         Update: {
           completed_at?: string
           id?: string
           lesson_id?: string | null
+          status?: string | null
           user_id?: string | null
         }
         Relationships: [

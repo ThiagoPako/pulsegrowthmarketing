@@ -66,17 +66,22 @@ async function executeQuery(body: any): Promise<{ data: any; error: any; count?:
       body: JSON.stringify(body),
     });
     const result = await response.json();
+    
     if (!response.ok) {
+      console.error('VPS Query Error:', result.error || result.message || 'Unknown error');
       const normalizedError = typeof result.error === 'string'
         ? { message: result.error }
-        : (result.error || { message: `HTTP ${response.status}` });
+        : (result.error || { message: result.message || `HTTP ${response.status}` });
       return { data: null, error: normalizedError };
     }
+    
     return { data: result.data, error: result.error || null, count: result.count ?? null };
   } catch (error: any) {
+    console.error('VPS Network/Execution Error:', error);
     return { data: null, error: { message: error.message || 'Network error' } };
   }
 }
+
 
 type FilterOp = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'like' | 'ilike' | 'is' | 'in' | 'contains' | 'not' | 'or';
 

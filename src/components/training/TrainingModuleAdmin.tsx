@@ -1,5 +1,4 @@
 import { cn } from '@/lib/utils';
-
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { Button } from '@/components/ui/button';
@@ -11,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Plus, Trash2, Edit2, GripVertical, Video, FolderPlus, BookOpen, Upload, Loader2, Play, FileVideo, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
+
 
 interface Track {
   id: string;

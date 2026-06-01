@@ -40,7 +40,7 @@ interface AuthContextType {
   session: { access_token: string } | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, name: string, role: AppRole) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, name: string, role: AppRole, isSelfRegister?: boolean) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -198,7 +198,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string, name: string, role: AppRole) => {
+  const signUp = async (email: string, password: string, name: string, role: AppRole, isSelfRegister: boolean = false) => {
     try {
       const token = localStorage.getItem(TOKEN_KEY);
       const res = await fetch(`${VPS_API_BASE}/auth/create-user`, {
@@ -207,7 +207,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ email, password, name, role }),
+        body: JSON.stringify({ email, password, name, role, isSelfRegister }),
       });
       const data = await res.json();
       if (!res.ok) return { error: data.error || 'Erro ao cadastrar usuário' };

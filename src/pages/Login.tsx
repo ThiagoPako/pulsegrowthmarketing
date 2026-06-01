@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { UserPlus } from 'lucide-react';
 
 export default function Login() {
   const { signIn } = useAuth();
@@ -51,9 +52,14 @@ export default function Login() {
             </Button>
           </form>
 
-          <p className="text-xs text-muted-foreground text-center mt-4">
-            Solicite suas credenciais ao administrador
-          </p>
+          <div className="mt-6 pt-5 border-t border-muted flex flex-col items-center gap-3">
+            <p className="text-xs text-muted-foreground text-center">
+              Novo colaborador?
+            </p>
+            <Button variant="outline" className="w-full text-xs font-bold uppercase tracking-widest gap-2" onClick={() => navigate('/treinamento-registro')}>
+              <UserPlus size={14} /> Criar conta de acesso
+            </Button>
+          </div>
         </div>
       </div>
     </div>

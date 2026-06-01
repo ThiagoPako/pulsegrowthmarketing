@@ -264,8 +264,8 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
           </div>
         </div>
       ) : (
-        /* Track Detail View (Netflix Content Detail) */
-        <div className="space-y-8 animate-in fade-in duration-500">
+        /* Track Detail View */
+        <div className="space-y-8 animate-in fade-in duration-500 max-w-[1600px] mx-auto">
           <div className="flex items-center justify-between mb-8">
             <Button variant="ghost" onClick={() => { setSelectedTrack(null); setCurrentVideo(null); }} className="text-white hover:text-red-600 gap-2">
               <ChevronLeft size={24} /> Voltar para o catálogo
@@ -277,8 +277,8 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
             {/* Player / Preview */}
-            <div className="lg:col-span-8 space-y-6">
-              <div className="aspect-video bg-black rounded-sm overflow-hidden border border-white/10 relative shadow-2xl group">
+            <div className="lg:col-span-8 space-y-8">
+              <div className="aspect-video bg-black rounded-3xl overflow-hidden border border-white/5 relative shadow-2xl group ring-1 ring-white/10">
                 {currentVideo ? (
                   <iframe 
                     src={currentVideo.video_url.includes('youtube') ? currentVideo.video_url.replace('watch?v=', 'embed/') : currentVideo.video_url} 
@@ -297,7 +297,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                       <Button 
                         size="lg" 
-                        className="rounded-full w-20 h-20 bg-white text-black hover:scale-110 transition-transform p-0"
+                        className="rounded-full w-24 h-24 bg-red-600 text-white hover:scale-110 hover:bg-red-700 transition-all p-0 shadow-[0_0_50px_rgba(220,38,38,0.3)]"
                         onClick={() => {
                           const firstLesson = lessons[0];
                           if (firstLesson) {
@@ -308,46 +308,52 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                           }
                         }}
                       >
-                        <Play size={40} className="ml-2 fill-current" />
+                        <Play size={48} className="ml-2 fill-current" />
                       </Button>
-                      <p className="mt-4 text-xl font-bold uppercase tracking-widest italic">Assistir Agora</p>
+                      <p className="mt-6 text-2xl font-black uppercase tracking-[0.2em] italic text-white drop-shadow-lg">Assistir Agora</p>
                     </div>
                   </div>
                 )}
               </div>
               
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <h2 className="text-4xl font-black tracking-tight">{currentVideo?.title || selectedTrack.title}</h2>
-                    <div className="flex items-center gap-3 text-sm font-bold">
+              <div className="space-y-6">
+                <div className="flex items-start justify-between gap-6">
+                  <div className="space-y-2">
+                    <h2 className="text-5xl font-black tracking-tighter uppercase italic leading-none">{currentVideo?.title || selectedTrack.title}</h2>
+                    <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-widest">
                        <span className="text-emerald-500">2026</span>
-                       <Badge variant="outline" className="text-white border-white/30 px-1 py-0">16+</Badge>
-                       <span className="text-gray-400">Metodologia {currentVideo?.methodology_name || selectedTrack.category}</span>
+                       <Badge variant="outline" className="text-white border-white/20 px-2 py-0.5 rounded-sm">16+</Badge>
+                       <span className="text-gray-500">Metodologia {currentVideo?.methodology_name || selectedTrack.category}</span>
                     </div>
                   </div>
                   {currentVideo && (
                     <Button 
                       variant={currentVideo.status === 'completed' ? "secondary" : "destructive"}
-                      className={`rounded-full h-12 gap-2 ${currentVideo.status === 'completed' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-white text-black hover:bg-gray-200'}`}
+                      className={cn(
+                        "rounded-full h-14 px-8 gap-3 font-black uppercase italic tracking-widest transition-all",
+                        currentVideo.status === 'completed' 
+                          ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-[0_0_20px_rgba(16,185,129,0.3)]' 
+                          : 'bg-white text-black hover:bg-gray-200'
+                      )}
                       onClick={() => updateProgress(currentVideo.id, currentVideo.status === 'completed' ? 'in_progress' : 'completed')}
                     >
-                      {currentVideo.status === 'completed' ? <CheckCircle2 size={20} /> : <Circle size={20} />}
-                      {currentVideo.status === 'completed' ? 'Concluído' : 'Marcar como concluído'}
+                      {currentVideo.status === 'completed' ? <CheckCircle2 size={24} /> : <Circle size={24} />}
+                      {currentVideo.status === 'completed' ? 'Concluído' : 'Marcar Aula'}
                     </Button>
                   )}
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-6">
-                  <div className="md:col-span-2 space-y-6">
-                    <p className="text-lg text-gray-300 leading-relaxed">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+                  <div className="md:col-span-2 space-y-8">
+                    <p className="text-xl text-gray-300 leading-relaxed font-medium">
                       {currentVideo?.description || selectedTrack.description}
                     </p>
                     
                     {currentVideo?.content_markdown && (
-                      <div className="bg-white/5 rounded-lg p-6 border border-white/10 prose prose-invert max-w-none">
-                        <div className="flex items-center gap-2 text-red-500 mb-4 font-bold uppercase text-xs tracking-widest">
-                          <FileText size={16} /> Guia de Apoio
+                      <div className="bg-zinc-900/50 rounded-3xl p-10 border border-white/5 backdrop-blur-md prose prose-invert max-w-none shadow-2xl relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-1 h-full bg-red-600" />
+                        <div className="flex items-center gap-3 text-red-600 mb-8 font-black uppercase text-xs tracking-[0.3em]">
+                          <FileText size={20} /> Guia de Treinamento
                         </div>
                         <ReactMarkdown>
                           {currentVideo.content_markdown}
@@ -356,87 +362,103 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                     )}
                   </div>
                   
-                  <div className="space-y-4">
-                    <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-                      <h4 className="text-xs font-black uppercase text-gray-500 mb-3 tracking-widest">Detalhes do Curso</h4>
-                      <div className="space-y-3">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-400">Dificuldade</span>
-                          <span className="font-bold text-white">{selectedTrack.difficulty || 'Iniciante'}</span>
+                  <div className="space-y-8">
+                    <div className="bg-zinc-900/50 rounded-3xl p-8 border border-white/5 backdrop-blur-md shadow-2xl ring-1 ring-white/5">
+                      <h4 className="text-[10px] font-black uppercase text-gray-500 mb-6 tracking-[0.3em]">Status de Elite</h4>
+                      <div className="space-y-6">
+                        <div className="flex justify-between items-end">
+                          <span className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Seu Desempenho</span>
+                          <span className="font-black text-3xl text-emerald-500 italic leading-none">{getCourseProgress()}%</span>
                         </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-400">Tempo Estimado</span>
-                          <span className="font-bold text-white">{selectedTrack.estimated_time || '2h 30min'}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-400">Progresso</span>
-                          <span className="font-bold text-emerald-500">{getCourseProgress()}%</span>
-                        </div>
-                        <div className="w-full bg-white/10 rounded-full h-1.5 mt-1">
-                          <div 
-                            className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500" 
-                            style={{ width: `${getCourseProgress()}%` }}
+                        <div className="w-full bg-white/5 rounded-full h-2 overflow-hidden">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${getCourseProgress()}%` }}
+                            className="bg-emerald-500 h-full shadow-[0_0_15px_rgba(16,185,129,0.6)]" 
+                            transition={{ duration: 1.5, ease: "easeOut" }}
                           />
                         </div>
-                        <div className="flex justify-between text-sm mt-3">
-                          <span className="text-gray-400">Total de Aulas</span>
-                          <span className="font-bold text-white">{lessons.length}</span>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
+                            <p className="text-[9px] text-gray-500 uppercase font-black tracking-widest mb-1">Aulas</p>
+                            <p className="text-2xl font-black italic text-white">{lessons.length}</p>
+                          </div>
+                          <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
+                            <p className="text-[9px] text-gray-500 uppercase font-black tracking-widest mb-1">Carga</p>
+                            <p className="text-2xl font-black italic text-white">{selectedTrack.estimated_time || '2h'}</p>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              </div>
-            </div>
 
-            {/* Episode List (Episodes Sidebar) */}
-            <div className="lg:col-span-4 space-y-6">
-              <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                <h3 className="text-xl font-bold">Aulas</h3>
-                <span className="text-sm text-gray-400">{lessons.length} Vídeos</span>
-              </div>
-
-              <div className="space-y-4 overflow-y-auto max-h-[70vh] pr-2 scrollbar-thin">
-                {modules.map((mod, modIdx) => (
-                  <div key={mod.id} className="space-y-3">
-                    <h4 className="text-sm font-black uppercase tracking-widest text-gray-500 mt-4">Módulo {modIdx + 1}: {mod.title}</h4>
-                    <div className="space-y-2">
-                      {lessons
-                        .filter(l => l.module_id === mod.id)
-                        .map((lesson, idx) => (
-                          <div 
-                            key={lesson.id}
-                            onClick={() => setCurrentVideo(lesson)}
-                            className={`group flex items-center gap-4 p-4 rounded-md transition-all cursor-pointer border ${currentVideo?.id === lesson.id ? 'bg-[#333] border-white/20' : 'bg-transparent border-transparent hover:bg-[#222]'}`}
-                          >
-                            <div className="flex flex-col items-center">
-                              <span className="text-xl font-bold text-gray-600 group-hover:text-white transition-colors">{idx + 1}</span>
-                              {lesson.status === 'completed' ? (
-                                <CheckCircle2 size={12} className="text-emerald-500" />
-                              ) : lesson.status === 'in_progress' ? (
-                                <Clock size={12} className="text-blue-400" />
-                              ) : null}
+                    <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-3 scrollbar-thin scrollbar-thumb-red-600/20">
+                      {modules.map((mod, modIdx) => (
+                        <div key={mod.id} className="space-y-4">
+                          <div className="flex items-center gap-3 px-2">
+                            <div className="h-10 w-10 rounded-xl bg-red-600/10 border border-red-600/20 flex items-center justify-center text-red-600 font-black text-sm italic shadow-lg shadow-red-600/5">
+                              {modIdx + 1}
                             </div>
-                            <div className="relative w-24 aspect-video shrink-0 bg-[#222] rounded overflow-hidden">
-                              <Play size={16} className={`absolute inset-0 m-auto z-10 ${currentVideo?.id === lesson.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`} />
-                              {lesson.status === 'completed' && (
-                                <div className="absolute inset-0 bg-emerald-500/20 z-10 flex items-center justify-center">
-                                  <CheckCircle2 size={16} className="text-emerald-500" />
-                                </div>
-                              )}
-                              <div className="w-full h-full bg-slate-800 flex items-center justify-center">
-                                <Video size={20} className="text-gray-600" />
-                              </div>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-bold truncate">{lesson.title}</p>
-                              <p className="text-xs text-gray-500">{lesson.duration || '10s'}</p>
-                            </div>
+                            <h4 className="text-[12px] font-black uppercase tracking-[0.15em] text-white/90 truncate">{mod.title}</h4>
                           </div>
-                        ))}
+                          
+                          <div className="space-y-3">
+                            {lessons
+                              .filter(l => l.module_id === mod.id)
+                              .map((lesson, idx) => (
+                                <button 
+                                  key={lesson.id}
+                                  onClick={() => setCurrentVideo(lesson)}
+                                  className={cn(
+                                    "w-full group flex items-center gap-5 p-4 rounded-2xl transition-all duration-500 border text-left relative overflow-hidden",
+                                    currentVideo?.id === lesson.id 
+                                      ? 'bg-red-600/10 border-red-600/30 shadow-[0_0_30px_rgba(220,38,38,0.1)]' 
+                                      : 'bg-zinc-900/40 border-transparent hover:bg-zinc-800/60 hover:border-white/10'
+                                  )}
+                                >
+                                  {currentVideo?.id === lesson.id && (
+                                    <div className="absolute left-0 top-0 w-1 h-full bg-red-600" />
+                                  )}
+                                  <div className="relative w-24 aspect-video shrink-0 bg-zinc-800 rounded-xl overflow-hidden border border-white/5 shadow-xl transition-transform duration-500 group-hover:scale-105">
+                                    <div className={cn(
+                                      "absolute inset-0 z-10 flex items-center justify-center transition-all duration-500",
+                                      currentVideo?.id === lesson.id ? 'bg-red-600/40 opacity-100' : 'bg-black/60 opacity-0 group-hover:opacity-100'
+                                    )}>
+                                      <Play size={20} className={cn("text-white fill-current", currentVideo?.id === lesson.id && "animate-pulse")} />
+                                    </div>
+                                    {lesson.status === 'completed' && (
+                                      <div className="absolute top-1.5 right-1.5 z-20 bg-emerald-500 rounded-full p-1 shadow-2xl ring-2 ring-black/20">
+                                        <CheckCircle2 size={12} className="text-white" />
+                                      </div>
+                                    )}
+                                    <div className="w-full h-full bg-zinc-950 flex items-center justify-center">
+                                      <Video size={24} className="text-zinc-800" />
+                                    </div>
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className={cn(
+                                      "text-xs font-black italic uppercase tracking-tighter truncate transition-all duration-500",
+                                      currentVideo?.id === lesson.id ? 'text-red-500 scale-105 origin-left' : 'text-zinc-400 group-hover:text-white'
+                                    )}>
+                                      {lesson.title}
+                                    </p>
+                                    <div className="flex items-center gap-3 mt-1.5">
+                                      <span className="text-[10px] text-zinc-600 font-bold uppercase tracking-[0.2em]">{lesson.duration || '10s'}</span>
+                                      {lesson.status === 'in_progress' && (
+                                        <div className="flex items-center gap-1.5">
+                                          <div className="h-1 w-1 bg-blue-400 rounded-full animate-ping" />
+                                          <span className="text-[9px] text-blue-400 font-black uppercase italic tracking-widest">No Player</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </button>
+                              ))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))}
+                </div>
               </div>
             </div>
           </div>
@@ -444,4 +466,8 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
       )}
     </div>
   );
+}
+
+function cn(...classes: any[]) {
+  return classes.filter(Boolean).join(' ');
 }

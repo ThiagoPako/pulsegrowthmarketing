@@ -595,6 +595,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                                 </button>
                               ))}
                           </div>
+
                         </div>
                       ))}
                     </div>

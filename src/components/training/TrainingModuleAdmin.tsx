@@ -124,10 +124,11 @@ export default function TrainingModuleAdmin() {
       toast.error('Erro ao criar módulo'); 
       return; 
     }
-    setModules([...modules, data]);
+    setModules(prev => [...prev, data]);
     setModuleForm({ title: '' });
     toast.success('Módulo adicionado!');
   };
+
 
   const createLesson = async (moduleId: string) => {
     if (!lessonForm.title.trim()) {

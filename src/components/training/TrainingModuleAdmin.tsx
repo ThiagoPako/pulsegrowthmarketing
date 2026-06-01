@@ -604,8 +604,9 @@ export default function TrainingModuleAdmin() {
             <Button 
               onClick={handleModalFileUpload}
               disabled={!selectedFile || uploading === uploadModalLesson?.id}
-              className="flex-1 bg-primary text-white hover:bg-primary/90 uppercase text-xs font-bold tracking-widest"
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black uppercase italic tracking-widest text-xs h-12 rounded-2xl"
             >
+
               {uploading === uploadModalLesson?.id ? (
                 <>
                   <Loader2 size={14} className="animate-spin mr-2" />

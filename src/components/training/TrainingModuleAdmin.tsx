@@ -7,8 +7,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Trash2, Edit2, GripVertical, Video, FolderPlus, BookOpen, Upload, Loader2, Play } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Plus, Trash2, Edit2, GripVertical, Video, FolderPlus, BookOpen, Upload, Loader2, Play, FileVideo, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Track {

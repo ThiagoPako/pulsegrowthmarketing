@@ -79,6 +79,7 @@ const CancellationReports = lazy(() => import("@/pages/CancellationReports"));
 const EventRegistration = lazy(() => import("@/pages/EventRegistration"));
 const TrainingManager = lazy(() => import("@/pages/TrainingManager"));
 const CRM = lazy(() => import("@/pages/CRM"));
+const Training = lazy(() => import("@/pages/Training"));
 
 
 const queryClient = new QueryClient({
@@ -194,7 +195,8 @@ function AppRoutes() {
         <Route path="/clube-descontos" element={<ProtectedRoute><DiscountAdmin /></ProtectedRoute>} />
         <Route path="/painel-tv" element={<ProtectedRoute><TvPanelControl /></ProtectedRoute>} />
         <Route path="/cancelamentos" element={<ProtectedRoute><CancellationReports /></ProtectedRoute>} />
-        <Route path="/treinamento" element={<ProtectedRoute><TrainingManager /></ProtectedRoute>} />
+        <Route path="/treinamento-gestao" element={<ProtectedRoute><TrainingManager /></ProtectedRoute>} />
+        <Route path="/treinamento" element={<ProtectedRoute><Training /></ProtectedRoute>} />
         <Route path="/evento/:token" element={<EventRegistration />} />
         <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
 

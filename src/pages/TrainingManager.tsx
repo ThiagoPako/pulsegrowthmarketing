@@ -201,7 +201,7 @@ export default function TrainingManager() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <GraduationCap size={24} className="text-primary" />
-          <h1 className="text-2xl font-bold">Módulo de Treinamento</h1>
+          <h1 className="text-2xl font-bold">Gestão de Treinamento</h1>
         </div>
       </div>
 
@@ -216,24 +216,7 @@ export default function TrainingManager() {
         </TabsList>
 
         <TabsContent value="structured" className="mt-0">
-          {currentUser?.role === 'admin' ? (
-            <Tabs defaultValue="view" className="space-y-4">
-              <div className="flex justify-end mb-4">
-                <TabsList>
-                  <TabsTrigger value="view">Visualizar</TabsTrigger>
-                  <TabsTrigger value="admin">Gerenciar Slots</TabsTrigger>
-                </TabsList>
-              </div>
-              <TabsContent value="view">
-                <TrainingModuleView userId={user?.id || ''} />
-              </TabsContent>
-              <TabsContent value="admin">
-                <TrainingModuleAdmin />
-              </TabsContent>
-            </Tabs>
-          ) : (
-            <TrainingModuleView userId={user?.id || ''} />
-          )}
+          <TrainingModuleAdmin />
         </TabsContent>
 
         <TabsContent value="presentations" className="space-y-6">

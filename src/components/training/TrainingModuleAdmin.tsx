@@ -126,6 +126,26 @@ export default function TrainingModuleAdmin() {
     toast.success('Aula adicionada ao módulo!');
   };
 
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const onDrop = async (e: React.DragEvent, lessonId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      const mockEvent = {
+        target: {
+          files: [file]
+        }
+      } as unknown as React.ChangeEvent<HTMLInputElement>;
+      handleFileUpload(mockEvent, lessonId);
+    }
+  };
+
   const deleteTrack = async (id: string) => {
     if (!confirm('Tem certeza? Isso excluirá todos os módulos e vídeos desta trilha.')) return;
     const { error } = await supabase.from('training_tracks').delete().eq('id', id);
@@ -309,41 +329,42 @@ export default function TrainingModuleAdmin() {
                       </Dialog>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {lessons.filter(l => l.module_id === mod.id).map(lesson => (
-                        <div key={lesson.id} className="relative aspect-video rounded-xl bg-[#1a1a1a] border border-white/5 overflow-hidden group shadow-lg">
-                          {/* Placeholder/Thumbnail Simulado */}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10" />
-                          
-                          <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
+                        <div 
+                          key={lesson.id} 
+                          onDragOver={onDragOver}
+                          onDrop={(e) => onDrop(e, lesson.id)}
+                          className={`relative aspect-video rounded-2xl overflow-hidden group shadow-2xl transition-all duration-300 ${
+                            !lesson.video_url 
+                              ? 'border-2 border-dashed border-primary/20 bg-primary/[0.02] hover:border-primary/50 hover:bg-primary/[0.05]' 
+                              : 'border border-white/5 bg-[#1a1a1a]'
+                          }`}
+                        >
+                          {/* Background Content */}
+                          <div className="absolute inset-0 z-0">
                             {lesson.video_url ? (
                               <div className="relative w-full h-full">
                                 <video src={lesson.video_url} className="w-full h-full object-cover opacity-40" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
                                 <div className="absolute inset-0 flex items-center justify-center">
-                                  <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center backdrop-blur-sm border border-white/20">
-                                    <Play size={20} className="text-white fill-current ml-1" />
+                                  <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center backdrop-blur-md border border-white/20 group-hover:scale-110 transition-transform duration-300">
+                                    <Play size={24} className="text-white fill-current ml-1" />
                                   </div>
                                 </div>
                               </div>
                             ) : (
-                              <Video size={40} className="text-white/10" />
-                            )}
-                          </div>
-
-                          {/* Info Overlay */}
-                          <div className="absolute bottom-0 left-0 right-0 p-4 z-20">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <h5 className="text-sm font-bold text-white truncate">{lesson.title}</h5>
-                                <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
-                                  {lesson.methodology_name || 'Sem metodologia'} • {lesson.duration}
-                                </p>
-                              </div>
-                              <div className="flex gap-1 shrink-0">
+                              <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center">
+                                <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:scale-110 transition-transform duration-300">
+                                  <Upload size={32} />
+                                </div>
+                                <p className="text-xs font-bold text-primary/60 uppercase tracking-tighter mb-1">Slot Vazio</p>
+                                <p className="text-[10px] text-muted-foreground leading-tight px-4">Arraste um vídeo aqui ou clique para selecionar</p>
+                                
                                 <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-7 w-7 rounded-full bg-white/10 hover:bg-primary hover:text-white transition-all backdrop-blur-md border border-white/10"
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="mt-4 h-8 bg-transparent border-primary/20 text-primary hover:bg-primary hover:text-white transition-all text-[10px] font-bold uppercase tracking-widest"
                                   onClick={() => {
                                     const input = document.createElement('input');
                                     input.type = 'file';
@@ -353,34 +374,78 @@ export default function TrainingModuleAdmin() {
                                   }}
                                   disabled={uploading === lesson.id}
                                 >
-                                  {uploading === lesson.id ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-7 w-7 rounded-full bg-white/10 hover:bg-destructive hover:text-white transition-all backdrop-blur-md border border-white/10"
-                                  onClick={() => deleteLesson(lesson.id)}
-                                >
-                                  <Trash2 size={12} />
+                                  {uploading === lesson.id ? <Loader2 size={12} className="animate-spin mr-2" /> : <Plus size={12} className="mr-2" />}
+                                  Selecionar Vídeo
                                 </Button>
                               </div>
-                            </div>
+                            )}
                           </div>
+
+                          {/* Info Overlay (Sempre visível se tiver vídeo, ou no hover) */}
+                          {lesson.video_url && (
+                            <div className="absolute bottom-0 left-0 right-0 p-4 z-20 bg-gradient-to-t from-black to-transparent">
+                              <div className="flex items-end justify-between gap-3">
+                                <div className="min-w-0">
+                                  <h5 className="text-sm font-black text-white truncate italic uppercase tracking-tighter">{lesson.title}</h5>
+                                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                                    {lesson.methodology_name || 'Pulse Methodology'} • {lesson.duration}
+                                  </p>
+                                </div>
+                                <div className="flex gap-2">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 rounded-full bg-white/10 hover:bg-primary hover:text-white transition-all backdrop-blur-md border border-white/10"
+                                    onClick={() => {
+                                      const input = document.createElement('input');
+                                      input.type = 'file';
+                                      input.accept = 'video/*';
+                                      input.onchange = (e) => handleFileUpload(e as any, lesson.id);
+                                      input.click();
+                                    }}
+                                    disabled={uploading === lesson.id}
+                                  >
+                                    {uploading === lesson.id ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                                  </Button>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 rounded-full bg-white/10 hover:bg-destructive hover:text-white transition-all backdrop-blur-md border border-white/10"
+                                    onClick={() => deleteLesson(lesson.id)}
+                                  >
+                                    <Trash2 size={14} />
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                           
                           {/* Status Badge */}
-                          <div className="absolute top-3 right-3 z-30">
-                            <Badge className={lesson.video_url ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 backdrop-blur-sm" : "bg-amber-500/20 text-amber-400 border-amber-500/30 backdrop-blur-sm"}>
-                              {lesson.video_url ? 'Com Vídeo' : 'Vazio'}
+                          <div className="absolute top-4 left-4 z-30">
+                            <Badge className={`border-none px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${
+                              lesson.video_url 
+                                ? "bg-emerald-500 text-white" 
+                                : "bg-amber-500 text-white animate-pulse"
+                            }`}>
+                              {lesson.video_url ? 'Ativo' : 'Pendente'}
                             </Badge>
                           </div>
+
+                          {/* Uploading Overlay */}
+                          {uploading === lesson.id && (
+                            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center">
+                              <Loader2 size={32} className="text-primary animate-spin mb-3" />
+                              <p className="text-xs font-black text-white uppercase tracking-widest italic animate-pulse">Enviando Vídeo...</p>
+                            </div>
+                          )}
                         </div>
                       ))}
                       
-                      {/* Empty State */}
+                      {/* Empty State / Add Slot Helper */}
                       {lessons.filter(l => l.module_id === mod.id).length === 0 && (
-                        <div className="col-span-full aspect-video rounded-xl border-2 border-dashed border-white/5 flex flex-col items-center justify-center text-muted-foreground bg-white/[0.02]">
-                          <Video size={32} className="mb-2 opacity-20" />
-                          <p className="text-xs">Nenhum slot criado</p>
+                        <div className="col-span-full py-12 flex flex-col items-center justify-center text-muted-foreground border-2 border-dashed border-white/5 rounded-2xl bg-white/[0.01]">
+                          <Video size={48} className="mb-4 opacity-10" />
+                          <p className="text-sm font-bold uppercase tracking-widest italic opacity-40">Nenhum slot neste módulo</p>
                         </div>
                       )}
                     </div>

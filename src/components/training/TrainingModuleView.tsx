@@ -153,10 +153,21 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
               alt="Featured"
             />
             <div className="absolute bottom-[20%] left-12 z-20 max-w-xl space-y-4">
-              <Badge className="bg-red-600 text-white hover:bg-red-700 border-none px-3 py-1 text-sm font-bold uppercase tracking-widest">
-                Destaque
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge className="bg-red-600 text-white hover:bg-red-700 border-none px-3 py-1 text-sm font-bold uppercase tracking-widest">
+                  Destaque
+                </Badge>
+                {tracks[0]?.difficulty && (
+                  <Badge variant="outline" className="border-white/40 text-white uppercase text-[10px] tracking-wider">
+                    {tracks[0].difficulty}
+                  </Badge>
+                )}
+              </div>
               <h1 className="text-6xl font-black tracking-tighter uppercase italic">{tracks[0]?.title || "Treinamento Pulse"}</h1>
+              <div className="flex items-center gap-4 text-emerald-500 font-bold text-sm">
+                <span>Recomendado para você</span>
+                <span className="text-gray-400">{tracks[0]?.estimated_time || '2h 30min'}</span>
+              </div>
               <p className="text-lg text-gray-300 line-clamp-3">
                 {tracks[0]?.description || "Aprenda a nossa metodologia exclusiva de captação e edição rápida. O segredo para vídeos de alta qualidade em tempo recorde."}
               </p>
@@ -166,14 +177,14 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                   className="bg-white text-black hover:bg-gray-200 px-8 text-lg font-bold"
                   onClick={() => tracks[0] && setSelectedTrack(tracks[0])}
                 >
-                  <Play className="mr-2 fill-current" /> Começar
+                  <Play className="mr-2 fill-current" /> Assistir
                 </Button>
                 <Button 
                   size="lg" 
                   variant="outline" 
                   className="bg-gray-500/50 text-white border-none hover:bg-gray-500/70 px-8 text-lg font-bold backdrop-blur-md"
                 >
-                  <Info className="mr-2" /> Saiba mais
+                  <Info className="mr-2" /> Detalhes
                 </Button>
               </div>
             </div>

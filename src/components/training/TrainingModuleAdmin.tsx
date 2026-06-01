@@ -17,6 +17,8 @@ interface Track {
   description: string;
   category: string;
   is_active: boolean;
+  estimated_time?: string;
+  difficulty?: string;
 }
 
 interface Module {

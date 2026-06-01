@@ -75,11 +75,13 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
         return;
       }
       
-      console.log('Tracks loaded:', data?.length);
+      console.log('Tracks loaded:', data);
       if (data) {
-        // Fallback filter in JS if eq('is_active', true) was problematic
-        const activeTracks = data.filter(t => t.is_active !== false);
-        setTracks(activeTracks);
+        setTracks(data);
+        if (data.length > 0 && !selectedTrack) {
+           // Auto-select first track to show content if it's empty
+           console.log('Auto-selecting track:', data[0].title);
+        }
       }
     } catch (err) {
       console.error('Unexpected error loading tracks:', err);
@@ -87,6 +89,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
       setLoading(false);
     }
   };
+
 
 
 

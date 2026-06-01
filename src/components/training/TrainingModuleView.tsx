@@ -52,9 +52,14 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   const [showPlayer, setShowPlayer] = useState(false);
   const [hoveredTrack, setHoveredTrack] = useState<string | null>(null);
   const [forceUpdate, setForceUpdate] = useState(0);
-
-
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [uploadModalLesson, setUploadModalLesson] = useState<Lesson | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const modalFileInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
+
 
   useEffect(() => {
     loadTracks();

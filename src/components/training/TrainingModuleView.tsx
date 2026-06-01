@@ -419,7 +419,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                             </div>
                             <div className="relative w-24 aspect-video shrink-0 bg-[#222] rounded overflow-hidden">
                               <Play size={16} className={`absolute inset-0 m-auto z-10 ${currentVideo?.id === lesson.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`} />
-                              {lesson.completed && (
+                              {lesson.status === 'completed' && (
                                 <div className="absolute inset-0 bg-emerald-500/20 z-10 flex items-center justify-center">
                                   <CheckCircle2 size={16} className="text-emerald-500" />
                                 </div>

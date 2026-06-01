@@ -88,8 +88,20 @@ export default function TrainingModuleAdmin() {
       toast.error('O título da trilha é obrigatório');
       return;
     }
-    const { data, error } = await supabase.from('training_tracks').insert(trackForm).select().single();
-    if (error) { toast.error('Erro ao criar trilha'); return; }
+    const insertData = {
+      title: trackForm.title,
+      description: trackForm.description,
+      category: trackForm.category,
+      estimated_time: trackForm.estimated_time,
+      difficulty: trackForm.difficulty,
+      is_active: true
+    };
+    const { data, error } = await supabase.from('training_tracks').insert(insertData).select().single();
+    if (error) { 
+      console.error('Error creating track:', error);
+      toast.error('Erro ao criar trilha'); 
+      return; 
+    }
     setTracks([data, ...tracks]);
     setSelectedTrack(data);
     setTrackForm({ title: '', description: '', category: 'Metodologia', estimated_time: '', difficulty: 'Iniciante' });
@@ -101,12 +113,17 @@ export default function TrainingModuleAdmin() {
       toast.error('O título do módulo é obrigatório');
       return;
     }
-    const { data, error } = await supabase.from('training_modules').insert({ 
-      ...moduleForm, 
+    const insertData = { 
+      title: moduleForm.title, 
       track_id: selectedTrack.id,
       display_order: modules.length 
-    }).select().single();
-    if (error) { toast.error('Erro ao criar módulo'); return; }
+    };
+    const { data, error } = await supabase.from('training_modules').insert(insertData).select().single();
+    if (error) { 
+      console.error('Error creating module:', error);
+      toast.error('Erro ao criar módulo'); 
+      return; 
+    }
     setModules([...modules, data]);
     setModuleForm({ title: '' });
     toast.success('Módulo adicionado!');
@@ -118,12 +135,22 @@ export default function TrainingModuleAdmin() {
       return;
     }
     const moduleLessons = lessons.filter(l => l.module_id === moduleId);
-    const { data, error } = await supabase.from('training_lessons').insert({ 
-      ...lessonForm, 
+    const insertData = { 
+      title: lessonForm.title,
+      description: lessonForm.description,
+      video_url: lessonForm.video_url,
+      methodology_name: lessonForm.methodology_name,
+      duration: lessonForm.duration,
+      content_markdown: lessonForm.content_markdown,
       module_id: moduleId,
       display_order: moduleLessons.length
-    }).select().single();
-    if (error) { toast.error('Erro ao adicionar aula'); return; }
+    };
+    const { data, error } = await supabase.from('training_lessons').insert(insertData).select().single();
+    if (error) { 
+      console.error('Error creating lesson:', error);
+      toast.error('Erro ao adicionar aula'); 
+      return; 
+    }
     setLessons([...lessons, data]);
     setLessonForm({ title: '', description: '', video_url: '', methodology_name: '', duration: '10s', content_markdown: '' });
     toast.success('Aula adicionada ao módulo!');

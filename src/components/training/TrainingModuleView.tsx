@@ -314,7 +314,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                         <div className="flex items-center gap-2 text-red-500 mb-4 font-bold uppercase text-xs tracking-widest">
                           <FileText size={16} /> Guia de Apoio
                         </div>
-                        <ReactMarkdown className="text-gray-300 text-sm leading-relaxed">
+                        <ReactMarkdown>
                           {currentVideo.content_markdown}
                         </ReactMarkdown>
                       </div>

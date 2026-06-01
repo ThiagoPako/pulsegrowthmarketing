@@ -309,52 +309,79 @@ export default function TrainingModuleAdmin() {
                       </Dialog>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {lessons.filter(l => l.module_id === mod.id).map(lesson => (
-                        <div key={lesson.id} className="p-3 bg-secondary/20 rounded-lg flex flex-col gap-3 group">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center text-primary">
-                                {lesson.video_url ? <Play size={18} /> : <Video size={18} />}
+                        <div key={lesson.id} className="relative aspect-video rounded-xl bg-[#1a1a1a] border border-white/5 overflow-hidden group shadow-lg">
+                          {/* Placeholder/Thumbnail Simulado */}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10" />
+                          
+                          <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
+                            {lesson.video_url ? (
+                              <div className="relative w-full h-full">
+                                <video src={lesson.video_url} className="w-full h-full object-cover opacity-40" />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center backdrop-blur-sm border border-white/20">
+                                    <Play size={20} className="text-white fill-current ml-1" />
+                                  </div>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-sm font-semibold">{lesson.title}</p>
-                                <p className="text-[10px] text-muted-foreground">{lesson.methodology_name} • {lesson.duration}</p>
+                            ) : (
+                              <Video size={40} className="text-white/10" />
+                            )}
+                          </div>
+
+                          {/* Info Overlay */}
+                          <div className="absolute bottom-0 left-0 right-0 p-4 z-20">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <h5 className="text-sm font-bold text-white truncate">{lesson.title}</h5>
+                                <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
+                                  {lesson.methodology_name || 'Sem metodologia'} • {lesson.duration}
+                                </p>
                               </div>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-8 w-8 text-primary hover:bg-primary/10"
-                                onClick={() => {
-                                  const input = document.createElement('input');
-                                  input.type = 'file';
-                                  input.accept = 'video/*';
-                                  input.onchange = (e) => handleFileUpload(e as any, lesson.id);
-                                  input.click();
-                                }}
-                                disabled={uploading === lesson.id}
-                              >
-                                {uploading === lesson.id ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => deleteLesson(lesson.id)}>
-                                <Trash2 size={14} />
-                              </Button>
+                              <div className="flex gap-1 shrink-0">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-7 w-7 rounded-full bg-white/10 hover:bg-primary hover:text-white transition-all backdrop-blur-md border border-white/10"
+                                  onClick={() => {
+                                    const input = document.createElement('input');
+                                    input.type = 'file';
+                                    input.accept = 'video/*';
+                                    input.onchange = (e) => handleFileUpload(e as any, lesson.id);
+                                    input.click();
+                                  }}
+                                  disabled={uploading === lesson.id}
+                                >
+                                  {uploading === lesson.id ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-7 w-7 rounded-full bg-white/10 hover:bg-destructive hover:text-white transition-all backdrop-blur-md border border-white/10"
+                                  onClick={() => deleteLesson(lesson.id)}
+                                >
+                                  <Trash2 size={12} />
+                                </Button>
+                              </div>
                             </div>
                           </div>
                           
-                          {lesson.video_url && (
-                            <div className="text-[10px] text-muted-foreground truncate bg-background/50 p-1 px-2 rounded">
-                              Link: <a href={lesson.video_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{lesson.video_url}</a>
-                            </div>
-                          )}
+                          {/* Status Badge */}
+                          <div className="absolute top-3 right-3 z-30">
+                            <Badge className={lesson.video_url ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 backdrop-blur-sm" : "bg-amber-500/20 text-amber-400 border-amber-500/30 backdrop-blur-sm"}>
+                              {lesson.video_url ? 'Com Vídeo' : 'Vazio'}
+                            </Badge>
+                          </div>
                         </div>
                       ))}
+                      
+                      {/* Empty State */}
                       {lessons.filter(l => l.module_id === mod.id).length === 0 && (
-                        <p className="col-span-full text-center text-xs text-muted-foreground py-4 border border-dashed rounded-lg">
-                          Nenhum vídeo adicionado a este módulo.
-                        </p>
+                        <div className="col-span-full aspect-video rounded-xl border-2 border-dashed border-white/5 flex flex-col items-center justify-center text-muted-foreground bg-white/[0.02]">
+                          <Video size={32} className="mb-2 opacity-20" />
+                          <p className="text-xs">Nenhum slot criado</p>
+                        </div>
                       )}
                     </div>
                   </div>

@@ -63,25 +63,31 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
 
   const loadTracks = async () => {
     try {
+      console.log('Fetching tracks...');
       const { data, error } = await supabase
         .from('training_tracks')
-        .select('*')
-        .eq('is_active', true)
+        .select('id, title, description, thumbnail_url, category, estimated_time, difficulty, is_active')
         .order('created_at', { ascending: false });
       
       if (error) {
         console.error('Error loading tracks:', error);
-        toast.error('Erro ao carregar trilhas');
+        toast.error('Erro ao carregar trilhas: ' + (error.message || 'Erro de conexão'));
         return;
       }
       
-      if (data) setTracks(data);
+      console.log('Tracks loaded:', data?.length);
+      if (data) {
+        // Fallback filter in JS if eq('is_active', true) was problematic
+        const activeTracks = data.filter(t => t.is_active !== false);
+        setTracks(activeTracks);
+      }
     } catch (err) {
       console.error('Unexpected error loading tracks:', err);
     } finally {
       setLoading(false);
     }
   };
+
 
 
   const loadTrackDetails = async (trackId: string) => {

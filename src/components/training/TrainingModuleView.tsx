@@ -48,6 +48,8 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   const [currentVideo, setCurrentVideo] = useState<Lesson | null>(null);
   const [showPlayer, setShowPlayer] = useState(false);
   const [hoveredTrack, setHoveredTrack] = useState<string | null>(null);
+  const [forceUpdate, setForceUpdate] = useState(0);
+
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 

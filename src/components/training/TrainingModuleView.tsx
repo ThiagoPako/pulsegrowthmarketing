@@ -13,6 +13,8 @@ interface Track {
   description: string;
   thumbnail_url: string;
   category: string;
+  estimated_time?: string;
+  difficulty?: string;
 }
 
 interface Module {
@@ -32,6 +34,7 @@ interface Lesson {
   duration: string;
   display_order: number;
   completed?: boolean;
+  content_markdown?: string;
 }
 
 export default function TrainingModuleView({ userId }: { userId: string }) {

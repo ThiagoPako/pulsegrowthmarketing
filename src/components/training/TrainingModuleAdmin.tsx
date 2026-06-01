@@ -47,9 +47,9 @@ export default function TrainingModuleAdmin() {
   const [loading, setLoading] = useState(true);
 
   // Form states
-  const [trackForm, setTrackForm] = useState({ title: '', description: '', category: 'Metodologia' });
+  const [trackForm, setTrackForm] = useState({ title: '', description: '', category: 'Metodologia', estimated_time: '', difficulty: 'Iniciante' });
   const [moduleForm, setModuleForm] = useState({ title: '' });
-  const [lessonForm, setLessonForm] = useState({ title: '', description: '', video_url: '', methodology_name: '', duration: '10s' });
+  const [lessonForm, setLessonForm] = useState({ title: '', description: '', video_url: '', methodology_name: '', duration: '10s', content_markdown: '' });
 
   useEffect(() => {
     loadTracks();

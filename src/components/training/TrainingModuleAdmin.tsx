@@ -330,20 +330,23 @@ export default function TrainingModuleAdmin() {
         <div className="md:col-span-3">
           {selectedTrack ? (
             <div className="space-y-6">
-              <div className="flex justify-between items-center bg-secondary/30 p-4 rounded-xl">
+              <div className="flex justify-between items-center bg-zinc-900/50 p-6 rounded-3xl border border-white/5 backdrop-blur-sm shadow-xl">
                 <div>
-                  <h3 className="text-lg font-bold">{selectedTrack.title}</h3>
-                  <p className="text-sm text-muted-foreground">{selectedTrack.description}</p>
+                  <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white">{selectedTrack.title}</h3>
+                  <p className="text-sm text-gray-400 font-medium mt-1">{selectedTrack.description}</p>
                 </div>
                 <Dialog>
                   <DialogTrigger asChild>
-                    <Button size="sm" variant="outline"><FolderPlus className="mr-2" size={16} /> Novo Módulo</Button>
+                    <Button size="sm" variant="outline" className="border-red-600/30 text-red-600 hover:bg-red-600 hover:text-white rounded-full font-black uppercase italic tracking-widest text-xs h-10 px-6 transition-all"><FolderPlus className="mr-2" size={16} /> Novo Módulo</Button>
                   </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader><DialogTitle>Adicionar Módulo à Trilha</DialogTitle></DialogHeader>
-                    <div className="space-y-4 pt-4">
-                      <Input placeholder="Nome do Módulo (ex: Módulo 1: Gravação de Falas)" value={moduleForm.title} onChange={e => setModuleForm({title: e.target.value})} />
-                      <Button className="w-full" onClick={createModule}>Adicionar Módulo</Button>
+                  <DialogContent className="bg-[#1a1a1a] border-white/10 text-white rounded-[2rem]">
+                    <DialogHeader><DialogTitle className="italic uppercase font-black">Adicionar Módulo à Trilha</DialogTitle></DialogHeader>
+                    <div className="space-y-6 pt-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 ml-2">Título do Módulo</label>
+                        <Input placeholder="Módulo 1: Gravação de Falas" value={moduleForm.title} onChange={e => setModuleForm({title: e.target.value})} className="bg-zinc-900 border-white/10 h-12 rounded-2xl" />
+                      </div>
+                      <Button className="w-full bg-red-600 hover:bg-red-700 h-12 rounded-2xl font-black uppercase italic tracking-widest" onClick={createModule}>Adicionar Módulo</Button>
                     </div>
                   </DialogContent>
                 </Dialog>

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Plus, Trash2, Edit2, GripVertical, Video, FolderPlus, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
@@ -16,6 +17,8 @@ interface Track {
   description: string;
   category: string;
   is_active: boolean;
+  estimated_time?: string;
+  difficulty?: string;
 }
 
 interface Module {
@@ -44,9 +47,9 @@ export default function TrainingModuleAdmin() {
   const [loading, setLoading] = useState(true);
 
   // Form states
-  const [trackForm, setTrackForm] = useState({ title: '', description: '', category: 'Metodologia' });
+  const [trackForm, setTrackForm] = useState({ title: '', description: '', category: 'Metodologia', estimated_time: '', difficulty: 'Iniciante' });
   const [moduleForm, setModuleForm] = useState({ title: '' });
-  const [lessonForm, setLessonForm] = useState({ title: '', description: '', video_url: '', methodology_name: '', duration: '10s' });
+  const [lessonForm, setLessonForm] = useState({ title: '', description: '', video_url: '', methodology_name: '', duration: '10s', content_markdown: '' });
 
   useEffect(() => {
     loadTracks();
@@ -78,7 +81,7 @@ export default function TrainingModuleAdmin() {
     const { data, error } = await supabase.from('training_tracks').insert(trackForm).select().single();
     if (error) { toast.error('Erro ao criar trilha'); return; }
     setTracks([data, ...tracks]);
-    setTrackForm({ title: '', description: '', category: 'Metodologia' });
+    setTrackForm({ title: '', description: '', category: 'Metodologia', estimated_time: '', difficulty: 'Iniciante' });
     toast.success('Trilha criada com sucesso!');
   };
 
@@ -104,7 +107,7 @@ export default function TrainingModuleAdmin() {
     }).select().single();
     if (error) { toast.error('Erro ao adicionar aula'); return; }
     setLessons([...lessons, data]);
-    setLessonForm({ title: '', description: '', video_url: '', methodology_name: '', duration: '10s' });
+    setLessonForm({ title: '', description: '', video_url: '', methodology_name: '', duration: '10s', content_markdown: '' });
     toast.success('Vídeo/Aula adicionada ao slot!');
   };
 
@@ -139,7 +142,22 @@ export default function TrainingModuleAdmin() {
             <div className="space-y-4 pt-4">
               <Input placeholder="Título da Trilha (ex: Metodologia de Captação)" value={trackForm.title} onChange={e => setTrackForm({...trackForm, title: e.target.value})} />
               <Textarea placeholder="Descrição curta" value={trackForm.description} onChange={e => setTrackForm({...trackForm, description: e.target.value})} />
-              <Input placeholder="Categoria (ex: Videomaker, Social Media)" value={trackForm.category} onChange={e => setTrackForm({...trackForm, category: e.target.value})} />
+              <div className="grid grid-cols-2 gap-4">
+                <Input placeholder="Categoria" value={trackForm.category} onChange={e => setTrackForm({...trackForm, category: e.target.value})} />
+                <Input placeholder="Tempo Estimado (ex: 2h)" value={trackForm.estimated_time} onChange={e => setTrackForm({...trackForm, estimated_time: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Dificuldade</label>
+                <Select value={trackForm.difficulty} onValueChange={val => setTrackForm({...trackForm, difficulty: val})}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Iniciante">Iniciante</SelectItem>
+                    <SelectItem value="Intermediário">Intermediário</SelectItem>
+                    <SelectItem value="Avançado">Avançado</SelectItem>
+                    <SelectItem value="Especialista">Especialista</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <Button className="w-full" onClick={createTrack}>Criar Trilha</Button>
             </div>
           </DialogContent>
@@ -211,7 +229,8 @@ export default function TrainingModuleAdmin() {
                             <div className="grid grid-cols-2 gap-4">
                                 <Input placeholder="Duração (ex: 5-10s)" value={lessonForm.duration} onChange={e => setLessonForm({...lessonForm, duration: e.target.value})} />
                             </div>
-                            <Textarea placeholder="Instruções para o colaborador" value={lessonForm.description} onChange={e => setLessonForm({...lessonForm, description: e.target.value})} />
+                            <Textarea placeholder="Instruções curtas" value={lessonForm.description} onChange={e => setLessonForm({...lessonForm, description: e.target.value})} />
+                            <Textarea placeholder="Conteúdo detalhado (Markdown)" value={lessonForm.content_markdown} onChange={e => setLessonForm({...lessonForm, content_markdown: e.target.value})} rows={6} />
                             <Button className="w-full" onClick={() => createLesson(mod.id)}>Salvar Slot</Button>
                           </div>
                         </DialogContent>

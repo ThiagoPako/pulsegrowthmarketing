@@ -3,9 +3,10 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Play, CheckCircle2, Circle, Clock, ChevronRight, ChevronLeft, Info, X, Video } from 'lucide-react';
+import { Play, CheckCircle2, Circle, Clock, ChevronRight, ChevronLeft, Info, X, Video, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import ReactMarkdown from 'react-markdown';
 
 interface Track {
   id: string;
@@ -13,6 +14,8 @@ interface Track {
   description: string;
   thumbnail_url: string;
   category: string;
+  estimated_time?: string;
+  difficulty?: string;
 }
 
 interface Module {
@@ -32,6 +35,7 @@ interface Lesson {
   duration: string;
   display_order: number;
   completed?: boolean;
+  content_markdown?: string;
 }
 
 export default function TrainingModuleView({ userId }: { userId: string }) {
@@ -150,10 +154,21 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
               alt="Featured"
             />
             <div className="absolute bottom-[20%] left-12 z-20 max-w-xl space-y-4">
-              <Badge className="bg-red-600 text-white hover:bg-red-700 border-none px-3 py-1 text-sm font-bold uppercase tracking-widest">
-                Destaque
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge className="bg-red-600 text-white hover:bg-red-700 border-none px-3 py-1 text-sm font-bold uppercase tracking-widest">
+                  Destaque
+                </Badge>
+                {tracks[0]?.difficulty && (
+                  <Badge variant="outline" className="border-white/40 text-white uppercase text-[10px] tracking-wider">
+                    {tracks[0].difficulty}
+                  </Badge>
+                )}
+              </div>
               <h1 className="text-6xl font-black tracking-tighter uppercase italic">{tracks[0]?.title || "Treinamento Pulse"}</h1>
+              <div className="flex items-center gap-4 text-emerald-500 font-bold text-sm">
+                <span>Recomendado para você</span>
+                <span className="text-gray-400">{tracks[0]?.estimated_time || '2h 30min'}</span>
+              </div>
               <p className="text-lg text-gray-300 line-clamp-3">
                 {tracks[0]?.description || "Aprenda a nossa metodologia exclusiva de captação e edição rápida. O segredo para vídeos de alta qualidade em tempo recorde."}
               </p>
@@ -163,14 +178,14 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                   className="bg-white text-black hover:bg-gray-200 px-8 text-lg font-bold"
                   onClick={() => tracks[0] && setSelectedTrack(tracks[0])}
                 >
-                  <Play className="mr-2 fill-current" /> Começar
+                  <Play className="mr-2 fill-current" /> Assistir
                 </Button>
                 <Button 
                   size="lg" 
                   variant="outline" 
                   className="bg-gray-500/50 text-white border-none hover:bg-gray-500/70 px-8 text-lg font-bold backdrop-blur-md"
                 >
-                  <Info className="mr-2" /> Saiba mais
+                  <Info className="mr-2" /> Detalhes
                 </Button>
               </div>
             </div>
@@ -287,9 +302,45 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                     </Button>
                   )}
                 </div>
-                <p className="text-lg text-gray-300 max-w-4xl leading-relaxed">
-                  {currentVideo?.description || selectedTrack.description}
-                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-6">
+                  <div className="md:col-span-2 space-y-6">
+                    <p className="text-lg text-gray-300 leading-relaxed">
+                      {currentVideo?.description || selectedTrack.description}
+                    </p>
+                    
+                    {currentVideo?.content_markdown && (
+                      <div className="bg-white/5 rounded-lg p-6 border border-white/10 prose prose-invert max-w-none">
+                        <div className="flex items-center gap-2 text-red-500 mb-4 font-bold uppercase text-xs tracking-widest">
+                          <FileText size={16} /> Guia de Apoio
+                        </div>
+                        <ReactMarkdown>
+                          {currentVideo.content_markdown}
+                        </ReactMarkdown>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                      <h4 className="text-xs font-black uppercase text-gray-500 mb-3 tracking-widest">Detalhes do Curso</h4>
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-400">Dificuldade</span>
+                          <span className="font-bold text-white">{selectedTrack.difficulty || 'Iniciante'}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-400">Tempo Estimado</span>
+                          <span className="font-bold text-white">{selectedTrack.estimated_time || '2h 30min'}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-400">Total de Aulas</span>
+                          <span className="font-bold text-white">{lessons.length}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 

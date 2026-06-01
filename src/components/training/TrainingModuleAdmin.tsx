@@ -152,9 +152,10 @@ export default function TrainingModuleAdmin() {
       toast.error('Erro ao adicionar aula'); 
       return; 
     }
-    setLessons([...lessons, data]);
+    setLessons(prev => [...prev, data]);
     setLessonForm({ title: '', description: '', video_url: '', methodology_name: '', duration: '10s', content_markdown: '' });
     toast.success('Aula adicionada ao módulo!');
+
   };
 
   const onDragOver = (e: React.DragEvent) => {

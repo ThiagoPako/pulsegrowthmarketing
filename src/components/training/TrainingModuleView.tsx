@@ -302,9 +302,45 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                     </Button>
                   )}
                 </div>
-                <p className="text-lg text-gray-300 max-w-4xl leading-relaxed">
-                  {currentVideo?.description || selectedTrack.description}
-                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-6">
+                  <div className="md:col-span-2 space-y-6">
+                    <p className="text-lg text-gray-300 leading-relaxed">
+                      {currentVideo?.description || selectedTrack.description}
+                    </p>
+                    
+                    {currentVideo?.content_markdown && (
+                      <div className="bg-white/5 rounded-lg p-6 border border-white/10 prose prose-invert max-w-none">
+                        <div className="flex items-center gap-2 text-red-500 mb-4 font-bold uppercase text-xs tracking-widest">
+                          <FileText size={16} /> Guia de Apoio
+                        </div>
+                        <ReactMarkdown className="text-gray-300 text-sm leading-relaxed">
+                          {currentVideo.content_markdown}
+                        </ReactMarkdown>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                      <h4 className="text-xs font-black uppercase text-gray-500 mb-3 tracking-widest">Detalhes do Curso</h4>
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-400">Dificuldade</span>
+                          <span className="font-bold text-white">{selectedTrack.difficulty || 'Iniciante'}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-400">Tempo Estimado</span>
+                          <span className="font-bold text-white">{selectedTrack.estimated_time || '2h 30min'}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-400">Total de Aulas</span>
+                          <span className="font-bold text-white">{lessons.length}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 

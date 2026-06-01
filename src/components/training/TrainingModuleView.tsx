@@ -148,10 +148,12 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
       }
     } catch (error: any) {
       console.error('Error loading track details:', error);
-      toast.error('Erro ao carregar detalhes do treinamento');
+      toast.error('Erro ao carregar detalhes: ' + (error.message || 'Falha na API'));
     } finally {
       setLoading(false);
     }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, lessonId: string) => {
     const file = e.target.files?.[0];
     if (!file) return;

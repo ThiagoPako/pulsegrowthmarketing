@@ -3200,6 +3200,7 @@ export type Database = {
           monthly_salary: number | null
           name: string
           role: Database["public"]["Enums"]["app_role"]
+          training_bio: string | null
           updated_at: string
         }
         Insert: {
@@ -3216,6 +3217,7 @@ export type Database = {
           monthly_salary?: number | null
           name: string
           role?: Database["public"]["Enums"]["app_role"]
+          training_bio?: string | null
           updated_at?: string
         }
         Update: {
@@ -3232,6 +3234,7 @@ export type Database = {
           monthly_salary?: number | null
           name?: string
           role?: Database["public"]["Enums"]["app_role"]
+          training_bio?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -3923,11 +3926,13 @@ export type Database = {
       }
       training_lessons: {
         Row: {
+          content_markdown: string | null
           created_at: string
           description: string | null
           display_order: number
           duration: string | null
           id: string
+          is_preview: boolean | null
           methodology_name: string | null
           module_id: string | null
           thumbnail_url: string | null
@@ -3936,11 +3941,13 @@ export type Database = {
           video_url: string | null
         }
         Insert: {
+          content_markdown?: string | null
           created_at?: string
           description?: string | null
           display_order?: number
           duration?: string | null
           id?: string
+          is_preview?: boolean | null
           methodology_name?: string | null
           module_id?: string | null
           thumbnail_url?: string | null
@@ -3949,11 +3956,13 @@ export type Database = {
           video_url?: string | null
         }
         Update: {
+          content_markdown?: string | null
           created_at?: string
           description?: string | null
           display_order?: number
           duration?: string | null
           id?: string
+          is_preview?: boolean | null
           methodology_name?: string | null
           module_id?: string | null
           thumbnail_url?: string | null
@@ -4125,6 +4134,8 @@ export type Database = {
           category: string | null
           created_at: string
           description: string | null
+          difficulty: string | null
+          estimated_time: string | null
           id: string
           is_active: boolean | null
           thumbnail_url: string | null
@@ -4135,6 +4146,8 @@ export type Database = {
           category?: string | null
           created_at?: string
           description?: string | null
+          difficulty?: string | null
+          estimated_time?: string | null
           id?: string
           is_active?: boolean | null
           thumbnail_url?: string | null
@@ -4145,6 +4158,8 @@ export type Database = {
           category?: string | null
           created_at?: string
           description?: string | null
+          difficulty?: string | null
+          estimated_time?: string | null
           id?: string
           is_active?: boolean | null
           thumbnail_url?: string | null

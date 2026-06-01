@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Trash2, Edit2, GripVertical, Video, FolderPlus } from 'lucide-react';
+import { Plus, Trash2, Edit2, GripVertical, Video, FolderPlus, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Track {
@@ -199,7 +200,7 @@ export default function TrainingModuleAdmin() {
                       </h4>
                       <Dialog>
                         <DialogTrigger asChild>
-                          <Button size="xs" variant="ghost" className="text-primary h-8"><Plus size={14} className="mr-1" /> Add Vídeo Slot</Button>
+                          <Button size="sm" variant="ghost" className="text-primary h-8"><Plus size={14} className="mr-1" /> Add Vídeo Slot</Button>
                         </DialogTrigger>
                         <DialogContent>
                           <DialogHeader><DialogTitle>Novo Slot de Vídeo/Metodologia</DialogTitle></DialogHeader>

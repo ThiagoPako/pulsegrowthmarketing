@@ -69,20 +69,43 @@ export default function TrainingModuleAdmin() {
   }, [selectedTrack]);
 
   const loadTracks = async () => {
-    const { data } = await supabase.from('training_tracks').select('*').order('created_at', { ascending: false });
-    if (data) setTracks(data);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase.from('training_tracks').select('*').order('created_at', { ascending: false });
+      if (error) {
+        console.error('Error loading tracks (Admin):', error);
+        toast.error('Erro ao carregar trilhas');
+        return;
+      }
+      if (data) setTracks(data);
+    } catch (err) {
+      console.error('Unexpected error loading tracks (Admin):', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const loadTrackDetails = async (trackId: string) => {
-    const { data: modData } = await supabase.from('training_modules').select('*').eq('track_id', trackId).order('display_order', { ascending: true });
-    if (modData) {
-      setModules(modData);
-      const moduleIds = modData.map(m => m.id);
-      const { data: lessData } = await supabase.from('training_lessons').select('*').in('module_id', moduleIds).order('display_order', { ascending: true });
-      if (lessData) setLessons(lessData);
+    try {
+      const { data: modData, error: modErr } = await supabase.from('training_modules').select('*').eq('track_id', trackId).order('display_order', { ascending: true });
+      if (modErr) throw modErr;
+      
+      if (modData) {
+        setModules(modData);
+        const moduleIds = modData.map(m => m.id);
+        if (moduleIds.length > 0) {
+          const { data: lessData, error: lessErr } = await supabase.from('training_lessons').select('*').in('module_id', moduleIds).order('display_order', { ascending: true });
+          if (lessErr) throw lessErr;
+          if (lessData) setLessons(lessData);
+        } else {
+          setLessons([]);
+        }
+      }
+    } catch (error: any) {
+      console.error('Error loading track details (Admin):', error);
+      toast.error('Erro ao carregar detalhes');
     }
   };
+
 
   const createTrack = async () => {
     if (!trackForm.title.trim()) {

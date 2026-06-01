@@ -126,6 +126,26 @@ export default function TrainingModuleAdmin() {
     toast.success('Aula adicionada ao módulo!');
   };
 
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const onDrop = async (e: React.DragEvent, lessonId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      const mockEvent = {
+        target: {
+          files: [file]
+        }
+      } as unknown as React.ChangeEvent<HTMLInputElement>;
+      handleFileUpload(mockEvent, lessonId);
+    }
+  };
+
   const deleteTrack = async (id: string) => {
     if (!confirm('Tem certeza? Isso excluirá todos os módulos e vídeos desta trilha.')) return;
     const { error } = await supabase.from('training_tracks').delete().eq('id', id);

@@ -416,8 +416,9 @@ export default function TrainingModuleAdmin() {
                           onDrop={(e) => onDrop(e, lesson.id)}
                           className={`relative aspect-video rounded-2xl overflow-hidden group shadow-2xl transition-all duration-300 ${
                             !lesson.video_url 
-                              ? 'border-2 border-dashed border-primary/20 bg-primary/[0.02] hover:border-primary/50 hover:bg-primary/[0.05]' 
+                              ? 'border-2 border-dashed border-red-600/20 bg-red-600/[0.02] hover:border-red-600/50 hover:bg-red-600/[0.05]' 
                               : 'border border-white/5 bg-[#1a1a1a]'
+
                           }`}
                         >
                           {/* Background Content */}

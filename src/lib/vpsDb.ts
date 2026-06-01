@@ -65,12 +65,26 @@ async function executeQuery(body: any): Promise<{ data: any; error: any; count?:
       headers: getAuthHeaders(),
       body: JSON.stringify(body),
     });
-    const result = await response.json();
+    
+    const contentType = response.headers.get('content-type') || '';
+    let result: any;
+    
+    if (contentType.includes('application/json')) {
+      result = await response.json();
+    } else {
+      const text = await response.text();
+      console.error('VPS API returned non-JSON response:', text.slice(0, 200));
+      return { 
+        data: null, 
+        error: { 
+          message: 'O servidor da VPS retornou uma resposta inválida (HTML/Texto). Isso geralmente significa que a API está fora do ar ou o Nginx bloqueou a requisição.' 
+        } 
+      };
+    }
     
     if (!response.ok) {
       console.error('VPS Query Error:', result.error || result.message || 'Unknown error');
       
-      // Special handling for the "Table not allowed" error to guide the user
       const errorMessage = typeof result.error === 'string' ? result.error : (result.error?.message || result.message || `HTTP ${response.status}`);
       if (errorMessage.includes('not allowed')) {
         return { 
@@ -87,9 +101,10 @@ async function executeQuery(body: any): Promise<{ data: any; error: any; count?:
     return { data: result.data, error: result.error || null, count: result.count ?? null };
   } catch (error: any) {
     console.error('VPS Network/Execution Error:', error);
-    return { data: null, error: { message: error.message || 'Network error' } };
+    return { data: null, error: { message: 'Erro de conexão com a VPS: ' + (error.message || 'Network error') } };
   }
 }
+
 
 
 

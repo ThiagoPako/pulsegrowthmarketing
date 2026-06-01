@@ -471,10 +471,11 @@ export default function TrainingModuleAdmin() {
                                   <Button 
                                     variant="ghost" 
                                     size="icon" 
-                                    className="h-8 w-8 rounded-full bg-white/10 hover:bg-primary hover:text-white transition-all backdrop-blur-md border border-white/10"
+                                    className="h-8 w-8 rounded-full bg-white/10 hover:bg-red-600 hover:text-white transition-all backdrop-blur-md border border-white/10"
                                     onClick={() => setUploadModalLesson(lesson)}
                                     disabled={uploading === lesson.id}
                                   >
+
                                     {uploading === lesson.id ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                                   </Button>
                                   <Button 

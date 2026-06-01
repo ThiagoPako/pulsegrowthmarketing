@@ -540,7 +540,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                                   )}
                                   <div className="relative w-24 aspect-video shrink-0 bg-zinc-800 rounded-xl overflow-hidden border border-white/5 shadow-xl transition-transform duration-500 group-hover:scale-105">
                                     <div className={cn(
-                                      "absolute inset-0 z-10 flex items-center justify-center transition-all duration-500",
+                                      "absolute inset-0 z-10 flex items-center justify-center transition-all duration-300",
                                       currentVideo?.id === lesson.id ? 'bg-red-600/40 opacity-100' : 'bg-black/60 opacity-0 group-hover:opacity-100'
                                     )}>
                                       <Play size={20} className={cn("text-white fill-current", currentVideo?.id === lesson.id && "animate-pulse")} />
@@ -551,7 +551,11 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                                       </div>
                                     )}
                                     <div className="w-full h-full bg-zinc-950 flex items-center justify-center">
-                                      <Video size={24} className="text-zinc-800" />
+                                      {lesson.thumbnail_url ? (
+                                        <img src={lesson.thumbnail_url} className="w-full h-full object-cover" alt={lesson.title} />
+                                      ) : (
+                                        <Video size={24} className="text-zinc-800" />
+                                      )}
                                     </div>
                                   </div>
                                   <div className="flex-1 min-w-0">
@@ -571,6 +575,23 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                                       )}
                                     </div>
                                   </div>
+                                  
+                                  {isAdmin && (
+                                    <div className="absolute right-2 top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                       <Button 
+                                          variant="ghost" size="icon" 
+                                          className="h-7 w-7 rounded-full bg-black/60 backdrop-blur-md hover:bg-red-600 text-white"
+                                          onClick={(e) => { e.stopPropagation(); setUploadModalLesson(lesson); }}
+                                       ><Upload size={12} /></Button>
+                                       {lesson.video_url && (
+                                         <Button 
+                                            variant="ghost" size="icon" 
+                                            className="h-7 w-7 rounded-full bg-black/60 backdrop-blur-md hover:bg-destructive text-white"
+                                            onClick={(e) => { e.stopPropagation(); deleteLesson(lesson.id); }}
+                                         ><Trash2 size={12} /></Button>
+                                       )}
+                                    </div>
+                                  )}
                                 </button>
                               ))}
                           </div>
@@ -584,6 +605,52 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
           </div>
         </div>
       )}
+
+      {/* Modal de Upload para Administrador */}
+      <Dialog open={!!uploadModalLesson} onOpenChange={(open) => !open && setUploadModalLesson(null)}>
+        <DialogContent className="sm:max-w-md bg-[#111] border-white/5 text-white rounded-[2.5rem] shadow-2xl p-8">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3 text-2xl font-black italic uppercase tracking-tighter text-white">
+              <FileVideo className="text-red-600" />
+              Upload Elite
+            </DialogTitle>
+            <DialogDescription className="text-zinc-500 font-bold uppercase tracking-widest text-[10px] mt-2">
+              Vídeo para: <span className="text-red-500 italic">{uploadModalLesson?.title}</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-10 mt-6 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-[2rem] bg-white/[0.01] hover:bg-white/[0.03] transition-all group cursor-pointer"
+               onClick={() => modalFileInputRef.current?.click()}>
+            <input type="file" ref={modalFileInputRef} className="hidden" accept="video/*" onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} />
+            
+            {selectedFile ? (
+              <div className="flex flex-col items-center animate-in zoom-in duration-500">
+                <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4 text-emerald-500 shadow-2xl shadow-emerald-500/10">
+                  <CheckCircle2 size={40} />
+                </div>
+                <p className="text-sm font-black italic text-white mb-1 truncate max-w-[280px]">{selectedFile.name}</p>
+                <p className="text-[9px] text-zinc-500 font-black uppercase tracking-[0.2em]">{(selectedFile.size / (1024 * 1024)).toFixed(2)} MB • Pronto</p>
+              </div>
+            ) : (
+              <>
+                <div className="w-20 h-20 rounded-3xl bg-red-600/10 flex items-center justify-center mb-4 text-red-600 group-hover:scale-110 group-hover:bg-red-600 group-hover:text-white transition-all duration-500 shadow-xl">
+                  <Upload size={38} />
+                </div>
+                <p className="text-sm font-black italic uppercase tracking-[0.2em] text-white">Clique para selecionar</p>
+                <p className="text-[9px] text-zinc-600 font-bold uppercase tracking-[0.1em] mt-2">MP4, MOV OU WEBM</p>
+              </>
+            )}
+          </div>
+
+          <DialogFooter className="flex gap-3 mt-8">
+            <Button variant="ghost" onClick={() => setUploadModalLesson(null)} className="flex-1 text-zinc-600 hover:text-white hover:bg-white/5 font-black uppercase italic tracking-widest h-12 rounded-2xl">Cancelar</Button>
+            <Button onClick={handleModalFileUpload} disabled={!selectedFile || uploading === uploadModalLesson?.id} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black uppercase italic tracking-widest h-12 rounded-2xl shadow-xl shadow-red-600/10">
+              {uploading === uploadModalLesson?.id ? (<><Loader2 size={16} className="animate-spin mr-2" />Enviando...</>) : 'Confirmar Upload'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

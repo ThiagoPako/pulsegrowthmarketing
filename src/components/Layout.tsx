@@ -94,7 +94,7 @@ const navCategories: NavCategory[] = [
       { path: '/clube-descontos', label: 'Clube Descontos', icon: Gift, roles: ['admin', 'social_media'] },
       { path: '/painel-tv', label: 'Painel TV', icon: Monitor, roles: ['admin'] },
       { path: '/cancelamentos', label: 'Cancelamentos', icon: UserMinus, roles: ['admin', 'social_media'] },
-      { path: '/treinamento', label: 'Treinamento', icon: BookOpen, roles: ['admin'] },
+      { path: '/treinamento', label: 'Treinamento', icon: BookOpen, roles: ['admin', 'videomaker', 'social_media', 'editor', 'designer', 'fotografo', 'endomarketing'] },
       { path: '/portal-videos', label: 'Vídeos Portal', icon: Video, roles: ['admin'] },
       { path: '/landing-admin', label: 'Landing Page', icon: Rocket, roles: ['admin'] },
       { path: '/propostas', label: 'Propostas', icon: FileText, roles: ['admin'] },

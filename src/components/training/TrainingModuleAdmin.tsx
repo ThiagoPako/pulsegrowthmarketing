@@ -1,7 +1,6 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/vpsDb';
-import { supabase as supabaseReal } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -145,27 +144,31 @@ export default function TrainingModuleAdmin() {
 
     setUploading(lessonId);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
-      const filePath = `lessons/${fileName}`;
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('path', 'training-videos');
 
-      const { data: uploadData, error: uploadError } = await supabaseReal.storage
-        .from('training-videos')
-        .upload(filePath, file);
+      const token = localStorage.getItem('pulse_jwt');
+      const response = await fetch('https://agenciapulse.tech/api/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
 
-      if (uploadError) throw uploadError;
+      const result = await response.json();
 
-      // Get public URL
-      const { data: { publicUrl } } = supabaseReal.storage
-        .from('training-videos')
-        .getPublicUrl(filePath);
+      if (!response.ok) throw new Error(result.error || 'Erro no upload');
 
-      // Update lesson in DB
+      const videoUrl = result.url; // URL retornada pela sua API da VPS
+
+      // Update lesson in DB via your VPS API
       const { error: updateError } = await supabase
         .from('training_lessons')
         .update({ 
-          video_url: publicUrl,
-          video_path: filePath 
+          video_url: videoUrl,
+          video_path: result.path || videoUrl 
         } as any)
         .eq('id', lessonId);
 
@@ -173,10 +176,10 @@ export default function TrainingModuleAdmin() {
 
       // Update local state
       setLessons(prev => prev.map(l => 
-        l.id === lessonId ? { ...l, video_url: publicUrl, video_path: filePath } : l
+        l.id === lessonId ? { ...l, video_url: videoUrl, video_path: result.path || videoUrl } : l
       ));
 
-      toast.success('Vídeo enviado com sucesso!');
+      toast.success('Vídeo enviado com sucesso para a VPS!');
     } catch (error: any) {
       console.error('Upload error:', error);
       toast.error('Erro ao fazer upload do vídeo: ' + error.message);

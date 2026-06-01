@@ -105,10 +105,11 @@ function PageLoader() {
   );
 }
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function ProtectedRoute({ children, noLayout = false }: { children: React.ReactNode, noLayout?: boolean }) {
   const { user, loading } = useAuth();
   if (loading) return <PageLoader />;
   if (!user) return <Navigate to="/login" replace />;
+  if (noLayout) return <>{children}</>;
   return <Layout>{children}</Layout>;
 }
 
@@ -197,7 +198,7 @@ function AppRoutes() {
         <Route path="/painel-tv" element={<ProtectedRoute><TvPanelControl /></ProtectedRoute>} />
         <Route path="/cancelamentos" element={<ProtectedRoute><CancellationReports /></ProtectedRoute>} />
         <Route path="/treinamento-gestao" element={<ProtectedRoute><TrainingManager /></ProtectedRoute>} />
-        <Route path="/treinamento" element={<ProtectedRoute><Training /></ProtectedRoute>} />
+        <Route path="/treinamento" element={<ProtectedRoute noLayout><Training /></ProtectedRoute>} />
         <Route path="/treinamento-registro" element={<TrainingRegister />} />
         <Route path="/evento/:token" element={<EventRegistration />} />
         <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />

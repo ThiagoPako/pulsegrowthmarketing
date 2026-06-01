@@ -143,10 +143,19 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   return (
     <div className="min-h-screen bg-[#141414] text-white -m-6 p-6 font-sans">
       {!selectedTrack ? (
-        <div className="space-y-12">
+        <div className="space-y-12 pb-20">
           {/* Billboard */}
-          <div className="relative h-[70vh] -mt-6 -mx-6 mb-12 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-r from-[#141414] via-transparent to-transparent z-10" />
+          <div className="relative h-[80vh] -mt-6 -mx-6 mb-12 overflow-hidden">
+            <div className="absolute top-6 left-12 z-50">
+              <h2 className="text-2xl font-black italic uppercase tracking-tighter text-red-600">Pulse <span className="text-white">Academy</span></h2>
+            </div>
+            
+            <div className="absolute top-6 right-12 z-50 flex items-center gap-6">
+               <button onClick={() => window.location.href = '/dashboard'} className="text-sm font-bold text-white/70 hover:text-white transition-colors">Dashboard</button>
+               <div className="w-10 h-10 rounded bg-red-600 flex items-center justify-center font-bold text-sm">P</div>
+            </div>
+
+            <div className="absolute inset-0 bg-gradient-to-r from-[#141414] via-[#141414]/40 to-transparent z-10" />
             <div className="absolute inset-0 bg-gradient-to-t from-[#141414] to-transparent z-10" />
             <img 
               src={tracks[0]?.thumbnail_url || "https://images.unsplash.com/photo-1492691523567-6170f2295b21?auto=format&fit=crop&q=80&w=2070"} 

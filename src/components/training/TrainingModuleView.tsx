@@ -90,12 +90,11 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
       }
       
       console.log('Tracks loaded:', data);
-      if (data) {
+      if (data && data.length > 0) {
         setTracks(data);
-        if (data.length > 0 && !selectedTrack) {
-           // Auto-select first track to show content if it's empty
-           console.log('Auto-selecting track:', data[0].title);
-        }
+        // Garante que a trilha Pulse seja a selecionada por padrão
+        const pulseTrack = data.find(t => t.title.includes('Pulse')) || data[0];
+        setSelectedTrack(pulseTrack);
       }
     } catch (err) {
       console.error('Unexpected error loading tracks:', err);
@@ -103,8 +102,6 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
       setLoading(false);
     }
   };
-
-
 
 
   const loadTrackDetails = async (trackId: string) => {
@@ -126,7 +123,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
         if (moduleIds.length > 0) {
           const { data: lessData, error: lessErr } = await supabase
             .from('training_lessons')
-            .select('id, module_id, title, description, video_url, video_path, methodology_name, duration, display_order, content_markdown')
+            .select('id, module_id, title, description, video_url, video_path, methodology_name, duration, display_order, content_markdown, thumbnail_url')
             .in('module_id', moduleIds)
             .order('display_order', { ascending: true });
 
@@ -156,6 +153,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
       setLoading(false);
     }
   };
+
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, lessonId: string) => {
     const file = e.target.files?.[0];

@@ -312,6 +312,13 @@ export default function CommercialProposal() {
     } catch { /* ignore corrupt data */ }
   }, []);
 
+  // Auto-apply 5% discount when annual contract is selected (custom proposal)
+  useEffect(() => {
+    if (proposalType !== 'personalizada') return;
+    setCustomDiscount(contractDuration === 'anual' ? 5 : 0);
+  }, [contractDuration, proposalType]);
+
+
   // Save draft on every change (debounced via effect)
   useEffect(() => {
     const draft = {
@@ -963,15 +970,8 @@ export default function CommercialProposal() {
     
     const additionalTotal = additionalServices.reduce((sum, s) => sum + s.price, 0);
     const monthlyTotalBeforeDiscount = baseTotal + (parseFloat(customMonthlyValue) || 0);
-    
-    // Auto-apply 5% discount if annual is selected
-    useEffect(() => {
-      if (contractDuration === 'anual') {
-        setCustomDiscount(5);
-      } else {
-        setCustomDiscount(0);
-      }
-    }, [contractDuration]);
+
+
 
     return (
       <>

@@ -493,6 +493,26 @@ app.get('/api/auth/me', async (req, res) => {
   }
 });
 
+// ─── Multi-city: cidades do usuário logado ─────────────────
+app.get('/api/me/cities', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    const { rows } = await pool.query(
+      'SELECT city, is_primary FROM user_cities WHERE user_id = $1 ORDER BY is_primary DESC, city ASC',
+      [user.id]
+    );
+    if (rows.length === 0) {
+      // Fallback: usuário sem registro recebe minacu como default
+      return res.json({ cities: ['minacu'], primary: 'minacu' });
+    }
+    const cities = rows.map(r => r.city);
+    const primary = rows.find(r => r.is_primary)?.city || cities[0];
+    res.json({ cities, primary });
+  } catch (e) {
+    res.status(401).json({ error: 'Não autenticado' });
+  }
+});
+
 // ─── Change password ────────────────────────────────────────
 app.post('/api/auth/change-password', async (req, res) => {
   try {

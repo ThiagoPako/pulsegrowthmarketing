@@ -101,41 +101,52 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
         .eq('track_id', trackId)
         .order('display_order', { ascending: true });
 
-      if (modErr) throw modErr;
-
-      if (modData) {
-        setModules(modData);
-        const moduleIds = modData.map(m => m.id);
-        
-        if (moduleIds.length > 0) {
-          const { data: lessData, error: lessErr } = await supabase
-            .from('training_lessons')
-            .select('id, module_id, title, description, video_url, video_path, methodology_name, duration, display_order, content_markdown, thumbnail_url')
-            .in('module_id', moduleIds)
-            .order('display_order', { ascending: true });
-
-          if (lessErr) throw lessErr;
-
-          const { data: progressData } = await supabase
-            .from('user_training_progress')
-            .select('lesson_id, status')
-            .eq('user_id', userId);
-
-          const progressMap = new Map((progressData || []).map(p => [p.lesson_id, p.status]));
-
-          if (lessData) {
-            setLessons(lessData.map(l => ({
-              ...l,
-              status: progressMap.get(l.id) || 'not_started'
-            })));
-          }
-        } else {
-          setLessons([]);
-        }
+      if (modErr) {
+        console.error('[Academy] modules error:', modErr);
+        toast.error('Erro ao carregar módulos: ' + (modErr.message || ''));
       }
+
+      const safeModules = modData || [];
+      setModules(safeModules);
+
+      const moduleIds = safeModules.map(m => m.id);
+      if (moduleIds.length === 0) {
+        setLessons([]);
+        return;
+      }
+
+      const [lessRes, progRes] = await Promise.allSettled([
+        supabase
+          .from('training_lessons')
+          .select('id, module_id, title, description, video_url, video_path, methodology_name, duration, display_order, content_markdown, thumbnail_url')
+          .in('module_id', moduleIds)
+          .order('display_order', { ascending: true }),
+        supabase
+          .from('user_training_progress')
+          .select('lesson_id, status')
+          .eq('user_id', userId),
+      ]);
+
+      let lessData: any[] = [];
+      if (lessRes.status === 'fulfilled') {
+        if (lessRes.value.error) console.error('[Academy] lessons error:', lessRes.value.error);
+        lessData = lessRes.value.data || [];
+      } else {
+        console.error('[Academy] lessons rejected:', lessRes.reason);
+      }
+
+      let progressData: any[] = [];
+      if (progRes.status === 'fulfilled' && !progRes.value.error) {
+        progressData = progRes.value.data || [];
+      } else if (progRes.status === 'fulfilled') {
+        console.warn('[Academy] progress error (ignorado):', progRes.value.error);
+      }
+
+      const progressMap = new Map(progressData.map(p => [p.lesson_id, p.status]));
+      setLessons(lessData.map((l: any) => ({ ...l, status: progressMap.get(l.id) || 'not_started' })));
     } catch (error: any) {
       console.error('Error loading track details:', error);
-      toast.error('Erro ao carregar detalhes');
+      toast.error('Erro ao carregar detalhes: ' + (error?.message || ''));
     } finally {
       setLoading(false);
     }
@@ -278,7 +289,8 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
               <div ref={scrollContainerRef} className="flex gap-2 overflow-x-auto scrollbar-hide px-4 pb-8">
                 {tracks.map(track => (
                   <motion.div key={track.id} onClick={() => setSelectedTrack(track)} className="relative flex-none w-72 aspect-video bg-[#2f2f2f] rounded-md overflow-hidden cursor-pointer shadow-lg" whileHover={{ scale: 1.1, zIndex: 40 }}>
-                    <img src={track.thumbnail_url} className="w-full h-full object-cover" alt={track.title} />
+                    <img src={track.thumbnail_url} className="w-full h-full object-cover" alt={track.title} onError={(e) => { (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1492691523567-6170f2295b21?auto=format&fit=crop&q=80&w=600'; }} />
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-3"><h3 className="font-black text-xs uppercase tracking-tight text-white truncate">{track.title}</h3></div>
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 hover:opacity-100 transition-opacity flex flex-col justify-end p-4"><h3 className="font-bold text-sm">{track.title}</h3></div>
                   </motion.div>
                 ))}
@@ -334,17 +346,38 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                       </div>
                     </div>
                     <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-3 scrollbar-thin scrollbar-thumb-red-600/20">
-                      {modules.map((mod, modIdx) => (
+                      {modules.length === 0 && (
+                        <div className="text-center py-12 text-zinc-500 text-xs font-bold uppercase tracking-widest">Nenhum módulo cadastrado ainda</div>
+                      )}
+                      {modules.map((mod, modIdx) => {
+                        const modLessons = lessons.filter(l => l.module_id === mod.id);
+                        return (
                         <div key={mod.id} className="space-y-4">
                           <div className="flex items-center gap-3 px-2"><div className="h-10 w-10 rounded-xl bg-red-600/10 border border-red-600/20 flex items-center justify-center text-red-600 font-black text-sm italic">{modIdx + 1}</div><h4 className="text-[12px] font-black uppercase tracking-[0.15em] text-white/90 truncate">{mod.title}</h4></div>
                           <div className="space-y-3">
-                            {lessons.filter(l => l.module_id === mod.id).map(lesson => (
+                            {modLessons.length === 0 && (
+                              <div className="px-4 py-3 rounded-2xl border border-dashed border-white/10 text-[10px] uppercase tracking-widest text-zinc-600 font-bold">Slots em breve</div>
+                            )}
+                            {modLessons.map((lesson, lessonIdx) => (
                               <button key={lesson.id} onClick={() => setCurrentVideo(lesson)} className={cn("w-full group flex items-center gap-5 p-4 rounded-2xl transition-all border text-left relative overflow-hidden", currentVideo?.id === lesson.id ? 'bg-red-600/10 border-red-600/30' : 'bg-zinc-900/40 border-transparent hover:bg-zinc-800/60')}>
                                 <div className="relative w-24 aspect-video shrink-0 bg-zinc-800 rounded-xl overflow-hidden border border-white/5 shadow-xl transition-transform duration-500 group-hover:scale-105">
                                   <div className={cn("absolute inset-0 z-10 flex items-center justify-center transition-all duration-300", currentVideo?.id === lesson.id ? 'bg-red-600/40 opacity-100' : 'bg-black/60 opacity-0 group-hover:opacity-100')}><Play size={20} className={cn("text-white fill-current", currentVideo?.id === lesson.id && "animate-pulse")} /></div>
-                                  <div className="w-full h-full bg-zinc-950 flex items-center justify-center">{lesson.thumbnail_url ? <img src={lesson.thumbnail_url} className="w-full h-full object-cover" alt={lesson.title} /> : <Video size={24} className="text-zinc-800" />}</div>
+                                  {lesson.thumbnail_url ? (
+                                    <img src={lesson.thumbnail_url} className="w-full h-full object-cover" alt={lesson.title} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                                  ) : (
+                                    <div className="w-full h-full bg-gradient-to-br from-red-600/30 to-zinc-950 flex flex-col items-center justify-center gap-1">
+                                      <Video size={20} className="text-white/40" />
+                                      <span className="text-[8px] font-black uppercase tracking-widest text-white/60">Slot {lessonIdx + 1}</span>
+                                    </div>
+                                  )}
                                 </div>
-                                <div className="flex-1 min-w-0"><p className={cn("text-xs font-black italic uppercase tracking-tighter truncate", currentVideo?.id === lesson.id ? 'text-red-500' : 'text-zinc-400')}>{lesson.title}</p><div className="flex items-center gap-3 mt-1.5"><span className="text-[10px] text-zinc-600 font-bold uppercase tracking-[0.2em]">{lesson.duration || '10s'}</span></div></div>
+                                <div className="flex-1 min-w-0">
+                                  <p className={cn("text-xs font-black italic uppercase tracking-tighter truncate", currentVideo?.id === lesson.id ? 'text-red-500' : 'text-zinc-300')}>{lesson.title || `Slot ${lessonIdx + 1}`}</p>
+                                  <div className="flex items-center gap-3 mt-1.5">
+                                    <span className="text-[10px] text-zinc-600 font-bold uppercase tracking-[0.2em]">{lesson.duration || (lesson.video_url ? '—' : 'Sem vídeo')}</span>
+                                    {lesson.status === 'completed' && <CheckCircle2 size={12} className="text-emerald-500" />}
+                                  </div>
+                                </div>
                                 {isAdmin && (
                                   <div className="absolute right-2 top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full bg-black/60 backdrop-blur-md hover:bg-red-600 text-white" onClick={(e) => { e.stopPropagation(); setUploadModalLesson(lesson); }}><Upload size={12} /></Button>
@@ -355,7 +388,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                             ))}
                           </div>
                         </div>
-                      ))}
+                      );})}
                     </div>
                   </div>
                 </div>

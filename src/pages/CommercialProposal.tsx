@@ -737,15 +737,23 @@ export default function CommercialProposal() {
         endomarketing_data: endoData,
       } as any;
 
-      const { data, error } = await vpsDb.from('commercial_proposals').insert(payload).select('*').single();
-      if (error) throw error;
+      let data: any;
+      if (editingProposalId) {
+        const res = await vpsDb.from('commercial_proposals').update(payload).eq('id', editingProposalId).select('*').single();
+        if (res.error) throw res.error;
+        data = res.data;
+      } else {
+        const res = await vpsDb.from('commercial_proposals').insert(payload).select('*').single();
+        if (res.error) throw res.error;
+        data = res.data;
+      }
 
       if (!data?.token) throw new Error('Proposta salva sem token de compartilhamento.');
 
       const link = `${window.location.origin}/proposta/${data.token}`;
       setShareLink(link);
       await copyToClipboard(link);
-      toast.success('Proposta salva! Link copiado para a área de transferência.');
+      toast.success(editingProposalId ? 'Proposta atualizada! Link copiado.' : 'Proposta salva! Link copiado para a área de transferência.');
       localStorage.removeItem(DRAFT_KEY);
       refetchProposals();
     } catch (e: any) {

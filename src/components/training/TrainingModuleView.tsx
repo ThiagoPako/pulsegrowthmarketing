@@ -425,16 +425,16 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
       ) : (
         <div className="animate-in fade-in duration-300">
           {/* Top bar */}
-          <div className="sticky top-0 z-40 flex items-center justify-between px-5 lg:px-8 py-3 bg-gradient-to-b from-[#0a0a0a] via-[#0a0a0a]/95 to-transparent backdrop-blur-sm">
+          <div className="sticky top-0 z-40 flex items-center justify-between px-3 sm:px-5 lg:px-8 py-2 sm:py-3 bg-gradient-to-b from-[#0a0a0a] via-[#0a0a0a]/95 to-transparent backdrop-blur-sm">
             <Button variant="ghost" size="sm" onClick={() => { setSelectedTrack(null); setCurrentVideo(null); }} className="text-white/80 hover:text-white hover:bg-white/5 gap-1.5 h-8 px-2 text-xs font-bold">
               <ChevronLeft size={16} /> Catálogo
             </Button>
-            <h2 className="text-base font-black italic uppercase tracking-tighter text-red-600">Pulse <span className="text-white">Academy</span></h2>
+            <h2 className="text-sm sm:text-base font-black italic uppercase tracking-tighter text-red-600">Pulse <span className="text-white">Academy</span></h2>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 px-5 lg:px-8 pb-12">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 px-3 sm:px-5 lg:px-8 pb-8 sm:pb-12">
             {/* LEFT — Player + metadata */}
-            <div className="lg:col-span-8 space-y-4">
+            <div className="lg:col-span-8 space-y-3 sm:space-y-4">
               <div className="aspect-video bg-black rounded-xl overflow-hidden border border-white/5 relative shadow-2xl">
                 {currentVideo?.video_url ? (
                   <iframe src={currentVideo.video_url.includes('youtube') ? currentVideo.video_url.replace('watch?v=', 'embed/') : currentVideo.video_url} className="w-full h-full" allowFullScreen key={currentVideo.video_url} />

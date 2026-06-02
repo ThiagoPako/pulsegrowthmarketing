@@ -196,7 +196,7 @@ export default function ProposalViewer() {
     { id: 'campanhas', name: 'Criação de Campanhas de Marketing', icon: Megaphone, desc: 'Campanhas sazonais e promocionais desenhadas sob medida para gerar autoridade, engajamento e conversão para o seu negócio.' },
     { id: 'gestao_projetos', name: 'Gestão de Projetos', icon: ListChecks, desc: 'Acompanhamento próximo com gestor dedicado, prazos controlados, fluxo de aprovação organizado e relatórios periódicos de resultado.' },
     { id: 'roteiros', name: 'Roteiros', icon: FileText, desc: 'Roteiros estratégicos baseados em copywriting, gatilhos mentais e funil de vendas — pensados para o público-alvo do seu segmento.' },
-    { id: 'captacao', name: 'Captação', icon: Camera, desc: 'Gravações profissionais com videomaker dedicado, equipamentos de cinema, iluminação e direção de cena no local do cliente.' },
+    { id: 'captacao', name: 'Captação', icon: Camera, desc: 'Videomaker especializado em direcionamento de gravação, com foco em qualidade de cena, áudio limpo e enquadramento profissional no local do cliente.' },
     { id: 'edicao', name: 'Edição Profissional', icon: Scissors, desc: 'Edição premium com tratamento de cor, motion graphics, legendas dinâmicas, sound design e identidade visual da marca.' },
     { id: 'designer', name: 'Designer', icon: Palette, desc: 'Artes estáticas, criativos para feed e stories, carrosséis e materiais gráficos seguindo a identidade visual da marca.' },
     { id: 'meta_ads', name: 'Gestão de Tráfego Meta Ads', icon: BarChart3, desc: 'Gestão especializada de campanhas no Facebook e Instagram Ads: segmentação avançada, criativos testados, otimização diária e foco em ROAS.' },

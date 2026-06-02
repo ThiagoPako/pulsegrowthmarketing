@@ -5777,12 +5777,14 @@ app.get('/api/training/sign', async (req, res) => {
       return res.json({ url: src, external: true });
     }
 
-    // Real existence check before issuing token — never sign for missing files
+    // Não bloqueia mais por checagem em disco aqui — o /stream resolve e retorna 404 se faltar.
     const absCheck = resolveTrainingFile(src);
-    if (!absCheck || !fs.existsSync(absCheck)) {
-      console.error('[training/sign] file not found on disk', { lessonId, src, resolved: absCheck, roots: TRAINING_VIDEO_ROOTS });
-      return res.status(404).json({ error: 'video file not found on disk', src, resolved: absCheck });
+    if (!absCheck) {
+      console.warn('[training/sign] file path could not be resolved, issuing token anyway', { lessonId, src });
     }
+
+
+
 
 
     const token = jwt.sign(

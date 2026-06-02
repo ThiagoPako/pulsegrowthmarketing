@@ -5636,6 +5636,11 @@ app.post('/api/quick-chat', (req, res) => {
 //   3. /api/training/stream requires a short-lived (10 min) signed token bound to lessonId + user
 //   4. Stream response forces inline disposition, no-store cache, range support
 const TRAINING_VIDEO_ROOT = process.env.TRAINING_VIDEO_ROOT || '/var/www/html/uploads/training-videos';
+const TRAINING_VIDEO_ROOTS = Array.from(new Set([
+  path.resolve(TRAINING_VIDEO_ROOT),
+  path.resolve('/var/www/uploads/training-videos'),
+  path.resolve('/var/www/html/uploads/training-videos'),
+]));
 const TRAINING_STREAM_TTL = 60 * 10; // 10 min
 
 function getTrainingStreamContentType(filePathOrUrl = '') {
@@ -5661,15 +5666,29 @@ function resolveTrainingFile(videoPathOrUrl) {
   let rel = String(videoPathOrUrl).trim();
   // Strip full URLs
   rel = rel.replace(/^https?:\/\/[^/]+/, '');
+  rel = decodeURIComponent(rel.split('?')[0].split('#')[0] || '');
   rel = rel.replace(/^\/+/, '');
-  rel = rel.replace(/^uploads\/training-videos\//, '');
-  rel = rel.replace(/^uploads\//, '');
-  rel = rel.replace(/^training-videos\//, '');
   // Prevent traversal
   if (rel.includes('..') || rel.includes('\0')) return null;
-  const abs = path.resolve(TRAINING_VIDEO_ROOT, rel);
-  if (!abs.startsWith(path.resolve(TRAINING_VIDEO_ROOT))) return null;
-  return abs;
+
+  const relativeCandidates = Array.from(new Set([
+    rel,
+    rel.replace(/^uploads\/training-videos\//, ''),
+    rel.replace(/^uploads\//, ''),
+    rel.replace(/^training-videos\//, ''),
+  ].filter(Boolean)));
+
+  for (const root of TRAINING_VIDEO_ROOTS) {
+    for (const candidate of relativeCandidates) {
+      const abs = path.resolve(root, candidate);
+      if (!abs.startsWith(root)) continue;
+      if (fs.existsSync(abs)) return abs;
+    }
+  }
+
+  const fallbackRoot = TRAINING_VIDEO_ROOTS[0];
+  const fallbackPath = path.resolve(fallbackRoot, relativeCandidates[0] || '');
+  return fallbackPath.startsWith(fallbackRoot) ? fallbackPath : null;
 }
 
 // GET /api/training/sign?lessonId=xxx → { url }

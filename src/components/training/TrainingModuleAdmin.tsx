@@ -51,6 +51,47 @@ export default function TrainingModuleAdmin() {
   const [uploadModalLesson, setUploadModalLesson] = useState<Lesson | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const modalFileInputRef = useRef<HTMLInputElement>(null);
+  const [previewLesson, setPreviewLesson] = useState<Lesson | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewIsExternal, setPreviewIsExternal] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPreviewUrl(null);
+    setPreviewIsExternal(false);
+    if (!previewLesson) return;
+    const src = previewLesson.video_url || previewLesson.video_path || '';
+    const isExternal = /youtube\.com|youtu\.be|vimeo\.com/i.test(src);
+    if (isExternal) {
+      setPreviewIsExternal(true);
+      setPreviewUrl(src.includes('youtube') ? src.replace('watch?v=', 'embed/') : src);
+      return;
+    }
+    (async () => {
+      try {
+        setPreviewLoading(true);
+        const token = localStorage.getItem('pulse_jwt');
+        const res = await fetch(
+          `https://agenciapulse.tech/api/training/sign?lessonId=${encodeURIComponent(previewLesson.id)}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+        );
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok || !data?.url) {
+          toast.error(`Não foi possível abrir o vídeo: ${data?.error || `HTTP ${res.status}`}`);
+          return;
+        }
+        const url = data.url.startsWith('http') ? data.url : `https://agenciapulse.tech${data.url}`;
+        setPreviewUrl(url);
+      } catch {
+        if (!cancelled) toast.error('Falha ao carregar vídeo.');
+      } finally {
+        if (!cancelled) setPreviewLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [previewLesson]);
 
   // Form states
   const [trackForm, setTrackForm] = useState({ title: '', description: '', category: 'Metodologia', estimated_time: '', difficulty: 'Iniciante' });

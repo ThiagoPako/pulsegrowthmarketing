@@ -25,6 +25,7 @@ import ProductionAssistant from '@/components/ProductionAssistant';
 import WelcomeRocket from '@/components/WelcomeRocket';
 import VirtualOffice from '@/components/VirtualOffice';
 import QuickShortcutsBar from '@/components/QuickShortcutsBar';
+import CitySwitcher from '@/components/CitySwitcher';
 
 type NavCategory = {
   label: string;
@@ -322,6 +323,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 ml-auto shrink-0">
+            <CitySwitcher />
             {/* Virtual Office button */}
             <Dialog>
               <DialogTrigger asChild>

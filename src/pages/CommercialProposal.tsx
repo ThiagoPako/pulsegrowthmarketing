@@ -310,6 +310,7 @@ export default function CommercialProposal() {
       endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription,
       customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings,
       cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, cronogramaPricingMode, cronogramaTotalCustomValue,
+      contractDuration, selectedBaseServices, additionalServices
     };
     const timer = setTimeout(() => {
       try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* quota */ }

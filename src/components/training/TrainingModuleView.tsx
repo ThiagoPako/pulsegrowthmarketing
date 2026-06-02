@@ -62,6 +62,8 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
+  const currentVideoSource = currentVideo?.video_url || currentVideo?.video_path || '';
+  const isExternalVideo = /youtube|vimeo/i.test(currentVideoSource);
 
   useEffect(() => {
     loadTracks();
@@ -77,9 +79,9 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   useEffect(() => {
     let cancelled = false;
     setSignedVideoUrl(null);
-    if (!currentVideo?.id || !currentVideo?.video_url) return;
+    if (!currentVideo?.id || !currentVideoSource) return;
     // External providers (YouTube/Vimeo) keep using iframe
-    if (/youtube|vimeo/i.test(currentVideo.video_url)) return;
+    if (isExternalVideo) return;
 
     (async () => {
       try {
@@ -105,7 +107,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
     })();
 
     return () => { cancelled = true; };
-  }, [currentVideo?.id, currentVideo?.video_url]);
+  }, [currentVideo?.id, currentVideoSource, isExternalVideo]);
 
   const loadTracks = async () => {
     try {
@@ -472,13 +474,13 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
             {/* LEFT — Player + metadata */}
             <div className="lg:col-span-8 space-y-3 sm:space-y-4">
               <div className="aspect-video bg-black rounded-xl overflow-hidden border border-white/5 relative shadow-2xl">
-                {currentVideo?.video_url ? (
-                  /youtube|vimeo/i.test(currentVideo.video_url) ? (
+                {currentVideoSource ? (
+                  isExternalVideo ? (
                     <iframe
-                      src={currentVideo.video_url.includes('youtube') ? currentVideo.video_url.replace('watch?v=', 'embed/') : currentVideo.video_url}
+                      src={currentVideoSource.includes('youtube') ? currentVideoSource.replace('watch?v=', 'embed/') : currentVideoSource}
                       className="w-full h-full"
                       allowFullScreen
-                      key={currentVideo.video_url}
+                      key={currentVideoSource}
                     />
                   ) : signedVideoUrl ? (
                     <video

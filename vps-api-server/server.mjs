@@ -5640,6 +5640,10 @@ const TRAINING_VIDEO_ROOTS = Array.from(new Set([
   path.resolve(TRAINING_VIDEO_ROOT),
   path.resolve('/var/www/uploads/training-videos'),
   path.resolve('/var/www/html/uploads/training-videos'),
+  path.resolve('/var/www/uploads/general'),
+  path.resolve('/var/www/html/uploads/general'),
+  path.resolve('/var/www/uploads/content'),
+  path.resolve('/var/www/html/uploads/content'),
   path.resolve('/var/www/uploads'),
   path.resolve('/var/www/html/uploads'),
 ]));

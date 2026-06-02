@@ -60,10 +60,45 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const modalFileInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const isAdmin = profile?.role === 'admin';
   const currentVideoSource = currentVideo?.video_url || currentVideo?.video_path || '';
   const isExternalVideo = /youtube|vimeo/i.test(currentVideoSource);
+
+  const getTrainingAuthToken = () => {
+    const vpsToken = localStorage.getItem('pulse_jwt');
+    if (vpsToken) return vpsToken;
+
+    if (session?.access_token) return session.access_token;
+
+    try {
+      for (let index = 0; index < localStorage.length; index += 1) {
+        const key = localStorage.key(index);
+        if (!key || !key.includes('auth-token')) continue;
+
+        const rawValue = localStorage.getItem(key);
+        if (!rawValue) continue;
+
+        const parsedValue = JSON.parse(rawValue);
+
+        if (typeof parsedValue?.access_token === 'string') return parsedValue.access_token;
+        if (typeof parsedValue?.currentSession?.access_token === 'string') return parsedValue.currentSession.access_token;
+
+        if (Array.isArray(parsedValue)) {
+          const sessionCandidate = parsedValue.find(
+            (entry) => typeof entry?.access_token === 'string' || typeof entry?.currentSession?.access_token === 'string',
+          );
+
+          if (typeof sessionCandidate?.access_token === 'string') return sessionCandidate.access_token;
+          if (typeof sessionCandidate?.currentSession?.access_token === 'string') return sessionCandidate.currentSession.access_token;
+        }
+      }
+    } catch {
+      return null;
+    }
+
+    return null;
+  };
 
   useEffect(() => {
     loadTracks();
@@ -86,12 +121,12 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
     (async () => {
       try {
         setVideoLoading(true);
-        const token = localStorage.getItem('pulse_jwt');
+        const token = getTrainingAuthToken();
         const res = await fetch(
           `https://agenciapulse.tech/api/training/sign?lessonId=${encodeURIComponent(currentVideo.id)}`,
           { headers: token ? { Authorization: `Bearer ${token}` } : {} },
         );
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (cancelled) return;
         if (!res.ok || !data?.url) {
           toast.error('Não foi possível liberar o vídeo.');
@@ -107,7 +142,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
     })();
 
     return () => { cancelled = true; };
-  }, [currentVideo?.id, currentVideoSource, isExternalVideo]);
+  }, [currentVideo?.id, currentVideoSource, isExternalVideo, session?.access_token]);
 
   const loadTracks = async () => {
     try {
@@ -487,6 +522,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                       src={signedVideoUrl}
                       className="w-full h-full bg-black"
                       controls
+                      crossOrigin="use-credentials"
                       controlsList="nodownload noremoteplayback noplaybackrate"
                       disablePictureInPicture
                       onContextMenu={(e) => e.preventDefault()}

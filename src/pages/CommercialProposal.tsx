@@ -151,7 +151,41 @@ const ADDITIONAL_SERVICES = [
 
 export default function CommercialProposal() {
   const { user } = useAuth();
-  const { users } = useApp();
+  const { users: appUsers } = useApp();
+
+  // Load profiles DIRECTLY from the profiles table (same as Team page) to
+  // guarantee avatar_url is populated. AppContext.users sometimes returns
+  // without avatar_url on the VPS, which broke the proposal photos.
+  const { data: directProfiles = [] } = useQuery({
+    queryKey: ['proposal-direct-profiles'],
+    queryFn: async () => {
+      const { data } = await vpsDb.from('profiles').select('*');
+      return ((data as any[]) || []).map(p => ({
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        role: p.role,
+        avatarUrl: p.avatar_url,
+        displayName: p.display_name,
+        jobTitle: p.job_title,
+      }));
+    },
+  });
+
+  // Merge: prefer fresh avatar from direct profiles fetch.
+  const users = useMemo(() => {
+    if (!directProfiles.length) return appUsers;
+    const byId = new Map(directProfiles.map(p => [p.id, p]));
+    const merged = appUsers.map(u => {
+      const fresh = byId.get(u.id);
+      return fresh?.avatarUrl ? { ...u, avatarUrl: fresh.avatarUrl } : u;
+    });
+    // Include any profile not in appUsers (edge case)
+    directProfiles.forEach(p => {
+      if (!merged.find(u => u.id === p.id)) merged.push(p as any);
+    });
+    return merged;
+  }, [appUsers, directProfiles]);
 
   // Common fields
   const [proposalType, setProposalType] = useState<ProposalType>('marketing');

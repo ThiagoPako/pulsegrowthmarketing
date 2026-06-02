@@ -336,6 +336,25 @@ export default function CommercialProposal() {
     setCustomDiscount(contractDuration === 'anual' ? 5 : 0);
   }, [contractDuration, proposalType]);
 
+  // Keep team member avatars in sync with the latest users list so that the
+  // photo shown in the preview is exactly the one persisted to the public link.
+  useEffect(() => {
+    if (!users.length) return;
+    setTeamMembers(prev => {
+      let changed = false;
+      const next = prev.map(m => {
+        const match = users.find(u => (u.displayName || u.name) === m.name);
+        const freshAvatar = match?.avatarUrl;
+        if (freshAvatar && freshAvatar !== m.avatarUrl) {
+          changed = true;
+          return { ...m, avatarUrl: freshAvatar };
+        }
+        return m;
+      });
+      return changed ? next : prev;
+    });
+  }, [users]);
+
 
   // Save draft on every change (debounced via effect)
   useEffect(() => {

@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppProvider, useApp } from "@/contexts/AppContext";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { CityProvider } from "@/contexts/CityContext";
 import Layout from "@/components/Layout";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Login from "@/pages/Login";
@@ -216,11 +217,13 @@ const App = () => (
       <TooltipProvider>
         <Sonner />
         <AuthProvider>
-          <BrowserRouter>
-            <AppProvider>
-              <AppRoutes />
-            </AppProvider>
-          </BrowserRouter>
+          <CityProvider>
+            <BrowserRouter>
+              <AppProvider>
+                <AppRoutes />
+              </AppProvider>
+            </BrowserRouter>
+          </CityProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

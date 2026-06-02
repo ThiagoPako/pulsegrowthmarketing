@@ -23,7 +23,7 @@ import {
   FileText, Plus, Trash2, CalendarIcon, Download, Eye, Users, Rocket,
   CheckCircle2, Film, Palette, Scissors, Camera, Monitor, Share2, BarChart3,
   Clock, Gift, AlertTriangle, X, Link2, Copy, ExternalLink, List, Code, Megaphone,
-  Sparkles, Loader2, UserPlus, DollarSign, Target, CalendarDays, ListChecks, Layers
+  Sparkles, Loader2, UserPlus, DollarSign, Target, CalendarDays, ListChecks, Layers, Pencil
 } from 'lucide-react';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';

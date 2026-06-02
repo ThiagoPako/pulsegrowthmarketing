@@ -126,17 +126,17 @@ function copyToClipboard(text: string): Promise<void> {
 
 // Serviços fixos inclusos no contrato mensal (sem cobrança extra)
 const INCLUDED_SERVICES = [
-  { id: 'social_media', name: 'Social Media', icon: Share2 },
-  { id: 'campanhas', name: 'Criação de Campanhas de Marketing', icon: Megaphone },
-  { id: 'gestao_projetos', name: 'Gestão de Projetos', icon: ListChecks },
-  { id: 'roteiros', name: 'Roteiros', icon: FileText },
-  { id: 'captacao', name: 'Captação', icon: Camera },
-  { id: 'edicao', name: 'Edição Profissional', icon: Scissors },
-  { id: 'designer', name: 'Designer', icon: Palette },
-  { id: 'meta_ads', name: 'Gestão de Tráfego Meta Ads', icon: BarChart3 },
-  { id: 'google_ads', name: 'Gestão de Tráfego Google Ads', icon: Target },
-  { id: 'portal_cliente', name: 'Portal do Cliente', icon: Monitor },
-  { id: 'reuniao_mensal', name: 'Reunião Mensal', icon: CalendarDays },
+  { id: 'social_media', name: 'Social Media', icon: Share2, desc: 'Planejamento editorial mensal, gestão estratégica das redes, copywriting persuasivo e publicações otimizadas para o algoritmo de cada plataforma.' },
+  { id: 'campanhas', name: 'Criação de Campanhas de Marketing', icon: Megaphone, desc: 'Campanhas sazonais e promocionais desenhadas sob medida para gerar autoridade, engajamento e conversão para o seu negócio.' },
+  { id: 'gestao_projetos', name: 'Gestão de Projetos', icon: ListChecks, desc: 'Acompanhamento próximo com gestor dedicado, prazos controlados, fluxo de aprovação organizado e relatórios periódicos de resultado.' },
+  { id: 'roteiros', name: 'Roteiros', icon: FileText, desc: 'Roteiros estratégicos baseados em copywriting, gatilhos mentais e funil de vendas — pensados para o público-alvo do seu segmento.' },
+  { id: 'captacao', name: 'Captação', icon: Camera, desc: 'Gravações profissionais com videomaker dedicado, equipamentos de cinema, iluminação e direção de cena no local do cliente.' },
+  { id: 'edicao', name: 'Edição Profissional', icon: Scissors, desc: 'Edição premium com tratamento de cor, motion graphics, legendas dinâmicas, sound design e identidade visual da marca.' },
+  { id: 'designer', name: 'Designer', icon: Palette, desc: 'Artes estáticas, criativos para feed e stories, carrosséis e materiais gráficos seguindo a identidade visual da marca.' },
+  { id: 'meta_ads', name: 'Gestão de Tráfego Meta Ads', icon: BarChart3, desc: 'Gestão especializada de campanhas no Facebook e Instagram Ads: segmentação avançada, criativos testados, otimização diária e foco em ROAS.' },
+  { id: 'google_ads', name: 'Gestão de Tráfego Google Ads', icon: Target, desc: 'Campanhas de Pesquisa, Display, YouTube e Performance Max — palavras-chave estratégicas, lances inteligentes e foco em lead qualificado.' },
+  { id: 'portal_cliente', name: 'Portal do Cliente', icon: Monitor, desc: 'Acesso exclusivo 24h para acompanhar agenda de gravações, aprovar conteúdos, ver entregas e métricas de performance em tempo real.' },
+  { id: 'reuniao_mensal', name: 'Reunião Mensal', icon: CalendarDays, desc: 'Reunião estratégica mensal de alinhamento — análise de resultados, ajustes de rota e planejamento das próximas ações.' },
 ];
 
 // Adicionais opcionais cobrados à parte (fora do valor fixo mensal)

@@ -2517,7 +2517,7 @@ export default function CommercialProposal() {
                         else totalProposals++;
                       }
                     }
-                    if (totalPhotos > 0) {
+                    if (totalProposals > 0) {
                       toast.success(`${totalPhotos} foto(s) atualizada(s) em ${totalProposals} proposta(s).${errors ? ` ${errors} falha(s).` : ''}`);
                       await refetchProposals();
                     } else {

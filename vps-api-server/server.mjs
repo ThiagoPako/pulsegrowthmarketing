@@ -4087,7 +4087,8 @@ app.post('/api/db/query', async (req, res) => {
     res.json(result);
   } catch (e) {
     console.error('DB query error:', e);
-    res.status(500).json({ data: null, error: { message: e.message } });
+    const status = e?.statusCode === 400 ? 400 : 500;
+    res.status(status).json({ data: null, error: { message: e.message } });
   }
 });
 

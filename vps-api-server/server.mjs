@@ -3734,15 +3734,23 @@ const TABLES_WITH_CITY = new Set([
 
 // Resolve a cidade ativa do request: header x-pulse-city, validado contra user_cities.
 // Fallback: primary do usuário, ou 'minacu' se não houver registro.
-async function resolveActiveCity(req, userId) {
+async function resolveActiveCity(req, userId, userObj = null) {
   const raw = String(req.headers['x-pulse-city'] || '').toLowerCase();
   const requested = (raw === 'minacu' || raw === 'uruacu') ? raw : null;
+
+  // Admins podem acessar qualquer cidade sem precisar de registro em user_cities
+  try {
+    if (userObj && await isAdminUser(userObj)) {
+      return requested || 'minacu';
+    }
+  } catch { /* segue fluxo normal */ }
+
   try {
     const { rows } = await pool.query(
       'SELECT city, is_primary FROM user_cities WHERE user_id = $1',
       [userId]
     );
-    if (rows.length === 0) return 'minacu';
+    if (rows.length === 0) return requested || 'minacu';
     const allowed = rows.map(r => r.city);
     if (requested && allowed.includes(requested)) return requested;
     return (rows.find(r => r.is_primary)?.city) || allowed[0];
@@ -3750,6 +3758,7 @@ async function resolveActiveCity(req, userId) {
     return requested || 'minacu';
   }
 }
+
 
 function sanitizeIdentifier(name) {
   return name.replace(/[^a-zA-Z0-9_]/g, '');

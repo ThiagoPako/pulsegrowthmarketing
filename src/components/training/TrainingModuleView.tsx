@@ -522,6 +522,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                       src={signedVideoUrl}
                       className="w-full h-full bg-black"
                       controls
+                      crossOrigin="use-credentials"
                       controlsList="nodownload noremoteplayback noplaybackrate"
                       disablePictureInPicture
                       onContextMenu={(e) => e.preventDefault()}

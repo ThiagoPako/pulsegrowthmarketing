@@ -151,7 +151,9 @@ export default function Team() {
     if (!form.name || !form.email || !form.password) { toast.error('Preencha todos os campos'); return; }
     if (form.password.length < 6) { toast.error('Senha deve ter no mínimo 6 caracteres'); return; }
 
-    const { error } = await signUp(form.email, form.password, form.name, form.role as AppRole);
+    if (!form.cities.length) { toast.error('Selecione ao menos uma cidade'); return; }
+    const primaryCity = form.cities.includes(form.primaryCity) ? form.primaryCity : form.cities[0];
+    const { error } = await signUp(form.email, form.password, form.name, form.role as AppRole, false, form.cities, primaryCity);
     if (error) {
       toast.error(error);
       return;

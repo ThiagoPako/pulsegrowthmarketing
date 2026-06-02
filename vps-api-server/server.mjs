@@ -4339,16 +4339,27 @@ app.put('/api/recordings/:id', async (req, res) => {
     if ((r.type === 'avulso' || r.prospect_name) && r.client_id == null && !clientIdNullable) {
       return res.status(500).json({ error: 'Schema da VPS desatualizado: client_id da tabela recordings ainda está NOT NULL e bloqueia vídeo avulso.' });
     }
-    const allowed = ['client_id','videomaker_id','date','start_time','type','status','confirmation_status', ...(hasProspectName ? ['prospect_name'] : [])];
+    const allowed = ['client_id','videomaker_id','date','start_time','type','status','confirmation_status','city', ...(hasProspectName ? ['prospect_name'] : [])];
     const sets = []; const vals = []; let idx = 1;
-    for (const key of allowed) { if (r[key] !== undefined) { sets.push(`${key} = $${idx}`); vals.push(r[key]); idx++; } }
+    for (const key of allowed) {
+      if (r[key] !== undefined) {
+        let value = r[key];
+        if (key === 'city') value = assertValidCity(scopeCity ? activeCity : value);
+        sets.push(`${key} = $${idx}`);
+        vals.push(value);
+        idx++;
+      }
+    }
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     vals.push(id);
     const cityClause = scopeCity ? ` AND city = $${idx + 1}` : '';
     if (scopeCity) vals.push(activeCity);
     const { rows } = await pool.query(`UPDATE recordings SET ${sets.join(', ')} WHERE id = $${idx}${cityClause} RETURNING *`, vals);
     res.json(rows[0]);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    const status = e?.statusCode === 400 ? 400 : 500;
+    res.status(status).json({ error: e.message });
+  }
 });
 
 app.delete('/api/recordings/:id', async (req, res) => {

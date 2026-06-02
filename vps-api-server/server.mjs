@@ -4094,7 +4094,7 @@ app.post('/api/clients', async (req, res) => {
         c.logo_url || null, c.fixed_day || 'segunda', c.fixed_time || '09:00', c.videomaker_id || null,
         c.backup_time || '14:00', c.backup_day || 'terca', c.extra_day || 'quarta',
         c.extra_content_types || '{}', c.accepts_extra ?? false, c.extra_client_appears ?? false,
-        c.whatsapp || '', c.whatsapp_group || null, c.email || '', activeCity,
+        c.whatsapp || '', c.whatsapp_group || null, c.email || '', (scopeCity ? activeCity : (c.city || 'minacu')),
         c.weekly_reels ?? 0, c.weekly_creatives ?? 0, c.weekly_goal ?? 10, c.has_endomarketing ?? false,
         c.has_vehicle_flyer ?? false, c.weekly_stories ?? 0, c.presence_days ?? 1, c.monthly_recordings ?? 4,
         c.niche || '', c.client_login || '', c.drive_link || '', c.drive_fotos || '',

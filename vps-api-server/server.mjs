@@ -5833,22 +5833,24 @@ app.get('/api/training/sign', async (req, res) => {
       return res.json({ url: src, external: true });
     }
 
-    // Não bloqueia mais por checagem em disco aqui — o /stream resolve e retorna 404 se faltar.
+    // Gate em disco: sem arquivo valido -> sem token. Evita o player abrir e dar erro.
     const absCheck = resolveTrainingFile(src);
-    if (!absCheck) {
-      console.warn('[training/sign] file path could not be resolved, issuing token anyway', { lessonId, src });
+    if (!absCheck || !fs.existsSync(absCheck)) {
+      console.warn('[training/sign] arquivo nao encontrado', { lessonId, src });
+      return res.status(404).json({ error: 'video file not available yet', code: 'NOT_ON_DISK' });
     }
-
-
-
-
+    let stat;
+    try { stat = fs.statSync(absCheck); } catch { stat = null; }
+    if (!stat || !stat.isFile() || stat.size < 1024) {
+      return res.status(409).json({ error: 'video is still being written', code: 'INCOMPLETE', size: stat?.size || 0 });
+    }
 
     const token = jwt.sign(
       { lessonId, sub: user.id, scope: 'training-stream' },
       JWT_SECRET,
       { expiresIn: TRAINING_STREAM_TTL },
     );
-    res.json({ url: `/api/training/stream/${lessonId}?token=${token}` });
+    res.json({ url: `/api/training/stream/${lessonId}?token=${token}`, size: stat.size });
   } catch (err) {
     console.error('[training/sign] auth error:', err?.message);
     res.status(401).json({ error: err.message || 'Unauthorized' });

@@ -284,14 +284,33 @@ export default function TrainingModuleAdmin() {
       const videoPath = result.path || result.filename || videoUrl;
 
       // Validação real: confirma que o arquivo existe no caminho esperado antes de liberar
-      const verifyRes = await fetch(
-        `https://agenciapulse.tech/api/training/verify?path=${encodeURIComponent(videoPath)}`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-      const verifyJson = await verifyRes.json().catch(() => ({}));
-      if (!verifyRes.ok || !verifyJson?.ok) {
-        throw new Error('Upload concluído mas arquivo não encontrado no servidor. Tente novamente.');
+      let verified = false;
+      try {
+        const verifyRes = await fetch(
+          `https://agenciapulse.tech/api/training/verify?path=${encodeURIComponent(videoPath)}`,
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        const verifyJson = await verifyRes.json().catch(() => ({}));
+        verified = !!(verifyRes.ok && verifyJson?.ok);
+        if (!verified) {
+          console.warn('[training upload] verify falhou, tentando HEAD direto', verifyJson);
+        }
+      } catch (e) {
+        console.warn('[training upload] verify endpoint erro, tentando HEAD direto', e);
       }
+
+      // Fallback: HEAD direto no arquivo público
+      if (!verified) {
+        try {
+          const head = await fetch(videoUrl, { method: 'HEAD', cache: 'no-store' });
+          verified = head.ok;
+        } catch {}
+      }
+
+      if (!verified) {
+        throw new Error('Upload concluído mas arquivo não pôde ser confirmado no servidor.');
+      }
+
 
       const { error: updateError } = await supabase
         .from('training_lessons')

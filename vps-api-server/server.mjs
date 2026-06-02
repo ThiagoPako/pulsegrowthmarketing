@@ -4303,7 +4303,10 @@ app.post('/api/recordings', async (req, res) => {
       const vals = [r.id || crypto.randomUUID(), r.client_id || null, r.videomaker_id, r.date, r.start_time, r.type || 'fixa', r.status || 'agendada', r.confirmation_status || 'pendente'];
       if (scopeCity) {
         cols.push('city');
-        vals.push(activeCity);
+        vals.push(assertValidCity(activeCity));
+      } else if (r.city !== undefined) {
+        cols.push('city');
+        vals.push(assertValidCity(r.city));
       }
       if (hasProspectName && r.prospect_name) {
         cols.push('prospect_name');

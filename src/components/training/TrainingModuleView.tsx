@@ -423,97 +423,139 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
         </div>
 
       ) : (
-        <div className="space-y-8 animate-in fade-in duration-500 max-w-[1600px] mx-auto p-6 lg:p-10">
-          <div className="flex items-center justify-between mb-8">
-            <Button variant="ghost" onClick={() => { setSelectedTrack(null); setCurrentVideo(null); }} className="text-white hover:text-red-600 gap-2"><ChevronLeft size={24} /> Voltar para o catálogo</Button>
-            <h2 className="text-3xl font-black italic uppercase tracking-tighter text-red-600">Pulse <span className="text-white">Original</span></h2>
+        <div className="animate-in fade-in duration-300">
+          {/* Top bar */}
+          <div className="sticky top-0 z-40 flex items-center justify-between px-5 lg:px-8 py-3 bg-gradient-to-b from-[#0a0a0a] via-[#0a0a0a]/95 to-transparent backdrop-blur-sm">
+            <Button variant="ghost" size="sm" onClick={() => { setSelectedTrack(null); setCurrentVideo(null); }} className="text-white/80 hover:text-white hover:bg-white/5 gap-1.5 h-8 px-2 text-xs font-bold">
+              <ChevronLeft size={16} /> Catálogo
+            </Button>
+            <h2 className="text-base font-black italic uppercase tracking-tighter text-red-600">Pulse <span className="text-white">Academy</span></h2>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-            <div className="lg:col-span-8 space-y-8">
-              <div className="aspect-video bg-black rounded-3xl overflow-hidden border border-white/5 relative shadow-2xl group ring-1 ring-white/10">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 px-5 lg:px-8 pb-12">
+            {/* LEFT — Player + metadata */}
+            <div className="lg:col-span-8 space-y-4">
+              <div className="aspect-video bg-black rounded-xl overflow-hidden border border-white/5 relative shadow-2xl">
                 {currentVideo?.video_url ? (
                   <iframe src={currentVideo.video_url.includes('youtube') ? currentVideo.video_url.replace('watch?v=', 'embed/') : currentVideo.video_url} className="w-full h-full" allowFullScreen key={currentVideo.video_url} />
                 ) : (
                   <div className="w-full h-full relative">
                     <img src={selectedTrack.thumbnail_url} className="w-full h-full object-cover opacity-40" />
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <Button size="lg" className="rounded-full w-24 h-24 bg-red-600 text-white hover:scale-110 hover:bg-red-700 transition-all p-0 shadow-[0_0_50px_rgba(220,38,38,0.3)]" onClick={() => { const firstLesson = lessons[0]; if (firstLesson) setCurrentVideo(firstLesson); }}><Play size={48} className="ml-2 fill-current" /></Button>
-                      <p className="mt-6 text-2xl font-black uppercase tracking-[0.2em] italic text-white drop-shadow-lg">Assistir Agora</p>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                      <Button size="lg" className="rounded-full w-16 h-16 bg-red-600 text-white hover:scale-110 hover:bg-red-700 transition-all p-0 shadow-[0_0_40px_rgba(220,38,38,0.5)]" onClick={() => { const firstLesson = lessons.find(l => l.video_url) || lessons[0]; if (firstLesson) setCurrentVideo(firstLesson); }}>
+                        <Play size={28} className="ml-1 fill-current" />
+                      </Button>
+                      <p className="text-[11px] font-black uppercase tracking-[0.3em] italic text-white/90">Assistir Agora</p>
                     </div>
                   </div>
                 )}
               </div>
-              
-              <div className="space-y-6">
-                <div className="flex items-start justify-between gap-6">
-                  <div className="space-y-2">
-                    <h2 className="text-5xl font-black tracking-tighter uppercase italic leading-none">{currentVideo?.title || selectedTrack.title}</h2>
-                    <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-widest"><span className="text-emerald-500">2026</span><Badge variant="outline" className="text-white border-white/20 px-2 py-0.5 rounded-sm">16+</Badge><span className="text-gray-500">Metodologia {currentVideo?.methodology_name || selectedTrack.category}</span></div>
+
+              {/* Title + actions row */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-2xl lg:text-3xl font-black tracking-tighter uppercase italic leading-tight truncate">{currentVideo?.title || selectedTrack.title}</h2>
+                  <div className="flex items-center gap-2 mt-1.5 text-[10px] font-bold uppercase tracking-[0.2em] flex-wrap">
+                    <span className="text-emerald-500">2026</span>
+                    <Badge variant="outline" className="text-white/80 border-white/15 px-1.5 py-0 text-[9px] rounded-sm h-4">16+</Badge>
+                    <span className="text-zinc-500 truncate">{currentVideo?.methodology_name || selectedTrack.category}</span>
+                    <span className="text-zinc-700">·</span>
+                    <span className="text-zinc-500">{lessons.length} aulas</span>
+                    <span className="text-zinc-700">·</span>
+                    <span className="text-emerald-500/80">{getCourseProgress()}% concluído</span>
                   </div>
-                  {currentVideo && (
-                    <Button variant={currentVideo.status === 'completed' ? "secondary" : "destructive"} className={cn("rounded-full h-14 px-8 gap-3 font-black uppercase italic tracking-widest transition-all", currentVideo.status === 'completed' ? 'bg-emerald-600 text-white' : 'bg-white text-black')} onClick={() => updateProgress(currentVideo.id, currentVideo.status === 'completed' ? 'in_progress' : 'completed')}>
-                      {currentVideo.status === 'completed' ? <CheckCircle2 size={24} /> : <Circle size={24} />}
-                      {currentVideo.status === 'completed' ? 'Concluído' : 'Marcar Aula'}
-                    </Button>
-                  )}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-                  <div className="md:col-span-2 space-y-8"><p className="text-xl text-gray-300 leading-relaxed font-medium">{currentVideo?.description || selectedTrack.description}</p></div>
-                  <div className="space-y-8">
-                    <div className="bg-zinc-900/50 rounded-3xl p-8 border border-white/5 backdrop-blur-md shadow-2xl ring-1 ring-white/5">
-                      <h4 className="text-[10px] font-black uppercase text-gray-500 mb-6 tracking-[0.3em]">Status de Elite</h4>
-                      <div className="space-y-6">
-                        <div className="flex justify-between items-end"><span className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Desempenho</span><span className="font-black text-3xl text-emerald-500 italic leading-none">{getCourseProgress()}%</span></div>
-                        <div className="w-full bg-white/5 rounded-full h-2 overflow-hidden"><motion.div initial={{ width: 0 }} animate={{ width: `${getCourseProgress()}%` }} className="bg-emerald-500 h-full shadow-[0_0_15px_rgba(16,185,129,0.6)]" transition={{ duration: 1.5 }} /></div>
+                {currentVideo && (
+                  <Button size="sm" className={cn("rounded-full h-9 px-4 gap-1.5 font-black uppercase italic tracking-widest text-[10px] shrink-0", currentVideo.status === 'completed' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-white text-black hover:bg-zinc-200')} onClick={() => updateProgress(currentVideo.id, currentVideo.status === 'completed' ? 'in_progress' : 'completed')}>
+                    {currentVideo.status === 'completed' ? <CheckCircle2 size={14} /> : <Circle size={14} />}
+                    {currentVideo.status === 'completed' ? 'Concluído' : 'Marcar'}
+                  </Button>
+                )}
+              </div>
+
+              {/* Description */}
+              <div className="bg-zinc-900/40 border border-white/5 rounded-xl p-4">
+                <p className="text-sm text-zinc-300 leading-relaxed">{currentVideo?.description || selectedTrack.description}</p>
+              </div>
+
+              {/* Progress strip */}
+              <div className="bg-gradient-to-r from-zinc-900/60 to-zinc-900/20 border border-white/5 rounded-xl p-3 flex items-center gap-4">
+                <div className="flex-1">
+                  <div className="flex justify-between items-baseline mb-1.5">
+                    <span className="text-zinc-400 font-bold uppercase text-[9px] tracking-[0.25em]">Desempenho</span>
+                    <span className="font-black text-lg text-emerald-500 italic leading-none">{getCourseProgress()}%</span>
+                  </div>
+                  <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                    <motion.div initial={{ width: 0 }} animate={{ width: `${getCourseProgress()}%` }} className="bg-emerald-500 h-full shadow-[0_0_10px_rgba(16,185,129,0.6)]" transition={{ duration: 1.2 }} />
+                  </div>
+                </div>
+                <div className="text-right shrink-0 border-l border-white/5 pl-4">
+                  <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-500">Aulas</p>
+                  <p className="text-lg font-black italic text-white leading-none mt-1">{lessons.filter(l => l.status === 'completed').length}<span className="text-zinc-600">/{lessons.length}</span></p>
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT — Episodes list (Netflix style) */}
+            <div className="lg:col-span-4">
+              <div className="lg:sticky lg:top-14 space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="text-base font-black italic uppercase tracking-tighter text-white">Episódios</h3>
+                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-500">{modules.length} módulos</span>
+                </div>
+
+                <div className="space-y-3 max-h-[78vh] overflow-y-auto pr-2 scrollbar-hide">
+                  {modules.length === 0 && (
+                    <div className="text-center py-10 text-zinc-500 text-[10px] font-bold uppercase tracking-widest border border-dashed border-white/10 rounded-xl">Nenhum módulo cadastrado</div>
+                  )}
+                  {modules.map((mod, modIdx) => {
+                    const modLessons = lessons.filter(l => l.module_id === mod.id);
+                    return (
+                    <div key={mod.id} className="space-y-1.5">
+                      <div className="flex items-center gap-2 px-1 pb-1">
+                        <div className="h-6 w-6 rounded-md bg-red-600/15 border border-red-600/30 flex items-center justify-center text-red-500 font-black text-[10px] italic shrink-0">{String(modIdx + 1).padStart(2, '0')}</div>
+                        <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-white/90 truncate flex-1">{mod.title}</h4>
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-600">{modLessons.length}</span>
+                      </div>
+                      <div className="space-y-1">
+                        {modLessons.length === 0 && (
+                          <div className="px-3 py-2 rounded-lg border border-dashed border-white/5 text-[9px] uppercase tracking-widest text-zinc-600 font-bold text-center">Slots em breve</div>
+                        )}
+                        {modLessons.map((lesson, lessonIdx) => (
+                          <button key={lesson.id} onClick={() => setCurrentVideo(lesson)} className={cn("w-full group flex items-center gap-2.5 p-1.5 rounded-lg transition-all border text-left relative", currentVideo?.id === lesson.id ? 'bg-red-600/10 border-red-600/40' : 'bg-zinc-900/40 border-white/5 hover:border-white/15 hover:bg-zinc-900/70')}>
+                            <span className="text-[10px] font-black italic text-zinc-600 tabular-nums w-5 text-center shrink-0">{String(lessonIdx + 1).padStart(2, '0')}</span>
+                            <div className="relative w-16 aspect-video shrink-0 bg-zinc-950 rounded-md overflow-hidden border border-white/5">
+                              <div className={cn("absolute inset-0 z-10 flex items-center justify-center transition-all", currentVideo?.id === lesson.id ? 'bg-red-600/40 opacity-100' : 'bg-black/60 opacity-0 group-hover:opacity-100')}>
+                                <Play size={14} className="text-white fill-current" />
+                              </div>
+                              {lesson.thumbnail_url ? (
+                                <img src={lesson.thumbnail_url} className="w-full h-full object-cover" alt={lesson.title} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                              ) : (
+                                <div className={cn("w-full h-full flex items-center justify-center", lesson.video_url ? "bg-gradient-to-br from-red-600/30 to-zinc-950" : "bg-zinc-950")}>
+                                  <Video size={12} className="text-white/30" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className={cn("text-[10px] font-black uppercase tracking-tight truncate", currentVideo?.id === lesson.id ? 'text-red-500' : 'text-white/90')}>{lesson.title || `Slot ${lessonIdx + 1}`}</p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-[8px] text-zinc-600 font-bold uppercase tracking-[0.15em]">{lesson.duration || (lesson.video_url ? 'Disponível' : 'Sem vídeo')}</span>
+                                {lesson.status === 'completed' && <CheckCircle2 size={9} className="text-emerald-500" />}
+                                {!lesson.video_url && <span className="h-1 w-1 rounded-full bg-amber-500/60" />}
+                              </div>
+                            </div>
+                            {isAdmin && (
+                              <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                                <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md bg-black/60 hover:bg-red-600 text-white" onClick={(e) => { e.stopPropagation(); setUploadModalLesson(lesson); }}><Upload size={10} /></Button>
+                                {lesson.video_url && <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md bg-black/60 hover:bg-destructive text-white" onClick={(e) => { e.stopPropagation(); deleteLessonVideo(lesson.id); }}><Trash2 size={10} /></Button>}
+                              </div>
+                            )}
+                          </button>
+                        ))}
                       </div>
                     </div>
-                    <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-3 scrollbar-thin scrollbar-thumb-red-600/20">
-                      {modules.length === 0 && (
-                        <div className="text-center py-12 text-zinc-500 text-xs font-bold uppercase tracking-widest">Nenhum módulo cadastrado ainda</div>
-                      )}
-                      {modules.map((mod, modIdx) => {
-                        const modLessons = lessons.filter(l => l.module_id === mod.id);
-                        return (
-                        <div key={mod.id} className="space-y-4">
-                          <div className="flex items-center gap-3 px-2"><div className="h-10 w-10 rounded-xl bg-red-600/10 border border-red-600/20 flex items-center justify-center text-red-600 font-black text-sm italic">{modIdx + 1}</div><h4 className="text-[12px] font-black uppercase tracking-[0.15em] text-white/90 truncate">{mod.title}</h4></div>
-                          <div className="space-y-3">
-                            {modLessons.length === 0 && (
-                              <div className="px-4 py-3 rounded-2xl border border-dashed border-white/10 text-[10px] uppercase tracking-widest text-zinc-600 font-bold">Slots em breve</div>
-                            )}
-                            {modLessons.map((lesson, lessonIdx) => (
-                              <button key={lesson.id} onClick={() => setCurrentVideo(lesson)} className={cn("w-full group flex items-center gap-5 p-4 rounded-2xl transition-all border text-left relative overflow-hidden", currentVideo?.id === lesson.id ? 'bg-red-600/10 border-red-600/30' : 'bg-zinc-900/40 border-transparent hover:bg-zinc-800/60')}>
-                                <div className="relative w-24 aspect-video shrink-0 bg-zinc-800 rounded-xl overflow-hidden border border-white/5 shadow-xl transition-transform duration-500 group-hover:scale-105">
-                                  <div className={cn("absolute inset-0 z-10 flex items-center justify-center transition-all duration-300", currentVideo?.id === lesson.id ? 'bg-red-600/40 opacity-100' : 'bg-black/60 opacity-0 group-hover:opacity-100')}><Play size={20} className={cn("text-white fill-current", currentVideo?.id === lesson.id && "animate-pulse")} /></div>
-                                  {lesson.thumbnail_url ? (
-                                    <img src={lesson.thumbnail_url} className="w-full h-full object-cover" alt={lesson.title} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                                  ) : (
-                                    <div className="w-full h-full bg-gradient-to-br from-red-600/30 to-zinc-950 flex flex-col items-center justify-center gap-1">
-                                      <Video size={20} className="text-white/40" />
-                                      <span className="text-[8px] font-black uppercase tracking-widest text-white/60">Slot {lessonIdx + 1}</span>
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className={cn("text-xs font-black italic uppercase tracking-tighter truncate", currentVideo?.id === lesson.id ? 'text-red-500' : 'text-zinc-300')}>{lesson.title || `Slot ${lessonIdx + 1}`}</p>
-                                  <div className="flex items-center gap-3 mt-1.5">
-                                    <span className="text-[10px] text-zinc-600 font-bold uppercase tracking-[0.2em]">{lesson.duration || (lesson.video_url ? '—' : 'Sem vídeo')}</span>
-                                    {lesson.status === 'completed' && <CheckCircle2 size={12} className="text-emerald-500" />}
-                                  </div>
-                                </div>
-                                {isAdmin && (
-                                  <div className="absolute right-2 top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                                     <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full bg-black/60 backdrop-blur-md hover:bg-red-600 text-white" onClick={(e) => { e.stopPropagation(); setUploadModalLesson(lesson); }}><Upload size={12} /></Button>
-                                     {lesson.video_url && <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full bg-black/60 backdrop-blur-md hover:bg-destructive text-white" onClick={(e) => { e.stopPropagation(); deleteLessonVideo(lesson.id); }}><Trash2 size={12} /></Button>}
-                                  </div>
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      );})}
-                    </div>
-                  </div>
+                  );})}
                 </div>
               </div>
             </div>

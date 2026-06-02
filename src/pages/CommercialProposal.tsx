@@ -2470,7 +2470,28 @@ export default function CommercialProposal() {
           <Card className="lg:col-span-2">
             <CardHeader><CardTitle className="text-base flex items-center gap-2"><Users className="h-4 w-4" /> Equipe do Projeto</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-xs text-muted-foreground">Clique nos membros para adicionar ou remover da proposta</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">Clique nos membros para adicionar ou remover da proposta</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  type="button"
+                  onClick={() => {
+                    let updated = 0;
+                    setTeamMembers(prev => prev.map(m => {
+                      const u = users.find(x => (x.displayName || x.name) === m.name);
+                      if (u?.avatarUrl && u.avatarUrl !== m.avatarUrl) {
+                        updated++;
+                        return { ...m, avatarUrl: u.avatarUrl };
+                      }
+                      return m;
+                    }));
+                    toast.success(updated > 0 ? `${updated} foto(s) atualizada(s). Salve a proposta.` : 'Todas as fotos já estão atualizadas.');
+                  }}
+                >
+                  <Users className="h-3 w-3 mr-1" /> Atualizar fotos da equipe
+                </Button>
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                 {users.map(u => {
                   const memberName = u.displayName || u.name;

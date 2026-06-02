@@ -624,8 +624,11 @@ async function callAi(ai, model, messages, options = {}) {
   
   // Fallback chain: se o modelo falhar com 429, tenta modelos com cotas mais altas
   const FALLBACK_MODELS = {
-    'gemini-2.5-flash': ['gemini-2.5-flash-lite', 'gemini-2.0-flash-lite', 'gemini-1.5-flash-8b'],
+    'gemini-2.5-flash': ['gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'],
     'gemini-2.5-pro': ['gemini-2.5-flash', 'gemini-2.5-flash-lite'],
+    'gemini-1.5-flash-8b': ['gemini-2.5-flash-lite', 'gemini-2.0-flash-lite'],
+    'gemini-1.5-flash': ['gemini-2.5-flash', 'gemini-2.5-flash-lite'],
+    'gemini-1.5-pro': ['gemini-2.5-pro', 'gemini-2.5-flash'],
   };
   const modelsToTry = ai.provider === 'gemini' 
     ? [model, ...(FALLBACK_MODELS[model] || [])]
@@ -657,11 +660,11 @@ async function callAi(ai, model, messages, options = {}) {
           const err = new Error(`AI error [${res.status}]: ${errText}`);
           err.status = res.status;
           
-          // 429 = rate limit: tenta próximo modelo na chain de fallback imediatamente
-          if (res.status === 429) {
-            console.warn(`[callAi] Rate limit em ${tryModel}, tentando próximo modelo...`);
+          // 429 = rate limit ou 404 = modelo descontinuado: tenta próximo modelo na chain de fallback
+          if (res.status === 429 || res.status === 404) {
+            console.warn(`[callAi] ${res.status} em ${tryModel}, tentando próximo modelo...`);
             lastError = err;
-            break; // sai do loop de retries, vai pro próximo modelo
+            break;
           }
           // 5xx = retry com backoff exponencial
           if (res.status >= 500 && attempt < retries) {
@@ -676,7 +679,7 @@ async function callAi(ai, model, messages, options = {}) {
         return data.choices?.[0]?.message?.content || '';
       } catch (err) {
         lastError = err;
-        if (err.status === 429) break; // próximo modelo
+        if (err.status === 429 || err.status === 404) break; // próximo modelo
         if (attempt === retries) throw err;
       }
     }

@@ -4320,7 +4320,11 @@ app.post('/api/recordings', async (req, res) => {
       results.push(rows[0]);
     }
     res.json(results.length === 1 ? results[0] : results);
-  } catch (e) { console.error('POST /api/recordings error:', e); res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('POST /api/recordings error:', e);
+    const status = e?.statusCode === 400 ? 400 : 500;
+    res.status(status).json({ error: e.message });
+  }
 });
 
 app.put('/api/recordings/:id', async (req, res) => {

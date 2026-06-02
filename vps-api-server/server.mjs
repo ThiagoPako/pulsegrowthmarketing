@@ -3812,6 +3812,18 @@ async function resolveActiveCity(req, userId, userObj = null) {
   }
 }
 
+async function getScopedCityContext(req, tableName = null) {
+  const { user } = await verifyUser(req);
+  const scopeCity = tableName ? await tableHasCityColumn(tableName) : false;
+  const activeCity = scopeCity ? await resolveActiveCity(req, user.id, user) : null;
+  return { user, activeCity, scopeCity };
+}
+
+function cityScopedWhere(baseQuery, columnName = 'city', startIndex = 1, hasWhere = false) {
+  const clause = `${columnName} = $${startIndex}`;
+  return `${baseQuery}${hasWhere ? ' AND ' : ' WHERE '}${clause}`;
+}
+
 
 function sanitizeIdentifier(name) {
   return name.replace(/[^a-zA-Z0-9_]/g, '');
@@ -4055,15 +4067,15 @@ app.post('/api/db/query', async (req, res) => {
 // ─── Clients ────────────────────────────────────────────────
 app.get('/api/clients', async (req, res) => {
   try {
-    await verifyUser(req);
-    const { rows } = await pool.query('SELECT * FROM clients ORDER BY company_name');
+    const { activeCity } = await getScopedCityContext(req);
+    const { rows } = await pool.query('SELECT * FROM clients WHERE city = $1 ORDER BY company_name', [activeCity]);
     res.json(rows);
   } catch (e) { res.status(e.message === 'Unauthorized' ? 401 : 500).json({ error: e.message }); }
 });
 
 app.post('/api/clients', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { activeCity } = await getScopedCityContext(req);
     const c = req.body;
     const { rows } = await pool.query(
       `INSERT INTO clients (id, company_name, responsible_person, phone, color, logo_url, fixed_day, fixed_time,
@@ -4080,7 +4092,7 @@ app.post('/api/clients', async (req, res) => {
         c.logo_url || null, c.fixed_day || 'segunda', c.fixed_time || '09:00', c.videomaker_id || null,
         c.backup_time || '14:00', c.backup_day || 'terca', c.extra_day || 'quarta',
         c.extra_content_types || '{}', c.accepts_extra ?? false, c.extra_client_appears ?? false,
-        c.whatsapp || '', c.whatsapp_group || null, c.email || '', c.city || '',
+        c.whatsapp || '', c.whatsapp_group || null, c.email || '', activeCity,
         c.weekly_reels ?? 0, c.weekly_creatives ?? 0, c.weekly_goal ?? 10, c.has_endomarketing ?? false,
         c.has_vehicle_flyer ?? false, c.weekly_stories ?? 0, c.presence_days ?? 1, c.monthly_recordings ?? 4,
         c.niche || '', c.client_login || '', c.drive_link || '', c.drive_fotos || '',
@@ -4097,7 +4109,7 @@ app.post('/api/clients', async (req, res) => {
 
 app.put('/api/clients/:id', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { activeCity } = await getScopedCityContext(req);
     const { id } = req.params;
     const c = req.body;
     // Build dynamic SET clause from provided fields
@@ -4123,7 +4135,8 @@ app.put('/api/clients/:id', async (req, res) => {
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     sets.push(`updated_at = NOW()`);
     vals.push(id);
-    const { rows } = await pool.query(`UPDATE clients SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`, vals);
+    vals.push(activeCity);
+    const { rows } = await pool.query(`UPDATE clients SET ${sets.join(', ')} WHERE id = $${idx} AND city = $${idx + 1} RETURNING *`, vals);
     res.json(rows[0]);
   } catch (e) { console.error('PUT /api/clients error:', e); res.status(500).json({ error: e.message }); }
 });
@@ -4192,7 +4205,7 @@ app.delete('/api/clients/:id', async (req, res) => {
 // ─── Recordings ─────────────────────────────────────────────
 app.get('/api/recordings', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
     const { rows } = await pool.query(`
       SELECT
         r.*,
@@ -4212,8 +4225,9 @@ app.get('/api/recordings', async (req, res) => {
           ELSE r.status
         END AS effective_status
       FROM recordings r
+      ${scopeCity ? 'WHERE r.city = $1' : ''}
       ORDER BY r.date DESC, r.start_time ASC
-    `);
+    `, scopeCity ? [activeCity] : []);
 
     res.json(rows.map(({ effective_status, ...recording }) => ({
       ...recording,
@@ -4224,7 +4238,7 @@ app.get('/api/recordings', async (req, res) => {
 
 app.post('/api/recordings', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
     const items = Array.isArray(req.body) ? req.body : [req.body];
     const schemaResult = await pool.query(`
       SELECT column_name, is_nullable
@@ -4251,6 +4265,10 @@ app.post('/api/recordings', async (req, res) => {
 
       const cols = ['id', 'client_id', 'videomaker_id', 'date', 'start_time', 'type', 'status', 'confirmation_status'];
       const vals = [r.id || crypto.randomUUID(), r.client_id || null, r.videomaker_id, r.date, r.start_time, r.type || 'fixa', r.status || 'agendada', r.confirmation_status || 'pendente'];
+      if (scopeCity) {
+        cols.push('city');
+        vals.push(activeCity);
+      }
       if (hasProspectName && r.prospect_name) {
         cols.push('prospect_name');
         vals.push(r.prospect_name);
@@ -4268,7 +4286,7 @@ app.post('/api/recordings', async (req, res) => {
 
 app.put('/api/recordings/:id', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
     const { id } = req.params;
     const r = req.body;
     const schemaResult = await pool.query(`
@@ -4287,14 +4305,16 @@ app.put('/api/recordings/:id', async (req, res) => {
     for (const key of allowed) { if (r[key] !== undefined) { sets.push(`${key} = $${idx}`); vals.push(r[key]); idx++; } }
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     vals.push(id);
-    const { rows } = await pool.query(`UPDATE recordings SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`, vals);
+    const cityClause = scopeCity ? ` AND city = $${idx + 1}` : '';
+    if (scopeCity) vals.push(activeCity);
+    const { rows } = await pool.query(`UPDATE recordings SET ${sets.join(', ')} WHERE id = $${idx}${cityClause} RETURNING *`, vals);
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.delete('/api/recordings/:id', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
     const id = req.params.id;
     // Cascade: remove dependent records first
     await pool.query('DELETE FROM active_recordings WHERE recording_id = $1', [id]);
@@ -4310,7 +4330,10 @@ app.delete('/api/recordings/:id', async (req, res) => {
     }
     // Mark linked scripts as not recorded
     await pool.query("UPDATE scripts SET recorded = false, updated_at = NOW() WHERE recording_id = $1", [id]);
-    await pool.query('DELETE FROM recordings WHERE id = $1', [id]);
+    await pool.query(
+      `DELETE FROM recordings WHERE id = $1${scopeCity ? ' AND city = $2' : ''}`,
+      scopeCity ? [id, activeCity] : [id]
+    );
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -4318,11 +4341,11 @@ app.delete('/api/recordings/:id', async (req, res) => {
 // Bulk delete future recordings for a client
 app.delete('/api/recordings/future/:clientId', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
     const today = new Date().toISOString().split('T')[0];
     const { rowCount } = await pool.query(
-      "DELETE FROM recordings WHERE client_id = $1 AND status = 'agendada' AND date >= $2",
-      [req.params.clientId, today]
+      `DELETE FROM recordings WHERE client_id = $1 AND status = 'agendada' AND date >= $2${scopeCity ? ' AND city = $3' : ''}`,
+      scopeCity ? [req.params.clientId, today, activeCity] : [req.params.clientId, today]
     );
     res.json({ deleted: rowCount });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -4331,20 +4354,27 @@ app.delete('/api/recordings/future/:clientId', async (req, res) => {
 // ─── Kanban Tasks ───────────────────────────────────────────
 app.get('/api/kanban-tasks', async (req, res) => {
   try {
-    await verifyUser(req);
-    const { rows } = await pool.query('SELECT * FROM kanban_tasks ORDER BY created_at DESC');
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'kanban_tasks');
+    const { rows } = await pool.query(
+      `SELECT * FROM kanban_tasks${scopeCity ? ' WHERE city = $1' : ''} ORDER BY created_at DESC`,
+      scopeCity ? [activeCity] : []
+    );
     res.json(rows);
   } catch (e) { res.status(401).json({ error: e.message }); }
 });
 
 app.post('/api/kanban-tasks', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'kanban_tasks');
     const t = req.body;
+    const cityCols = scopeCity ? ', city' : '';
+    const cityVals = scopeCity ? ', $8' : '';
     const { rows } = await pool.query(
-      `INSERT INTO kanban_tasks (id, client_id, title, "column", checklist, week_start, recording_date)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [t.id || crypto.randomUUID(), t.client_id, t.title, t.column || 'todo', JSON.stringify(t.checklist || []), t.week_start, t.recording_date || null]
+      `INSERT INTO kanban_tasks (id, client_id, title, "column", checklist, week_start, recording_date${cityCols})
+       VALUES ($1,$2,$3,$4,$5,$6,$7${cityVals}) RETURNING *`,
+      scopeCity
+        ? [t.id || crypto.randomUUID(), t.client_id, t.title, t.column || 'todo', JSON.stringify(t.checklist || []), t.week_start, t.recording_date || null, activeCity]
+        : [t.id || crypto.randomUUID(), t.client_id, t.title, t.column || 'todo', JSON.stringify(t.checklist || []), t.week_start, t.recording_date || null]
     );
     res.json(rows[0]);
   } catch (e) { console.error('POST /api/kanban-tasks error:', e); res.status(500).json({ error: e.message }); }
@@ -4352,7 +4382,7 @@ app.post('/api/kanban-tasks', async (req, res) => {
 
 app.put('/api/kanban-tasks/:id', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'kanban_tasks');
     const { id } = req.params;
     const t = req.body;
     const allowed = ['client_id','title','column','checklist','week_start','recording_date'];
@@ -4367,15 +4397,20 @@ app.put('/api/kanban-tasks/:id', async (req, res) => {
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     sets.push('updated_at = NOW()');
     vals.push(id);
-    const { rows } = await pool.query(`UPDATE kanban_tasks SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`, vals);
+    const cityClause = scopeCity ? ` AND city = $${idx + 1}` : '';
+    if (scopeCity) vals.push(activeCity);
+    const { rows } = await pool.query(`UPDATE kanban_tasks SET ${sets.join(', ')} WHERE id = $${idx}${cityClause} RETURNING *`, vals);
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.delete('/api/kanban-tasks/:id', async (req, res) => {
   try {
-    await verifyUser(req);
-    await pool.query('DELETE FROM kanban_tasks WHERE id = $1', [req.params.id]);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'kanban_tasks');
+    await pool.query(
+      `DELETE FROM kanban_tasks WHERE id = $1${scopeCity ? ' AND city = $2' : ''}`,
+      scopeCity ? [req.params.id, activeCity] : [req.params.id]
+    );
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -4383,22 +4418,31 @@ app.delete('/api/kanban-tasks/:id', async (req, res) => {
 // ─── Scripts ────────────────────────────────────────────────
 app.get('/api/scripts', async (req, res) => {
   try {
-    await verifyUser(req);
-    const { rows } = await pool.query('SELECT * FROM scripts ORDER BY created_at DESC');
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'scripts');
+    const { rows } = await pool.query(
+      `SELECT * FROM scripts${scopeCity ? ' WHERE city = $1' : ''} ORDER BY created_at DESC`,
+      scopeCity ? [activeCity] : []
+    );
     res.json(rows);
   } catch (e) { res.status(401).json({ error: e.message }); }
 });
 
 app.post('/api/scripts', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'scripts');
     const s = req.body;
+    const cityCols = scopeCity ? ', city' : '';
+    const cityVals = scopeCity ? ', $17' : '';
     const { rows } = await pool.query(
-      `INSERT INTO scripts (id, client_id, title, video_type, content_format, content, recorded, priority, is_endomarketing, endo_client_id, scheduled_date, created_by, caption, client_priority, direct_to_editing, recording_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
-      [s.id || crypto.randomUUID(), s.client_id, s.title, s.video_type || 'reels', s.content_format || 'reels',
-       s.content || '', s.recorded ?? false, s.priority || 'normal', s.is_endomarketing ?? false,
-       s.endo_client_id || null, s.scheduled_date || null, s.created_by || null, s.caption || null, s.client_priority || 'normal', s.direct_to_editing ?? false, s.recording_id || null]
+      `INSERT INTO scripts (id, client_id, title, video_type, content_format, content, recorded, priority, is_endomarketing, endo_client_id, scheduled_date, created_by, caption, client_priority, direct_to_editing, recording_id${cityCols})
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16${cityVals}) RETURNING *`,
+      scopeCity
+        ? [s.id || crypto.randomUUID(), s.client_id, s.title, s.video_type || 'reels', s.content_format || 'reels',
+           s.content || '', s.recorded ?? false, s.priority || 'normal', s.is_endomarketing ?? false,
+           s.endo_client_id || null, s.scheduled_date || null, s.created_by || null, s.caption || null, s.client_priority || 'normal', s.direct_to_editing ?? false, s.recording_id || null, activeCity]
+        : [s.id || crypto.randomUUID(), s.client_id, s.title, s.video_type || 'reels', s.content_format || 'reels',
+           s.content || '', s.recorded ?? false, s.priority || 'normal', s.is_endomarketing ?? false,
+           s.endo_client_id || null, s.scheduled_date || null, s.created_by || null, s.caption || null, s.client_priority || 'normal', s.direct_to_editing ?? false, s.recording_id || null]
     );
     // Create portal notification
     try {
@@ -4414,7 +4458,7 @@ app.post('/api/scripts', async (req, res) => {
 
 app.put('/api/scripts/:id', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'scripts');
     const { id } = req.params;
     const s = req.body;
     const allowed = ['client_id','title','video_type','content_format','content','recorded','priority','is_endomarketing','endo_client_id','scheduled_date','created_by','caption','client_priority','direct_to_editing','recording_id'];
@@ -4423,15 +4467,20 @@ app.put('/api/scripts/:id', async (req, res) => {
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     sets.push('updated_at = NOW()');
     vals.push(id);
-    const { rows } = await pool.query(`UPDATE scripts SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`, vals);
+    const cityClause = scopeCity ? ` AND city = $${idx + 1}` : '';
+    if (scopeCity) vals.push(activeCity);
+    const { rows } = await pool.query(`UPDATE scripts SET ${sets.join(', ')} WHERE id = $${idx}${cityClause} RETURNING *`, vals);
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.delete('/api/scripts/:id', async (req, res) => {
   try {
-    await verifyUser(req);
-    await pool.query('DELETE FROM scripts WHERE id = $1', [req.params.id]);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'scripts');
+    await pool.query(
+      `DELETE FROM scripts WHERE id = $1${scopeCity ? ' AND city = $2' : ''}`,
+      scopeCity ? [req.params.id, activeCity] : [req.params.id]
+    );
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -4464,22 +4513,30 @@ app.put('/api/company-settings/:id', async (req, res) => {
 // ─── Active Recordings ──────────────────────────────────────
 app.get('/api/active-recordings', async (req, res) => {
   try {
-    await verifyUser(req);
-    const { rows } = await pool.query('SELECT * FROM active_recordings');
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'active_recordings');
+    const { rows } = await pool.query(
+      `SELECT * FROM active_recordings${scopeCity ? ' WHERE city = $1' : ''}`,
+      scopeCity ? [activeCity] : []
+    );
     res.json(rows);
   } catch (e) { res.status(401).json({ error: e.message }); }
 });
 
 app.post('/api/active-recordings', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'active_recordings');
     const r = req.body;
     // Remove existing for this recording
-    await pool.query('DELETE FROM active_recordings WHERE recording_id = $1', [r.recording_id]);
+    await pool.query(
+      `DELETE FROM active_recordings WHERE recording_id = $1${scopeCity ? ' AND city = $2' : ''}`,
+      scopeCity ? [r.recording_id, activeCity] : [r.recording_id]
+    );
     const { rows } = await pool.query(
-      `INSERT INTO active_recordings (recording_id, videomaker_id, client_id, started_at, planned_script_ids)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [r.recording_id, r.videomaker_id, r.client_id, r.started_at || new Date().toISOString(), r.planned_script_ids || '{}']
+      `INSERT INTO active_recordings (recording_id, videomaker_id, client_id, started_at, planned_script_ids${scopeCity ? ', city' : ''})
+       VALUES ($1,$2,$3,$4,$5${scopeCity ? ', $6' : ''}) RETURNING *`,
+      scopeCity
+        ? [r.recording_id, r.videomaker_id, r.client_id, r.started_at || new Date().toISOString(), r.planned_script_ids || '{}', activeCity]
+        : [r.recording_id, r.videomaker_id, r.client_id, r.started_at || new Date().toISOString(), r.planned_script_ids || '{}']
     );
     res.json(rows[0]);
   } catch (e) { console.error('POST /api/active-recordings error:', e); res.status(500).json({ error: e.message }); }

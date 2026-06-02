@@ -5,9 +5,21 @@
 
 const VPS_API_BASE = 'https://agenciapulse.tech/api';
 const TOKEN_KEY = 'pulse_jwt';
+const CITY_KEY = 'pulse:active_city';
+
+function getActiveCity(): string {
+  if (typeof window === 'undefined') return 'minacu';
+  const inMem = (window as any).__PULSE_ACTIVE_CITY__;
+  if (inMem === 'minacu' || inMem === 'uruacu') return inMem;
+  const stored = localStorage.getItem(CITY_KEY);
+  return stored === 'uruacu' ? 'uruacu' : 'minacu';
+}
 
 function getAuthHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'x-pulse-city': getActiveCity(),
+  };
   const token = localStorage.getItem(TOKEN_KEY);
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;

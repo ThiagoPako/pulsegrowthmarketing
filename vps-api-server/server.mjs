@@ -5666,13 +5666,12 @@ async function ensureTrainingPlayableSource(sourcePath, lessonId) {
 function resolveTrainingFile(videoPathOrUrl) {
   if (!videoPathOrUrl) return null;
   let rel = String(videoPathOrUrl).trim();
-  // Strip full URLs
   rel = rel.replace(/^https?:\/\/[^/]+/, '');
   rel = decodeURIComponent(rel.split('?')[0].split('#')[0] || '');
   rel = rel.replace(/^\/+/, '');
-  // Prevent traversal
   if (rel.includes('..') || rel.includes('\0')) return null;
 
+  const base = path.basename(rel);
   const relativeCandidates = Array.from(new Set([
     rel,
     rel.replace(/^uploads\/training-videos\//, ''),
@@ -5680,21 +5679,49 @@ function resolveTrainingFile(videoPathOrUrl) {
     rel.replace(/^training-videos\//, ''),
     rel.replace(/^uploads\//, 'training-videos/'),
     rel.replace(/^\/?/, 'training-videos/'),
-    path.basename(rel),
-    `training-videos/${path.basename(rel)}`,
+    base,
+    `training-videos/${base}`,
   ].filter(Boolean)));
 
   for (const root of TRAINING_VIDEO_ROOTS) {
     for (const candidate of relativeCandidates) {
       const abs = path.resolve(root, candidate);
       if (!abs.startsWith(root)) continue;
-      if (fs.existsSync(abs)) return abs;
+      if (fs.existsSync(abs) && fs.statSync(abs).isFile()) return abs;
     }
   }
 
-  const fallbackRoot = TRAINING_VIDEO_ROOTS[0];
-  const fallbackPath = path.resolve(fallbackRoot, relativeCandidates[0] || '');
-  return fallbackPath.startsWith(fallbackRoot) ? fallbackPath : null;
+  // Last-resort: recursive search by basename in known upload roots
+  const searchRoots = [
+    '/var/www/html/uploads',
+    '/var/www/uploads',
+    '/var/www/html',
+    '/var/www',
+  ];
+  for (const r of searchRoots) {
+    try {
+      if (!fs.existsSync(r)) continue;
+      const stack = [r];
+      let steps = 0;
+      while (stack.length && steps < 5000) {
+        const cur = stack.pop();
+        steps++;
+        let entries;
+        try { entries = fs.readdirSync(cur, { withFileTypes: true }); } catch { continue; }
+        for (const e of entries) {
+          const full = path.join(cur, e.name);
+          if (e.isDirectory()) {
+            if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
+            stack.push(full);
+          } else if (e.isFile() && e.name === base) {
+            return full;
+          }
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
+  return null;
 }
 
 function getTrainingAuthTokenFromHeader(req) {
@@ -5750,12 +5777,14 @@ app.get('/api/training/sign', async (req, res) => {
       return res.json({ url: src, external: true });
     }
 
-    // Real existence check before issuing token — never sign for missing files
+    // Não bloqueia mais por checagem em disco aqui — o /stream resolve e retorna 404 se faltar.
     const absCheck = resolveTrainingFile(src);
-    if (!absCheck || !fs.existsSync(absCheck)) {
-      console.error('[training/sign] file not found on disk', { lessonId, src, resolved: absCheck, roots: TRAINING_VIDEO_ROOTS });
-      return res.status(404).json({ error: 'video file not found on disk', src, resolved: absCheck });
+    if (!absCheck) {
+      console.warn('[training/sign] file path could not be resolved, issuing token anyway', { lessonId, src });
     }
+
+
+
 
 
     const token = jwt.sign(

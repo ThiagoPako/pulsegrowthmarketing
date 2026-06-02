@@ -5747,17 +5747,19 @@ app.get('/api/training/sign', async (req, res) => {
     // Real existence check before issuing token — never sign for missing files
     const absCheck = resolveTrainingFile(src);
     if (!absCheck || !fs.existsSync(absCheck)) {
-      return res.status(404).json({ error: 'video file not found on disk' });
+      console.error('[training/sign] file not found on disk', { lessonId, src, resolved: absCheck, roots: TRAINING_VIDEO_ROOTS });
+      return res.status(404).json({ error: 'video file not found on disk', src, resolved: absCheck });
     }
 
 
     const token = jwt.sign(
-      { lessonId, sub: user.id, authToken: headerToken, scope: 'training-stream' },
+      { lessonId, sub: user.id, scope: 'training-stream' },
       JWT_SECRET,
       { expiresIn: TRAINING_STREAM_TTL },
     );
     res.json({ url: `/api/training/stream/${lessonId}?token=${token}` });
   } catch (err) {
+    console.error('[training/sign] auth error:', err?.message);
     res.status(401).json({ error: err.message || 'Unauthorized' });
   }
 });

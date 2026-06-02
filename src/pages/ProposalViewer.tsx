@@ -539,22 +539,64 @@ export default function ProposalViewer() {
           </p>
 
           {selectedIncluded.length > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
               {selectedIncluded.map((s, i) => (
                 <motion.div
                   key={s.id}
                   initial={{ opacity: 0, y: 10 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
-                  transition={{ delay: 0.05 * i }}
-                  className="flex items-center gap-2 p-3 rounded-xl border-2 bg-emerald-50 border-emerald-200"
+                  transition={{ delay: 0.04 * i }}
+                  className="flex items-start gap-3 p-4 rounded-xl border-2 bg-emerald-50/60 border-emerald-200 hover:shadow-md transition-shadow"
                 >
-                  <s.icon className="h-4 w-4 text-emerald-700 shrink-0" />
-                  <span className="text-xs font-bold text-emerald-900 leading-tight">{s.name}</span>
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 ml-auto shrink-0" />
+                  <div className="p-2 rounded-lg bg-emerald-100 shrink-0">
+                    <s.icon className="h-5 w-5 text-emerald-700" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-bold text-emerald-950 leading-tight">{s.name}</span>
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                    </div>
+                    <p className="text-xs text-gray-600 leading-relaxed">{s.desc}</p>
+                  </div>
                 </motion.div>
               ))}
             </div>
+          )}
+
+          {(customData.selectedIncludedServices?.includes('meta_ads') || customData.selectedIncludedServices?.includes('google_ads')) && (
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="mb-6 p-5 md:p-6 rounded-2xl border-2 relative overflow-hidden"
+              style={{ borderColor: accentColor, background: 'linear-gradient(135deg, hsl(16 82% 98%), white)' }}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-2 rounded-lg" style={{ background: accentColor }}>
+                  <Target className="h-5 w-5 text-white" />
+                </div>
+                <h3 className="text-base md:text-lg font-bold text-gray-900">Gestão de Tráfego Pago Especializada</h3>
+              </div>
+              <p className="text-sm text-gray-700 leading-relaxed mb-4">
+                Mais do que apenas "subir anúncios". Nossa gestão de tráfego é uma <strong>consultoria estratégica</strong> voltada para o seu negócio: estudamos o seu mercado, o comportamento do seu cliente ideal e a sazonalidade do seu segmento para transformar investimento em <strong>resultado mensurável</strong>.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                {[
+                  { icon: Target, text: 'Estratégia personalizada para o seu nicho e público-alvo' },
+                  { icon: BarChart3, text: 'Estruturação completa de funil: topo, meio e fundo' },
+                  { icon: Layers, text: 'Testes A/B contínuos de criativos, públicos e copies' },
+                  { icon: Zap, text: 'Otimização diária focada em CPL, CPA e ROAS' },
+                  { icon: ListChecks, text: 'Acompanhamento de pixel, conversões e eventos personalizados' },
+                  { icon: FileText, text: 'Relatórios estratégicos com leitura e recomendações' },
+                ].map((it, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs text-gray-700">
+                    <it.icon className="h-4 w-4 mt-0.5 shrink-0" style={{ color: accentColor }} />
+                    <span className="leading-relaxed">{it.text}</span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
           )}
 
           {extraServices.length > 0 && (

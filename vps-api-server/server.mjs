@@ -303,20 +303,28 @@ async function verifyUser(req) {
   }
 }
 
+async function isAdminUser(user) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  try {
+    const { rows } = await pool.query(
+      'SELECT 1 FROM user_roles WHERE user_id = $1 AND role = $2 LIMIT 1',
+      [user.id, 'admin']
+    );
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 async function verifyAdmin(req) {
   const { user, userClient } = await verifyUser(req);
-  // Check role from JWT payload first
-  if (user.role === 'admin') {
+  if (await isAdminUser(user)) {
     return { user, userClient, admin: getAdminClient() };
   }
-  // Fallback: check DB
-  const { rows } = await pool.query(
-    'SELECT role FROM user_roles WHERE user_id = $1 AND role = $2',
-    [user.id, 'admin']
-  );
-  if (rows.length === 0) throw new Error('Admin access required');
-  return { user, userClient, admin: getAdminClient() };
+  throw new Error('Admin access required');
 }
+
 
 let profilesPasswordHashColumnPromise;
 

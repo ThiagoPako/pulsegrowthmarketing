@@ -270,125 +270,158 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   );
 
   return (
-    <div className="min-h-screen bg-[#141414] text-white -m-6 p-6 font-sans">
+    <div className="min-h-screen bg-[#0a0a0a] text-white -m-6 font-sans">
       {!selectedTrack ? (
-        <div className="space-y-12 pb-20">
-          <div className="relative h-[80vh] -mt-6 -mx-6 mb-12 overflow-hidden">
-            <div className="absolute top-6 left-12 z-50 flex items-center gap-4">
-              <h2 className="text-2xl font-black italic uppercase tracking-tighter text-red-600">Pulse <span className="text-white">Academy</span></h2>
+        <div className="pb-24">
+          {/* ── HERO ── */}
+          <div className="relative h-[58vh] min-h-[440px] overflow-hidden">
+            <div className="absolute top-5 left-8 lg:left-12 z-50 flex items-center gap-4">
+              <h2 className="text-xl font-black italic uppercase tracking-tighter text-red-600">Pulse <span className="text-white">Academy</span></h2>
               <Button size="sm" variant="ghost" className="text-[10px] text-white/20 hover:text-white h-7" onClick={() => setForceUpdate(p => p + 1)}>Recarregar</Button>
             </div>
-            <div className="absolute inset-0 bg-gradient-to-r from-[#141414] via-[#141414]/40 to-transparent z-10" />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#141414] to-transparent z-10" />
-            <img 
-              src={tracks[0]?.thumbnail_url || "https://images.unsplash.com/photo-1492691523567-6170f2295b21?auto=format&fit=crop&q=80&w=2070"} 
-              className="w-full h-full object-cover opacity-60"
+            <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/70 to-transparent z-10" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/30 to-transparent z-10" />
+            <img
+              src={tracks[0]?.thumbnail_url || "https://images.unsplash.com/photo-1492691523567-6170f2295b21?auto=format&fit=crop&q=80&w=2070"}
+              className="w-full h-full object-cover opacity-70"
               alt="Featured"
             />
-            <div className="absolute bottom-[20%] left-12 z-20 max-w-xl space-y-4">
-              <Badge className="bg-red-600 text-white border-none px-3 py-1 text-sm font-bold uppercase tracking-widest">Destaque</Badge>
-              <h1 className="text-6xl font-black tracking-tighter uppercase italic">{tracks[0]?.title || "Treinamento Pulse"}</h1>
-              <p className="text-lg text-gray-300 line-clamp-3">{tracks[0]?.description}</p>
-              <div className="flex gap-3 pt-4">
-                <Button size="lg" className="bg-white text-black hover:bg-gray-200 px-8 text-lg font-bold" onClick={() => tracks[0] && setSelectedTrack(tracks[0])}><Play className="mr-2 fill-current" /> Assistir</Button>
+            <div className="absolute bottom-12 left-8 lg:left-12 z-20 max-w-2xl space-y-4">
+              <Badge className="bg-red-600 text-white border-none px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.25em] rounded-sm">Em Destaque</Badge>
+              <h1 className="text-4xl lg:text-5xl font-black tracking-tighter uppercase italic leading-[0.95]">{tracks[0]?.title || "Treinamento Pulse"}</h1>
+              <p className="text-sm lg:text-base text-gray-300/90 line-clamp-2 max-w-xl">{tracks[0]?.description}</p>
+              <div className="flex gap-3 pt-2">
+                <Button size="lg" className="bg-white text-black hover:bg-gray-200 px-7 font-black uppercase italic tracking-widest text-xs h-11" onClick={() => tracks[0] && setSelectedTrack(tracks[0])}>
+                  <Play className="mr-2 fill-current" size={18} /> Assistir
+                </Button>
+                <Button size="lg" variant="ghost" className="bg-white/10 backdrop-blur hover:bg-white/20 text-white px-7 font-black uppercase italic tracking-widest text-xs h-11" onClick={() => { const el = document.getElementById('trilhas-catalogo'); el?.scrollIntoView({ behavior: 'smooth' }); }}>
+                  <Info className="mr-2" size={16} /> Explorar
+                </Button>
               </div>
             </div>
           </div>
 
-          <div className="space-y-4 relative group">
-            <h2 className="text-2xl font-bold ml-4 group-hover:text-red-600 transition-colors">Minhas Trilhas</h2>
-            <div className="relative">
-              <button onClick={() => scroll('left')} className="absolute left-0 top-0 bottom-0 w-12 z-30 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><ChevronLeft size={40} /></button>
-              <div ref={scrollContainerRef} className="flex gap-2 overflow-x-auto scrollbar-hide px-4 pb-8">
-                {tracks.map(track => (
-                  <motion.div key={track.id} onClick={() => setSelectedTrack(track)} className="relative flex-none w-72 aspect-video bg-[#2f2f2f] rounded-md overflow-hidden cursor-pointer shadow-lg" whileHover={{ scale: 1.1, zIndex: 40 }}>
-                    <img src={track.thumbnail_url} className="w-full h-full object-cover" alt={track.title} onError={(e) => { (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1492691523567-6170f2295b21?auto=format&fit=crop&q=80&w=600'; }} />
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-3"><h3 className="font-black text-xs uppercase tracking-tight text-white truncate">{track.title}</h3></div>
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 hover:opacity-100 transition-opacity flex flex-col justify-end p-4"><h3 className="font-bold text-sm">{track.title}</h3></div>
-                  </motion.div>
-                ))}
+          {/* ── CATÁLOGO COMPLETO ── */}
+          <div id="trilhas-catalogo" className="px-6 lg:px-12 pt-10 space-y-14">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.35em] text-red-600 mb-1">Catálogo</p>
+                <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white">Todas as Trilhas</h2>
               </div>
-              <button onClick={() => scroll('right')} className="absolute right-0 top-0 bottom-0 w-12 z-30 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><ChevronRight size={40} /></button>
+              <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-zinc-500">{tracks.length} {tracks.length === 1 ? 'trilha' : 'trilhas'}</p>
             </div>
-          </div>
 
-          {/* Listagem completa de módulos e slots por trilha */}
-          <div className="space-y-12 px-4 pt-4">
             {tracks.map((track) => {
               const trackMods = (catalogModules as any[]).filter(m => m.track_id === track.id).sort((a,b) => (a.display_order||0)-(b.display_order||0));
+              const trackLessonsAll = catalogLessons.filter(l => trackMods.some(m => m.id === l.module_id));
+              const filled = trackLessonsAll.filter(l => l.video_url).length;
               return (
-                <div key={`cat-${track.id}`} className="space-y-6">
-                  <div className="flex items-end justify-between gap-4 border-b border-white/5 pb-3">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-red-600">{track.category || 'Trilha'}</p>
-                      <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white">{track.title}</h3>
+                <section key={`cat-${track.id}`} className="space-y-5">
+                  <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="relative w-20 h-20 rounded-2xl overflow-hidden shrink-0 border border-white/10 shadow-xl">
+                        <img src={track.thumbnail_url} className="w-full h-full object-cover" alt={track.title} onError={(e) => { (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1492691523567-6170f2295b21?auto=format&fit=crop&q=80&w=600'; }} />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-red-600 mb-1">{track.category || 'Trilha'}</p>
+                        <h3 className="text-xl lg:text-2xl font-black italic uppercase tracking-tighter text-white truncate">{track.title}</h3>
+                        <div className="flex items-center gap-3 mt-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">
+                          <span>{trackMods.length} módulos</span>
+                          <span className="text-zinc-700">·</span>
+                          <span>{trackLessonsAll.length} aulas</span>
+                          <span className="text-zinc-700">·</span>
+                          <span className="text-emerald-500/80">{filled} com vídeo</span>
+                        </div>
+                      </div>
                     </div>
-                    <Button size="sm" variant="ghost" className="text-white/70 hover:text-red-600 gap-2 font-bold uppercase tracking-widest text-[10px]" onClick={() => setSelectedTrack(track)}>
-                      <Play size={14} className="fill-current" /> Abrir trilha
+                    <Button size="sm" className="bg-white text-black hover:bg-gray-200 gap-2 font-black uppercase tracking-widest text-[10px] h-9 px-5 shrink-0" onClick={() => setSelectedTrack(track)}>
+                      <Play size={12} className="fill-current" /> Abrir trilha
                     </Button>
                   </div>
 
                   {trackMods.length === 0 ? (
-                    <div className="text-[11px] uppercase tracking-widest text-zinc-600 font-bold px-2">Nenhum módulo cadastrado</div>
+                    <div className="text-[11px] uppercase tracking-widest text-zinc-600 font-bold px-2 py-8 text-center border border-dashed border-white/10 rounded-2xl">Nenhum módulo cadastrado</div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
                       {trackMods.map((mod, modIdx) => {
                         const modLessons = catalogLessons.filter(l => l.module_id === mod.id).sort((a,b) => (a.display_order||0)-(b.display_order||0));
                         const filledSlots = Math.max(modLessons.length, 2);
                         const slots: (Lesson | null)[] = Array.from({ length: filledSlots }, (_, i) => modLessons[i] || null);
+                        const withVideo = modLessons.filter(l => l.video_url).length;
                         return (
-                          <div key={mod.id} className="bg-zinc-900/40 border border-white/5 rounded-2xl p-5 space-y-4">
-                            <div className="flex items-center gap-3">
-                              <div className="h-9 w-9 rounded-xl bg-red-600/10 border border-red-600/20 flex items-center justify-center text-red-600 font-black text-xs italic">{modIdx + 1}</div>
+                          <motion.div
+                            key={mod.id}
+                            initial={{ opacity: 0, y: 12 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ duration: 0.4, delay: modIdx * 0.04 }}
+                            className="group bg-gradient-to-b from-zinc-900/60 to-zinc-900/20 border border-white/5 hover:border-red-600/30 rounded-2xl p-4 space-y-3 transition-all hover:shadow-[0_0_30px_rgba(220,38,38,0.08)]"
+                          >
+                            <div className="flex items-center gap-3 pb-3 border-b border-white/5">
+                              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-red-600/20 to-red-600/5 border border-red-600/30 flex items-center justify-center text-red-500 font-black text-sm italic shrink-0">{String(modIdx + 1).padStart(2, '0')}</div>
                               <div className="flex-1 min-w-0">
-                                <h4 className="text-[12px] font-black uppercase tracking-[0.15em] text-white/90 truncate">{mod.title}</h4>
-                                <p className="text-[9px] uppercase tracking-widest text-zinc-500 font-bold mt-0.5">{modLessons.length} de {filledSlots} slots</p>
+                                <h4 className="text-[11px] font-black uppercase tracking-[0.15em] text-white truncate group-hover:text-red-500 transition-colors">{mod.title}</h4>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
+                                    <div className="h-full bg-emerald-500/70" style={{ width: `${filledSlots ? (withVideo / filledSlots) * 100 : 0}%` }} />
+                                  </div>
+                                  <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500 tabular-nums">{withVideo}/{filledSlots}</span>
+                                </div>
                               </div>
                             </div>
 
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               {slots.map((lesson, slotIdx) => (
                                 <button
                                   key={lesson?.id || `empty-${mod.id}-${slotIdx}`}
                                   onClick={() => { if (lesson) { setSelectedTrack(track); setCurrentVideo(lesson); } else { setSelectedTrack(track); } }}
                                   className={cn(
-                                    "w-full flex items-center gap-3 p-2 rounded-xl text-left border transition-all",
-                                    lesson ? "bg-zinc-900/60 border-white/5 hover:border-red-600/40 hover:bg-red-600/5" : "bg-transparent border-dashed border-white/10 hover:border-white/30"
+                                    "w-full flex items-center gap-2.5 p-1.5 rounded-lg text-left border transition-all",
+                                    lesson?.video_url
+                                      ? "bg-zinc-900/40 border-white/5 hover:border-red-600/40 hover:bg-red-600/5"
+                                      : lesson
+                                        ? "bg-zinc-900/30 border-white/5 hover:border-amber-500/30"
+                                        : "bg-transparent border-dashed border-white/5 hover:border-white/20"
                                   )}
                                 >
-                                  <div className="relative w-14 aspect-video shrink-0 rounded-md overflow-hidden bg-zinc-950 border border-white/5">
+                                  <div className="relative w-12 aspect-video shrink-0 rounded-md overflow-hidden bg-zinc-950 border border-white/5">
                                     {lesson?.thumbnail_url ? (
                                       <img src={lesson.thumbnail_url} className="w-full h-full object-cover" alt={lesson.title} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                                     ) : (
-                                      <div className="w-full h-full bg-gradient-to-br from-red-600/30 to-zinc-950 flex items-center justify-center">
-                                        <Video size={14} className="text-white/40" />
+                                      <div className={cn("w-full h-full flex items-center justify-center", lesson ? "bg-gradient-to-br from-red-600/20 to-zinc-950" : "bg-zinc-950")}>
+                                        <Video size={12} className={cn(lesson ? "text-white/40" : "text-white/15")} />
                                       </div>
                                     )}
-                                    {lesson?.video_url && (
-                                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition"><Play size={12} className="text-white fill-current" /></div>
-                                    )}
+                                    <span className="absolute top-0.5 left-0.5 text-[7px] font-black text-white/80 bg-black/60 px-1 rounded leading-none py-0.5">{String(slotIdx + 1).padStart(2, '0')}</span>
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <p className={cn("text-[11px] font-black italic uppercase tracking-tight truncate", lesson ? "text-white/90" : "text-zinc-500")}>{lesson?.title || `Slot ${slotIdx + 1} — vazio`}</p>
-                                    <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-600 mt-0.5">
-                                      {lesson ? (lesson.video_url ? (lesson.duration || 'Vídeo carregado') : 'Sem vídeo') : 'Aguardando upload'}
+                                    <p className={cn("text-[10px] font-black uppercase tracking-tight truncate", lesson?.video_url ? "text-white/95" : lesson ? "text-white/70" : "text-zinc-600")}>{lesson?.title || `Slot ${slotIdx + 1} — vazio`}</p>
+                                    <p className={cn("text-[8px] font-bold uppercase tracking-[0.2em] mt-0.5", lesson?.video_url ? "text-emerald-500/80" : "text-zinc-600")}>
+                                      {lesson?.video_url ? (lesson.duration || 'Disponível') : lesson ? 'Aguardando vídeo' : 'Vazio'}
                                     </p>
                                   </div>
+                                  {lesson?.video_url ? (
+                                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.7)] shrink-0" />
+                                  ) : lesson ? (
+                                    <div className="h-1.5 w-1.5 rounded-full bg-amber-500/60 shrink-0" />
+                                  ) : (
+                                    <div className="h-1.5 w-1.5 rounded-full bg-white/10 shrink-0" />
+                                  )}
                                 </button>
                               ))}
                             </div>
-                          </div>
+                          </motion.div>
                         );
                       })}
                     </div>
                   )}
-                </div>
+                </section>
               );
             })}
           </div>
-
-
         </div>
+
       ) : (
         <div className="space-y-8 animate-in fade-in duration-500 max-w-[1600px] mx-auto">
           <div className="flex items-center justify-between mb-8">

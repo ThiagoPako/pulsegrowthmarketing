@@ -1165,11 +1165,6 @@ export default function CommercialProposal() {
       </>
     );
   };
-          </div>
-        </CardContent>
-      </Card>
-    </>
-  );
 
   const CATEGORY_ICONS: Record<string, any> = {
     video: Film, design: Palette, social_media: Share2, traffic: BarChart3,

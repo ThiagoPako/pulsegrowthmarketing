@@ -725,7 +725,10 @@ export default function ProposalViewer() {
     const discountedVal = totalValue * (1 - discount / 100);
     const installs = cronoData.installments || 1;
     const installmentVal = discountedVal / installs;
+    const semestralMonthly = totalValue / 6;
+    const anualMonthly = (totalValue * 0.95) / 12;
     const fmt2 = fmt;
+    const selectedIncluded = INCLUDED_SERVICES.filter((s) => cronoData.selectedIncludedServices?.includes(s.id));
     return (
       <>
         {cronoData.methodology && (
@@ -740,6 +743,40 @@ export default function ProposalViewer() {
             {cronoData.totalDays && <p className="text-sm text-gray-500">⏱️ Prazo estimado: <strong>{cronoData.totalDays} dias</strong></p>}
           </AnimatedSection>
         )}
+
+        {selectedIncluded.length > 0 && (
+          <AnimatedSection className="px-6 md:px-10 pb-6">
+            <div className="flex items-center gap-2 mb-1">
+              <Rocket className="h-5 w-5" style={{ color: accentColor }} />
+              <h2 className="text-xl font-bold text-gray-800">Serviços Inclusos no Contrato</h2>
+            </div>
+            <p className="text-sm text-gray-500 mb-5">Tudo isso já está incluso no valor — sem cobranças extras</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {selectedIncluded.map((s, i) => (
+                <motion.div
+                  key={s.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: 0.04 * i }}
+                  className="flex items-start gap-3 p-4 rounded-xl border-2 bg-emerald-50/60 border-emerald-200 hover:shadow-md transition-shadow"
+                >
+                  <div className="p-2 rounded-lg bg-emerald-100 shrink-0">
+                    <s.icon className="h-5 w-5 text-emerald-700" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-bold text-emerald-950 leading-tight">{s.name}</span>
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                    </div>
+                    <p className="text-xs text-gray-600 leading-relaxed">{s.desc}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </AnimatedSection>
+        )}
+
         {cronoData.phases?.length > 0 && (
           <AnimatedSection className="px-6 md:px-10 pb-6">
             <h2 className="text-lg font-bold text-gray-800 mb-3">Fases do Projeto</h2>
@@ -760,7 +797,6 @@ export default function ProposalViewer() {
         {cronoData.deliverables?.length > 0 && (
           <AnimatedSection className="px-6 md:px-10 pb-6">
             <h2 className="text-lg font-bold text-gray-800 mb-3">Escopo dos Serviços</h2>
-            {/* Guarda pública: nunca renderiza colunas Qtd/Unit/Subtotal no link da proposta */}
             <div className="space-y-2">
               {cronoData.deliverables.map((d: any, i: number) => (
                 <motion.div
@@ -786,10 +822,41 @@ export default function ProposalViewer() {
           </AnimatedSection>
         )}
         <AnimatedSection className="px-6 md:px-10 pb-8">
+          <h2 className="text-lg font-bold text-gray-800 mb-4">Investimento</h2>
+
+          {totalValue > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+              <motion.div whileHover={{ scale: 1.02 }} className="border-2 rounded-2xl p-5 transition-shadow hover:shadow-lg">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Semestral</div>
+                <h3 className="text-base font-bold text-gray-800 mt-1">6x parcelas</h3>
+                <p className="text-2xl font-bold mt-2" style={{ color: accentColor }}>
+                  {fmt2(semestralMonthly)}<span className="text-xs font-normal text-gray-500">/mês</span>
+                </p>
+                <p className="text-[11px] text-gray-500 mt-1">Total: {fmt2(totalValue)}</p>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.02 }} className="border-2 rounded-2xl p-5 relative overflow-hidden" style={{ borderColor: accentColor }}>
+                <motion.div
+                  animate={{ opacity: [0.5, 1, 0.5] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                  className="absolute -top-3 left-4 px-3 py-0.5 rounded-full text-[10px] font-bold text-white flex items-center gap-1"
+                  style={{ background: 'hsl(142 71% 40%)' }}
+                >
+                  <Zap className="h-3 w-3" /> 5% OFF
+                </motion.div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mt-2">Anual</div>
+                <h3 className="text-base font-bold text-gray-800 mt-1">12x parcelas</h3>
+                <p className="text-2xl font-bold mt-2" style={{ color: accentColor }}>
+                  {fmt2(anualMonthly)}<span className="text-xs font-normal text-gray-500">/mês</span>
+                </p>
+                <p className="text-[11px] text-gray-500 mt-1">Total: {fmt2(totalValue * 0.95)} <span className="line-through text-gray-400 ml-1">{fmt2(totalValue)}</span></p>
+              </motion.div>
+            </div>
+          )}
+
           <motion.div whileHover={{ scale: 1.01 }} className="border-2 rounded-2xl p-6" style={{ borderColor: accentColor }}>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-gray-600 text-sm">Valor total</span>
+                <span className="text-gray-600 text-sm">Valor total do projeto</span>
                 <span className="text-xl font-bold" style={{ color: accentColor }}>{fmt2(totalValue)}</span>
               </div>
               {discount > 0 && (
@@ -821,6 +888,25 @@ export default function ProposalViewer() {
                   <span className="font-medium">{cronoData.totalDays} dias</span>
                 </div>
               )}
+            </div>
+          </motion.div>
+
+          {/* Garantia de Entrega via Contrato */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="mt-4 p-4 md:p-5 rounded-2xl border-2 flex items-start gap-3"
+            style={{ borderColor: 'hsl(142 71% 40%)', background: 'linear-gradient(135deg, hsl(142 71% 97%), white)' }}
+          >
+            <div className="p-2 rounded-lg shrink-0" style={{ background: 'hsl(142 71% 40%)' }}>
+              <CheckCircle2 className="h-5 w-5 text-white" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm md:text-base font-bold text-gray-900 mb-1">Garantia de Entrega via Contrato</h3>
+              <p className="text-xs md:text-sm text-gray-700 leading-relaxed">
+                Todas as entregas descritas nesta proposta são <strong>formalizadas em contrato</strong>, garantindo prazos, escopo e qualidade acordados. Sua tranquilidade é nosso compromisso — você tem segurança jurídica e clareza total sobre cada etapa do projeto.
+              </p>
             </div>
           </motion.div>
         </AnimatedSection>

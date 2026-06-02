@@ -605,6 +605,8 @@ export default function CommercialProposal() {
         installments: parseInt(cronogramaInstallments) || 1,
         pricingMode: cronogramaPricingMode,
         totalValue: cronogramaResolvedTotal,
+        selectedIncludedServices,
+        contractDuration,
       } : {};
 
       let saveSystemData: any = systemData;

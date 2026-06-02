@@ -624,8 +624,11 @@ async function callAi(ai, model, messages, options = {}) {
   
   // Fallback chain: se o modelo falhar com 429, tenta modelos com cotas mais altas
   const FALLBACK_MODELS = {
-    'gemini-2.5-flash': ['gemini-2.5-flash-lite', 'gemini-2.0-flash-lite', 'gemini-1.5-flash-8b'],
+    'gemini-2.5-flash': ['gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'],
     'gemini-2.5-pro': ['gemini-2.5-flash', 'gemini-2.5-flash-lite'],
+    'gemini-1.5-flash-8b': ['gemini-2.5-flash-lite', 'gemini-2.0-flash-lite'],
+    'gemini-1.5-flash': ['gemini-2.5-flash', 'gemini-2.5-flash-lite'],
+    'gemini-1.5-pro': ['gemini-2.5-pro', 'gemini-2.5-flash'],
   };
   const modelsToTry = ai.provider === 'gemini' 
     ? [model, ...(FALLBACK_MODELS[model] || [])]

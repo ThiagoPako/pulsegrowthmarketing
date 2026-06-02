@@ -649,8 +649,23 @@ export default function Team() {
                           }}
                         />
                       </div>
+                      {(() => {
+                        const uc = userCities[u.id];
+                        const list = uc?.cities?.length ? uc.cities : (['minacu'] as CityCode[]);
+                        return (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleOpenCities(u); }}
+                            className="h-7 px-2 rounded-md bg-secondary/50 hover:bg-secondary text-[10px] flex items-center gap-1 border border-transparent hover:border-primary/30 transition-all"
+                            title="Cidades de acesso"
+                          >
+                            <MapPin size={11} className="text-primary" />
+                            {list.map(c => CITY_LABELS[c as CityCode]).join(' · ')}
+                          </button>
+                        );
+                      })()}
                       {u.id !== currentUser?.id && (
-                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Permissões de módulos" onClick={() => handleOpenPermissions(u)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Permissões de módulos" onClick={(e) => { e.stopPropagation(); handleOpenPermissions(u); }}>
                           <Lock size={16} />
                         </Button>
                       )}

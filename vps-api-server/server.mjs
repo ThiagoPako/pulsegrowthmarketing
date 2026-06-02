@@ -3732,6 +3732,26 @@ const TABLES_WITH_CITY = new Set([
   'crm_leads','crm_notes',
 ]);
 
+// Cache de quais tabelas realmente possuem a coluna `city` no schema atual.
+// Evita 42703 (column does not exist) se a migração ainda não rodou para alguma tabela.
+const _cityColumnCache = new Map();
+async function tableHasCityColumn(tableName) {
+  if (_cityColumnCache.has(tableName)) return _cityColumnCache.get(tableName);
+  try {
+    const { rows } = await pool.query(
+      `SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = $1 AND column_name = 'city' LIMIT 1`,
+      [tableName]
+    );
+    const has = rows.length > 0;
+    _cityColumnCache.set(tableName, has);
+    return has;
+  } catch {
+    return false;
+  }
+}
+
+
 // Resolve a cidade ativa do request: header x-pulse-city, validado contra user_cities.
 // Fallback: primary do usuário, ou 'minacu' se não houver registro.
 async function resolveActiveCity(req, userId, userObj = null) {
@@ -3781,7 +3801,8 @@ app.post('/api/db/query', async (req, res) => {
     }
 
     // Multi-city: resolve cidade ativa e prepara flag de scoping
-    const scopeCity = TABLES_WITH_CITY.has(safeTable);
+    // Só aplica se a tabela estiver na lista E realmente tiver a coluna `city` no DB.
+    const scopeCity = TABLES_WITH_CITY.has(safeTable) && await tableHasCityColumn(safeTable);
     const activeCity = scopeCity ? await resolveActiveCity(req, user.id, user) : null;
 
     let result;

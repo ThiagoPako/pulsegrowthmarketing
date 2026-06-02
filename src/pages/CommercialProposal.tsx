@@ -1707,35 +1707,64 @@ export default function CommercialProposal() {
     const discountedVal = val * (1 - customDiscount / 100);
     const installs = parseInt(customInstallments) || 1;
     const installmentVal = discountedVal / installs;
-    const services: { icon: any; value: string | number; label: string }[] = [];
-    if (parseInt(customVideos) > 0) services.push({ icon: Film, value: customVideos, label: 'Vídeos/mês' });
-    if (parseInt(customStories) > 0) services.push({ icon: Camera, value: customStories, label: 'Stories/mês' });
-    if (parseInt(customArts) > 0) services.push({ icon: Palette, value: customArts, label: 'Artes/mês' });
-    if (parseInt(customRecordings) > 0) services.push({ icon: Film, value: customRecordings, label: 'Captações/mês' });
-    if (parseInt(customEventCoverage) > 0) services.push({ icon: Camera, value: customEventCoverage, label: 'Coberturas/mês' });
-    if (customSocialMedia) services.push({ icon: Share2, value: '✓', label: 'Social Media' });
-    if (customTrafficMgmt) services.push({ icon: BarChart3, value: '✓', label: 'Gestão de Tráfego' });
+    const legacyExtraIds: string[] = [];
+    if (customSocialMedia && !selectedIncludedServices.includes('social_media')) legacyExtraIds.push('social_media');
+    if (customTrafficMgmt && !selectedIncludedServices.includes('meta_ads') && !selectedIncludedServices.includes('google_ads')) legacyExtraIds.push('meta_ads');
+    const allIncludedIds = [...selectedIncludedServices, ...legacyExtraIds];
+    const selectedIncluded = INCLUDED_SERVICES.filter(s => allIncludedIds.includes(s.id));
+
+    const extraStats: { icon: any; value: string | number; label: string }[] = [];
+    if (parseInt(customVideos) > 0) extraStats.push({ icon: Film, value: customVideos, label: 'Vídeos/mês' });
+    if (parseInt(customStories) > 0) extraStats.push({ icon: Camera, value: customStories, label: 'Stories/mês' });
+    if (parseInt(customArts) > 0) extraStats.push({ icon: Palette, value: customArts, label: 'Artes/mês' });
+    if (parseInt(customRecordings) > 0) extraStats.push({ icon: Film, value: customRecordings, label: 'Captações/mês' });
+    if (parseInt(customEventCoverage) > 0) extraStats.push({ icon: Camera, value: customEventCoverage, label: 'Coberturas/mês' });
 
     return (
       <>
-        {services.length > 0 && (
+        {(selectedIncluded.length > 0 || extraStats.length > 0) && (
           <div data-pdf-section className="p-8 md:p-12">
             <h2 className="text-xl font-bold text-gray-800 mb-1 flex items-center gap-2">
-              <Target className="h-5 w-5" style={{ color: 'hsl(16 82% 51%)' }} /> Serviços Inclusos
+              <Target className="h-5 w-5" style={{ color: 'hsl(16 82% 51%)' }} /> Serviços Inclusos no Contrato
             </h2>
-            <p className="text-sm text-gray-500 mb-6">Proposta personalizada para sua empresa</p>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {services.map((s, i) => {
-                const Icon = s.icon;
-                return (
-                  <div key={i} className="border rounded-lg p-3 text-center">
-                    <Icon className="h-5 w-5 mx-auto mb-1" style={{ color: 'hsl(16 82% 51%)' }} />
-                    <p className="text-2xl font-bold text-gray-800">{s.value}</p>
-                    <p className="text-xs text-gray-500">{s.label}</p>
-                  </div>
-                );
-              })}
-            </div>
+            <p className="text-sm text-gray-500 mb-6">Tudo isto já está incluso no valor fixo mensal do contrato</p>
+
+            {selectedIncluded.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                {selectedIncluded.map((s) => {
+                  const Icon = s.icon;
+                  return (
+                    <div key={s.id} className="flex items-start gap-3 p-4 rounded-xl border-2 bg-emerald-50/60 border-emerald-200">
+                      <div className="p-2 rounded-lg bg-emerald-100 shrink-0">
+                        <Icon className="h-5 w-5 text-emerald-700" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-bold text-emerald-950 leading-tight">{s.name}</span>
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                        </div>
+                        <p className="text-xs text-gray-600 leading-relaxed">{s.desc}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {extraStats.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {extraStats.map((s, i) => {
+                  const Icon = s.icon;
+                  return (
+                    <div key={i} className="border rounded-lg p-3 text-center bg-white">
+                      <Icon className="h-5 w-5 mx-auto mb-1" style={{ color: 'hsl(16 82% 51%)' }} />
+                      <p className="text-2xl font-bold text-gray-800">{s.value}</p>
+                      <p className="text-xs text-gray-500">{s.label}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
         {customDescription && (

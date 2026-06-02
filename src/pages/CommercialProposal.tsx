@@ -2305,7 +2305,7 @@ export default function CommercialProposal() {
                 <Download className="h-4 w-4 mr-1" /> PDF
               </Button>
               <Button size="sm" onClick={saveAndShareProposal} disabled={savingProposal} className="bg-green-600 hover:bg-green-700">
-                <Link2 className="h-4 w-4 mr-1" /> {savingProposal ? 'Salvando...' : 'Salvar & Enviar Link'}
+                <Link2 className="h-4 w-4 mr-1" /> {savingProposal ? 'Salvando...' : editingProposalId ? 'Atualizar Proposta' : 'Salvar & Enviar Link'}
               </Button>
             </>
           )}

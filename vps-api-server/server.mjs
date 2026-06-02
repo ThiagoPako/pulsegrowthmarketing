@@ -679,7 +679,7 @@ async function callAi(ai, model, messages, options = {}) {
         return data.choices?.[0]?.message?.content || '';
       } catch (err) {
         lastError = err;
-        if (err.status === 429) break; // próximo modelo
+        if (err.status === 429 || err.status === 404) break; // próximo modelo
         if (attempt === retries) throw err;
       }
     }

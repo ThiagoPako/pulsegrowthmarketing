@@ -4133,7 +4133,11 @@ app.post('/api/clients', async (req, res) => {
       ]
     );
     res.json(rows[0]);
-  } catch (e) { console.error('POST /api/clients error:', e); res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('POST /api/clients error:', e);
+    const status = e?.statusCode === 400 ? 400 : 500;
+    res.status(status).json({ error: e.message });
+  }
 });
 
 app.put('/api/clients/:id', async (req, res) => {

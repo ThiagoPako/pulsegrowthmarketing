@@ -614,6 +614,38 @@ export default function TrainingModuleAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!previewLesson} onOpenChange={(open) => !open && setPreviewLesson(null)}>
+        <DialogContent className="sm:max-w-4xl bg-black border-white/10 text-white rounded-[2rem] p-4">
+          <DialogHeader>
+            <DialogTitle className="italic uppercase font-black truncate">{previewLesson?.title}</DialogTitle>
+            <DialogDescription className="text-zinc-500 font-bold uppercase tracking-widest text-[10px]">
+              {previewLesson?.methodology_name || 'Pulse'} • {previewLesson?.duration}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="aspect-video w-full bg-black rounded-xl overflow-hidden border border-white/5 mt-2">
+            {previewLoading && !previewUrl && (
+              <div className="w-full h-full flex items-center justify-center text-white/60 text-xs font-black uppercase tracking-[0.3em]">
+                <Loader2 className="animate-spin mr-2" size={16} /> Liberando vídeo…
+              </div>
+            )}
+            {previewUrl && previewIsExternal && (
+              <iframe src={previewUrl} className="w-full h-full" allowFullScreen key={previewUrl} />
+            )}
+            {previewUrl && !previewIsExternal && (
+              <video
+                src={previewUrl}
+                className="w-full h-full bg-black"
+                controls
+                autoPlay
+                playsInline
+                preload="metadata"
+                key={previewUrl}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

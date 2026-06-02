@@ -532,12 +532,12 @@ export default function TrainingModuleAdmin() {
                               <Button 
                                 variant="ghost" size="icon" 
                                 className="h-8 w-8 rounded-full bg-black/60 backdrop-blur-md hover:bg-red-600 text-white transition-all border border-white/5"
-                                onClick={() => setUploadModalLesson(lesson)}
+                                onClick={(e) => { e.stopPropagation(); setUploadModalLesson(lesson); }}
                               ><Upload size={14} /></Button>
                               <Button 
                                 variant="ghost" size="icon" 
                                 className="h-8 w-8 rounded-full bg-black/60 backdrop-blur-md hover:bg-destructive text-white transition-all border border-white/5"
-                                onClick={() => deleteLesson(lesson.id)}
+                                onClick={(e) => { e.stopPropagation(); deleteLesson(lesson.id); }}
                               ><Trash2 size={14} /></Button>
                             </div>
                           )}

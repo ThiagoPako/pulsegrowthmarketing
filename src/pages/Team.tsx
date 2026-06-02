@@ -109,7 +109,19 @@ export default function Team() {
     if (data) setPartners(data as PartnerInfo[]);
   };
 
-  useEffect(() => { fetchMembers(); fetchPartners(); }, []);
+  const fetchUserCities = async () => {
+    try {
+      const token = localStorage.getItem('pulse_jwt');
+      const res = await fetch(`${VPS_API_BASE}/admin/user-cities`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!res.ok) return;
+      const json = await res.json();
+      setUserCities(json.users || {});
+    } catch { /* noop */ }
+  };
+
+  useEffect(() => { fetchMembers(); fetchPartners(); fetchUserCities(); }, []);
 
   // Sync permissions when target changes
   useEffect(() => {

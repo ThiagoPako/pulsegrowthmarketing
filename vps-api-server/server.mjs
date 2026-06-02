@@ -3997,7 +3997,9 @@ app.post('/api/db/query', async (req, res) => {
 
       case 'update': {
         const jsonColumns = await getTableJsonColumns(safeTable);
-        const scopedData = scopeCity ? { ...data, city: activeCity } : data;
+        const scopedData = scopeCity
+          ? { ...data, city: assertValidCity(activeCity) }
+          : (data && data.city !== undefined ? { ...data, city: assertValidCity(data.city) } : data);
         const entries = Object.entries(scopedData).map(([key, value]) => [sanitizeIdentifier(key), value]);
         const keys = entries.map(([key]) => key);
         const values = entries.map(([key, value]) => serializeValueForColumn(key, value, jsonColumns));

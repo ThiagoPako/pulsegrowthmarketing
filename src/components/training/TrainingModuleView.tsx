@@ -423,7 +423,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
         </div>
 
       ) : (
-        <div className="space-y-8 animate-in fade-in duration-500 max-w-[1600px] mx-auto">
+        <div className="space-y-8 animate-in fade-in duration-500 max-w-[1600px] mx-auto p-6 lg:p-10">
           <div className="flex items-center justify-between mb-8">
             <Button variant="ghost" onClick={() => { setSelectedTrack(null); setCurrentVideo(null); }} className="text-white hover:text-red-600 gap-2"><ChevronLeft size={24} /> Voltar para o catálogo</Button>
             <h2 className="text-3xl font-black italic uppercase tracking-tighter text-red-600">Pulse <span className="text-white">Original</span></h2>

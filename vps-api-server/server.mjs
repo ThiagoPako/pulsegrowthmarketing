@@ -3595,6 +3595,8 @@ const ALLOWED_TABLES = [
   'event_recordings','client_testimonials','proposal_checklist_items','holidays',
   'tv_settings','fieldwork_activities',
   'training_presentations','training_slides',
+  'training_tracks','training_modules','training_lessons','user_training_progress',
+  'user_permissions',
 ];
 
 function sanitizeIdentifier(name) {

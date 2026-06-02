@@ -289,7 +289,8 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
               <div ref={scrollContainerRef} className="flex gap-2 overflow-x-auto scrollbar-hide px-4 pb-8">
                 {tracks.map(track => (
                   <motion.div key={track.id} onClick={() => setSelectedTrack(track)} className="relative flex-none w-72 aspect-video bg-[#2f2f2f] rounded-md overflow-hidden cursor-pointer shadow-lg" whileHover={{ scale: 1.1, zIndex: 40 }}>
-                    <img src={track.thumbnail_url} className="w-full h-full object-cover" alt={track.title} />
+                    <img src={track.thumbnail_url} className="w-full h-full object-cover" alt={track.title} onError={(e) => { (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1492691523567-6170f2295b21?auto=format&fit=crop&q=80&w=600'; }} />
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-3"><h3 className="font-black text-xs uppercase tracking-tight text-white truncate">{track.title}</h3></div>
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 hover:opacity-100 transition-opacity flex flex-col justify-end p-4"><h3 className="font-bold text-sm">{track.title}</h3></div>
                   </motion.div>
                 ))}

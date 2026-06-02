@@ -4205,7 +4205,7 @@ app.delete('/api/clients/:id', async (req, res) => {
 // ─── Recordings ─────────────────────────────────────────────
 app.get('/api/recordings', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
     const { rows } = await pool.query(`
       SELECT
         r.*,
@@ -4225,8 +4225,9 @@ app.get('/api/recordings', async (req, res) => {
           ELSE r.status
         END AS effective_status
       FROM recordings r
+      ${scopeCity ? 'WHERE r.city = $1' : ''}
       ORDER BY r.date DESC, r.start_time ASC
-    `);
+    `, scopeCity ? [activeCity] : []);
 
     res.json(rows.map(({ effective_status, ...recording }) => ({
       ...recording,
@@ -4237,7 +4238,7 @@ app.get('/api/recordings', async (req, res) => {
 
 app.post('/api/recordings', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
     const items = Array.isArray(req.body) ? req.body : [req.body];
     const schemaResult = await pool.query(`
       SELECT column_name, is_nullable
@@ -4264,6 +4265,10 @@ app.post('/api/recordings', async (req, res) => {
 
       const cols = ['id', 'client_id', 'videomaker_id', 'date', 'start_time', 'type', 'status', 'confirmation_status'];
       const vals = [r.id || crypto.randomUUID(), r.client_id || null, r.videomaker_id, r.date, r.start_time, r.type || 'fixa', r.status || 'agendada', r.confirmation_status || 'pendente'];
+      if (scopeCity) {
+        cols.push('city');
+        vals.push(activeCity);
+      }
       if (hasProspectName && r.prospect_name) {
         cols.push('prospect_name');
         vals.push(r.prospect_name);
@@ -4281,7 +4286,7 @@ app.post('/api/recordings', async (req, res) => {
 
 app.put('/api/recordings/:id', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
     const { id } = req.params;
     const r = req.body;
     const schemaResult = await pool.query(`
@@ -4300,14 +4305,16 @@ app.put('/api/recordings/:id', async (req, res) => {
     for (const key of allowed) { if (r[key] !== undefined) { sets.push(`${key} = $${idx}`); vals.push(r[key]); idx++; } }
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     vals.push(id);
-    const { rows } = await pool.query(`UPDATE recordings SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`, vals);
+    const cityClause = scopeCity ? ` AND city = $${idx + 1}` : '';
+    if (scopeCity) vals.push(activeCity);
+    const { rows } = await pool.query(`UPDATE recordings SET ${sets.join(', ')} WHERE id = $${idx}${cityClause} RETURNING *`, vals);
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.delete('/api/recordings/:id', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
     const id = req.params.id;
     // Cascade: remove dependent records first
     await pool.query('DELETE FROM active_recordings WHERE recording_id = $1', [id]);
@@ -4323,7 +4330,10 @@ app.delete('/api/recordings/:id', async (req, res) => {
     }
     // Mark linked scripts as not recorded
     await pool.query("UPDATE scripts SET recorded = false, updated_at = NOW() WHERE recording_id = $1", [id]);
-    await pool.query('DELETE FROM recordings WHERE id = $1', [id]);
+    await pool.query(
+      `DELETE FROM recordings WHERE id = $1${scopeCity ? ' AND city = $2' : ''}`,
+      scopeCity ? [id, activeCity] : [id]
+    );
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -4331,11 +4341,11 @@ app.delete('/api/recordings/:id', async (req, res) => {
 // Bulk delete future recordings for a client
 app.delete('/api/recordings/future/:clientId', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
     const today = new Date().toISOString().split('T')[0];
     const { rowCount } = await pool.query(
-      "DELETE FROM recordings WHERE client_id = $1 AND status = 'agendada' AND date >= $2",
-      [req.params.clientId, today]
+      `DELETE FROM recordings WHERE client_id = $1 AND status = 'agendada' AND date >= $2${scopeCity ? ' AND city = $3' : ''}`,
+      scopeCity ? [req.params.clientId, today, activeCity] : [req.params.clientId, today]
     );
     res.json({ deleted: rowCount });
   } catch (e) { res.status(500).json({ error: e.message }); }

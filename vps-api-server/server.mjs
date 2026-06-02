@@ -4156,8 +4156,11 @@ app.put('/api/clients/:id', async (req, res) => {
     let idx = 1;
     for (const key of allowed) {
       if (c[key] !== undefined) {
+        let value = c[key];
+        if (key === 'city') value = assertValidCity(value);
+        if (key === 'briefing_data') value = JSON.stringify(c[key]);
         sets.push(`${key} = $${idx}`);
-        vals.push(key === 'briefing_data' ? JSON.stringify(c[key]) : c[key]);
+        vals.push(value);
         idx++;
       }
     }

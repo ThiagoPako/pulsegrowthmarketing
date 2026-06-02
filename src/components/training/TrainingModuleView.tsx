@@ -101,41 +101,52 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
         .eq('track_id', trackId)
         .order('display_order', { ascending: true });
 
-      if (modErr) throw modErr;
-
-      if (modData) {
-        setModules(modData);
-        const moduleIds = modData.map(m => m.id);
-        
-        if (moduleIds.length > 0) {
-          const { data: lessData, error: lessErr } = await supabase
-            .from('training_lessons')
-            .select('id, module_id, title, description, video_url, video_path, methodology_name, duration, display_order, content_markdown, thumbnail_url')
-            .in('module_id', moduleIds)
-            .order('display_order', { ascending: true });
-
-          if (lessErr) throw lessErr;
-
-          const { data: progressData } = await supabase
-            .from('user_training_progress')
-            .select('lesson_id, status')
-            .eq('user_id', userId);
-
-          const progressMap = new Map((progressData || []).map(p => [p.lesson_id, p.status]));
-
-          if (lessData) {
-            setLessons(lessData.map(l => ({
-              ...l,
-              status: progressMap.get(l.id) || 'not_started'
-            })));
-          }
-        } else {
-          setLessons([]);
-        }
+      if (modErr) {
+        console.error('[Academy] modules error:', modErr);
+        toast.error('Erro ao carregar módulos: ' + (modErr.message || ''));
       }
+
+      const safeModules = modData || [];
+      setModules(safeModules);
+
+      const moduleIds = safeModules.map(m => m.id);
+      if (moduleIds.length === 0) {
+        setLessons([]);
+        return;
+      }
+
+      const [lessRes, progRes] = await Promise.allSettled([
+        supabase
+          .from('training_lessons')
+          .select('id, module_id, title, description, video_url, video_path, methodology_name, duration, display_order, content_markdown, thumbnail_url')
+          .in('module_id', moduleIds)
+          .order('display_order', { ascending: true }),
+        supabase
+          .from('user_training_progress')
+          .select('lesson_id, status')
+          .eq('user_id', userId),
+      ]);
+
+      let lessData: any[] = [];
+      if (lessRes.status === 'fulfilled') {
+        if (lessRes.value.error) console.error('[Academy] lessons error:', lessRes.value.error);
+        lessData = lessRes.value.data || [];
+      } else {
+        console.error('[Academy] lessons rejected:', lessRes.reason);
+      }
+
+      let progressData: any[] = [];
+      if (progRes.status === 'fulfilled' && !progRes.value.error) {
+        progressData = progRes.value.data || [];
+      } else if (progRes.status === 'fulfilled') {
+        console.warn('[Academy] progress error (ignorado):', progRes.value.error);
+      }
+
+      const progressMap = new Map(progressData.map(p => [p.lesson_id, p.status]));
+      setLessons(lessData.map((l: any) => ({ ...l, status: progressMap.get(l.id) || 'not_started' })));
     } catch (error: any) {
       console.error('Error loading track details:', error);
-      toast.error('Erro ao carregar detalhes');
+      toast.error('Erro ao carregar detalhes: ' + (error?.message || ''));
     } finally {
       setLoading(false);
     }

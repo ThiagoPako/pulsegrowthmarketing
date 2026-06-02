@@ -35,7 +35,7 @@ import {
   Rocket, Film, Palette, Camera, Monitor, Share2, BarChart3,
   CheckCircle2, Gift, FileText, Scissors, Users, MessageCircle,
   ThumbsUp, ThumbsDown, Clock, Send, Code, Megaphone, Star, Zap,
-  CalendarDays, Layers, Sparkles, Target
+  CalendarDays, Layers, Sparkles, Target, ListChecks
 } from 'lucide-react';
 
 const INTERNAL_PROCESS_STEPS = [
@@ -191,13 +191,24 @@ export default function ProposalViewer() {
   const systemData = proposal.system_data || {};
   const endoData = proposal.endomarketing_data || {};
   
+  const INCLUDED_SERVICES = [
+    { id: 'social_media', name: 'Social Media', icon: Share2 },
+    { id: 'campanhas', name: 'Criação de Campanhas de Marketing', icon: Megaphone },
+    { id: 'gestao_projetos', name: 'Gestão de Projetos', icon: ListChecks },
+    { id: 'roteiros', name: 'Roteiros', icon: FileText },
+    { id: 'captacao', name: 'Captação', icon: Camera },
+    { id: 'edicao', name: 'Edição Profissional', icon: Scissors },
+    { id: 'designer', name: 'Designer', icon: Palette },
+    { id: 'meta_ads', name: 'Gestão de Tráfego Meta Ads', icon: BarChart3 },
+    { id: 'google_ads', name: 'Gestão de Tráfego Google Ads', icon: Target },
+    { id: 'portal_cliente', name: 'Portal do Cliente', icon: Monitor },
+    { id: 'reuniao_mensal', name: 'Reunião Mensal', icon: CalendarDays },
+  ];
   const PREDEFINED_SERVICES = [
-    { id: 'google_negocio', name: 'Google Meu Negócio', icon: Target },
-    { id: 'landing_page', name: 'Criação de Landing Page', icon: Code },
-    { id: 'site_promocoes', name: 'Site com Sistema de Promoções', icon: Sparkles },
-    { id: 'gestao_trafego', name: 'Gestão de Tráfego Pago', icon: BarChart3 },
-    { id: 'social_media', name: 'Gestão de Redes Sociais', icon: Share2 },
-    { id: 'identidade_visual', name: 'Identidade Visual', icon: Palette },
+    { id: 'google_negocio', name: 'Google Meu Negócio', price: 500, icon: Target },
+    { id: 'landing_page', name: 'Criação de Landing Page', price: 1500, icon: Code },
+    { id: 'site_promocoes', name: 'Site com Sistema de Promoções', price: 3500, icon: Sparkles },
+    { id: 'identidade_visual', name: 'Identidade Visual', price: 2000, icon: Palette },
   ];
   const planPrice = plan.price || 0;
   const bonusTotal = bonus.reduce((s: number, b: any) => s + (b.value || 0), 0);
@@ -492,64 +503,94 @@ export default function ProposalViewer() {
 
   // ===== CUSTOM / PERSONALIZADA =====
   const renderCustomContent = () => {
-    const customData = systemData; // stored in system_data
+    const customData = systemData;
     const val = customData.monthlyValue || 0;
-    
-    // Calculate total from base services if provided
-    const selectedBase = PREDEFINED_SERVICES.filter(s => customData.selectedBaseServices?.includes(s.id));
-    const baseServicesTotal = selectedBase.length > 0 ? 0 : 0; // The price was already included in monthlyValue or added separately
-    
+
+    const selectedIncluded = INCLUDED_SERVICES.filter(s => customData.selectedIncludedServices?.includes(s.id));
+    const selectedAdicionaisPredef = PREDEFINED_SERVICES.filter(s => customData.selectedBaseServices?.includes(s.id));
     const additional = customData.additionalServices || [];
+    const adicionaisPredefTotal = selectedAdicionaisPredef.reduce((sum: number, s: any) => sum + (s.price || 0), 0);
     const additionalTotal = additional.reduce((sum: number, s: any) => sum + (s.price || 0), 0);
-    
-    const totalBeforeDiscount = val + additionalTotal;
+    const adicionaisTotal = adicionaisPredefTotal + additionalTotal;
+
+    // Contrato mensal é apenas o valor fixo (adicionais são à parte)
+    const totalBeforeDiscount = val;
     const discountedVal = totalBeforeDiscount * (1 - discount / 100);
-    
+
     const installs = customData.installments || 1;
     const installmentVal = discountedVal / installs;
-    
-    const services: { icon: any; value: string | number; label: string }[] = [];
-    
-    // Add base services from predefined list
-    selectedBase.forEach(s => {
-      services.push({ icon: s.icon, value: '✓', label: s.name });
-    });
 
-    if (customData.videos > 0) services.push({ icon: Film, value: customData.videos, label: 'Vídeos/mês' });
-    if (customData.stories > 0) services.push({ icon: Camera, value: customData.stories, label: 'Stories/mês' });
-    if (customData.arts > 0) services.push({ icon: Palette, value: customData.arts, label: 'Artes/mês' });
-    if (customData.recordings > 0) services.push({ icon: Film, value: customData.recordings, label: 'Captações/mês' });
-    if (customData.eventCoverage > 0) services.push({ icon: Camera, value: customData.eventCoverage, label: 'Coberturas/mês' });
-    if (customData.socialMedia) services.push({ icon: Share2, value: '✓', label: 'Social Media' });
-    if (customData.trafficManagement) services.push({ icon: BarChart3, value: '✓', label: 'Gestão de Tráfego' });
+    const extraServices: { icon: any; value: string | number; label: string }[] = [];
+    if (customData.videos > 0) extraServices.push({ icon: Film, value: customData.videos, label: 'Vídeos/mês' });
+    if (customData.stories > 0) extraServices.push({ icon: Camera, value: customData.stories, label: 'Stories/mês' });
+    if (customData.arts > 0) extraServices.push({ icon: Palette, value: customData.arts, label: 'Artes/mês' });
+    if (customData.recordings > 0) extraServices.push({ icon: Film, value: customData.recordings, label: 'Captações/mês' });
+    if (customData.eventCoverage > 0) extraServices.push({ icon: Camera, value: customData.eventCoverage, label: 'Coberturas/mês' });
 
     return (
       <>
         <AnimatedSection className="px-6 md:px-10 py-8">
           <div className="flex items-center gap-2 mb-1">
             <Rocket className="h-5 w-5" style={{ color: accentColor }} />
-            <h2 className="text-xl font-bold text-gray-800">Serviços Inclusos</h2>
+            <h2 className="text-xl font-bold text-gray-800">Serviços Inclusos no Contrato</h2>
           </div>
           <p className="text-sm text-gray-500 mb-5">
-            Proposta {customData.contractDuration === 'anual' ? 'Anual' : 'Semestral'} personalizada
+            Proposta {customData.contractDuration === 'anual' ? 'Anual' : 'Semestral'} personalizada — tudo isso já está no valor fixo mensal
           </p>
-          
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {services.map((s, i) => (
-              <StatCard key={i} icon={s.icon} value={s.value} label={s.label} delay={0.1 + i * 0.05} />
-            ))}
-          </div>
 
-          {additional.length > 0 && (
-            <div className="mt-8">
-              <h3 className="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wider">Serviços Adicionais</h3>
+          {selectedIncluded.length > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+              {selectedIncluded.map((s, i) => (
+                <motion.div
+                  key={s.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: 0.05 * i }}
+                  className="flex items-center gap-2 p-3 rounded-xl border-2 bg-emerald-50 border-emerald-200"
+                >
+                  <s.icon className="h-4 w-4 text-emerald-700 shrink-0" />
+                  <span className="text-xs font-bold text-emerald-900 leading-tight">{s.name}</span>
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 ml-auto shrink-0" />
+                </motion.div>
+              ))}
+            </div>
+          )}
+
+          {extraServices.length > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {extraServices.map((s, i) => (
+                <StatCard key={i} icon={s.icon} value={s.value} label={s.label} delay={0.1 + i * 0.05} />
+              ))}
+            </div>
+          )}
+
+          {(selectedAdicionaisPredef.length > 0 || additional.length > 0) && (
+            <div className="mt-8 p-5 rounded-2xl border-2 border-dashed" style={{ borderColor: accentColor }}>
+              <h3 className="text-sm font-bold text-gray-800 mb-1 uppercase tracking-wider flex items-center gap-2">
+                <Sparkles className="h-4 w-4" style={{ color: accentColor }} /> Adicionais Opcionais
+              </h3>
+              <p className="text-xs text-gray-500 mb-3">Serviços extras cobrados à parte, fora do valor fixo mensal do contrato</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {selectedAdicionaisPredef.map((s: any, i: number) => (
+                  <div key={`p-${i}`} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <s.icon className="h-4 w-4 text-gray-600" />
+                      <span className="text-sm font-medium text-gray-700">{s.name}</span>
+                    </div>
+                    <span className="text-sm font-bold" style={{ color: accentColor }}>{fmt(s.price)}</span>
+                  </div>
+                ))}
                 {additional.map((s: any, i: number) => (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
+                  <div key={`a-${i}`} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
                     <span className="text-sm font-medium text-gray-700">{s.name}</span>
                     <span className="text-sm font-bold" style={{ color: accentColor }}>{fmt(s.price)}</span>
                   </div>
                 ))}
+              </div>
+              <div className="flex justify-between items-center mt-3 pt-3 border-t text-xs text-gray-500">
+                <span>Total adicionais (à parte)</span>
+                <span className="font-bold">{fmt(adicionaisTotal)}</span>
               </div>
             </div>
           )}
@@ -563,14 +604,14 @@ export default function ProposalViewer() {
         )}
 
         <AnimatedSection className="px-6 md:px-10 pb-8">
-          <h2 className="text-lg font-bold text-gray-800 mb-4">Investimento</h2>
+          <h2 className="text-lg font-bold text-gray-800 mb-4">Investimento Mensal</h2>
           <motion.div whileHover={{ scale: 1.01 }} className="border-2 rounded-2xl p-6" style={{ borderColor: accentColor }}>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-gray-600 text-sm">Valor do Pacote</span>
-                <span className="text-xl font-bold" style={{ color: accentColor }}>{fmt(totalBeforeDiscount)}</span>
+                <span className="text-gray-600 text-sm">Valor do Contrato</span>
+                <span className="text-xl font-bold" style={{ color: accentColor }}>{fmt(totalBeforeDiscount)}<span className="text-xs font-normal text-gray-500">/mês</span></span>
               </div>
-              
+
               {discount > 0 && (
                 <>
                   <div className="flex justify-between items-center text-green-600 text-sm">
@@ -578,12 +619,12 @@ export default function ProposalViewer() {
                     <span className="font-bold">-{fmt(totalBeforeDiscount - discountedVal)}</span>
                   </div>
                   <div className="flex justify-between items-center border-t pt-2">
-                    <span className="font-bold text-gray-800">Total</span>
-                    <motion.span animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 1, delay: 0.5 }} className="text-2xl font-bold" style={{ color: accentColor }}>{fmt(discountedVal)}</motion.span>
+                    <span className="font-bold text-gray-800">Total mensal</span>
+                    <motion.span animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 1, delay: 0.5 }} className="text-2xl font-bold" style={{ color: accentColor }}>{fmt(discountedVal)}<span className="text-xs font-normal text-gray-500">/mês</span></motion.span>
                   </div>
                 </>
               )}
-              
+
               <Separator />
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-600">Duração do Contrato</span>
@@ -599,6 +640,15 @@ export default function ProposalViewer() {
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600">{installs}x de</span>
                   <span className="font-bold" style={{ color: accentColor }}>{fmt(installmentVal)}</span>
+                </div>
+              )}
+
+              {adicionaisTotal > 0 && (
+                <div className="mt-3 p-3 rounded-lg bg-gray-50 border border-gray-200 text-xs">
+                  <div className="flex justify-between text-gray-600 italic">
+                    <span>+ Adicionais opcionais (à parte)</span>
+                    <span className="font-bold">{fmt(adicionaisTotal)}</span>
+                  </div>
                 </div>
               )}
             </div>

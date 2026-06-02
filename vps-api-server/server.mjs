@@ -3977,7 +3977,9 @@ app.post('/api/db/query', async (req, res) => {
         const jsonColumns = await getTableJsonColumns(safeTable);
         for (const item of items) {
           // Multi-city: força city para a cidade ativa (ignora qualquer valor enviado pelo cliente)
-          const itemScoped = scopeCity ? { ...item, city: activeCity } : item;
+          const itemScoped = scopeCity
+            ? { ...item, city: assertValidCity(activeCity) }
+            : (item && item.city !== undefined ? { ...item, city: assertValidCity(item.city) } : item);
           const entries = Object.entries(itemScoped).map(([key, value]) => [sanitizeIdentifier(key), value]);
           const keys = entries.map(([key]) => key);
           const values = entries.map(([key, value]) => serializeValueForColumn(key, value, jsonColumns));

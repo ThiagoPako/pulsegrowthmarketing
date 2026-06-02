@@ -124,6 +124,15 @@ function copyToClipboard(text: string): Promise<void> {
   return Promise.resolve();
 }
 
+const PREDEFINED_SERVICES = [
+  { id: 'google_negocio', name: 'Google Meu Negócio', price: 500, icon: Target },
+  { id: 'landing_page', name: 'Criação de Landing Page', price: 1500, icon: Code },
+  { id: 'site_promocoes', name: 'Site com Sistema de Promoções', price: 3500, icon: Sparkles },
+  { id: 'gestao_trafego', name: 'Gestão de Tráfego Pago', price: 1200, icon: BarChart3 },
+  { id: 'social_media', name: 'Gestão de Redes Sociais', price: 1500, icon: Share2 },
+  { id: 'identidade_visual', name: 'Identidade Visual', price: 2000, icon: Palette },
+];
+
 export default function CommercialProposal() {
   const { user } = useAuth();
   const { users } = useApp();
@@ -176,6 +185,9 @@ export default function CommercialProposal() {
   const [endoDescription, setEndoDescription] = useState('');
 
   // Personalizada fields
+  const [contractDuration, setContractDuration] = useState<'semestral' | 'anual'>('semestral');
+  const [selectedBaseServices, setSelectedBaseServices] = useState<string[]>([]);
+  const [additionalServices, setAdditionalServices] = useState<{ id: string; name: string; price: number }[]>([]);
   const [customVideos, setCustomVideos] = useState('');
   const [customStories, setCustomStories] = useState('');
   const [customEventCoverage, setCustomEventCoverage] = useState('');
@@ -283,6 +295,9 @@ export default function CommercialProposal() {
       if (d.customPaymentMethod) setCustomPaymentMethod(d.customPaymentMethod);
       if (d.customInstallments) setCustomInstallments(d.customInstallments);
       if (d.customRecordings) setCustomRecordings(d.customRecordings);
+      if (d.contractDuration) setContractDuration(d.contractDuration);
+      if (d.selectedBaseServices) setSelectedBaseServices(d.selectedBaseServices);
+      if (d.additionalServices) setAdditionalServices(d.additionalServices);
       // Cronograma
       if (d.cronogramaDesc) setCronogramaDesc(d.cronogramaDesc);
       if (d.cronogramaDeliverables?.length) setCronogramaDeliverables(d.cronogramaDeliverables);
@@ -307,12 +322,13 @@ export default function CommercialProposal() {
       endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription,
       customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings,
       cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, cronogramaPricingMode, cronogramaTotalCustomValue,
+      contractDuration, selectedBaseServices, additionalServices
     };
     const timer = setTimeout(() => {
       try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* quota */ }
     }, 500);
     return () => clearTimeout(timer);
-  }, [proposalType, clientName, clientCompany, validityDate, bonusServices, teamMembers, customDiscount, observations, whatsappNumber, selectedPlanId, hasContract, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription, customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings, cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, cronogramaPricingMode, cronogramaTotalCustomValue]);
+  }, [proposalType, clientName, clientCompany, validityDate, bonusServices, teamMembers, customDiscount, observations, whatsappNumber, selectedPlanId, hasContract, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription, customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings, cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, cronogramaPricingMode, cronogramaTotalCustomValue, contractDuration, selectedBaseServices, additionalServices]);
   const { data: plans = [] } = useQuery({
     queryKey: ['plans-proposal'],
     queryFn: async () => {
@@ -547,6 +563,9 @@ export default function CommercialProposal() {
         paymentMethod: customPaymentMethod,
         installments: parseInt(customInstallments) || 1,
         recordings: parseInt(customRecordings) || 0,
+        contractDuration,
+        selectedBaseServices,
+        additionalServices
       } : {};
 
       const cronogramaSumValue = cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0);
@@ -937,86 +956,218 @@ export default function CommercialProposal() {
     </>
   );
 
-  const renderCustomForm = () => (
-    <>
-      <Card>
-        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Target className="h-4 w-4 text-primary" /> Serviços da Proposta</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Vídeos/mês</Label>
-              <Input type="number" value={customVideos} onChange={e => setCustomVideos(e.target.value)} min={0} placeholder="0" />
-            </div>
-            <div>
-              <Label>Stories/mês</Label>
-              <Input type="number" value={customStories} onChange={e => setCustomStories(e.target.value)} min={0} placeholder="0" />
-            </div>
-            <div>
-              <Label>Artes/mês</Label>
-              <Input type="number" value={customArts} onChange={e => setCustomArts(e.target.value)} min={0} placeholder="0" />
-            </div>
-            <div>
-              <Label>Captações/mês</Label>
-              <Input type="number" value={customRecordings} onChange={e => setCustomRecordings(e.target.value)} min={0} placeholder="0" />
-            </div>
-            <div>
-              <Label>Cobertura de eventos/mês</Label>
-              <Input type="number" value={customEventCoverage} onChange={e => setCustomEventCoverage(e.target.value)} min={0} placeholder="0" />
-            </div>
-          </div>
-          <Separator />
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Social Media (Gestão de Redes)</Label>
-                <p className="text-xs text-muted-foreground">Publicação, programação e gerenciamento</p>
-              </div>
-              <Switch checked={customSocialMedia} onCheckedChange={setCustomSocialMedia} />
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Gestão de Tráfego</Label>
-                <p className="text-xs text-muted-foreground">Campanhas patrocinadas e anúncios</p>
-              </div>
-              <Switch checked={customTrafficMgmt} onCheckedChange={setCustomTrafficMgmt} />
-            </div>
-          </div>
-          <Separator />
-          <div>
-            <Label>Descrição do serviço</Label>
-            <Textarea value={customDescription} onChange={e => setCustomDescription(e.target.value)} placeholder="Descreva os detalhes do serviço personalizado..." rows={3} />
-          </div>
-        </CardContent>
-      </Card>
+  const renderCustomForm = () => {
+    const baseTotal = PREDEFINED_SERVICES
+      .filter(s => selectedBaseServices.includes(s.id))
+      .reduce((sum, s) => sum + s.price, 0);
+    
+    const additionalTotal = additionalServices.reduce((sum, s) => sum + s.price, 0);
+    const monthlyTotalBeforeDiscount = baseTotal + (parseFloat(customMonthlyValue) || 0);
+    
+    // Auto-apply 5% discount if annual is selected
+    useEffect(() => {
+      if (contractDuration === 'anual') {
+        setCustomDiscount(5);
+      } else {
+        setCustomDiscount(0);
+      }
+    }, [contractDuration]);
 
-      <Card>
-        <CardHeader><CardTitle className="text-base">Valores e Pagamento</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div>
-            <Label>Valor total (R$)</Label>
-            <Input type="number" value={customMonthlyValue} onChange={e => setCustomMonthlyValue(e.target.value)} placeholder="0.00" />
-          </div>
-          <div>
-            <Label>Forma de pagamento</Label>
-            <Select value={customPaymentMethod} onValueChange={setCustomPaymentMethod}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {PAYMENT_METHODS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Parcelas</Label>
-            <Input type="number" value={customInstallments} onChange={e => setCustomInstallments(e.target.value)} min={1} max={24} />
-          </div>
-          <div>
-            <Label>Desconto (%)</Label>
-            <Input type="number" value={customDiscount} onChange={e => setCustomDiscount(Number(e.target.value))} min={0} max={50} />
-          </div>
-        </CardContent>
-      </Card>
-    </>
-  );
+    return (
+      <>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center justify-between">
+              <span>Tempo de Contrato</span>
+              <Badge variant={contractDuration === 'anual' ? 'default' : 'outline'} className={cn(contractDuration === 'anual' && "bg-green-500")}>
+                {contractDuration === 'anual' ? '5% de Desconto Ativado' : 'Sem desconto'}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex gap-4">
+            <Button 
+              type="button" 
+              variant={contractDuration === 'semestral' ? 'default' : 'outline'}
+              className="flex-1"
+              onClick={() => setContractDuration('semestral')}
+            >
+              Semestral
+            </Button>
+            <Button 
+              type="button" 
+              variant={contractDuration === 'anual' ? 'default' : 'outline'}
+              className="flex-1"
+              onClick={() => setContractDuration('anual')}
+            >
+              Anual (5% OFF)
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="text-base">Serviços do Pacote</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-2">
+              {PREDEFINED_SERVICES.map(service => {
+                const Icon = service.icon;
+                const isSelected = selectedBaseServices.includes(service.id);
+                return (
+                  <Button
+                    key={service.id}
+                    type="button"
+                    variant={isSelected ? "default" : "outline"}
+                    className={cn("h-auto py-3 px-4 flex flex-col items-center gap-1 text-center", isSelected && "bg-primary/90")}
+                    onClick={() => {
+                      if (isSelected) {
+                        setSelectedBaseServices(prev => prev.filter(id => id !== service.id));
+                      } else {
+                        setSelectedBaseServices(prev => [...prev, service.id]);
+                      }
+                    }}
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span className="text-xs font-bold leading-tight">{service.name}</span>
+                    <span className="text-[10px] opacity-70">{fmt(service.price)}</span>
+                  </Button>
+                );
+              })}
+            </div>
+            
+            <Separator />
+            
+            <div className="space-y-3">
+              <Label>Serviços Unitários Adicionais</Label>
+              <div className="grid grid-cols-1 gap-2">
+                {additionalServices.map(s => (
+                  <div key={s.id} className="flex items-center justify-between bg-accent/30 p-2 rounded-lg border">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold">{s.name}</span>
+                      <span className="text-[10px] text-muted-foreground">{fmt(s.price)}</span>
+                    </div>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => setAdditionalServices(prev => prev.filter(x => x.id !== s.id))}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="flex gap-2">
+                <Input id="add-service-name" placeholder="Nome do serviço" className="flex-1 h-9 text-sm" />
+                <Input id="add-service-price" type="number" placeholder="Valor" className="w-24 h-9 text-sm" />
+                <Button size="sm" onClick={() => {
+                  const nameEl = document.getElementById('add-service-name') as HTMLInputElement;
+                  const priceEl = document.getElementById('add-service-price') as HTMLInputElement;
+                  const name = nameEl.value;
+                  const price = parseFloat(priceEl.value) || 0;
+                  if (name) {
+                    setAdditionalServices(prev => [...prev, { id: crypto.randomUUID(), name, price }]);
+                    nameEl.value = '';
+                    priceEl.value = '';
+                  }
+                }}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <Separator />
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Reels/mês</Label>
+                <Input type="number" value={customVideos} onChange={e => setCustomVideos(e.target.value)} min={0} placeholder="0" />
+              </div>
+              <div>
+                <Label>Stories/mês</Label>
+                <Input type="number" value={customStories} onChange={e => setCustomStories(e.target.value)} min={0} placeholder="0" />
+              </div>
+              <div>
+                <Label>Artes/mês</Label>
+                <Input type="number" value={customArts} onChange={e => setCustomArts(e.target.value)} min={0} placeholder="0" />
+              </div>
+              <div>
+                <Label>Captações/mês</Label>
+                <Input type="number" value={customRecordings} onChange={e => setCustomRecordings(e.target.value)} min={0} placeholder="0" />
+              </div>
+            </div>
+
+            <Separator />
+            
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>Social Media (Gestão de Redes)</Label>
+                <Switch checked={customSocialMedia} onCheckedChange={setCustomSocialMedia} />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label>Gestão de Tráfego</Label>
+                <Switch checked={customTrafficMgmt} onCheckedChange={setCustomTrafficMgmt} />
+              </div>
+            </div>
+            
+            <Separator />
+            
+            <div>
+              <Label>Descrição Adicional do Escopo</Label>
+              <Textarea value={customDescription} onChange={e => setCustomDescription(e.target.value)} placeholder="Descreva outros detalhes específicos..." rows={3} />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="text-base">Valores e Pagamento</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="bg-accent/50 rounded-lg p-3 space-y-2">
+              <div className="flex justify-between text-xs">
+                <span>Serviços do pacote</span>
+                <span>{fmt(monthlyTotalBeforeDiscount)}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span>Serviços unitários</span>
+                <span>{fmt(additionalTotal)}</span>
+              </div>
+              {customDiscount > 0 && (
+                <div className="flex justify-between text-xs text-green-600">
+                  <span>Desconto ({customDiscount}%)</span>
+                  <span>-{fmt((monthlyTotalBeforeDiscount + additionalTotal) * (customDiscount / 100))}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm font-bold border-t pt-1">
+                <span>Total</span>
+                <span className="text-primary">{fmt((monthlyTotalBeforeDiscount + additionalTotal) * (1 - customDiscount / 100))}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Valor Base Customizado</Label>
+                <Input type="number" value={customMonthlyValue} onChange={e => setCustomMonthlyValue(e.target.value)} placeholder="0.00" />
+              </div>
+              <div>
+                <Label>Desconto Manual (%)</Label>
+                <Input type="number" value={customDiscount} onChange={e => setCustomDiscount(Number(e.target.value))} min={0} max={100} />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Forma de Pagamento</Label>
+                <Select value={customPaymentMethod} onValueChange={setCustomPaymentMethod}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_METHODS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Parcelas</Label>
+                <Input type="number" value={customInstallments} onChange={e => setCustomInstallments(e.target.value)} min={1} max={24} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </>
+    );
+  };
 
   const CATEGORY_ICONS: Record<string, any> = {
     video: Film, design: Palette, social_media: Share2, traffic: BarChart3,

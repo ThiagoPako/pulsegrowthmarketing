@@ -35,7 +35,7 @@ import {
   Rocket, Film, Palette, Camera, Monitor, Share2, BarChart3,
   CheckCircle2, Gift, FileText, Scissors, Users, MessageCircle,
   ThumbsUp, ThumbsDown, Clock, Send, Code, Megaphone, Star, Zap,
-  CalendarDays, Layers
+  CalendarDays, Layers, Sparkles, Target
 } from 'lucide-react';
 
 const INTERNAL_PROCESS_STEPS = [
@@ -190,6 +190,15 @@ export default function ProposalViewer() {
   const team: any[] = proposal.team_members || [];
   const systemData = proposal.system_data || {};
   const endoData = proposal.endomarketing_data || {};
+  
+  const PREDEFINED_SERVICES = [
+    { id: 'google_negocio', name: 'Google Meu Negócio', icon: Target },
+    { id: 'landing_page', name: 'Criação de Landing Page', icon: Code },
+    { id: 'site_promocoes', name: 'Site com Sistema de Promoções', icon: Sparkles },
+    { id: 'gestao_trafego', name: 'Gestão de Tráfego Pago', icon: BarChart3 },
+    { id: 'social_media', name: 'Gestão de Redes Sociais', icon: Share2 },
+    { id: 'identidade_visual', name: 'Identidade Visual', icon: Palette },
+  ];
   const planPrice = plan.price || 0;
   const bonusTotal = bonus.reduce((s: number, b: any) => s + (b.value || 0), 0);
   const monthlyTotal = planPrice + bonusTotal;
@@ -485,10 +494,27 @@ export default function ProposalViewer() {
   const renderCustomContent = () => {
     const customData = systemData; // stored in system_data
     const val = customData.monthlyValue || 0;
-    const discountedVal = val * (1 - discount / 100);
+    
+    // Calculate total from base services if provided
+    const selectedBase = PREDEFINED_SERVICES.filter(s => customData.selectedBaseServices?.includes(s.id));
+    const baseServicesTotal = selectedBase.length > 0 ? 0 : 0; // The price was already included in monthlyValue or added separately
+    
+    const additional = customData.additionalServices || [];
+    const additionalTotal = additional.reduce((sum: number, s: any) => sum + (s.price || 0), 0);
+    
+    const totalBeforeDiscount = val + additionalTotal;
+    const discountedVal = totalBeforeDiscount * (1 - discount / 100);
+    
     const installs = customData.installments || 1;
     const installmentVal = discountedVal / installs;
+    
     const services: { icon: any; value: string | number; label: string }[] = [];
+    
+    // Add base services from predefined list
+    selectedBase.forEach(s => {
+      services.push({ icon: s.icon, value: '✓', label: s.name });
+    });
+
     if (customData.videos > 0) services.push({ icon: Film, value: customData.videos, label: 'Vídeos/mês' });
     if (customData.stories > 0) services.push({ icon: Camera, value: customData.stories, label: 'Stories/mês' });
     if (customData.arts > 0) services.push({ icon: Palette, value: customData.arts, label: 'Artes/mês' });
@@ -499,39 +525,57 @@ export default function ProposalViewer() {
 
     return (
       <>
-        {services.length > 0 && (
-          <AnimatedSection className="px-6 md:px-10 py-8">
-            <div className="flex items-center gap-2 mb-1">
-              <Rocket className="h-5 w-5" style={{ color: accentColor }} />
-              <h2 className="text-xl font-bold text-gray-800">Serviços Inclusos</h2>
+        <AnimatedSection className="px-6 md:px-10 py-8">
+          <div className="flex items-center gap-2 mb-1">
+            <Rocket className="h-5 w-5" style={{ color: accentColor }} />
+            <h2 className="text-xl font-bold text-gray-800">Serviços Inclusos</h2>
+          </div>
+          <p className="text-sm text-gray-500 mb-5">
+            Proposta {customData.contractDuration === 'anual' ? 'Anual' : 'Semestral'} personalizada
+          </p>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {services.map((s, i) => (
+              <StatCard key={i} icon={s.icon} value={s.value} label={s.label} delay={0.1 + i * 0.05} />
+            ))}
+          </div>
+
+          {additional.length > 0 && (
+            <div className="mt-8">
+              <h3 className="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wider">Serviços Adicionais</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {additional.map((s: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
+                    <span className="text-sm font-medium text-gray-700">{s.name}</span>
+                    <span className="text-sm font-bold" style={{ color: accentColor }}>{fmt(s.price)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <p className="text-sm text-gray-500 mb-5">Proposta personalizada para sua empresa</p>
-            <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
-              {services.map((s, i) => (
-                <StatCard key={i} icon={s.icon} value={s.value} label={s.label} delay={0.1 + i * 0.05} />
-              ))}
-            </div>
-          </AnimatedSection>
-        )}
+          )}
+        </AnimatedSection>
+
         {customData.description && (
           <AnimatedSection className="px-6 md:px-10 pb-4">
             <h2 className="text-lg font-bold text-gray-800 mb-3">Escopo dos Serviços</h2>
             <ScopeDescription text={customData.description} accentColor={accentColor} />
           </AnimatedSection>
         )}
+
         <AnimatedSection className="px-6 md:px-10 pb-8">
           <h2 className="text-lg font-bold text-gray-800 mb-4">Investimento</h2>
           <motion.div whileHover={{ scale: 1.01 }} className="border-2 rounded-2xl p-6" style={{ borderColor: accentColor }}>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-gray-600 text-sm">Valor</span>
-                <span className="text-xl font-bold" style={{ color: accentColor }}>{fmt(val)}</span>
+                <span className="text-gray-600 text-sm">Valor do Pacote</span>
+                <span className="text-xl font-bold" style={{ color: accentColor }}>{fmt(totalBeforeDiscount)}</span>
               </div>
+              
               {discount > 0 && (
                 <>
                   <div className="flex justify-between items-center text-green-600 text-sm">
-                    <span>Desconto ({discount}%)</span>
-                    <span className="font-bold">-{fmt(val - discountedVal)}</span>
+                    <span>Desconto {customData.contractDuration === 'anual' ? '(Fidelidade Anual)' : `(${discount}%)`}</span>
+                    <span className="font-bold">-{fmt(totalBeforeDiscount - discountedVal)}</span>
                   </div>
                   <div className="flex justify-between items-center border-t pt-2">
                     <span className="font-bold text-gray-800">Total</span>
@@ -539,7 +583,14 @@ export default function ProposalViewer() {
                   </div>
                 </>
               )}
+              
               <Separator />
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-600">Duração do Contrato</span>
+                <span className="font-bold uppercase tracking-tight" style={{ color: accentColor }}>
+                  {customData.contractDuration === 'anual' ? 'Anual' : 'Semestral'}
+                </span>
+              </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-600">Pagamento</span>
                 <span className="font-medium">{PAYMENT_METHODS[customData.paymentMethod] || customData.paymentMethod || 'PIX'}</span>

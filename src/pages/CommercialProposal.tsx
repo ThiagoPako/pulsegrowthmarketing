@@ -336,6 +336,25 @@ export default function CommercialProposal() {
     setCustomDiscount(contractDuration === 'anual' ? 5 : 0);
   }, [contractDuration, proposalType]);
 
+  // Keep team member avatars in sync with the latest users list so that the
+  // photo shown in the preview is exactly the one persisted to the public link.
+  useEffect(() => {
+    if (!users.length) return;
+    setTeamMembers(prev => {
+      let changed = false;
+      const next = prev.map(m => {
+        const match = users.find(u => (u.displayName || u.name) === m.name);
+        const freshAvatar = match?.avatarUrl;
+        if (freshAvatar && freshAvatar !== m.avatarUrl) {
+          changed = true;
+          return { ...m, avatarUrl: freshAvatar };
+        }
+        return m;
+      });
+      return changed ? next : prev;
+    });
+  }, [users]);
+
 
   // Save draft on every change (debounced via effect)
   useEffect(() => {
@@ -615,13 +634,22 @@ export default function CommercialProposal() {
       if (proposalType === 'personalizada') saveSystemData = customData;
       if (proposalType === 'cronograma') saveSystemData = cronogramaData;
 
+      // Enrich team members with the freshest avatarUrl from current users list
+      // to guarantee that the photos rendered in the preview also persist on the
+      // public viewer link (integrity between preview and shared proposal).
+      const enrichedTeamMembers = teamMembers.map(m => {
+        if (m.avatarUrl) return m;
+        const match = users.find(u => (u.displayName || u.name) === m.name);
+        return match?.avatarUrl ? { ...m, avatarUrl: match.avatarUrl } : m;
+      });
+
       const payload = {
         client_name: clientName,
         client_company: clientCompany,
         plan_id: proposalType === 'marketing' ? selectedPlanId : null,
         plan_snapshot: proposalType === 'marketing' ? selectedPlan : null,
         bonus_services: bonusServices,
-        team_members: teamMembers,
+        team_members: enrichedTeamMembers,
         has_contract: hasContract,
         custom_discount: customDiscount,
         observations,
@@ -649,7 +677,7 @@ export default function CommercialProposal() {
       toast.error('Erro ao salvar proposta: ' + message);
     }
     setSavingProposal(false);
-  }, [clientName, clientCompany, selectedPlanId, selectedPlan, bonusServices, teamMembers, hasContract, customDiscount, observations, validityDate, whatsappNumber, user, proposalType, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription, customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings, cronogramaProjectName, cronogramaMethodology, cronogramaDeliverables, cronogramaPhases, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, copyToClipboard, refetchProposals]);
+  }, [clientName, clientCompany, selectedPlanId, selectedPlan, bonusServices, teamMembers, users, hasContract, customDiscount, observations, validityDate, whatsappNumber, user, proposalType, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription, customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings, cronogramaProjectName, cronogramaMethodology, cronogramaDeliverables, cronogramaPhases, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, copyToClipboard, refetchProposals]);
 
   const handleCopyLink = (link: string) => {
     copyToClipboard(link).then(() => toast.success('Link copiado!'));

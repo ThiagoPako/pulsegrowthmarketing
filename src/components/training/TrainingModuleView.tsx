@@ -47,6 +47,8 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [catalogModules, setCatalogModules] = useState<Module[] & { track_id?: string }[]>([]);
+  const [catalogLessons, setCatalogLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentVideo, setCurrentVideo] = useState<Lesson | null>(null);
   const [hoveredTrack, setHoveredTrack] = useState<string | null>(null);
@@ -79,10 +81,21 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
       
       if (error) throw error;
       
-      if (data && data.length > 0) {
-        setTracks(data);
-        const pulseTrack = data.find(t => t.title.includes('Pulse')) || data[0];
-        setSelectedTrack(pulseTrack);
+      const list = data || [];
+      setTracks(list);
+
+      if (list.length > 0) {
+        const trackIds = list.map((t: any) => t.id);
+        const [modsRes, lessRes] = await Promise.allSettled([
+          supabase.from('training_modules').select('id, track_id, title, description, display_order').in('track_id', trackIds).order('display_order', { ascending: true }),
+          supabase.from('training_lessons').select('id, module_id, title, description, video_url, video_path, methodology_name, duration, display_order, thumbnail_url').order('display_order', { ascending: true }),
+        ]);
+        const mods = modsRes.status === 'fulfilled' ? (modsRes.value.data || []) : [];
+        const less = lessRes.status === 'fulfilled' ? (lessRes.value.data || []) : [];
+        if (modsRes.status === 'fulfilled' && modsRes.value.error) console.error('[Academy] catalog modules:', modsRes.value.error);
+        if (lessRes.status === 'fulfilled' && lessRes.value.error) console.error('[Academy] catalog lessons:', lessRes.value.error);
+        setCatalogModules(mods as any);
+        setCatalogLessons(less as any);
       }
     } catch (err: any) {
       console.error('Error loading tracks:', err);

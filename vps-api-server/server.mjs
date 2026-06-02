@@ -4111,7 +4111,7 @@ app.post('/api/clients', async (req, res) => {
 
 app.put('/api/clients/:id', async (req, res) => {
   try {
-    const { activeCity } = await getScopedCityContext(req);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
     const { id } = req.params;
     const c = req.body;
     // Build dynamic SET clause from provided fields

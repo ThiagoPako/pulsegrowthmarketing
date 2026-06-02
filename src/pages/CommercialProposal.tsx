@@ -263,8 +263,83 @@ export default function CommercialProposal() {
     setCronogramaMethodology(''); setCronogramaProjectName('');
     setCronogramaTotalDays(''); setCronogramaPaymentMethod('pix'); setCronogramaInstallments('1');
     setCronogramaPricingMode('individual'); setCronogramaTotalCustomValue('');
+    setEditingProposalId(null);
+    setShareLink('');
     localStorage.removeItem(DRAFT_KEY);
     toast.success('Proposta limpa com sucesso!');
+  }, []);
+
+  // Load an existing proposal into the form for editing
+  const loadProposalForEdit = useCallback((p: any) => {
+    setEditingProposalId(p.id);
+    setProposalType((p.proposal_type as ProposalType) || 'marketing');
+    setClientName(p.client_name || '');
+    setClientCompany(p.client_company || '');
+    setWhatsappNumber(p.whatsapp_number || '');
+    if (p.validity_date) {
+      try { setValidityDate(new Date(p.validity_date + 'T00:00:00')); } catch { /* ignore */ }
+    }
+    setBonusServices(p.bonus_services || []);
+    setTeamMembers(p.team_members || []);
+    setCustomDiscount(p.custom_discount || 0);
+    setObservations(p.observations || '');
+    setHasContract(p.has_contract !== false);
+    setSelectedPlanId(p.plan_id || '');
+    // System
+    const sys = p.system_data || {};
+    if (p.proposal_type === 'sistema') {
+      setSystemScope(sys.scope || []);
+      setSystemDeliverables(sys.deliverables || []);
+      setSystemValue(sys.value != null ? String(sys.value) : '');
+      setSystemPaymentMethod(sys.paymentMethod || 'pix');
+      setSystemInstallments(String(sys.installments || '1'));
+      setSystemAdditionalCosts(sys.additionalCosts || '');
+      setSystemTimeline(sys.timeline || '');
+    }
+    // Endo
+    const endo = p.endomarketing_data || {};
+    setEndoPlan(endo.plan || '');
+    setEndoDaysPerWeek(String(endo.daysPerWeek || '3'));
+    setEndoSessionDuration(String(endo.sessionDuration || '2'));
+    setEndoStoriesPerDay(String(endo.storiesPerDay || '5'));
+    setEndoMonthlyValue(endo.monthlyValue != null ? String(endo.monthlyValue) : '');
+    setEndoDescription(endo.description || '');
+    // Personalizada
+    if (p.proposal_type === 'personalizada') {
+      setCustomVideos(sys.videos != null ? String(sys.videos) : '');
+      setCustomStories(sys.stories != null ? String(sys.stories) : '');
+      setCustomEventCoverage(sys.eventCoverage != null ? String(sys.eventCoverage) : '');
+      setCustomSocialMedia(!!sys.socialMedia);
+      setCustomArts(sys.arts != null ? String(sys.arts) : '');
+      setCustomTrafficMgmt(!!sys.trafficManagement);
+      setCustomMonthlyValue(sys.monthlyValue != null ? String(sys.monthlyValue) : '');
+      setCustomDescription(sys.description || '');
+      setCustomPaymentMethod(sys.paymentMethod || 'pix');
+      setCustomInstallments(String(sys.installments || '1'));
+      setCustomRecordings(sys.recordings != null ? String(sys.recordings) : '');
+      setContractDuration(sys.contractDuration || 'semestral');
+      setSelectedBaseServices(sys.selectedBaseServices || []);
+      setSelectedIncludedServices(sys.selectedIncludedServices || []);
+      setAdditionalServices(sys.additionalServices || []);
+    }
+    // Cronograma
+    if (p.proposal_type === 'cronograma') {
+      setCronogramaProjectName(sys.projectName || '');
+      setCronogramaMethodology(sys.methodology || '');
+      setCronogramaDeliverables(sys.deliverables || []);
+      setCronogramaPhases(sys.phases || []);
+      setCronogramaTotalDays(sys.totalDays != null ? String(sys.totalDays) : '');
+      setCronogramaPaymentMethod(sys.paymentMethod || 'pix');
+      setCronogramaInstallments(String(sys.installments || '1'));
+      setCronogramaPricingMode(sys.pricingMode || 'individual');
+      setCronogramaTotalCustomValue(sys.totalValue != null ? String(sys.totalValue) : '');
+      setSelectedIncludedServices(sys.selectedIncludedServices || []);
+      setContractDuration(sys.contractDuration || 'semestral');
+    }
+    setShareLink(`${window.location.origin}/proposta/${p.token}`);
+    setShowSavedProposals(false);
+    setShowPreview(true);
+    toast.success(`Editando proposta de ${p.client_company}`);
   }, []);
 
   // ── Auto-save draft to localStorage ──

@@ -487,11 +487,12 @@ export default function TrainingModuleAdmin() {
                       {lessons.filter(l => l.module_id === mod.id).map(lesson => (
                         <div 
                           key={lesson.id} 
+                          onClick={() => { if (lesson.video_url) setPreviewLesson(lesson); }}
                           className={cn(
                             "relative aspect-video rounded-3xl overflow-hidden group shadow-2xl transition-all duration-500 border",
                             !lesson.video_url 
                               ? 'border-2 border-dashed border-red-600/20 bg-red-600/[0.02] hover:border-red-600/50' 
-                              : 'border-white/5 bg-zinc-950'
+                              : 'border-white/5 bg-zinc-950 cursor-pointer'
                           )}
                         >
                           <div className="absolute inset-0 z-0">

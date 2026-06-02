@@ -4137,8 +4137,12 @@ app.put('/api/clients/:id', async (req, res) => {
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     sets.push(`updated_at = NOW()`);
     vals.push(id);
-    vals.push(activeCity);
-    const { rows } = await pool.query(`UPDATE clients SET ${sets.join(', ')} WHERE id = $${idx} AND city = $${idx + 1} RETURNING *`, vals);
+    let whereSql = `WHERE id = $${idx}`;
+    if (scopeCity) {
+      vals.push(activeCity);
+      whereSql += ` AND city = $${idx + 1}`;
+    }
+    const { rows } = await pool.query(`UPDATE clients SET ${sets.join(', ')} ${whereSql} RETURNING *`, vals);
     res.json(rows[0]);
   } catch (e) { console.error('PUT /api/clients error:', e); res.status(500).json({ error: e.message }); }
 });

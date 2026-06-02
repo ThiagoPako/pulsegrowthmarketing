@@ -51,6 +51,8 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   const [catalogLessons, setCatalogLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentVideo, setCurrentVideo] = useState<Lesson | null>(null);
+  const [signedVideoUrl, setSignedVideoUrl] = useState<string | null>(null);
+  const [videoLoading, setVideoLoading] = useState(false);
   const [hoveredTrack, setHoveredTrack] = useState<string | null>(null);
   const [forceUpdate, setForceUpdate] = useState(0);
   const [uploading, setUploading] = useState<string | null>(null);
@@ -70,6 +72,40 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
       loadTrackDetails(selectedTrack.id);
     }
   }, [selectedTrack, forceUpdate]);
+
+  // Fetch short-lived signed URL whenever the selected video changes
+  useEffect(() => {
+    let cancelled = false;
+    setSignedVideoUrl(null);
+    if (!currentVideo?.id || !currentVideo?.video_url) return;
+    // External providers (YouTube/Vimeo) keep using iframe
+    if (/youtube|vimeo/i.test(currentVideo.video_url)) return;
+
+    (async () => {
+      try {
+        setVideoLoading(true);
+        const token = localStorage.getItem('pulse_jwt');
+        const res = await fetch(
+          `https://agenciapulse.tech/api/training/sign?lessonId=${encodeURIComponent(currentVideo.id)}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+        );
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok || !data?.url) {
+          toast.error('Não foi possível liberar o vídeo.');
+          return;
+        }
+        const url = data.url.startsWith('http') ? data.url : `https://agenciapulse.tech${data.url}`;
+        setSignedVideoUrl(url);
+      } catch {
+        if (!cancelled) toast.error('Falha ao carregar vídeo protegido.');
+      } finally {
+        if (!cancelled) setVideoLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [currentVideo?.id, currentVideo?.video_url]);
 
   const loadTracks = async () => {
     try {
@@ -444,9 +480,9 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                       allowFullScreen
                       key={currentVideo.video_url}
                     />
-                  ) : (
+                  ) : signedVideoUrl ? (
                     <video
-                      src={currentVideo.video_url}
+                      src={signedVideoUrl}
                       className="w-full h-full bg-black"
                       controls
                       controlsList="nodownload noremoteplayback noplaybackrate"
@@ -454,8 +490,12 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                       onContextMenu={(e) => e.preventDefault()}
                       playsInline
                       preload="metadata"
-                      key={currentVideo.video_url}
+                      key={signedVideoUrl}
                     />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-white/60 text-xs font-black uppercase tracking-[0.3em]">
+                      {videoLoading ? <><Loader2 className="animate-spin mr-2" size={16} /> Liberando vídeo…</> : 'Aguardando autorização…'}
+                    </div>
                   )
                 ) : (
                   <div className="w-full h-full relative">

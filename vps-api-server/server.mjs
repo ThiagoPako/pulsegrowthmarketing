@@ -5629,7 +5629,130 @@ app.post('/api/quick-chat', (req, res) => {
   res.json({ ok: true, message: payload });
 });
 
+// ─── Training Video Protected Streaming ─────────────────────
+// Blocks direct download by:
+//   1. nginx denies /uploads/training-videos/* (returns 403)
+//   2. /api/training/sign requires a valid logged-in user JWT
+//   3. /api/training/stream requires a short-lived (10 min) signed token bound to lessonId + user
+//   4. Stream response forces inline disposition, no-store cache, range support
+const TRAINING_VIDEO_ROOT = process.env.TRAINING_VIDEO_ROOT || '/var/www/html/uploads/training-videos';
+const TRAINING_STREAM_TTL = 60 * 10; // 10 min
+
+function resolveTrainingFile(videoPathOrUrl) {
+  if (!videoPathOrUrl) return null;
+  let rel = String(videoPathOrUrl).trim();
+  // Strip full URLs
+  rel = rel.replace(/^https?:\/\/[^/]+/, '');
+  rel = rel.replace(/^\/+/, '');
+  rel = rel.replace(/^uploads\//, '');
+  rel = rel.replace(/^training-videos\//, '');
+  // Prevent traversal
+  if (rel.includes('..') || rel.includes('\0')) return null;
+  const abs = path.resolve(TRAINING_VIDEO_ROOT, rel);
+  if (!abs.startsWith(path.resolve(TRAINING_VIDEO_ROOT))) return null;
+  return abs;
+}
+
+// GET /api/training/sign?lessonId=xxx → { url }
+app.get('/api/training/sign', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    const lessonId = String(req.query.lessonId || '');
+    if (!lessonId) return res.status(400).json({ error: 'lessonId required' });
+
+    const { rows } = await pool.query(
+      'SELECT video_path, video_url FROM training_lessons WHERE id = $1 LIMIT 1',
+      [lessonId],
+    );
+    if (!rows.length) return res.status(404).json({ error: 'lesson not found' });
+    const src = rows[0].video_path || rows[0].video_url;
+    if (!src) return res.status(404).json({ error: 'no video' });
+
+    // If external URL (YouTube/Vimeo), return as-is — those have their own DRM
+    if (/^https?:\/\//.test(src) && !src.includes('agenciapulse.tech')) {
+      return res.json({ url: src, external: true });
+    }
+
+    const token = jwt.sign(
+      { lessonId, sub: user.id, scope: 'training-stream' },
+      JWT_SECRET,
+      { expiresIn: TRAINING_STREAM_TTL },
+    );
+    res.json({ url: `/api/training/stream/${lessonId}?token=${token}` });
+  } catch (err) {
+    res.status(401).json({ error: err.message || 'Unauthorized' });
+  }
+});
+
+// GET /api/training/stream/:lessonId?token=xxx → ranged video stream
+app.get('/api/training/stream/:lessonId', async (req, res) => {
+  try {
+    const lessonId = req.params.lessonId;
+    const token = String(req.query.token || '');
+    if (!token) return res.status(401).end();
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch {
+      return res.status(401).end();
+    }
+    if (decoded.scope !== 'training-stream' || decoded.lessonId !== lessonId) {
+      return res.status(403).end();
+    }
+
+    const { rows } = await pool.query(
+      'SELECT video_path, video_url FROM training_lessons WHERE id = $1 LIMIT 1',
+      [lessonId],
+    );
+    if (!rows.length) return res.status(404).end();
+    const filePath = resolveTrainingFile(rows[0].video_path || rows[0].video_url);
+    if (!filePath || !fs.existsSync(filePath)) return res.status(404).end();
+
+    const stat = fs.statSync(filePath);
+    const total = stat.size;
+    const range = req.headers.range;
+
+    // Anti-download / anti-cache headers
+    const baseHeaders = {
+      'Content-Type': 'video/mp4',
+      'Content-Disposition': 'inline',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+      Pragma: 'no-cache',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'SAMEORIGIN',
+      'Accept-Ranges': 'bytes',
+    };
+
+    if (range) {
+      const match = /bytes=(\d+)-(\d*)/.exec(range);
+      if (!match) {
+        res.writeHead(416, baseHeaders);
+        return res.end();
+      }
+      const start = parseInt(match[1], 10);
+      const end = match[2] ? parseInt(match[2], 10) : Math.min(start + 1024 * 1024 - 1, total - 1);
+      if (start >= total || end >= total) {
+        res.writeHead(416, { ...baseHeaders, 'Content-Range': `bytes */${total}` });
+        return res.end();
+      }
+      res.writeHead(206, {
+        ...baseHeaders,
+        'Content-Range': `bytes ${start}-${end}/${total}`,
+        'Content-Length': end - start + 1,
+      });
+      fs.createReadStream(filePath, { start, end }).pipe(res);
+    } else {
+      res.writeHead(200, { ...baseHeaders, 'Content-Length': total });
+      fs.createReadStream(filePath).pipe(res);
+    }
+  } catch (err) {
+    console.error('[training/stream] error:', err);
+    if (!res.headersSent) res.status(500).end();
+  }
+});
+
 // ─── WebSocket Server for real-time presence & chat ─────────
+
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 

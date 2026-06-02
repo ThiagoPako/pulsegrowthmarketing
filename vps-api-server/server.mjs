@@ -303,20 +303,28 @@ async function verifyUser(req) {
   }
 }
 
+async function isAdminUser(user) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  try {
+    const { rows } = await pool.query(
+      'SELECT 1 FROM user_roles WHERE user_id = $1 AND role = $2 LIMIT 1',
+      [user.id, 'admin']
+    );
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 async function verifyAdmin(req) {
   const { user, userClient } = await verifyUser(req);
-  // Check role from JWT payload first
-  if (user.role === 'admin') {
+  if (await isAdminUser(user)) {
     return { user, userClient, admin: getAdminClient() };
   }
-  // Fallback: check DB
-  const { rows } = await pool.query(
-    'SELECT role FROM user_roles WHERE user_id = $1 AND role = $2',
-    [user.id, 'admin']
-  );
-  if (rows.length === 0) throw new Error('Admin access required');
-  return { user, userClient, admin: getAdminClient() };
+  throw new Error('Admin access required');
 }
+
 
 let profilesPasswordHashColumnPromise;
 
@@ -497,12 +505,22 @@ app.get('/api/auth/me', async (req, res) => {
 app.get('/api/me/cities', async (req, res) => {
   try {
     const { user } = await verifyUser(req);
+
+    // Admins sempre têm acesso a todas as cidades, independente de user_cities
+    if (await isAdminUser(user)) {
+      const { rows: adminRows } = await pool.query(
+        'SELECT city, is_primary FROM user_cities WHERE user_id = $1',
+        [user.id]
+      );
+      const primary = adminRows.find(r => r.is_primary)?.city || 'minacu';
+      return res.json({ cities: ['minacu', 'uruacu'], primary });
+    }
+
     const { rows } = await pool.query(
       'SELECT city, is_primary FROM user_cities WHERE user_id = $1 ORDER BY is_primary DESC, city ASC',
       [user.id]
     );
     if (rows.length === 0) {
-      // Fallback: usuário sem registro recebe minacu como default
       return res.json({ cities: ['minacu'], primary: 'minacu' });
     }
     const cities = rows.map(r => r.city);
@@ -512,6 +530,7 @@ app.get('/api/me/cities', async (req, res) => {
     res.status(401).json({ error: 'Não autenticado' });
   }
 });
+
 
 // ─── Change password ────────────────────────────────────────
 app.post('/api/auth/change-password', async (req, res) => {
@@ -3715,15 +3734,23 @@ const TABLES_WITH_CITY = new Set([
 
 // Resolve a cidade ativa do request: header x-pulse-city, validado contra user_cities.
 // Fallback: primary do usuário, ou 'minacu' se não houver registro.
-async function resolveActiveCity(req, userId) {
+async function resolveActiveCity(req, userId, userObj = null) {
   const raw = String(req.headers['x-pulse-city'] || '').toLowerCase();
   const requested = (raw === 'minacu' || raw === 'uruacu') ? raw : null;
+
+  // Admins podem acessar qualquer cidade sem precisar de registro em user_cities
+  try {
+    if (userObj && await isAdminUser(userObj)) {
+      return requested || 'minacu';
+    }
+  } catch { /* segue fluxo normal */ }
+
   try {
     const { rows } = await pool.query(
       'SELECT city, is_primary FROM user_cities WHERE user_id = $1',
       [userId]
     );
-    if (rows.length === 0) return 'minacu';
+    if (rows.length === 0) return requested || 'minacu';
     const allowed = rows.map(r => r.city);
     if (requested && allowed.includes(requested)) return requested;
     return (rows.find(r => r.is_primary)?.city) || allowed[0];
@@ -3731,6 +3758,7 @@ async function resolveActiveCity(req, userId) {
     return requested || 'minacu';
   }
 }
+
 
 function sanitizeIdentifier(name) {
   return name.replace(/[^a-zA-Z0-9_]/g, '');
@@ -3754,7 +3782,7 @@ app.post('/api/db/query', async (req, res) => {
 
     // Multi-city: resolve cidade ativa e prepara flag de scoping
     const scopeCity = TABLES_WITH_CITY.has(safeTable);
-    const activeCity = scopeCity ? await resolveActiveCity(req, user.id) : null;
+    const activeCity = scopeCity ? await resolveActiveCity(req, user.id, user) : null;
 
     let result;
 

@@ -574,6 +574,35 @@ app.post('/api/auth/set-password', async (req, res) => {
 
 // ─── Admin: Create user ─────────────────────────────────────
 const VALID_CITIES = ['minacu', 'uruacu'];
+let userCitiesTableEnsuredPromise = null;
+
+async function ensureUserCitiesTable() {
+  if (!userCitiesTableEnsuredPromise) {
+    userCitiesTableEnsuredPromise = pool.query(`
+      CREATE TABLE IF NOT EXISTS user_cities (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL,
+        city TEXT NOT NULL CHECK (city IN ('minacu', 'uruacu')),
+        is_primary BOOLEAN NOT NULL DEFAULT false,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE (user_id, city)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_user_cities_user_id
+        ON user_cities (user_id);
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_user_cities_primary_per_user
+        ON user_cities (user_id)
+        WHERE is_primary = true;
+    `).catch((error) => {
+      userCitiesTableEnsuredPromise = null;
+      throw error;
+    });
+  }
+
+  return userCitiesTableEnsuredPromise;
+}
+
 function sanitizeCities(input) {
   if (!Array.isArray(input)) return [];
   const out = [];
@@ -585,6 +614,7 @@ function sanitizeCities(input) {
 }
 
 async function saveUserCities(userId, cities, primary) {
+  await ensureUserCitiesTable();
   const list = sanitizeCities(cities);
   if (list.length === 0) list.push('minacu');
   const primaryCity = list.includes(String(primary || '').toLowerCase())

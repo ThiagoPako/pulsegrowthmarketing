@@ -3863,7 +3863,14 @@ app.post('/api/db/query', async (req, res) => {
           }
           if (whereClauses.length > 0) query += ` WHERE ${whereClauses.join(' AND ')}`;
         }
+        // Multi-city: impede DELETE cruzado
+        if (scopeCity) {
+          query += (query.includes(' WHERE ') ? ' AND ' : ' WHERE ') + `city = $${paramIdx}`;
+          params.push(activeCity);
+          paramIdx++;
+        }
         query += ' RETURNING *';
+
         const { rows } = await pool.query(query, params);
         result = { data: rows, error: null };
         break;

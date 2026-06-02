@@ -2,6 +2,20 @@ import { useState, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth, type AppRole } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
+import { supabase as supabaseReal } from '@/integrations/supabase/client';
+
+// Resolve um token de autorização válido para o backend VPS.
+// Tenta pulse_jwt (local) primeiro; se ausente, cai pro access_token do Supabase Auth.
+async function getAuthToken(): Promise<string | null> {
+  const local = typeof window !== 'undefined' ? localStorage.getItem('pulse_jwt') : null;
+  if (local) return local;
+  try {
+    const { data } = await supabaseReal.auth.getSession();
+    return data?.session?.access_token || null;
+  } catch {
+    return null;
+  }
+}
 import { ROLE_LABELS } from '@/types';
 import type { UserRole } from '@/types';
 import { Button } from '@/components/ui/button';

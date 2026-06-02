@@ -286,16 +286,16 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
               className="w-full h-full object-cover opacity-70"
               alt="Featured"
             />
-            <div className="absolute bottom-12 left-8 lg:left-12 z-20 max-w-2xl space-y-4">
+            <div className="absolute bottom-6 sm:bottom-12 left-4 sm:left-8 lg:left-12 right-4 z-20 max-w-2xl space-y-3 sm:space-y-4">
               <Badge className="bg-red-600 text-white border-none px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.25em] rounded-sm">Em Destaque</Badge>
-              <h1 className="text-4xl lg:text-5xl font-black tracking-tighter uppercase italic leading-[0.95]">{tracks[0]?.title || "Treinamento Pulse"}</h1>
-              <p className="text-sm lg:text-base text-gray-300/90 line-clamp-2 max-w-xl">{tracks[0]?.description}</p>
-              <div className="flex gap-3 pt-2">
-                <Button size="lg" className="bg-white text-black hover:bg-gray-200 px-7 font-black uppercase italic tracking-widest text-xs h-11" onClick={() => tracks[0] && setSelectedTrack(tracks[0])}>
-                  <Play className="mr-2 fill-current" size={18} /> Assistir
+              <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black tracking-tighter uppercase italic leading-[0.95]">{tracks[0]?.title || "Treinamento Pulse"}</h1>
+              <p className="text-xs sm:text-sm lg:text-base text-gray-300/90 line-clamp-2 max-w-xl">{tracks[0]?.description}</p>
+              <div className="flex gap-2 sm:gap-3 pt-1 sm:pt-2">
+                <Button size="lg" className="bg-white text-black hover:bg-gray-200 px-4 sm:px-7 font-black uppercase italic tracking-widest text-[11px] sm:text-xs h-9 sm:h-11" onClick={() => tracks[0] && setSelectedTrack(tracks[0])}>
+                  <Play className="mr-1.5 sm:mr-2 fill-current" size={16} /> Assistir
                 </Button>
-                <Button size="lg" variant="ghost" className="bg-white/10 backdrop-blur hover:bg-white/20 text-white px-7 font-black uppercase italic tracking-widest text-xs h-11" onClick={() => { const el = document.getElementById('trilhas-catalogo'); el?.scrollIntoView({ behavior: 'smooth' }); }}>
-                  <Info className="mr-2" size={16} /> Explorar
+                <Button size="lg" variant="ghost" className="bg-white/10 backdrop-blur hover:bg-white/20 text-white px-4 sm:px-7 font-black uppercase italic tracking-widest text-[11px] sm:text-xs h-9 sm:h-11" onClick={() => { const el = document.getElementById('trilhas-catalogo'); el?.scrollIntoView({ behavior: 'smooth' }); }}>
+                  <Info className="mr-1.5 sm:mr-2" size={14} /> Explorar
                 </Button>
               </div>
             </div>

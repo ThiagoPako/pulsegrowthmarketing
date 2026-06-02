@@ -4067,8 +4067,10 @@ app.post('/api/db/query', async (req, res) => {
 // ─── Clients ────────────────────────────────────────────────
 app.get('/api/clients', async (req, res) => {
   try {
-    const { activeCity } = await getScopedCityContext(req);
-    const { rows } = await pool.query('SELECT * FROM clients WHERE city = $1 ORDER BY company_name', [activeCity]);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
+    const { rows } = scopeCity
+      ? await pool.query('SELECT * FROM clients WHERE city = $1 ORDER BY company_name', [activeCity])
+      : await pool.query('SELECT * FROM clients ORDER BY company_name');
     res.json(rows);
   } catch (e) { res.status(e.message === 'Unauthorized' ? 401 : 500).json({ error: e.message }); }
 });

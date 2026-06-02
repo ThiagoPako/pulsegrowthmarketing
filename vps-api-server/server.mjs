@@ -5691,6 +5691,12 @@ function resolveTrainingFile(videoPathOrUrl) {
   return fallbackPath.startsWith(fallbackRoot) ? fallbackPath : null;
 }
 
+function getTrainingAuthTokenFromHeader(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  return authHeader.replace('Bearer ', '').trim() || null;
+}
+
 // GET /api/training/verify?path=...  → confirms uploaded file exists on disk
 app.get('/api/training/verify', async (req, res) => {
   try {
@@ -5720,6 +5726,7 @@ app.get('/api/training/verify', async (req, res) => {
 
 app.get('/api/training/sign', async (req, res) => {
   try {
+    const headerToken = getTrainingAuthTokenFromHeader(req);
     const { user } = await verifyUser(req);
     const lessonId = String(req.query.lessonId || '');
     if (!lessonId) return res.status(400).json({ error: 'lessonId required' });
@@ -5745,7 +5752,7 @@ app.get('/api/training/sign', async (req, res) => {
 
 
     const token = jwt.sign(
-      { lessonId, sub: user.id, scope: 'training-stream' },
+      { lessonId, sub: user.id, authToken: headerToken, scope: 'training-stream' },
       JWT_SECRET,
       { expiresIn: TRAINING_STREAM_TTL },
     );
@@ -5769,6 +5776,11 @@ app.get('/api/training/stream/:lessonId', async (req, res) => {
     }
     if (decoded.scope !== 'training-stream' || decoded.lessonId !== lessonId) {
       return res.status(403).end();
+    }
+
+    const requestAuthToken = getTrainingAuthTokenFromHeader(req);
+    if (!requestAuthToken || decoded.authToken !== requestAuthToken) {
+      return res.status(401).end();
     }
 
     const { rows } = await pool.query(

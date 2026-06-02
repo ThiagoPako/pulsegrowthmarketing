@@ -735,6 +735,52 @@ export default function Team() {
         )
       )}
 
+      {/* Cities Dialog */}
+      <Dialog open={!!cityTarget} onOpenChange={v => { if (!v) setCityTarget(null); }}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><MapPin size={18} /> Cidades de acesso</DialogTitle>
+          </DialogHeader>
+          {cityTarget && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                <UserAvatar user={cityTarget} size="md" />
+                <div>
+                  <p className="font-medium text-sm">{cityTarget.displayName || cityTarget.name}</p>
+                  <p className="text-xs text-muted-foreground">{cityTarget.email}</p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Selecione as cidades que este colaborador poderá acessar. A cidade <strong>Principal</strong> é a que abre por padrão ao logar.
+              </p>
+              <div className="space-y-2">
+                {ALL_CITIES.map(c => {
+                  const checked = cityEdit.cities.includes(c);
+                  return (
+                    <label key={c} className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${checked ? 'bg-primary/5 border-primary/30' : 'bg-card border-border hover:bg-muted/50'}`}>
+                      <Checkbox checked={checked} onCheckedChange={() => toggleCity(c)} />
+                      <span className="text-sm font-medium flex-1">{CITY_LABELS[c]}</span>
+                      {checked && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); setCityEdit(prev => ({ ...prev, primary: c })); }}
+                          className={`text-[10px] px-2 py-0.5 rounded ${cityEdit.primary === c ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted-foreground/20'}`}
+                        >
+                          {cityEdit.primary === c ? 'Principal' : 'Tornar principal'}
+                        </button>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+              <Button onClick={handleSaveCities} disabled={savingCities} className="w-full">
+                {savingCities ? 'Salvando...' : 'Salvar Cidades'}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Member Stats Dialog */}
       <TeamMemberStats
         member={statsTarget}

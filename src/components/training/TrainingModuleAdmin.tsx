@@ -51,6 +51,47 @@ export default function TrainingModuleAdmin() {
   const [uploadModalLesson, setUploadModalLesson] = useState<Lesson | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const modalFileInputRef = useRef<HTMLInputElement>(null);
+  const [previewLesson, setPreviewLesson] = useState<Lesson | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewIsExternal, setPreviewIsExternal] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPreviewUrl(null);
+    setPreviewIsExternal(false);
+    if (!previewLesson) return;
+    const src = previewLesson.video_url || previewLesson.video_path || '';
+    const isExternal = /youtube\.com|youtu\.be|vimeo\.com/i.test(src);
+    if (isExternal) {
+      setPreviewIsExternal(true);
+      setPreviewUrl(src.includes('youtube') ? src.replace('watch?v=', 'embed/') : src);
+      return;
+    }
+    (async () => {
+      try {
+        setPreviewLoading(true);
+        const token = localStorage.getItem('pulse_jwt');
+        const res = await fetch(
+          `https://agenciapulse.tech/api/training/sign?lessonId=${encodeURIComponent(previewLesson.id)}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+        );
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok || !data?.url) {
+          toast.error(`Não foi possível abrir o vídeo: ${data?.error || `HTTP ${res.status}`}`);
+          return;
+        }
+        const url = data.url.startsWith('http') ? data.url : `https://agenciapulse.tech${data.url}`;
+        setPreviewUrl(url);
+      } catch {
+        if (!cancelled) toast.error('Falha ao carregar vídeo.');
+      } finally {
+        if (!cancelled) setPreviewLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [previewLesson]);
 
   // Form states
   const [trackForm, setTrackForm] = useState({ title: '', description: '', category: 'Metodologia', estimated_time: '', difficulty: 'Iniciante' });
@@ -243,14 +284,33 @@ export default function TrainingModuleAdmin() {
       const videoPath = result.path || result.filename || videoUrl;
 
       // Validação real: confirma que o arquivo existe no caminho esperado antes de liberar
-      const verifyRes = await fetch(
-        `https://agenciapulse.tech/api/training/verify?path=${encodeURIComponent(videoPath)}`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-      const verifyJson = await verifyRes.json().catch(() => ({}));
-      if (!verifyRes.ok || !verifyJson?.ok) {
-        throw new Error('Upload concluído mas arquivo não encontrado no servidor. Tente novamente.');
+      let verified = false;
+      try {
+        const verifyRes = await fetch(
+          `https://agenciapulse.tech/api/training/verify?path=${encodeURIComponent(videoPath)}`,
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        const verifyJson = await verifyRes.json().catch(() => ({}));
+        verified = !!(verifyRes.ok && verifyJson?.ok);
+        if (!verified) {
+          console.warn('[training upload] verify falhou, tentando HEAD direto', verifyJson);
+        }
+      } catch (e) {
+        console.warn('[training upload] verify endpoint erro, tentando HEAD direto', e);
       }
+
+      // Fallback: HEAD direto no arquivo público
+      if (!verified) {
+        try {
+          const head = await fetch(videoUrl, { method: 'HEAD', cache: 'no-store' });
+          verified = head.ok;
+        } catch {}
+      }
+
+      if (!verified) {
+        throw new Error('Upload concluído mas arquivo não pôde ser confirmado no servidor.');
+      }
+
 
       const { error: updateError } = await supabase
         .from('training_lessons')
@@ -427,11 +487,12 @@ export default function TrainingModuleAdmin() {
                       {lessons.filter(l => l.module_id === mod.id).map(lesson => (
                         <div 
                           key={lesson.id} 
+                          onClick={() => { if (lesson.video_url) setPreviewLesson(lesson); }}
                           className={cn(
                             "relative aspect-video rounded-3xl overflow-hidden group shadow-2xl transition-all duration-500 border",
                             !lesson.video_url 
                               ? 'border-2 border-dashed border-red-600/20 bg-red-600/[0.02] hover:border-red-600/50' 
-                              : 'border-white/5 bg-zinc-950'
+                              : 'border-white/5 bg-zinc-950 cursor-pointer'
                           )}
                         >
                           <div className="absolute inset-0 z-0">
@@ -471,12 +532,12 @@ export default function TrainingModuleAdmin() {
                               <Button 
                                 variant="ghost" size="icon" 
                                 className="h-8 w-8 rounded-full bg-black/60 backdrop-blur-md hover:bg-red-600 text-white transition-all border border-white/5"
-                                onClick={() => setUploadModalLesson(lesson)}
+                                onClick={(e) => { e.stopPropagation(); setUploadModalLesson(lesson); }}
                               ><Upload size={14} /></Button>
                               <Button 
                                 variant="ghost" size="icon" 
                                 className="h-8 w-8 rounded-full bg-black/60 backdrop-blur-md hover:bg-destructive text-white transition-all border border-white/5"
-                                onClick={() => deleteLesson(lesson.id)}
+                                onClick={(e) => { e.stopPropagation(); deleteLesson(lesson.id); }}
                               ><Trash2 size={14} /></Button>
                             </div>
                           )}
@@ -551,6 +612,38 @@ export default function TrainingModuleAdmin() {
               {uploading === uploadModalLesson?.id ? (<><Loader2 size={16} className="animate-spin mr-2" />Enviando...</>) : 'Confirmar Upload'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!previewLesson} onOpenChange={(open) => !open && setPreviewLesson(null)}>
+        <DialogContent className="sm:max-w-4xl bg-black border-white/10 text-white rounded-[2rem] p-4">
+          <DialogHeader>
+            <DialogTitle className="italic uppercase font-black truncate">{previewLesson?.title}</DialogTitle>
+            <DialogDescription className="text-zinc-500 font-bold uppercase tracking-widest text-[10px]">
+              {previewLesson?.methodology_name || 'Pulse'} • {previewLesson?.duration}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="aspect-video w-full bg-black rounded-xl overflow-hidden border border-white/5 mt-2">
+            {previewLoading && !previewUrl && (
+              <div className="w-full h-full flex items-center justify-center text-white/60 text-xs font-black uppercase tracking-[0.3em]">
+                <Loader2 className="animate-spin mr-2" size={16} /> Liberando vídeo…
+              </div>
+            )}
+            {previewUrl && previewIsExternal && (
+              <iframe src={previewUrl} className="w-full h-full" allowFullScreen key={previewUrl} />
+            )}
+            {previewUrl && !previewIsExternal && (
+              <video
+                src={previewUrl}
+                className="w-full h-full bg-black"
+                controls
+                autoPlay
+                playsInline
+                preload="metadata"
+                key={previewUrl}
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

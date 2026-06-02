@@ -47,6 +47,8 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [catalogModules, setCatalogModules] = useState<Module[] & { track_id?: string }[]>([]);
+  const [catalogLessons, setCatalogLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentVideo, setCurrentVideo] = useState<Lesson | null>(null);
   const [hoveredTrack, setHoveredTrack] = useState<string | null>(null);
@@ -79,10 +81,21 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
       
       if (error) throw error;
       
-      if (data && data.length > 0) {
-        setTracks(data);
-        const pulseTrack = data.find(t => t.title.includes('Pulse')) || data[0];
-        setSelectedTrack(pulseTrack);
+      const list = data || [];
+      setTracks(list);
+
+      if (list.length > 0) {
+        const trackIds = list.map((t: any) => t.id);
+        const [modsRes, lessRes] = await Promise.allSettled([
+          supabase.from('training_modules').select('id, track_id, title, description, display_order').in('track_id', trackIds).order('display_order', { ascending: true }),
+          supabase.from('training_lessons').select('id, module_id, title, description, video_url, video_path, methodology_name, duration, display_order, thumbnail_url').order('display_order', { ascending: true }),
+        ]);
+        const mods = modsRes.status === 'fulfilled' ? (modsRes.value.data || []) : [];
+        const less = lessRes.status === 'fulfilled' ? (lessRes.value.data || []) : [];
+        if (modsRes.status === 'fulfilled' && modsRes.value.error) console.error('[Academy] catalog modules:', modsRes.value.error);
+        if (lessRes.status === 'fulfilled' && lessRes.value.error) console.error('[Academy] catalog lessons:', lessRes.value.error);
+        setCatalogModules(mods as any);
+        setCatalogLessons(less as any);
       }
     } catch (err: any) {
       console.error('Error loading tracks:', err);
@@ -298,6 +311,83 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
               <button onClick={() => scroll('right')} className="absolute right-0 top-0 bottom-0 w-12 z-30 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><ChevronRight size={40} /></button>
             </div>
           </div>
+
+          {/* Listagem completa de módulos e slots por trilha */}
+          <div className="space-y-12 px-4 pt-4">
+            {tracks.map((track) => {
+              const trackMods = (catalogModules as any[]).filter(m => m.track_id === track.id).sort((a,b) => (a.display_order||0)-(b.display_order||0));
+              return (
+                <div key={`cat-${track.id}`} className="space-y-6">
+                  <div className="flex items-end justify-between gap-4 border-b border-white/5 pb-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-red-600">{track.category || 'Trilha'}</p>
+                      <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white">{track.title}</h3>
+                    </div>
+                    <Button size="sm" variant="ghost" className="text-white/70 hover:text-red-600 gap-2 font-bold uppercase tracking-widest text-[10px]" onClick={() => setSelectedTrack(track)}>
+                      <Play size={14} className="fill-current" /> Abrir trilha
+                    </Button>
+                  </div>
+
+                  {trackMods.length === 0 ? (
+                    <div className="text-[11px] uppercase tracking-widest text-zinc-600 font-bold px-2">Nenhum módulo cadastrado</div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                      {trackMods.map((mod, modIdx) => {
+                        const modLessons = catalogLessons.filter(l => l.module_id === mod.id).sort((a,b) => (a.display_order||0)-(b.display_order||0));
+                        const filledSlots = Math.max(modLessons.length, 2);
+                        const slots: (Lesson | null)[] = Array.from({ length: filledSlots }, (_, i) => modLessons[i] || null);
+                        return (
+                          <div key={mod.id} className="bg-zinc-900/40 border border-white/5 rounded-2xl p-5 space-y-4">
+                            <div className="flex items-center gap-3">
+                              <div className="h-9 w-9 rounded-xl bg-red-600/10 border border-red-600/20 flex items-center justify-center text-red-600 font-black text-xs italic">{modIdx + 1}</div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="text-[12px] font-black uppercase tracking-[0.15em] text-white/90 truncate">{mod.title}</h4>
+                                <p className="text-[9px] uppercase tracking-widest text-zinc-500 font-bold mt-0.5">{modLessons.length} de {filledSlots} slots</p>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              {slots.map((lesson, slotIdx) => (
+                                <button
+                                  key={lesson?.id || `empty-${mod.id}-${slotIdx}`}
+                                  onClick={() => { if (lesson) { setSelectedTrack(track); setCurrentVideo(lesson); } else { setSelectedTrack(track); } }}
+                                  className={cn(
+                                    "w-full flex items-center gap-3 p-2 rounded-xl text-left border transition-all",
+                                    lesson ? "bg-zinc-900/60 border-white/5 hover:border-red-600/40 hover:bg-red-600/5" : "bg-transparent border-dashed border-white/10 hover:border-white/30"
+                                  )}
+                                >
+                                  <div className="relative w-14 aspect-video shrink-0 rounded-md overflow-hidden bg-zinc-950 border border-white/5">
+                                    {lesson?.thumbnail_url ? (
+                                      <img src={lesson.thumbnail_url} className="w-full h-full object-cover" alt={lesson.title} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                                    ) : (
+                                      <div className="w-full h-full bg-gradient-to-br from-red-600/30 to-zinc-950 flex items-center justify-center">
+                                        <Video size={14} className="text-white/40" />
+                                      </div>
+                                    )}
+                                    {lesson?.video_url && (
+                                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition"><Play size={12} className="text-white fill-current" /></div>
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className={cn("text-[11px] font-black italic uppercase tracking-tight truncate", lesson ? "text-white/90" : "text-zinc-500")}>{lesson?.title || `Slot ${slotIdx + 1} — vazio`}</p>
+                                    <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-600 mt-0.5">
+                                      {lesson ? (lesson.video_url ? (lesson.duration || 'Vídeo carregado') : 'Sem vídeo') : 'Aguardando upload'}
+                                    </p>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+
         </div>
       ) : (
         <div className="space-y-8 animate-in fade-in duration-500 max-w-[1600px] mx-auto">

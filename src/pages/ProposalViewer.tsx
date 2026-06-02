@@ -190,6 +190,15 @@ export default function ProposalViewer() {
   const team: any[] = proposal.team_members || [];
   const systemData = proposal.system_data || {};
   const endoData = proposal.endomarketing_data || {};
+  
+  const PREDEFINED_SERVICES = [
+    { id: 'google_negocio', name: 'Google Meu Negócio', icon: Target },
+    { id: 'landing_page', name: 'Criação de Landing Page', icon: Code },
+    { id: 'site_promocoes', name: 'Site com Sistema de Promoções', icon: Sparkles },
+    { id: 'gestao_trafego', name: 'Gestão de Tráfego Pago', icon: BarChart3 },
+    { id: 'social_media', name: 'Gestão de Redes Sociais', icon: Share2 },
+    { id: 'identidade_visual', name: 'Identidade Visual', icon: Palette },
+  ];
   const planPrice = plan.price || 0;
   const bonusTotal = bonus.reduce((s: number, b: any) => s + (b.value || 0), 0);
   const monthlyTotal = planPrice + bonusTotal;

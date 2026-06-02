@@ -660,11 +660,11 @@ async function callAi(ai, model, messages, options = {}) {
           const err = new Error(`AI error [${res.status}]: ${errText}`);
           err.status = res.status;
           
-          // 429 = rate limit: tenta próximo modelo na chain de fallback imediatamente
-          if (res.status === 429) {
-            console.warn(`[callAi] Rate limit em ${tryModel}, tentando próximo modelo...`);
+          // 429 = rate limit ou 404 = modelo descontinuado: tenta próximo modelo na chain de fallback
+          if (res.status === 429 || res.status === 404) {
+            console.warn(`[callAi] ${res.status} em ${tryModel}, tentando próximo modelo...`);
             lastError = err;
-            break; // sai do loop de retries, vai pro próximo modelo
+            break;
           }
           // 5xx = retry com backoff exponencial
           if (res.status >= 500 && attempt < retries) {

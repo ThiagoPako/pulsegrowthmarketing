@@ -191,13 +191,24 @@ export default function ProposalViewer() {
   const systemData = proposal.system_data || {};
   const endoData = proposal.endomarketing_data || {};
   
+  const INCLUDED_SERVICES = [
+    { id: 'social_media', name: 'Social Media', icon: Share2 },
+    { id: 'campanhas', name: 'Criação de Campanhas de Marketing', icon: Megaphone },
+    { id: 'gestao_projetos', name: 'Gestão de Projetos', icon: ListChecks },
+    { id: 'roteiros', name: 'Roteiros', icon: FileText },
+    { id: 'captacao', name: 'Captação', icon: Camera },
+    { id: 'edicao', name: 'Edição Profissional', icon: Scissors },
+    { id: 'designer', name: 'Designer', icon: Palette },
+    { id: 'meta_ads', name: 'Gestão de Tráfego Meta Ads', icon: BarChart3 },
+    { id: 'google_ads', name: 'Gestão de Tráfego Google Ads', icon: Target },
+    { id: 'portal_cliente', name: 'Portal do Cliente', icon: Monitor },
+    { id: 'reuniao_mensal', name: 'Reunião Mensal', icon: CalendarDays },
+  ];
   const PREDEFINED_SERVICES = [
-    { id: 'google_negocio', name: 'Google Meu Negócio', icon: Target },
-    { id: 'landing_page', name: 'Criação de Landing Page', icon: Code },
-    { id: 'site_promocoes', name: 'Site com Sistema de Promoções', icon: Sparkles },
-    { id: 'gestao_trafego', name: 'Gestão de Tráfego Pago', icon: BarChart3 },
-    { id: 'social_media', name: 'Gestão de Redes Sociais', icon: Share2 },
-    { id: 'identidade_visual', name: 'Identidade Visual', icon: Palette },
+    { id: 'google_negocio', name: 'Google Meu Negócio', price: 500, icon: Target },
+    { id: 'landing_page', name: 'Criação de Landing Page', price: 1500, icon: Code },
+    { id: 'site_promocoes', name: 'Site com Sistema de Promoções', price: 3500, icon: Sparkles },
+    { id: 'identidade_visual', name: 'Identidade Visual', price: 2000, icon: Palette },
   ];
   const planPrice = plan.price || 0;
   const bonusTotal = bonus.reduce((s: number, b: any) => s + (b.value || 0), 0);

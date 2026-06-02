@@ -2485,34 +2485,41 @@ export default function CommercialProposal() {
                 variant="outline"
                 type="button"
                 onClick={async () => {
-                  let totalProposals = 0;
-                  let totalPhotos = 0;
-                  for (const p of savedProposals as any[]) {
-                    const data = p.proposal_data || {};
-                    const tm = Array.isArray(data.teamMembers) ? data.teamMembers : [];
-                    if (!tm.length) continue;
-                    let changed = false;
-                    const updatedTeam = tm.map((m: any) => {
-                      const u = users.find(x => (x.displayName || x.name) === m.name);
-                      if (u?.avatarUrl && u.avatarUrl !== m.avatarUrl) {
-                        changed = true;
-                        totalPhotos++;
-                        return { ...m, avatarUrl: u.avatarUrl };
+                  try {
+                    let totalProposals = 0;
+                    let totalPhotos = 0;
+                    let errors = 0;
+                    for (const p of savedProposals as any[]) {
+                      const tm = Array.isArray(p.team_members) ? p.team_members : [];
+                      if (!tm.length) continue;
+                      let changed = false;
+                      const updatedTeam = tm.map((m: any) => {
+                        const memberName = m.name || m.displayName;
+                        const u = users.find(x => (x.displayName || x.name) === memberName);
+                        const freshAvatar = u?.avatarUrl;
+                        if (freshAvatar && freshAvatar !== m.avatarUrl) {
+                          changed = true;
+                          totalPhotos++;
+                          return { ...m, avatarUrl: freshAvatar };
+                        }
+                        return m;
+                      });
+                      if (changed) {
+                        const res = await vpsDb.from('commercial_proposals')
+                          .update({ team_members: updatedTeam })
+                          .eq('id', p.id);
+                        if (res.error) { errors++; console.error('Update failed', p.id, res.error); }
+                        else totalProposals++;
                       }
-                      return m;
-                    });
-                    if (changed) {
-                      totalProposals++;
-                      await vpsDb.from('commercial_proposals').update({
-                        proposal_data: { ...data, teamMembers: updatedTeam },
-                      }).eq('id', p.id);
                     }
-                  }
-                  if (totalPhotos > 0) {
-                    toast.success(`${totalPhotos} foto(s) atualizada(s) em ${totalProposals} proposta(s).`);
-                    refetchProposals();
-                  } else {
-                    toast.info('Todas as propostas já estão com as fotos atualizadas.');
+                    if (totalPhotos > 0) {
+                      toast.success(`${totalPhotos} foto(s) atualizada(s) em ${totalProposals} proposta(s).${errors ? ` ${errors} falha(s).` : ''}`);
+                      await refetchProposals();
+                    } else {
+                      toast.info('Todas as propostas já estão com as fotos atualizadas.');
+                    }
+                  } catch (e: any) {
+                    toast.error('Erro: ' + (e?.message || 'falha desconhecida'));
                   }
                 }}
               >

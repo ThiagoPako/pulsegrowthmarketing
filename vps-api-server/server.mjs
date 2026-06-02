@@ -3676,7 +3676,7 @@ function sanitizeIdentifier(name) {
 // Generic query endpoint
 app.post('/api/db/query', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { user } = await verifyUser(req);
     const { table, operation, data, filters, select, order, limit: queryLimit, single, joins } = req.body;
 
     const safeTable = sanitizeIdentifier(table);
@@ -3688,7 +3688,12 @@ app.post('/api/db/query', async (req, res) => {
       await ensureProposalTables();
     }
 
+    // Multi-city: resolve cidade ativa e prepara flag de scoping
+    const scopeCity = TABLES_WITH_CITY.has(safeTable);
+    const activeCity = scopeCity ? await resolveActiveCity(req, user.id) : null;
+
     let result;
+
 
     switch (operation) {
       case 'select': {

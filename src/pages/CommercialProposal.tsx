@@ -1168,24 +1168,27 @@ export default function CommercialProposal() {
           <CardContent className="space-y-3">
             <div className="bg-accent/50 rounded-lg p-3 space-y-2">
               <div className="flex justify-between text-xs">
-                <span>Serviços do pacote</span>
+                <span>Valor mensal do contrato</span>
                 <span>{fmt(monthlyTotalBeforeDiscount)}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span>Serviços unitários</span>
-                <span>{fmt(additionalTotal)}</span>
               </div>
               {customDiscount > 0 && (
                 <div className="flex justify-between text-xs text-green-600">
                   <span>Desconto ({customDiscount}%)</span>
-                  <span>-{fmt((monthlyTotalBeforeDiscount + additionalTotal) * (customDiscount / 100))}</span>
+                  <span>-{fmt(monthlyTotalBeforeDiscount * (customDiscount / 100))}</span>
                 </div>
               )}
               <div className="flex justify-between text-sm font-bold border-t pt-1">
-                <span>Total</span>
-                <span className="text-primary">{fmt((monthlyTotalBeforeDiscount + additionalTotal) * (1 - customDiscount / 100))}</span>
+                <span>Total mensal</span>
+                <span className="text-primary">{fmt(monthlyTotalBeforeDiscount * (1 - customDiscount / 100))}</span>
               </div>
+              {adicionaisTotal > 0 && (
+                <div className="flex justify-between text-[11px] text-muted-foreground border-t pt-1 italic">
+                  <span>+ Adicionais à parte</span>
+                  <span>{fmt(adicionaisTotal)}</span>
+                </div>
+              )}
             </div>
+
 
             <div className="grid grid-cols-2 gap-3">
               <div>

@@ -514,7 +514,8 @@ export default function ProposalViewer() {
         )}
         {customData.description && (
           <AnimatedSection className="px-6 md:px-10 pb-4">
-            <p className="text-sm text-gray-600 bg-gray-50 rounded-xl p-4">{customData.description}</p>
+            <h2 className="text-lg font-bold text-gray-800 mb-3">Escopo dos Serviços</h2>
+            <ScopeDescription text={customData.description} accentColor={accentColor} />
           </AnimatedSection>
         )}
         <AnimatedSection className="px-6 md:px-10 pb-8">

@@ -226,6 +226,7 @@ export default function TrainingModuleAdmin() {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('folder', 'training-videos');
       formData.append('path', 'training-videos');
 
       const token = localStorage.getItem('pulse_jwt');
@@ -239,7 +240,7 @@ export default function TrainingModuleAdmin() {
       if (!response.ok) throw new Error(result.error || 'Erro no upload');
 
       const videoUrl = result.url;
-      const videoPath = result.path || videoUrl;
+      const videoPath = result.path || result.filename || videoUrl;
 
       // Validação real: confirma que o arquivo existe no caminho esperado antes de liberar
       const verifyRes = await fetch(

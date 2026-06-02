@@ -437,7 +437,26 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
             <div className="lg:col-span-8 space-y-3 sm:space-y-4">
               <div className="aspect-video bg-black rounded-xl overflow-hidden border border-white/5 relative shadow-2xl">
                 {currentVideo?.video_url ? (
-                  <iframe src={currentVideo.video_url.includes('youtube') ? currentVideo.video_url.replace('watch?v=', 'embed/') : currentVideo.video_url} className="w-full h-full" allowFullScreen key={currentVideo.video_url} />
+                  /youtube|vimeo/i.test(currentVideo.video_url) ? (
+                    <iframe
+                      src={currentVideo.video_url.includes('youtube') ? currentVideo.video_url.replace('watch?v=', 'embed/') : currentVideo.video_url}
+                      className="w-full h-full"
+                      allowFullScreen
+                      key={currentVideo.video_url}
+                    />
+                  ) : (
+                    <video
+                      src={currentVideo.video_url}
+                      className="w-full h-full bg-black"
+                      controls
+                      controlsList="nodownload noremoteplayback noplaybackrate"
+                      disablePictureInPicture
+                      onContextMenu={(e) => e.preventDefault()}
+                      playsInline
+                      preload="metadata"
+                      key={currentVideo.video_url}
+                    />
+                  )
                 ) : (
                   <div className="w-full h-full relative">
                     <img src={selectedTrack.thumbnail_url} className="w-full h-full object-cover opacity-40" />

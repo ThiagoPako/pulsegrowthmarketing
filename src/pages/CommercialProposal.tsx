@@ -312,6 +312,7 @@ export default function CommercialProposal() {
       if (d.customRecordings) setCustomRecordings(d.customRecordings);
       if (d.contractDuration) setContractDuration(d.contractDuration);
       if (d.selectedBaseServices) setSelectedBaseServices(d.selectedBaseServices);
+      if (d.selectedIncludedServices) setSelectedIncludedServices(d.selectedIncludedServices);
       if (d.additionalServices) setAdditionalServices(d.additionalServices);
       // Cronograma
       if (d.cronogramaDesc) setCronogramaDesc(d.cronogramaDesc);

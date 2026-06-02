@@ -312,6 +312,13 @@ export default function CommercialProposal() {
     } catch { /* ignore corrupt data */ }
   }, []);
 
+  // Auto-apply 5% discount when annual contract is selected (custom proposal)
+  useEffect(() => {
+    if (proposalType !== 'personalizada') return;
+    setCustomDiscount(contractDuration === 'anual' ? 5 : 0);
+  }, [contractDuration, proposalType]);
+
+
   // Save draft on every change (debounced via effect)
   useEffect(() => {
     const draft = {

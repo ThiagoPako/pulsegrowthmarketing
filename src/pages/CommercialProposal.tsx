@@ -1857,19 +1857,19 @@ export default function CommercialProposal() {
 
                     <Separator />
                     <div className="grid grid-cols-2 gap-3 pt-1">
-                      <div className="rounded-xl border-2 p-3 text-center" style={{ borderColor: contractDuration === 'semestral' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
+                      <div className="rounded-xl border-2 p-4 text-center" style={{ borderColor: contractDuration === 'semestral' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
                         <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Semestral</div>
-                        <div className="text-lg font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val * 6)}</div>
-                        <div className="text-[10px] text-gray-500">6x {fmt(val)}/mês</div>
+                        <div className="text-xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
+                        <div className="text-[10px] text-gray-500 mt-1">Compromisso de 6 meses</div>
                       </div>
-                      <div className="rounded-xl border-2 p-3 text-center relative" style={{ borderColor: contractDuration === 'anual' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
+                      <div className="rounded-xl border-2 p-4 text-center relative" style={{ borderColor: contractDuration === 'anual' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
                         <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">5% OFF</div>
                         <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Anual</div>
-                        <div className="text-lg font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val * 12 * 0.95)}</div>
-                        <div className="text-[10px] text-gray-500">12x {fmt(val * 0.95)}/mês</div>
+                        <div className="text-xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val * 0.95)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
+                        <div className="text-[10px] text-green-600 font-semibold mt-1">Economia total de {fmt(val * 12 * 0.05)}</div>
                       </div>
                     </div>
-                    <p className="text-[11px] text-gray-500 text-center pt-1">O valor é pago mensalmente — totais acima são apenas referência do contrato.</p>
+                    <p className="text-[11px] text-gray-500 text-center pt-1">O valor é pago mensalmente conforme a duração do contrato escolhida.</p>
 
                     {adicionaisTotal > 0 && (
                       <div className="mt-3 p-3 rounded-lg bg-gray-50 border border-gray-200 text-xs">

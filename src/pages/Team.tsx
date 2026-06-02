@@ -367,6 +367,39 @@ export default function Team() {
                   </Select>
                 </div>
 
+                <div className="space-y-2 p-3 rounded-lg bg-muted/50 border border-border">
+                  <Label className="flex items-center gap-2"><MapPin size={14} /> Cidades de acesso</Label>
+                  <p className="text-[11px] text-muted-foreground">Marque as cidades que este colaborador poderá acessar. A principal é a cidade padrão ao logar.</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {ALL_CITIES.map(c => {
+                      const checked = form.cities.includes(c);
+                      return (
+                        <label key={c} className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-colors ${checked ? 'bg-primary/5 border-primary/30' : 'bg-card border-border hover:bg-muted/50'}`}>
+                          <Checkbox checked={checked} onCheckedChange={() => {
+                            setForm(prev => {
+                              const has = prev.cities.includes(c);
+                              const cities = has ? prev.cities.filter(x => x !== c) : [...prev.cities, c];
+                              const primaryCity = cities.includes(prev.primaryCity) ? prev.primaryCity : (cities[0] || 'minacu');
+                              return { ...prev, cities, primaryCity: primaryCity as CityCode };
+                            });
+                          }} />
+                          <span className="text-sm font-medium flex-1">{CITY_LABELS[c]}</span>
+                          {checked && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.preventDefault(); setForm(prev => ({ ...prev, primaryCity: c })); }}
+                              className={`text-[10px] px-1.5 py-0.5 rounded ${form.primaryCity === c ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted-foreground/20'}`}
+                            >
+                              {form.primaryCity === c ? 'Principal' : 'Tornar principal'}
+                            </button>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+
                 {form.role === 'parceiro' && (
                   <div className="space-y-3 p-3 rounded-lg bg-muted/50 border border-border">
                     <p className="text-sm font-semibold flex items-center gap-2"><Handshake size={16} /> Dados do Parceiro</p>

@@ -137,6 +137,8 @@ const INCLUDED_SERVICES = [
   { id: 'google_ads', name: 'Gestão de Tráfego Google Ads', icon: Target, desc: 'Campanhas de Pesquisa, Display, YouTube e Performance Max — palavras-chave estratégicas, lances inteligentes e foco em lead qualificado.' },
   { id: 'portal_cliente', name: 'Portal do Cliente', icon: Monitor, desc: 'Acesso exclusivo 24h para acompanhar agenda de gravações, aprovar conteúdos, ver entregas e métricas de performance em tempo real.' },
   { id: 'reuniao_mensal', name: 'Reunião Mensal', icon: CalendarDays, desc: 'Reunião estratégica mensal de alinhamento — análise de resultados, ajustes de rota e planejamento das próximas ações.' },
+  { id: 'google_ads_setup', name: 'Implementação Conta Google Ads', icon: Target, desc: 'Criação e configuração completa da conta Google Ads: estrutura de campanhas, pixels de conversão, públicos e integrações — gratuito para clientes do contrato.' },
+  { id: 'meta_ads_setup', name: 'Implementação Conta Meta Ads', icon: Target, desc: 'Criação e configuração do Gerenciador de Negócios Meta: conta de anúncios, pixel, eventos de conversão e integrações com Instagram/Facebook — gratuito para clientes do contrato.' },
 ];
 
 // Adicionais opcionais cobrados à parte (fora do valor fixo mensal)
@@ -145,8 +147,6 @@ const ADDITIONAL_SERVICES = [
   { id: 'landing_page', name: 'Criação de Landing Page', price: 1500, icon: Code },
   { id: 'site_promocoes', name: 'Site com Sistema de Promoções', price: 3500, icon: Sparkles },
   { id: 'identidade_visual', name: 'Identidade Visual', price: 2000, icon: Palette },
-  { id: 'google_ads_setup', name: 'Implementação de Conta Google Ads', price: 0, icon: Target },
-  { id: 'meta_ads_setup', name: 'Implementação de Conta Meta Ads', price: 0, icon: Target },
 ];
 
 export default function CommercialProposal() {

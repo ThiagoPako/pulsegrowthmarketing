@@ -3784,31 +3784,57 @@ async function tableHasCityColumn(tableName) {
   }
 }
 
+// Whitelist global das cidades suportadas pelo sistema.
+const ALLOWED_CITIES = new Set(['minacu', 'uruacu']);
+
+function normalizeCityValue(value) {
+  if (value === null || value === undefined) return null;
+  const v = String(value).trim().toLowerCase();
+  if (!v) return null;
+  // Normaliza acentos comuns: "Minaçu"/"Uruaçu" -> "minacu"/"uruacu"
+  const stripped = v.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return stripped;
+}
+
+function assertValidCity(value, { field = 'city' } = {}) {
+  const normalized = normalizeCityValue(value);
+  if (!normalized || !ALLOWED_CITIES.has(normalized)) {
+    const err = new Error(`Campo "${field}" inválido. Valores permitidos: ${Array.from(ALLOWED_CITIES).join(', ')}.`);
+    err.statusCode = 400;
+    throw err;
+  }
+  return normalized;
+}
 
 // Resolve a cidade ativa do request: header x-pulse-city, validado contra user_cities.
 // Fallback: primary do usuário, ou 'minacu' se não houver registro.
 async function resolveActiveCity(req, userId, userObj = null) {
-  const raw = String(req.headers['x-pulse-city'] || '').toLowerCase();
-  const requested = (raw === 'minacu' || raw === 'uruacu') ? raw : null;
+  const requested = normalizeCityValue(req.headers['x-pulse-city']);
+  const requestedValid = requested && ALLOWED_CITIES.has(requested) ? requested : null;
 
   // Admins podem acessar qualquer cidade sem precisar de registro em user_cities
   try {
     if (userObj && await isAdminUser(userObj)) {
-      return requested || 'minacu';
+      return assertValidCity(requestedValid || 'minacu');
     }
-  } catch { /* segue fluxo normal */ }
+  } catch (e) {
+    if (e && e.statusCode === 400) throw e;
+    /* segue fluxo normal */
+  }
 
   try {
     const { rows } = await pool.query(
       'SELECT city, is_primary FROM user_cities WHERE user_id = $1',
       [userId]
     );
-    if (rows.length === 0) return requested || 'minacu';
-    const allowed = rows.map(r => r.city);
-    if (requested && allowed.includes(requested)) return requested;
-    return (rows.find(r => r.is_primary)?.city) || allowed[0];
-  } catch {
-    return requested || 'minacu';
+    if (rows.length === 0) return assertValidCity(requestedValid || 'minacu');
+    const allowed = rows.map(r => normalizeCityValue(r.city)).filter(Boolean);
+    if (requestedValid && allowed.includes(requestedValid)) return requestedValid;
+    const primary = normalizeCityValue(rows.find(r => r.is_primary)?.city);
+    return assertValidCity(primary || allowed[0]);
+  } catch (e) {
+    if (e && e.statusCode === 400) throw e;
+    return assertValidCity(requestedValid || 'minacu');
   }
 }
 
@@ -3951,7 +3977,9 @@ app.post('/api/db/query', async (req, res) => {
         const jsonColumns = await getTableJsonColumns(safeTable);
         for (const item of items) {
           // Multi-city: força city para a cidade ativa (ignora qualquer valor enviado pelo cliente)
-          const itemScoped = scopeCity ? { ...item, city: activeCity } : item;
+          const itemScoped = scopeCity
+            ? { ...item, city: assertValidCity(activeCity) }
+            : (item && item.city !== undefined ? { ...item, city: assertValidCity(item.city) } : item);
           const entries = Object.entries(itemScoped).map(([key, value]) => [sanitizeIdentifier(key), value]);
           const keys = entries.map(([key]) => key);
           const values = entries.map(([key, value]) => serializeValueForColumn(key, value, jsonColumns));
@@ -3969,7 +3997,9 @@ app.post('/api/db/query', async (req, res) => {
 
       case 'update': {
         const jsonColumns = await getTableJsonColumns(safeTable);
-        const scopedData = scopeCity ? { ...data, city: activeCity } : data;
+        const scopedData = scopeCity
+          ? { ...data, city: assertValidCity(activeCity) }
+          : (data && data.city !== undefined ? { ...data, city: assertValidCity(data.city) } : data);
         const entries = Object.entries(scopedData).map(([key, value]) => [sanitizeIdentifier(key), value]);
         const keys = entries.map(([key]) => key);
         const values = entries.map(([key, value]) => serializeValueForColumn(key, value, jsonColumns));
@@ -4057,7 +4087,8 @@ app.post('/api/db/query', async (req, res) => {
     res.json(result);
   } catch (e) {
     console.error('DB query error:', e);
-    res.status(500).json({ data: null, error: { message: e.message } });
+    const status = e?.statusCode === 400 ? 400 : 500;
+    res.status(status).json({ data: null, error: { message: e.message } });
   }
 });
 
@@ -4095,7 +4126,7 @@ app.post('/api/clients', async (req, res) => {
         c.logo_url || null, c.fixed_day || 'segunda', c.fixed_time || '09:00', c.videomaker_id || null,
         c.backup_time || '14:00', c.backup_day || 'terca', c.extra_day || 'quarta',
         c.extra_content_types || '{}', c.accepts_extra ?? false, c.extra_client_appears ?? false,
-        c.whatsapp || '', c.whatsapp_group || null, c.email || '', (scopeCity ? activeCity : (c.city || 'minacu')),
+        c.whatsapp || '', c.whatsapp_group || null, c.email || '', assertValidCity(scopeCity ? activeCity : (c.city || 'minacu')),
         c.weekly_reels ?? 0, c.weekly_creatives ?? 0, c.weekly_goal ?? 10, c.has_endomarketing ?? false,
         c.has_vehicle_flyer ?? false, c.weekly_stories ?? 0, c.presence_days ?? 1, c.monthly_recordings ?? 4,
         c.niche || '', c.client_login || '', c.drive_link || '', c.drive_fotos || '',
@@ -4107,7 +4138,11 @@ app.post('/api/clients', async (req, res) => {
       ]
     );
     res.json(rows[0]);
-  } catch (e) { console.error('POST /api/clients error:', e); res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('POST /api/clients error:', e);
+    const status = e?.statusCode === 400 ? 400 : 500;
+    res.status(status).json({ error: e.message });
+  }
 });
 
 app.put('/api/clients/:id', async (req, res) => {
@@ -4130,8 +4165,11 @@ app.put('/api/clients/:id', async (req, res) => {
     let idx = 1;
     for (const key of allowed) {
       if (c[key] !== undefined) {
+        let value = c[key];
+        if (key === 'city') value = assertValidCity(value);
+        if (key === 'briefing_data') value = JSON.stringify(c[key]);
         sets.push(`${key} = $${idx}`);
-        vals.push(key === 'briefing_data' ? JSON.stringify(c[key]) : c[key]);
+        vals.push(value);
         idx++;
       }
     }
@@ -4145,7 +4183,11 @@ app.put('/api/clients/:id', async (req, res) => {
     }
     const { rows } = await pool.query(`UPDATE clients SET ${sets.join(', ')} ${whereSql} RETURNING *`, vals);
     res.json(rows[0]);
-  } catch (e) { console.error('PUT /api/clients error:', e); res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('PUT /api/clients error:', e);
+    const status = e?.statusCode === 400 ? 400 : 500;
+    res.status(status).json({ error: e.message });
+  }
 });
 
 app.delete('/api/clients/:id', async (req, res) => {
@@ -4274,7 +4316,10 @@ app.post('/api/recordings', async (req, res) => {
       const vals = [r.id || crypto.randomUUID(), r.client_id || null, r.videomaker_id, r.date, r.start_time, r.type || 'fixa', r.status || 'agendada', r.confirmation_status || 'pendente'];
       if (scopeCity) {
         cols.push('city');
-        vals.push(activeCity);
+        vals.push(assertValidCity(activeCity));
+      } else if (r.city !== undefined) {
+        cols.push('city');
+        vals.push(assertValidCity(r.city));
       }
       if (hasProspectName && r.prospect_name) {
         cols.push('prospect_name');
@@ -4288,7 +4333,11 @@ app.post('/api/recordings', async (req, res) => {
       results.push(rows[0]);
     }
     res.json(results.length === 1 ? results[0] : results);
-  } catch (e) { console.error('POST /api/recordings error:', e); res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('POST /api/recordings error:', e);
+    const status = e?.statusCode === 400 ? 400 : 500;
+    res.status(status).json({ error: e.message });
+  }
 });
 
 app.put('/api/recordings/:id', async (req, res) => {
@@ -4307,16 +4356,27 @@ app.put('/api/recordings/:id', async (req, res) => {
     if ((r.type === 'avulso' || r.prospect_name) && r.client_id == null && !clientIdNullable) {
       return res.status(500).json({ error: 'Schema da VPS desatualizado: client_id da tabela recordings ainda está NOT NULL e bloqueia vídeo avulso.' });
     }
-    const allowed = ['client_id','videomaker_id','date','start_time','type','status','confirmation_status', ...(hasProspectName ? ['prospect_name'] : [])];
+    const allowed = ['client_id','videomaker_id','date','start_time','type','status','confirmation_status','city', ...(hasProspectName ? ['prospect_name'] : [])];
     const sets = []; const vals = []; let idx = 1;
-    for (const key of allowed) { if (r[key] !== undefined) { sets.push(`${key} = $${idx}`); vals.push(r[key]); idx++; } }
+    for (const key of allowed) {
+      if (r[key] !== undefined) {
+        let value = r[key];
+        if (key === 'city') value = assertValidCity(scopeCity ? activeCity : value);
+        sets.push(`${key} = $${idx}`);
+        vals.push(value);
+        idx++;
+      }
+    }
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     vals.push(id);
     const cityClause = scopeCity ? ` AND city = $${idx + 1}` : '';
     if (scopeCity) vals.push(activeCity);
     const { rows } = await pool.query(`UPDATE recordings SET ${sets.join(', ')} WHERE id = $${idx}${cityClause} RETURNING *`, vals);
     res.json(rows[0]);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    const status = e?.statusCode === 400 ? 400 : 500;
+    res.status(status).json({ error: e.message });
+  }
 });
 
 app.delete('/api/recordings/:id', async (req, res) => {

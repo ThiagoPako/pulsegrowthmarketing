@@ -2312,6 +2312,20 @@ export default function CommercialProposal() {
         </div>
       </div>
 
+      {/* Editing banner */}
+      {editingProposalId && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center gap-3">
+          <Pencil className="h-5 w-5 text-amber-600 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-800">Editando proposta existente</p>
+            <p className="text-xs text-amber-700 truncate">As alterações serão salvas na mesma proposta (mesmo link público).</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={clearProposal}>
+            <X className="h-3 w-3 mr-1" /> Cancelar edição
+          </Button>
+        </div>
+      )}
+
       {/* Share link banner */}
       {shareLink && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-3">

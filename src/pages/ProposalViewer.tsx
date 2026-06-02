@@ -643,6 +643,20 @@ export default function ProposalViewer() {
                 </div>
               )}
 
+              <Separator />
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div className="rounded-xl border-2 p-3 text-center" style={{ borderColor: customData.contractDuration === 'semestral' ? accentColor : '#e5e7eb' }}>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Semestral</div>
+                  <div className="text-lg font-bold mt-1" style={{ color: accentColor }}>{fmt(discountedVal * 6)}</div>
+                  <div className="text-[10px] text-gray-500">6x {fmt(discountedVal)}</div>
+                </div>
+                <div className="rounded-xl border-2 p-3 text-center relative" style={{ borderColor: customData.contractDuration === 'anual' ? accentColor : '#e5e7eb' }}>
+                  <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">5% OFF</div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Anual</div>
+                  <div className="text-lg font-bold mt-1" style={{ color: accentColor }}>{fmt(totalBeforeDiscount * 12 * 0.95)}</div>
+                  <div className="text-[10px] text-gray-500">12x {fmt(totalBeforeDiscount * 0.95)}</div>
+                </div>
+              </div>
               {adicionaisTotal > 0 && (
                 <div className="mt-3 p-3 rounded-lg bg-gray-50 border border-gray-200 text-xs">
                   <div className="flex justify-between text-gray-600 italic">

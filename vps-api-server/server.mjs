@@ -5711,6 +5711,13 @@ app.get('/api/training/sign', async (req, res) => {
       return res.json({ url: src, external: true });
     }
 
+    // Real existence check before issuing token — never sign for missing files
+    const absCheck = resolveTrainingFile(src);
+    if (!absCheck || !fs.existsSync(absCheck)) {
+      return res.status(404).json({ error: 'video file not found on disk' });
+    }
+
+
     const token = jwt.sign(
       { lessonId, sub: user.id, scope: 'training-stream' },
       JWT_SECRET,

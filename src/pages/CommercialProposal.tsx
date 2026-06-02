@@ -513,7 +513,12 @@ export default function CommercialProposal() {
   const { data: savedProposals = [], refetch: refetchProposals } = useQuery({
     queryKey: ['saved-proposals'],
     queryFn: async () => {
-      const { data } = await vpsDb.from('commercial_proposals').select('*').order('created_at', { ascending: false });
+      const { data, error } = await vpsDb.from('commercial_proposals').select('*').order('created_at', { ascending: false });
+      if (error) {
+        console.error('Saved proposals query error:', error);
+        toast.error('Erro ao carregar propostas salvas: ' + (error.message || 'falha desconhecida'));
+        return [];
+      }
       return (data as any[]) || [];
     },
   });
@@ -2512,7 +2517,7 @@ export default function CommercialProposal() {
                         else totalProposals++;
                       }
                     }
-                    if (totalPhotos > 0) {
+                    if (totalProposals > 0) {
                       toast.success(`${totalPhotos} foto(s) atualizada(s) em ${totalProposals} proposta(s).${errors ? ` ${errors} falha(s).` : ''}`);
                       await refetchProposals();
                     } else {

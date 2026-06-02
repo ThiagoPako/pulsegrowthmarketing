@@ -176,6 +176,9 @@ export default function CommercialProposal() {
   const [endoDescription, setEndoDescription] = useState('');
 
   // Personalizada fields
+  const [contractDuration, setContractDuration] = useState<'semestral' | 'anual'>('semestral');
+  const [selectedBaseServices, setSelectedBaseServices] = useState<string[]>([]);
+  const [additionalServices, setAdditionalServices] = useState<{ id: string; name: string; price: number }[]>([]);
   const [customVideos, setCustomVideos] = useState('');
   const [customStories, setCustomStories] = useState('');
   const [customEventCoverage, setCustomEventCoverage] = useState('');

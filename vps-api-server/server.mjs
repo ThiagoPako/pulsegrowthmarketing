@@ -3622,10 +3622,56 @@ const ALLOWED_TABLES = [
   'user_permissions',
 ];
 
+// ═══════════════════════════════════════════════════════════════
+// MULTI-CITY ENFORCEMENT
+// ═══════════════════════════════════════════════════════════════
+// Tabelas que devem ser filtradas pela cidade ativa do usuário
+const TABLES_WITH_CITY = new Set([
+  'clients','recordings','kanban_tasks','scripts','active_recordings',
+  'content_tasks','task_history','task_comments',
+  'design_tasks','design_task_history','delivery_records',
+  'revenues','expenses','financial_contracts','financial_activity_log',
+  'financial_chat_messages','cash_reserve_movements','billing_messages',
+  'social_media_deliveries','social_accounts','integration_logs',
+  'automation_flows','automation_logs','api_integrations','api_integration_logs',
+  'onboarding_tasks',
+  'client_portal_contents','client_portal_comments','client_portal_notifications',
+  'flyer_items','flyer_templates',
+  'endomarketing_clientes','endomarketing_agendamentos','endomarketing_profissionais',
+  'endomarketing_logs','endomarketing_packages','endomarketing_partner_tasks',
+  'client_endomarketing_contracts',
+  'traffic_campaigns','whatsapp_messages','whatsapp_confirmations',
+  'recording_wait_logs','portal_videos','portal_video_views',
+  'commercial_proposals','proposal_comments','event_recordings',
+  'client_testimonials','proposal_checklist_items',
+  'fieldwork_activities','goals','notifications',
+  'company_settings','whatsapp_config','payment_config',
+  'crm_leads','crm_notes',
+]);
+
+// Resolve a cidade ativa do request: header x-pulse-city, validado contra user_cities.
+// Fallback: primary do usuário, ou 'minacu' se não houver registro.
+async function resolveActiveCity(req, userId) {
+  const raw = String(req.headers['x-pulse-city'] || '').toLowerCase();
+  const requested = (raw === 'minacu' || raw === 'uruacu') ? raw : null;
+  try {
+    const { rows } = await pool.query(
+      'SELECT city, is_primary FROM user_cities WHERE user_id = $1',
+      [userId]
+    );
+    if (rows.length === 0) return 'minacu';
+    const allowed = rows.map(r => r.city);
+    if (requested && allowed.includes(requested)) return requested;
+    return (rows.find(r => r.is_primary)?.city) || allowed[0];
+  } catch {
+    return requested || 'minacu';
+  }
+}
+
 function sanitizeIdentifier(name) {
-  // Only allow alphanumeric and underscores
   return name.replace(/[^a-zA-Z0-9_]/g, '');
 }
+
 
 // Generic query endpoint
 app.post('/api/db/query', async (req, res) => {

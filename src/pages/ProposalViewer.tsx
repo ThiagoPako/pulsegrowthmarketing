@@ -35,7 +35,7 @@ import {
   Rocket, Film, Palette, Camera, Monitor, Share2, BarChart3,
   CheckCircle2, Gift, FileText, Scissors, Users, MessageCircle,
   ThumbsUp, ThumbsDown, Clock, Send, Code, Megaphone, Star, Zap,
-  CalendarDays, Layers
+  CalendarDays, Layers, Sparkles, Target
 } from 'lucide-react';
 
 const INTERNAL_PROCESS_STEPS = [

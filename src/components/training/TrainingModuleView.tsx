@@ -505,7 +505,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                   <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-500">{modules.length} módulos</span>
                 </div>
 
-                <div className="space-y-3 max-h-[78vh] overflow-y-auto pr-2 scrollbar-hide">
+                <div className="space-y-3 lg:max-h-[78vh] lg:overflow-y-auto lg:pr-2 scrollbar-hide">
                   {modules.length === 0 && (
                     <div className="text-center py-10 text-zinc-500 text-[10px] font-bold uppercase tracking-widest border border-dashed border-white/10 rounded-xl">Nenhum módulo cadastrado</div>
                   )}

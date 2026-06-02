@@ -3764,6 +3764,14 @@ app.post('/api/db/query', async (req, res) => {
           if (whereClauses.length > 0) query += ` WHERE ${whereClauses.join(' AND ')}`;
         }
 
+        // Multi-city: força filtro de cidade no SELECT
+        if (scopeCity) {
+          query += (query.includes(' WHERE ') ? ' AND ' : ' WHERE ') + `${safeTable}.city = $${paramIdx}`;
+          params.push(activeCity);
+          paramIdx++;
+        }
+
+
         // Handle order
         if (order) {
           const orderParts = Array.isArray(order) ? order : [order];
@@ -3784,7 +3792,9 @@ app.post('/api/db/query', async (req, res) => {
         const allResults = [];
         const jsonColumns = await getTableJsonColumns(safeTable);
         for (const item of items) {
-          const entries = Object.entries(item).map(([key, value]) => [sanitizeIdentifier(key), value]);
+          // Multi-city: força city para a cidade ativa (ignora qualquer valor enviado pelo cliente)
+          const itemScoped = scopeCity ? { ...item, city: activeCity } : item;
+          const entries = Object.entries(itemScoped).map(([key, value]) => [sanitizeIdentifier(key), value]);
           const keys = entries.map(([key]) => key);
           const values = entries.map(([key, value]) => serializeValueForColumn(key, value, jsonColumns));
           const placeholders = values.map((_, i) => `$${i + 1}`);
@@ -3797,6 +3807,7 @@ app.post('/api/db/query', async (req, res) => {
         result = { data: allResults.length === 1 ? allResults[0] : allResults, error: null };
         break;
       }
+
 
       case 'update': {
         const jsonColumns = await getTableJsonColumns(safeTable);
@@ -3818,7 +3829,14 @@ app.post('/api/db/query', async (req, res) => {
           }
           if (whereClauses.length > 0) query += ` WHERE ${whereClauses.join(' AND ')}`;
         }
+        // Multi-city: impede UPDATE cruzado
+        if (scopeCity) {
+          query += (query.includes(' WHERE ') ? ' AND ' : ' WHERE ') + `city = $${paramIdx}`;
+          params.push(activeCity);
+          paramIdx++;
+        }
         query += ' RETURNING *';
+
         const { rows } = await pool.query(query, params);
         result = { data: rows, error: null };
         break;

@@ -615,13 +615,22 @@ export default function CommercialProposal() {
       if (proposalType === 'personalizada') saveSystemData = customData;
       if (proposalType === 'cronograma') saveSystemData = cronogramaData;
 
+      // Enrich team members with the freshest avatarUrl from current users list
+      // to guarantee that the photos rendered in the preview also persist on the
+      // public viewer link (integrity between preview and shared proposal).
+      const enrichedTeamMembers = teamMembers.map(m => {
+        if (m.avatarUrl) return m;
+        const match = users.find(u => (u.displayName || u.name) === m.name);
+        return match?.avatarUrl ? { ...m, avatarUrl: match.avatarUrl } : m;
+      });
+
       const payload = {
         client_name: clientName,
         client_company: clientCompany,
         plan_id: proposalType === 'marketing' ? selectedPlanId : null,
         plan_snapshot: proposalType === 'marketing' ? selectedPlan : null,
         bonus_services: bonusServices,
-        team_members: teamMembers,
+        team_members: enrichedTeamMembers,
         has_contract: hasContract,
         custom_discount: customDiscount,
         observations,

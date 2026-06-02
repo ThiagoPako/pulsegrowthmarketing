@@ -317,26 +317,26 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
               const filled = trackLessonsAll.filter(l => l.video_url).length;
               return (
                 <section key={`cat-${track.id}`} className="space-y-5">
-                  <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
-                    <div className="flex items-center gap-4 min-w-0">
-                      <div className="relative w-20 h-20 rounded-2xl overflow-hidden shrink-0 border border-white/10 shadow-xl">
+                  <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3 sm:pb-4">
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                      <div className="relative w-14 h-14 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl overflow-hidden shrink-0 border border-white/10 shadow-xl">
                         <img src={track.thumbnail_url} className="w-full h-full object-cover" alt={track.title} onError={(e) => { (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1492691523567-6170f2295b21?auto=format&fit=crop&q=80&w=600'; }} />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-red-600 mb-1">{track.category || 'Trilha'}</p>
-                        <h3 className="text-xl lg:text-2xl font-black italic uppercase tracking-tighter text-white truncate">{track.title}</h3>
-                        <div className="flex items-center gap-3 mt-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">
-                          <span>{trackMods.length} módulos</span>
+                        <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.3em] text-red-600 mb-0.5 sm:mb-1">{track.category || 'Trilha'}</p>
+                        <h3 className="text-base sm:text-xl lg:text-2xl font-black italic uppercase tracking-tighter text-white truncate">{track.title}</h3>
+                        <div className="flex items-center gap-2 sm:gap-3 mt-1 sm:mt-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.15em] sm:tracking-[0.2em] text-zinc-500 flex-wrap">
+                          <span>{trackMods.length} mód.</span>
                           <span className="text-zinc-700">·</span>
                           <span>{trackLessonsAll.length} aulas</span>
-                          <span className="text-zinc-700">·</span>
-                          <span className="text-emerald-500/80">{filled} com vídeo</span>
+                          <span className="text-zinc-700 hidden sm:inline">·</span>
+                          <span className="text-emerald-500/80 hidden sm:inline">{filled} com vídeo</span>
                         </div>
                       </div>
                     </div>
-                    <Button size="sm" className="bg-white text-black hover:bg-gray-200 gap-2 font-black uppercase tracking-widest text-[10px] h-9 px-5 shrink-0" onClick={() => setSelectedTrack(track)}>
-                      <Play size={12} className="fill-current" /> Abrir trilha
+                    <Button size="sm" className="bg-white text-black hover:bg-gray-200 gap-1.5 sm:gap-2 font-black uppercase tracking-widest text-[10px] h-8 sm:h-9 px-3 sm:px-5 shrink-0" onClick={() => setSelectedTrack(track)}>
+                      <Play size={12} className="fill-current" /> <span className="hidden sm:inline">Abrir trilha</span><span className="sm:hidden">Abrir</span>
                     </Button>
                   </div>
 

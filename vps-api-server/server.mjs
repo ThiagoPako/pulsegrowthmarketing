@@ -3812,10 +3812,11 @@ async function resolveActiveCity(req, userId, userObj = null) {
   }
 }
 
-async function getScopedCityContext(req) {
+async function getScopedCityContext(req, tableName = null) {
   const { user } = await verifyUser(req);
-  const activeCity = await resolveActiveCity(req, user.id, user);
-  return { user, activeCity };
+  const scopeCity = tableName ? await tableHasCityColumn(tableName) : false;
+  const activeCity = scopeCity ? await resolveActiveCity(req, user.id, user) : null;
+  return { user, activeCity, scopeCity };
 }
 
 function cityScopedWhere(baseQuery, columnName = 'city', startIndex = 1, hasWhere = false) {

@@ -797,9 +797,15 @@ export default function CommercialProposal() {
         data = res.data;
       }
 
-      if (!data?.token) throw new Error('Proposta salva sem token de compartilhamento.');
+      let token = data?.token;
+      if (!token && editingProposalId) {
+        // Update response may omit the token; fetch it from the existing record
+        const refetch = await vpsDb.from('commercial_proposals').select('token').eq('id', editingProposalId).single();
+        token = refetch.data?.token;
+      }
+      if (!token) throw new Error('Proposta salva sem token de compartilhamento.');
 
-      const link = `${window.location.origin}/proposta/${data.token}`;
+      const link = `${window.location.origin}/proposta/${token}`;
       setShareLink(link);
       await copyToClipboard(link);
       toast.success(editingProposalId ? 'Proposta atualizada! Link copiado.' : 'Proposta salva! Link copiado para a área de transferência.');

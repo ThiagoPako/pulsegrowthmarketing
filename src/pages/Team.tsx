@@ -182,7 +182,7 @@ export default function Team() {
     setOpen(false);
     setForm({ name: '', email: '', password: '', role: 'videomaker', cities: ['minacu'], primaryCity: 'minacu' });
     setPartnerForm({ companyName: '', serviceFunction: '', fixedRate: 0, phone: '', notes: '' });
-    setTimeout(fetchMembers, 1000);
+    setTimeout(() => { fetchMembers(); fetchUserCities(); }, 1000);
   };
 
   const handleResetPassword = async () => {

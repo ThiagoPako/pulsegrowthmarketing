@@ -124,6 +124,15 @@ function copyToClipboard(text: string): Promise<void> {
   return Promise.resolve();
 }
 
+const PREDEFINED_SERVICES = [
+  { id: 'google_negocio', name: 'Google Meu Negócio', price: 500, icon: Target },
+  { id: 'landing_page', name: 'Criação de Landing Page', price: 1500, icon: Code },
+  { id: 'site_promocoes', name: 'Site com Sistema de Promoções', price: 3500, icon: Sparkles },
+  { id: 'gestao_trafego', name: 'Gestão de Tráfego Pago', price: 1200, icon: BarChart3 },
+  { id: 'social_media', name: 'Gestão de Redes Sociais', price: 1500, icon: Share2 },
+  { id: 'identidade_visual', name: 'Identidade Visual', price: 2000, icon: Palette },
+];
+
 export default function CommercialProposal() {
   const { user } = useAuth();
   const { users } = useApp();

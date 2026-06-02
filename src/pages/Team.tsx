@@ -166,7 +166,7 @@ export default function Team() {
 
     toast.success('Usuário cadastrado com sucesso!');
     setOpen(false);
-    setForm({ name: '', email: '', password: '', role: 'videomaker' });
+    setForm({ name: '', email: '', password: '', role: 'videomaker', cities: ['minacu'], primaryCity: 'minacu' });
     setPartnerForm({ companyName: '', serviceFunction: '', fixedRate: 0, phone: '', notes: '' });
     setTimeout(fetchMembers, 1000);
   };
@@ -295,7 +295,7 @@ export default function Team() {
         {currentUser?.role === 'admin' && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button onClick={() => { setForm({ name: '', email: '', password: '', role: 'videomaker' }); setPartnerForm({ companyName: '', serviceFunction: '', fixedRate: 0, phone: '', notes: '' }); }}>
+              <Button onClick={() => { setForm({ name: '', email: '', password: '', role: 'videomaker', cities: ['minacu'], primaryCity: 'minacu' }); setPartnerForm({ companyName: '', serviceFunction: '', fixedRate: 0, phone: '', notes: '' }); }}>
                 <Plus size={16} className="mr-2" /> Novo Usuário
               </Button>
             </DialogTrigger>

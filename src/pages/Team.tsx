@@ -12,11 +12,15 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, KeyRound, Users, Handshake, Trash2, Shield, Lock, Cake, CalendarDays, BarChart3, DollarSign } from 'lucide-react';
+import { Plus, KeyRound, Users, Handshake, Trash2, Shield, Lock, Cake, CalendarDays, BarChart3, DollarSign, MapPin } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import { useUserPermissions, AVAILABLE_MODULES } from '@/hooks/useUserPermissions';
 import BirthdayCountdown from '@/components/BirthdayCountdown';
 import TeamMemberStats from '@/components/TeamMemberStats';
+import { CITY_LABELS, type CityCode } from '@/contexts/CityContext';
+
+const ALL_CITIES: CityCode[] = ['minacu', 'uruacu'];
+const VPS_API_BASE = 'https://agenciapulse.tech/api';
 
 const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'fotografo', 'designer'];
 

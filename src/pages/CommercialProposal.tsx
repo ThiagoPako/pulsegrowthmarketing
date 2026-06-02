@@ -2468,7 +2468,47 @@ export default function CommercialProposal() {
 
           {/* All proposals list */}
           <Card>
-            <CardHeader><CardTitle className="text-base">Todas as Propostas</CardTitle></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+              <CardTitle className="text-base">Todas as Propostas</CardTitle>
+              <Button
+                size="sm"
+                variant="outline"
+                type="button"
+                onClick={async () => {
+                  let totalProposals = 0;
+                  let totalPhotos = 0;
+                  for (const p of savedProposals as any[]) {
+                    const data = p.proposal_data || {};
+                    const tm = Array.isArray(data.teamMembers) ? data.teamMembers : [];
+                    if (!tm.length) continue;
+                    let changed = false;
+                    const updatedTeam = tm.map((m: any) => {
+                      const u = users.find(x => (x.displayName || x.name) === m.name);
+                      if (u?.avatarUrl && u.avatarUrl !== m.avatarUrl) {
+                        changed = true;
+                        totalPhotos++;
+                        return { ...m, avatarUrl: u.avatarUrl };
+                      }
+                      return m;
+                    });
+                    if (changed) {
+                      totalProposals++;
+                      await vpsDb.from('commercial_proposals').update({
+                        proposal_data: { ...data, teamMembers: updatedTeam },
+                      }).eq('id', p.id);
+                    }
+                  }
+                  if (totalPhotos > 0) {
+                    toast.success(`${totalPhotos} foto(s) atualizada(s) em ${totalProposals} proposta(s).`);
+                    refetchProposals();
+                  } else {
+                    toast.info('Todas as propostas já estão com as fotos atualizadas.');
+                  }
+                }}
+              >
+                <Users className="h-3 w-3 mr-1" /> Atualizar fotos em todas
+              </Button>
+            </CardHeader>
             <CardContent>
             {savedProposals.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhuma proposta salva ainda.</p>

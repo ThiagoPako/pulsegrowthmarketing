@@ -63,8 +63,12 @@ export default function Team() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [partners, setPartners] = useState<PartnerInfo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'videomaker' as UserRole });
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'videomaker' as UserRole, cities: ['minacu'] as CityCode[], primaryCity: 'minacu' as CityCode });
   const [partnerForm, setPartnerForm] = useState({ companyName: '', serviceFunction: '', fixedRate: 0, phone: '', notes: '' });
+  const [userCities, setUserCities] = useState<Record<string, { cities: CityCode[]; primary: CityCode | null }>>({});
+  const [cityTarget, setCityTarget] = useState<TeamMember | null>(null);
+  const [cityEdit, setCityEdit] = useState<{ cities: CityCode[]; primary: CityCode }>({ cities: ['minacu'], primary: 'minacu' });
+  const [savingCities, setSavingCities] = useState(false);
 
   const [resetOpen, setResetOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState<TeamMember | null>(null);

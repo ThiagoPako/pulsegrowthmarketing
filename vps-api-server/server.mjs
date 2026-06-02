@@ -4067,15 +4067,17 @@ app.post('/api/db/query', async (req, res) => {
 // ─── Clients ────────────────────────────────────────────────
 app.get('/api/clients', async (req, res) => {
   try {
-    const { activeCity } = await getScopedCityContext(req);
-    const { rows } = await pool.query('SELECT * FROM clients WHERE city = $1 ORDER BY company_name', [activeCity]);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
+    const { rows } = scopeCity
+      ? await pool.query('SELECT * FROM clients WHERE city = $1 ORDER BY company_name', [activeCity])
+      : await pool.query('SELECT * FROM clients ORDER BY company_name');
     res.json(rows);
   } catch (e) { res.status(e.message === 'Unauthorized' ? 401 : 500).json({ error: e.message }); }
 });
 
 app.post('/api/clients', async (req, res) => {
   try {
-    const { activeCity } = await getScopedCityContext(req);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
     const c = req.body;
     const { rows } = await pool.query(
       `INSERT INTO clients (id, company_name, responsible_person, phone, color, logo_url, fixed_day, fixed_time,
@@ -4092,7 +4094,7 @@ app.post('/api/clients', async (req, res) => {
         c.logo_url || null, c.fixed_day || 'segunda', c.fixed_time || '09:00', c.videomaker_id || null,
         c.backup_time || '14:00', c.backup_day || 'terca', c.extra_day || 'quarta',
         c.extra_content_types || '{}', c.accepts_extra ?? false, c.extra_client_appears ?? false,
-        c.whatsapp || '', c.whatsapp_group || null, c.email || '', activeCity,
+        c.whatsapp || '', c.whatsapp_group || null, c.email || '', (scopeCity ? activeCity : (c.city || 'minacu')),
         c.weekly_reels ?? 0, c.weekly_creatives ?? 0, c.weekly_goal ?? 10, c.has_endomarketing ?? false,
         c.has_vehicle_flyer ?? false, c.weekly_stories ?? 0, c.presence_days ?? 1, c.monthly_recordings ?? 4,
         c.niche || '', c.client_login || '', c.drive_link || '', c.drive_fotos || '',
@@ -4109,7 +4111,7 @@ app.post('/api/clients', async (req, res) => {
 
 app.put('/api/clients/:id', async (req, res) => {
   try {
-    const { activeCity } = await getScopedCityContext(req);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
     const { id } = req.params;
     const c = req.body;
     // Build dynamic SET clause from provided fields
@@ -4135,8 +4137,12 @@ app.put('/api/clients/:id', async (req, res) => {
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     sets.push(`updated_at = NOW()`);
     vals.push(id);
-    vals.push(activeCity);
-    const { rows } = await pool.query(`UPDATE clients SET ${sets.join(', ')} WHERE id = $${idx} AND city = $${idx + 1} RETURNING *`, vals);
+    let whereSql = `WHERE id = $${idx}`;
+    if (scopeCity) {
+      vals.push(activeCity);
+      whereSql += ` AND city = $${idx + 1}`;
+    }
+    const { rows } = await pool.query(`UPDATE clients SET ${sets.join(', ')} ${whereSql} RETURNING *`, vals);
     res.json(rows[0]);
   } catch (e) { console.error('PUT /api/clients error:', e); res.status(500).json({ error: e.message }); }
 });

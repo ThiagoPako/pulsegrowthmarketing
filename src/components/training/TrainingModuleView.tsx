@@ -455,7 +455,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
               {/* Title + actions row */}
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
-                  <h2 className="text-2xl lg:text-3xl font-black tracking-tighter uppercase italic leading-tight truncate">{currentVideo?.title || selectedTrack.title}</h2>
+                  <h2 className="text-lg sm:text-2xl lg:text-3xl font-black tracking-tighter uppercase italic leading-tight truncate">{currentVideo?.title || selectedTrack.title}</h2>
                   <div className="flex items-center gap-2 mt-1.5 text-[10px] font-bold uppercase tracking-[0.2em] flex-wrap">
                     <span className="text-emerald-500">2026</span>
                     <Badge variant="outline" className="text-white/80 border-white/15 px-1.5 py-0 text-[9px] rounded-sm h-4">16+</Badge>

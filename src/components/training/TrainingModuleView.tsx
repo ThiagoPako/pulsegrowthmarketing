@@ -302,7 +302,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
           </div>
 
           {/* ── CATÁLOGO COMPLETO ── */}
-          <div id="trilhas-catalogo" className="px-6 lg:px-12 pt-10 space-y-14">
+          <div id="trilhas-catalogo" className="px-3 sm:px-6 lg:px-12 pt-6 sm:pt-10 space-y-8 sm:space-y-14">
             <div className="flex items-end justify-between gap-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.35em] text-red-600 mb-1">Catálogo</p>

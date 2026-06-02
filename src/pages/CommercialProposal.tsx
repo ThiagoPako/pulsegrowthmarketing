@@ -126,17 +126,17 @@ function copyToClipboard(text: string): Promise<void> {
 
 // Serviços fixos inclusos no contrato mensal (sem cobrança extra)
 const INCLUDED_SERVICES = [
-  { id: 'social_media', name: 'Social Media', icon: Share2 },
-  { id: 'campanhas', name: 'Criação de Campanhas de Marketing', icon: Megaphone },
-  { id: 'gestao_projetos', name: 'Gestão de Projetos', icon: ListChecks },
-  { id: 'roteiros', name: 'Roteiros', icon: FileText },
-  { id: 'captacao', name: 'Captação', icon: Camera },
-  { id: 'edicao', name: 'Edição Profissional', icon: Scissors },
-  { id: 'designer', name: 'Designer', icon: Palette },
-  { id: 'meta_ads', name: 'Gestão de Tráfego Meta Ads', icon: BarChart3 },
-  { id: 'google_ads', name: 'Gestão de Tráfego Google Ads', icon: Target },
-  { id: 'portal_cliente', name: 'Portal do Cliente', icon: Monitor },
-  { id: 'reuniao_mensal', name: 'Reunião Mensal', icon: CalendarDays },
+  { id: 'social_media', name: 'Social Media', icon: Share2, desc: 'Planejamento editorial mensal, gestão estratégica das redes, copywriting persuasivo e publicações otimizadas para o algoritmo de cada plataforma.' },
+  { id: 'campanhas', name: 'Criação de Campanhas de Marketing', icon: Megaphone, desc: 'Campanhas sazonais e promocionais desenhadas sob medida para gerar autoridade, engajamento e conversão para o seu negócio.' },
+  { id: 'gestao_projetos', name: 'Gestão de Projetos', icon: ListChecks, desc: 'Acompanhamento próximo com gestor dedicado, prazos controlados, fluxo de aprovação organizado e relatórios periódicos de resultado.' },
+  { id: 'roteiros', name: 'Roteiros', icon: FileText, desc: 'Roteiros estratégicos baseados em copywriting, gatilhos mentais e funil de vendas — pensados para o público-alvo do seu segmento.' },
+  { id: 'captacao', name: 'Captação', icon: Camera, desc: 'Gravações profissionais com videomaker dedicado, equipamentos de cinema, iluminação e direção de cena no local do cliente.' },
+  { id: 'edicao', name: 'Edição Profissional', icon: Scissors, desc: 'Edição premium com tratamento de cor, motion graphics, legendas dinâmicas, sound design e identidade visual da marca.' },
+  { id: 'designer', name: 'Designer', icon: Palette, desc: 'Artes estáticas, criativos para feed e stories, carrosséis e materiais gráficos seguindo a identidade visual da marca.' },
+  { id: 'meta_ads', name: 'Gestão de Tráfego Meta Ads', icon: BarChart3, desc: 'Gestão especializada de campanhas no Facebook e Instagram Ads: segmentação avançada, criativos testados, otimização diária e foco em ROAS.' },
+  { id: 'google_ads', name: 'Gestão de Tráfego Google Ads', icon: Target, desc: 'Campanhas de Pesquisa, Display, YouTube e Performance Max — palavras-chave estratégicas, lances inteligentes e foco em lead qualificado.' },
+  { id: 'portal_cliente', name: 'Portal do Cliente', icon: Monitor, desc: 'Acesso exclusivo 24h para acompanhar agenda de gravações, aprovar conteúdos, ver entregas e métricas de performance em tempo real.' },
+  { id: 'reuniao_mensal', name: 'Reunião Mensal', icon: CalendarDays, desc: 'Reunião estratégica mensal de alinhamento — análise de resultados, ajustes de rota e planejamento das próximas ações.' },
 ];
 
 // Adicionais opcionais cobrados à parte (fora do valor fixo mensal)
@@ -1707,35 +1707,64 @@ export default function CommercialProposal() {
     const discountedVal = val * (1 - customDiscount / 100);
     const installs = parseInt(customInstallments) || 1;
     const installmentVal = discountedVal / installs;
-    const services: { icon: any; value: string | number; label: string }[] = [];
-    if (parseInt(customVideos) > 0) services.push({ icon: Film, value: customVideos, label: 'Vídeos/mês' });
-    if (parseInt(customStories) > 0) services.push({ icon: Camera, value: customStories, label: 'Stories/mês' });
-    if (parseInt(customArts) > 0) services.push({ icon: Palette, value: customArts, label: 'Artes/mês' });
-    if (parseInt(customRecordings) > 0) services.push({ icon: Film, value: customRecordings, label: 'Captações/mês' });
-    if (parseInt(customEventCoverage) > 0) services.push({ icon: Camera, value: customEventCoverage, label: 'Coberturas/mês' });
-    if (customSocialMedia) services.push({ icon: Share2, value: '✓', label: 'Social Media' });
-    if (customTrafficMgmt) services.push({ icon: BarChart3, value: '✓', label: 'Gestão de Tráfego' });
+    const legacyExtraIds: string[] = [];
+    if (customSocialMedia && !selectedIncludedServices.includes('social_media')) legacyExtraIds.push('social_media');
+    if (customTrafficMgmt && !selectedIncludedServices.includes('meta_ads') && !selectedIncludedServices.includes('google_ads')) legacyExtraIds.push('meta_ads');
+    const allIncludedIds = [...selectedIncludedServices, ...legacyExtraIds];
+    const selectedIncluded = INCLUDED_SERVICES.filter(s => allIncludedIds.includes(s.id));
+
+    const extraStats: { icon: any; value: string | number; label: string }[] = [];
+    if (parseInt(customVideos) > 0) extraStats.push({ icon: Film, value: customVideos, label: 'Vídeos/mês' });
+    if (parseInt(customStories) > 0) extraStats.push({ icon: Camera, value: customStories, label: 'Stories/mês' });
+    if (parseInt(customArts) > 0) extraStats.push({ icon: Palette, value: customArts, label: 'Artes/mês' });
+    if (parseInt(customRecordings) > 0) extraStats.push({ icon: Film, value: customRecordings, label: 'Captações/mês' });
+    if (parseInt(customEventCoverage) > 0) extraStats.push({ icon: Camera, value: customEventCoverage, label: 'Coberturas/mês' });
 
     return (
       <>
-        {services.length > 0 && (
+        {(selectedIncluded.length > 0 || extraStats.length > 0) && (
           <div data-pdf-section className="p-8 md:p-12">
             <h2 className="text-xl font-bold text-gray-800 mb-1 flex items-center gap-2">
-              <Target className="h-5 w-5" style={{ color: 'hsl(16 82% 51%)' }} /> Serviços Inclusos
+              <Target className="h-5 w-5" style={{ color: 'hsl(16 82% 51%)' }} /> Serviços Inclusos no Contrato
             </h2>
-            <p className="text-sm text-gray-500 mb-6">Proposta personalizada para sua empresa</p>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {services.map((s, i) => {
-                const Icon = s.icon;
-                return (
-                  <div key={i} className="border rounded-lg p-3 text-center">
-                    <Icon className="h-5 w-5 mx-auto mb-1" style={{ color: 'hsl(16 82% 51%)' }} />
-                    <p className="text-2xl font-bold text-gray-800">{s.value}</p>
-                    <p className="text-xs text-gray-500">{s.label}</p>
-                  </div>
-                );
-              })}
-            </div>
+            <p className="text-sm text-gray-500 mb-6">Tudo isto já está incluso no valor fixo mensal do contrato</p>
+
+            {selectedIncluded.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                {selectedIncluded.map((s) => {
+                  const Icon = s.icon;
+                  return (
+                    <div key={s.id} className="flex items-start gap-3 p-4 rounded-xl border-2 bg-emerald-50/60 border-emerald-200">
+                      <div className="p-2 rounded-lg bg-emerald-100 shrink-0">
+                        <Icon className="h-5 w-5 text-emerald-700" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-bold text-emerald-950 leading-tight">{s.name}</span>
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                        </div>
+                        <p className="text-xs text-gray-600 leading-relaxed">{s.desc}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {extraStats.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {extraStats.map((s, i) => {
+                  const Icon = s.icon;
+                  return (
+                    <div key={i} className="border rounded-lg p-3 text-center bg-white">
+                      <Icon className="h-5 w-5 mx-auto mb-1" style={{ color: 'hsl(16 82% 51%)' }} />
+                      <p className="text-2xl font-bold text-gray-800">{s.value}</p>
+                      <p className="text-xs text-gray-500">{s.label}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
         {customDescription && (

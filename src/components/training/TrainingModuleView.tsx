@@ -475,8 +475,8 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
               </div>
 
               {/* Description */}
-              <div className="bg-zinc-900/40 border border-white/5 rounded-xl p-4">
-                <p className="text-sm text-zinc-300 leading-relaxed">{currentVideo?.description || selectedTrack.description}</p>
+              <div className="bg-zinc-900/40 border border-white/5 rounded-xl p-3 sm:p-4">
+                <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">{currentVideo?.description || selectedTrack.description}</p>
               </div>
 
               {/* Progress strip */}

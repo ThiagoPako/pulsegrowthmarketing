@@ -563,6 +563,9 @@ export default function CommercialProposal() {
         paymentMethod: customPaymentMethod,
         installments: parseInt(customInstallments) || 1,
         recordings: parseInt(customRecordings) || 0,
+        contractDuration,
+        selectedBaseServices,
+        additionalServices
       } : {};
 
       const cronogramaSumValue = cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0);

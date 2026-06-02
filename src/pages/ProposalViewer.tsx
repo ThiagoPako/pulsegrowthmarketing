@@ -657,7 +657,7 @@ export default function ProposalViewer() {
                   <div className="text-[10px] text-gray-500">12x {fmt(totalBeforeDiscount * 0.95)}</div>
                 </div>
               </div>
-
+              {adicionaisTotal > 0 && (
                 <div className="mt-3 p-3 rounded-lg bg-gray-50 border border-gray-200 text-xs">
                   <div className="flex justify-between text-gray-600 italic">
                     <span>+ Adicionais opcionais (à parte)</span>

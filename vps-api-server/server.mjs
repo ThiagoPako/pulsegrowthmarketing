@@ -5638,6 +5638,24 @@ app.post('/api/quick-chat', (req, res) => {
 const TRAINING_VIDEO_ROOT = process.env.TRAINING_VIDEO_ROOT || '/var/www/html/uploads/training-videos';
 const TRAINING_STREAM_TTL = 60 * 10; // 10 min
 
+function getTrainingStreamContentType(filePathOrUrl = '') {
+  return getPortalMediaContentType(filePathOrUrl);
+}
+
+async function ensureTrainingPlayableSource(sourcePath, lessonId) {
+  const ext = path.extname(sourcePath || '').toLowerCase();
+  if (ext !== '.mov') return { filePath: sourcePath, contentType: getTrainingStreamContentType(sourcePath) };
+
+  const cacheKey = crypto.createHash('md5').update(`${lessonId}:${sourcePath}`).digest('hex');
+  const cachedFile = path.join(TRANSCODE_CACHE_DIR, `training_${cacheKey}.mp4`);
+
+  if (!fs.existsSync(cachedFile)) {
+    await warmPortal480pCache(sourcePath, cachedFile);
+  }
+
+  return { filePath: cachedFile, contentType: 'video/mp4' };
+}
+
 function resolveTrainingFile(videoPathOrUrl) {
   if (!videoPathOrUrl) return null;
   let rel = String(videoPathOrUrl).trim();
@@ -5705,8 +5723,9 @@ app.get('/api/training/stream/:lessonId', async (req, res) => {
       [lessonId],
     );
     if (!rows.length) return res.status(404).end();
-    const filePath = resolveTrainingFile(rows[0].video_path || rows[0].video_url);
-    if (!filePath || !fs.existsSync(filePath)) return res.status(404).end();
+    const rawFilePath = resolveTrainingFile(rows[0].video_path || rows[0].video_url);
+    if (!rawFilePath || !fs.existsSync(rawFilePath)) return res.status(404).end();
+    const { filePath, contentType } = await ensureTrainingPlayableSource(rawFilePath, lessonId);
 
     const stat = fs.statSync(filePath);
     const total = stat.size;
@@ -5714,7 +5733,7 @@ app.get('/api/training/stream/:lessonId', async (req, res) => {
 
     // Anti-download / anti-cache headers
     const baseHeaders = {
-      'Content-Type': 'video/mp4',
+      'Content-Type': contentType,
       'Content-Disposition': 'inline',
       'Cache-Control': 'no-store, no-cache, must-revalidate, private',
       Pragma: 'no-cache',

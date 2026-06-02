@@ -979,14 +979,13 @@ export default function CommercialProposal() {
   );
 
   const renderCustomForm = () => {
-    const baseTotal = PREDEFINED_SERVICES
+    const adicionaisPredefTotal = ADDITIONAL_SERVICES
       .filter(s => selectedBaseServices.includes(s.id))
       .reduce((sum, s) => sum + s.price, 0);
-    
+
     const additionalTotal = additionalServices.reduce((sum, s) => sum + s.price, 0);
-    const monthlyTotalBeforeDiscount = baseTotal + (parseFloat(customMonthlyValue) || 0);
-
-
+    const adicionaisTotal = adicionaisPredefTotal + additionalTotal;
+    const monthlyTotalBeforeDiscount = parseFloat(customMonthlyValue) || 0;
 
     return (
       <>
@@ -1020,10 +1019,45 @@ export default function CommercialProposal() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-base">Serviços do Pacote</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-base">Serviços Inclusos no Contrato</CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">Serviços fixos inclusos no valor mensal do contrato</p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {INCLUDED_SERVICES.map(service => {
+                const Icon = service.icon;
+                const isSelected = selectedIncludedServices.includes(service.id);
+                return (
+                  <Button
+                    key={service.id}
+                    type="button"
+                    variant={isSelected ? "default" : "outline"}
+                    className={cn("h-auto py-3 px-2 flex flex-col items-center gap-1 text-center", isSelected && "bg-emerald-600 hover:bg-emerald-700 text-white")}
+                    onClick={() => {
+                      setSelectedIncludedServices(prev =>
+                        isSelected ? prev.filter(id => id !== service.id) : [...prev, service.id]
+                      );
+                    }}
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span className="text-[11px] font-bold leading-tight">{service.name}</span>
+                    {isSelected && <CheckCircle2 className="h-3 w-3" />}
+                  </Button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Adicionais</CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">Serviços opcionais cobrados à parte, fora do valor fixo mensal do contrato</p>
+          </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-2">
-              {PREDEFINED_SERVICES.map(service => {
+              {ADDITIONAL_SERVICES.map(service => {
                 const Icon = service.icon;
                 const isSelected = selectedBaseServices.includes(service.id);
                 return (
@@ -1042,11 +1076,12 @@ export default function CommercialProposal() {
                   >
                     <Icon className="h-5 w-5" />
                     <span className="text-xs font-bold leading-tight">{service.name}</span>
-                    <span className="text-[10px] opacity-70">{fmt(service.price)}</span>
+                    <span className="text-[10px] opacity-70">{fmt(service.price)} (à parte)</span>
                   </Button>
                 );
               })}
             </div>
+
             
             <Separator />
             

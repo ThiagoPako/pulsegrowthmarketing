@@ -3812,6 +3812,17 @@ async function resolveActiveCity(req, userId, userObj = null) {
   }
 }
 
+async function getScopedCityContext(req) {
+  const { user } = await verifyUser(req);
+  const activeCity = await resolveActiveCity(req, user.id, user);
+  return { user, activeCity };
+}
+
+function cityScopedWhere(baseQuery, columnName = 'city', startIndex = 1, hasWhere = false) {
+  const clause = `${columnName} = $${startIndex}`;
+  return `${baseQuery}${hasWhere ? ' AND ' : ' WHERE '}${clause}`;
+}
+
 
 function sanitizeIdentifier(name) {
   return name.replace(/[^a-zA-Z0-9_]/g, '');

@@ -5662,6 +5662,7 @@ function resolveTrainingFile(videoPathOrUrl) {
   // Strip full URLs
   rel = rel.replace(/^https?:\/\/[^/]+/, '');
   rel = rel.replace(/^\/+/, '');
+  rel = rel.replace(/^uploads\/training-videos\//, '');
   rel = rel.replace(/^uploads\//, '');
   rel = rel.replace(/^training-videos\//, '');
   // Prevent traversal

@@ -2838,7 +2838,16 @@ export default function CommercialProposal() {
                 <p className="text-sm text-gray-500 mb-4">Profissionais envolvidos no seu projeto</p>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {teamMembers.map(m => (
-                    <div key={m.id} className="border rounded-lg p-3 text-center">
+                    <div key={m.id} className="relative border rounded-lg p-3 text-center group">
+                      <button
+                        type="button"
+                        onClick={() => setTeamMembers(prev => prev.filter(t => t.id !== m.id))}
+                        data-html2canvas-ignore="true"
+                        title="Remover da equipe"
+                        className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 shadow"
+                      >
+                        ×
+                      </button>
                       {m.avatarUrl ? (
                         <img src={m.avatarUrl} alt={m.name} className="w-12 h-12 rounded-full mx-auto mb-2 object-cover border-2" style={{ borderColor: 'hsl(16 82% 80%)' }} />
                       ) : (

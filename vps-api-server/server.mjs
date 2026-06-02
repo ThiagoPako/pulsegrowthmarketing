@@ -505,12 +505,22 @@ app.get('/api/auth/me', async (req, res) => {
 app.get('/api/me/cities', async (req, res) => {
   try {
     const { user } = await verifyUser(req);
+
+    // Admins sempre têm acesso a todas as cidades, independente de user_cities
+    if (await isAdminUser(user)) {
+      const { rows: adminRows } = await pool.query(
+        'SELECT city, is_primary FROM user_cities WHERE user_id = $1',
+        [user.id]
+      );
+      const primary = adminRows.find(r => r.is_primary)?.city || 'minacu';
+      return res.json({ cities: ['minacu', 'uruacu'], primary });
+    }
+
     const { rows } = await pool.query(
       'SELECT city, is_primary FROM user_cities WHERE user_id = $1 ORDER BY is_primary DESC, city ASC',
       [user.id]
     );
     if (rows.length === 0) {
-      // Fallback: usuário sem registro recebe minacu como default
       return res.json({ cities: ['minacu'], primary: 'minacu' });
     }
     const cities = rows.map(r => r.city);
@@ -520,6 +530,7 @@ app.get('/api/me/cities', async (req, res) => {
     res.status(401).json({ error: 'Não autenticado' });
   }
 });
+
 
 // ─── Change password ────────────────────────────────────────
 app.post('/api/auth/change-password', async (req, res) => {

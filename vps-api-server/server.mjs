@@ -4077,7 +4077,7 @@ app.get('/api/clients', async (req, res) => {
 
 app.post('/api/clients', async (req, res) => {
   try {
-    const { activeCity } = await getScopedCityContext(req);
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
     const c = req.body;
     const { rows } = await pool.query(
       `INSERT INTO clients (id, company_name, responsible_person, phone, color, logo_url, fixed_day, fixed_time,

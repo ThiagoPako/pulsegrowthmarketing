@@ -239,18 +239,31 @@ export default function TrainingModuleAdmin() {
       if (!response.ok) throw new Error(result.error || 'Erro no upload');
 
       const videoUrl = result.url;
+      const videoPath = result.path || videoUrl;
+
+      // Validação real: confirma que o arquivo existe no caminho esperado antes de liberar
+      const verifyRes = await fetch(
+        `https://agenciapulse.tech/api/training/verify?path=${encodeURIComponent(videoPath)}`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      const verifyJson = await verifyRes.json().catch(() => ({}));
+      if (!verifyRes.ok || !verifyJson?.ok) {
+        throw new Error('Upload concluído mas arquivo não encontrado no servidor. Tente novamente.');
+      }
+
       const { error: updateError } = await supabase
         .from('training_lessons')
-        .update({ video_url: videoUrl, video_path: result.path || videoUrl } as any)
+        .update({ video_url: videoUrl, video_path: videoPath } as any)
         .eq('id', lessonId);
 
       if (updateError) throw updateError;
 
       setLessons(prev => prev.map(l => 
-        l.id === lessonId ? { ...l, video_url: videoUrl, video_path: result.path || videoUrl } : l
+        l.id === lessonId ? { ...l, video_url: videoUrl, video_path: videoPath } : l
       ));
 
-      toast.success('Vídeo enviado!');
+      toast.success('Vídeo enviado e validado!');
+
     } catch (error: any) {
       console.error('Upload error:', error);
       toast.error('Erro no upload: ' + error.message);

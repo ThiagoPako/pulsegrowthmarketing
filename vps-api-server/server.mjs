@@ -5660,11 +5660,18 @@ async function ensureTrainingPlayableSource(sourcePath, lessonId) {
   const cacheKey = crypto.createHash('md5').update(`${lessonId}:${sourcePath}`).digest('hex');
   const cachedFile = path.join(TRANSCODE_CACHE_DIR, `training_${cacheKey}.mp4`);
 
-  if (!fs.existsSync(cachedFile)) {
-    await warmPortal480pCache(sourcePath, cachedFile);
+  if (fs.existsSync(cachedFile)) {
+    return { filePath: cachedFile, contentType: 'video/mp4' };
   }
 
-  return { filePath: cachedFile, contentType: 'video/mp4' };
+  // Kick off transcode in the background — do NOT block the player. Most .mov files
+  // from iPhone/macOS are H.264/AAC and browsers will play them when served as
+  // video/mp4 with byte-range support. Next play will hit the cached MP4.
+  warmPortal480pCache(sourcePath, cachedFile).catch((error) => {
+    console.error('[training] background transcode error:', error?.message || error);
+  });
+
+  return { filePath: sourcePath, contentType: 'video/mp4' };
 }
 
 function resolveTrainingFile(videoPathOrUrl) {

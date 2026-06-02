@@ -145,6 +145,8 @@ const ADDITIONAL_SERVICES = [
   { id: 'landing_page', name: 'Criação de Landing Page', price: 1500, icon: Code },
   { id: 'site_promocoes', name: 'Site com Sistema de Promoções', price: 3500, icon: Sparkles },
   { id: 'identidade_visual', name: 'Identidade Visual', price: 2000, icon: Palette },
+  { id: 'google_ads_setup', name: 'Implementação de Conta Google Ads', price: 800, icon: Target },
+  { id: 'meta_ads_setup', name: 'Implementação de Conta Meta Ads', price: 800, icon: Target },
 ];
 
 export default function CommercialProposal() {

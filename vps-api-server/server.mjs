@@ -4178,7 +4178,11 @@ app.put('/api/clients/:id', async (req, res) => {
     }
     const { rows } = await pool.query(`UPDATE clients SET ${sets.join(', ')} ${whereSql} RETURNING *`, vals);
     res.json(rows[0]);
-  } catch (e) { console.error('PUT /api/clients error:', e); res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('PUT /api/clients error:', e);
+    const status = e?.statusCode === 400 ? 400 : 500;
+    res.status(status).json({ error: e.message });
+  }
 });
 
 app.delete('/api/clients/:id', async (req, res) => {

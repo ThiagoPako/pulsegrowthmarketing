@@ -5734,7 +5734,43 @@ function getTrainingAuthTokenFromHeader(req) {
   return authHeader.replace('Bearer ', '').trim() || null;
 }
 
-// GET /api/training/verify?path=...  → confirms uploaded file exists on disk
+// Probe a media file with ffprobe (best-effort). Returns { ok, durationSec?, hasVideoStream? }
+async function probeTrainingMedia(absPath) {
+  return new Promise((resolve) => {
+    try {
+      const proc = spawn('ffprobe', [
+        '-v', 'error',
+        '-print_format', 'json',
+        '-show_streams',
+        '-show_format',
+        absPath,
+      ]);
+      let out = '';
+      let err = '';
+      const timer = setTimeout(() => { try { proc.kill('SIGKILL'); } catch {} resolve({ ok: false, error: 'ffprobe timeout' }); }, 5000);
+      proc.stdout.on('data', (c) => { out += c.toString(); });
+      proc.stderr.on('data', (c) => { err += c.toString(); });
+      proc.on('error', () => { clearTimeout(timer); resolve({ ok: true, skipped: true }); });
+      proc.on('close', (code) => {
+        clearTimeout(timer);
+        if (code !== 0) return resolve({ ok: false, error: err || `ffprobe exit ${code}` });
+        try {
+          const info = JSON.parse(out);
+          const streams = Array.isArray(info.streams) ? info.streams : [];
+          const hasVideoStream = streams.some((s) => s.codec_type === 'video');
+          const durationSec = Number(info?.format?.duration || 0) || null;
+          resolve({ ok: hasVideoStream, hasVideoStream, durationSec });
+        } catch {
+          resolve({ ok: false, error: 'invalid ffprobe output' });
+        }
+      });
+    } catch {
+      resolve({ ok: true, skipped: true });
+    }
+  });
+}
+
+// GET /api/training/verify?path=...  → confirms uploaded file exists on disk and is a valid media file
 app.get('/api/training/verify', async (req, res) => {
   try {
     await verifyUser(req);
@@ -5753,7 +5789,23 @@ app.get('/api/training/verify', async (req, res) => {
     if (!stat.isFile() || stat.size === 0) {
       return res.status(404).json({ ok: false, error: 'invalid file' });
     }
-    res.json({ ok: true, size: stat.size, path: abs });
+    if (stat.size < 1024) {
+      return res.status(409).json({ ok: false, error: 'file too small / still writing', size: stat.size });
+    }
+
+    const probe = await probeTrainingMedia(abs);
+    if (!probe.ok && !probe.skipped) {
+      return res.status(415).json({ ok: false, error: probe.error || 'unplayable media', size: stat.size });
+    }
+
+    res.json({
+      ok: true,
+      size: stat.size,
+      path: abs,
+      durationSec: probe.durationSec ?? null,
+      hasVideoStream: probe.hasVideoStream ?? null,
+      probed: !probe.skipped,
+    });
   } catch (err) {
     res.status(401).json({ ok: false, error: err.message || 'Unauthorized' });
   }

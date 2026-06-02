@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { supabase as vpsDb } from '@/lib/vpsDb';
 import { useAuth } from '@/hooks/useAuth';

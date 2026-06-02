@@ -2730,7 +2730,7 @@ app.post('/api/portal-recordings', async (req, res) => {
 });
 
 // ─── 7. Portal Media Proxy (streaming-first + 480p warmup) ───────
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';

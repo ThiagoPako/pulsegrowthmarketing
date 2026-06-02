@@ -1773,40 +1773,118 @@ export default function CommercialProposal() {
             <ScopeDescription text={customDescription} />
           </div>
         )}
-        <div data-pdf-section className="px-8 md:px-12 pb-8">
-          <h2 className="text-xl font-bold text-gray-800 mb-6">Investimento</h2>
-          <div className="border-2 rounded-xl p-6" style={{ borderColor: 'hsl(16 82% 51%)' }}>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Valor total</span>
-                <span className="text-xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val)}</span>
-              </div>
-              {customDiscount > 0 && (
-                <>
-                  <div className="flex justify-between items-center text-green-600">
-                    <span>Desconto ({customDiscount}%)</span>
-                    <span className="font-bold">-{fmt(val - discountedVal)}</span>
+        {(() => {
+          const selectedAdicionaisPredef = ADDITIONAL_SERVICES.filter(s => selectedBaseServices.includes(s.id));
+          const adicionaisPredefTotal = selectedAdicionaisPredef.reduce((sum, s) => sum + (s.price || 0), 0);
+          const additionalTotal = additionalServices.reduce((sum, s) => sum + (s.price || 0), 0);
+          const adicionaisTotal = adicionaisPredefTotal + additionalTotal;
+          const hasAdicionais = selectedAdicionaisPredef.length > 0 || additionalServices.length > 0;
+
+          return (
+            <>
+              {hasAdicionais && (
+                <div data-pdf-section className="px-8 md:px-12 pb-6">
+                  <div className="p-5 rounded-2xl border-2 border-dashed" style={{ borderColor: 'hsl(16 82% 51%)' }}>
+                    <h3 className="text-sm font-bold text-gray-800 mb-1 uppercase tracking-wider flex items-center gap-2">
+                      <Sparkles className="h-4 w-4" style={{ color: 'hsl(16 82% 51%)' }} /> Adicionais Opcionais
+                    </h3>
+                    <p className="text-xs text-gray-500 mb-3">Serviços extras cobrados à parte, fora do valor fixo mensal do contrato</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {selectedAdicionaisPredef.map((s, i) => {
+                        const Icon = s.icon;
+                        return (
+                          <div key={`p-${i}`} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
+                            <div className="flex items-center gap-2">
+                              <Icon className="h-4 w-4 text-gray-600" />
+                              <span className="text-sm font-medium text-gray-700">{s.name}</span>
+                            </div>
+                            <span className="text-sm font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(s.price)}</span>
+                          </div>
+                        );
+                      })}
+                      {additionalServices.map((s, i) => (
+                        <div key={`a-${i}`} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
+                          <span className="text-sm font-medium text-gray-700">{s.name}</span>
+                          <span className="text-sm font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(s.price)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-between items-center mt-3 pt-3 border-t text-xs text-gray-500">
+                      <span>Total adicionais (à parte)</span>
+                      <span className="font-bold">{fmt(adicionaisTotal)}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center border-t pt-2">
-                    <span className="font-bold text-gray-800">Total</span>
-                    <span className="text-2xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(discountedVal)}</span>
-                  </div>
-                </>
-              )}
-              <Separator />
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Forma de pagamento</span>
-                <span className="font-medium">{PAYMENT_METHODS.find(m => m.value === customPaymentMethod)?.label}</span>
-              </div>
-              {installs > 1 && (
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">{customInstallments}x de</span>
-                  <span className="font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(installmentVal)}</span>
                 </div>
               )}
-            </div>
-          </div>
-        </div>
+
+              <div data-pdf-section className="px-8 md:px-12 pb-8">
+                <h2 className="text-xl font-bold text-gray-800 mb-4">Investimento Mensal</h2>
+                <div className="border-2 rounded-2xl p-6" style={{ borderColor: 'hsl(16 82% 51%)' }}>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600 text-sm">Valor do Contrato</span>
+                      <span className="text-xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val)}<span className="text-xs font-normal text-gray-500">/mês</span></span>
+                    </div>
+                    {customDiscount > 0 && (
+                      <>
+                        <div className="flex justify-between items-center text-green-600 text-sm">
+                          <span>Desconto {contractDuration === 'anual' ? '(Fidelidade Anual)' : `(${customDiscount}%)`}</span>
+                          <span className="font-bold">-{fmt(val - discountedVal)}</span>
+                        </div>
+                        <div className="flex justify-between items-center border-t pt-2">
+                          <span className="font-bold text-gray-800">Total mensal</span>
+                          <span className="text-2xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(discountedVal)}<span className="text-xs font-normal text-gray-500">/mês</span></span>
+                        </div>
+                      </>
+                    )}
+                    <Separator />
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-600">Duração do Contrato</span>
+                      <span className="font-bold uppercase tracking-tight" style={{ color: 'hsl(16 82% 51%)' }}>
+                        {contractDuration === 'anual' ? 'Anual' : 'Semestral'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-600">Forma de pagamento</span>
+                      <span className="font-medium">{PAYMENT_METHODS.find(m => m.value === customPaymentMethod)?.label}</span>
+                    </div>
+                    {installs > 1 && (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-600">{customInstallments}x de</span>
+                        <span className="font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(installmentVal)}</span>
+                      </div>
+                    )}
+
+                    <Separator />
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div className="rounded-xl border-2 p-3 text-center" style={{ borderColor: contractDuration === 'semestral' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Semestral</div>
+                        <div className="text-lg font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val * 6)}</div>
+                        <div className="text-[10px] text-gray-500">6x {fmt(val)}/mês</div>
+                      </div>
+                      <div className="rounded-xl border-2 p-3 text-center relative" style={{ borderColor: contractDuration === 'anual' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
+                        <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">5% OFF</div>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Anual</div>
+                        <div className="text-lg font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val * 12 * 0.95)}</div>
+                        <div className="text-[10px] text-gray-500">12x {fmt(val * 0.95)}/mês</div>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-gray-500 text-center pt-1">O valor é pago mensalmente — totais acima são apenas referência do contrato.</p>
+
+                    {adicionaisTotal > 0 && (
+                      <div className="mt-3 p-3 rounded-lg bg-gray-50 border border-gray-200 text-xs">
+                        <div className="flex justify-between text-gray-600 italic">
+                          <span>+ Adicionais opcionais (à parte)</span>
+                          <span className="font-bold">{fmt(adicionaisTotal)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          );
+        })()}
       </>
     );
   };

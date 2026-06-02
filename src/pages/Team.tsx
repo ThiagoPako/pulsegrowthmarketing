@@ -182,7 +182,7 @@ export default function Team() {
     if (cityEdit.cities.length === 0) { toast.error('Selecione ao menos uma cidade'); return; }
     setSavingCities(true);
     try {
-      const token = localStorage.getItem('pulse_jwt');
+      const token = await getAuthToken();
       const res = await fetch(`${VPS_API_BASE}/admin/user-cities`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },

@@ -5778,11 +5778,6 @@ app.get('/api/training/stream/:lessonId', async (req, res) => {
       return res.status(403).end();
     }
 
-    const requestAuthToken = getTrainingAuthTokenFromHeader(req);
-    if (!requestAuthToken || decoded.authToken !== requestAuthToken) {
-      return res.status(401).end();
-    }
-
     const { rows } = await pool.query(
       'SELECT video_path, video_url FROM training_lessons WHERE id = $1 LIMIT 1',
       [lessonId],

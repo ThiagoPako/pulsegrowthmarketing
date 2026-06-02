@@ -480,9 +480,9 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                       allowFullScreen
                       key={currentVideo.video_url}
                     />
-                  ) : (
+                  ) : signedVideoUrl ? (
                     <video
-                      src={currentVideo.video_url}
+                      src={signedVideoUrl}
                       className="w-full h-full bg-black"
                       controls
                       controlsList="nodownload noremoteplayback noplaybackrate"
@@ -490,8 +490,12 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                       onContextMenu={(e) => e.preventDefault()}
                       playsInline
                       preload="metadata"
-                      key={currentVideo.video_url}
+                      key={signedVideoUrl}
                     />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-white/60 text-xs font-black uppercase tracking-[0.3em]">
+                      {videoLoading ? <><Loader2 className="animate-spin mr-2" size={16} /> Liberando vídeo…</> : 'Aguardando autorização…'}
+                    </div>
                   )
                 ) : (
                   <div className="w-full h-full relative">

@@ -504,6 +504,7 @@ app.get('/api/auth/me', async (req, res) => {
 // ─── Multi-city: cidades do usuário logado ─────────────────
 app.get('/api/me/cities', async (req, res) => {
   try {
+    await ensureUserCitiesTable();
     const { user } = await verifyUser(req);
 
     // Admins sempre têm acesso a todas as cidades, independente de user_cities
@@ -696,6 +697,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
 // ─── Admin: Listar cidades de todos os usuários ─────────────
 app.get('/api/admin/user-cities', async (req, res) => {
   try {
+    await ensureUserCitiesTable();
     await verifyAdmin(req);
     const { rows } = await pool.query(
       'SELECT user_id, city, is_primary FROM user_cities ORDER BY user_id, is_primary DESC, city ASC'
@@ -715,6 +717,7 @@ app.get('/api/admin/user-cities', async (req, res) => {
 // ─── Admin: Atualizar cidades de um usuário ─────────────────
 app.post('/api/admin/user-cities', async (req, res) => {
   try {
+    await ensureUserCitiesTable();
     await verifyAdmin(req);
     const { userId, cities, primaryCity } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId obrigatório' });

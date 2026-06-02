@@ -2442,6 +2442,9 @@ export default function CommercialProposal() {
                         <Badge className={statusColors[p.status] || ''}>
                           {p.status === 'aceita' ? '✅ Aceita' : p.status === 'recusada' ? '❌ Recusada' : '⏳ Pendente'}
                         </Badge>
+                        <Button size="icon" variant="ghost" onClick={() => loadProposalForEdit(p)} title="Editar proposta">
+                          <Pencil className="h-3 w-3" />
+                        </Button>
                         <Button size="icon" variant="ghost" onClick={() => handleCopyLink(link)} title="Copiar link">
                           <Copy className="h-3 w-3" />
                         </Button>

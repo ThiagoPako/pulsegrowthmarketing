@@ -28,6 +28,7 @@ import {
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import ScopeDescription from '@/components/ScopeDescription';
 
 type ProposalType = 'marketing' | 'sistema' | 'endomarketing' | 'personalizada' | 'cronograma';
 
@@ -1531,7 +1532,8 @@ export default function CommercialProposal() {
         )}
         {customDescription && (
           <div data-pdf-section className="px-8 md:px-12 pb-4">
-            <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-4">{customDescription}</p>
+            <h2 className="text-lg font-bold text-gray-800 mb-3">Escopo dos Serviços</h2>
+            <ScopeDescription text={customDescription} />
           </div>
         )}
         <div data-pdf-section className="px-8 md:px-12 pb-8">

@@ -245,7 +245,7 @@ export default function Team() {
 
     setResetting(true);
     try {
-      const token = localStorage.getItem('pulse_jwt');
+      const token = await getAuthToken();
       const res = await fetch('https://agenciapulse.tech/api/auth/reset-password', {
         method: 'POST',
         headers: {

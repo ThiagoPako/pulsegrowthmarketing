@@ -167,6 +167,7 @@ export default function CommercialProposal() {
   const [savingProposal, setSavingProposal] = useState(false);
   const [shareLink, setShareLink] = useState('');
   const [showSavedProposals, setShowSavedProposals] = useState(false);
+  const [editingProposalId, setEditingProposalId] = useState<string | null>(null);
   const proposalRef = useRef<HTMLDivElement>(null);
 
   // Marketing fields

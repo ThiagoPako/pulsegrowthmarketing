@@ -125,7 +125,7 @@ export default function Team() {
 
   const fetchUserCities = async () => {
     try {
-      const token = localStorage.getItem('pulse_jwt');
+      const token = await getAuthToken();
       const res = await fetch(`${VPS_API_BASE}/admin/user-cities`, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });

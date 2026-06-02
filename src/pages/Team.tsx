@@ -146,6 +146,46 @@ export default function Team() {
 
   const selectAllModules = () => setPermModules(AVAILABLE_MODULES.map(m => m.key));
   const clearAllModules = () => setPermModules([]);
+  const handleOpenCities = (member: TeamMember) => {
+    const current = userCities[member.id];
+    const cities = current?.cities?.length ? current.cities : (['minacu'] as CityCode[]);
+    const primary = (current?.primary as CityCode) || cities[0];
+    setCityEdit({ cities, primary });
+    setCityTarget(member);
+  };
+
+  const toggleCity = (city: CityCode) => {
+    setCityEdit(prev => {
+      const has = prev.cities.includes(city);
+      const next = has ? prev.cities.filter(c => c !== city) : [...prev.cities, city];
+      const nextPrimary = next.includes(prev.primary) ? prev.primary : (next[0] || 'minacu');
+      return { cities: next, primary: nextPrimary as CityCode };
+    });
+  };
+
+  const handleSaveCities = async () => {
+    if (!cityTarget) return;
+    if (cityEdit.cities.length === 0) { toast.error('Selecione ao menos uma cidade'); return; }
+    setSavingCities(true);
+    try {
+      const token = localStorage.getItem('pulse_jwt');
+      const res = await fetch(`${VPS_API_BASE}/admin/user-cities`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ userId: cityTarget.id, cities: cityEdit.cities, primaryCity: cityEdit.primary }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Erro ao salvar cidades');
+      toast.success('Cidades atualizadas!');
+      setCityTarget(null);
+      await fetchUserCities();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSavingCities(false);
+    }
+  };
+
 
   const handleSave = async () => {
     if (!form.name || !form.email || !form.password) { toast.error('Preencha todos os campos'); return; }

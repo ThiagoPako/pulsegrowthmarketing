@@ -554,10 +554,37 @@ app.post('/api/auth/set-password', async (req, res) => {
 });
 
 // ─── Admin: Create user ─────────────────────────────────────
+const VALID_CITIES = ['minacu', 'uruacu'];
+function sanitizeCities(input) {
+  if (!Array.isArray(input)) return [];
+  const out = [];
+  for (const c of input) {
+    const v = String(c || '').toLowerCase();
+    if (VALID_CITIES.includes(v) && !out.includes(v)) out.push(v);
+  }
+  return out;
+}
+
+async function saveUserCities(userId, cities, primary) {
+  const list = sanitizeCities(cities);
+  if (list.length === 0) list.push('minacu');
+  const primaryCity = list.includes(String(primary || '').toLowerCase())
+    ? String(primary).toLowerCase()
+    : list[0];
+  await pool.query('DELETE FROM user_cities WHERE user_id = $1', [userId]);
+  for (const c of list) {
+    await pool.query(
+      'INSERT INTO user_cities (user_id, city, is_primary) VALUES ($1, $2, $3)',
+      [userId, c, c === primaryCity]
+    );
+  }
+  return { cities: list, primary: primaryCity };
+}
+
 app.post('/api/auth/create-user', async (req, res) => {
   try {
     await verifyAdmin(req);
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, cities, primaryCity } = req.body;
     if (!name || !email || !password) return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
     if (password.length < 6) return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
 
@@ -592,7 +619,9 @@ app.post('/api/auth/create-user', async (req, res) => {
       [id, userRole]
     );
 
-    res.json({ success: true, user: { id, name, email: normalizedEmail, role: userRole } });
+    const saved = await saveUserCities(id, cities && cities.length ? cities : ['minacu'], primaryCity);
+
+    res.json({ success: true, user: { id, name, email: normalizedEmail, role: userRole, cities: saved.cities, primary_city: saved.primary } });
   } catch (error) {
     console.error('Create user error:', error);
     res.status(500).json({ error: error.message });
@@ -612,6 +641,41 @@ app.post('/api/auth/reset-password', async (req, res) => {
   } catch (error) {
     console.error('Reset password error:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── Admin: Listar cidades de todos os usuários ─────────────
+app.get('/api/admin/user-cities', async (req, res) => {
+  try {
+    await verifyAdmin(req);
+    const { rows } = await pool.query(
+      'SELECT user_id, city, is_primary FROM user_cities ORDER BY user_id, is_primary DESC, city ASC'
+    );
+    const map = {};
+    for (const r of rows) {
+      if (!map[r.user_id]) map[r.user_id] = { cities: [], primary: null };
+      map[r.user_id].cities.push(r.city);
+      if (r.is_primary && !map[r.user_id].primary) map[r.user_id].primary = r.city;
+    }
+    res.json({ users: map });
+  } catch (error) {
+    res.status(error.message?.includes('Admin') ? 403 : 500).json({ error: error.message });
+  }
+});
+
+// ─── Admin: Atualizar cidades de um usuário ─────────────────
+app.post('/api/admin/user-cities', async (req, res) => {
+  try {
+    await verifyAdmin(req);
+    const { userId, cities, primaryCity } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId obrigatório' });
+    const list = sanitizeCities(cities);
+    if (list.length === 0) return res.status(400).json({ error: 'Selecione ao menos uma cidade' });
+    const saved = await saveUserCities(userId, list, primaryCity);
+    res.json({ success: true, ...saved });
+  } catch (error) {
+    console.error('Update user cities error:', error);
+    res.status(error.message?.includes('Admin') ? 403 : 500).json({ error: error.message });
   }
 });
 

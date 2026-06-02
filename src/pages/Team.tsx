@@ -12,11 +12,15 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, KeyRound, Users, Handshake, Trash2, Shield, Lock, Cake, CalendarDays, BarChart3, DollarSign } from 'lucide-react';
+import { Plus, KeyRound, Users, Handshake, Trash2, Shield, Lock, Cake, CalendarDays, BarChart3, DollarSign, MapPin } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import { useUserPermissions, AVAILABLE_MODULES } from '@/hooks/useUserPermissions';
 import BirthdayCountdown from '@/components/BirthdayCountdown';
 import TeamMemberStats from '@/components/TeamMemberStats';
+import { CITY_LABELS, type CityCode } from '@/contexts/CityContext';
+
+const ALL_CITIES: CityCode[] = ['minacu', 'uruacu'];
+const VPS_API_BASE = 'https://agenciapulse.tech/api';
 
 const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'fotografo', 'designer'];
 
@@ -59,8 +63,12 @@ export default function Team() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [partners, setPartners] = useState<PartnerInfo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'videomaker' as UserRole });
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'videomaker' as UserRole, cities: ['minacu'] as CityCode[], primaryCity: 'minacu' as CityCode });
   const [partnerForm, setPartnerForm] = useState({ companyName: '', serviceFunction: '', fixedRate: 0, phone: '', notes: '' });
+  const [userCities, setUserCities] = useState<Record<string, { cities: CityCode[]; primary: CityCode | null }>>({});
+  const [cityTarget, setCityTarget] = useState<TeamMember | null>(null);
+  const [cityEdit, setCityEdit] = useState<{ cities: CityCode[]; primary: CityCode }>({ cities: ['minacu'], primary: 'minacu' });
+  const [savingCities, setSavingCities] = useState(false);
 
   const [resetOpen, setResetOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState<TeamMember | null>(null);
@@ -101,7 +109,19 @@ export default function Team() {
     if (data) setPartners(data as PartnerInfo[]);
   };
 
-  useEffect(() => { fetchMembers(); fetchPartners(); }, []);
+  const fetchUserCities = async () => {
+    try {
+      const token = localStorage.getItem('pulse_jwt');
+      const res = await fetch(`${VPS_API_BASE}/admin/user-cities`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!res.ok) return;
+      const json = await res.json();
+      setUserCities(json.users || {});
+    } catch { /* noop */ }
+  };
+
+  useEffect(() => { fetchMembers(); fetchPartners(); fetchUserCities(); }, []);
 
   // Sync permissions when target changes
   useEffect(() => {
@@ -126,12 +146,54 @@ export default function Team() {
 
   const selectAllModules = () => setPermModules(AVAILABLE_MODULES.map(m => m.key));
   const clearAllModules = () => setPermModules([]);
+  const handleOpenCities = (member: TeamMember) => {
+    const current = userCities[member.id];
+    const cities = current?.cities?.length ? current.cities : (['minacu'] as CityCode[]);
+    const primary = (current?.primary as CityCode) || cities[0];
+    setCityEdit({ cities, primary });
+    setCityTarget(member);
+  };
+
+  const toggleCity = (city: CityCode) => {
+    setCityEdit(prev => {
+      const has = prev.cities.includes(city);
+      const next = has ? prev.cities.filter(c => c !== city) : [...prev.cities, city];
+      const nextPrimary = next.includes(prev.primary) ? prev.primary : (next[0] || 'minacu');
+      return { cities: next, primary: nextPrimary as CityCode };
+    });
+  };
+
+  const handleSaveCities = async () => {
+    if (!cityTarget) return;
+    if (cityEdit.cities.length === 0) { toast.error('Selecione ao menos uma cidade'); return; }
+    setSavingCities(true);
+    try {
+      const token = localStorage.getItem('pulse_jwt');
+      const res = await fetch(`${VPS_API_BASE}/admin/user-cities`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ userId: cityTarget.id, cities: cityEdit.cities, primaryCity: cityEdit.primary }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Erro ao salvar cidades');
+      toast.success('Cidades atualizadas!');
+      setCityTarget(null);
+      await fetchUserCities();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSavingCities(false);
+    }
+  };
+
 
   const handleSave = async () => {
     if (!form.name || !form.email || !form.password) { toast.error('Preencha todos os campos'); return; }
     if (form.password.length < 6) { toast.error('Senha deve ter no mínimo 6 caracteres'); return; }
 
-    const { error } = await signUp(form.email, form.password, form.name, form.role as AppRole);
+    if (!form.cities.length) { toast.error('Selecione ao menos uma cidade'); return; }
+    const primaryCity = form.cities.includes(form.primaryCity) ? form.primaryCity : form.cities[0];
+    const { error } = await signUp(form.email, form.password, form.name, form.role as AppRole, false, form.cities, primaryCity);
     if (error) {
       toast.error(error);
       return;
@@ -158,9 +220,9 @@ export default function Team() {
 
     toast.success('Usuário cadastrado com sucesso!');
     setOpen(false);
-    setForm({ name: '', email: '', password: '', role: 'videomaker' });
+    setForm({ name: '', email: '', password: '', role: 'videomaker', cities: ['minacu'], primaryCity: 'minacu' });
     setPartnerForm({ companyName: '', serviceFunction: '', fixedRate: 0, phone: '', notes: '' });
-    setTimeout(fetchMembers, 1000);
+    setTimeout(() => { fetchMembers(); fetchUserCities(); }, 1000);
   };
 
   const handleResetPassword = async () => {
@@ -287,7 +349,7 @@ export default function Team() {
         {currentUser?.role === 'admin' && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button onClick={() => { setForm({ name: '', email: '', password: '', role: 'videomaker' }); setPartnerForm({ companyName: '', serviceFunction: '', fixedRate: 0, phone: '', notes: '' }); }}>
+              <Button onClick={() => { setForm({ name: '', email: '', password: '', role: 'videomaker', cities: ['minacu'], primaryCity: 'minacu' }); setPartnerForm({ companyName: '', serviceFunction: '', fixedRate: 0, phone: '', notes: '' }); }}>
                 <Plus size={16} className="mr-2" /> Novo Usuário
               </Button>
             </DialogTrigger>
@@ -304,6 +366,39 @@ export default function Team() {
                     <SelectContent>{ROLES.map(r => <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
+
+                <div className="space-y-2 p-3 rounded-lg bg-muted/50 border border-border">
+                  <Label className="flex items-center gap-2"><MapPin size={14} /> Cidades de acesso</Label>
+                  <p className="text-[11px] text-muted-foreground">Marque as cidades que este colaborador poderá acessar. A principal é a cidade padrão ao logar.</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {ALL_CITIES.map(c => {
+                      const checked = form.cities.includes(c);
+                      return (
+                        <label key={c} className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-colors ${checked ? 'bg-primary/5 border-primary/30' : 'bg-card border-border hover:bg-muted/50'}`}>
+                          <Checkbox checked={checked} onCheckedChange={() => {
+                            setForm(prev => {
+                              const has = prev.cities.includes(c);
+                              const cities = has ? prev.cities.filter(x => x !== c) : [...prev.cities, c];
+                              const primaryCity = cities.includes(prev.primaryCity) ? prev.primaryCity : (cities[0] || 'minacu');
+                              return { ...prev, cities, primaryCity: primaryCity as CityCode };
+                            });
+                          }} />
+                          <span className="text-sm font-medium flex-1">{CITY_LABELS[c]}</span>
+                          {checked && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.preventDefault(); setForm(prev => ({ ...prev, primaryCity: c })); }}
+                              className={`text-[10px] px-1.5 py-0.5 rounded ${form.primaryCity === c ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted-foreground/20'}`}
+                            >
+                              {form.primaryCity === c ? 'Principal' : 'Tornar principal'}
+                            </button>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
 
                 {form.role === 'parceiro' && (
                   <div className="space-y-3 p-3 rounded-lg bg-muted/50 border border-border">
@@ -554,8 +649,23 @@ export default function Team() {
                           }}
                         />
                       </div>
+                      {(() => {
+                        const uc = userCities[u.id];
+                        const list = uc?.cities?.length ? uc.cities : (['minacu'] as CityCode[]);
+                        return (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleOpenCities(u); }}
+                            className="h-7 px-2 rounded-md bg-secondary/50 hover:bg-secondary text-[10px] flex items-center gap-1 border border-transparent hover:border-primary/30 transition-all"
+                            title="Cidades de acesso"
+                          >
+                            <MapPin size={11} className="text-primary" />
+                            {list.map(c => CITY_LABELS[c as CityCode]).join(' · ')}
+                          </button>
+                        );
+                      })()}
                       {u.id !== currentUser?.id && (
-                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Permissões de módulos" onClick={() => handleOpenPermissions(u)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Permissões de módulos" onClick={(e) => { e.stopPropagation(); handleOpenPermissions(u); }}>
                           <Lock size={16} />
                         </Button>
                       )}
@@ -624,6 +734,52 @@ export default function Team() {
           </div>
         )
       )}
+
+      {/* Cities Dialog */}
+      <Dialog open={!!cityTarget} onOpenChange={v => { if (!v) setCityTarget(null); }}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><MapPin size={18} /> Cidades de acesso</DialogTitle>
+          </DialogHeader>
+          {cityTarget && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                <UserAvatar user={cityTarget} size="md" />
+                <div>
+                  <p className="font-medium text-sm">{cityTarget.displayName || cityTarget.name}</p>
+                  <p className="text-xs text-muted-foreground">{cityTarget.email}</p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Selecione as cidades que este colaborador poderá acessar. A cidade <strong>Principal</strong> é a que abre por padrão ao logar.
+              </p>
+              <div className="space-y-2">
+                {ALL_CITIES.map(c => {
+                  const checked = cityEdit.cities.includes(c);
+                  return (
+                    <label key={c} className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${checked ? 'bg-primary/5 border-primary/30' : 'bg-card border-border hover:bg-muted/50'}`}>
+                      <Checkbox checked={checked} onCheckedChange={() => toggleCity(c)} />
+                      <span className="text-sm font-medium flex-1">{CITY_LABELS[c]}</span>
+                      {checked && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); setCityEdit(prev => ({ ...prev, primary: c })); }}
+                          className={`text-[10px] px-2 py-0.5 rounded ${cityEdit.primary === c ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted-foreground/20'}`}
+                        >
+                          {cityEdit.primary === c ? 'Principal' : 'Tornar principal'}
+                        </button>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+              <Button onClick={handleSaveCities} disabled={savingCities} className="w-full">
+                {savingCities ? 'Salvando...' : 'Salvar Cidades'}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Member Stats Dialog */}
       <TeamMemberStats

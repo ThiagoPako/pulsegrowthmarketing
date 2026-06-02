@@ -3784,31 +3784,57 @@ async function tableHasCityColumn(tableName) {
   }
 }
 
+// Whitelist global das cidades suportadas pelo sistema.
+const ALLOWED_CITIES = new Set(['minacu', 'uruacu']);
+
+function normalizeCityValue(value) {
+  if (value === null || value === undefined) return null;
+  const v = String(value).trim().toLowerCase();
+  if (!v) return null;
+  // Normaliza acentos comuns: "Minaçu"/"Uruaçu" -> "minacu"/"uruacu"
+  const stripped = v.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return stripped;
+}
+
+function assertValidCity(value, { field = 'city' } = {}) {
+  const normalized = normalizeCityValue(value);
+  if (!normalized || !ALLOWED_CITIES.has(normalized)) {
+    const err = new Error(`Campo "${field}" inválido. Valores permitidos: ${Array.from(ALLOWED_CITIES).join(', ')}.`);
+    err.statusCode = 400;
+    throw err;
+  }
+  return normalized;
+}
 
 // Resolve a cidade ativa do request: header x-pulse-city, validado contra user_cities.
 // Fallback: primary do usuário, ou 'minacu' se não houver registro.
 async function resolveActiveCity(req, userId, userObj = null) {
-  const raw = String(req.headers['x-pulse-city'] || '').toLowerCase();
-  const requested = (raw === 'minacu' || raw === 'uruacu') ? raw : null;
+  const requested = normalizeCityValue(req.headers['x-pulse-city']);
+  const requestedValid = requested && ALLOWED_CITIES.has(requested) ? requested : null;
 
   // Admins podem acessar qualquer cidade sem precisar de registro em user_cities
   try {
     if (userObj && await isAdminUser(userObj)) {
-      return requested || 'minacu';
+      return assertValidCity(requestedValid || 'minacu');
     }
-  } catch { /* segue fluxo normal */ }
+  } catch (e) {
+    if (e && e.statusCode === 400) throw e;
+    /* segue fluxo normal */
+  }
 
   try {
     const { rows } = await pool.query(
       'SELECT city, is_primary FROM user_cities WHERE user_id = $1',
       [userId]
     );
-    if (rows.length === 0) return requested || 'minacu';
-    const allowed = rows.map(r => r.city);
-    if (requested && allowed.includes(requested)) return requested;
-    return (rows.find(r => r.is_primary)?.city) || allowed[0];
-  } catch {
-    return requested || 'minacu';
+    if (rows.length === 0) return assertValidCity(requestedValid || 'minacu');
+    const allowed = rows.map(r => normalizeCityValue(r.city)).filter(Boolean);
+    if (requestedValid && allowed.includes(requestedValid)) return requestedValid;
+    const primary = normalizeCityValue(rows.find(r => r.is_primary)?.city);
+    return assertValidCity(primary || allowed[0]);
+  } catch (e) {
+    if (e && e.statusCode === 400) throw e;
+    return assertValidCity(requestedValid || 'minacu');
   }
 }
 

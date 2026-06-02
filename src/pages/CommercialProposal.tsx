@@ -200,7 +200,8 @@ export default function CommercialProposal() {
 
   // Personalizada fields
   const [contractDuration, setContractDuration] = useState<'semestral' | 'anual'>('semestral');
-  const [selectedBaseServices, setSelectedBaseServices] = useState<string[]>([]);
+  const [selectedBaseServices, setSelectedBaseServices] = useState<string[]>([]); // adicionais (fora do contrato)
+  const [selectedIncludedServices, setSelectedIncludedServices] = useState<string[]>([]); // inclusos no contrato
   const [additionalServices, setAdditionalServices] = useState<{ id: string; name: string; price: number }[]>([]);
   const [customVideos, setCustomVideos] = useState('');
   const [customStories, setCustomStories] = useState('');

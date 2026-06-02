@@ -129,7 +129,9 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
         const data = await res.json().catch(() => ({}));
         if (cancelled) return;
         if (!res.ok || !data?.url) {
-          toast.error('Não foi possível liberar o vídeo.');
+          const reason = data?.error || `HTTP ${res.status}`;
+          console.error('[training/sign] failed:', reason, data);
+          toast.error(`Não foi possível liberar o vídeo: ${reason}`);
           return;
         }
         const url = data.url.startsWith('http') ? data.url : `https://agenciapulse.tech${data.url}`;

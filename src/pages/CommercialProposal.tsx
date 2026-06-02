@@ -23,7 +23,7 @@ import {
   FileText, Plus, Trash2, CalendarIcon, Download, Eye, Users, Rocket,
   CheckCircle2, Film, Palette, Scissors, Camera, Monitor, Share2, BarChart3,
   Clock, Gift, AlertTriangle, X, Link2, Copy, ExternalLink, List, Code, Megaphone,
-  Sparkles, Loader2, UserPlus, DollarSign, Target, CalendarDays, ListChecks, Layers
+  Sparkles, Loader2, UserPlus, DollarSign, Target, CalendarDays, ListChecks, Layers, Pencil
 } from 'lucide-react';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
@@ -167,6 +167,7 @@ export default function CommercialProposal() {
   const [savingProposal, setSavingProposal] = useState(false);
   const [shareLink, setShareLink] = useState('');
   const [showSavedProposals, setShowSavedProposals] = useState(false);
+  const [editingProposalId, setEditingProposalId] = useState<string | null>(null);
   const proposalRef = useRef<HTMLDivElement>(null);
 
   // Marketing fields
@@ -262,8 +263,83 @@ export default function CommercialProposal() {
     setCronogramaMethodology(''); setCronogramaProjectName('');
     setCronogramaTotalDays(''); setCronogramaPaymentMethod('pix'); setCronogramaInstallments('1');
     setCronogramaPricingMode('individual'); setCronogramaTotalCustomValue('');
+    setEditingProposalId(null);
+    setShareLink('');
     localStorage.removeItem(DRAFT_KEY);
     toast.success('Proposta limpa com sucesso!');
+  }, []);
+
+  // Load an existing proposal into the form for editing
+  const loadProposalForEdit = useCallback((p: any) => {
+    setEditingProposalId(p.id);
+    setProposalType((p.proposal_type as ProposalType) || 'marketing');
+    setClientName(p.client_name || '');
+    setClientCompany(p.client_company || '');
+    setWhatsappNumber(p.whatsapp_number || '');
+    if (p.validity_date) {
+      try { setValidityDate(new Date(p.validity_date + 'T00:00:00')); } catch { /* ignore */ }
+    }
+    setBonusServices(p.bonus_services || []);
+    setTeamMembers(p.team_members || []);
+    setCustomDiscount(p.custom_discount || 0);
+    setObservations(p.observations || '');
+    setHasContract(p.has_contract !== false);
+    setSelectedPlanId(p.plan_id || '');
+    // System
+    const sys = p.system_data || {};
+    if (p.proposal_type === 'sistema') {
+      setSystemScope(sys.scope || []);
+      setSystemDeliverables(sys.deliverables || []);
+      setSystemValue(sys.value != null ? String(sys.value) : '');
+      setSystemPaymentMethod(sys.paymentMethod || 'pix');
+      setSystemInstallments(String(sys.installments || '1'));
+      setSystemAdditionalCosts(sys.additionalCosts || '');
+      setSystemTimeline(sys.timeline || '');
+    }
+    // Endo
+    const endo = p.endomarketing_data || {};
+    setEndoPlan(endo.plan || '');
+    setEndoDaysPerWeek(String(endo.daysPerWeek || '3'));
+    setEndoSessionDuration(String(endo.sessionDuration || '2'));
+    setEndoStoriesPerDay(String(endo.storiesPerDay || '5'));
+    setEndoMonthlyValue(endo.monthlyValue != null ? String(endo.monthlyValue) : '');
+    setEndoDescription(endo.description || '');
+    // Personalizada
+    if (p.proposal_type === 'personalizada') {
+      setCustomVideos(sys.videos != null ? String(sys.videos) : '');
+      setCustomStories(sys.stories != null ? String(sys.stories) : '');
+      setCustomEventCoverage(sys.eventCoverage != null ? String(sys.eventCoverage) : '');
+      setCustomSocialMedia(!!sys.socialMedia);
+      setCustomArts(sys.arts != null ? String(sys.arts) : '');
+      setCustomTrafficMgmt(!!sys.trafficManagement);
+      setCustomMonthlyValue(sys.monthlyValue != null ? String(sys.monthlyValue) : '');
+      setCustomDescription(sys.description || '');
+      setCustomPaymentMethod(sys.paymentMethod || 'pix');
+      setCustomInstallments(String(sys.installments || '1'));
+      setCustomRecordings(sys.recordings != null ? String(sys.recordings) : '');
+      setContractDuration(sys.contractDuration || 'semestral');
+      setSelectedBaseServices(sys.selectedBaseServices || []);
+      setSelectedIncludedServices(sys.selectedIncludedServices || []);
+      setAdditionalServices(sys.additionalServices || []);
+    }
+    // Cronograma
+    if (p.proposal_type === 'cronograma') {
+      setCronogramaProjectName(sys.projectName || '');
+      setCronogramaMethodology(sys.methodology || '');
+      setCronogramaDeliverables(sys.deliverables || []);
+      setCronogramaPhases(sys.phases || []);
+      setCronogramaTotalDays(sys.totalDays != null ? String(sys.totalDays) : '');
+      setCronogramaPaymentMethod(sys.paymentMethod || 'pix');
+      setCronogramaInstallments(String(sys.installments || '1'));
+      setCronogramaPricingMode(sys.pricingMode || 'individual');
+      setCronogramaTotalCustomValue(sys.totalValue != null ? String(sys.totalValue) : '');
+      setSelectedIncludedServices(sys.selectedIncludedServices || []);
+      setContractDuration(sys.contractDuration || 'semestral');
+    }
+    setShareLink(`${window.location.origin}/proposta/${p.token}`);
+    setShowSavedProposals(false);
+    setShowPreview(true);
+    toast.success(`Editando proposta de ${p.client_company}`);
   }, []);
 
   // ── Auto-save draft to localStorage ──
@@ -661,15 +737,23 @@ export default function CommercialProposal() {
         endomarketing_data: endoData,
       } as any;
 
-      const { data, error } = await vpsDb.from('commercial_proposals').insert(payload).select('*').single();
-      if (error) throw error;
+      let data: any;
+      if (editingProposalId) {
+        const res = await vpsDb.from('commercial_proposals').update(payload).eq('id', editingProposalId).select('*').single();
+        if (res.error) throw res.error;
+        data = res.data;
+      } else {
+        const res = await vpsDb.from('commercial_proposals').insert(payload).select('*').single();
+        if (res.error) throw res.error;
+        data = res.data;
+      }
 
       if (!data?.token) throw new Error('Proposta salva sem token de compartilhamento.');
 
       const link = `${window.location.origin}/proposta/${data.token}`;
       setShareLink(link);
       await copyToClipboard(link);
-      toast.success('Proposta salva! Link copiado para a área de transferência.');
+      toast.success(editingProposalId ? 'Proposta atualizada! Link copiado.' : 'Proposta salva! Link copiado para a área de transferência.');
       localStorage.removeItem(DRAFT_KEY);
       refetchProposals();
     } catch (e: any) {
@@ -677,7 +761,7 @@ export default function CommercialProposal() {
       toast.error('Erro ao salvar proposta: ' + message);
     }
     setSavingProposal(false);
-  }, [clientName, clientCompany, selectedPlanId, selectedPlan, bonusServices, teamMembers, users, hasContract, customDiscount, observations, validityDate, whatsappNumber, user, proposalType, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription, customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings, cronogramaProjectName, cronogramaMethodology, cronogramaDeliverables, cronogramaPhases, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, copyToClipboard, refetchProposals]);
+  }, [editingProposalId, clientName, clientCompany, selectedPlanId, selectedPlan, bonusServices, teamMembers, users, hasContract, customDiscount, observations, validityDate, whatsappNumber, user, proposalType, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription, customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings, cronogramaProjectName, cronogramaMethodology, cronogramaDeliverables, cronogramaPhases, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, copyToClipboard, refetchProposals]);
 
   const handleCopyLink = (link: string) => {
     copyToClipboard(link).then(() => toast.success('Link copiado!'));
@@ -2221,12 +2305,26 @@ export default function CommercialProposal() {
                 <Download className="h-4 w-4 mr-1" /> PDF
               </Button>
               <Button size="sm" onClick={saveAndShareProposal} disabled={savingProposal} className="bg-green-600 hover:bg-green-700">
-                <Link2 className="h-4 w-4 mr-1" /> {savingProposal ? 'Salvando...' : 'Salvar & Enviar Link'}
+                <Link2 className="h-4 w-4 mr-1" /> {savingProposal ? 'Salvando...' : editingProposalId ? 'Atualizar Proposta' : 'Salvar & Enviar Link'}
               </Button>
             </>
           )}
         </div>
       </div>
+
+      {/* Editing banner */}
+      {editingProposalId && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center gap-3">
+          <Pencil className="h-5 w-5 text-amber-600 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-800">Editando proposta existente</p>
+            <p className="text-xs text-amber-700 truncate">As alterações serão salvas na mesma proposta (mesmo link público).</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={clearProposal}>
+            <X className="h-3 w-3 mr-1" /> Cancelar edição
+          </Button>
+        </div>
+      )}
 
       {/* Share link banner */}
       {shareLink && (
@@ -2358,6 +2456,9 @@ export default function CommercialProposal() {
                         <Badge className={statusColors[p.status] || ''}>
                           {p.status === 'aceita' ? '✅ Aceita' : p.status === 'recusada' ? '❌ Recusada' : '⏳ Pendente'}
                         </Badge>
+                        <Button size="icon" variant="ghost" onClick={() => loadProposalForEdit(p)} title="Editar proposta">
+                          <Pencil className="h-3 w-3" />
+                        </Button>
                         <Button size="icon" variant="ghost" onClick={() => handleCopyLink(link)} title="Copiar link">
                           <Copy className="h-3 w-3" />
                         </Button>

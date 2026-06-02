@@ -23,6 +23,7 @@ async function publicProposalAction(body: Record<string, any>): Promise<any> {
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import pulseLogo from '@/assets/pulse_logo.png';
+import ScopeDescription from '@/components/ScopeDescription';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';

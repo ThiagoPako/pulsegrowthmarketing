@@ -286,23 +286,23 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
               className="w-full h-full object-cover opacity-70"
               alt="Featured"
             />
-            <div className="absolute bottom-12 left-8 lg:left-12 z-20 max-w-2xl space-y-4">
+            <div className="absolute bottom-6 sm:bottom-12 left-4 sm:left-8 lg:left-12 right-4 z-20 max-w-2xl space-y-3 sm:space-y-4">
               <Badge className="bg-red-600 text-white border-none px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.25em] rounded-sm">Em Destaque</Badge>
-              <h1 className="text-4xl lg:text-5xl font-black tracking-tighter uppercase italic leading-[0.95]">{tracks[0]?.title || "Treinamento Pulse"}</h1>
-              <p className="text-sm lg:text-base text-gray-300/90 line-clamp-2 max-w-xl">{tracks[0]?.description}</p>
-              <div className="flex gap-3 pt-2">
-                <Button size="lg" className="bg-white text-black hover:bg-gray-200 px-7 font-black uppercase italic tracking-widest text-xs h-11" onClick={() => tracks[0] && setSelectedTrack(tracks[0])}>
-                  <Play className="mr-2 fill-current" size={18} /> Assistir
+              <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black tracking-tighter uppercase italic leading-[0.95]">{tracks[0]?.title || "Treinamento Pulse"}</h1>
+              <p className="text-xs sm:text-sm lg:text-base text-gray-300/90 line-clamp-2 max-w-xl">{tracks[0]?.description}</p>
+              <div className="flex gap-2 sm:gap-3 pt-1 sm:pt-2">
+                <Button size="lg" className="bg-white text-black hover:bg-gray-200 px-4 sm:px-7 font-black uppercase italic tracking-widest text-[11px] sm:text-xs h-9 sm:h-11" onClick={() => tracks[0] && setSelectedTrack(tracks[0])}>
+                  <Play className="mr-1.5 sm:mr-2 fill-current" size={16} /> Assistir
                 </Button>
-                <Button size="lg" variant="ghost" className="bg-white/10 backdrop-blur hover:bg-white/20 text-white px-7 font-black uppercase italic tracking-widest text-xs h-11" onClick={() => { const el = document.getElementById('trilhas-catalogo'); el?.scrollIntoView({ behavior: 'smooth' }); }}>
-                  <Info className="mr-2" size={16} /> Explorar
+                <Button size="lg" variant="ghost" className="bg-white/10 backdrop-blur hover:bg-white/20 text-white px-4 sm:px-7 font-black uppercase italic tracking-widest text-[11px] sm:text-xs h-9 sm:h-11" onClick={() => { const el = document.getElementById('trilhas-catalogo'); el?.scrollIntoView({ behavior: 'smooth' }); }}>
+                  <Info className="mr-1.5 sm:mr-2" size={14} /> Explorar
                 </Button>
               </div>
             </div>
           </div>
 
           {/* ── CATÁLOGO COMPLETO ── */}
-          <div id="trilhas-catalogo" className="px-6 lg:px-12 pt-10 space-y-14">
+          <div id="trilhas-catalogo" className="px-3 sm:px-6 lg:px-12 pt-6 sm:pt-10 space-y-8 sm:space-y-14">
             <div className="flex items-end justify-between gap-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.35em] text-red-600 mb-1">Catálogo</p>
@@ -317,26 +317,26 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
               const filled = trackLessonsAll.filter(l => l.video_url).length;
               return (
                 <section key={`cat-${track.id}`} className="space-y-5">
-                  <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
-                    <div className="flex items-center gap-4 min-w-0">
-                      <div className="relative w-20 h-20 rounded-2xl overflow-hidden shrink-0 border border-white/10 shadow-xl">
+                  <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3 sm:pb-4">
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                      <div className="relative w-14 h-14 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl overflow-hidden shrink-0 border border-white/10 shadow-xl">
                         <img src={track.thumbnail_url} className="w-full h-full object-cover" alt={track.title} onError={(e) => { (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1492691523567-6170f2295b21?auto=format&fit=crop&q=80&w=600'; }} />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-red-600 mb-1">{track.category || 'Trilha'}</p>
-                        <h3 className="text-xl lg:text-2xl font-black italic uppercase tracking-tighter text-white truncate">{track.title}</h3>
-                        <div className="flex items-center gap-3 mt-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">
-                          <span>{trackMods.length} módulos</span>
+                        <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.3em] text-red-600 mb-0.5 sm:mb-1">{track.category || 'Trilha'}</p>
+                        <h3 className="text-base sm:text-xl lg:text-2xl font-black italic uppercase tracking-tighter text-white truncate">{track.title}</h3>
+                        <div className="flex items-center gap-2 sm:gap-3 mt-1 sm:mt-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.15em] sm:tracking-[0.2em] text-zinc-500 flex-wrap">
+                          <span>{trackMods.length} mód.</span>
                           <span className="text-zinc-700">·</span>
                           <span>{trackLessonsAll.length} aulas</span>
-                          <span className="text-zinc-700">·</span>
-                          <span className="text-emerald-500/80">{filled} com vídeo</span>
+                          <span className="text-zinc-700 hidden sm:inline">·</span>
+                          <span className="text-emerald-500/80 hidden sm:inline">{filled} com vídeo</span>
                         </div>
                       </div>
                     </div>
-                    <Button size="sm" className="bg-white text-black hover:bg-gray-200 gap-2 font-black uppercase tracking-widest text-[10px] h-9 px-5 shrink-0" onClick={() => setSelectedTrack(track)}>
-                      <Play size={12} className="fill-current" /> Abrir trilha
+                    <Button size="sm" className="bg-white text-black hover:bg-gray-200 gap-1.5 sm:gap-2 font-black uppercase tracking-widest text-[10px] h-8 sm:h-9 px-3 sm:px-5 shrink-0" onClick={() => setSelectedTrack(track)}>
+                      <Play size={12} className="fill-current" /> <span className="hidden sm:inline">Abrir trilha</span><span className="sm:hidden">Abrir</span>
                     </Button>
                   </div>
 
@@ -425,16 +425,16 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
       ) : (
         <div className="animate-in fade-in duration-300">
           {/* Top bar */}
-          <div className="sticky top-0 z-40 flex items-center justify-between px-5 lg:px-8 py-3 bg-gradient-to-b from-[#0a0a0a] via-[#0a0a0a]/95 to-transparent backdrop-blur-sm">
+          <div className="sticky top-0 z-40 flex items-center justify-between px-3 sm:px-5 lg:px-8 py-2 sm:py-3 bg-gradient-to-b from-[#0a0a0a] via-[#0a0a0a]/95 to-transparent backdrop-blur-sm">
             <Button variant="ghost" size="sm" onClick={() => { setSelectedTrack(null); setCurrentVideo(null); }} className="text-white/80 hover:text-white hover:bg-white/5 gap-1.5 h-8 px-2 text-xs font-bold">
               <ChevronLeft size={16} /> Catálogo
             </Button>
-            <h2 className="text-base font-black italic uppercase tracking-tighter text-red-600">Pulse <span className="text-white">Academy</span></h2>
+            <h2 className="text-sm sm:text-base font-black italic uppercase tracking-tighter text-red-600">Pulse <span className="text-white">Academy</span></h2>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 px-5 lg:px-8 pb-12">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 px-3 sm:px-5 lg:px-8 pb-8 sm:pb-12">
             {/* LEFT — Player + metadata */}
-            <div className="lg:col-span-8 space-y-4">
+            <div className="lg:col-span-8 space-y-3 sm:space-y-4">
               <div className="aspect-video bg-black rounded-xl overflow-hidden border border-white/5 relative shadow-2xl">
                 {currentVideo?.video_url ? (
                   <iframe src={currentVideo.video_url.includes('youtube') ? currentVideo.video_url.replace('watch?v=', 'embed/') : currentVideo.video_url} className="w-full h-full" allowFullScreen key={currentVideo.video_url} />
@@ -455,7 +455,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
               {/* Title + actions row */}
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
-                  <h2 className="text-2xl lg:text-3xl font-black tracking-tighter uppercase italic leading-tight truncate">{currentVideo?.title || selectedTrack.title}</h2>
+                  <h2 className="text-lg sm:text-2xl lg:text-3xl font-black tracking-tighter uppercase italic leading-tight truncate">{currentVideo?.title || selectedTrack.title}</h2>
                   <div className="flex items-center gap-2 mt-1.5 text-[10px] font-bold uppercase tracking-[0.2em] flex-wrap">
                     <span className="text-emerald-500">2026</span>
                     <Badge variant="outline" className="text-white/80 border-white/15 px-1.5 py-0 text-[9px] rounded-sm h-4">16+</Badge>
@@ -475,8 +475,8 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
               </div>
 
               {/* Description */}
-              <div className="bg-zinc-900/40 border border-white/5 rounded-xl p-4">
-                <p className="text-sm text-zinc-300 leading-relaxed">{currentVideo?.description || selectedTrack.description}</p>
+              <div className="bg-zinc-900/40 border border-white/5 rounded-xl p-3 sm:p-4">
+                <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">{currentVideo?.description || selectedTrack.description}</p>
               </div>
 
               {/* Progress strip */}
@@ -505,7 +505,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                   <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-500">{modules.length} módulos</span>
                 </div>
 
-                <div className="space-y-3 max-h-[78vh] overflow-y-auto pr-2 scrollbar-hide">
+                <div className="space-y-3 lg:max-h-[78vh] lg:overflow-y-auto lg:pr-2 scrollbar-hide">
                   {modules.length === 0 && (
                     <div className="text-center py-10 text-zinc-500 text-[10px] font-bold uppercase tracking-widest border border-dashed border-white/10 rounded-xl">Nenhum módulo cadastrado</div>
                   )}

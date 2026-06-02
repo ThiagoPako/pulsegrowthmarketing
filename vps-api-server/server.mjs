@@ -3782,7 +3782,7 @@ app.post('/api/db/query', async (req, res) => {
 
     // Multi-city: resolve cidade ativa e prepara flag de scoping
     const scopeCity = TABLES_WITH_CITY.has(safeTable);
-    const activeCity = scopeCity ? await resolveActiveCity(req, user.id) : null;
+    const activeCity = scopeCity ? await resolveActiveCity(req, user.id, user) : null;
 
     let result;
 

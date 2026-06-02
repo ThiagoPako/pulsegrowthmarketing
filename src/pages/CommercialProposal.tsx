@@ -588,6 +588,7 @@ export default function CommercialProposal() {
         recordings: parseInt(customRecordings) || 0,
         contractDuration,
         selectedBaseServices,
+        selectedIncludedServices,
         additionalServices
       } : {};
 

@@ -51,6 +51,8 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   const [catalogLessons, setCatalogLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentVideo, setCurrentVideo] = useState<Lesson | null>(null);
+  const [signedVideoUrl, setSignedVideoUrl] = useState<string | null>(null);
+  const [videoLoading, setVideoLoading] = useState(false);
   const [hoveredTrack, setHoveredTrack] = useState<string | null>(null);
   const [forceUpdate, setForceUpdate] = useState(0);
   const [uploading, setUploading] = useState<string | null>(null);

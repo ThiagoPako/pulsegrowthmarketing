@@ -5691,7 +5691,33 @@ function resolveTrainingFile(videoPathOrUrl) {
   return fallbackPath.startsWith(fallbackRoot) ? fallbackPath : null;
 }
 
+// GET /api/training/verify?path=...  → confirms uploaded file exists on disk
+app.get('/api/training/verify', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const src = String(req.query.path || req.query.url || '');
+    if (!src) return res.status(400).json({ ok: false, error: 'path required' });
+
+    if (/^https?:\/\//.test(src) && !src.includes('agenciapulse.tech')) {
+      return res.json({ ok: true, external: true });
+    }
+
+    const abs = resolveTrainingFile(src);
+    if (!abs || !fs.existsSync(abs)) {
+      return res.status(404).json({ ok: false, error: 'file not found on disk' });
+    }
+    const stat = fs.statSync(abs);
+    if (!stat.isFile() || stat.size === 0) {
+      return res.status(404).json({ ok: false, error: 'invalid file' });
+    }
+    res.json({ ok: true, size: stat.size, path: abs });
+  } catch (err) {
+    res.status(401).json({ ok: false, error: err.message || 'Unauthorized' });
+  }
+});
+
 // GET /api/training/sign?lessonId=xxx → { url }
+
 app.get('/api/training/sign', async (req, res) => {
   try {
     const { user } = await verifyUser(req);

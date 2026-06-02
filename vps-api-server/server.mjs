@@ -3969,7 +3969,8 @@ app.post('/api/db/query', async (req, res) => {
 
       case 'update': {
         const jsonColumns = await getTableJsonColumns(safeTable);
-        const entries = Object.entries(data).map(([key, value]) => [sanitizeIdentifier(key), value]);
+        const scopedData = scopeCity ? { ...data, city: activeCity } : data;
+        const entries = Object.entries(scopedData).map(([key, value]) => [sanitizeIdentifier(key), value]);
         const keys = entries.map(([key]) => key);
         const values = entries.map(([key, value]) => serializeValueForColumn(key, value, jsonColumns));
         let paramIdx = 1;

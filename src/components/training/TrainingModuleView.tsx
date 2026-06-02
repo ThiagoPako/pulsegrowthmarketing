@@ -248,6 +248,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('folder', 'training-videos');
       formData.append('path', 'training-videos');
 
       const token = localStorage.getItem('pulse_jwt');
@@ -261,15 +262,16 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
       if (!response.ok) throw new Error(result.error || 'Erro no upload');
 
       const videoUrl = result.url;
+      const resolvedVideoPath = result.path || result.filename || videoUrl;
       const { error: updateError } = await supabase
         .from('training_lessons')
-        .update({ video_url: videoUrl, video_path: result.path || videoUrl } as any)
+        .update({ video_url: videoUrl, video_path: resolvedVideoPath } as any)
         .eq('id', lessonId);
 
       if (updateError) throw updateError;
 
       setLessons(prev => prev.map(l => 
-        l.id === lessonId ? { ...l, video_url: videoUrl, video_path: result.path || videoUrl } : l
+        l.id === lessonId ? { ...l, video_url: videoUrl, video_path: resolvedVideoPath } : l
       ));
 
       toast.success('Vídeo enviado com sucesso!');

@@ -5640,6 +5640,8 @@ const TRAINING_VIDEO_ROOTS = Array.from(new Set([
   path.resolve(TRAINING_VIDEO_ROOT),
   path.resolve('/var/www/uploads/training-videos'),
   path.resolve('/var/www/html/uploads/training-videos'),
+  path.resolve('/var/www/uploads'),
+  path.resolve('/var/www/html/uploads'),
 ]));
 const TRAINING_STREAM_TTL = 60 * 10; // 10 min
 
@@ -5676,6 +5678,10 @@ function resolveTrainingFile(videoPathOrUrl) {
     rel.replace(/^uploads\/training-videos\//, ''),
     rel.replace(/^uploads\//, ''),
     rel.replace(/^training-videos\//, ''),
+    rel.replace(/^uploads\//, 'training-videos/'),
+    rel.replace(/^\/?/, 'training-videos/'),
+    path.basename(rel),
+    `training-videos/${path.basename(rel)}`,
   ].filter(Boolean)));
 
   for (const root of TRAINING_VIDEO_ROOTS) {

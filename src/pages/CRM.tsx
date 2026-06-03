@@ -129,6 +129,47 @@ export default function CRM() {
     },
   });
 
+  const updateLead = useMutation({
+    mutationFn: async (lead: Partial<Lead> & { id: string }) => {
+      const { error } = await supabase
+        .from('crm_leads')
+        .update({
+          name: lead.name,
+          company: lead.company,
+          email: lead.email,
+          phone: lead.phone,
+          contract_value: lead.contract_value,
+          status: lead.status
+        })
+        .eq('id', lead.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
+      toast.success('Lead atualizado com sucesso!');
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Erro ao atualizar lead');
+    }
+  });
+
+  const deleteLead = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('crm_leads')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
+      toast.success('Lead excluído com sucesso!');
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Erro ao excluir lead');
+    }
+  });
+
   const createLead = useMutation({
     mutationFn: async (newLead: Partial<Lead>) => {
       if (!newLead.name) throw new Error('Nome é obrigatório');

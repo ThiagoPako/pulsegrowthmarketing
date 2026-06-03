@@ -440,7 +440,7 @@ export default function CRM() {
                                               )}
 
 
-                                              <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all">
+                                              <div className="flex items-center gap-1.5 opacity-100 group-hover:opacity-100 transition-all">
                                                 {stage.id === 'contacted' && (
                                                   <Button
                                                     size="icon"

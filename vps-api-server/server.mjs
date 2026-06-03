@@ -305,11 +305,11 @@ async function verifyUser(req) {
 
 async function isAdminUser(user) {
   if (!user) return false;
-  if (user.role === 'admin') return true;
+  if (user.role === 'admin' || user.role === 'social_media') return true;
   try {
     const { rows } = await pool.query(
-      'SELECT 1 FROM user_roles WHERE user_id = $1 AND role = $2 LIMIT 1',
-      [user.id, 'admin']
+      'SELECT 1 FROM user_roles WHERE user_id = $1 AND role IN ($2, $3) LIMIT 1',
+      [user.id, 'admin', 'social_media']
     );
     return rows.length > 0;
   } catch {

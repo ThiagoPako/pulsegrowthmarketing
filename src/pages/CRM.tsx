@@ -82,7 +82,8 @@ const RECOVERY_STAGES: { id: LeadStatus; label: string; color: string; icon: any
 ];
 
 export default function CRM() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const canEdit = profile?.role === 'admin' || profile?.role === 'social_media';
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'pipeline' | 'goals'>('pipeline');
   const [isRecoveryView, setIsRecoveryView] = useState(false);
@@ -505,8 +506,12 @@ export default function CRM() {
 
                                                    </Dialog>
                                                 )}
-                                                <EditLeadDialog lead={lead} onUpdate={(data) => updateLead.mutate(data)} />
-                                                <DeleteLeadDialog leadName={lead.name} onDelete={() => deleteLead.mutate(lead.id)} />
+                                                {canEdit && (
+                                                  <>
+                                                    <EditLeadDialog lead={lead} onUpdate={(data) => updateLead.mutate(data)} />
+                                                    <DeleteLeadDialog leadName={lead.name} onDelete={() => deleteLead.mutate(lead.id)} />
+                                                  </>
+                                                )}
                                                 <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
 
                                               </div>
@@ -652,9 +657,13 @@ export default function CRM() {
                         </div>
                         <div className="flex items-center gap-1">
                           <MeetingActions lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
-                           <EditLeadDialog lead={lead} onUpdate={(data) => updateLead.mutate(data)} />
-                           <DeleteLeadDialog leadName={lead.name} onDelete={() => deleteLead.mutate(lead.id)} />
-                           <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                          {canEdit && (
+                            <>
+                              <EditLeadDialog lead={lead} onUpdate={(data) => updateLead.mutate(data)} />
+                              <DeleteLeadDialog leadName={lead.name} onDelete={() => deleteLead.mutate(lead.id)} />
+                            </>
+                          )}
+                          <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
                         </div>
                       </div>
                     )})}

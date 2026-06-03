@@ -3855,6 +3855,12 @@ function sanitizeIdentifier(name) {
   return name.replace(/[^a-zA-Z0-9_]/g, '');
 }
 
+function isCrmLeadManagementPayload(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+  const restrictedFields = new Set(['name', 'company', 'email', 'phone', 'contract_value']);
+  return Object.keys(data).some((key) => restrictedFields.has(key));
+}
+
 
 // Generic query endpoint
 app.post('/api/db/query', async (req, res) => {
@@ -3996,6 +4002,10 @@ app.post('/api/db/query', async (req, res) => {
 
 
       case 'update': {
+        if (safeTable === 'crm_leads' && isCrmLeadManagementPayload(data) && !(await isAdminUser(user))) {
+          return res.status(403).json({ error: 'Apenas admin ou social_media podem editar este lead no CRM.' });
+        }
+
         const jsonColumns = await getTableJsonColumns(safeTable);
         const scopedData = scopeCity
           ? { ...data, city: assertValidCity(activeCity) }
@@ -4032,6 +4042,10 @@ app.post('/api/db/query', async (req, res) => {
       }
 
       case 'delete': {
+        if (safeTable === 'crm_leads' && !(await isAdminUser(user))) {
+          return res.status(403).json({ error: 'Apenas admin ou social_media podem excluir leads do CRM.' });
+        }
+
         let query = `DELETE FROM ${safeTable}`;
         const params = [];
         let paramIdx = 1;

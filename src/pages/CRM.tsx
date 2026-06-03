@@ -505,6 +505,8 @@ export default function CRM() {
 
                                                    </Dialog>
                                                 )}
+                                                <EditLeadDialog lead={lead} onUpdate={(data) => updateLead.mutate(data)} />
+                                                <DeleteLeadDialog leadName={lead.name} onDelete={() => deleteLead.mutate(lead.id)} />
                                                 <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
 
                                               </div>

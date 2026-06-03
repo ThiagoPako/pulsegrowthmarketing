@@ -921,3 +921,110 @@ function MeetingActions({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }
     </>
   );
 }
+
+function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Partial<Lead> & { id: string }) => void }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full text-blue-600 hover:bg-blue-50" title="Editar lead">
+          <Pencil size={14} />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Editar Lead - {lead.name}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          const formData = new FormData(e.currentTarget);
+          onUpdate({
+            id: lead.id,
+            name: formData.get('name') as string,
+            company: formData.get('company') as string,
+            email: formData.get('email') as string,
+            phone: formData.get('phone') as string,
+            contract_value: Number(formData.get('value')),
+            status: formData.get('status') as LeadStatus
+          });
+          setOpen(false);
+        }} className="space-y-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="edit-name">Nome do Decisor</Label>
+            <Input id="edit-name" name="name" defaultValue={lead.name} required className="bg-muted/50" />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="edit-company">Empresa / Negócio</Label>
+            <Input id="edit-company" name="company" defaultValue={lead.company || ''} className="bg-muted/50" />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="edit-email">Email</Label>
+            <Input id="edit-email" name="email" type="email" defaultValue={lead.email || ''} className="bg-muted/50" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-value">Valor Possível</Label>
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input id="edit-value" name="value" type="number" step="0.01" defaultValue={lead.contract_value} className="pl-9 bg-muted/50" />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-phone">WhatsApp</Label>
+              <Input id="edit-phone" name="phone" defaultValue={lead.phone || ''} className="bg-muted/50" />
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="edit-status">Status</Label>
+            <Select name="status" defaultValue={lead.status}>
+              <SelectTrigger className="bg-muted/50">
+                <SelectValue placeholder="Selecione o status" />
+              </SelectTrigger>
+              <SelectContent>
+                {STAGES.map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                ))}
+                {RECOVERY_STAGES.map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button type="submit" className="w-full mt-4">
+            Salvar Alterações
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteLeadDialog({ leadName, onDelete }: { leadName: string; onDelete: () => void }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full text-red-600 hover:bg-red-50" title="Excluir lead">
+          <Trash2 size={14} />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Excluir lead?</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Tem certeza que deseja excluir o lead <strong>{leadName}</strong>? Esta ação não pode ser desfeita.
+        </p>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+          <Button variant="destructive" onClick={() => {
+            onDelete();
+            setOpen(false);
+          }}>Excluir</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -119,7 +119,7 @@ export default function CRM() {
     mutationFn: async ({ id, status }: { id: string; status: LeadStatus }) => {
       const { error } = await supabase
         .from('crm_leads')
-        .update({ status })
+        .update({ status } as any)
         .eq('id', id);
       if (error) throw error;
     },
@@ -140,7 +140,7 @@ export default function CRM() {
           phone: lead.phone,
           contract_value: lead.contract_value,
           status: lead.status
-        })
+        } as any)
         .eq('id', lead.id);
       if (error) throw error;
     },

@@ -652,7 +652,9 @@ export default function CRM() {
                         </div>
                         <div className="flex items-center gap-1">
                           <MeetingActions lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
-                          <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                           <EditLeadDialog lead={lead} onUpdate={(data) => updateLead.mutate(data)} />
+                           <DeleteLeadDialog leadName={lead.name} onDelete={() => deleteLead.mutate(lead.id)} />
+                           <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
                         </div>
                       </div>
                     )})}

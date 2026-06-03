@@ -59,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchProfile = useCallback(async (userId: string) => {
     const hasVpsToken = typeof window !== 'undefined' && !!localStorage.getItem(TOKEN_KEY);
+    const token = typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
 
     if (!hasVpsToken) {
       const { data: sbData, error: sbErr } = await supabaseReal
@@ -72,6 +73,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    let authProfile: Partial<Profile> | null = null;
+    if (token) {
+      try {
+        const response = await fetch(`${VPS_API_BASE}/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (response.ok) {
+          authProfile = await response.json();
+        }
+      } catch (error) {
+        console.warn('fetchProfile auth/me failed:', error);
+      }
+    }
+
     // Try VPS first
     const { data, error } = await supabase
       .from('profiles')
@@ -79,9 +95,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .eq('id', userId)
       .single();
     if (data && !error) {
-      setProfile(data as Profile);
+      setProfile({
+        ...(data as Profile),
+        role: (authProfile?.role as AppRole) || (data as Profile).role,
+        email: authProfile?.email || (data as Profile).email,
+        name: authProfile?.name || (data as Profile).name,
+      });
       return;
     }
+
+    if (authProfile?.role) {
+      setProfile({
+        id: userId,
+        name: authProfile.name || authProfile.display_name || '',
+        email: authProfile.email || '',
+        role: authProfile.role as AppRole,
+        avatar_url: authProfile.avatar_url,
+        display_name: authProfile.display_name || authProfile.name,
+        job_title: authProfile.job_title,
+        bio: authProfile.bio,
+        font_scale: authProfile.font_scale,
+      });
+      return;
+    }
+
     // Fallback: try Supabase directly (preview environment)
     const { data: sbData, error: sbErr } = await supabaseReal
       .from('profiles')
@@ -89,7 +126,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .eq('id', userId)
       .single();
     if (sbData && !sbErr) {
-      setProfile(sbData as unknown as Profile);
+      setProfile({
+        ...(sbData as unknown as Profile),
+        role: (authProfile?.role as AppRole) || (sbData as unknown as Profile).role,
+      });
     }
   }, []);
 

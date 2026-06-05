@@ -1316,12 +1316,12 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
 
                     return (
                       <>
-                        {/* Add links - videomaker can add drive link in captacao, editor can add video link in edicao/alteracao */}
-                        {(task.kanban_column === 'captacao' || task.kanban_column === 'edicao') && !task.drive_link && !isEditor && (
+                        {/* Add links - videomaker can add drive link in captacao (e alteracao em story), editor adiciona video link em edicao/alteracao */}
+                        {((task.kanban_column === 'captacao' || task.kanban_column === 'edicao') && !task.drive_link && !isEditor) || (isVideomaker && task.kanban_column === 'alteracao' && task.content_type === 'story') ? (
                           <Button variant="outline" size="sm" className="w-full gap-2 justify-start" onClick={() => { setShowLinkForm('drive'); setLinkValue(''); }}>
-                            <Link2 size={14} className="text-blue-600" /> Adicionar Link Drive
+                            <Link2 size={14} className="text-blue-600" /> {isVideomaker && task.kanban_column === 'alteracao' ? 'Atualizar Link Drive' : 'Adicionar Link Drive'}
                           </Button>
-                        )}
+                        ) : null}
                         
                         {/* Video: Upload file OR paste link - only editors and admins */}
                         {(task.kanban_column === 'edicao' || task.kanban_column === 'alteracao') && !task.edited_video_link && !isVideomaker && (

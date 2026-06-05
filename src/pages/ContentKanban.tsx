@@ -694,7 +694,7 @@ export default function ContentKanban() {
   // ─── ROLE-BASED COLUMN PERMISSIONS ────────────────────────
   const ROLE_ALLOWED_COLUMNS: Record<string, string[]> = {
     editor: ['edicao', 'alteracao', 'revisao'], // editor can move to edicao/alteracao/revisao only
-    videomaker: ['ideias', 'captacao'], // videomaker preenche o link enquanto está em Captação
+    videomaker: ['ideias', 'captacao', 'alteracao', 'revisao'], // videomaker also handles alteração de stories
   };
 
   const userRole = profile?.role || '';
@@ -706,7 +706,7 @@ export default function ContentKanban() {
   // Columns where user can interact (drag, add, execute actions)
   const interactiveColumns = useMemo(() => {
     if (userRole === 'editor') return ['edicao', 'revisao', 'alteracao'];
-    if (userRole === 'videomaker') return ['ideias', 'captacao'];
+    if (userRole === 'videomaker') return ['ideias', 'captacao', 'alteracao', 'revisao'];
     return KANBAN_COLUMNS.map(c => c.id) as string[];
   }, [userRole]);
 

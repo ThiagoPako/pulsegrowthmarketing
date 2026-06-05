@@ -725,9 +725,17 @@ export default function ContentKanban() {
       if (userRole === 'editor' && !['edicao', 'alteracao'].includes(task.kanban_column)) {
         return 'Editores só podem mover cards que estejam em Edição ou Alteração.';
       }
-      // Videomaker can only move FROM their allowed columns
-      if (userRole === 'videomaker' && !['ideias', 'captacao'].includes(task.kanban_column)) {
-        return 'Videomakers só podem mover cards que estejam em Ideias ou Captação.';
+      // Videomaker: own columns + alteração apenas em stories
+      if (userRole === 'videomaker') {
+        const allowedFrom = ['ideias', 'captacao'];
+        const isStoryAlteracao = task.kanban_column === 'alteracao' && task.content_type === 'story';
+        if (!allowedFrom.includes(task.kanban_column) && !isStoryAlteracao) {
+          return 'Videomakers só podem mover cards em Ideias, Captação ou Alteração de Stories.';
+        }
+        // Restrict alteração transitions to story content
+        if (targetColumn === 'alteracao' && task.content_type !== 'story') {
+          return 'Videomakers só podem atuar em alterações de Stories.';
+        }
       }
     }
     // Rule: tasks in execution columns MUST have a responsible person

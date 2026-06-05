@@ -1239,16 +1239,19 @@ export default function ContentKanban() {
                               undefined
                             }
                             onSchedule={task.kanban_column === 'agendamentos' && (userRole === 'admin' || userRole === 'social_media') ? () => openScheduleDialog(task) : undefined}
-                            onResubmit={task.kanban_column === 'alteracao' && (userRole === 'editor' || userRole === 'admin') ? () => handleResubmitFromAlteracao(task) : undefined}
+                            onResubmit={task.kanban_column === 'alteracao' && (userRole === 'editor' || userRole === 'admin' || (userRole === 'videomaker' && task.content_type === 'story')) ? () => handleResubmitFromAlteracao(task) : undefined}
                             onMoveForward={(() => {
                               if (isRestricted) {
                                 // Editor: only forward from edicao→revisao or alteracao→revisao
                                 if (userRole === 'editor' && (task.kanban_column === 'edicao' || task.kanban_column === 'alteracao')) {
                                   return () => handleMoveToColumn(task, 'revisao');
                                 }
-                                // Videomaker: only forward from ideias→captacao
+                                // Videomaker: ideias→captacao; story alteracao→revisao
                                 if (userRole === 'videomaker' && task.kanban_column === 'ideias') {
                                   return () => handleMoveToColumn(task, 'captacao');
+                                }
+                                if (userRole === 'videomaker' && task.kanban_column === 'alteracao' && task.content_type === 'story') {
+                                  return () => handleMoveToColumn(task, 'revisao');
                                 }
                                 return undefined;
                               }
@@ -1270,6 +1273,7 @@ export default function ContentKanban() {
                             forwardLabel={(() => {
                               if (userRole === 'editor' && (task.kanban_column === 'edicao' || task.kanban_column === 'alteracao')) return 'Revisão';
                               if (userRole === 'videomaker' && task.kanban_column === 'ideias') return 'Captação';
+                              if (userRole === 'videomaker' && task.kanban_column === 'alteracao' && task.content_type === 'story') return 'Revisão';
                               if (isRestricted) return undefined;
                               return getAdjacentColumns(task.kanban_column).next?.label;
                             })()}

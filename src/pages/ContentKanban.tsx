@@ -694,7 +694,7 @@ export default function ContentKanban() {
   // ─── ROLE-BASED COLUMN PERMISSIONS ────────────────────────
   const ROLE_ALLOWED_COLUMNS: Record<string, string[]> = {
     editor: ['edicao', 'alteracao', 'revisao'], // editor can move to edicao/alteracao/revisao only
-    videomaker: ['ideias', 'captacao'], // videomaker preenche o link enquanto está em Captação
+    videomaker: ['ideias', 'captacao', 'alteracao', 'revisao'], // videomaker also handles alteração de stories
   };
 
   const userRole = profile?.role || '';
@@ -706,7 +706,7 @@ export default function ContentKanban() {
   // Columns where user can interact (drag, add, execute actions)
   const interactiveColumns = useMemo(() => {
     if (userRole === 'editor') return ['edicao', 'revisao', 'alteracao'];
-    if (userRole === 'videomaker') return ['ideias', 'captacao'];
+    if (userRole === 'videomaker') return ['ideias', 'captacao', 'alteracao', 'revisao'];
     return KANBAN_COLUMNS.map(c => c.id) as string[];
   }, [userRole]);
 
@@ -725,9 +725,17 @@ export default function ContentKanban() {
       if (userRole === 'editor' && !['edicao', 'alteracao'].includes(task.kanban_column)) {
         return 'Editores só podem mover cards que estejam em Edição ou Alteração.';
       }
-      // Videomaker can only move FROM their allowed columns
-      if (userRole === 'videomaker' && !['ideias', 'captacao'].includes(task.kanban_column)) {
-        return 'Videomakers só podem mover cards que estejam em Ideias ou Captação.';
+      // Videomaker: own columns + alteração apenas em stories
+      if (userRole === 'videomaker') {
+        const allowedFrom = ['ideias', 'captacao'];
+        const isStoryAlteracao = task.kanban_column === 'alteracao' && task.content_type === 'story';
+        if (!allowedFrom.includes(task.kanban_column) && !isStoryAlteracao) {
+          return 'Videomakers só podem mover cards em Ideias, Captação ou Alteração de Stories.';
+        }
+        // Restrict alteração transitions to story content
+        if (targetColumn === 'alteracao' && task.content_type !== 'story') {
+          return 'Videomakers só podem atuar em alterações de Stories.';
+        }
       }
     }
     // Rule: tasks in execution columns MUST have a responsible person
@@ -1231,16 +1239,19 @@ export default function ContentKanban() {
                               undefined
                             }
                             onSchedule={task.kanban_column === 'agendamentos' && (userRole === 'admin' || userRole === 'social_media') ? () => openScheduleDialog(task) : undefined}
-                            onResubmit={task.kanban_column === 'alteracao' && (userRole === 'editor' || userRole === 'admin') ? () => handleResubmitFromAlteracao(task) : undefined}
+                            onResubmit={task.kanban_column === 'alteracao' && (userRole === 'editor' || userRole === 'admin' || (userRole === 'videomaker' && task.content_type === 'story')) ? () => handleResubmitFromAlteracao(task) : undefined}
                             onMoveForward={(() => {
                               if (isRestricted) {
                                 // Editor: only forward from edicao→revisao or alteracao→revisao
                                 if (userRole === 'editor' && (task.kanban_column === 'edicao' || task.kanban_column === 'alteracao')) {
                                   return () => handleMoveToColumn(task, 'revisao');
                                 }
-                                // Videomaker: only forward from ideias→captacao
+                                // Videomaker: ideias→captacao; story alteracao→revisao
                                 if (userRole === 'videomaker' && task.kanban_column === 'ideias') {
                                   return () => handleMoveToColumn(task, 'captacao');
+                                }
+                                if (userRole === 'videomaker' && task.kanban_column === 'alteracao' && task.content_type === 'story') {
+                                  return () => handleMoveToColumn(task, 'revisao');
                                 }
                                 return undefined;
                               }
@@ -1262,6 +1273,7 @@ export default function ContentKanban() {
                             forwardLabel={(() => {
                               if (userRole === 'editor' && (task.kanban_column === 'edicao' || task.kanban_column === 'alteracao')) return 'Revisão';
                               if (userRole === 'videomaker' && task.kanban_column === 'ideias') return 'Captação';
+                              if (userRole === 'videomaker' && task.kanban_column === 'alteracao' && task.content_type === 'story') return 'Revisão';
                               if (isRestricted) return undefined;
                               return getAdjacentColumns(task.kanban_column).next?.label;
                             })()}

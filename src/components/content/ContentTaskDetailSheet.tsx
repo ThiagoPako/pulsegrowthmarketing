@@ -1408,8 +1408,8 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                           </div>
                         )}
 
-                        {/* Alteração: Resubmit - editor or admin */}
-                        {task.kanban_column === 'alteracao' && (isEditor || canManage) && (
+                        {/* Alteração: Resubmit - editor, admin, ou videomaker em story */}
+                        {task.kanban_column === 'alteracao' && (isEditor || canManage || (isVideomaker && task.content_type === 'story')) && (
                           <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-teal-600 border-teal-300 hover:bg-teal-50 dark:text-teal-400 dark:border-teal-700" onClick={handleResubmitFromAlteracao}>
                             <Send size={14} /> Reenviar para Revisão
                           </Button>

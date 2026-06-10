@@ -95,11 +95,25 @@ export default function DesignerKanban() {
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
   const canDelete = currentUser?.role === 'admin';
 
+  const PRIORITY_WEIGHT: Record<string, number> = { urgente: 0, alta: 1, media: 2, baixa: 3 };
+
   const tasksByColumn = useMemo(() => {
     const map: Record<string, DesignTask[]> = {};
     DESIGN_COLUMNS.forEach(c => { map[c.key] = []; });
     tasks.forEach(t => {
       if (map[t.kanban_column]) map[t.kanban_column].push(t);
+    });
+    // Order by position asc, then priority weight, then created_at asc
+    Object.keys(map).forEach(k => {
+      map[k].sort((a, b) => {
+        const pa = a.position ?? 999999;
+        const pb = b.position ?? 999999;
+        if (pa !== pb) return pa - pb;
+        const wa = PRIORITY_WEIGHT[a.priority] ?? 9;
+        const wb = PRIORITY_WEIGHT[b.priority] ?? 9;
+        if (wa !== wb) return wa - wb;
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
     });
     return map;
   }, [tasks]);

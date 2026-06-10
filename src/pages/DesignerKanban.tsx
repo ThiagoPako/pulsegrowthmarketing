@@ -604,21 +604,25 @@ function CopyPreviewDialog({ task, onClose, onOpenFull }: { task: DesignTask; on
 /* ── Enhanced Task Card ── */
 interface TaskCardProps {
   task: DesignTask;
+  queueIndex?: number | null;
+  columnKey?: string;
   isDragging: boolean;
   onClick: () => void;
   onOpenDetail: () => void;
   onDelete: () => void;
   canDelete: boolean;
   onQuickStart?: () => void;
+  onReturnToQueue?: () => void;
   onDragStart: (e: DragEvent<HTMLDivElement>) => void;
   onDragEnd: () => void;
 }
 
-function TaskCard({ task, isDragging, onClick, onOpenDetail, onDelete, canDelete, onQuickStart, onDragStart, onDragEnd }: TaskCardProps) {
+function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDetail, onDelete, canDelete, onQuickStart, onReturnToQueue, onDragStart, onDragEnd }: TaskCardProps) {
   const priorityCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.media;
   
   const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.kanban_column !== 'aprovado';
   const formattedDueDate = task.due_date ? new Date(task.due_date).toLocaleDateString('pt-BR') : null;
+  const isNext = queueIndex === 1 && columnKey === 'nova_tarefa';
 
   return (
     <div
@@ -628,8 +632,23 @@ function TaskCard({ task, isDragging, onClick, onOpenDetail, onDelete, canDelete
       onClick={onClick}
       className={`relative bg-card border border-border/60 rounded-xl p-3 cursor-grab active:cursor-grabbing hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200 space-y-2.5 group ${
         isDragging ? 'opacity-40 scale-95 ring-2 ring-primary/40' : ''
-      } ${isOverdue ? 'border-red-500/50 bg-red-50/10 dark:bg-red-950/5 animate-[pulse_2s_infinite]' : ''}`}
+      } ${isOverdue ? 'border-red-500/50 bg-red-50/10 dark:bg-red-950/5 animate-[pulse_2s_infinite]' : ''} ${
+        isNext ? 'ring-2 ring-amber-400/70 shadow-lg shadow-amber-500/10' : ''
+      }`}
     >
+      {/* Queue order badge */}
+      {queueIndex != null && (
+        <div
+          className={`absolute -top-2 -left-2 z-20 min-w-[26px] h-[26px] px-1.5 flex items-center justify-center rounded-full text-[11px] font-bold shadow-md ${
+            isNext
+              ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white ring-2 ring-background animate-pulse'
+              : 'bg-primary text-primary-foreground ring-2 ring-background'
+          }`}
+          title={isNext ? 'Próxima a executar' : `Posição ${queueIndex} na fila`}
+        >
+          {isNext ? <Flame size={11} /> : `#${queueIndex}`}
+        </div>
+      )}
       {/* Quick action buttons - positioned away from top-right close area */}
       <div className="absolute top-2 left-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
         <button

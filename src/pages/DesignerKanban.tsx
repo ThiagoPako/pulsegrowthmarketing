@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2, Play, Image as ImageIcon, Upload, Download, FileDown, Calendar } from 'lucide-react';
+import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2, Play, Image as ImageIcon, Upload, Download, FileDown, Calendar, Undo2, Flame } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DesignTaskCreateDialog from '@/components/designer/DesignTaskCreateDialog';
 import DesignTaskDetailSheet from '@/components/designer/DesignTaskDetailSheet';
@@ -95,11 +95,25 @@ export default function DesignerKanban() {
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
   const canDelete = currentUser?.role === 'admin';
 
+  const PRIORITY_WEIGHT: Record<string, number> = { urgente: 0, alta: 1, media: 2, baixa: 3 };
+
   const tasksByColumn = useMemo(() => {
     const map: Record<string, DesignTask[]> = {};
     DESIGN_COLUMNS.forEach(c => { map[c.key] = []; });
     tasks.forEach(t => {
       if (map[t.kanban_column]) map[t.kanban_column].push(t);
+    });
+    // Order by position asc, then priority weight, then created_at asc
+    Object.keys(map).forEach(k => {
+      map[k].sort((a, b) => {
+        const pa = a.position ?? 999999;
+        const pb = b.position ?? 999999;
+        if (pa !== pb) return pa - pb;
+        const wa = PRIORITY_WEIGHT[a.priority] ?? 9;
+        const wb = PRIORITY_WEIGHT[b.priority] ?? 9;
+        if (wa !== wb) return wa - wb;
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
     });
     return map;
   }, [tasks]);
@@ -215,6 +229,27 @@ export default function DesignerKanban() {
       toast.success('Tarefa iniciada! 🎨');
     } catch (err: any) {
       toast.error(err.message || 'Erro ao iniciar');
+    }
+  };
+
+  const handleReturnToQueue = async (task: DesignTask) => {
+    if (!window.confirm(`Devolver "${task.title}" para Nova Tarefa? O cronômetro será pausado.`)) return;
+    try {
+      await updateTask.mutateAsync({
+        id: task.id,
+        kanban_column: 'nova_tarefa',
+        timer_running: false,
+        timer_started_at: null,
+      } as any);
+      await addHistory.mutateAsync({
+        task_id: task.id,
+        action: 'Devolvida para fila',
+        details: 'Designer retornou a tarefa para Nova Tarefa para trocar/ajustar',
+        user_id: user?.id,
+      });
+      toast.success('Tarefa devolvida para a fila');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao devolver tarefa');
     }
   };
 
@@ -351,6 +386,8 @@ export default function DesignerKanban() {
                         >
                           <TaskCard
                             task={task}
+                            queueIndex={col.key === 'nova_tarefa' || col.key === 'executando' ? i + 1 : null}
+                            columnKey={col.key}
                             isDragging={draggingTaskId === task.id}
                             onClick={() => setCopyPreviewTask(task)}
                             onOpenDetail={() => setSelectedTaskId(task.id)}
@@ -361,6 +398,7 @@ export default function DesignerKanban() {
                             }}
                             canDelete={canDelete}
                             onQuickStart={col.key === 'nova_tarefa' ? () => handleQuickStart(task) : undefined}
+                            onReturnToQueue={col.key === 'executando' ? () => handleReturnToQueue(task) : undefined}
                             onDragStart={e => handleDragStart(e, task)}
                             onDragEnd={handleDragEnd}
                           />
@@ -566,21 +604,25 @@ function CopyPreviewDialog({ task, onClose, onOpenFull }: { task: DesignTask; on
 /* ── Enhanced Task Card ── */
 interface TaskCardProps {
   task: DesignTask;
+  queueIndex?: number | null;
+  columnKey?: string;
   isDragging: boolean;
   onClick: () => void;
   onOpenDetail: () => void;
   onDelete: () => void;
   canDelete: boolean;
   onQuickStart?: () => void;
+  onReturnToQueue?: () => void;
   onDragStart: (e: DragEvent<HTMLDivElement>) => void;
   onDragEnd: () => void;
 }
 
-function TaskCard({ task, isDragging, onClick, onOpenDetail, onDelete, canDelete, onQuickStart, onDragStart, onDragEnd }: TaskCardProps) {
+function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDetail, onDelete, canDelete, onQuickStart, onReturnToQueue, onDragStart, onDragEnd }: TaskCardProps) {
   const priorityCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.media;
   
   const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.kanban_column !== 'aprovado';
   const formattedDueDate = task.due_date ? new Date(task.due_date).toLocaleDateString('pt-BR') : null;
+  const isNext = queueIndex === 1 && columnKey === 'nova_tarefa';
 
   return (
     <div
@@ -590,8 +632,23 @@ function TaskCard({ task, isDragging, onClick, onOpenDetail, onDelete, canDelete
       onClick={onClick}
       className={`relative bg-card border border-border/60 rounded-xl p-3 cursor-grab active:cursor-grabbing hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200 space-y-2.5 group ${
         isDragging ? 'opacity-40 scale-95 ring-2 ring-primary/40' : ''
-      } ${isOverdue ? 'border-red-500/50 bg-red-50/10 dark:bg-red-950/5 animate-[pulse_2s_infinite]' : ''}`}
+      } ${isOverdue ? 'border-red-500/50 bg-red-50/10 dark:bg-red-950/5 animate-[pulse_2s_infinite]' : ''} ${
+        isNext ? 'ring-2 ring-amber-400/70 shadow-lg shadow-amber-500/10' : ''
+      }`}
     >
+      {/* Queue order badge */}
+      {queueIndex != null && (
+        <div
+          className={`absolute -top-2 -left-2 z-20 min-w-[26px] h-[26px] px-1.5 flex items-center justify-center rounded-full text-[11px] font-bold shadow-md ${
+            isNext
+              ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white ring-2 ring-background animate-pulse'
+              : 'bg-primary text-primary-foreground ring-2 ring-background'
+          }`}
+          title={isNext ? 'Próxima a executar' : `Posição ${queueIndex} na fila`}
+        >
+          {isNext ? <Flame size={11} /> : `#${queueIndex}`}
+        </div>
+      )}
       {/* Quick action buttons - positioned away from top-right close area */}
       <div className="absolute top-2 left-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
         <button
@@ -652,6 +709,19 @@ function TaskCard({ task, isDragging, onClick, onOpenDetail, onDelete, canDelete
           onClick={(e) => { e.stopPropagation(); onQuickStart(); }}
         >
           <Play size={12} fill="currentColor" /> Iniciar Tarefa
+        </Button>
+      )}
+
+      {/* Return to queue button for executando */}
+      {onReturnToQueue && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full h-7 text-[11px] gap-1.5 border-dashed text-muted-foreground hover:text-foreground hover:border-amber-400/60 hover:bg-amber-50/40 dark:hover:bg-amber-950/20 rounded-lg"
+          onClick={(e) => { e.stopPropagation(); onReturnToQueue(); }}
+          title="Devolver para Nova Tarefa para trocar ou adicionar arte"
+        >
+          <Undo2 size={11} /> Voltar para Nova Tarefa
         </Button>
       )}
     </div>

@@ -386,6 +386,8 @@ export default function DesignerKanban() {
                         >
                           <TaskCard
                             task={task}
+                            queueIndex={col.key === 'nova_tarefa' || col.key === 'executando' ? i + 1 : null}
+                            columnKey={col.key}
                             isDragging={draggingTaskId === task.id}
                             onClick={() => setCopyPreviewTask(task)}
                             onOpenDetail={() => setSelectedTaskId(task.id)}
@@ -396,6 +398,7 @@ export default function DesignerKanban() {
                             }}
                             canDelete={canDelete}
                             onQuickStart={col.key === 'nova_tarefa' ? () => handleQuickStart(task) : undefined}
+                            onReturnToQueue={col.key === 'executando' ? () => handleReturnToQueue(task) : undefined}
                             onDragStart={e => handleDragStart(e, task)}
                             onDragEnd={handleDragEnd}
                           />

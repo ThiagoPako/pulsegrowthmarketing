@@ -711,6 +711,19 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
           <Play size={12} fill="currentColor" /> Iniciar Tarefa
         </Button>
       )}
+
+      {/* Return to queue button for executando */}
+      {onReturnToQueue && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full h-7 text-[11px] gap-1.5 border-dashed text-muted-foreground hover:text-foreground hover:border-amber-400/60 hover:bg-amber-50/40 dark:hover:bg-amber-950/20 rounded-lg"
+          onClick={(e) => { e.stopPropagation(); onReturnToQueue(); }}
+          title="Devolver para Nova Tarefa para trocar ou adicionar arte"
+        >
+          <Undo2 size={11} /> Voltar para Nova Tarefa
+        </Button>
+      )}
     </div>
   );
 }

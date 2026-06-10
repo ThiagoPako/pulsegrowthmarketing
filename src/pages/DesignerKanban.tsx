@@ -232,6 +232,27 @@ export default function DesignerKanban() {
     }
   };
 
+  const handleReturnToQueue = async (task: DesignTask) => {
+    if (!window.confirm(`Devolver "${task.title}" para Nova Tarefa? O cronômetro será pausado.`)) return;
+    try {
+      await updateTask.mutateAsync({
+        id: task.id,
+        kanban_column: 'nova_tarefa',
+        timer_running: false,
+        timer_started_at: null,
+      } as any);
+      await addHistory.mutateAsync({
+        task_id: task.id,
+        action: 'Devolvida para fila',
+        details: 'Designer retornou a tarefa para Nova Tarefa para trocar/ajustar',
+        user_id: user?.id,
+      });
+      toast.success('Tarefa devolvida para a fila');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao devolver tarefa');
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">

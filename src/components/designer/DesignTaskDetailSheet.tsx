@@ -1441,17 +1441,17 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                       )}
                     </div>
 
-                    {/* Reference image upload */}
+                    {/* Reference image / file upload */}
                     <div className="space-y-1.5">
                       <Label className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                        <Image size={10} /> Imagens de referência (opcional)
+                        <Image size={10} /> Imagens ou arquivos de referência (opcional)
                       </Label>
                       <label className={`flex items-center justify-center gap-1.5 h-8 rounded-md border border-dashed border-border cursor-pointer text-[11px] hover:bg-muted/40 transition-colors ${uploadingAdjustmentRef ? 'opacity-60 pointer-events-none' : ''}`}>
                         {uploadingAdjustmentRef ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                        <span>{uploadingAdjustmentRef ? 'Enviando...' : 'Anexar imagens (PNG, JPG, até 10MB)'}</span>
+                        <span>{uploadingAdjustmentRef ? 'Enviando...' : 'Anexar imagens ou arquivos (PDF, AI, PSD, DOC, etc, até 10MB)'}</span>
                         <input
                           type="file"
-                          accept="image/*"
+                          accept="*/*"
                           multiple
                           className="hidden"
                           onChange={e => { handleUploadAdjustmentRef(e.target.files); e.target.value = ''; }}

@@ -80,6 +80,8 @@ const CancellationReports = lazy(() => import("@/pages/CancellationReports"));
 const EventRegistration = lazy(() => import("@/pages/EventRegistration"));
 const TrainingManager = lazy(() => import("@/pages/TrainingManager"));
 const CRM = lazy(() => import("@/pages/CRM"));
+const LinkShortener = lazy(() => import("@/pages/LinkShortener"));
+const ShortLinkRedirect = lazy(() => import("@/pages/ShortLinkRedirect"));
 const Training = lazy(() => import("@/pages/Training"));
 const TrainingRegister = lazy(() => import("@/pages/TrainingRegister"));
 
@@ -203,6 +205,8 @@ function AppRoutes() {
         <Route path="/treinamento-registro" element={<TrainingRegister />} />
         <Route path="/evento/:token" element={<EventRegistration />} />
         <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
+        <Route path="/encurtador" element={<ProtectedRoute><LinkShortener /></ProtectedRoute>} />
+        <Route path="/r/:slug" element={<ShortLinkRedirect />} />
 
         <Route path="/tv" element={<Suspense fallback={<PageLoader />}><TvDashboard /></Suspense>} />
         <Route path="*" element={<NotFound />} />

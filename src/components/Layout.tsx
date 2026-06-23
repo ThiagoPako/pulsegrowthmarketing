@@ -69,6 +69,7 @@ const navCategories: NavCategory[] = [
       { path: '/planos', label: 'Planos', icon: Package, roles: ['admin', 'social_media'] },
       { path: '/metas', label: 'Metas', icon: Target, roles: ['admin', 'social_media'] },
       { path: '/crm', label: 'CRM', icon: Kanban, roles: ['admin', 'social_media'] },
+      { path: '/encurtador', label: 'Encurtador', icon: Type, roles: ['admin', 'social_media'] },
     ],
   },
 

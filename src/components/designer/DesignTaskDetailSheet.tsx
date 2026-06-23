@@ -83,6 +83,9 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [showRocketFlyby, setShowRocketFlyby] = useState(false);
   const [dueDate, setDueDate] = useState(task.due_date || '');
   const [editingDueDate, setEditingDueDate] = useState(false);
+  const [editingRefs, setEditingRefs] = useState(false);
+  const [newRefLink, setNewRefLink] = useState('');
+  const [uploadingRefImage, setUploadingRefImage] = useState(false);
   const prevColumnRef = useRef(task.kanban_column);
 
   // Animate rocket flyby when column changes

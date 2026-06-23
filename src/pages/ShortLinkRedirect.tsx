@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import pulseLogo from "@/assets/pulse-logo.png";
+import pulseLogo from "@/assets/pulse_logo.png.asset.json";
 
 export default function ShortLinkRedirect() {
   const { slug } = useParams<{ slug: string }>();
@@ -40,18 +40,16 @@ export default function ShortLinkRedirect() {
   }, [slug]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/10">
+    <div className="min-h-screen flex items-center justify-center bg-black">
       <div className="flex flex-col items-center gap-6 px-6 text-center">
         <img
-          src={pulseLogo}
+          src={pulseLogo.url}
           alt="Pulse Growth Marketing"
-          className="w-44 h-auto animate-pulse drop-shadow-lg"
+          className="w-56 h-auto animate-pulse drop-shadow-[0_0_30px_rgba(234,88,12,0.5)]"
+          style={{ animationDuration: "1.2s" }}
         />
         {status === "loading" ? (
-          <>
-            <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-            <p className="text-sm text-muted-foreground">Redirecionando...</p>
-          </>
+          <div className="w-8 h-8 border-4 border-white/20 border-t-primary rounded-full animate-spin" />
         ) : (
           <p className="text-base text-destructive font-medium">Link inválido ou expirado.</p>
         )}

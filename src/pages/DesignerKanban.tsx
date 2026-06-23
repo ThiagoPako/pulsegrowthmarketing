@@ -181,6 +181,8 @@ export default function DesignerKanban() {
         toast.error('Anexe a arte ou mockup antes de enviar para análise');
         return;
       }
+      // Card está pronto: remover data de vencimento para não ficar marcado como atrasado
+      extraFields.due_date = null;
     }
 
     if (targetColumn === 'aprovado') {

@@ -161,14 +161,17 @@ export default function DesignerKanban() {
     
     if (overTaskId) {
       const overIdx = colTasks.findIndex(t => t.id === overTaskId);
+      const prevPos = Number(colTasks[overIdx-1]?.position ?? 0);
+      const overPos = Number(colTasks[overIdx]?.position ?? 0);
       // Insert BEFORE the card we are hovering over
-      newPosition = overIdx === 0 ? (colTasks[0]?.position || 1000) - 100 : ((colTasks[overIdx-1]?.position || 0) + (colTasks[overIdx]?.position || 0)) / 2;
+      newPosition = overIdx === 0 ? Number(colTasks[0]?.position ?? 1000) - 100 : (prevPos + overPos) / 2;
     } else {
       // If no overTaskId, append to the end
-      newPosition = colTasks.length > 0 ? (colTasks[colTasks.length-1]?.position || 0) + 100 : 1000;
+      const lastPos = Number(colTasks[colTasks.length-1]?.position ?? 0);
+      newPosition = colTasks.length > 0 ? lastPos + 100 : 1000;
     }
     
-    extraFields.position = newPosition;
+    extraFields.position = Math.round(newPosition);
 
     if (targetColumn === 'executando') {
       if (!task.started_at) extraFields.started_at = new Date().toISOString();

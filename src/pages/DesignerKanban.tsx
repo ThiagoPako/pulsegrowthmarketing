@@ -507,6 +507,97 @@ export default function DesignerKanban() {
   );
 }
 
+/* ── Agendamentos View: tasks grouped by due_date ── */
+function AgendamentosView({ tasks, onOpen }: { tasks: DesignTask[]; onOpen: (id: string) => void }) {
+  const COMPLETED_COLS = ['em_analise', 'enviar_cliente', 'aprovado'];
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+  const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + 7);
+
+  const scheduled = tasks
+    .filter(t => t.due_date && !COMPLETED_COLS.includes(t.kanban_column))
+    .sort((a, b) => new Date(a.due_date!).getTime() - new Date(b.due_date!).getTime());
+
+  const groups: { label: string; tone: string; items: DesignTask[] }[] = [
+    { label: '⚠️ Atrasados', tone: 'text-red-600 border-red-500/40', items: [] },
+    { label: '🔥 Hoje', tone: 'text-amber-600 border-amber-500/40', items: [] },
+    { label: '📅 Amanhã', tone: 'text-orange-600 border-orange-500/40', items: [] },
+    { label: '🗓️ Esta semana', tone: 'text-blue-600 border-blue-500/40', items: [] },
+    { label: '🌅 Futuro', tone: 'text-muted-foreground border-border', items: [] },
+  ];
+
+  scheduled.forEach(t => {
+    const d = new Date(t.due_date!); d.setHours(0, 0, 0, 0);
+    if (d < today) groups[0].items.push(t);
+    else if (d.getTime() === today.getTime()) groups[1].items.push(t);
+    else if (d.getTime() === tomorrow.getTime()) groups[2].items.push(t);
+    else if (d <= weekEnd) groups[3].items.push(t);
+    else groups[4].items.push(t);
+  });
+
+  const unscheduled = tasks.filter(t => !t.due_date && !COMPLETED_COLS.includes(t.kanban_column));
+
+  return (
+    <div className="space-y-4">
+      {groups.every(g => g.items.length === 0) && unscheduled.length === 0 && (
+        <div className="text-center py-12 text-muted-foreground text-sm">
+          Nenhum agendamento pendente. 🎉
+        </div>
+      )}
+      {groups.map(g => g.items.length > 0 && (
+        <div key={g.label} className={`rounded-xl border-l-4 ${g.tone} bg-card border border-border p-3`}>
+          <div className={`text-xs font-bold uppercase tracking-wider mb-2 ${g.tone.split(' ')[0]}`}>
+            {g.label} <span className="text-muted-foreground font-normal">({g.items.length})</span>
+          </div>
+          <div className="space-y-1.5">
+            {g.items.map(t => (
+              <button
+                key={t.id}
+                onClick={() => onOpen(t.id)}
+                className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left group"
+              >
+                <ClientLogo client={{ companyName: t.clients?.company_name || '', color: t.clients?.color || '217 91% 60%', logoUrl: t.clients?.logo_url }} size="sm" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{t.title}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{t.clients?.company_name} • {FORMAT_LABELS[t.format_type] || t.format_type}</p>
+                </div>
+                <Badge variant="outline" className="text-[10px] shrink-0">
+                  <Calendar size={10} className="mr-1" /> {new Date(t.due_date!).toLocaleDateString('pt-BR')}
+                </Badge>
+                <Badge className={`text-[10px] shrink-0 ${PRIORITY_CONFIG[t.priority]?.color}`}>{PRIORITY_CONFIG[t.priority]?.label}</Badge>
+                <Badge variant="secondary" className="text-[10px] shrink-0">{DESIGN_COLUMNS.find(c => c.key === t.kanban_column)?.label}</Badge>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      {unscheduled.length > 0 && (
+        <div className="rounded-xl border border-dashed border-border bg-muted/20 p-3">
+          <div className="text-xs font-bold uppercase tracking-wider mb-2 text-muted-foreground">
+            Sem prazo definido <span className="font-normal">({unscheduled.length})</span>
+          </div>
+          <div className="space-y-1.5">
+            {unscheduled.map(t => (
+              <button
+                key={t.id}
+                onClick={() => onOpen(t.id)}
+                className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left group"
+              >
+                <ClientLogo client={{ companyName: t.clients?.company_name || '', color: t.clients?.color || '217 91% 60%', logoUrl: t.clients?.logo_url }} size="sm" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{t.title}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{t.clients?.company_name} • {FORMAT_LABELS[t.format_type] || t.format_type}</p>
+                </div>
+                <Badge className={`text-[10px] shrink-0 ${PRIORITY_CONFIG[t.priority]?.color}`}>{PRIORITY_CONFIG[t.priority]?.label}</Badge>
+                <Badge variant="secondary" className="text-[10px] shrink-0">{DESIGN_COLUMNS.find(c => c.key === t.kanban_column)?.label}</Badge>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
 /* ── Copy Preview Dialog ── */
 function CopyPreviewDialog({ task, onClose, onOpenFull }: { task: DesignTask; onClose: () => void; onOpenFull: () => void }) {
   const color = task.clients?.color || '217 91% 60%';

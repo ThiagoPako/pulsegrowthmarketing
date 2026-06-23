@@ -597,6 +597,9 @@ function AgendamentosView({ tasks, onOpen }: { tasks: DesignTask[]; onOpen: (id:
       )}
     </div>
   );
+}
+
+
 
 /* ── Copy Preview Dialog ── */
 function CopyPreviewDialog({ task, onClose, onOpenFull }: { task: DesignTask; onClose: () => void; onOpenFull: () => void }) {

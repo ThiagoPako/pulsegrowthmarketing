@@ -623,8 +623,9 @@ interface TaskCardProps {
 function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDetail, onDelete, canDelete, onQuickStart, onReturnToQueue, onDragStart, onDragEnd }: TaskCardProps) {
   const priorityCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.media;
   
-  const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.kanban_column !== 'aprovado';
-  const formattedDueDate = task.due_date ? new Date(task.due_date).toLocaleDateString('pt-BR') : null;
+  const COMPLETED_COLS = ['em_analise', 'enviar_cliente', 'aprovado'];
+  const isOverdue = task.due_date && new Date(task.due_date) < new Date() && !COMPLETED_COLS.includes(task.kanban_column);
+  const formattedDueDate = task.due_date && !COMPLETED_COLS.includes(task.kanban_column) ? new Date(task.due_date).toLocaleDateString('pt-BR') : null;
   const isNext = queueIndex === 1 && columnKey === 'nova_tarefa';
 
   return (

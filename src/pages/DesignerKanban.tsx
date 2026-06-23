@@ -155,22 +155,42 @@ export default function DesignerKanban() {
     const targetLabel = DESIGN_COLUMNS.find(c => c.key === targetColumn)?.label || targetColumn;
     const extraFields: Record<string, any> = {};
 
-    // Calculate new position
+    // Calculate new position (safe within bigint range)
+    const MAX_SAFE_POS = 1e15;
     const colTasks = [...(tasksByColumn[targetColumn] || [])].filter(t => t.id !== taskId);
+    const hasCorruptPos = colTasks.some(t => {
+      const n = Number(t.position);
+      return !Number.isFinite(n) || Math.abs(n) > MAX_SAFE_POS;
+    });
+
     let newPosition = 0;
-    
-    if (overTaskId) {
+    let renormalizeUpdates: Array<{ id: string; position: number }> = [];
+
+    if (hasCorruptPos) {
+      // Renormaliza posições da coluna para evitar overflow de bigint
+      let insertIdx = colTasks.length;
+      if (overTaskId) {
+        const i = colTasks.findIndex(t => t.id === overTaskId);
+        if (i >= 0) insertIdx = i;
+      }
+      const reordered = [...colTasks];
+      reordered.splice(insertIdx, 0, { id: taskId } as any);
+      renormalizeUpdates = reordered.map((t, idx) => ({ id: t.id, position: (idx + 1) * 1000 }));
+      newPosition = (insertIdx + 1) * 1000;
+    } else if (overTaskId) {
       const overIdx = colTasks.findIndex(t => t.id === overTaskId);
       const prevPos = Number(colTasks[overIdx-1]?.position ?? 0);
       const overPos = Number(colTasks[overIdx]?.position ?? 0);
-      // Insert BEFORE the card we are hovering over
       newPosition = overIdx === 0 ? Number(colTasks[0]?.position ?? 1000) - 100 : (prevPos + overPos) / 2;
     } else {
-      // If no overTaskId, append to the end
       const lastPos = Number(colTasks[colTasks.length-1]?.position ?? 0);
       newPosition = colTasks.length > 0 ? lastPos + 100 : 1000;
     }
-    
+
+    // Clamp final
+    if (!Number.isFinite(newPosition) || Math.abs(newPosition) > MAX_SAFE_POS) {
+      newPosition = (colTasks.length + 1) * 1000;
+    }
     extraFields.position = Math.round(newPosition);
 
     if (targetColumn === 'executando') {
@@ -184,7 +204,6 @@ export default function DesignerKanban() {
         toast.error('Anexe a arte ou mockup antes de enviar para análise');
         return;
       }
-      // Card está pronto: remover data de vencimento para não ficar marcado como atrasado
       extraFields.due_date = null;
     }
 
@@ -205,13 +224,20 @@ export default function DesignerKanban() {
     }
 
     try {
+      if (renormalizeUpdates.length > 0) {
+        await Promise.all(
+          renormalizeUpdates
+            .filter(u => u.id !== taskId)
+            .map(u => supabase.from('design_tasks').update({ position: u.position }).eq('id', u.id))
+        );
+      }
       await updateTask.mutateAsync({ id: taskId, kanban_column: targetColumn, ...extraFields } as any);
       await addHistory.mutateAsync({ task_id: taskId, action: `Movido para ${targetLabel}`, user_id: user?.id });
       toast.success(`Tarefa movida para "${targetLabel}"`);
     } catch (err: any) {
       toast.error(err.message || 'Erro ao mover tarefa');
     }
-  }, [tasks, user, updateTask, addHistory]);
+  }, [tasks, user, updateTask, addHistory, tasksByColumn]);
 
   const handleDragEnd = useCallback(() => {
     setDraggingTaskId(null);

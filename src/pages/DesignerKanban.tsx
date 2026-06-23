@@ -106,8 +106,8 @@ export default function DesignerKanban() {
     // Order by position asc, then priority weight, then created_at asc
     Object.keys(map).forEach(k => {
       map[k].sort((a, b) => {
-        const pa = a.position ?? 999999;
-        const pb = b.position ?? 999999;
+        const pa = a.position != null ? Number(a.position) : 999999;
+        const pb = b.position != null ? Number(b.position) : 999999;
         if (pa !== pb) return pa - pb;
         const wa = PRIORITY_WEIGHT[a.priority] ?? 9;
         const wb = PRIORITY_WEIGHT[b.priority] ?? 9;
@@ -161,14 +161,17 @@ export default function DesignerKanban() {
     
     if (overTaskId) {
       const overIdx = colTasks.findIndex(t => t.id === overTaskId);
+      const prevPos = Number(colTasks[overIdx-1]?.position ?? 0);
+      const overPos = Number(colTasks[overIdx]?.position ?? 0);
       // Insert BEFORE the card we are hovering over
-      newPosition = overIdx === 0 ? (colTasks[0]?.position || 1000) - 100 : ((colTasks[overIdx-1]?.position || 0) + (colTasks[overIdx]?.position || 0)) / 2;
+      newPosition = overIdx === 0 ? Number(colTasks[0]?.position ?? 1000) - 100 : (prevPos + overPos) / 2;
     } else {
       // If no overTaskId, append to the end
-      newPosition = colTasks.length > 0 ? (colTasks[colTasks.length-1]?.position || 0) + 100 : 1000;
+      const lastPos = Number(colTasks[colTasks.length-1]?.position ?? 0);
+      newPosition = colTasks.length > 0 ? lastPos + 100 : 1000;
     }
     
-    extraFields.position = newPosition;
+    extraFields.position = Math.round(newPosition);
 
     if (targetColumn === 'executando') {
       if (!task.started_at) extraFields.started_at = new Date().toISOString();

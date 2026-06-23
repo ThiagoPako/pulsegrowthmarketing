@@ -1,0 +1,2 @@
+DROP POLICY IF EXISTS "Authenticated can insert short links" ON public.short_links;
+CREATE POLICY "Anyone can insert short links" ON public.short_links FOR INSERT TO anon, authenticated WITH CHECK (true);

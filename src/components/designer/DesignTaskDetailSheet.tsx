@@ -727,6 +727,149 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                     </div>
                   )}
 
+                  {/* Editor de referências - permite Social Media adicionar links e imagens depois */}
+                  {isSocialMedia && (
+                    <div className="rounded-lg border border-dashed border-primary/40 bg-primary/5 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                          <Link2 size={10} /> Adicionar referências
+                        </Label>
+                        {!editingRefs && (
+                          <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]" onClick={() => setEditingRefs(true)}>
+                            <Pencil size={10} className="mr-1" /> Editar
+                          </Button>
+                        )}
+                      </div>
+                      {editingRefs ? (
+                        <div className="space-y-2">
+                          {/* Add link */}
+                          <div className="flex gap-1.5">
+                            <Input
+                              value={newRefLink}
+                              onChange={e => setNewRefLink(e.target.value)}
+                              placeholder="https://link de referência..."
+                              className="text-xs h-8"
+                              onKeyDown={async e => {
+                                if (e.key === 'Enter' && newRefLink.trim()) {
+                                  e.preventDefault();
+                                  const link = newRefLink.trim();
+                                  const updated = [...(task.references_links || []), link];
+                                  await updateTask.mutateAsync({ id: task.id, references_links: updated } as any);
+                                  await addHistory.mutateAsync({ task_id: task.id, action: 'Link de referência adicionado', details: link, user_id: user?.id });
+                                  setNewRefLink('');
+                                  toast.success('Link adicionado');
+                                }
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-8 text-xs shrink-0"
+                              onClick={async () => {
+                                if (!newRefLink.trim()) return;
+                                const link = newRefLink.trim();
+                                const updated = [...(task.references_links || []), link];
+                                await updateTask.mutateAsync({ id: task.id, references_links: updated } as any);
+                                await addHistory.mutateAsync({ task_id: task.id, action: 'Link de referência adicionado', details: link, user_id: user?.id });
+                                setNewRefLink('');
+                                toast.success('Link adicionado');
+                              }}
+                            >
+                              + Link
+                            </Button>
+                          </div>
+
+                          {/* Upload images/files */}
+                          <label className={`flex items-center justify-center gap-1.5 h-8 rounded-md border border-dashed border-border cursor-pointer text-[11px] hover:bg-muted/40 transition-colors ${uploadingRefImage ? 'opacity-60 pointer-events-none' : ''}`}>
+                            {uploadingRefImage ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                            <span>{uploadingRefImage ? 'Enviando...' : 'Anexar imagens ou arquivos (até 10MB)'}</span>
+                            <input
+                              type="file"
+                              accept="*/*"
+                              multiple
+                              className="hidden"
+                              onChange={async e => {
+                                const files = Array.from(e.target.files || []);
+                                e.target.value = '';
+                                if (!files.length) return;
+                                setUploadingRefImage(true);
+                                try {
+                                  const uploaded: string[] = [];
+                                  for (const file of files) {
+                                    if (file.size > 10 * 1024 * 1024) { toast.error(`${file.name}: máximo 10MB`); continue; }
+                                    const url = await uploadFileToVps(file, 'design-files');
+                                    if (url) uploaded.push(url);
+                                  }
+                                  if (uploaded.length > 0) {
+                                    const updated = [...(task.reference_images || []), ...uploaded];
+                                    await updateTask.mutateAsync({ id: task.id, reference_images: updated } as any);
+                                    await addHistory.mutateAsync({ task_id: task.id, action: `${uploaded.length} referência(s) anexada(s)`, user_id: user?.id });
+                                    toast.success(`${uploaded.length} arquivo(s) anexado(s)`);
+                                  }
+                                } catch (err: any) {
+                                  toast.error(err.message || 'Erro ao enviar');
+                                } finally {
+                                  setUploadingRefImage(false);
+                                }
+                              }}
+                            />
+                          </label>
+
+                          {/* List current items with remove */}
+                          {(task.references_links?.length > 0 || task.reference_images?.length > 0) && (
+                            <div className="space-y-1 pt-1 border-t border-border/40">
+                              {task.references_links?.map((link, i) => (
+                                <div key={`l-${i}`} className="flex items-center gap-1.5 text-[11px] bg-background/60 rounded px-2 py-1 border border-border">
+                                  <Link2 size={10} className="shrink-0 text-muted-foreground" />
+                                  <a href={link} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-primary hover:underline">{link}</a>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const updated = (task.references_links || []).filter((_, idx) => idx !== i);
+                                      await updateTask.mutateAsync({ id: task.id, references_links: updated } as any);
+                                      toast.success('Link removido');
+                                    }}
+                                    className="text-muted-foreground hover:text-destructive shrink-0"
+                                  >
+                                    <X size={11} />
+                                  </button>
+                                </div>
+                              ))}
+                              {task.reference_images?.map((img, i) => (
+                                <div key={`i-${i}`} className="flex items-center gap-1.5 text-[11px] bg-background/60 rounded px-2 py-1 border border-border">
+                                  <Image size={10} className="shrink-0 text-muted-foreground" />
+                                  <a href={img} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-primary hover:underline">{img.split('/').pop()}</a>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const updated = (task.reference_images || []).filter((_, idx) => idx !== i);
+                                      await updateTask.mutateAsync({ id: task.id, reference_images: updated } as any);
+                                      toast.success('Imagem removida');
+                                    }}
+                                    className="text-muted-foreground hover:text-destructive shrink-0"
+                                  >
+                                    <X size={11} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <Button size="sm" variant="ghost" className="w-full h-7 text-[11px]" onClick={() => setEditingRefs(false)}>
+                            Concluir edição
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-muted-foreground">
+                          Clique em "Editar" para adicionar mais links ou imagens de referência.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+
+
                   {/* Adjustment notes */}
                   {task.observations && task.kanban_column === 'ajustes' && (
                     <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">

@@ -266,6 +266,7 @@ export default function DesignerKanban() {
           <Tabs value={view} onValueChange={v => setView(v as any)}>
             <TabsList className="h-8">
               <TabsTrigger value="kanban" className="text-xs gap-1"><Kanban size={14} /> Kanban</TabsTrigger>
+              <TabsTrigger value="agendamentos" className="text-xs gap-1"><Calendar size={14} /> Agendamentos</TabsTrigger>
               <TabsTrigger value="lista" className="text-xs gap-1"><List size={14} /> Lista</TabsTrigger>
             </TabsList>
           </Tabs>

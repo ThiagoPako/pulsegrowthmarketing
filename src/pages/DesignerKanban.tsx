@@ -106,8 +106,8 @@ export default function DesignerKanban() {
     // Order by position asc, then priority weight, then created_at asc
     Object.keys(map).forEach(k => {
       map[k].sort((a, b) => {
-        const pa = a.position ?? 999999;
-        const pb = b.position ?? 999999;
+        const pa = a.position != null ? Number(a.position) : 999999;
+        const pb = b.position != null ? Number(b.position) : 999999;
         if (pa !== pb) return pa - pb;
         const wa = PRIORITY_WEIGHT[a.priority] ?? 9;
         const wb = PRIORITY_WEIGHT[b.priority] ?? 9;

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/vpsDb';
+import { useCity } from '@/contexts/CityContext';
 import { toast } from 'sonner';
 
 export type DesignTaskColumn = 'nova_tarefa' | 'executando' | 'em_analise' | 'enviar_cliente' | 'aprovado' | 'ajustes';
@@ -51,9 +52,10 @@ export interface DesignTask {
 
 export function useDesignTasks() {
   const queryClient = useQueryClient();
+  const { activeCity, isLoading: cityLoading } = useCity();
 
   const tasksQuery = useQuery({
-    queryKey: ['design-tasks'],
+    queryKey: ['design-tasks', activeCity],
     queryFn: async () => {
       try {
         const { data, error } = await supabase
@@ -71,12 +73,13 @@ export function useDesignTasks() {
         throw err;
       }
     },
+    enabled: !cityLoading,
     refetchInterval: 8000,
     refetchOnWindowFocus: true,
   });
 
   const historyQuery = (taskId: string) => useQuery({
-    queryKey: ['design-task-history', taskId],
+    queryKey: ['design-task-history', activeCity, taskId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('design_task_history')
@@ -86,7 +89,7 @@ export function useDesignTasks() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!taskId,
+    enabled: !!taskId && !cityLoading,
   });
 
   const createTask = useMutation({

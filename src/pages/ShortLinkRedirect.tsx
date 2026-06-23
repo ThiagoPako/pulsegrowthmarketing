@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import pulseLogo from "@/assets/pulse-logo.png";
+import pulseLogo from "@/assets/pulse_logo.png.asset.json";
 
 export default function ShortLinkRedirect() {
   const { slug } = useParams<{ slug: string }>();

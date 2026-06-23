@@ -426,6 +426,8 @@ export default function DesignerKanban() {
             })}
           </div>
         </DragScrollContainer>
+      ) : view === 'agendamentos' ? (
+        <AgendamentosView tasks={tasks} onOpen={id => setSelectedTaskId(id)} />
       ) : (
         <div className="border rounded-lg overflow-hidden">
           <table className="w-full text-sm">

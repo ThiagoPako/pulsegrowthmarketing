@@ -3603,6 +3603,77 @@ export type Database = {
           },
         ]
       }
+      short_link_clicks: {
+        Row: {
+          clicked_at: string
+          id: string
+          ip: string | null
+          referrer: string | null
+          short_link_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          clicked_at?: string
+          id?: string
+          ip?: string | null
+          referrer?: string | null
+          short_link_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          clicked_at?: string
+          id?: string
+          ip?: string | null
+          referrer?: string | null
+          short_link_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "short_link_clicks_short_link_id_fkey"
+            columns: ["short_link_id"]
+            isOneToOne: false
+            referencedRelation: "short_links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      short_links: {
+        Row: {
+          active: boolean
+          campaign_name: string
+          city: string
+          created_at: string
+          created_by: string | null
+          id: string
+          original_url: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          campaign_name: string
+          city?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          original_url: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          campaign_name?: string
+          city?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          original_url?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       social_accounts: {
         Row: {
           access_token: string

@@ -1498,7 +1498,7 @@ export default function LandingPage() {
       <Sobre />
       <Servicos />
       <ComoFunciona />
-      <Planos />
+      
       <Cases />
       <Depoimentos />
       <FAQ />

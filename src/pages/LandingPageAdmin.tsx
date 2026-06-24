@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Video, Save, Upload, Trash2, ExternalLink, Rocket, Play, Film } from 'lucide-react';
+import TeamMembersAdmin from '@/components/landing/TeamMembersAdmin';
 
 interface PlanVideo {
   id: string;
@@ -319,6 +320,9 @@ export default function LandingPageAdmin() {
           ))}
         </CardContent>
       </Card>
+
+      {/* Team Members */}
+      <TeamMembersAdmin />
     </div>
   );
 }

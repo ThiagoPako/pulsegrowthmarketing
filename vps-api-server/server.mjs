@@ -18,6 +18,10 @@ import pg from 'pg';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
+// Keep DATE columns as YYYY-MM-DD strings. Converting them to JS Date objects
+// shifts calendar-only values one day back in Brazilian timezones when JSON-serialized.
+pg.types.setTypeParser(1082, (value) => value);
+
 const { Pool } = pg;
 const app = express();
 const PORT = process.env.API_PORT || 3002;

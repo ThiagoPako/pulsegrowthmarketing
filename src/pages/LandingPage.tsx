@@ -173,7 +173,7 @@ function Navbar() {
     { label: 'Quem Somos', href: '#quem-somos', id: 'quem-somos' },
     { label: 'Serviços', href: '#servicos', id: 'servicos' },
     { label: 'Processo', href: '#portal', id: 'portal' },
-    { label: 'Planos', href: '#planos', id: 'planos' },
+    
     { label: 'Cases', href: '#cases', id: 'cases' },
     { label: 'Depoimentos', href: '#depoimentos', id: 'depoimentos' },
     { label: 'FAQ', href: '#faq', id: 'faq' },

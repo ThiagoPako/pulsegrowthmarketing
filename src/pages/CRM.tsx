@@ -25,15 +25,41 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { format, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
+function normalizeMeetingDateInput(value?: string | null) {
+  if (!value || typeof value !== 'string') return '';
+
+  const trimmedValue = value.trim();
+  const isoDate = trimmedValue.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDate) return `${isoDate[1]}-${isoDate[2]}-${isoDate[3]}`;
+
+  const brDate = trimmedValue.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (!brDate) return '';
+
+  const day = Number(brDate[1]);
+  const month = Number(brDate[2]);
+  const rawYear = Number(brDate[3]);
+  const year = rawYear < 100 ? rawYear + 2000 : rawYear;
+  const parsed = new Date(year, month - 1, day, 12, 0, 0, 0);
+
+  if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) {
+    return '';
+  }
+
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
 function parseMeetingDate(value?: string | null) {
-  if (!value || typeof value !== 'string') return null;
+  const normalized = normalizeMeetingDateInput(value);
+  if (!normalized) return null;
 
-  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value)
-    ? `${value}T12:00:00`
-    : value;
+  const [year, month, day] = normalized.split('-').map(Number);
+  const parsed = new Date(year, month - 1, day, 12, 0, 0, 0);
 
-  const parsed = new Date(normalized);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) {
+    return null;
+  }
+
+  return parsed;
 }
 
 function formatMeetingDate(value: string | null | undefined, pattern: string, fallback = '—') {
@@ -476,8 +502,12 @@ export default function CRM() {
                                                         <form onSubmit={async (e) => {
                                                             e.preventDefault();
                                                             const formData = new FormData(e.currentTarget);
-                                                            const m_date = formData.get('date') as string;
+                                                            const m_date = normalizeMeetingDateInput(formData.get('date') as string);
                                                             const m_time = formData.get('time') as string;
+                                                            if (!m_date) {
+                                                              toast.error('Data da reunião inválida.');
+                                                              return;
+                                                            }
                                                             
                                                             const { error } = await supabase.from('crm_leads').update({
                                                                 status: 'meeting',
@@ -845,8 +875,12 @@ function MeetingActions({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }
   const handleReschedule = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const m_date = formData.get('date') as string;
+    const m_date = normalizeMeetingDateInput(formData.get('date') as string);
     const m_time = formData.get('time') as string;
+    if (!m_date) {
+      toast.error('Data da reunião inválida.');
+      return;
+    }
     const { error } = await supabase
       .from('crm_leads')
       .update({ meeting_date: m_date, meeting_time: m_time, status: 'meeting' } as any)
@@ -894,7 +928,7 @@ function MeetingActions({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }
                   type="date"
                   name="date"
                   required
-                  defaultValue={lead.meeting_date ?? ''}
+                  defaultValue={normalizeMeetingDateInput(lead.meeting_date)}
                 />
               </div>
               <div className="grid gap-2">

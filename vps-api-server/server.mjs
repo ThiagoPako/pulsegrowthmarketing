@@ -3855,6 +3855,15 @@ function sanitizeIdentifier(name) {
   return name.replace(/[^a-zA-Z0-9_]/g, '');
 }
 
+function sanitizeOrderColumn(column, fallbackTable) {
+  const raw = String(column || '').trim();
+  if (raw.includes('.')) {
+    const [tableName, columnName] = raw.split('.').map(sanitizeIdentifier);
+    if (tableName && columnName) return `${tableName}.${columnName}`;
+  }
+  return `${fallbackTable}.${sanitizeIdentifier(raw)}`;
+}
+
 function isCrmLeadManagementPayload(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
   const restrictedFields = new Set(['name', 'company', 'email', 'phone', 'contract_value']);
@@ -3965,7 +3974,7 @@ app.post('/api/db/query', async (req, res) => {
         // Handle order
         if (order) {
           const orderParts = Array.isArray(order) ? order : [order];
-          const orderClauses = orderParts.map(o => `${sanitizeIdentifier(o.column)} ${o.ascending === false ? 'DESC' : 'ASC'}`);
+          const orderClauses = orderParts.map(o => `${sanitizeOrderColumn(o.column, safeTable)} ${o.ascending === false ? 'DESC' : 'ASC'}`);
           query += ` ORDER BY ${orderClauses.join(', ')}`;
         }
 

@@ -64,8 +64,19 @@ export function useDesignTasks() {
           .order('created_at', { ascending: false });
         
         if (error) {
-          console.error('Error fetching design tasks:', error);
-          throw error;
+          console.warn('Error fetching design tasks with relations, retrying simple query:', error);
+
+          const fallback = await supabase
+            .from('design_tasks')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (fallback.error) {
+            console.error('Error fetching design tasks:', fallback.error);
+            throw fallback.error;
+          }
+
+          return (fallback.data || []) as unknown as DesignTask[];
         }
         return (data || []) as unknown as DesignTask[];
       } catch (err) {
@@ -75,6 +86,7 @@ export function useDesignTasks() {
     },
     enabled: !cityLoading,
     refetchInterval: 8000,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: true,
   });
 

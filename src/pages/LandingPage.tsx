@@ -146,7 +146,7 @@ function Navbar() {
 
   // Track active section
   useEffect(() => {
-    const sectionIds = ['quem-somos', 'servicos', 'portal', 'planos', 'cases', 'depoimentos', 'faq', 'contato'];
+    const sectionIds = ['quem-somos', 'servicos', 'portal', 'cases', 'depoimentos', 'faq', 'contato'];
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {

@@ -82,7 +82,14 @@ export default function DesignerDashboard() {
   const myTasks = useMemo(() => {
     if (!user?.id) return tasks;
     if (currentUser?.role === 'admin') return tasks;
-    return tasks.filter(t => t.assigned_to === user.id || !t.assigned_to);
+    const assignedOrOpenTasks = tasks.filter(t => t.assigned_to === user.id || !t.assigned_to);
+    const isDesignerRole = currentUser?.role === 'designer' || currentUser?.role === 'fotografo';
+
+    // Fallback defensivo: em produção existem demandas antigas atribuídas a IDs legados.
+    // Se o filtro pessoal zerar tudo, o designer ainda vê a fila operacional da cidade ativa.
+    if (isDesignerRole && assignedOrOpenTasks.length === 0 && tasks.length > 0) return tasks;
+
+    return assignedOrOpenTasks;
   }, [tasks, user?.id, currentUser?.role]);
 
   const stats = useMemo(() => {

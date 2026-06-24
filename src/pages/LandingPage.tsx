@@ -146,7 +146,7 @@ function Navbar() {
 
   // Track active section
   useEffect(() => {
-    const sectionIds = ['quem-somos', 'servicos', 'portal', 'planos', 'cases', 'depoimentos', 'faq', 'contato'];
+    const sectionIds = ['quem-somos', 'servicos', 'portal', 'cases', 'depoimentos', 'faq', 'contato'];
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -173,7 +173,7 @@ function Navbar() {
     { label: 'Quem Somos', href: '#quem-somos', id: 'quem-somos' },
     { label: 'Serviços', href: '#servicos', id: 'servicos' },
     { label: 'Processo', href: '#portal', id: 'portal' },
-    { label: 'Planos', href: '#planos', id: 'planos' },
+    
     { label: 'Cases', href: '#cases', id: 'cases' },
     { label: 'Depoimentos', href: '#depoimentos', id: 'depoimentos' },
     { label: 'FAQ', href: '#faq', id: 'faq' },
@@ -1498,7 +1498,7 @@ export default function LandingPage() {
       <Sobre />
       <Servicos />
       <ComoFunciona />
-      <Planos />
+      
       <Cases />
       <Depoimentos />
       <FAQ />

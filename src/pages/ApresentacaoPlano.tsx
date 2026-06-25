@@ -135,19 +135,28 @@ export default function ApresentacaoPlano() {
   const goNext = () => { if (nextKey) { navigate(`/apresentacao/${nextKey}`); window.scrollTo({ top: 0 }); } };
 
   useEffect(() => {
+    const scrollByAmount = (delta: number) => {
+      const el = document.scrollingElement || document.documentElement;
+      el.scrollTo({ top: el.scrollTop + delta, behavior: 'smooth' });
+    };
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      // Remove focus de botões para o navegador não consumir as setas
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+      const step = window.innerHeight * 0.85;
       if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); goNext(); }
       else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); goPrev(); }
-      else if (e.key === 'ArrowDown') { e.preventDefault(); window.scrollBy({ top: window.innerHeight * 0.9, behavior: 'smooth' }); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); window.scrollBy({ top: -window.innerHeight * 0.9, behavior: 'smooth' }); }
-      else if (e.key === 'Home') { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
-      else if (e.key === 'End') { e.preventDefault(); window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }
+      else if (e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); scrollByAmount(step); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); scrollByAmount(-step); }
+      else if (e.key === 'Home') { e.preventDefault(); (document.scrollingElement || document.documentElement).scrollTo({ top: 0, behavior: 'smooth' }); }
+      else if (e.key === 'End') { e.preventDefault(); (document.scrollingElement || document.documentElement).scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }
       else if (e.key === 'Escape') { window.close(); }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener('keydown', handler, { capture: true });
+    return () => window.removeEventListener('keydown', handler, { capture: true } as any);
   }, [prevKey, nextKey]);
 
   if (!plan) return <Navigate to="/apresentacao" replace />;

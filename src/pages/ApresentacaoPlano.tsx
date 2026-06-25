@@ -459,7 +459,7 @@ export default function ApresentacaoPlano() {
             </h2>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-5 md:gap-6">
             {[
               { icon: Target, title: 'Estratégia', desc: 'Cada conteúdo nasce de análise de público, mercado e objetivo de negócio.' },
               { icon: Sparkles, title: 'Produção', desc: 'Equipe própria de social media, designer, videomakers, editores e tráfego pago.' },

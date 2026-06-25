@@ -182,16 +182,18 @@ export default function ApresentacaoPlano() {
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
-      {/* Top bar: posição + fechar */}
-      <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
-        <Badge variant="outline" className="backdrop-blur bg-background/80">
-          {currentIndex + 1} / {PRESENTATION_ORDER.length}
+      {/* Top bar: posição + ações */}
+      <div className="fixed top-3 right-3 z-50 flex items-center gap-1.5 md:gap-2">
+        <Badge variant="outline" className="backdrop-blur bg-background/80 text-xs px-2">
+          {currentIndex + 1}/{PRESENTATION_ORDER.length}
         </Badge>
-        <Button variant="outline" size="sm" onClick={copyPublicLink} className="backdrop-blur bg-background/80">
-          <Link2 className="h-4 w-4 mr-1" /> Copiar link
+        <Button variant="outline" size="sm" onClick={copyPublicLink} className="backdrop-blur bg-background/80 h-8 px-2 md:px-3" aria-label="Copiar link">
+          <Link2 className="h-4 w-4 md:mr-1" />
+          <span className="hidden md:inline">Copiar link</span>
         </Button>
-        <Button variant="outline" size="sm" onClick={() => window.close()} className="backdrop-blur bg-background/80">
-          <X className="h-4 w-4 mr-1" /> Fechar
+        <Button variant="outline" size="sm" onClick={() => window.close()} className="backdrop-blur bg-background/80 h-8 px-2 md:px-3" aria-label="Fechar">
+          <X className="h-4 w-4 md:mr-1" />
+          <span className="hidden md:inline">Fechar</span>
         </Button>
       </div>
 
@@ -201,10 +203,10 @@ export default function ApresentacaoPlano() {
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Falar no WhatsApp"
-        className="fixed bottom-6 right-6 z-50 h-16 px-5 rounded-full bg-[#25D366] text-white shadow-2xl hover:scale-105 transition-all flex items-center gap-2 font-semibold animate-pulse hover:animate-none"
+        className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-50 h-14 w-14 md:h-16 md:w-auto md:px-5 rounded-full bg-[#25D366] text-white shadow-2xl hover:scale-105 transition-all flex items-center justify-center gap-2 font-semibold animate-pulse hover:animate-none"
       >
         <MessageCircle className="h-6 w-6" />
-        <span className="hidden sm:inline">Falar com a Pulse</span>
+        <span className="hidden md:inline">Falar com a Pulse</span>
       </a>
 
       {/* Setas fixas de navegação entre planos */}
@@ -212,23 +214,23 @@ export default function ApresentacaoPlano() {
         <button
           onClick={goPrev}
           aria-label="Plano anterior"
-          className="fixed left-3 top-1/2 -translate-y-1/2 z-50 h-14 w-14 rounded-full bg-background/80 backdrop-blur border border-border shadow-lg hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all flex items-center justify-center group"
+          className="fixed left-2 md:left-3 bottom-4 md:bottom-auto md:top-1/2 md:-translate-y-1/2 z-50 h-11 w-11 md:h-14 md:w-14 rounded-full bg-background/80 backdrop-blur border border-border shadow-lg hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all flex items-center justify-center"
         >
-          <ArrowLeft className="h-6 w-6" />
+          <ArrowLeft className="h-5 w-5 md:h-6 md:w-6" />
         </button>
       )}
       {nextKey && (
         <button
           onClick={goNext}
           aria-label="Próximo plano"
-          className="fixed right-3 top-1/2 -translate-y-1/2 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-xl hover:scale-110 transition-all flex items-center justify-center animate-pulse"
+          className="fixed left-16 md:left-auto md:right-3 bottom-4 md:bottom-auto md:top-1/2 md:-translate-y-1/2 z-50 h-11 w-11 md:h-14 md:w-14 rounded-full bg-primary text-primary-foreground shadow-xl hover:scale-110 transition-all flex items-center justify-center animate-pulse"
         >
-          <ArrowRight className="h-6 w-6" />
+          <ArrowRight className="h-5 w-5 md:h-6 md:w-6" />
         </button>
       )}
 
       {/* Dica de teclado */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 hidden md:flex items-center gap-3 px-4 py-2 rounded-full bg-background/80 backdrop-blur border border-border text-xs text-muted-foreground shadow">
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 hidden md:flex items-center gap-3 px-4 py-2 rounded-full bg-background/80 backdrop-blur border border-border text-xs text-muted-foreground shadow">
         <span>← → trocar plano</span>
         <span className="opacity-40">•</span>
         <span>↑ ↓ rolar página</span>
@@ -244,21 +246,21 @@ export default function ApresentacaoPlano() {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-orange-500/10 blur-3xl" />
         </div>
 
-        <div className="container mx-auto px-6 text-center relative z-10">
-          <motion.img src={LOGO_URL} alt="Pulse" className="h-20 mx-auto mb-6" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8 }} />
+        <div className="container mx-auto px-4 md:px-6 text-center relative z-10 pt-16 md:pt-0">
+          <motion.img src={LOGO_URL} alt="Pulse" className="h-14 md:h-20 mx-auto mb-4 md:mb-6" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8 }} />
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-            <Badge className="mb-6 bg-primary/10 text-primary border-primary/20">
+            <Badge className="mb-4 md:mb-6 bg-primary/10 text-primary border-primary/20">
               <Sparkles className="h-3 w-3 mr-1" /> Plano apresentado
             </Badge>
           </motion.div>
 
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }} className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary to-orange-600 flex items-center justify-center mx-auto mb-6 shadow-2xl">
-            <Icon className="h-12 w-12 text-primary-foreground" />
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }} className="w-20 h-20 md:w-24 md:h-24 rounded-3xl bg-gradient-to-br from-primary to-orange-600 flex items-center justify-center mx-auto mb-4 md:mb-6 shadow-2xl">
+            <Icon className="h-10 w-10 md:h-12 md:w-12 text-primary-foreground" />
           </motion.div>
 
           <motion.h1
-            className="text-5xl md:text-7xl font-bold tracking-tight mb-4"
+            className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-4 leading-tight"
             style={{ fontFamily: 'var(--font-display)' }}
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -266,10 +268,10 @@ export default function ApresentacaoPlano() {
           >
             <span className="bg-gradient-to-r from-primary via-orange-500 to-primary bg-clip-text text-transparent">{plan.name}</span>
           </motion.h1>
-          <motion.p className="text-2xl text-foreground/90 max-w-2xl mx-auto mb-4 font-semibold" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
+          <motion.p className="text-lg md:text-2xl text-foreground/90 max-w-2xl mx-auto mb-3 md:mb-4 font-semibold px-2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
             {plan.tagline}
           </motion.p>
-          <motion.p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}>
+          <motion.p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto mb-8 md:mb-10 px-2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}>
             {plan.description}
           </motion.p>
 
@@ -281,27 +283,27 @@ export default function ApresentacaoPlano() {
       </section>
 
       {/* PARA QUEM É */}
-      <section className="py-20 bg-secondary/30">
-        <div className="container mx-auto px-6 max-w-4xl">
+      <section className="py-14 md:py-20 bg-secondary/30">
+        <div className="container mx-auto px-4 md:px-6 max-w-4xl">
           <motion.div {...fadeUp} className="text-center">
             <Badge variant="outline" className="mb-4">Ideal para</Badge>
-            <h2 className="text-3xl md:text-4xl font-bold mb-6" style={{ fontFamily: 'var(--font-display)' }}>
+            <h2 className="text-2xl md:text-4xl font-bold mb-4 md:mb-6" style={{ fontFamily: 'var(--font-display)' }}>
               Esse plano é <span className="text-primary">perfeito</span> para você se...
             </h2>
-            <p className="text-xl text-muted-foreground leading-relaxed">{plan.ideal}</p>
+            <p className="text-base md:text-xl text-muted-foreground leading-relaxed">{plan.ideal}</p>
           </motion.div>
         </div>
       </section>
 
       {/* ENTREGAS — categorizadas */}
-      <section className="py-24">
-        <div className="container mx-auto px-6 max-w-6xl">
-          <motion.div {...fadeUp} className="text-center mb-16">
+      <section className="py-16 md:py-24">
+        <div className="container mx-auto px-4 md:px-6 max-w-6xl">
+          <motion.div {...fadeUp} className="text-center mb-10 md:mb-16">
             <Badge className="mb-4 bg-primary text-primary-foreground">{plan.features.length} entregas mensais</Badge>
-            <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
+            <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
               Tudo que está <span className="text-primary">incluso</span>
             </h2>
-            <p className="text-lg text-muted-foreground">Organizado por área para você visualizar a operação completa.</p>
+            <p className="text-base md:text-lg text-muted-foreground">Organizado por área para você visualizar a operação completa.</p>
           </motion.div>
 
           <div className="grid md:grid-cols-2 gap-6">
@@ -338,14 +340,14 @@ export default function ApresentacaoPlano() {
       </section>
 
       {/* INVESTIMENTO — destaque ANUAL */}
-      <section className="py-24 bg-gradient-to-b from-secondary/30 to-background">
-        <div className="container mx-auto px-6 max-w-5xl">
-          <motion.div {...fadeUp} className="text-center mb-14">
+      <section className="py-16 md:py-24 bg-gradient-to-b from-secondary/30 to-background">
+        <div className="container mx-auto px-4 md:px-6 max-w-5xl">
+          <motion.div {...fadeUp} className="text-center mb-10 md:mb-14">
             <Badge variant="outline" className="mb-4">Investimento</Badge>
-            <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
+            <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
               Economize fechando <span className="text-primary">o plano anual</span>
             </h2>
-            <p className="text-lg text-muted-foreground">Mesmo plano, mesma entrega — pagando menos por mês.</p>
+            <p className="text-base md:text-lg text-muted-foreground">Mesmo plano, mesma entrega — pagando menos por mês.</p>
           </motion.div>
 
           {(() => {
@@ -364,25 +366,25 @@ export default function ApresentacaoPlano() {
                   initial={{ opacity: 0, scale: 0.95 }}
                   whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true }}
-                  className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 text-white p-8 md:p-10 mb-10 shadow-2xl"
+                  className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 text-white p-6 md:p-10 mb-8 md:mb-10 shadow-2xl"
                 >
                   <div className="absolute -top-10 -right-10 w-64 h-64 rounded-full bg-white/10 blur-3xl" />
-                  <div className="relative flex flex-col md:flex-row items-center justify-between gap-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-20 h-20 rounded-3xl bg-white/20 backdrop-blur flex items-center justify-center">
-                        <PiggyBank className="h-10 w-10" />
+                  <div className="relative flex flex-col md:flex-row items-center md:items-center text-center md:text-left justify-between gap-5 md:gap-6">
+                    <div className="flex flex-col md:flex-row items-center gap-3 md:gap-4">
+                      <div className="w-16 h-16 md:w-20 md:h-20 rounded-3xl bg-white/20 backdrop-blur flex items-center justify-center shrink-0">
+                        <PiggyBank className="h-8 w-8 md:h-10 md:w-10" />
                       </div>
                       <div>
-                        <div className="text-sm font-semibold uppercase tracking-wider opacity-90">Economia total no anual</div>
-                        <div className="text-5xl md:text-6xl font-bold leading-none mt-1" style={{ fontFamily: 'var(--font-display)' }}>
+                        <div className="text-xs md:text-sm font-semibold uppercase tracking-wider opacity-90">Economia total no anual</div>
+                        <div className="text-4xl md:text-6xl font-bold leading-none mt-1" style={{ fontFamily: 'var(--font-display)' }}>
                           {brl(totalEconomia)}
                         </div>
-                        <div className="text-sm opacity-90 mt-1">
+                        <div className="text-xs md:text-sm opacity-90 mt-1">
                           {brl(diffMes)} a menos por mês • {pct}% de desconto
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 text-sm bg-white/15 backdrop-blur rounded-full px-4 py-2 font-semibold">
+                    <div className="flex items-center gap-2 text-xs md:text-sm bg-white/15 backdrop-blur rounded-full px-4 py-2 font-semibold">
                       <TrendingDown className="h-4 w-4" />
                       Recomendamos o anual
                     </div>
@@ -396,13 +398,13 @@ export default function ApresentacaoPlano() {
                     initial={{ opacity: 0, y: 30 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
-                    className="relative rounded-3xl p-8 border-2 border-border bg-card opacity-90"
+                    className="relative rounded-3xl p-6 md:p-8 border-2 border-border bg-card opacity-90"
                   >
-                    <div className="text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wider">
+                    <div className="text-xs md:text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wider">
                       Contrato {semestral.label}
                     </div>
                     <div className="flex items-baseline gap-2 mb-4">
-                      <span className="text-5xl font-bold text-muted-foreground line-through decoration-2" style={{ fontFamily: 'var(--font-display)' }}>
+                      <span className="text-4xl md:text-5xl font-bold text-muted-foreground line-through decoration-2" style={{ fontFamily: 'var(--font-display)' }}>
                         {semestral.monthly}
                       </span>
                       <span className="text-sm text-muted-foreground">/mês</span>
@@ -416,21 +418,21 @@ export default function ApresentacaoPlano() {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.15 }}
-                    className="relative rounded-3xl p-8 border-2 border-primary bg-gradient-to-br from-primary via-orange-600 to-primary text-primary-foreground shadow-2xl md:scale-105"
+                    className="relative rounded-3xl p-6 md:p-8 border-2 border-primary bg-gradient-to-br from-primary via-orange-600 to-primary text-primary-foreground shadow-2xl md:scale-105"
                   >
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-300 text-yellow-950 font-bold shadow-lg">
+                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-300 text-yellow-950 font-bold shadow-lg whitespace-nowrap">
                       <Crown className="h-3 w-3 mr-1" /> Mais escolhido
                     </Badge>
-                    <div className="text-sm font-semibold mb-2 text-primary-foreground/90 uppercase tracking-wider">
+                    <div className="text-xs md:text-sm font-semibold mb-2 text-primary-foreground/90 uppercase tracking-wider">
                       Contrato {anual.label}
                     </div>
                     <div className="flex items-baseline gap-2 mb-2">
-                      <span className="text-6xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
+                      <span className="text-5xl md:text-6xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
                         {anual.monthly}
                       </span>
                       <span className="text-sm text-primary-foreground/80">/mês</span>
                     </div>
-                    <div className="inline-flex items-center gap-1.5 bg-yellow-300 text-yellow-950 rounded-full px-3 py-1 text-sm font-bold mt-2">
+                    <div className="inline-flex items-center gap-1.5 bg-yellow-300 text-yellow-950 rounded-full px-3 py-1 text-xs md:text-sm font-bold mt-2">
                       <PiggyBank className="h-3.5 w-3.5" /> Economiza {brl(diffMes)}/mês
                     </div>
                     {anual.save && (
@@ -448,16 +450,16 @@ export default function ApresentacaoPlano() {
 
 
       {/* DIFERENCIAIS */}
-      <section className="py-24">
-        <div className="container mx-auto px-6 max-w-5xl">
-          <motion.div {...fadeUp} className="text-center mb-16">
+      <section className="py-16 md:py-24">
+        <div className="container mx-auto px-4 md:px-6 max-w-5xl">
+          <motion.div {...fadeUp} className="text-center mb-10 md:mb-16">
             <Badge variant="outline" className="mb-4">Por que a Pulse?</Badge>
-            <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
+            <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
               Mais que uma agência, um <span className="text-primary">time dedicado</span>
             </h2>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-5 md:gap-6">
             {[
               { icon: Target, title: 'Estratégia', desc: 'Cada conteúdo nasce de análise de público, mercado e objetivo de negócio.' },
               { icon: Sparkles, title: 'Produção', desc: 'Equipe própria de social media, designer, videomakers, editores e tráfego pago.' },
@@ -483,14 +485,14 @@ export default function ApresentacaoPlano() {
       </section>
 
       {/* PORTAL */}
-      <section className="py-24 bg-secondary/30">
-        <div className="container mx-auto px-6 max-w-6xl">
-          <motion.div {...fadeUp} className="text-center mb-16">
+      <section className="py-16 md:py-24 bg-secondary/30">
+        <div className="container mx-auto px-4 md:px-6 max-w-6xl">
+          <motion.div {...fadeUp} className="text-center mb-10 md:mb-16">
             <Badge variant="outline" className="mb-4">Diferencial exclusivo</Badge>
-            <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
+            <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
               Portal do Cliente <span className="text-primary">Pulse</span>
             </h2>
-            <p className="text-lg text-muted-foreground">Plataforma própria que centraliza materiais, aprovações e acompanhamentos.</p>
+            <p className="text-base md:text-lg text-muted-foreground">Plataforma própria que centraliza materiais, aprovações e acompanhamentos.</p>
           </motion.div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -516,11 +518,11 @@ export default function ApresentacaoPlano() {
 
       {/* EQUIPE */}
       {(true) && (
-        <section className="py-24">
-          <div className="container mx-auto px-6 max-w-6xl">
-            <motion.div {...fadeUp} className="text-center mb-16">
+        <section className="py-16 md:py-24">
+          <div className="container mx-auto px-4 md:px-6 max-w-6xl">
+            <motion.div {...fadeUp} className="text-center mb-10 md:mb-16">
               <Badge variant="outline" className="mb-4"><Users className="h-3 w-3 mr-1" /> Nosso time</Badge>
-              <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
+              <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
                 Quem cuida do <span className="text-primary">seu projeto</span>
               </h2>
             </motion.div>
@@ -531,7 +533,7 @@ export default function ApresentacaoPlano() {
                 <p className="text-muted-foreground">Cadastre sua equipe em <code className="px-2 py-1 rounded bg-secondary text-foreground">/admin/equipe</code> para aparecer aqui automaticamente.</p>
               </div>
             ) : (
-              <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
                 {team.map((m, i) => (
                   <motion.div
                     key={m.id}
@@ -565,17 +567,17 @@ export default function ApresentacaoPlano() {
 
       {/* PORTAL EM AÇÃO — vídeos reais de clientes */}
       {showcaseVideos.length > 0 && (
-        <section className="py-24 bg-secondary/30">
-          <div className="container mx-auto px-6 max-w-6xl">
-            <motion.div {...fadeUp} className="text-center mb-12">
+        <section className="py-16 md:py-24 bg-secondary/30">
+          <div className="container mx-auto px-4 md:px-6 max-w-6xl">
+            <motion.div {...fadeUp} className="text-center mb-10 md:mb-12">
               <Badge variant="outline" className="mb-4"><PlayCircle className="h-3 w-3 mr-1" /> Veja na prática</Badge>
-              <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
+              <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
                 Conteúdos reais entregues <span className="text-primary">pelo portal</span>
               </h2>
-              <p className="text-lg text-muted-foreground">Veja como o cliente recebe e aprova materiais direto na plataforma Pulse.</p>
+              <p className="text-base md:text-lg text-muted-foreground">Veja como o cliente recebe e aprova materiais direto na plataforma Pulse.</p>
             </motion.div>
 
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
               {showcaseVideos.map((v, i) => (
                 <motion.div
                   key={v.id}
@@ -607,19 +609,19 @@ export default function ApresentacaoPlano() {
       )}
 
       {/* CTA */}
-      <section className="py-24 relative overflow-hidden">
+      <section className="py-16 md:py-24 pb-32 md:pb-24 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary via-orange-600 to-primary -z-10" />
         <div className="absolute inset-0 -z-10">
           <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full bg-white/10 blur-3xl animate-pulse" />
           <div className="absolute bottom-0 right-1/4 w-96 h-96 rounded-full bg-white/10 blur-3xl animate-pulse" style={{ animationDelay: '1.5s' }} />
         </div>
 
-        <motion.div {...fadeUp} className="container mx-auto px-6 text-center text-primary-foreground">
-          <h2 className="text-4xl md:text-6xl font-bold mb-6" style={{ fontFamily: 'var(--font-display)' }}>
+        <motion.div {...fadeUp} className="container mx-auto px-4 md:px-6 text-center text-primary-foreground">
+          <h2 className="text-3xl md:text-6xl font-bold mb-5 md:mb-6 leading-tight" style={{ fontFamily: 'var(--font-display)' }}>
             Vamos começar com o <br />
             <span className="underline decoration-yellow-300 decoration-4 underline-offset-8">{plan.name}</span>?
           </h2>
-          <p className="text-lg md:text-xl text-primary-foreground/90 max-w-2xl mx-auto mb-10">
+          <p className="text-base md:text-xl text-primary-foreground/90 max-w-2xl mx-auto mb-8 md:mb-10">
             Confirme conosco e iniciamos seu projeto em até 7 dias úteis.
           </p>
           <div className="flex flex-wrap gap-4 justify-center">

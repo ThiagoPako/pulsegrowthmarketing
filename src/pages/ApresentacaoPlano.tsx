@@ -609,19 +609,19 @@ export default function ApresentacaoPlano() {
       )}
 
       {/* CTA */}
-      <section className="py-24 relative overflow-hidden">
+      <section className="py-16 md:py-24 pb-32 md:pb-24 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary via-orange-600 to-primary -z-10" />
         <div className="absolute inset-0 -z-10">
           <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full bg-white/10 blur-3xl animate-pulse" />
           <div className="absolute bottom-0 right-1/4 w-96 h-96 rounded-full bg-white/10 blur-3xl animate-pulse" style={{ animationDelay: '1.5s' }} />
         </div>
 
-        <motion.div {...fadeUp} className="container mx-auto px-6 text-center text-primary-foreground">
-          <h2 className="text-4xl md:text-6xl font-bold mb-6" style={{ fontFamily: 'var(--font-display)' }}>
+        <motion.div {...fadeUp} className="container mx-auto px-4 md:px-6 text-center text-primary-foreground">
+          <h2 className="text-3xl md:text-6xl font-bold mb-5 md:mb-6 leading-tight" style={{ fontFamily: 'var(--font-display)' }}>
             Vamos começar com o <br />
             <span className="underline decoration-yellow-300 decoration-4 underline-offset-8">{plan.name}</span>?
           </h2>
-          <p className="text-lg md:text-xl text-primary-foreground/90 max-w-2xl mx-auto mb-10">
+          <p className="text-base md:text-xl text-primary-foreground/90 max-w-2xl mx-auto mb-8 md:mb-10">
             Confirme conosco e iniciamos seu projeto em até 7 dias úteis.
           </p>
           <div className="flex flex-wrap gap-4 justify-center">

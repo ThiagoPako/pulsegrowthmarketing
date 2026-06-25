@@ -9,7 +9,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
+import { supabase as vpsDb } from '@/lib/vpsDb';
 import { getPlan, PLANS } from '@/data/plans';
+
+const SHOWCASE_CLIENTS = ['shallon', 'super brasil', 'casa & decor'];
 
 const PRESENTATION_ORDER: Array<'starter' | 'boost' | 'premium' | 'elite'> = [
   'starter', 'boost', 'premium', 'elite',

@@ -180,87 +180,159 @@ export default function ApresentacaoPlano() {
         </div>
       </section>
 
-      {/* ENTREGAS */}
+      {/* ENTREGAS — categorizadas */}
       <section className="py-24">
-        <div className="container mx-auto px-6 max-w-5xl">
+        <div className="container mx-auto px-6 max-w-6xl">
           <motion.div {...fadeUp} className="text-center mb-16">
             <Badge className="mb-4 bg-primary text-primary-foreground">{plan.features.length} entregas mensais</Badge>
             <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
               Tudo que está <span className="text-primary">incluso</span>
             </h2>
-            <p className="text-lg text-muted-foreground">Operação completa, sem letras miúdas, sem surpresas.</p>
+            <p className="text-lg text-muted-foreground">Organizado por área para você visualizar a operação completa.</p>
           </motion.div>
 
-          <div className="grid sm:grid-cols-2 gap-4">
-            {plan.features.map((f, i) => (
+          <div className="grid md:grid-cols-2 gap-6">
+            {categorizeFeatures(plan.features).map((cat, idx) => (
               <motion.div
-                key={f}
-                initial={{ opacity: 0, x: -20 }}
-                whileInView={{ opacity: 1, x: 0 }}
+                key={cat.title}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.04 }}
-                className="flex items-start gap-3 bg-card border border-border rounded-xl p-4 hover:border-primary/40 hover:shadow-md transition-all"
+                transition={{ delay: idx * 0.1 }}
+                className="bg-gradient-to-br from-card to-secondary/30 border-2 border-border rounded-3xl p-6 md:p-8 hover:border-primary/50 hover:shadow-xl transition-all"
               >
-                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <Check className="h-4 w-4 text-primary" />
+                <div className="flex items-center gap-3 mb-5 pb-4 border-b border-border">
+                  <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center">
+                    <cat.icon className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>{cat.title}</h3>
+                    <p className="text-xs text-muted-foreground">{cat.items.length} {cat.items.length === 1 ? 'entrega' : 'entregas'}</p>
+                  </div>
                 </div>
-                <span className="text-sm md:text-base font-medium pt-1">{f}</span>
+                <ul className="space-y-2.5">
+                  {cat.items.map((f) => (
+                    <li key={f} className="flex items-start gap-2.5 text-sm md:text-base">
+                      <Check className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                      <span className="font-medium">{f}</span>
+                    </li>
+                  ))}
+                </ul>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* INVESTIMENTO */}
+      {/* INVESTIMENTO — destaque ANUAL */}
       <section className="py-24 bg-gradient-to-b from-secondary/30 to-background">
-        <div className="container mx-auto px-6 max-w-4xl">
-          <motion.div {...fadeUp} className="text-center mb-12">
+        <div className="container mx-auto px-6 max-w-5xl">
+          <motion.div {...fadeUp} className="text-center mb-14">
             <Badge variant="outline" className="mb-4">Investimento</Badge>
             <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
-              Escolha o <span className="text-primary">prazo de contrato</span>
+              Economize fechando <span className="text-primary">o plano anual</span>
             </h2>
-            <p className="text-lg text-muted-foreground">Quanto maior o compromisso, melhor o investimento mensal.</p>
+            <p className="text-lg text-muted-foreground">Mesmo plano, mesma entrega — pagando menos por mês.</p>
           </motion.div>
 
-          <div className="grid md:grid-cols-2 gap-6">
-            {plan.pricing.map((p, i) => {
-              const best = i === plan.pricing.length - 1;
-              return (
+          {(() => {
+            const semestral = plan.pricing[0];
+            const anual = plan.pricing[plan.pricing.length - 1];
+            const sem = parsePrice(semestral.monthly);
+            const an = parsePrice(anual.monthly);
+            const diffMes = sem - an;
+            const totalEconomia = diffMes * 12;
+            const pct = sem > 0 ? Math.round((diffMes / sem) * 100) : 0;
+
+            return (
+              <>
+                {/* Banner de economia */}
                 <motion.div
-                  key={p.label}
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true }}
-                  transition={{ delay: i * 0.15 }}
-                  className={`relative rounded-3xl p-8 border-2 transition-all hover:-translate-y-1 hover:shadow-2xl ${
-                    best
-                      ? 'bg-gradient-to-br from-primary to-orange-600 text-primary-foreground border-primary shadow-xl'
-                      : 'bg-card border-border'
-                  }`}
+                  className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 text-white p-8 md:p-10 mb-10 shadow-2xl"
                 >
-                  {best && (
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-background text-primary">
-                      Melhor custo-benefício
-                    </Badge>
-                  )}
-                  <div className={`text-sm font-semibold mb-2 ${best ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
-                    Contrato de {p.label}
-                  </div>
-                  <div className="flex items-baseline gap-2 mb-2">
-                    <span className="text-5xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>{p.monthly}</span>
-                    <span className={`text-sm ${best ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>/mês</span>
-                  </div>
-                  {p.save && (
-                    <div className={`text-sm font-semibold ${best ? 'text-yellow-200' : 'text-success'}`}>
-                      💰 {p.save}
+                  <div className="absolute -top-10 -right-10 w-64 h-64 rounded-full bg-white/10 blur-3xl" />
+                  <div className="relative flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-20 h-20 rounded-3xl bg-white/20 backdrop-blur flex items-center justify-center">
+                        <PiggyBank className="h-10 w-10" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-semibold uppercase tracking-wider opacity-90">Economia total no anual</div>
+                        <div className="text-5xl md:text-6xl font-bold leading-none mt-1" style={{ fontFamily: 'var(--font-display)' }}>
+                          {brl(totalEconomia)}
+                        </div>
+                        <div className="text-sm opacity-90 mt-1">
+                          {brl(diffMes)} a menos por mês • {pct}% de desconto
+                        </div>
+                      </div>
                     </div>
-                  )}
+                    <div className="flex items-center gap-2 text-sm bg-white/15 backdrop-blur rounded-full px-4 py-2 font-semibold">
+                      <TrendingDown className="h-4 w-4" />
+                      Recomendamos o anual
+                    </div>
+                  </div>
                 </motion.div>
-              );
-            })}
-          </div>
+
+                {/* Cards comparativos */}
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* Semestral */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 30 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    className="relative rounded-3xl p-8 border-2 border-border bg-card opacity-90"
+                  >
+                    <div className="text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wider">
+                      Contrato {semestral.label}
+                    </div>
+                    <div className="flex items-baseline gap-2 mb-4">
+                      <span className="text-5xl font-bold text-muted-foreground line-through decoration-2" style={{ fontFamily: 'var(--font-display)' }}>
+                        {semestral.monthly}
+                      </span>
+                      <span className="text-sm text-muted-foreground">/mês</span>
+                    </div>
+                    <div className="text-sm text-muted-foreground">Sem desconto de fidelidade</div>
+                  </motion.div>
+
+                  {/* Anual — destaque */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 30 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.15 }}
+                    className="relative rounded-3xl p-8 border-2 border-primary bg-gradient-to-br from-primary via-orange-600 to-primary text-primary-foreground shadow-2xl md:scale-105"
+                  >
+                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-300 text-yellow-950 font-bold shadow-lg">
+                      <Crown className="h-3 w-3 mr-1" /> Mais escolhido
+                    </Badge>
+                    <div className="text-sm font-semibold mb-2 text-primary-foreground/90 uppercase tracking-wider">
+                      Contrato {anual.label}
+                    </div>
+                    <div className="flex items-baseline gap-2 mb-2">
+                      <span className="text-6xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
+                        {anual.monthly}
+                      </span>
+                      <span className="text-sm text-primary-foreground/80">/mês</span>
+                    </div>
+                    <div className="inline-flex items-center gap-1.5 bg-yellow-300 text-yellow-950 rounded-full px-3 py-1 text-sm font-bold mt-2">
+                      <PiggyBank className="h-3.5 w-3.5" /> Economiza {brl(diffMes)}/mês
+                    </div>
+                    {anual.save && (
+                      <div className="text-sm font-semibold text-yellow-100 mt-3 flex items-center gap-1">
+                        💰 {anual.save}
+                      </div>
+                    )}
+                  </motion.div>
+                </div>
+              </>
+            );
+          })()}
         </div>
       </section>
+
 
       {/* DIFERENCIAIS */}
       <section className="py-24">

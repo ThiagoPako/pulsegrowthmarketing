@@ -16,8 +16,8 @@ export default function Apresentacao() {
 
   // Ordem: Boost primeiro (foco), depois os outros
   const ordered = [
-    PLANS.find((p) => p.key === 'boost')!,
     PLANS.find((p) => p.key === 'starter')!,
+    PLANS.find((p) => p.key === 'boost')!,
     PLANS.find((p) => p.key === 'premium')!,
     PLANS.find((p) => p.key === 'elite')!,
   ];

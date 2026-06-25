@@ -155,7 +155,7 @@ export default function Apresentacao() {
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Falar no WhatsApp"
-        className="fixed bottom-6 right-6 z-50 h-16 px-5 rounded-full bg-[#25D366] text-white shadow-2xl hover:scale-105 transition-all flex items-center gap-2 font-semibold animate-pulse hover:animate-none"
+        className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-50 h-14 w-14 md:h-16 md:w-auto md:px-5 rounded-full bg-[#25D366] text-white shadow-2xl hover:scale-105 transition-all flex items-center justify-center gap-2 font-semibold animate-pulse hover:animate-none"
       >
         <MessageCircle className="h-6 w-6" />
         <span className="hidden sm:inline">Falar com a Pulse</span>

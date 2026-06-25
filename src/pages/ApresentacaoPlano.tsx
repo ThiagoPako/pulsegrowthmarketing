@@ -73,6 +73,7 @@ export default function ApresentacaoPlano() {
   const { plano } = useParams<{ plano: string }>();
   const navigate = useNavigate();
   const [team, setTeam] = useState<any[]>([]);
+  const [showcaseVideos, setShowcaseVideos] = useState<Array<{ id: string; title: string; file_url: string; thumbnail_url?: string; client_name: string }>>([]);
 
   const plan = plano ? getPlan(plano) : undefined;
 
@@ -85,6 +86,37 @@ export default function ApresentacaoPlano() {
         .eq('active', true)
         .order('display_order', { ascending: true });
       setTeam(data || []);
+    })();
+
+    (async () => {
+      try {
+        const { data: clientsData } = await (vpsDb as any).from('clients').select('id, company_name');
+        const showcase = (clientsData || []).filter((c: any) =>
+          SHOWCASE_CLIENTS.some((name) => (c.company_name || '').toLowerCase().includes(name))
+        );
+        if (showcase.length === 0) return;
+        const ids = showcase.map((c: any) => c.id);
+        const { data: contents } = await (vpsDb as any)
+          .from('client_portal_contents')
+          .select('id, title, file_url, thumbnail_url, client_id, content_type, status, created_at')
+          .in('client_id', ids)
+          .eq('content_type', 'reel')
+          .order('created_at', { ascending: false });
+        const nameById = new Map(showcase.map((c: any) => [c.id, c.company_name]));
+        const videos = (contents || [])
+          .filter((v: any) => v.file_url)
+          .slice(0, 6)
+          .map((v: any) => ({
+            id: v.id,
+            title: v.title,
+            file_url: v.file_url,
+            thumbnail_url: v.thumbnail_url,
+            client_name: nameById.get(v.client_id) || '',
+          }));
+        setShowcaseVideos(videos);
+      } catch (err) {
+        console.warn('showcase videos error', err);
+      }
     })();
   }, [plan]);
 

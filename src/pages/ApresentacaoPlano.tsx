@@ -366,25 +366,25 @@ export default function ApresentacaoPlano() {
                   initial={{ opacity: 0, scale: 0.95 }}
                   whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true }}
-                  className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 text-white p-8 md:p-10 mb-10 shadow-2xl"
+                  className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 text-white p-6 md:p-10 mb-8 md:mb-10 shadow-2xl"
                 >
                   <div className="absolute -top-10 -right-10 w-64 h-64 rounded-full bg-white/10 blur-3xl" />
-                  <div className="relative flex flex-col md:flex-row items-center justify-between gap-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-20 h-20 rounded-3xl bg-white/20 backdrop-blur flex items-center justify-center">
-                        <PiggyBank className="h-10 w-10" />
+                  <div className="relative flex flex-col md:flex-row items-center md:items-center text-center md:text-left justify-between gap-5 md:gap-6">
+                    <div className="flex flex-col md:flex-row items-center gap-3 md:gap-4">
+                      <div className="w-16 h-16 md:w-20 md:h-20 rounded-3xl bg-white/20 backdrop-blur flex items-center justify-center shrink-0">
+                        <PiggyBank className="h-8 w-8 md:h-10 md:w-10" />
                       </div>
                       <div>
-                        <div className="text-sm font-semibold uppercase tracking-wider opacity-90">Economia total no anual</div>
-                        <div className="text-5xl md:text-6xl font-bold leading-none mt-1" style={{ fontFamily: 'var(--font-display)' }}>
+                        <div className="text-xs md:text-sm font-semibold uppercase tracking-wider opacity-90">Economia total no anual</div>
+                        <div className="text-4xl md:text-6xl font-bold leading-none mt-1" style={{ fontFamily: 'var(--font-display)' }}>
                           {brl(totalEconomia)}
                         </div>
-                        <div className="text-sm opacity-90 mt-1">
+                        <div className="text-xs md:text-sm opacity-90 mt-1">
                           {brl(diffMes)} a menos por mês • {pct}% de desconto
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 text-sm bg-white/15 backdrop-blur rounded-full px-4 py-2 font-semibold">
+                    <div className="flex items-center gap-2 text-xs md:text-sm bg-white/15 backdrop-blur rounded-full px-4 py-2 font-semibold">
                       <TrendingDown className="h-4 w-4" />
                       Recomendamos o anual
                     </div>

@@ -283,27 +283,27 @@ export default function ApresentacaoPlano() {
       </section>
 
       {/* PARA QUEM É */}
-      <section className="py-20 bg-secondary/30">
-        <div className="container mx-auto px-6 max-w-4xl">
+      <section className="py-14 md:py-20 bg-secondary/30">
+        <div className="container mx-auto px-4 md:px-6 max-w-4xl">
           <motion.div {...fadeUp} className="text-center">
             <Badge variant="outline" className="mb-4">Ideal para</Badge>
-            <h2 className="text-3xl md:text-4xl font-bold mb-6" style={{ fontFamily: 'var(--font-display)' }}>
+            <h2 className="text-2xl md:text-4xl font-bold mb-4 md:mb-6" style={{ fontFamily: 'var(--font-display)' }}>
               Esse plano é <span className="text-primary">perfeito</span> para você se...
             </h2>
-            <p className="text-xl text-muted-foreground leading-relaxed">{plan.ideal}</p>
+            <p className="text-base md:text-xl text-muted-foreground leading-relaxed">{plan.ideal}</p>
           </motion.div>
         </div>
       </section>
 
       {/* ENTREGAS — categorizadas */}
-      <section className="py-24">
-        <div className="container mx-auto px-6 max-w-6xl">
-          <motion.div {...fadeUp} className="text-center mb-16">
+      <section className="py-16 md:py-24">
+        <div className="container mx-auto px-4 md:px-6 max-w-6xl">
+          <motion.div {...fadeUp} className="text-center mb-10 md:mb-16">
             <Badge className="mb-4 bg-primary text-primary-foreground">{plan.features.length} entregas mensais</Badge>
-            <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
+            <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
               Tudo que está <span className="text-primary">incluso</span>
             </h2>
-            <p className="text-lg text-muted-foreground">Organizado por área para você visualizar a operação completa.</p>
+            <p className="text-base md:text-lg text-muted-foreground">Organizado por área para você visualizar a operação completa.</p>
           </motion.div>
 
           <div className="grid md:grid-cols-2 gap-6">

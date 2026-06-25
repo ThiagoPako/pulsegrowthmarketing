@@ -40,9 +40,14 @@ export default function Apresentacao() {
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
-      <div className="fixed top-4 right-4 z-50">
-        <Button variant="outline" size="sm" onClick={() => navigate(-1)} className="backdrop-blur bg-background/80">
-          <X className="h-4 w-4 mr-1" /> Sair
+      <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
+        {!isPublic && (
+          <Button variant="default" size="sm" onClick={() => copyPublicLink()} className="backdrop-blur shadow-lg">
+            <Link2 className="h-4 w-4 mr-1" /> Copiar link público
+          </Button>
+        )}
+        <Button variant="outline" size="sm" onClick={() => isPublic ? window.close() : navigate(-1)} className="backdrop-blur bg-background/80">
+          <X className="h-4 w-4 mr-1" /> {isPublic ? 'Fechar' : 'Sair'}
         </Button>
       </div>
 

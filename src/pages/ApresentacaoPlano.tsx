@@ -493,33 +493,40 @@ export default function ApresentacaoPlano() {
               </h2>
             </motion.div>
 
-            <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {team.map((m, i) => (
-                <motion.div
-                  key={m.id}
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.08 }}
-                  className="bg-card border border-border rounded-2xl overflow-hidden hover:border-primary/50 hover:shadow-xl hover:-translate-y-1 transition-all group"
-                >
-                  <div className="aspect-square overflow-hidden bg-secondary">
-                    {m.photo_url ? (
-                      <img src={m.photo_url} alt={m.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-muted-foreground/40">
-                        {m.name?.[0]}
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-5">
-                    <h3 className="font-bold text-lg">{m.name}</h3>
-                    <div className="text-sm text-primary font-medium mb-2">{m.role}</div>
-                    {m.bio && <p className="text-xs text-muted-foreground line-clamp-3">{m.bio}</p>}
-                  </div>
-                </motion.div>
-              ))}
-            </div>
+            {team.length === 0 ? (
+              <div className="text-center py-12 bg-card border border-dashed border-border rounded-3xl">
+                <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground/40" />
+                <p className="text-muted-foreground">Cadastre sua equipe em <code className="px-2 py-1 rounded bg-secondary text-foreground">/admin/equipe</code> para aparecer aqui automaticamente.</p>
+              </div>
+            ) : (
+              <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {team.map((m, i) => (
+                  <motion.div
+                    key={m.id}
+                    initial={{ opacity: 0, y: 30 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.08 }}
+                    className="bg-card border border-border rounded-2xl overflow-hidden hover:border-primary/50 hover:shadow-xl hover:-translate-y-1 transition-all group"
+                  >
+                    <div className="aspect-square overflow-hidden bg-secondary">
+                      {m.photo_url ? (
+                        <img src={m.photo_url} alt={m.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-muted-foreground/40">
+                          {m.name?.[0]}
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-5">
+                      <h3 className="font-bold text-lg">{m.name}</h3>
+                      <div className="text-sm text-primary font-medium mb-2">{m.role}</div>
+                      {m.bio && <p className="text-xs text-muted-foreground line-clamp-3">{m.bio}</p>}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       )}

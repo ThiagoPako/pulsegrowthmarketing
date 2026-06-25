@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
-import { ArrowRight, Sparkles, Check, ExternalLink, X, Link2 } from 'lucide-react';
+import { ArrowRight, Sparkles, Check, ExternalLink, X, Link2, MessageCircle } from 'lucide-react';
+const WHATSAPP_NUMBER = '5562985382981';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -146,6 +147,17 @@ export default function Apresentacao() {
           </p>
         </div>
       </section>
+
+      <a
+        href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Olá! Vi a apresentação de planos da Pulse e gostaria de mais informações.')}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Falar no WhatsApp"
+        className="fixed bottom-6 right-6 z-50 h-16 px-5 rounded-full bg-[#25D366] text-white shadow-2xl hover:scale-105 transition-all flex items-center gap-2 font-semibold animate-pulse hover:animate-none"
+      >
+        <MessageCircle className="h-6 w-6" />
+        <span className="hidden sm:inline">Falar com a Pulse</span>
+      </a>
     </div>
   );
 }

@@ -11,8 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { getPlan, PLANS } from '@/data/plans';
 
-const PRESENTATION_ORDER: Array<'boost' | 'starter' | 'premium' | 'elite'> = [
-  'boost', 'starter', 'premium', 'elite',
+const PRESENTATION_ORDER: Array<'starter' | 'boost' | 'premium' | 'elite'> = [
+  'starter', 'boost', 'premium', 'elite',
 ];
 
 const LOGO_URL = '/pulse-logo.png';

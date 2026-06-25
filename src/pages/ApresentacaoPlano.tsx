@@ -510,6 +510,49 @@ export default function ApresentacaoPlano() {
         </section>
       )}
 
+      {/* PORTAL EM AÇÃO — vídeos reais de clientes */}
+      {showcaseVideos.length > 0 && (
+        <section className="py-24 bg-secondary/30">
+          <div className="container mx-auto px-6 max-w-6xl">
+            <motion.div {...fadeUp} className="text-center mb-12">
+              <Badge variant="outline" className="mb-4"><PlayCircle className="h-3 w-3 mr-1" /> Veja na prática</Badge>
+              <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
+                Conteúdos reais entregues <span className="text-primary">pelo portal</span>
+              </h2>
+              <p className="text-lg text-muted-foreground">Veja como o cliente recebe e aprova materiais direto na plataforma Pulse.</p>
+            </motion.div>
+
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {showcaseVideos.map((v, i) => (
+                <motion.div
+                  key={v.id}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.1 }}
+                  className="bg-card border border-border rounded-2xl overflow-hidden hover:border-primary/50 hover:shadow-xl transition-all group"
+                >
+                  <div className="aspect-[9/16] bg-black relative overflow-hidden">
+                    <video
+                      src={v.file_url}
+                      poster={v.thumbnail_url}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="p-4">
+                    <div className="text-xs text-primary font-semibold uppercase tracking-wider mb-1">{v.client_name}</div>
+                    <h3 className="font-bold text-sm line-clamp-2">{v.title}</h3>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* CTA */}
       <section className="py-24 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary via-orange-600 to-primary -z-10" />

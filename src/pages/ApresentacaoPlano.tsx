@@ -483,7 +483,7 @@ export default function ApresentacaoPlano() {
       </section>
 
       {/* EQUIPE */}
-      {(
+      {(true) && (
         <section className="py-24">
           <div className="container mx-auto px-6 max-w-6xl">
             <motion.div {...fadeUp} className="text-center mb-16">

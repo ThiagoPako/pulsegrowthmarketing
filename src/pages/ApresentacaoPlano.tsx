@@ -246,21 +246,21 @@ export default function ApresentacaoPlano() {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-orange-500/10 blur-3xl" />
         </div>
 
-        <div className="container mx-auto px-6 text-center relative z-10">
-          <motion.img src={LOGO_URL} alt="Pulse" className="h-20 mx-auto mb-6" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8 }} />
+        <div className="container mx-auto px-4 md:px-6 text-center relative z-10 pt-16 md:pt-0">
+          <motion.img src={LOGO_URL} alt="Pulse" className="h-14 md:h-20 mx-auto mb-4 md:mb-6" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8 }} />
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-            <Badge className="mb-6 bg-primary/10 text-primary border-primary/20">
+            <Badge className="mb-4 md:mb-6 bg-primary/10 text-primary border-primary/20">
               <Sparkles className="h-3 w-3 mr-1" /> Plano apresentado
             </Badge>
           </motion.div>
 
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }} className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary to-orange-600 flex items-center justify-center mx-auto mb-6 shadow-2xl">
-            <Icon className="h-12 w-12 text-primary-foreground" />
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }} className="w-20 h-20 md:w-24 md:h-24 rounded-3xl bg-gradient-to-br from-primary to-orange-600 flex items-center justify-center mx-auto mb-4 md:mb-6 shadow-2xl">
+            <Icon className="h-10 w-10 md:h-12 md:w-12 text-primary-foreground" />
           </motion.div>
 
           <motion.h1
-            className="text-5xl md:text-7xl font-bold tracking-tight mb-4"
+            className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-4 leading-tight"
             style={{ fontFamily: 'var(--font-display)' }}
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -268,10 +268,10 @@ export default function ApresentacaoPlano() {
           >
             <span className="bg-gradient-to-r from-primary via-orange-500 to-primary bg-clip-text text-transparent">{plan.name}</span>
           </motion.h1>
-          <motion.p className="text-2xl text-foreground/90 max-w-2xl mx-auto mb-4 font-semibold" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
+          <motion.p className="text-lg md:text-2xl text-foreground/90 max-w-2xl mx-auto mb-3 md:mb-4 font-semibold px-2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
             {plan.tagline}
           </motion.p>
-          <motion.p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}>
+          <motion.p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto mb-8 md:mb-10 px-2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}>
             {plan.description}
           </motion.p>
 

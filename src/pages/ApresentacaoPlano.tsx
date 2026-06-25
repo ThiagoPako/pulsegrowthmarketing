@@ -182,16 +182,18 @@ export default function ApresentacaoPlano() {
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
-      {/* Top bar: posição + fechar */}
-      <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
-        <Badge variant="outline" className="backdrop-blur bg-background/80">
-          {currentIndex + 1} / {PRESENTATION_ORDER.length}
+      {/* Top bar: posição + ações */}
+      <div className="fixed top-3 right-3 z-50 flex items-center gap-1.5 md:gap-2">
+        <Badge variant="outline" className="backdrop-blur bg-background/80 text-xs px-2">
+          {currentIndex + 1}/{PRESENTATION_ORDER.length}
         </Badge>
-        <Button variant="outline" size="sm" onClick={copyPublicLink} className="backdrop-blur bg-background/80">
-          <Link2 className="h-4 w-4 mr-1" /> Copiar link
+        <Button variant="outline" size="sm" onClick={copyPublicLink} className="backdrop-blur bg-background/80 h-8 px-2 md:px-3" aria-label="Copiar link">
+          <Link2 className="h-4 w-4 md:mr-1" />
+          <span className="hidden md:inline">Copiar link</span>
         </Button>
-        <Button variant="outline" size="sm" onClick={() => window.close()} className="backdrop-blur bg-background/80">
-          <X className="h-4 w-4 mr-1" /> Fechar
+        <Button variant="outline" size="sm" onClick={() => window.close()} className="backdrop-blur bg-background/80 h-8 px-2 md:px-3" aria-label="Fechar">
+          <X className="h-4 w-4 md:mr-1" />
+          <span className="hidden md:inline">Fechar</span>
         </Button>
       </div>
 
@@ -201,10 +203,10 @@ export default function ApresentacaoPlano() {
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Falar no WhatsApp"
-        className="fixed bottom-6 right-6 z-50 h-16 px-5 rounded-full bg-[#25D366] text-white shadow-2xl hover:scale-105 transition-all flex items-center gap-2 font-semibold animate-pulse hover:animate-none"
+        className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-50 h-14 w-14 md:h-16 md:w-auto md:px-5 rounded-full bg-[#25D366] text-white shadow-2xl hover:scale-105 transition-all flex items-center justify-center gap-2 font-semibold animate-pulse hover:animate-none"
       >
         <MessageCircle className="h-6 w-6" />
-        <span className="hidden sm:inline">Falar com a Pulse</span>
+        <span className="hidden md:inline">Falar com a Pulse</span>
       </a>
 
       {/* Setas fixas de navegação entre planos */}
@@ -212,23 +214,23 @@ export default function ApresentacaoPlano() {
         <button
           onClick={goPrev}
           aria-label="Plano anterior"
-          className="fixed left-3 top-1/2 -translate-y-1/2 z-50 h-14 w-14 rounded-full bg-background/80 backdrop-blur border border-border shadow-lg hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all flex items-center justify-center group"
+          className="fixed left-2 md:left-3 bottom-4 md:bottom-auto md:top-1/2 md:-translate-y-1/2 z-50 h-11 w-11 md:h-14 md:w-14 rounded-full bg-background/80 backdrop-blur border border-border shadow-lg hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all flex items-center justify-center"
         >
-          <ArrowLeft className="h-6 w-6" />
+          <ArrowLeft className="h-5 w-5 md:h-6 md:w-6" />
         </button>
       )}
       {nextKey && (
         <button
           onClick={goNext}
           aria-label="Próximo plano"
-          className="fixed right-3 top-1/2 -translate-y-1/2 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-xl hover:scale-110 transition-all flex items-center justify-center animate-pulse"
+          className="fixed left-16 md:left-auto md:right-3 bottom-4 md:bottom-auto md:top-1/2 md:-translate-y-1/2 z-50 h-11 w-11 md:h-14 md:w-14 rounded-full bg-primary text-primary-foreground shadow-xl hover:scale-110 transition-all flex items-center justify-center animate-pulse"
         >
-          <ArrowRight className="h-6 w-6" />
+          <ArrowRight className="h-5 w-5 md:h-6 md:w-6" />
         </button>
       )}
 
       {/* Dica de teclado */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 hidden md:flex items-center gap-3 px-4 py-2 rounded-full bg-background/80 backdrop-blur border border-border text-xs text-muted-foreground shadow">
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 hidden md:flex items-center gap-3 px-4 py-2 rounded-full bg-background/80 backdrop-blur border border-border text-xs text-muted-foreground shadow">
         <span>← → trocar plano</span>
         <span className="opacity-40">•</span>
         <span>↑ ↓ rolar página</span>

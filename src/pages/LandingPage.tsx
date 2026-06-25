@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import FacebookPixel from '@/components/FacebookPixel';
-import Equipe from '@/components/landing/Equipe';
+
 
 const WHATSAPP_LINK = 'https://wa.me/5562985382981?text=Olá!%20Vim%20pelo%20site%20e%20gostaria%20de%20saber%20mais%20sobre%20os%20serviços%20da%20Pulse.';
 const INSTAGRAM_LINK = 'https://instagram.com/ag.pulse';
@@ -147,7 +147,7 @@ function Navbar() {
 
   // Track active section
   useEffect(() => {
-    const sectionIds = ['quem-somos', 'servicos', 'portal', 'equipe', 'cases', 'depoimentos', 'faq', 'contato'];
+    const sectionIds = ['quem-somos', 'servicos', 'portal', 'cases', 'depoimentos', 'faq', 'contato'];
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -174,7 +174,7 @@ function Navbar() {
     { label: 'Quem Somos', href: '#quem-somos', id: 'quem-somos' },
     { label: 'Serviços', href: '#servicos', id: 'servicos' },
     { label: 'Processo', href: '#portal', id: 'portal' },
-    { label: 'Equipe', href: '#equipe', id: 'equipe' },
+    
     { label: 'Cases', href: '#cases', id: 'cases' },
     { label: 'Depoimentos', href: '#depoimentos', id: 'depoimentos' },
     { label: 'FAQ', href: '#faq', id: 'faq' },
@@ -1499,7 +1499,7 @@ export default function LandingPage() {
       <Sobre />
       <Servicos />
       <ComoFunciona />
-      <Equipe />
+      
       <Cases />
       <Depoimentos />
       <FAQ />

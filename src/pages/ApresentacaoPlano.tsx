@@ -567,17 +567,17 @@ export default function ApresentacaoPlano() {
 
       {/* PORTAL EM AÇÃO — vídeos reais de clientes */}
       {showcaseVideos.length > 0 && (
-        <section className="py-24 bg-secondary/30">
-          <div className="container mx-auto px-6 max-w-6xl">
-            <motion.div {...fadeUp} className="text-center mb-12">
+        <section className="py-16 md:py-24 bg-secondary/30">
+          <div className="container mx-auto px-4 md:px-6 max-w-6xl">
+            <motion.div {...fadeUp} className="text-center mb-10 md:mb-12">
               <Badge variant="outline" className="mb-4"><PlayCircle className="h-3 w-3 mr-1" /> Veja na prática</Badge>
-              <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
+              <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
                 Conteúdos reais entregues <span className="text-primary">pelo portal</span>
               </h2>
-              <p className="text-lg text-muted-foreground">Veja como o cliente recebe e aprova materiais direto na plataforma Pulse.</p>
+              <p className="text-base md:text-lg text-muted-foreground">Veja como o cliente recebe e aprova materiais direto na plataforma Pulse.</p>
             </motion.div>
 
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
               {showcaseVideos.map((v, i) => (
                 <motion.div
                   key={v.id}

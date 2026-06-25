@@ -101,6 +101,7 @@ const navCategories: NavCategory[] = [
       { path: '/portal-videos', label: 'Vídeos Portal', icon: Video, roles: ['admin'] },
       { path: '/landing-admin', label: 'Landing Page', icon: Rocket, roles: ['admin'] },
       { path: '/propostas', label: 'Propostas', icon: FileText, roles: ['admin'] },
+      { path: '/apresentacao', label: 'Apresentação', icon: Sparkles, roles: ['admin'] },
       { path: '/configuracoes', label: 'Config', icon: Settings, roles: ['admin', 'social_media'] },
     ],
   },

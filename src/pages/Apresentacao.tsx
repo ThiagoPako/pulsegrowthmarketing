@@ -9,7 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import logoAsset from '@/assets/pulse_logo.png.asset.json';
+const LOGO_URL = '/pulse-logo.png';
 
 type Plan = {
   key: string;

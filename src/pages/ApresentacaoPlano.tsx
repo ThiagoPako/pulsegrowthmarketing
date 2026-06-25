@@ -7,7 +7,9 @@ import {
   Check, ArrowRight, ArrowLeft, Sparkles, Target, TrendingUp,
   Users, PlayCircle, Calendar, BarChart3, MessageSquare, Eye, Ticket, Palette, X,
   Film, Image as ImageIcon, Megaphone, PenTool, FileText, Layers, Crown, PiggyBank, TrendingDown,
+  MessageCircle,
 } from 'lucide-react';
+const WHATSAPP_NUMBER = '5562985382981';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';

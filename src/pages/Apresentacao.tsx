@@ -41,14 +41,16 @@ export default function Apresentacao() {
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
-      <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
+      <div className="fixed top-3 right-3 z-50 flex items-center gap-1.5 md:gap-2">
         {!isPublic && (
-          <Button variant="default" size="sm" onClick={() => copyPublicLink()} className="backdrop-blur shadow-lg">
-            <Link2 className="h-4 w-4 mr-1" /> Copiar link público
+          <Button variant="default" size="sm" onClick={() => copyPublicLink()} className="backdrop-blur shadow-lg h-8 px-2 md:px-3" aria-label="Copiar link público">
+            <Link2 className="h-4 w-4 md:mr-1" />
+            <span className="hidden md:inline">Copiar link público</span>
           </Button>
         )}
-        <Button variant="outline" size="sm" onClick={() => isPublic ? window.close() : navigate(-1)} className="backdrop-blur bg-background/80">
-          <X className="h-4 w-4 mr-1" /> {isPublic ? 'Fechar' : 'Sair'}
+        <Button variant="outline" size="sm" onClick={() => isPublic ? window.close() : navigate(-1)} className="backdrop-blur bg-background/80 h-8 px-2 md:px-3" aria-label={isPublic ? 'Fechar' : 'Sair'}>
+          <X className="h-4 w-4 md:mr-1" />
+          <span className="hidden md:inline">{isPublic ? 'Fechar' : 'Sair'}</span>
         </Button>
       </div>
 

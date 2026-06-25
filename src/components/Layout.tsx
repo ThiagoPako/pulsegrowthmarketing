@@ -201,7 +201,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             return (
               <button
                 key={item.path}
-                onClick={() => (onNav || navigate)(item.path)}
+                onClick={() => {
+                  if (item.path === '/apresentacao') {
+                    window.open(item.path, '_blank', 'noopener,noreferrer');
+                  } else {
+                    (onNav || navigate)(item.path);
+                  }
+                }}
                 className={`w-full group flex items-center gap-2.5 rounded-xl transition-all duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-sm ${
                   expanded ? 'px-3 py-2' : 'flex-col px-2 py-2'
                 } ${active ? 'bg-sidebar-accent text-primary shadow-sm' : 'text-sidebar-foreground'}`}

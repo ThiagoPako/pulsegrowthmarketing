@@ -67,6 +67,7 @@ const ClientFeedback = lazy(() => import("@/pages/ClientFeedback"));
 const TestimonialsAdmin = lazy(() => import("@/pages/TestimonialsAdmin"));
 const LandingPageAdmin = lazy(() => import("@/pages/LandingPageAdmin"));
 const Apresentacao = lazy(() => import("@/pages/Apresentacao"));
+const ApresentacaoPlano = lazy(() => import("@/pages/ApresentacaoPlano"));
 const CommercialProposal = lazy(() => import("@/pages/CommercialProposal"));
 const ProposalViewer = lazy(() => import("@/pages/ProposalViewer"));
 const RecordingControl = lazy(() => import("@/pages/RecordingControl"));
@@ -191,6 +192,7 @@ function AppRoutes() {
         <Route path="/landing-admin" element={<ProtectedRoute><LandingPageAdmin /></ProtectedRoute>} />
         <Route path="/propostas" element={<ProtectedRoute><CommercialProposal /></ProtectedRoute>} />
         <Route path="/apresentacao" element={<ProtectedRoute><Apresentacao /></ProtectedRoute>} />
+        <Route path="/apresentacao/:plano" element={<ProtectedRoute><ApresentacaoPlano /></ProtectedRoute>} />
         <Route path="/controle-gravacoes" element={<ProtectedRoute><RecordingControl /></ProtectedRoute>} />
         <Route path="/controle-edicao" element={<ProtectedRoute><EditingControl /></ProtectedRoute>} />
         <Route path="/proposta/:token" element={<ProposalViewer />} />

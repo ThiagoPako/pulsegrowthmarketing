@@ -398,13 +398,13 @@ export default function ApresentacaoPlano() {
                     initial={{ opacity: 0, y: 30 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
-                    className="relative rounded-3xl p-8 border-2 border-border bg-card opacity-90"
+                    className="relative rounded-3xl p-6 md:p-8 border-2 border-border bg-card opacity-90"
                   >
-                    <div className="text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wider">
+                    <div className="text-xs md:text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wider">
                       Contrato {semestral.label}
                     </div>
                     <div className="flex items-baseline gap-2 mb-4">
-                      <span className="text-5xl font-bold text-muted-foreground line-through decoration-2" style={{ fontFamily: 'var(--font-display)' }}>
+                      <span className="text-4xl md:text-5xl font-bold text-muted-foreground line-through decoration-2" style={{ fontFamily: 'var(--font-display)' }}>
                         {semestral.monthly}
                       </span>
                       <span className="text-sm text-muted-foreground">/mês</span>
@@ -418,21 +418,21 @@ export default function ApresentacaoPlano() {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.15 }}
-                    className="relative rounded-3xl p-8 border-2 border-primary bg-gradient-to-br from-primary via-orange-600 to-primary text-primary-foreground shadow-2xl md:scale-105"
+                    className="relative rounded-3xl p-6 md:p-8 border-2 border-primary bg-gradient-to-br from-primary via-orange-600 to-primary text-primary-foreground shadow-2xl md:scale-105"
                   >
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-300 text-yellow-950 font-bold shadow-lg">
+                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-300 text-yellow-950 font-bold shadow-lg whitespace-nowrap">
                       <Crown className="h-3 w-3 mr-1" /> Mais escolhido
                     </Badge>
-                    <div className="text-sm font-semibold mb-2 text-primary-foreground/90 uppercase tracking-wider">
+                    <div className="text-xs md:text-sm font-semibold mb-2 text-primary-foreground/90 uppercase tracking-wider">
                       Contrato {anual.label}
                     </div>
                     <div className="flex items-baseline gap-2 mb-2">
-                      <span className="text-6xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
+                      <span className="text-5xl md:text-6xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
                         {anual.monthly}
                       </span>
                       <span className="text-sm text-primary-foreground/80">/mês</span>
                     </div>
-                    <div className="inline-flex items-center gap-1.5 bg-yellow-300 text-yellow-950 rounded-full px-3 py-1 text-sm font-bold mt-2">
+                    <div className="inline-flex items-center gap-1.5 bg-yellow-300 text-yellow-950 rounded-full px-3 py-1 text-xs md:text-sm font-bold mt-2">
                       <PiggyBank className="h-3.5 w-3.5" /> Economiza {brl(diffMes)}/mês
                     </div>
                     {anual.save && (

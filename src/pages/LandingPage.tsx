@@ -236,9 +236,6 @@ function Navbar() {
               <Button variant="ghost" size="sm" onClick={() => navigate('/clube')} className="hidden sm:inline-flex text-xs sm:text-sm h-8 sm:h-9 gap-1.5">
                 <Gift size={14} /> Clube de Descontos
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/login')} className="hidden sm:inline-flex text-xs sm:text-sm h-8 sm:h-9">
-                Área da Equipe
-              </Button>
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Button size="sm" onClick={() => openExternalLink(WHATSAPP_LINK)} className="gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shadow-primary/20 h-8 sm:h-9 text-xs sm:text-sm px-3 sm:px-4">
                   <MessageCircle size={14} /> <span className="hidden xs:inline">Falar conosco</span><span className="xs:hidden">WhatsApp</span>
@@ -321,9 +318,6 @@ function Navbar() {
                 </Button>
                 <Button variant="outline" size="lg" onClick={() => { setOpen(false); navigate('/clube'); }} className="w-full py-6 gap-2">
                   <Gift size={18} /> Clube de Descontos
-                </Button>
-                <Button variant="outline" size="lg" onClick={() => { setOpen(false); navigate('/login'); }} className="w-full py-6">
-                  Área da Equipe
                 </Button>
               </motion.div>
             </div>

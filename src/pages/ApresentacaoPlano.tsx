@@ -533,7 +533,7 @@ export default function ApresentacaoPlano() {
                 <p className="text-muted-foreground">Cadastre sua equipe em <code className="px-2 py-1 rounded bg-secondary text-foreground">/admin/equipe</code> para aparecer aqui automaticamente.</p>
               </div>
             ) : (
-              <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
                 {team.map((m, i) => (
                   <motion.div
                     key={m.id}

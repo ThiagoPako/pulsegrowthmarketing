@@ -67,6 +67,7 @@ const ClientFeedback = lazy(() => import("@/pages/ClientFeedback"));
 const TestimonialsAdmin = lazy(() => import("@/pages/TestimonialsAdmin"));
 const LandingPageAdmin = lazy(() => import("@/pages/LandingPageAdmin"));
 const Apresentacao = lazy(() => import("@/pages/Apresentacao"));
+const ApresentacaoPlano = lazy(() => import("@/pages/ApresentacaoPlano"));
 const CommercialProposal = lazy(() => import("@/pages/CommercialProposal"));
 const ProposalViewer = lazy(() => import("@/pages/ProposalViewer"));
 const RecordingControl = lazy(() => import("@/pages/RecordingControl"));

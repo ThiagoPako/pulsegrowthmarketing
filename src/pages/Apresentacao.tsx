@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
-import { ArrowRight, Sparkles, Check, ExternalLink, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { ArrowRight, Sparkles, Check, ExternalLink, X, Link2 } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PLANS } from '@/data/plans';
@@ -9,9 +10,24 @@ const LOGO_URL = '/pulse-logo.png';
 
 export default function Apresentacao() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isPublic = location.pathname.startsWith('/p/');
+  const baseRoute = isPublic ? '/p/planos' : '/apresentacao';
 
   const openPlan = (key: string) => {
-    window.open(`/apresentacao/${key}`, '_blank', 'noopener,noreferrer');
+    window.open(`${baseRoute}/${key}`, '_blank', 'noopener,noreferrer');
+  };
+
+  const copyPublicLink = async (planKey?: string) => {
+    const url = planKey
+      ? `${window.location.origin}/p/planos/${planKey}`
+      : `${window.location.origin}/p/planos`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link público copiado!', { description: url });
+    } catch {
+      toast.error('Copie manualmente: ' + url);
+    }
   };
 
   // Ordem: Boost primeiro (foco), depois os outros
@@ -24,9 +40,14 @@ export default function Apresentacao() {
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
-      <div className="fixed top-4 right-4 z-50">
-        <Button variant="outline" size="sm" onClick={() => navigate(-1)} className="backdrop-blur bg-background/80">
-          <X className="h-4 w-4 mr-1" /> Sair
+      <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
+        {!isPublic && (
+          <Button variant="default" size="sm" onClick={() => copyPublicLink()} className="backdrop-blur shadow-lg">
+            <Link2 className="h-4 w-4 mr-1" /> Copiar link público
+          </Button>
+        )}
+        <Button variant="outline" size="sm" onClick={() => isPublic ? window.close() : navigate(-1)} className="backdrop-blur bg-background/80">
+          <X className="h-4 w-4 mr-1" /> {isPublic ? 'Fechar' : 'Sair'}
         </Button>
       </div>
 

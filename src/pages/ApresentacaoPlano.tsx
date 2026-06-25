@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate, useParams, Navigate } from 'react-router-dom';
+import { useNavigate, useParams, useLocation, Navigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { Link2 } from 'lucide-react';
 import {
   Check, ArrowRight, ArrowLeft, Sparkles, Target, TrendingUp,
   Users, PlayCircle, Calendar, BarChart3, MessageSquare, Eye, Ticket, Palette, X,
@@ -77,6 +79,9 @@ function categorizeFeatures(features: string[]): Category[] {
 export default function ApresentacaoPlano() {
   const { plano } = useParams<{ plano: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isPublic = location.pathname.startsWith('/p/');
+  const baseRoute = isPublic ? '/p/planos' : '/apresentacao';
   const [team, setTeam] = useState<any[]>([]);
   const [showcaseVideos, setShowcaseVideos] = useState<Array<{ id: string; title: string; file_url: string; thumbnail_url?: string; client_name: string }>>([]);
 
@@ -131,8 +136,18 @@ export default function ApresentacaoPlano() {
     ? PRESENTATION_ORDER[currentIndex + 1]
     : null;
 
-  const goPrev = () => { if (prevKey) { navigate(`/apresentacao/${prevKey}`); window.scrollTo({ top: 0 }); } };
-  const goNext = () => { if (nextKey) { navigate(`/apresentacao/${nextKey}`); window.scrollTo({ top: 0 }); } };
+  const goPrev = () => { if (prevKey) { navigate(`${baseRoute}/${prevKey}`); window.scrollTo({ top: 0 }); } };
+  const goNext = () => { if (nextKey) { navigate(`${baseRoute}/${nextKey}`); window.scrollTo({ top: 0 }); } };
+
+  const copyPublicLink = async () => {
+    const url = `${window.location.origin}/p/planos/${plano}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link público copiado!', { description: url });
+    } catch {
+      toast.error('Não foi possível copiar. Link: ' + url);
+    }
+  };
 
   useEffect(() => {
     const scrollByAmount = (delta: number) => {
@@ -159,7 +174,7 @@ export default function ApresentacaoPlano() {
     return () => window.removeEventListener('keydown', handler, { capture: true } as any);
   }, [prevKey, nextKey]);
 
-  if (!plan) return <Navigate to="/apresentacao" replace />;
+  if (!plan) return <Navigate to={isPublic ? '/p/planos' : '/apresentacao'} replace />;
 
   const Icon = plan.icon;
 
@@ -170,6 +185,9 @@ export default function ApresentacaoPlano() {
         <Badge variant="outline" className="backdrop-blur bg-background/80">
           {currentIndex + 1} / {PRESENTATION_ORDER.length}
         </Badge>
+        <Button variant="outline" size="sm" onClick={copyPublicLink} className="backdrop-blur bg-background/80">
+          <Link2 className="h-4 w-4 mr-1" /> Copiar link
+        </Button>
         <Button variant="outline" size="sm" onClick={() => window.close()} className="backdrop-blur bg-background/80">
           <X className="h-4 w-4 mr-1" /> Fechar
         </Button>

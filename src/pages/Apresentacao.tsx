@@ -184,7 +184,7 @@ export default function Apresentacao() {
 
         <div className="container mx-auto px-6 text-center relative z-10">
           <motion.img
-            src={logoAsset.url}
+            src={LOGO_URL}
             alt="Pulse"
             className="h-24 mx-auto mb-8"
             initial={{ opacity: 0, scale: 0.8 }}
@@ -496,7 +496,7 @@ export default function Apresentacao() {
       </section>
 
       <footer className="py-8 text-center text-sm text-muted-foreground border-t border-border">
-        <img src={logoAsset.url} alt="Pulse" className="h-8 mx-auto mb-2 opacity-70" />
+        <img src={LOGO_URL} alt="Pulse" className="h-8 mx-auto mb-2 opacity-70" />
         © {new Date().getFullYear()} Pulse Growth Marketing. Todos os direitos reservados.
       </footer>
     </div>

@@ -34,6 +34,38 @@ const fadeUp = {
   transition: { duration: 0.6, ease: 'easeOut' as const },
 };
 
+const parsePrice = (s: string): number => {
+  const n = Number(String(s).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.'));
+  return isNaN(n) ? 0 : n;
+};
+
+const brl = (n: number) =>
+  n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+
+type Category = { title: string; icon: typeof Film; items: string[] };
+
+function categorizeFeatures(features: string[]): Category[] {
+  const buckets: Record<string, Category> = {
+    video:    { title: 'Vídeo & Reels',         icon: Film,        items: [] },
+    arte:     { title: 'Design & Artes',         icon: ImageIcon,   items: [] },
+    trafego:  { title: 'Tráfego Pago & Anúncios',icon: Megaphone,   items: [] },
+    estrategia:{title: 'Estratégia & Conteúdo',  icon: PenTool,     items: [] },
+    gestao:   { title: 'Gestão & Relatórios',    icon: BarChart3,   items: [] },
+    extras:   { title: 'Extras & Diferenciais',  icon: Sparkles,    items: [] },
+  };
+  features.forEach((f) => {
+    const t = f.toLowerCase();
+    if (/(reel|vídeo|video|edição|edicao|roteiro|gravaç|criativ.*víd|criativ.*vid|story|stories)/.test(t)) buckets.video.items.push(f);
+    else if (/(arte|design|post|feed|perfil|destaque|foto)/.test(t)) buckets.arte.items.push(f);
+    else if (/(tráfego|trafego|ads|anúnci|anunci|meta ads|google ads|campanh|criativo.*anúnc|criativo.*anunc)/.test(t)) buckets.trafego.items.push(f);
+    else if (/(linha editorial|estratég|estrateg|público|publico|análise|analise|sazon|comerci|vendas|treinamento)/.test(t)) buckets.estrategia.items.push(f);
+    else if (/(dashboard|relatóri|relatori|portal|crm|monitor|google meu negócio|google meu negocio|gestão|gestao|social media)/.test(t)) buckets.gestao.items.push(f);
+    else buckets.extras.items.push(f);
+  });
+  return Object.values(buckets).filter((b) => b.items.length > 0);
+}
+
+
 export default function ApresentacaoPlano() {
   const { plano } = useParams<{ plano: string }>();
   const navigate = useNavigate();

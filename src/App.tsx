@@ -193,6 +193,9 @@ function AppRoutes() {
         <Route path="/propostas" element={<ProtectedRoute><CommercialProposal /></ProtectedRoute>} />
         <Route path="/apresentacao" element={<ProtectedRoute><Apresentacao /></ProtectedRoute>} />
         <Route path="/apresentacao/:plano" element={<ProtectedRoute><ApresentacaoPlano /></ProtectedRoute>} />
+        {/* Rotas públicas para envio ao cliente (sem login) */}
+        <Route path="/p/planos" element={<Apresentacao />} />
+        <Route path="/p/planos/:plano" element={<ApresentacaoPlano />} />
         <Route path="/controle-gravacoes" element={<ProtectedRoute><RecordingControl /></ProtectedRoute>} />
         <Route path="/controle-edicao" element={<ProtectedRoute><EditingControl /></ProtectedRoute>} />
         <Route path="/proposta/:token" element={<ProposalViewer />} />

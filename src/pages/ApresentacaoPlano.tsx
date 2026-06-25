@@ -485,14 +485,14 @@ export default function ApresentacaoPlano() {
       </section>
 
       {/* PORTAL */}
-      <section className="py-24 bg-secondary/30">
-        <div className="container mx-auto px-6 max-w-6xl">
-          <motion.div {...fadeUp} className="text-center mb-16">
+      <section className="py-16 md:py-24 bg-secondary/30">
+        <div className="container mx-auto px-4 md:px-6 max-w-6xl">
+          <motion.div {...fadeUp} className="text-center mb-10 md:mb-16">
             <Badge variant="outline" className="mb-4">Diferencial exclusivo</Badge>
-            <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
+            <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
               Portal do Cliente <span className="text-primary">Pulse</span>
             </h2>
-            <p className="text-lg text-muted-foreground">Plataforma própria que centraliza materiais, aprovações e acompanhamentos.</p>
+            <p className="text-base md:text-lg text-muted-foreground">Plataforma própria que centraliza materiais, aprovações e acompanhamentos.</p>
           </motion.div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">

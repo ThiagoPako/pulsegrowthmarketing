@@ -21,13 +21,18 @@ const PRESENTATION_ORDER: Array<'starter' | 'boost' | 'premium' | 'elite'> = [
 const LOGO_URL = '/pulse-logo.png';
 
 const PORTAL_FEATURES = [
-  { icon: PlayCircle, title: 'Biblioteca de Conteúdos', desc: 'Vídeos, artes e fotos em painel estilo streaming.' },
-  { icon: Palette, title: 'Zona Criativa', desc: 'Roteiros, sugestões, aprovações e prioridades.' },
-  { icon: Calendar, title: 'Calendário de Produção', desc: 'Gravações, publicações e tudo planejado.' },
-  { icon: BarChart3, title: 'Acompanhamento de Entregas', desc: 'Visibilidade total das demandas.' },
-  { icon: Ticket, title: 'Emissor de Cupons', desc: 'Cupons promocionais para campanhas.' },
-  { icon: MessageSquare, title: 'Central de Comunicação', desc: 'Conversa em um único ambiente.' },
-  { icon: Eye, title: 'Transparência Total', desc: 'Saiba exatamente o que está sendo executado.' },
+  { icon: PlayCircle, title: 'Biblioteca de Conteúdos', desc: 'Todos os reels, vídeos, criativos e stories organizados estilo streaming, com filtros e download.' },
+  { icon: Palette, title: 'Zona Criativa', desc: 'Envio de ideias, roteiros, referências e prioridades direto pra equipe de produção.' },
+  { icon: Calendar, title: 'Calendário de Gravação', desc: 'Confirmação de presença, troca de horário e visão completa das agendas do mês.' },
+  { icon: BarChart3, title: 'Dashboard de Entregas', desc: 'Acompanhamento em tempo real do que foi entregue x contratado.' },
+  { icon: Ticket, title: 'Clube de Descontos', desc: 'Emissão de cupons promocionais ilimitados para campanhas e parcerias.' },
+  { icon: MessageSquare, title: 'Aprovação & Comentários', desc: 'Aprove ou peça alteração em cada vídeo/arte com um clique, sem WhatsApp solto.' },
+  { icon: Eye, title: 'Notificações', desc: 'Avisos de novos conteúdos, gravações e alterações em tempo real.' },
+  { icon: Sparkles, title: 'Eventos & Lives', desc: 'Cadastro de eventos, captação de leads e cobertura programada.' },
+  { icon: Megaphone, title: 'Panfletagem Digital', desc: 'Encartes interativos, ofertas com QR code e métricas de visualização.' },
+  { icon: PenTool, title: 'Briefings de Design', desc: 'Solicitação de artes avulsas com referências, prazos e status do designer.' },
+  { icon: PlayCircle, title: 'Treinamentos', desc: 'Trilhas de capacitação em vendas, marketing e atendimento para a equipe do cliente.' },
+  { icon: FileText, title: 'Tutoriais & Boas-vindas', desc: 'Onboarding guiado para que o cliente domine o portal em minutos.' },
 ];
 
 const fadeUp = {

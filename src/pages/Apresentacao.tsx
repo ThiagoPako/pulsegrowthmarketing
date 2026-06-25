@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
-import { ArrowRight, Sparkles, Check, ExternalLink, X, Link2 } from 'lucide-react';
+import { ArrowRight, Sparkles, Check, ExternalLink, X, Link2, MessageCircle } from 'lucide-react';
+const WHATSAPP_NUMBER = '5562985382981';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';

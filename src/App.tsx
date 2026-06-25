@@ -190,6 +190,7 @@ function AppRoutes() {
         <Route path="/depoimentos" element={<ProtectedRoute><TestimonialsAdmin /></ProtectedRoute>} />
         <Route path="/landing-admin" element={<ProtectedRoute><LandingPageAdmin /></ProtectedRoute>} />
         <Route path="/propostas" element={<ProtectedRoute><CommercialProposal /></ProtectedRoute>} />
+        <Route path="/apresentacao" element={<ProtectedRoute><Apresentacao /></ProtectedRoute>} />
         <Route path="/controle-gravacoes" element={<ProtectedRoute><RecordingControl /></ProtectedRoute>} />
         <Route path="/controle-edicao" element={<ProtectedRoute><EditingControl /></ProtectedRoute>} />
         <Route path="/proposta/:token" element={<ProposalViewer />} />

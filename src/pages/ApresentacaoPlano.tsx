@@ -195,6 +195,18 @@ export default function ApresentacaoPlano() {
         </Button>
       </div>
 
+      {/* Botão flutuante WhatsApp */}
+      <a
+        href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`Olá! Vi a apresentação do plano ${plan.name} da Pulse e gostaria de mais informações.`)}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Falar no WhatsApp"
+        className="fixed bottom-6 right-6 z-50 h-16 px-5 rounded-full bg-[#25D366] text-white shadow-2xl hover:scale-105 transition-all flex items-center gap-2 font-semibold animate-pulse hover:animate-none"
+      >
+        <MessageCircle className="h-6 w-6" />
+        <span className="hidden sm:inline">Falar com a Pulse</span>
+      </a>
+
       {/* Setas fixas de navegação entre planos */}
       {prevKey && (
         <button

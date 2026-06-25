@@ -340,14 +340,14 @@ export default function ApresentacaoPlano() {
       </section>
 
       {/* INVESTIMENTO — destaque ANUAL */}
-      <section className="py-24 bg-gradient-to-b from-secondary/30 to-background">
-        <div className="container mx-auto px-6 max-w-5xl">
-          <motion.div {...fadeUp} className="text-center mb-14">
+      <section className="py-16 md:py-24 bg-gradient-to-b from-secondary/30 to-background">
+        <div className="container mx-auto px-4 md:px-6 max-w-5xl">
+          <motion.div {...fadeUp} className="text-center mb-10 md:mb-14">
             <Badge variant="outline" className="mb-4">Investimento</Badge>
-            <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
+            <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
               Economize fechando <span className="text-primary">o plano anual</span>
             </h2>
-            <p className="text-lg text-muted-foreground">Mesmo plano, mesma entrega — pagando menos por mês.</p>
+            <p className="text-base md:text-lg text-muted-foreground">Mesmo plano, mesma entrega — pagando menos por mês.</p>
           </motion.div>
 
           {(() => {

@@ -21,13 +21,18 @@ const PRESENTATION_ORDER: Array<'starter' | 'boost' | 'premium' | 'elite'> = [
 const LOGO_URL = '/pulse-logo.png';
 
 const PORTAL_FEATURES = [
-  { icon: PlayCircle, title: 'Biblioteca de Conteúdos', desc: 'Vídeos, artes e fotos em painel estilo streaming.' },
-  { icon: Palette, title: 'Zona Criativa', desc: 'Roteiros, sugestões, aprovações e prioridades.' },
-  { icon: Calendar, title: 'Calendário de Produção', desc: 'Gravações, publicações e tudo planejado.' },
-  { icon: BarChart3, title: 'Acompanhamento de Entregas', desc: 'Visibilidade total das demandas.' },
-  { icon: Ticket, title: 'Emissor de Cupons', desc: 'Cupons promocionais para campanhas.' },
-  { icon: MessageSquare, title: 'Central de Comunicação', desc: 'Conversa em um único ambiente.' },
-  { icon: Eye, title: 'Transparência Total', desc: 'Saiba exatamente o que está sendo executado.' },
+  { icon: PlayCircle, title: 'Biblioteca de Conteúdos', desc: 'Todos os reels, vídeos, criativos e stories organizados estilo streaming, com filtros e download.' },
+  { icon: Palette, title: 'Zona Criativa', desc: 'Envio de ideias, roteiros, referências e prioridades direto pra equipe de produção.' },
+  { icon: Calendar, title: 'Calendário de Gravação', desc: 'Confirmação de presença, troca de horário e visão completa das agendas do mês.' },
+  { icon: BarChart3, title: 'Dashboard de Entregas', desc: 'Acompanhamento em tempo real do que foi entregue x contratado.' },
+  { icon: Ticket, title: 'Clube de Descontos', desc: 'Emissão de cupons promocionais ilimitados para campanhas e parcerias.' },
+  { icon: MessageSquare, title: 'Aprovação & Comentários', desc: 'Aprove ou peça alteração em cada vídeo/arte com um clique, sem WhatsApp solto.' },
+  { icon: Eye, title: 'Notificações', desc: 'Avisos de novos conteúdos, gravações e alterações em tempo real.' },
+  { icon: Sparkles, title: 'Eventos & Lives', desc: 'Cadastro de eventos, captação de leads e cobertura programada.' },
+  { icon: Megaphone, title: 'Panfletagem Digital', desc: 'Encartes interativos, ofertas com QR code e métricas de visualização.' },
+  { icon: PenTool, title: 'Briefings de Design', desc: 'Solicitação de artes avulsas com referências, prazos e status do designer.' },
+  { icon: PlayCircle, title: 'Treinamentos', desc: 'Trilhas de capacitação em vendas, marketing e atendimento para a equipe do cliente.' },
+  { icon: FileText, title: 'Tutoriais & Boas-vindas', desc: 'Onboarding guiado para que o cliente domine o portal em minutos.' },
 ];
 
 const fadeUp = {
@@ -130,19 +135,28 @@ export default function ApresentacaoPlano() {
   const goNext = () => { if (nextKey) { navigate(`/apresentacao/${nextKey}`); window.scrollTo({ top: 0 }); } };
 
   useEffect(() => {
+    const scrollByAmount = (delta: number) => {
+      const el = document.scrollingElement || document.documentElement;
+      el.scrollTo({ top: el.scrollTop + delta, behavior: 'smooth' });
+    };
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      // Remove focus de botões para o navegador não consumir as setas
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+      const step = window.innerHeight * 0.85;
       if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); goNext(); }
       else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); goPrev(); }
-      else if (e.key === 'ArrowDown') { e.preventDefault(); window.scrollBy({ top: window.innerHeight * 0.9, behavior: 'smooth' }); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); window.scrollBy({ top: -window.innerHeight * 0.9, behavior: 'smooth' }); }
-      else if (e.key === 'Home') { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
-      else if (e.key === 'End') { e.preventDefault(); window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }
+      else if (e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); scrollByAmount(step); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); scrollByAmount(-step); }
+      else if (e.key === 'Home') { e.preventDefault(); (document.scrollingElement || document.documentElement).scrollTo({ top: 0, behavior: 'smooth' }); }
+      else if (e.key === 'End') { e.preventDefault(); (document.scrollingElement || document.documentElement).scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }
       else if (e.key === 'Escape') { window.close(); }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener('keydown', handler, { capture: true });
+    return () => window.removeEventListener('keydown', handler, { capture: true } as any);
   }, [prevKey, nextKey]);
 
   if (!plan) return <Navigate to="/apresentacao" replace />;
@@ -469,7 +483,7 @@ export default function ApresentacaoPlano() {
       </section>
 
       {/* EQUIPE */}
-      {team.length > 0 && (
+      {(true) && (
         <section className="py-24">
           <div className="container mx-auto px-6 max-w-6xl">
             <motion.div {...fadeUp} className="text-center mb-16">
@@ -479,33 +493,40 @@ export default function ApresentacaoPlano() {
               </h2>
             </motion.div>
 
-            <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {team.map((m, i) => (
-                <motion.div
-                  key={m.id}
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.08 }}
-                  className="bg-card border border-border rounded-2xl overflow-hidden hover:border-primary/50 hover:shadow-xl hover:-translate-y-1 transition-all group"
-                >
-                  <div className="aspect-square overflow-hidden bg-secondary">
-                    {m.photo_url ? (
-                      <img src={m.photo_url} alt={m.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-muted-foreground/40">
-                        {m.name?.[0]}
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-5">
-                    <h3 className="font-bold text-lg">{m.name}</h3>
-                    <div className="text-sm text-primary font-medium mb-2">{m.role}</div>
-                    {m.bio && <p className="text-xs text-muted-foreground line-clamp-3">{m.bio}</p>}
-                  </div>
-                </motion.div>
-              ))}
-            </div>
+            {team.length === 0 ? (
+              <div className="text-center py-12 bg-card border border-dashed border-border rounded-3xl">
+                <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground/40" />
+                <p className="text-muted-foreground">Cadastre sua equipe em <code className="px-2 py-1 rounded bg-secondary text-foreground">/admin/equipe</code> para aparecer aqui automaticamente.</p>
+              </div>
+            ) : (
+              <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {team.map((m, i) => (
+                  <motion.div
+                    key={m.id}
+                    initial={{ opacity: 0, y: 30 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.08 }}
+                    className="bg-card border border-border rounded-2xl overflow-hidden hover:border-primary/50 hover:shadow-xl hover:-translate-y-1 transition-all group"
+                  >
+                    <div className="aspect-square overflow-hidden bg-secondary">
+                      {m.photo_url ? (
+                        <img src={m.photo_url} alt={m.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-muted-foreground/40">
+                          {m.name?.[0]}
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-5">
+                      <h3 className="font-bold text-lg">{m.name}</h3>
+                      <div className="text-sm text-primary font-medium mb-2">{m.role}</div>
+                      {m.bio && <p className="text-xs text-muted-foreground line-clamp-3">{m.bio}</p>}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       )}

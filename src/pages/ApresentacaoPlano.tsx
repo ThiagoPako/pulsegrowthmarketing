@@ -518,11 +518,11 @@ export default function ApresentacaoPlano() {
 
       {/* EQUIPE */}
       {(true) && (
-        <section className="py-24">
-          <div className="container mx-auto px-6 max-w-6xl">
-            <motion.div {...fadeUp} className="text-center mb-16">
+        <section className="py-16 md:py-24">
+          <div className="container mx-auto px-4 md:px-6 max-w-6xl">
+            <motion.div {...fadeUp} className="text-center mb-10 md:mb-16">
               <Badge variant="outline" className="mb-4"><Users className="h-3 w-3 mr-1" /> Nosso time</Badge>
-              <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
+              <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
                 Quem cuida do <span className="text-primary">seu projeto</span>
               </h2>
             </motion.div>

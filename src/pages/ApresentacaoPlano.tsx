@@ -9,7 +9,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
+import { supabase as vpsDb } from '@/lib/vpsDb';
 import { getPlan, PLANS } from '@/data/plans';
+
+const SHOWCASE_CLIENTS = ['shallon', 'super brasil', 'casa & decor'];
 
 const PRESENTATION_ORDER: Array<'starter' | 'boost' | 'premium' | 'elite'> = [
   'starter', 'boost', 'premium', 'elite',
@@ -70,6 +73,7 @@ export default function ApresentacaoPlano() {
   const { plano } = useParams<{ plano: string }>();
   const navigate = useNavigate();
   const [team, setTeam] = useState<any[]>([]);
+  const [showcaseVideos, setShowcaseVideos] = useState<Array<{ id: string; title: string; file_url: string; thumbnail_url?: string; client_name: string }>>([]);
 
   const plan = plano ? getPlan(plano) : undefined;
 
@@ -82,6 +86,37 @@ export default function ApresentacaoPlano() {
         .eq('active', true)
         .order('display_order', { ascending: true });
       setTeam(data || []);
+    })();
+
+    (async () => {
+      try {
+        const { data: clientsData } = await (vpsDb as any).from('clients').select('id, company_name');
+        const showcase = (clientsData || []).filter((c: any) =>
+          SHOWCASE_CLIENTS.some((name) => (c.company_name || '').toLowerCase().includes(name))
+        );
+        if (showcase.length === 0) return;
+        const ids = showcase.map((c: any) => c.id);
+        const { data: contents } = await (vpsDb as any)
+          .from('client_portal_contents')
+          .select('id, title, file_url, thumbnail_url, client_id, content_type, status, created_at')
+          .in('client_id', ids)
+          .eq('content_type', 'reel')
+          .order('created_at', { ascending: false });
+        const nameById = new Map(showcase.map((c: any) => [c.id, c.company_name]));
+        const videos = (contents || [])
+          .filter((v: any) => v.file_url)
+          .slice(0, 6)
+          .map((v: any) => ({
+            id: v.id,
+            title: v.title,
+            file_url: v.file_url,
+            thumbnail_url: v.thumbnail_url,
+            client_name: nameById.get(v.client_id) || '',
+          }));
+        setShowcaseVideos(videos);
+      } catch (err) {
+        console.warn('showcase videos error', err);
+      }
     })();
   }, [plan]);
 
@@ -467,6 +502,49 @@ export default function ApresentacaoPlano() {
                     <h3 className="font-bold text-lg">{m.name}</h3>
                     <div className="text-sm text-primary font-medium mb-2">{m.role}</div>
                     {m.bio && <p className="text-xs text-muted-foreground line-clamp-3">{m.bio}</p>}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* PORTAL EM AÇÃO — vídeos reais de clientes */}
+      {showcaseVideos.length > 0 && (
+        <section className="py-24 bg-secondary/30">
+          <div className="container mx-auto px-6 max-w-6xl">
+            <motion.div {...fadeUp} className="text-center mb-12">
+              <Badge variant="outline" className="mb-4"><PlayCircle className="h-3 w-3 mr-1" /> Veja na prática</Badge>
+              <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
+                Conteúdos reais entregues <span className="text-primary">pelo portal</span>
+              </h2>
+              <p className="text-lg text-muted-foreground">Veja como o cliente recebe e aprova materiais direto na plataforma Pulse.</p>
+            </motion.div>
+
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {showcaseVideos.map((v, i) => (
+                <motion.div
+                  key={v.id}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.1 }}
+                  className="bg-card border border-border rounded-2xl overflow-hidden hover:border-primary/50 hover:shadow-xl transition-all group"
+                >
+                  <div className="aspect-[9/16] bg-black relative overflow-hidden">
+                    <video
+                      src={v.file_url}
+                      poster={v.thumbnail_url}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="p-4">
+                    <div className="text-xs text-primary font-semibold uppercase tracking-wider mb-1">{v.client_name}</div>
+                    <h3 className="font-bold text-sm line-clamp-2">{v.title}</h3>
                   </div>
                 </motion.div>
               ))}

@@ -8,7 +8,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import { getPlan } from '@/data/plans';
+import { getPlan, PLANS } from '@/data/plans';
+
+const PRESENTATION_ORDER: Array<'boost' | 'starter' | 'premium' | 'elite'> = [
+  'boost', 'starter', 'premium', 'elite',
+];
 
 const LOGO_URL = '/pulse-logo.png';
 
@@ -48,16 +52,74 @@ export default function ApresentacaoPlano() {
     })();
   }, [plan]);
 
+  const currentIndex = plano ? PRESENTATION_ORDER.indexOf(plano as any) : -1;
+  const prevKey = currentIndex > 0 ? PRESENTATION_ORDER[currentIndex - 1] : null;
+  const nextKey = currentIndex >= 0 && currentIndex < PRESENTATION_ORDER.length - 1
+    ? PRESENTATION_ORDER[currentIndex + 1]
+    : null;
+
+  const goPrev = () => { if (prevKey) { navigate(`/apresentacao/${prevKey}`); window.scrollTo({ top: 0 }); } };
+  const goNext = () => { if (nextKey) { navigate(`/apresentacao/${nextKey}`); window.scrollTo({ top: 0 }); } };
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); goNext(); }
+      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); goPrev(); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); window.scrollBy({ top: window.innerHeight * 0.9, behavior: 'smooth' }); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); window.scrollBy({ top: -window.innerHeight * 0.9, behavior: 'smooth' }); }
+      else if (e.key === 'Home') { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+      else if (e.key === 'End') { e.preventDefault(); window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }
+      else if (e.key === 'Escape') { window.close(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [prevKey, nextKey]);
+
   if (!plan) return <Navigate to="/apresentacao" replace />;
 
   const Icon = plan.icon;
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
-      <div className="fixed top-4 right-4 z-50 flex gap-2">
+      {/* Top bar: posição + fechar */}
+      <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
+        <Badge variant="outline" className="backdrop-blur bg-background/80">
+          {currentIndex + 1} / {PRESENTATION_ORDER.length}
+        </Badge>
         <Button variant="outline" size="sm" onClick={() => window.close()} className="backdrop-blur bg-background/80">
           <X className="h-4 w-4 mr-1" /> Fechar
         </Button>
+      </div>
+
+      {/* Setas fixas de navegação entre planos */}
+      {prevKey && (
+        <button
+          onClick={goPrev}
+          aria-label="Plano anterior"
+          className="fixed left-3 top-1/2 -translate-y-1/2 z-50 h-14 w-14 rounded-full bg-background/80 backdrop-blur border border-border shadow-lg hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all flex items-center justify-center group"
+        >
+          <ArrowLeft className="h-6 w-6" />
+        </button>
+      )}
+      {nextKey && (
+        <button
+          onClick={goNext}
+          aria-label="Próximo plano"
+          className="fixed right-3 top-1/2 -translate-y-1/2 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-xl hover:scale-110 transition-all flex items-center justify-center animate-pulse"
+        >
+          <ArrowRight className="h-6 w-6" />
+        </button>
+      )}
+
+      {/* Dica de teclado */}
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 hidden md:flex items-center gap-3 px-4 py-2 rounded-full bg-background/80 backdrop-blur border border-border text-xs text-muted-foreground shadow">
+        <span>← → trocar plano</span>
+        <span className="opacity-40">•</span>
+        <span>↑ ↓ rolar página</span>
+        <span className="opacity-40">•</span>
+        <span>Esc fechar</span>
       </div>
 
       {/* HERO */}

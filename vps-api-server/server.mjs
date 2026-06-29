@@ -415,33 +415,44 @@ async function hasProfilesPasswordHashColumn() {
 }
 
 async function getAuthProfileByEmail(email) {
-  await ensureAuthSupportTables();
   const normalizedEmail = email.toLowerCase().trim();
 
-  if (await hasProfilesPasswordHashColumn()) {
+  if (await hasProfilesPasswordHashColumn().catch(() => false)) {
     const { rows } = await pool.query(
-      'SELECT id, name, email, role, avatar_url, display_name, job_title, password_hash FROM profiles WHERE email = $1 LIMIT 1',
+      'SELECT id, name, email, role, avatar_url, display_name, job_title, password_hash FROM profiles WHERE lower(email) = lower($1) LIMIT 1',
       [normalizedEmail]
     );
     return rows[0] || null;
   }
 
-  const { rows } = await pool.query(
-    `SELECT p.id, p.name, p.email, p.role, p.avatar_url, p.display_name, p.job_title, au.password_hash
-     FROM profiles p
-     LEFT JOIN auth_users au
-       ON au.id = p.id OR lower(au.email) = lower(p.email)
-     WHERE lower(p.email) = lower($1)
-     LIMIT 1`,
-    [normalizedEmail]
-  );
+  try {
+    await ensureAuthSupportTables();
+    const { rows } = await pool.query(
+      `SELECT p.id, p.name, p.email, p.role, p.avatar_url, p.display_name, p.job_title, au.password_hash
+       FROM profiles p
+       LEFT JOIN auth_users au
+         ON au.id = p.id OR lower(au.email) = lower(p.email)
+       WHERE lower(p.email) = lower($1)
+       LIMIT 1`,
+      [normalizedEmail]
+    );
 
-  return rows[0] || null;
+    return rows[0] || null;
+  } catch (error) {
+    console.error('Auth support lookup failed, falling back to profiles only:', error?.message || error);
+    const { rows } = await pool.query(
+      `SELECT id, name, email, role, avatar_url, display_name, job_title, NULL::text AS password_hash
+       FROM profiles
+       WHERE lower(email) = lower($1)
+       LIMIT 1`,
+      [normalizedEmail]
+    );
+    return rows[0] || null;
+  }
 }
 
 async function getAuthProfileById(userId) {
-  await ensureAuthSupportTables();
-  if (await hasProfilesPasswordHashColumn()) {
+  if (await hasProfilesPasswordHashColumn().catch(() => false)) {
     const { rows } = await pool.query(
       'SELECT id, name, email, role, avatar_url, display_name, job_title, password_hash FROM profiles WHERE id = $1 LIMIT 1',
       [userId]
@@ -449,39 +460,58 @@ async function getAuthProfileById(userId) {
     return rows[0] || null;
   }
 
-  const { rows } = await pool.query(
-    `SELECT p.id, p.name, p.email, p.role, p.avatar_url, p.display_name, p.job_title, au.password_hash
-     FROM profiles p
-     LEFT JOIN auth_users au
-       ON au.id = p.id OR lower(au.email) = lower(p.email)
-     WHERE p.id = $1
-     LIMIT 1`,
-    [userId]
-  );
+  try {
+    await ensureAuthSupportTables();
+    const { rows } = await pool.query(
+      `SELECT p.id, p.name, p.email, p.role, p.avatar_url, p.display_name, p.job_title, au.password_hash
+       FROM profiles p
+       LEFT JOIN auth_users au
+         ON au.id = p.id OR lower(au.email) = lower(p.email)
+       WHERE p.id = $1
+       LIMIT 1`,
+      [userId]
+    );
 
-  return rows[0] || null;
+    return rows[0] || null;
+  } catch (error) {
+    console.error('Auth support lookup by id failed, falling back to profiles only:', error?.message || error);
+    const { rows } = await pool.query(
+      `SELECT id, name, email, role, avatar_url, display_name, job_title, NULL::text AS password_hash
+       FROM profiles
+       WHERE id = $1
+       LIMIT 1`,
+      [userId]
+    );
+    return rows[0] || null;
+  }
 }
 
 async function getUserPrimaryRole(userId, fallbackRole = 'editor') {
-  await ensureAuthSupportTables();
-  const { rows: roles } = await pool.query(
-    'SELECT role FROM user_roles WHERE user_id = $1 LIMIT 1',
-    [userId]
-  );
-  return roles[0]?.role || fallbackRole || 'editor';
+  try {
+    await ensureAuthSupportTables();
+    const { rows: roles } = await pool.query(
+      'SELECT role FROM user_roles WHERE user_id = $1 LIMIT 1',
+      [userId]
+    );
+    return roles[0]?.role || fallbackRole || 'editor';
+  } catch (error) {
+    console.error('Role lookup failed, using profile fallback role:', error?.message || error);
+    return fallbackRole || 'editor';
+  }
 }
 
 async function storeUserPassword(userId, rawPassword) {
-  await ensureAuthSupportTables();
   const hash = await bcrypt.hash(rawPassword, 12);
 
-  if (await hasProfilesPasswordHashColumn()) {
+  if (await hasProfilesPasswordHashColumn().catch(() => false)) {
     await pool.query(
       'UPDATE profiles SET password_hash = $1, updated_at = NOW() WHERE id = $2',
       [hash, userId]
     );
     return;
   }
+
+  await ensureAuthSupportTables();
 
   const { rows } = await pool.query(
     'SELECT id, email FROM profiles WHERE id = $1 LIMIT 1',

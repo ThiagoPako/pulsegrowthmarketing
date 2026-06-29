@@ -179,8 +179,18 @@ export function generateFixedRecordings(
   const duration = settings.recordingDuration;
 
   for (const date of dates) {
-    const vmDayRecs = allRecs.filter(r => r.videomakerId === client.videomaker && r.date === date && r.status !== 'cancelada');
-    const clientDayRecs = allRecs.filter(r => r.clientId === client.id && r.date === date && r.status !== 'cancelada');
+    const vmDayRecs = allRecs.filter(r =>
+      r.videomakerId === client.videomaker &&
+      r.date === date &&
+      r.status !== 'cancelada' &&
+      r.type !== 'extra'
+    );
+    const clientDayRecs = allRecs.filter(r =>
+      r.clientId === client.id &&
+      r.date === date &&
+      r.status !== 'cancelada' &&
+      r.type !== 'extra'
+    );
     
     if (client.fullShiftRecording) {
       // Full-shift client: reserve both slots in the preferred shift

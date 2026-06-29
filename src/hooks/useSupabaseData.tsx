@@ -226,23 +226,34 @@ function scriptToRow(s: Script) {
 }
 
 function rowToSettings(r: any): CompanySettings {
+  const parseWorkDays = (value: any): DayOfWeek[] => {
+    if (Array.isArray(value) && value.length > 0) return value as DayOfWeek[];
+    if (typeof value === 'string') {
+      const days = value.replace(/[{}\[\]"\s]/g, '').split(',').filter(Boolean) as DayOfWeek[];
+      if (days.length > 0) return days;
+    }
+    return defaultSettings.workDays;
+  };
+
+  const recordingDuration = Number(r?.recording_duration);
+
   return {
-    shiftAStart: r.shift_a_start,
-    shiftAEnd: r.shift_a_end,
-    shiftBStart: r.shift_b_start,
-    shiftBEnd: r.shift_b_end,
-    workDays: r.work_days as DayOfWeek[],
-    recordingDuration: r.recording_duration,
-    editingDeadlineHours: r.editing_deadline_hours ?? 48,
-    reviewDeadlineHours: r.review_deadline_hours ?? 24,
-    alterationDeadlineHours: r.alteration_deadline_hours ?? 24,
-    approvalDeadlineHours: r.approval_deadline_hours ?? 6,
-    editingDeadlineEnabled: r.editing_deadline_enabled ?? true,
-    reviewDeadlineEnabled: r.review_deadline_enabled ?? true,
-    alterationDeadlineEnabled: r.alteration_deadline_enabled ?? true,
-    approvalDeadlineEnabled: r.approval_deadline_enabled ?? true,
-    costAllocationRule: r.cost_allocation_rule || 'approved',
-    autoFillVacancies: r.auto_fill_vacancies ?? false,
+    shiftAStart: r?.shift_a_start || defaultSettings.shiftAStart,
+    shiftAEnd: r?.shift_a_end || defaultSettings.shiftAEnd,
+    shiftBStart: r?.shift_b_start || defaultSettings.shiftBStart,
+    shiftBEnd: r?.shift_b_end || defaultSettings.shiftBEnd,
+    workDays: parseWorkDays(r?.work_days),
+    recordingDuration: Number.isFinite(recordingDuration) && recordingDuration > 0 ? recordingDuration : defaultSettings.recordingDuration,
+    editingDeadlineHours: r?.editing_deadline_hours ?? 48,
+    reviewDeadlineHours: r?.review_deadline_hours ?? 24,
+    alterationDeadlineHours: r?.alteration_deadline_hours ?? 24,
+    approvalDeadlineHours: r?.approval_deadline_hours ?? 6,
+    editingDeadlineEnabled: r?.editing_deadline_enabled ?? true,
+    reviewDeadlineEnabled: r?.review_deadline_enabled ?? true,
+    alterationDeadlineEnabled: r?.alteration_deadline_enabled ?? true,
+    approvalDeadlineEnabled: r?.approval_deadline_enabled ?? true,
+    costAllocationRule: r?.cost_allocation_rule || 'approved',
+    autoFillVacancies: r?.auto_fill_vacancies ?? false,
   };
 }
 

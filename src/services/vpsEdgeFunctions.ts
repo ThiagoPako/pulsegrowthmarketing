@@ -27,6 +27,31 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
+async function refreshVpsSession(): Promise<boolean> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
+  if (!token) return false;
+
+  try {
+    const response = await fetch(`${VPS_API_BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'x-pulse-city': getActiveCity(),
+      },
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.token) return false;
+
+    localStorage.setItem(TOKEN_KEY, payload.token);
+    window.dispatchEvent(new CustomEvent('pulse:auth-token-refreshed', { detail: { token: payload.token } }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Generic VPS function invoker — drop-in replacement for supabase.functions.invoke
  */
@@ -52,7 +77,13 @@ export async function invokeVpsFunction(
       fetchOptions.body = JSON.stringify(options.body);
     }
 
-    const response = await fetch(url, fetchOptions);
+    let response = await fetch(url, fetchOptions);
+
+    if (response.status === 401 && await refreshVpsSession()) {
+      fetchOptions.headers = getAuthHeaders();
+      response = await fetch(url, fetchOptions);
+    }
+
     const data = await response.json();
 
     if (!response.ok) {

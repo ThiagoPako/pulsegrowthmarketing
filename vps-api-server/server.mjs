@@ -257,7 +257,8 @@ ensureProposalTables().catch((error) => {
 
 // ─── JWT Config ─────────────────────────────────────────────
 const JWT_SECRET = process.env.JWT_SECRET || 'CHANGE_ME_IN_PRODUCTION';
-const JWT_EXPIRES_IN = '7d';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30d';
+const JWT_REFRESH_GRACE_SECONDS = Number(process.env.JWT_REFRESH_GRACE_SECONDS || 60 * 60 * 24 * 14);
 
 // ─── Supabase clients (transitional — will be removed later) ──
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -283,6 +284,24 @@ function signToken(payload) {
 
 function verifyToken(token) {
   return jwt.verify(token, JWT_SECRET);
+}
+
+function decodeTokenForRefresh(token) {
+  try {
+    return { decoded: jwt.verify(token, JWT_SECRET), expired: false };
+  } catch (error) {
+    if (error?.name !== 'TokenExpiredError') throw error;
+
+    const decoded = jwt.verify(token, JWT_SECRET, { ignoreExpiration: true });
+    const expiredAt = Number(decoded?.exp || 0);
+    const secondsSinceExpiry = Math.floor(Date.now() / 1000) - expiredAt;
+
+    if (!expiredAt || secondsSinceExpiry > JWT_REFRESH_GRACE_SECONDS) {
+      throw error;
+    }
+
+    return { decoded, expired: true };
+  }
 }
 
 async function verifyUser(req) {
@@ -443,6 +462,15 @@ async function getAuthProfileById(userId) {
   return rows[0] || null;
 }
 
+async function getUserPrimaryRole(userId, fallbackRole = 'editor') {
+  await ensureAuthSupportTables();
+  const { rows: roles } = await pool.query(
+    'SELECT role FROM user_roles WHERE user_id = $1 LIMIT 1',
+    [userId]
+  );
+  return roles[0]?.role || fallbackRole || 'editor';
+}
+
 async function storeUserPassword(userId, rawPassword) {
   await ensureAuthSupportTables();
   const hash = await bcrypt.hash(rawPassword, 12);
@@ -499,11 +527,7 @@ app.post('/api/auth/login', async (req, res) => {
     const valid = await bcrypt.compare(password, profile.password_hash);
     if (!valid) return res.status(401).json({ error: 'Email ou senha inválidos' });
 
-    const { rows: roles } = await pool.query(
-      'SELECT role FROM user_roles WHERE user_id = $1 LIMIT 1',
-      [profile.id]
-    );
-    const role = roles[0]?.role || profile.role || 'editor';
+    const role = await getUserPrimaryRole(profile.id, profile.role || 'editor');
 
     const token = signToken({ sub: profile.id, email: profile.email, role });
 
@@ -521,6 +545,37 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Erro interno no servidor' });
+  }
+});
+
+// ─── Refresh current session ─────────────────────────────────
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) return res.status(401).json({ error: 'Não autenticado' });
+
+    const currentToken = authHeader.replace('Bearer ', '');
+    const { decoded } = decodeTokenForRefresh(currentToken);
+    const profile = await getAuthProfileById(decoded.sub);
+
+    if (!profile) return res.status(401).json({ error: 'Perfil não encontrado' });
+
+    const role = await getUserPrimaryRole(profile.id, profile.role || decoded.role || 'editor');
+    const token = signToken({ sub: profile.id, email: profile.email, role });
+
+    res.json({
+      token,
+      user: {
+        id: profile.id,
+        email: profile.email,
+        name: profile.display_name || profile.name,
+        role,
+        avatar_url: profile.avatar_url,
+        job_title: profile.job_title,
+      },
+    });
+  } catch (error) {
+    res.status(401).json({ error: 'Sessão expirada. Faça login novamente.' });
   }
 });
 

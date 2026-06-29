@@ -1181,6 +1181,49 @@ export default function Schedule() {
       .sort((a, b) => a.clientName.localeCompare(b.clientName));
   }, [previewRecordings, clients]);
 
+  const previewConflicts = useMemo(() => {
+    const duration = (settings.recordingDuration || 90) + 30; // buffer
+    const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+    const vmName = (id: string) => users.find(u => u.id === id)?.name || 'Videomaker';
+    const cliName = (id: string) => clients.find(c => c.id === id)?.companyName || 'Cliente';
+    const conflicts: { videomakerName: string; date: string; a: Recording; b: Recording; kind: 'novo-vs-novo' | 'novo-vs-existente' }[] = [];
+
+    const overlaps = (aTime: string, bTime: string) => {
+      const aS = toMin(aTime), bS = toMin(bTime);
+      return aS < bS + duration && bS < aS + duration;
+    };
+
+    // novo vs novo
+    for (let i = 0; i < previewRecordings.length; i++) {
+      for (let j = i + 1; j < previewRecordings.length; j++) {
+        const a = previewRecordings[i], b = previewRecordings[j];
+        if (a.videomakerId === b.videomakerId && a.date === b.date && overlaps(a.startTime, b.startTime)) {
+          conflicts.push({ videomakerName: vmName(a.videomakerId), date: a.date, a, b, kind: 'novo-vs-novo' });
+        }
+      }
+    }
+
+    // novo vs existente (ignora canceladas e tipos de menor prioridade que serão removidos)
+    const lower = new Set(['extra', 'backup', 'secundaria']);
+    for (const novo of previewRecordings) {
+      for (const exist of recordings) {
+        if (exist.status === 'cancelada') continue;
+        if (lower.has(exist.type)) continue;
+        if (exist.videomakerId !== novo.videomakerId || exist.date !== novo.date) continue;
+        if (overlaps(novo.startTime, exist.startTime)) {
+          conflicts.push({ videomakerName: vmName(novo.videomakerId), date: novo.date, a: novo, b: exist, kind: 'novo-vs-existente' });
+        }
+      }
+    }
+
+    return conflicts.map(c => ({
+      ...c,
+      aLabel: `${cliName(c.a.clientId)} ${c.a.startTime}`,
+      bLabel: `${cliName(c.b.clientId)} ${c.b.startTime}${c.kind === 'novo-vs-existente' ? ` (${c.b.type})` : ''}`,
+    }));
+  }, [previewRecordings, recordings, users, clients, settings]);
+
+
 
   const today = new Date();
 

@@ -1,4 +1,4 @@
-import { format, addDays, getDay, startOfMonth } from 'date-fns';
+import { format, addDays, getDay } from 'date-fns';
 import type { Client, Recording, DayOfWeek, CompanySettings, RecordingType } from '@/types';
 
 /** Buffer time (in minutes) between recordings for the videomaker to upload materials */
@@ -26,7 +26,6 @@ function timeToMinutes(t: string) {
 
 /** Get the week number (1-5) of a date within its month */
 function getWeekOfMonth(date: Date): number {
-  const monthStart = startOfMonth(date);
   // Week 1 starts on the 1st, week 2 on the 8th, etc.
   return Math.ceil(date.getDate() / 7);
 }

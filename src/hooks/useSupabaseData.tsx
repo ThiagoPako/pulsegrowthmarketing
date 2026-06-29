@@ -6,6 +6,29 @@ import type { Client, Recording, KanbanTask, Script, CompanySettings, DayOfWeek,
 // ── Mappers: DB row ↔ App type ──
 
 function rowToClient(r: any): Client {
+  const normalizeDayOfWeek = (value: any, fallback: DayOfWeek): DayOfWeek => {
+    const normalized = String(value || '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace('terça', 'terca')
+      .replace('sabado', 'sabado') as DayOfWeek;
+
+    return ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'].includes(normalized)
+      ? normalized
+      : fallback;
+  };
+
+  const parseSelectedWeeks = (value: any): number[] => {
+    if (Array.isArray(value)) return value.map(Number).filter(Boolean);
+    if (typeof value === 'string') {
+      const weeks = value.replace(/[{}\[\]\s]/g, '').split(',').map(Number).filter(Boolean);
+      return weeks.length > 0 ? weeks : [1, 2, 3, 4];
+    }
+    return [1, 2, 3, 4];
+  };
+
   return {
     id: r.id,
     companyName: r.company_name,
@@ -13,12 +36,12 @@ function rowToClient(r: any): Client {
     phone: r.phone,
     color: r.color,
     logoUrl: r.logo_url || undefined,
-    fixedDay: r.fixed_day as DayOfWeek,
+    fixedDay: normalizeDayOfWeek(r.fixed_day, 'segunda'),
     fixedTime: r.fixed_time,
     videomaker: r.videomaker_id || '',
     backupTime: r.backup_time,
-    backupDay: r.backup_day as DayOfWeek,
-    extraDay: r.extra_day as DayOfWeek,
+    backupDay: normalizeDayOfWeek(r.backup_day, 'terca'),
+    extraDay: normalizeDayOfWeek(r.extra_day, 'quarta'),
     extraContentTypes: (r.extra_content_types || []) as ContentType[],
     acceptsExtra: r.accepts_extra,
     extraClientAppears: r.extra_client_appears,
@@ -43,7 +66,7 @@ function rowToClient(r: any): Client {
     editorial: r.editorial || '',
     fullShiftRecording: r.full_shift_recording || false,
     preferredShift: r.preferred_shift || 'manha',
-    selectedWeeks: r.selected_weeks || [1, 2, 3, 4],
+    selectedWeeks: parseSelectedWeeks(r.selected_weeks),
     artRequestsLimit: r.art_requests_limit ?? null,
     clientType: r.client_type || 'novo',
     proposalId: r.proposal_id || null,
@@ -203,23 +226,34 @@ function scriptToRow(s: Script) {
 }
 
 function rowToSettings(r: any): CompanySettings {
+  const parseWorkDays = (value: any): DayOfWeek[] => {
+    if (Array.isArray(value) && value.length > 0) return value as DayOfWeek[];
+    if (typeof value === 'string') {
+      const days = value.replace(/[{}\[\]"\s]/g, '').split(',').filter(Boolean) as DayOfWeek[];
+      if (days.length > 0) return days;
+    }
+    return ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
+  };
+
+  const recordingDuration = Number(r?.recording_duration);
+
   return {
-    shiftAStart: r.shift_a_start,
-    shiftAEnd: r.shift_a_end,
-    shiftBStart: r.shift_b_start,
-    shiftBEnd: r.shift_b_end,
-    workDays: r.work_days as DayOfWeek[],
-    recordingDuration: r.recording_duration,
-    editingDeadlineHours: r.editing_deadline_hours ?? 48,
-    reviewDeadlineHours: r.review_deadline_hours ?? 24,
-    alterationDeadlineHours: r.alteration_deadline_hours ?? 24,
-    approvalDeadlineHours: r.approval_deadline_hours ?? 6,
-    editingDeadlineEnabled: r.editing_deadline_enabled ?? true,
-    reviewDeadlineEnabled: r.review_deadline_enabled ?? true,
-    alterationDeadlineEnabled: r.alteration_deadline_enabled ?? true,
-    approvalDeadlineEnabled: r.approval_deadline_enabled ?? true,
-    costAllocationRule: r.cost_allocation_rule || 'approved',
-    autoFillVacancies: r.auto_fill_vacancies ?? false,
+    shiftAStart: r?.shift_a_start || '08:30',
+    shiftAEnd: r?.shift_a_end || '12:00',
+    shiftBStart: r?.shift_b_start || '14:30',
+    shiftBEnd: r?.shift_b_end || '18:00',
+    workDays: parseWorkDays(r?.work_days),
+    recordingDuration: Number.isFinite(recordingDuration) && recordingDuration > 0 ? recordingDuration : 90,
+    editingDeadlineHours: r?.editing_deadline_hours ?? 48,
+    reviewDeadlineHours: r?.review_deadline_hours ?? 24,
+    alterationDeadlineHours: r?.alteration_deadline_hours ?? 24,
+    approvalDeadlineHours: r?.approval_deadline_hours ?? 6,
+    editingDeadlineEnabled: r?.editing_deadline_enabled ?? true,
+    reviewDeadlineEnabled: r?.review_deadline_enabled ?? true,
+    alterationDeadlineEnabled: r?.alteration_deadline_enabled ?? true,
+    approvalDeadlineEnabled: r?.approval_deadline_enabled ?? true,
+    costAllocationRule: r?.cost_allocation_rule || 'approved',
+    autoFillVacancies: r?.auto_fill_vacancies ?? false,
   };
 }
 

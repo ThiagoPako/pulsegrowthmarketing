@@ -5,6 +5,7 @@ import type { Client, Recording, DayOfWeek, CompanySettings, RecordingType } fro
 const BUFFER_BETWEEN_RECORDINGS = 30;
 const FIXED_SCHEDULE_HORIZON_DAYS = 60;
 const LOWER_PRIORITY_TYPES_FOR_FIXED = new Set<RecordingType>(['extra', 'backup', 'secundaria']);
+const DEFAULT_RECORDING_DURATION = 90;
 
 const DAY_TO_NUM: Record<DayOfWeek, number> = {
   domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6,
@@ -18,6 +19,8 @@ interface FixedRecordingGenerationOptions {
   startDate?: string;
   endDate?: string;
   fillCompleteMonth?: boolean;
+  availableVideomakerIds?: string[];
+  fillAvailableSlots?: boolean;
 }
 
 function timeToMinutes(t: string) {
@@ -43,6 +46,49 @@ function shouldUseSelectedWeeks(selectedWeeks: number[] | undefined, fillComplet
   if (fillCompleteMonth) return false;
 
   return true;
+}
+
+function uniqueStrings(values: Array<string | null | undefined>): string[] {
+  return values.filter((value): value is string => Boolean(value && value.trim())).filter((value, index, array) => array.indexOf(value) === index);
+}
+
+function getDayNameFromDateKey(dateKey: string): DayOfWeek {
+  return NUM_TO_DAY[getDay(parseDateKey(dateKey))];
+}
+
+function getRecordingDuration(settings: CompanySettings): number {
+  const duration = Number(settings?.recordingDuration);
+  return Number.isFinite(duration) && duration > 0 ? duration : DEFAULT_RECORDING_DURATION;
+}
+
+function getCandidateVideomakers(client: Client, existingRecordings: Recording[], options: FixedRecordingGenerationOptions): string[] {
+  const fromOptions = options.availableVideomakerIds || [];
+  const fromExisting = existingRecordings.map(recording => recording.videomakerId);
+  return uniqueStrings([client.videomaker, ...fromOptions, ...fromExisting]);
+}
+
+function getActiveVideomakerDayCount(videomakerId: string, date: string, recordings: Recording[]): number {
+  return recordings.filter(recording =>
+    recording.videomakerId === videomakerId &&
+    recording.date === date &&
+    recording.status !== 'cancelada' &&
+    !LOWER_PRIORITY_TYPES_FOR_FIXED.has(recording.type)
+  ).length;
+}
+
+function sortVideomakersForDate(candidates: string[], preferredVideomakerId: string | undefined, date: string, recordings: Recording[]): string[] {
+  return [...candidates].sort((a, b) => {
+    if (preferredVideomakerId) {
+      if (a === preferredVideomakerId && b !== preferredVideomakerId) return -1;
+      if (b === preferredVideomakerId && a !== preferredVideomakerId) return 1;
+    }
+    return getActiveVideomakerDayCount(a, date, recordings) - getActiveVideomakerDayCount(b, date, recordings);
+  });
+}
+
+function getCandidateTimes(primaryTime: string | undefined, fillAvailableSlots?: boolean): string[] {
+  const standardSlots = ['08:30', '10:30', '14:30', '16:30'];
+  return fillAvailableSlots ? uniqueStrings([primaryTime, ...standardSlots]) : uniqueStrings([primaryTime || '08:30']);
 }
 
 export function getDatesForDayInRange(
@@ -149,7 +195,7 @@ export function isWithinWorkHoursCheck(
 ): boolean {
   if (!settings.workDays.includes(day)) return false;
   const start = timeToMinutes(startTime);
-  const end = start + settings.recordingDuration;
+  const end = start + getRecordingDuration(settings);
   const inA = start >= timeToMinutes(settings.shiftAStart) && end <= timeToMinutes(settings.shiftAEnd);
   const inB = start >= timeToMinutes(settings.shiftBStart) && end <= timeToMinutes(settings.shiftBEnd);
   return inA || inB;
@@ -167,8 +213,9 @@ export function generateFixedRecordings(
     return [];
   }
 
-  if (!client.videomaker) {
-    console.warn(`[generateFixedRecordings] Client "${client.companyName}" has no videomaker assigned — skipping.`);
+  const candidateVideomakers = getCandidateVideomakers(client, existingRecordings, options);
+  if (candidateVideomakers.length === 0) {
+    console.warn(`[generateFixedRecordings] Client "${client.companyName}" has no videomaker available — skipping.`);
     return [];
   }
   
@@ -177,15 +224,10 @@ export function generateFixedRecordings(
     : getDatesUntilEndOfMonth(client.fixedDay, client.selectedWeeks);
   const newRecordings: Recording[] = [];
   let allRecs = [...existingRecordings];
-  const duration = settings.recordingDuration;
+  const duration = getRecordingDuration(settings);
 
   for (const date of dates) {
-    const vmDayRecs = allRecs.filter(r =>
-      r.videomakerId === client.videomaker &&
-      r.date === date &&
-      r.status !== 'cancelada' &&
-      !LOWER_PRIORITY_TYPES_FOR_FIXED.has(r.type)
-    );
+    const dayName = getDayNameFromDateKey(date);
     const clientDayRecs = allRecs.filter(r =>
       r.clientId === client.id &&
       r.date === date &&
@@ -198,14 +240,25 @@ export function generateFixedRecordings(
       const slots = client.preferredShift === 'tarde'
         ? ['14:30', '16:30']
         : ['08:30', '10:30'];
-      
-      for (const timeStr of slots) {
-        const alreadyAtTime = clientDayRecs.some(r => r.startTime === timeStr);
-        if (vmDayRecs.length < 4 && !alreadyAtTime && !hasConflictCheck(client.videomaker, date, timeStr, allRecs, duration, undefined, 'fixa')) {
+
+      const missingSlots = slots.filter(timeStr => !clientDayRecs.some(r => r.startTime === timeStr));
+      if (missingSlots.length === 0) continue;
+
+      const orderedVms = sortVideomakersForDate(candidateVideomakers, client.videomaker, date, allRecs);
+      for (const vmId of orderedVms) {
+        const vmDayCount = getActiveVideomakerDayCount(vmId, date, allRecs);
+        if (vmDayCount + missingSlots.length > 4) continue;
+        const allSlotsFit = missingSlots.every(timeStr =>
+          isWithinWorkHoursCheck(dayName, timeStr, settings) &&
+          !hasConflictCheck(vmId, date, timeStr, allRecs, duration, undefined, 'fixa')
+        );
+        if (!allSlotsFit) continue;
+
+        for (const timeStr of missingSlots) {
           const rec: Recording = {
             id: crypto.randomUUID(),
             clientId: client.id,
-            videomakerId: client.videomaker,
+            videomakerId: vmId,
             date,
             startTime: timeStr,
             type: 'fixa',
@@ -213,27 +266,43 @@ export function generateFixedRecordings(
           };
           newRecordings.push(rec);
           allRecs.push(rec);
-          vmDayRecs.push(rec);
           clientDayRecs.push(rec);
         }
+        break;
       }
     } else {
       // Normal client: single slot at fixedTime
       const targetTime = client.fixedTime || '08:30'; // fallback
       const alreadyScheduled = clientDayRecs.length > 0;
-      
-      if (!alreadyScheduled && vmDayRecs.length < 4 && !hasConflictCheck(client.videomaker, date, targetTime, allRecs, duration, undefined, 'fixa')) {
-        const rec: Recording = {
-          id: crypto.randomUUID(),
-          clientId: client.id,
-          videomakerId: client.videomaker,
-          date,
-          startTime: targetTime,
-          type: 'fixa',
-          status: 'agendada',
-        };
-        newRecordings.push(rec);
-        allRecs.push(rec);
+      if (alreadyScheduled) continue;
+
+      const orderedVms = sortVideomakersForDate(candidateVideomakers, client.videomaker, date, allRecs);
+      const candidateTimes = getCandidateTimes(targetTime, options.fillAvailableSlots);
+      let placed = false;
+
+      for (const timeStr of candidateTimes) {
+        if (!isWithinWorkHoursCheck(dayName, timeStr, settings)) continue;
+
+        for (const vmId of orderedVms) {
+          if (getActiveVideomakerDayCount(vmId, date, allRecs) >= 4) continue;
+          if (hasConflictCheck(vmId, date, timeStr, allRecs, duration, undefined, 'fixa')) continue;
+
+          const rec: Recording = {
+            id: crypto.randomUUID(),
+            clientId: client.id,
+            videomakerId: vmId,
+            date,
+            startTime: timeStr,
+            type: 'fixa',
+            status: 'agendada',
+          };
+          newRecordings.push(rec);
+          allRecs.push(rec);
+          placed = true;
+          break;
+        }
+
+        if (placed) break;
       }
     }
   }
@@ -255,7 +324,7 @@ export function generateExtraRecordings(
   const dates = getDatesUntilEndOfMonth(client.extraDay);
   const newRecordings: Recording[] = [];
   let allRecs = [...existingRecordings];
-  const duration = settings.recordingDuration;
+  const duration = getRecordingDuration(settings);
 
   for (const date of dates) {
     const day = NUM_TO_DAY[getDay(new Date(date + 'T12:00:00'))];
@@ -326,7 +395,7 @@ export function findAvailableSlots(
   const day = NUM_TO_DAY[getDay(new Date(date + 'T12:00:00'))];
   if (!settings.workDays.includes(day)) return [];
 
-  const duration = settings.recordingDuration;
+  const duration = getRecordingDuration(settings);
   const availableSlots: string[] = [];
   
   // Custom fixed slots as requested by user: 08:30, 10:30, 14:30, 16:30
@@ -353,7 +422,7 @@ export function findRescheduleSlot(
   allVideomakerIds: string[]
 ): { date: string; startTime: string; videomakerId: string; type: 'secundaria' | 'extra' } | null {
   const today = format(new Date(), 'yyyy-MM-dd');
-  const duration = settings.recordingDuration;
+  const duration = getRecordingDuration(settings);
 
   if (client.status === 'cancelado') return null;
 

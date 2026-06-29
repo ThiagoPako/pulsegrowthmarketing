@@ -5032,7 +5032,7 @@ app.delete('/api/kanban-tasks/:id', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'kanban_tasks');
     await pool.query(
-      `DELETE FROM kanban_tasks WHERE id = $1${scopeCity ? ' AND city = $2' : ''}`,
+      `DELETE FROM kanban_tasks WHERE id = $1${scopeCity ? ` AND ${cityScopeCondition('city', '$2')}` : ''}`,
       scopeCity ? [req.params.id, activeCity] : [req.params.id]
     );
     res.json({ success: true });
@@ -5102,7 +5102,7 @@ app.delete('/api/scripts/:id', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'scripts');
     await pool.query(
-      `DELETE FROM scripts WHERE id = $1${scopeCity ? ' AND city = $2' : ''}`,
+      `DELETE FROM scripts WHERE id = $1${scopeCity ? ` AND ${cityScopeCondition('city', '$2')}` : ''}`,
       scopeCity ? [req.params.id, activeCity] : [req.params.id]
     );
     res.json({ success: true });
@@ -5152,7 +5152,7 @@ app.post('/api/active-recordings', async (req, res) => {
     const r = req.body;
     // Remove existing for this recording
     await pool.query(
-      `DELETE FROM active_recordings WHERE recording_id = $1${scopeCity ? ' AND city = $2' : ''}`,
+      `DELETE FROM active_recordings WHERE recording_id = $1${scopeCity ? ` AND ${cityScopeCondition('city', '$2')}` : ''}`,
       scopeCity ? [r.recording_id, activeCity] : [r.recording_id]
     );
     const { rows } = await pool.query(

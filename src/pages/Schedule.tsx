@@ -96,7 +96,7 @@ export default function Schedule() {
   const {
     clients, users, recordings, scripts, settings, activeRecordings,
     currentUser, updateScript, addRecording, updateRecording, cancelRecording, deleteRecording, cancelAndReschedule,
-    regenerateScheduleForClient, generateScheduleForClient, autoFillVacanciesForDate, organizeSchedule, startActiveRecording, stopActiveRecording,
+    regenerateScheduleForClient, generateScheduleForClient, generateFixedSchedulesForMonth, autoFillVacanciesForDate, organizeSchedule, startActiveRecording, stopActiveRecording,
     hasConflict, isWithinWorkHours,
 
 
@@ -1123,16 +1123,14 @@ export default function Schedule() {
       return;
     }
     setGeneratingAll(true);
-    let totalCreated = 0;
+    const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
+    const end = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
     try {
-      for (const client of fixedClients) {
-        const created = await generateScheduleForClient(client);
-        totalCreated += created;
-      }
+      const totalCreated = await generateFixedSchedulesForMonth(fixedClients, start, end);
       if (totalCreated > 0) {
-        toast.success(`${totalCreated} gravação(ões) fixa(s) gerada(s) para ${fixedClients.length} cliente(s)`);
+        toast.success(`${totalCreated} gravação(ões) fixa(s) criada(s) para o mês completo`);
       } else {
-        toast.info('Todas as agendas fixas já estão em dia');
+        toast.info('Todas as agendas fixas deste mês já estão preenchidas');
       }
     } catch (err) {
       console.error('Erro ao gerar agendas fixas:', err);
@@ -1223,7 +1221,7 @@ export default function Schedule() {
             <RefreshCw size={16} className="mr-2" /> Regenerar Agenda
           </Button>
           <Button variant="outline" className="border-primary/50 text-primary hover:bg-primary/10" onClick={handleGenerateAllFixed} disabled={generatingAll}>
-            <CalendarDays size={16} className="mr-2" /> {generatingAll ? 'Gerando...' : 'Gerar Todas Fixas'}
+            <CalendarDays size={16} className="mr-2" /> {generatingAll ? 'Gerando...' : 'Gerar Mês Fixo'}
           </Button>
 
           <Button onClick={() => { setForm({ clientId: '', videomakerId: '', date: format(new Date(), 'yyyy-MM-dd'), startTime: '08:30', type: 'fixa', prospectName: '' }); setNewOpen(true); }}>

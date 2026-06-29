@@ -4342,7 +4342,10 @@ function cityScopeExpression(columnName = 'city') {
     .split('.')
     .map((part) => sanitizeIdentifier(part))
     .join('.');
-  return `replace(lower(coalesce(nullif(btrim(${safeColumn}), ''), 'minacu')), 'ç', 'c')`;
+  // `city` can be TEXT on older VPS databases or the city_code ENUM after the
+  // multi-city migration. Cast to text before btrim/lower so scoped queries do
+  // not fail with: function btrim(city_code) does not exist.
+  return `replace(lower(coalesce(nullif(btrim(${safeColumn}::text), ''), 'minacu')), 'ç', 'c')`;
 }
 
 function cityScopeCondition(columnName = 'city', placeholder) {

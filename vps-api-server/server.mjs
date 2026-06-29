@@ -332,6 +332,47 @@ async function verifyAdmin(req) {
 
 let profilesPasswordHashColumnPromise;
 
+let authSupportTablesPromise;
+
+async function ensureAuthSupportTables() {
+  if (!authSupportTablesPromise) {
+    authSupportTablesPromise = pool.query(`
+      CREATE TABLE IF NOT EXISTS auth_users (
+        id UUID PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS user_roles (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+        role TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (user_id, role)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_auth_users_email_lower ON auth_users (lower(email));
+      CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles (user_id);
+      CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles (role);
+
+      INSERT INTO user_roles (user_id, role)
+      SELECT id, COALESCE(NULLIF(role, ''), 'editor')
+      FROM profiles
+      WHERE id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM user_roles ur WHERE ur.user_id = profiles.id
+        );
+    `).catch((error) => {
+      authSupportTablesPromise = null;
+      throw error;
+    });
+  }
+
+  return authSupportTablesPromise;
+}
+
 async function hasProfilesPasswordHashColumn() {
   if (!profilesPasswordHashColumnPromise) {
     profilesPasswordHashColumnPromise = pool.query(`
@@ -354,6 +395,7 @@ async function hasProfilesPasswordHashColumn() {
 }
 
 async function getAuthProfileByEmail(email) {
+  await ensureAuthSupportTables();
   const normalizedEmail = email.toLowerCase().trim();
 
   if (await hasProfilesPasswordHashColumn()) {
@@ -378,6 +420,7 @@ async function getAuthProfileByEmail(email) {
 }
 
 async function getAuthProfileById(userId) {
+  await ensureAuthSupportTables();
   if (await hasProfilesPasswordHashColumn()) {
     const { rows } = await pool.query(
       'SELECT id, name, email, role, avatar_url, display_name, job_title, password_hash FROM profiles WHERE id = $1 LIMIT 1',
@@ -400,6 +443,7 @@ async function getAuthProfileById(userId) {
 }
 
 async function storeUserPassword(userId, rawPassword) {
+  await ensureAuthSupportTables();
   const hash = await bcrypt.hash(rawPassword, 12);
 
   if (await hasProfilesPasswordHashColumn()) {

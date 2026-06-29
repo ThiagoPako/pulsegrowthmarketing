@@ -377,13 +377,31 @@ async function ensureAuthSupportTables() {
       CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles (user_id);
       CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles (role);
 
-      INSERT INTO user_roles (user_id, role)
-      SELECT id, COALESCE(NULLIF(role, ''), 'editor')
-      FROM profiles
-      WHERE id IS NOT NULL
-        AND NOT EXISTS (
-          SELECT 1 FROM user_roles ur WHERE ur.user_id = profiles.id
-        );
+      DO $$
+      DECLARE
+        role_udt TEXT;
+      BEGIN
+        SELECT udt_name INTO role_udt
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'user_roles'
+          AND column_name = 'role'
+        LIMIT 1;
+
+        IF role_udt = 'app_role' THEN
+          EXECUTE 'INSERT INTO user_roles (user_id, role)
+                   SELECT id, (COALESCE(NULLIF(role::text, ''''), ''editor''))::app_role
+                   FROM profiles
+                   WHERE id IS NOT NULL
+                   ON CONFLICT (user_id, role) DO NOTHING';
+        ELSE
+          EXECUTE 'INSERT INTO user_roles (user_id, role)
+                   SELECT id, COALESCE(NULLIF(role::text, ''''), ''editor'')
+                   FROM profiles
+                   WHERE id IS NOT NULL
+                   ON CONFLICT (user_id, role) DO NOTHING';
+        END IF;
+      END $$;
     `).catch((error) => {
       authSupportTablesPromise = null;
       throw error;
@@ -615,8 +633,8 @@ app.get('/api/auth/me', async (req, res) => {
     await ensureAuthSupportTables();
     const { user } = await verifyUser(req);
     const { rows } = await pool.query(
-      'SELECT p.id, p.name, p.email, p.avatar_url, p.display_name, p.job_title, p.bio, p.birthday, ur.role FROM profiles p LEFT JOIN user_roles ur ON ur.user_id = p.id WHERE p.id = $1 LIMIT 1',
-      [user.id]
+      'SELECT p.id, p.name, p.email, p.avatar_url, p.display_name, p.job_title, p.bio, p.birthday, COALESCE(ur.role::text, p.role::text, $2) AS role FROM profiles p LEFT JOIN user_roles ur ON ur.user_id = p.id WHERE p.id = $1 LIMIT 1',
+      [user.id, user.role || 'editor']
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Perfil não encontrado' });
 

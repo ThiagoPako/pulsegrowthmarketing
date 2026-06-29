@@ -599,8 +599,26 @@ async function getAuthProfileByEmail(email) {
 
   if (hasProfilesTable && profileColumns.has('email') && profileColumns.has('password_hash')) {
     try {
+      await ensureAuthSupportTables();
+      const authJoinCondition = profileColumns.has('id')
+        ? 'au.id = p.id OR lower(au.email) = lower(p.email)'
+        : 'lower(au.email) = lower(p.email)';
       const { rows } = await pool.query(
-        `SELECT ${profileSelect} FROM profiles WHERE lower(email) = lower($1) LIMIT 1`,
+        `SELECT ${profileColumns.has('id') ? 'p.id' : 'NULL::uuid AS id'},
+                ${profileColumns.has('name') ? 'p.name' : `split_part(p.email, '@', 1) AS name`},
+                p.email,
+                ${profileColumns.has('role') ? 'p.role::text AS role' : `'editor'::text AS role`},
+                ${profileColumns.has('avatar_url') ? 'p.avatar_url' : 'NULL::text AS avatar_url'},
+                ${profileColumns.has('display_name') ? 'p.display_name' : 'NULL::text AS display_name'},
+                ${profileColumns.has('job_title') ? 'p.job_title' : 'NULL::text AS job_title'},
+                COALESCE(au.password_hash, p.password_hash) AS password_hash,
+                p.password_hash AS profile_password_hash,
+                au.password_hash AS auth_password_hash
+         FROM profiles p
+         LEFT JOIN auth_users au
+           ON ${authJoinCondition}
+         WHERE lower(p.email) = lower($1)
+         LIMIT 1`,
         [normalizedEmail]
       );
       return rows[0] || await getLocalAuthUserByEmail(normalizedEmail);

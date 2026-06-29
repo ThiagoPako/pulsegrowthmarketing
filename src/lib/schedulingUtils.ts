@@ -5,6 +5,7 @@ import type { Client, Recording, DayOfWeek, CompanySettings, RecordingType } fro
 const BUFFER_BETWEEN_RECORDINGS = 30;
 const FIXED_SCHEDULE_HORIZON_DAYS = 60;
 const LOWER_PRIORITY_TYPES_FOR_FIXED = new Set<RecordingType>(['extra', 'backup', 'secundaria']);
+const DEFAULT_RECORDING_DURATION = 90;
 
 const DAY_TO_NUM: Record<DayOfWeek, number> = {
   domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6,
@@ -53,6 +54,11 @@ function uniqueStrings(values: Array<string | null | undefined>): string[] {
 
 function getDayNameFromDateKey(dateKey: string): DayOfWeek {
   return NUM_TO_DAY[getDay(parseDateKey(dateKey))];
+}
+
+function getRecordingDuration(settings: CompanySettings): number {
+  const duration = Number(settings?.recordingDuration);
+  return Number.isFinite(duration) && duration > 0 ? duration : DEFAULT_RECORDING_DURATION;
 }
 
 function getCandidateVideomakers(client: Client, existingRecordings: Recording[], options: FixedRecordingGenerationOptions): string[] {
@@ -189,7 +195,7 @@ export function isWithinWorkHoursCheck(
 ): boolean {
   if (!settings.workDays.includes(day)) return false;
   const start = timeToMinutes(startTime);
-  const end = start + settings.recordingDuration;
+  const end = start + getRecordingDuration(settings);
   const inA = start >= timeToMinutes(settings.shiftAStart) && end <= timeToMinutes(settings.shiftAEnd);
   const inB = start >= timeToMinutes(settings.shiftBStart) && end <= timeToMinutes(settings.shiftBEnd);
   return inA || inB;
@@ -218,7 +224,7 @@ export function generateFixedRecordings(
     : getDatesUntilEndOfMonth(client.fixedDay, client.selectedWeeks);
   const newRecordings: Recording[] = [];
   let allRecs = [...existingRecordings];
-  const duration = settings.recordingDuration;
+  const duration = getRecordingDuration(settings);
 
   for (const date of dates) {
     const dayName = getDayNameFromDateKey(date);
@@ -318,7 +324,7 @@ export function generateExtraRecordings(
   const dates = getDatesUntilEndOfMonth(client.extraDay);
   const newRecordings: Recording[] = [];
   let allRecs = [...existingRecordings];
-  const duration = settings.recordingDuration;
+  const duration = getRecordingDuration(settings);
 
   for (const date of dates) {
     const day = NUM_TO_DAY[getDay(new Date(date + 'T12:00:00'))];
@@ -389,7 +395,7 @@ export function findAvailableSlots(
   const day = NUM_TO_DAY[getDay(new Date(date + 'T12:00:00'))];
   if (!settings.workDays.includes(day)) return [];
 
-  const duration = settings.recordingDuration;
+  const duration = getRecordingDuration(settings);
   const availableSlots: string[] = [];
   
   // Custom fixed slots as requested by user: 08:30, 10:30, 14:30, 16:30
@@ -416,7 +422,7 @@ export function findRescheduleSlot(
   allVideomakerIds: string[]
 ): { date: string; startTime: string; videomakerId: string; type: 'secundaria' | 'extra' } | null {
   const today = format(new Date(), 'yyyy-MM-dd');
-  const duration = settings.recordingDuration;
+  const duration = getRecordingDuration(settings);
 
   if (client.status === 'cancelado') return null;
 

@@ -1,4 +1,4 @@
-import { format, addDays, getDay, startOfMonth, differenceInCalendarWeeks } from 'date-fns';
+import { format, addDays, getDay } from 'date-fns';
 import type { Client, Recording, DayOfWeek, CompanySettings, RecordingType } from '@/types';
 
 /** Buffer time (in minutes) between recordings for the videomaker to upload materials */
@@ -13,6 +13,12 @@ const NUM_TO_DAY: Record<number, DayOfWeek> = {
   0: 'domingo', 1: 'segunda', 2: 'terca', 3: 'quarta', 4: 'quinta', 5: 'sexta', 6: 'sabado',
 };
 
+interface FixedRecordingGenerationOptions {
+  startDate?: string;
+  endDate?: string;
+  fillCompleteMonth?: boolean;
+}
+
 function timeToMinutes(t: string) {
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
@@ -20,9 +26,49 @@ function timeToMinutes(t: string) {
 
 /** Get the week number (1-5) of a date within its month */
 function getWeekOfMonth(date: Date): number {
-  const monthStart = startOfMonth(date);
   // Week 1 starts on the 1st, week 2 on the 8th, etc.
   return Math.ceil(date.getDate() / 7);
+}
+
+function parseDateKey(dateKey: string): Date {
+  return new Date(`${dateKey}T12:00:00`);
+}
+
+function shouldUseSelectedWeeks(selectedWeeks: number[] | undefined, fillCompleteMonth?: boolean): boolean {
+  if (!selectedWeeks || selectedWeeks.length === 0) return false;
+
+  // No botão de gerar mês fixo, a intenção operacional é preencher o mês inteiro:
+  // 28, 29, 30 ou 31 dias, incluindo a 5ª ocorrência do dia fixo quando existir.
+  if (fillCompleteMonth) return false;
+
+  return true;
+}
+
+export function getDatesForDayInRange(
+  dayOfWeek: DayOfWeek,
+  startDate: string,
+  endDate: string,
+  selectedWeeks?: number[],
+  fillCompleteMonth?: boolean
+): string[] {
+  const dates: string[] = [];
+  const targetNum = DAY_TO_NUM[dayOfWeek];
+  const end = parseDateKey(endDate);
+  const useSelectedWeeks = shouldUseSelectedWeeks(selectedWeeks, fillCompleteMonth);
+
+  let current = parseDateKey(startDate);
+  while (current <= end && getDay(current) !== targetNum) {
+    current = addDays(current, 1);
+  }
+
+  while (current <= end) {
+    if (!useSelectedWeeks || selectedWeeks!.includes(getWeekOfMonth(current))) {
+      dates.push(format(current, 'yyyy-MM-dd'));
+    }
+    current = addDays(current, 7);
+  }
+
+  return dates;
 }
 
 /** Get all dates for a specific day of week from today across a rolling future window,
@@ -109,7 +155,8 @@ export function isWithinWorkHoursCheck(
 export function generateFixedRecordings(
   client: Client,
   existingRecordings: Recording[],
-  settings: CompanySettings
+  settings: CompanySettings,
+  options: FixedRecordingGenerationOptions = {}
 ): Recording[] {
   // Guard: cannot generate if client is cancelled or has no videomaker
   if (client.status === 'cancelado') {
@@ -121,14 +168,26 @@ export function generateFixedRecordings(
     return [];
   }
   
-  const dates = getDatesUntilEndOfMonth(client.fixedDay, client.selectedWeeks);
+  const dates = options.startDate && options.endDate
+    ? getDatesForDayInRange(client.fixedDay, options.startDate, options.endDate, client.selectedWeeks, options.fillCompleteMonth)
+    : getDatesUntilEndOfMonth(client.fixedDay, client.selectedWeeks);
   const newRecordings: Recording[] = [];
   let allRecs = [...existingRecordings];
   const duration = settings.recordingDuration;
 
   for (const date of dates) {
-    const vmDayRecs = allRecs.filter(r => r.videomakerId === client.videomaker && r.date === date && r.status !== 'cancelada');
-    const clientDayRecs = allRecs.filter(r => r.clientId === client.id && r.date === date && r.status !== 'cancelada');
+    const vmDayRecs = allRecs.filter(r =>
+      r.videomakerId === client.videomaker &&
+      r.date === date &&
+      r.status !== 'cancelada' &&
+      r.type !== 'extra'
+    );
+    const clientDayRecs = allRecs.filter(r =>
+      r.clientId === client.id &&
+      r.date === date &&
+      r.status !== 'cancelada' &&
+      r.type !== 'extra'
+    );
     
     if (client.fullShiftRecording) {
       // Full-shift client: reserve both slots in the preferred shift
@@ -138,7 +197,7 @@ export function generateFixedRecordings(
       
       for (const timeStr of slots) {
         const alreadyAtTime = clientDayRecs.some(r => r.startTime === timeStr);
-        if (vmDayRecs.length < 4 && !alreadyAtTime && !hasConflictCheck(client.videomaker, date, timeStr, allRecs, duration)) {
+        if (vmDayRecs.length < 4 && !alreadyAtTime && !hasConflictCheck(client.videomaker, date, timeStr, allRecs, duration, undefined, 'fixa')) {
           const rec: Recording = {
             id: crypto.randomUUID(),
             clientId: client.id,
@@ -159,7 +218,7 @@ export function generateFixedRecordings(
       const targetTime = client.fixedTime || '08:30'; // fallback
       const alreadyScheduled = clientDayRecs.length > 0;
       
-      if (!alreadyScheduled && vmDayRecs.length < 4 && !hasConflictCheck(client.videomaker, date, targetTime, allRecs, duration)) {
+      if (!alreadyScheduled && vmDayRecs.length < 4 && !hasConflictCheck(client.videomaker, date, targetTime, allRecs, duration, undefined, 'fixa')) {
         const rec: Recording = {
           id: crypto.randomUUID(),
           clientId: client.id,

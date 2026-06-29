@@ -38,8 +38,9 @@ interface AppContextType {
   deleteRecordingsBulk: (ids: string[]) => Promise<boolean>;
   cancelRecordingsBulk: (ids: string[]) => Promise<boolean>;
   cancelAndReschedule: (recording: Recording) => { success: boolean; rescheduled?: { date: string; startTime: string; videomakerId: string; type: string } };
-  generateScheduleForClient: (client: Client) => Promise<number>;
-  regenerateScheduleForClient: (client: Client) => Promise<{ deleted: number; created: number }>;
+  generateScheduleForClient: (client: Client, options?: FixedScheduleGenerationOptions) => Promise<number>;
+  regenerateScheduleForClient: (client: Client, options?: FixedScheduleGenerationOptions) => Promise<{ deleted: number; created: number }>;
+  generateFixedSchedulesForMonth: (clientsToGenerate: Client[], startDate: string, endDate: string) => Promise<number>;
   autoFillVacanciesForDate: (date: string) => Promise<number>;
   organizeSchedule: (startDate: string, endDate: string) => Promise<{ updated: number; cancelled: number }>;
 
@@ -57,6 +58,12 @@ interface AppContextType {
 
   getSuggestionsForCancellation: (recording: Recording) => Client[];
   refetchData: () => void;
+}
+
+interface FixedScheduleGenerationOptions {
+  startDate?: string;
+  endDate?: string;
+  fillCompleteMonth?: boolean;
 }
 
 
@@ -210,21 +217,83 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   /** Generate fixed recordings only for a client until end of month.
    * REGRA: extras e backups NUNCA são gerados automaticamente — só aparecem
    * manualmente quando um admin preenche a vaga após cancelamento. */
-  const generateScheduleForClient = useCallback(async (client: Client): Promise<number> => {
-    const fixedRecs = generateFixedRecordings(client, data.recordings, data.settings);
+  const generateScheduleForClient = useCallback(async (client: Client, options: FixedScheduleGenerationOptions = {}): Promise<number> => {
+    const fixedRecs = generateFixedRecordings(client, data.recordings, data.settings, options);
     if (fixedRecs.length > 0) {
       await data.addRecordingsBulk(fixedRecs);
     }
     return fixedRecs.length;
   }, [data, users]);
 
+  const generateFixedSchedulesForMonth = useCallback(async (clientsToGenerate: Client[], startDate: string, endDate: string): Promise<number> => {
+    const activeFixedClients = clientsToGenerate.filter(c => c.fixedDay && c.fixedTime && c.videomaker && c.status === 'ativo');
+    if (activeFixedClients.length === 0) return 0;
+
+    const generatedRecordings: Recording[] = [];
+    const monthRecordings = data.recordings.filter(r => r.date >= startDate && r.date <= endDate);
+    const currentRecordings = [...data.recordings];
+
+    for (const client of activeFixedClients) {
+      const clientMonthRecordings = monthRecordings.filter(r => r.clientId === client.id && r.status !== 'cancelada');
+      const needsFullShift = client.fullShiftRecording;
+      const expectedMinimum = needsFullShift ? 2 : 1;
+
+      const newClientRecordings = generateFixedRecordings(client, currentRecordings, data.settings, {
+        startDate,
+        endDate,
+        fillCompleteMonth: true,
+      }).filter(newRecording => {
+        const existingSameSlot = currentRecordings.some(existing =>
+          existing.clientId === newRecording.clientId &&
+          existing.date === newRecording.date &&
+          existing.startTime === newRecording.startTime &&
+          existing.type === 'fixa' &&
+          existing.status !== 'cancelada'
+        );
+
+        if (existingSameSlot) return false;
+
+        const existingClientRecsForDate = clientMonthRecordings.filter(existing =>
+          existing.date === newRecording.date && existing.status !== 'cancelada'
+        );
+
+        return existingClientRecsForDate.length < expectedMinimum;
+      });
+
+      generatedRecordings.push(...newClientRecordings);
+      currentRecordings.push(...newClientRecordings);
+    }
+
+    if (generatedRecordings.length > 0) {
+      const durationWithBuffer = (data.settings.recordingDuration || 90) + BUFFER_BETWEEN_RECORDINGS;
+      const conflictingExtraIds = data.recordings
+        .filter(recording => recording.type === 'extra' && recording.status !== 'cancelada')
+        .filter(extra => generatedRecordings.some(fixed => {
+          if (extra.videomakerId !== fixed.videomakerId || extra.date !== fixed.date) return false;
+          const extraStart = timeToMinutes(extra.startTime);
+          const fixedStart = timeToMinutes(fixed.startTime);
+          return fixedStart < extraStart + durationWithBuffer && fixedStart + durationWithBuffer > extraStart;
+        }))
+        .map(recording => recording.id);
+
+      if (conflictingExtraIds.length > 0) {
+        await data.cancelRecordingsBulk(conflictingExtraIds);
+      }
+
+      await data.addRecordingsBulk(generatedRecordings);
+      await data.refetch();
+    }
+
+    return generatedRecordings.length;
+  }, [data]);
+
   /** Delete future agendada recordings for a client and regenerate (fixed only) */
-  const regenerateScheduleForClient = useCallback(async (client: Client): Promise<{ deleted: number; created: number }> => {
+  const regenerateScheduleForClient = useCallback(async (client: Client, options: FixedScheduleGenerationOptions = {}): Promise<{ deleted: number; created: number }> => {
     const deleted = await data.deleteFutureRecordingsForClient(client.id);
     const today = new Date().toISOString().split('T')[0];
     const remainingRecs = data.recordings.filter(r => !(r.clientId === client.id && r.status === 'agendada' && r.date >= today));
     
-    const fixedRecs = generateFixedRecordings(client, remainingRecs, data.settings);
+    const fixedRecs = generateFixedRecordings(client, remainingRecs, data.settings, options);
     if (fixedRecs.length > 0) {
       await data.addRecordingsBulk(fixedRecs);
     }
@@ -448,7 +517,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addClient, updateClient, deleteClient,
       addRecording, updateRecording, cancelRecording, deleteRecording,
       deleteRecordingsBulk: data.deleteRecordingsBulk, cancelRecordingsBulk: data.cancelRecordingsBulk,
-      cancelAndReschedule, generateScheduleForClient, regenerateScheduleForClient,
+      cancelAndReschedule, generateScheduleForClient, regenerateScheduleForClient, generateFixedSchedulesForMonth,
       autoFillVacanciesForDate, organizeSchedule,
 
       addTask, updateTask, deleteTask,

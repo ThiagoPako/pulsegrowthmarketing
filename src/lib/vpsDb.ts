@@ -71,14 +71,47 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
+async function refreshVpsSession(): Promise<boolean> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
+  if (!token) return false;
+
+  try {
+    const response = await fetch(`${VPS_API_BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'x-pulse-city': getActiveCity(),
+      },
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.token) return false;
+
+    localStorage.setItem(TOKEN_KEY, payload.token);
+    window.dispatchEvent(new CustomEvent('pulse:auth-token-refreshed', { detail: { token: payload.token } }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 
 async function executeQuery(body: any): Promise<{ data: any; error: any; count?: number | null }> {
   try {
-    const response = await fetch(`${VPS_API_BASE}/db/query`, {
+    let response = await fetch(`${VPS_API_BASE}/db/query`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(body),
     });
+
+    if (response.status === 401 && await refreshVpsSession()) {
+      response = await fetch(`${VPS_API_BASE}/db/query`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(body),
+      });
+    }
     
     const contentType = response.headers.get('content-type') || '';
     let result: any;
@@ -519,11 +552,20 @@ class ChannelBuilder {
  */
 async function invokeFunction(functionName: string, options?: { body?: any }): Promise<{ data: any; error: any }> {
   try {
-    const response = await fetch(`${VPS_API_BASE}/${functionName}`, {
+    let response = await fetch(`${VPS_API_BASE}/${functionName}`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: options?.body ? JSON.stringify(options.body) : undefined,
     });
+
+    if (response.status === 401 && await refreshVpsSession()) {
+      response = await fetch(`${VPS_API_BASE}/${functionName}`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: options?.body ? JSON.stringify(options.body) : undefined,
+      });
+    }
+
     const data = await response.json();
     if (!response.ok) {
       return { data: null, error: data.error || { message: `HTTP ${response.status}` } };

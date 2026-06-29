@@ -676,21 +676,29 @@ async function getAuthProfileById(userId) {
 
   if (hasProfilesTable && profileColumns.has('id') && profileColumns.has('password_hash')) {
     try {
+      await ensureAuthSupportTables();
+      const authJoinCondition = profileColumns.has('email')
+        ? 'au.id = p.id OR lower(au.email) = lower(p.email)'
+        : 'au.id = p.id';
       const { rows } = await pool.query(
-        `SELECT id,
-                ${profileColumns.has('name') ? 'name' : profileColumns.has('email') ? `split_part(email, '@', 1) AS name` : 'NULL::text AS name'},
-                ${profileColumns.has('email') ? 'email' : 'NULL::text AS email'},
-                ${profileColumns.has('role') ? 'role::text AS role' : `'editor'::text AS role`},
-                ${profileColumns.has('avatar_url') ? 'avatar_url' : 'NULL::text AS avatar_url'},
-                ${profileColumns.has('display_name') ? 'display_name' : 'NULL::text AS display_name'},
-                ${profileColumns.has('job_title') ? 'job_title' : 'NULL::text AS job_title'},
-                password_hash
-           FROM profiles
-          WHERE id = $1
+        `SELECT p.id,
+                ${profileColumns.has('name') ? 'p.name' : profileColumns.has('email') ? `split_part(p.email, '@', 1) AS name` : 'NULL::text AS name'},
+                ${profileColumns.has('email') ? 'p.email' : 'au.email'},
+                ${profileColumns.has('role') ? 'p.role::text AS role' : `'editor'::text AS role`},
+                ${profileColumns.has('avatar_url') ? 'p.avatar_url' : 'NULL::text AS avatar_url'},
+                ${profileColumns.has('display_name') ? 'p.display_name' : 'NULL::text AS display_name'},
+                ${profileColumns.has('job_title') ? 'p.job_title' : 'NULL::text AS job_title'},
+                COALESCE(au.password_hash, p.password_hash) AS password_hash,
+                p.password_hash AS profile_password_hash,
+                au.password_hash AS auth_password_hash
+           FROM profiles p
+           LEFT JOIN auth_users au
+             ON ${authJoinCondition}
+          WHERE p.id = $1
           LIMIT 1`,
         [userId]
       );
-      return rows[0] || null;
+      return rows[0] || await getLocalAuthUserById(userId);
     } catch (error) {
       console.error('Profile auth lookup by id failed, using auth_users fallback:', error?.message || error);
     }
@@ -712,7 +720,7 @@ async function getAuthProfileById(userId) {
           LIMIT 1`,
         [userId]
       );
-      return rows[0] || null;
+      return rows[0] || await getLocalAuthUserById(userId);
     }
 
     await ensureAuthSupportTables();

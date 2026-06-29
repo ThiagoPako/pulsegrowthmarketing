@@ -1,4 +1,4 @@
-import { format, addDays, getDay, startOfMonth, differenceInCalendarWeeks } from 'date-fns';
+import { format, addDays, getDay, startOfMonth } from 'date-fns';
 import type { Client, Recording, DayOfWeek, CompanySettings, RecordingType } from '@/types';
 
 /** Buffer time (in minutes) between recordings for the videomaker to upload materials */
@@ -13,6 +13,12 @@ const NUM_TO_DAY: Record<number, DayOfWeek> = {
   0: 'domingo', 1: 'segunda', 2: 'terca', 3: 'quarta', 4: 'quinta', 5: 'sexta', 6: 'sabado',
 };
 
+interface FixedRecordingGenerationOptions {
+  startDate?: string;
+  endDate?: string;
+  fillCompleteMonth?: boolean;
+}
+
 function timeToMinutes(t: string) {
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
@@ -23,6 +29,50 @@ function getWeekOfMonth(date: Date): number {
   const monthStart = startOfMonth(date);
   // Week 1 starts on the 1st, week 2 on the 8th, etc.
   return Math.ceil(date.getDate() / 7);
+}
+
+function parseDateKey(dateKey: string): Date {
+  return new Date(`${dateKey}T12:00:00`);
+}
+
+function shouldUseSelectedWeeks(selectedWeeks: number[] | undefined, fillCompleteMonth?: boolean): boolean {
+  if (!selectedWeeks || selectedWeeks.length === 0) return false;
+
+  // Clientes antigos costumam vir com [1,2,3,4] como padrão. Para gerar o mês
+  // completo, esse padrão não pode bloquear a 5ª ocorrência em meses de 29-31 dias.
+  if (fillCompleteMonth) {
+    const hasDefaultFourWeeks = [1, 2, 3, 4].every(week => selectedWeeks.includes(week));
+    if (hasDefaultFourWeeks) return false;
+  }
+
+  return true;
+}
+
+export function getDatesForDayInRange(
+  dayOfWeek: DayOfWeek,
+  startDate: string,
+  endDate: string,
+  selectedWeeks?: number[],
+  fillCompleteMonth?: boolean
+): string[] {
+  const dates: string[] = [];
+  const targetNum = DAY_TO_NUM[dayOfWeek];
+  const end = parseDateKey(endDate);
+  const useSelectedWeeks = shouldUseSelectedWeeks(selectedWeeks, fillCompleteMonth);
+
+  let current = parseDateKey(startDate);
+  while (current <= end && getDay(current) !== targetNum) {
+    current = addDays(current, 1);
+  }
+
+  while (current <= end) {
+    if (!useSelectedWeeks || selectedWeeks!.includes(getWeekOfMonth(current))) {
+      dates.push(format(current, 'yyyy-MM-dd'));
+    }
+    current = addDays(current, 7);
+  }
+
+  return dates;
 }
 
 /** Get all dates for a specific day of week from today across a rolling future window,
@@ -109,7 +159,8 @@ export function isWithinWorkHoursCheck(
 export function generateFixedRecordings(
   client: Client,
   existingRecordings: Recording[],
-  settings: CompanySettings
+  settings: CompanySettings,
+  options: FixedRecordingGenerationOptions = {}
 ): Recording[] {
   // Guard: cannot generate if client is cancelled or has no videomaker
   if (client.status === 'cancelado') {
@@ -121,7 +172,9 @@ export function generateFixedRecordings(
     return [];
   }
   
-  const dates = getDatesUntilEndOfMonth(client.fixedDay, client.selectedWeeks);
+  const dates = options.startDate && options.endDate
+    ? getDatesForDayInRange(client.fixedDay, options.startDate, options.endDate, client.selectedWeeks, options.fillCompleteMonth)
+    : getDatesUntilEndOfMonth(client.fixedDay, client.selectedWeeks);
   const newRecordings: Recording[] = [];
   let allRecs = [...existingRecordings];
   const duration = settings.recordingDuration;

@@ -17,7 +17,6 @@ import { createClient } from '@supabase/supabase-js';
 import pg from 'pg';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
 
 // Keep DATE columns as YYYY-MM-DD strings. Converting them to JS Date objects
 // shifts calendar-only values one day back in Brazilian timezones when JSON-serialized.

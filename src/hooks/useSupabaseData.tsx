@@ -232,18 +232,18 @@ function rowToSettings(r: any): CompanySettings {
       const days = value.replace(/[{}\[\]"\s]/g, '').split(',').filter(Boolean) as DayOfWeek[];
       if (days.length > 0) return days;
     }
-    return defaultSettings.workDays;
+    return ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
   };
 
   const recordingDuration = Number(r?.recording_duration);
 
   return {
-    shiftAStart: r?.shift_a_start || defaultSettings.shiftAStart,
-    shiftAEnd: r?.shift_a_end || defaultSettings.shiftAEnd,
-    shiftBStart: r?.shift_b_start || defaultSettings.shiftBStart,
-    shiftBEnd: r?.shift_b_end || defaultSettings.shiftBEnd,
+    shiftAStart: r?.shift_a_start || '08:30',
+    shiftAEnd: r?.shift_a_end || '12:00',
+    shiftBStart: r?.shift_b_start || '14:30',
+    shiftBEnd: r?.shift_b_end || '18:00',
     workDays: parseWorkDays(r?.work_days),
-    recordingDuration: Number.isFinite(recordingDuration) && recordingDuration > 0 ? recordingDuration : defaultSettings.recordingDuration,
+    recordingDuration: Number.isFinite(recordingDuration) && recordingDuration > 0 ? recordingDuration : 90,
     editingDeadlineHours: r?.editing_deadline_hours ?? 48,
     reviewDeadlineHours: r?.review_deadline_hours ?? 24,
     alterationDeadlineHours: r?.alteration_deadline_hours ?? 24,

@@ -265,6 +265,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (generatedRecordings.length > 0) {
+      const durationWithBuffer = (data.settings.recordingDuration || 90) + BUFFER_BETWEEN_RECORDINGS;
+      const conflictingExtraIds = data.recordings
+        .filter(recording => recording.type === 'extra' && recording.status !== 'cancelada')
+        .filter(extra => generatedRecordings.some(fixed => {
+          if (extra.videomakerId !== fixed.videomakerId || extra.date !== fixed.date) return false;
+          const extraStart = timeToMinutes(extra.startTime);
+          const fixedStart = timeToMinutes(fixed.startTime);
+          return fixedStart < extraStart + durationWithBuffer && fixedStart + durationWithBuffer > extraStart;
+        }))
+        .map(recording => recording.id);
+
+      if (conflictingExtraIds.length > 0) {
+        await data.cancelRecordingsBulk(conflictingExtraIds);
+      }
+
       await data.addRecordingsBulk(generatedRecordings);
       await data.refetch();
     }

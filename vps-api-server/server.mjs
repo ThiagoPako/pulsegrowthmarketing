@@ -429,6 +429,7 @@ async function getLocalAuthUserByEmail(email) {
     await ensureAuthSupportTables();
     const profileColumns = await getExistingColumns('profiles').catch(() => new Set());
     const hasProfilesTable = profileColumns.size > 0;
+    const profileId = hasProfilesTable && profileColumns.has('id') ? 'p.id' : 'NULL::uuid';
     const profileName = hasProfilesTable && profileColumns.has('name') ? 'p.name' : 'NULL::text';
     const profileEmail = hasProfilesTable && profileColumns.has('email') ? 'p.email' : 'NULL::text';
     const profileRole = hasProfilesTable && profileColumns.has('role') ? 'p.role::text' : 'NULL::text';
@@ -448,7 +449,7 @@ async function getLocalAuthUserByEmail(email) {
 
     const { rows } = await pool.query(
       `SELECT
-         au.id,
+         COALESCE(${profileId}, au.id) AS id,
          COALESCE(${profileName}, split_part(au.email, '@', 1)) AS name,
          au.email,
          COALESCE(${profileRole}, ${userRole}, 'admin') AS role,
@@ -498,6 +499,7 @@ async function getLocalAuthUserById(userId) {
     await ensureAuthSupportTables();
     const profileColumns = await getExistingColumns('profiles').catch(() => new Set());
     const hasProfilesTable = profileColumns.size > 0;
+    const profileId = hasProfilesTable && profileColumns.has('id') ? 'p.id' : 'NULL::uuid';
     const profileName = hasProfilesTable && profileColumns.has('name') ? 'p.name' : 'NULL::text';
     const profileEmail = hasProfilesTable && profileColumns.has('email') ? 'p.email' : 'NULL::text';
     const profileRole = hasProfilesTable && profileColumns.has('role') ? 'p.role::text' : 'NULL::text';
@@ -514,10 +516,11 @@ async function getLocalAuthUserById(userId) {
       ? 'LEFT JOIN user_roles ur ON ur.user_id = au.id'
       : '';
     const userRole = userRolesJoin ? 'ur.role::text' : 'NULL::text';
+    const canMatchProfileId = Boolean(profileJoin && profileColumns.has('id'));
 
     const { rows } = await pool.query(
       `SELECT
-         au.id,
+         COALESCE(${profileId}, au.id) AS id,
          COALESCE(${profileName}, split_part(au.email, '@', 1)) AS name,
          COALESCE(${profileEmail}, au.email) AS email,
          COALESCE(${profileRole}, ${userRole}, 'admin') AS role,
@@ -528,7 +531,7 @@ async function getLocalAuthUserById(userId) {
        FROM auth_users au
         ${profileJoin}
         ${userRolesJoin}
-       WHERE au.id = $1
+       WHERE au.id = $1${canMatchProfileId ? ' OR p.id = $1' : ''}
        LIMIT 1`,
       [userId]
     );
@@ -770,7 +773,15 @@ async function getUserPrimaryRole(userId, fallbackRole = 'editor') {
   try {
     await ensureAuthSupportTables();
     const { rows: roles } = await pool.query(
-      'SELECT role FROM user_roles WHERE user_id = $1 LIMIT 1',
+      `SELECT ur.role
+         FROM user_roles ur
+         LEFT JOIN profiles role_profile ON role_profile.id = ur.user_id
+         LEFT JOIN auth_users role_auth ON role_auth.id = ur.user_id
+         LEFT JOIN profiles current_profile ON current_profile.id = $1
+         LEFT JOIN auth_users current_auth ON current_auth.id = $1
+        WHERE ur.user_id = $1
+           OR lower(COALESCE(role_profile.email, role_auth.email, '')) = lower(COALESCE(current_profile.email, current_auth.email, ''))
+        LIMIT 1`,
       [userId]
     );
     return roles[0]?.role || fallbackRole || 'editor';

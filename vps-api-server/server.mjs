@@ -319,8 +319,16 @@ async function verifyUser(req) {
   try {
     // Try JWT first (new system)
     const decoded = verifyToken(token);
+    const profile = await getAuthProfileById(decoded.sub).catch(() => null);
+    const role = profile
+      ? await getUserPrimaryRole(profile.id, profile.role || decoded.role || 'editor')
+      : decoded.role;
     return {
-      user: { id: decoded.sub, email: decoded.email, role: decoded.role },
+      user: {
+        id: profile?.id || decoded.sub,
+        email: profile?.email || decoded.email,
+        role,
+      },
       userClient: getUserClient(authHeader),
     };
   } catch {
@@ -429,6 +437,7 @@ async function getLocalAuthUserByEmail(email) {
     await ensureAuthSupportTables();
     const profileColumns = await getExistingColumns('profiles').catch(() => new Set());
     const hasProfilesTable = profileColumns.size > 0;
+    const profileId = hasProfilesTable && profileColumns.has('id') ? 'p.id' : 'NULL::uuid';
     const profileName = hasProfilesTable && profileColumns.has('name') ? 'p.name' : 'NULL::text';
     const profileEmail = hasProfilesTable && profileColumns.has('email') ? 'p.email' : 'NULL::text';
     const profileRole = hasProfilesTable && profileColumns.has('role') ? 'p.role::text' : 'NULL::text';
@@ -448,7 +457,7 @@ async function getLocalAuthUserByEmail(email) {
 
     const { rows } = await pool.query(
       `SELECT
-         au.id,
+         COALESCE(${profileId}, au.id) AS id,
          COALESCE(${profileName}, split_part(au.email, '@', 1)) AS name,
          au.email,
          COALESCE(${profileRole}, ${userRole}, 'admin') AS role,
@@ -463,7 +472,7 @@ async function getLocalAuthUserByEmail(email) {
        LIMIT 1`,
       [normalizedEmail]
     );
-    return rows[0] || null;
+    return rows[0] || await getLocalAuthUserById(userId);
   } catch (error) {
     console.error('Local auth lookup with profile join failed:', error?.message || error);
 
@@ -498,6 +507,7 @@ async function getLocalAuthUserById(userId) {
     await ensureAuthSupportTables();
     const profileColumns = await getExistingColumns('profiles').catch(() => new Set());
     const hasProfilesTable = profileColumns.size > 0;
+    const profileId = hasProfilesTable && profileColumns.has('id') ? 'p.id' : 'NULL::uuid';
     const profileName = hasProfilesTable && profileColumns.has('name') ? 'p.name' : 'NULL::text';
     const profileEmail = hasProfilesTable && profileColumns.has('email') ? 'p.email' : 'NULL::text';
     const profileRole = hasProfilesTable && profileColumns.has('role') ? 'p.role::text' : 'NULL::text';
@@ -514,10 +524,11 @@ async function getLocalAuthUserById(userId) {
       ? 'LEFT JOIN user_roles ur ON ur.user_id = au.id'
       : '';
     const userRole = userRolesJoin ? 'ur.role::text' : 'NULL::text';
+    const canMatchProfileId = Boolean(profileJoin && profileColumns.has('id'));
 
     const { rows } = await pool.query(
       `SELECT
-         au.id,
+         COALESCE(${profileId}, au.id) AS id,
          COALESCE(${profileName}, split_part(au.email, '@', 1)) AS name,
          COALESCE(${profileEmail}, au.email) AS email,
          COALESCE(${profileRole}, ${userRole}, 'admin') AS role,
@@ -528,7 +539,7 @@ async function getLocalAuthUserById(userId) {
        FROM auth_users au
         ${profileJoin}
         ${userRolesJoin}
-       WHERE au.id = $1
+       WHERE au.id = $1${canMatchProfileId ? ' OR p.id = $1' : ''}
        LIMIT 1`,
       [userId]
     );
@@ -770,7 +781,15 @@ async function getUserPrimaryRole(userId, fallbackRole = 'editor') {
   try {
     await ensureAuthSupportTables();
     const { rows: roles } = await pool.query(
-      'SELECT role FROM user_roles WHERE user_id = $1 LIMIT 1',
+      `SELECT ur.role
+         FROM user_roles ur
+         LEFT JOIN profiles role_profile ON role_profile.id = ur.user_id
+         LEFT JOIN auth_users role_auth ON role_auth.id = ur.user_id
+         LEFT JOIN profiles current_profile ON current_profile.id = $1
+         LEFT JOIN auth_users current_auth ON current_auth.id = $1
+        WHERE ur.user_id = $1
+           OR lower(COALESCE(role_profile.email, role_auth.email, '')) = lower(COALESCE(current_profile.email, current_auth.email, ''))
+        LIMIT 1`,
       [userId]
     );
     return roles[0]?.role || fallbackRole || 'editor';
@@ -4325,6 +4344,10 @@ function cityScopeExpression(columnName = 'city') {
   return `replace(lower(coalesce(nullif(btrim(${safeColumn}), ''), 'minacu')), 'ç', 'c')`;
 }
 
+function cityScopeCondition(columnName = 'city', placeholder) {
+  return `${cityScopeExpression(columnName)} = ${placeholder}`;
+}
+
 // Resolve a cidade ativa do request: header x-pulse-city, validado contra user_cities.
 // Fallback: primary do usuário, ou 'minacu' se não houver registro.
 async function resolveActiveCity(req, userId, userObj = null) {
@@ -4940,7 +4963,7 @@ app.delete('/api/recordings/:id', async (req, res) => {
     // Mark linked scripts as not recorded
     await pool.query("UPDATE scripts SET recorded = false, updated_at = NOW() WHERE recording_id = $1", [id]);
     await pool.query(
-      `DELETE FROM recordings WHERE id = $1${scopeCity ? ' AND city = $2' : ''}`,
+      `DELETE FROM recordings WHERE id = $1${scopeCity ? ` AND ${cityScopeCondition('city', '$2')}` : ''}`,
       scopeCity ? [id, activeCity] : [id]
     );
     res.json({ success: true });
@@ -4953,7 +4976,7 @@ app.delete('/api/recordings/future/:clientId', async (req, res) => {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
     const today = new Date().toISOString().split('T')[0];
     const { rowCount } = await pool.query(
-      `DELETE FROM recordings WHERE client_id = $1 AND status = 'agendada' AND date >= $2${scopeCity ? ' AND city = $3' : ''}`,
+      `DELETE FROM recordings WHERE client_id = $1 AND status = 'agendada' AND date >= $2${scopeCity ? ` AND ${cityScopeCondition('city', '$3')}` : ''}`,
       scopeCity ? [req.params.clientId, today, activeCity] : [req.params.clientId, today]
     );
     res.json({ deleted: rowCount });
@@ -4965,7 +4988,7 @@ app.get('/api/kanban-tasks', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'kanban_tasks');
     const { rows } = await pool.query(
-      `SELECT * FROM kanban_tasks${scopeCity ? ' WHERE city = $1' : ''} ORDER BY created_at DESC`,
+      `SELECT * FROM kanban_tasks${scopeCity ? ` WHERE ${cityScopeCondition('city', '$1')}` : ''} ORDER BY created_at DESC`,
       scopeCity ? [activeCity] : []
     );
     res.json(rows);
@@ -5006,7 +5029,7 @@ app.put('/api/kanban-tasks/:id', async (req, res) => {
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     sets.push('updated_at = NOW()');
     vals.push(id);
-    const cityClause = scopeCity ? ` AND city = $${idx + 1}` : '';
+    const cityClause = scopeCity ? ` AND ${cityScopeCondition('city', `$${idx + 1}`)}` : '';
     if (scopeCity) vals.push(activeCity);
     const { rows } = await pool.query(`UPDATE kanban_tasks SET ${sets.join(', ')} WHERE id = $${idx}${cityClause} RETURNING *`, vals);
     res.json(rows[0]);
@@ -5017,7 +5040,7 @@ app.delete('/api/kanban-tasks/:id', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'kanban_tasks');
     await pool.query(
-      `DELETE FROM kanban_tasks WHERE id = $1${scopeCity ? ' AND city = $2' : ''}`,
+      `DELETE FROM kanban_tasks WHERE id = $1${scopeCity ? ` AND ${cityScopeCondition('city', '$2')}` : ''}`,
       scopeCity ? [req.params.id, activeCity] : [req.params.id]
     );
     res.json({ success: true });
@@ -5029,7 +5052,7 @@ app.get('/api/scripts', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'scripts');
     const { rows } = await pool.query(
-      `SELECT * FROM scripts${scopeCity ? ' WHERE city = $1' : ''} ORDER BY created_at DESC`,
+      `SELECT * FROM scripts${scopeCity ? ` WHERE ${cityScopeCondition('city', '$1')}` : ''} ORDER BY created_at DESC`,
       scopeCity ? [activeCity] : []
     );
     res.json(rows);
@@ -5076,7 +5099,7 @@ app.put('/api/scripts/:id', async (req, res) => {
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     sets.push('updated_at = NOW()');
     vals.push(id);
-    const cityClause = scopeCity ? ` AND city = $${idx + 1}` : '';
+    const cityClause = scopeCity ? ` AND ${cityScopeCondition('city', `$${idx + 1}`)}` : '';
     if (scopeCity) vals.push(activeCity);
     const { rows } = await pool.query(`UPDATE scripts SET ${sets.join(', ')} WHERE id = $${idx}${cityClause} RETURNING *`, vals);
     res.json(rows[0]);
@@ -5087,7 +5110,7 @@ app.delete('/api/scripts/:id', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'scripts');
     await pool.query(
-      `DELETE FROM scripts WHERE id = $1${scopeCity ? ' AND city = $2' : ''}`,
+      `DELETE FROM scripts WHERE id = $1${scopeCity ? ` AND ${cityScopeCondition('city', '$2')}` : ''}`,
       scopeCity ? [req.params.id, activeCity] : [req.params.id]
     );
     res.json({ success: true });
@@ -5124,7 +5147,7 @@ app.get('/api/active-recordings', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'active_recordings');
     const { rows } = await pool.query(
-      `SELECT * FROM active_recordings${scopeCity ? ' WHERE city = $1' : ''}`,
+      `SELECT * FROM active_recordings${scopeCity ? ` WHERE ${cityScopeCondition('city', '$1')}` : ''}`,
       scopeCity ? [activeCity] : []
     );
     res.json(rows);
@@ -5137,7 +5160,7 @@ app.post('/api/active-recordings', async (req, res) => {
     const r = req.body;
     // Remove existing for this recording
     await pool.query(
-      `DELETE FROM active_recordings WHERE recording_id = $1${scopeCity ? ' AND city = $2' : ''}`,
+      `DELETE FROM active_recordings WHERE recording_id = $1${scopeCity ? ` AND ${cityScopeCondition('city', '$2')}` : ''}`,
       scopeCity ? [r.recording_id, activeCity] : [r.recording_id]
     );
     const { rows } = await pool.query(

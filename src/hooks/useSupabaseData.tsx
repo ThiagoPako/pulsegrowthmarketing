@@ -6,6 +6,29 @@ import type { Client, Recording, KanbanTask, Script, CompanySettings, DayOfWeek,
 // ── Mappers: DB row ↔ App type ──
 
 function rowToClient(r: any): Client {
+  const normalizeDayOfWeek = (value: any, fallback: DayOfWeek): DayOfWeek => {
+    const normalized = String(value || '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace('terça', 'terca')
+      .replace('sabado', 'sabado') as DayOfWeek;
+
+    return ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'].includes(normalized)
+      ? normalized
+      : fallback;
+  };
+
+  const parseSelectedWeeks = (value: any): number[] => {
+    if (Array.isArray(value)) return value.map(Number).filter(Boolean);
+    if (typeof value === 'string') {
+      const weeks = value.replace(/[{}\[\]\s]/g, '').split(',').map(Number).filter(Boolean);
+      return weeks.length > 0 ? weeks : [1, 2, 3, 4];
+    }
+    return [1, 2, 3, 4];
+  };
+
   return {
     id: r.id,
     companyName: r.company_name,
@@ -13,12 +36,12 @@ function rowToClient(r: any): Client {
     phone: r.phone,
     color: r.color,
     logoUrl: r.logo_url || undefined,
-    fixedDay: r.fixed_day as DayOfWeek,
+    fixedDay: normalizeDayOfWeek(r.fixed_day, 'segunda'),
     fixedTime: r.fixed_time,
     videomaker: r.videomaker_id || '',
     backupTime: r.backup_time,
-    backupDay: r.backup_day as DayOfWeek,
-    extraDay: r.extra_day as DayOfWeek,
+    backupDay: normalizeDayOfWeek(r.backup_day, 'terca'),
+    extraDay: normalizeDayOfWeek(r.extra_day, 'quarta'),
     extraContentTypes: (r.extra_content_types || []) as ContentType[],
     acceptsExtra: r.accepts_extra,
     extraClientAppears: r.extra_client_appears,
@@ -43,7 +66,7 @@ function rowToClient(r: any): Client {
     editorial: r.editorial || '',
     fullShiftRecording: r.full_shift_recording || false,
     preferredShift: r.preferred_shift || 'manha',
-    selectedWeeks: r.selected_weeks || [1, 2, 3, 4],
+    selectedWeeks: parseSelectedWeeks(r.selected_weeks),
     artRequestsLimit: r.art_requests_limit ?? null,
     clientType: r.client_type || 'novo',
     proposalId: r.proposal_id || null,

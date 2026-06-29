@@ -1117,9 +1117,19 @@ export default function Schedule() {
 
   const [generatingAll, setGeneratingAll] = useState(false);
   const handleGenerateAllFixed = async () => {
-    const fixedClients = clients.filter(c => c.fixedDay && c.fixedTime && c.videomaker && c.status === 'ativo');
+    const fixedClients = clients.filter(c => c.fixedDay && c.status === 'ativo');
     if (fixedClients.length === 0) {
       toast.info('Nenhum cliente com agenda fixa configurada');
+      return;
+    }
+    const generationVideomakers = new Set([
+      ...videomakers.map(vm => vm.id),
+      ...recordings.map(recording => recording.videomakerId),
+      ...fixedClients.map(client => client.videomaker),
+    ].filter(Boolean));
+
+    if (generationVideomakers.size === 0) {
+      toast.error('Nenhum videomaker ativo encontrado para gerar as agendas fixas');
       return;
     }
     setGeneratingAll(true);

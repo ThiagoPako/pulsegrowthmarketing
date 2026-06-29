@@ -3810,6 +3810,14 @@ function assertValidCity(value, { field = 'city' } = {}) {
   return normalized;
 }
 
+function cityScopeExpression(columnName = 'city') {
+  const safeColumn = columnName
+    .split('.')
+    .map((part) => sanitizeIdentifier(part))
+    .join('.');
+  return `replace(lower(coalesce(nullif(btrim(${safeColumn}), ''), 'minacu')), 'ç', 'c')`;
+}
+
 // Resolve a cidade ativa do request: header x-pulse-city, validado contra user_cities.
 // Fallback: primary do usuário, ou 'minacu' se não houver registro.
 async function resolveActiveCity(req, userId, userObj = null) {
@@ -3969,7 +3977,7 @@ app.post('/api/db/query', async (req, res) => {
 
         // Multi-city: força filtro de cidade no SELECT
         if (scopeCity) {
-          query += (query.includes(' WHERE ') ? ' AND ' : ' WHERE ') + `${safeTable}.city = $${paramIdx}`;
+          query += (query.includes(' WHERE ') ? ' AND ' : ' WHERE ') + `${cityScopeExpression(`${safeTable}.city`)} = $${paramIdx}`;
           params.push(activeCity);
           paramIdx++;
         }
@@ -4043,7 +4051,7 @@ app.post('/api/db/query', async (req, res) => {
         }
         // Multi-city: impede UPDATE cruzado
         if (scopeCity) {
-          query += (query.includes(' WHERE ') ? ' AND ' : ' WHERE ') + `city = $${paramIdx}`;
+          query += (query.includes(' WHERE ') ? ' AND ' : ' WHERE ') + `${cityScopeExpression('city')} = $${paramIdx}`;
           params.push(activeCity);
           paramIdx++;
         }
@@ -4081,7 +4089,7 @@ app.post('/api/db/query', async (req, res) => {
         }
         // Multi-city: impede DELETE cruzado
         if (scopeCity) {
-          query += (query.includes(' WHERE ') ? ' AND ' : ' WHERE ') + `city = $${paramIdx}`;
+          query += (query.includes(' WHERE ') ? ' AND ' : ' WHERE ') + `${cityScopeExpression('city')} = $${paramIdx}`;
           params.push(activeCity);
           paramIdx++;
         }
@@ -4128,7 +4136,7 @@ app.get('/api/clients', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
     const { rows } = scopeCity
-      ? await pool.query('SELECT * FROM clients WHERE city = $1 ORDER BY company_name', [activeCity])
+      ? await pool.query(`SELECT * FROM clients WHERE ${cityScopeExpression('city')} = $1 ORDER BY company_name`, [activeCity])
       : await pool.query('SELECT * FROM clients ORDER BY company_name');
     res.json(rows);
   } catch (e) { res.status(e.message === 'Unauthorized' ? 401 : 500).json({ error: e.message }); }
@@ -4206,7 +4214,7 @@ app.put('/api/clients/:id', async (req, res) => {
     let whereSql = `WHERE id = $${idx}`;
     if (scopeCity) {
       vals.push(activeCity);
-      whereSql += ` AND city = $${idx + 1}`;
+      whereSql += ` AND ${cityScopeExpression('city')} = $${idx + 1}`;
     }
     const { rows } = await pool.query(`UPDATE clients SET ${sets.join(', ')} ${whereSql} RETURNING *`, vals);
     res.json(rows[0]);
@@ -4301,7 +4309,7 @@ app.get('/api/recordings', async (req, res) => {
           ELSE r.status
         END AS effective_status
       FROM recordings r
-      ${scopeCity ? 'WHERE r.city = $1' : ''}
+      ${scopeCity ? `WHERE ${cityScopeExpression('r.city')} = $1` : ''}
       ORDER BY r.date DESC, r.start_time ASC
     `, scopeCity ? [activeCity] : []);
 
@@ -4396,7 +4404,7 @@ app.put('/api/recordings/:id', async (req, res) => {
     }
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     vals.push(id);
-    const cityClause = scopeCity ? ` AND city = $${idx + 1}` : '';
+    const cityClause = scopeCity ? ` AND ${cityScopeExpression('city')} = $${idx + 1}` : '';
     if (scopeCity) vals.push(activeCity);
     const { rows } = await pool.query(`UPDATE recordings SET ${sets.join(', ')} WHERE id = $${idx}${cityClause} RETURNING *`, vals);
     res.json(rows[0]);

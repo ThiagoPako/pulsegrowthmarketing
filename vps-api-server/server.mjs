@@ -382,32 +382,6 @@ async function ensureAuthSupportTables() {
       CREATE INDEX IF NOT EXISTS idx_auth_users_email_lower ON auth_users (lower(email));
       CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles (user_id);
       CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles (role);
-
-      DO $$
-      DECLARE
-        role_udt TEXT;
-      BEGIN
-        SELECT udt_name INTO role_udt
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'user_roles'
-          AND column_name = 'role'
-        LIMIT 1;
-
-        IF role_udt = 'app_role' THEN
-          EXECUTE 'INSERT INTO user_roles (user_id, role)
-                   SELECT id, (COALESCE(NULLIF(role::text, ''''), ''editor''))::app_role
-                   FROM profiles
-                   WHERE id IS NOT NULL
-                   ON CONFLICT (user_id, role) DO NOTHING';
-        ELSE
-          EXECUTE 'INSERT INTO user_roles (user_id, role)
-                   SELECT id, COALESCE(NULLIF(role::text, ''''), ''editor'')
-                   FROM profiles
-                   WHERE id IS NOT NULL
-                   ON CONFLICT (user_id, role) DO NOTHING';
-        END IF;
-      END $$;
     `).catch((error) => {
       authSupportTablesPromise = null;
       throw error;

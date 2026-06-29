@@ -135,6 +135,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const BUFFER_BETWEEN_RECORDINGS = 30;
   const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
+  const LOWER_PRIORITY_TYPES_FOR_FIXED = new Set<RecordingType>(['extra', 'backup', 'secundaria']);
 
   const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType, clientId?: string) => {
     const newStart = timeToMinutes(startTime);
@@ -230,14 +231,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (activeFixedClients.length === 0) return 0;
 
     const generatedRecordings: Recording[] = [];
-    const monthRecordings = data.recordings.filter(r => r.date >= startDate && r.date <= endDate);
     const currentRecordings = [...data.recordings];
 
     for (const client of activeFixedClients) {
-      const clientMonthRecordings = monthRecordings.filter(r => r.clientId === client.id && r.status !== 'cancelada');
-      const needsFullShift = client.fullShiftRecording;
-      const expectedMinimum = needsFullShift ? 2 : 1;
-
       const newClientRecordings = generateFixedRecordings(client, currentRecordings, data.settings, {
         startDate,
         endDate,
@@ -253,11 +249,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         if (existingSameSlot) return false;
 
-        const existingClientRecsForDate = clientMonthRecordings.filter(existing =>
-          existing.date === newRecording.date && existing.status !== 'cancelada'
+        const existingFixedClientRecsForDate = currentRecordings.filter(existing =>
+          existing.clientId === newRecording.clientId &&
+          existing.date === newRecording.date &&
+          existing.type === 'fixa' &&
+          existing.status !== 'cancelada'
         );
 
-        return existingClientRecsForDate.length < expectedMinimum;
+        return client.fullShiftRecording ? existingFixedClientRecsForDate.length < 2 : existingFixedClientRecsForDate.length === 0;
       });
 
       generatedRecordings.push(...newClientRecordings);
@@ -266,8 +265,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     if (generatedRecordings.length > 0) {
       const durationWithBuffer = (data.settings.recordingDuration || 90) + BUFFER_BETWEEN_RECORDINGS;
-      const conflictingExtraIds = data.recordings
-        .filter(recording => recording.type === 'extra' && recording.status !== 'cancelada')
+      const conflictingLowerPriorityIds = data.recordings
+        .filter(recording => LOWER_PRIORITY_TYPES_FOR_FIXED.has(recording.type) && recording.status !== 'cancelada')
         .filter(extra => generatedRecordings.some(fixed => {
           if (extra.videomakerId !== fixed.videomakerId || extra.date !== fixed.date) return false;
           const extraStart = timeToMinutes(extra.startTime);
@@ -276,8 +275,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }))
         .map(recording => recording.id);
 
-      if (conflictingExtraIds.length > 0) {
-        await data.cancelRecordingsBulk(conflictingExtraIds);
+      if (conflictingLowerPriorityIds.length > 0) {
+        await data.cancelRecordingsBulk(conflictingLowerPriorityIds);
       }
 
       await data.addRecordingsBulk(generatedRecordings);

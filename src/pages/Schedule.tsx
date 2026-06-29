@@ -1116,6 +1116,10 @@ export default function Schedule() {
   };
 
   const [generatingAll, setGeneratingAll] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewRecordings, setPreviewRecordings] = useState<Recording[]>([]);
+  const [previewRange, setPreviewRange] = useState<{ start: string; end: string } | null>(null);
+
   const handleGenerateAllFixed = async () => {
     const fixedClients = clients.filter(c => c.fixedDay && c.status === 'ativo');
     if (fixedClients.length === 0) {
@@ -1132,16 +1136,27 @@ export default function Schedule() {
       toast.error('Nenhum videomaker ativo encontrado para gerar as agendas fixas');
       return;
     }
-    setGeneratingAll(true);
     const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
     const end = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
+    const preview = previewFixedSchedulesForMonth(fixedClients, start, end);
+    if (preview.length === 0) {
+      toast.info('Todas as agendas fixas deste mês já estão preenchidas');
+      return;
+    }
+    setPreviewRecordings(preview);
+    setPreviewRange({ start, end });
+    setPreviewOpen(true);
+  };
+
+  const handleConfirmGeneration = async () => {
+    setGeneratingAll(true);
     try {
-      const totalCreated = await generateFixedSchedulesForMonth(fixedClients, start, end);
+      const totalCreated = await commitFixedSchedules(previewRecordings);
       if (totalCreated > 0) {
         toast.success(`${totalCreated} gravação(ões) fixa(s) criada(s) para o mês completo`);
-      } else {
-        toast.info('Todas as agendas fixas deste mês já estão preenchidas');
       }
+      setPreviewOpen(false);
+      setPreviewRecordings([]);
     } catch (err) {
       console.error('Erro ao gerar agendas fixas:', err);
       toast.error('Erro ao gerar agendas fixas');
@@ -1149,6 +1164,23 @@ export default function Schedule() {
       setGeneratingAll(false);
     }
   };
+
+  const previewByClient = useMemo(() => {
+    const map = new Map<string, Recording[]>();
+    for (const rec of previewRecordings) {
+      const list = map.get(rec.clientId) || [];
+      list.push(rec);
+      map.set(rec.clientId, list);
+    }
+    return Array.from(map.entries())
+      .map(([clientId, recs]) => ({
+        clientId,
+        clientName: clients.find(c => c.id === clientId)?.companyName || 'Cliente',
+        recordings: recs.sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime)),
+      }))
+      .sort((a, b) => a.clientName.localeCompare(b.clientName));
+  }, [previewRecordings, clients]);
+
 
   const today = new Date();
 

@@ -37,12 +37,9 @@ function parseDateKey(dateKey: string): Date {
 function shouldUseSelectedWeeks(selectedWeeks: number[] | undefined, fillCompleteMonth?: boolean): boolean {
   if (!selectedWeeks || selectedWeeks.length === 0) return false;
 
-  // Clientes antigos costumam vir com [1,2,3,4] como padrão. Para gerar o mês
-  // completo, esse padrão não pode bloquear a 5ª ocorrência em meses de 29-31 dias.
-  if (fillCompleteMonth) {
-    const hasDefaultFourWeeks = [1, 2, 3, 4].every(week => selectedWeeks.includes(week));
-    if (hasDefaultFourWeeks) return false;
-  }
+  // No botão de gerar mês fixo, a intenção operacional é preencher o mês inteiro:
+  // 28, 29, 30 ou 31 dias, incluindo a 5ª ocorrência do dia fixo quando existir.
+  if (fillCompleteMonth) return false;
 
   return true;
 }

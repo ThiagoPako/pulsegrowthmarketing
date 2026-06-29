@@ -590,7 +590,7 @@ async function getAuthProfileById(userId) {
     try {
       const { rows } = await pool.query(
         `SELECT id,
-                ${profileColumns.has('name') ? 'name' : `split_part(email, '@', 1) AS name`},
+                ${profileColumns.has('name') ? 'name' : profileColumns.has('email') ? `split_part(email, '@', 1) AS name` : 'NULL::text AS name'},
                 ${profileColumns.has('email') ? 'email' : 'NULL::text AS email'},
                 ${profileColumns.has('role') ? 'role::text AS role' : `'editor'::text AS role`},
                 ${profileColumns.has('avatar_url') ? 'avatar_url' : 'NULL::text AS avatar_url'},
@@ -628,6 +628,9 @@ async function getAuthProfileById(userId) {
     }
 
     await ensureAuthSupportTables();
+    const authJoinCondition = profileColumns.has('email')
+      ? 'au.id = p.id OR lower(au.email) = lower(p.email)'
+      : 'au.id = p.id';
     const { rows } = await pool.query(
       `SELECT p.id,
               ${profileColumns.has('name') ? 'p.name' : profileColumns.has('email') ? `split_part(p.email, '@', 1) AS name` : 'NULL::text AS name'},
@@ -639,7 +642,7 @@ async function getAuthProfileById(userId) {
               au.password_hash
        FROM profiles p
        LEFT JOIN auth_users au
-         ON au.id = p.id OR lower(au.email) = lower(p.email)
+         ON ${authJoinCondition}
        WHERE p.id = $1
        LIMIT 1`,
       [userId]

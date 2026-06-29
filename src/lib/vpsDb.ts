@@ -647,7 +647,7 @@ export const supabase = {
         if (!response.ok) {
           const message = payload && typeof payload === 'object' && 'error' in payload
             ? String(payload.error)
-            : response.status === 502 || !contentType.includes('application/json')
+            : response.status >= 500 || !contentType.includes('application/json')
               ? 'Servidor de autenticação indisponível no momento.'
               : 'Login failed';
           return { data: null, error: { message } };

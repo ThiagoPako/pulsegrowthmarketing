@@ -1181,6 +1181,49 @@ export default function Schedule() {
       .sort((a, b) => a.clientName.localeCompare(b.clientName));
   }, [previewRecordings, clients]);
 
+  const previewConflicts = useMemo(() => {
+    const duration = (settings.recordingDuration || 90) + 30; // buffer
+    const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+    const vmName = (id: string) => users.find(u => u.id === id)?.name || 'Videomaker';
+    const cliName = (id: string) => clients.find(c => c.id === id)?.companyName || 'Cliente';
+    const conflicts: { videomakerName: string; date: string; a: Recording; b: Recording; kind: 'novo-vs-novo' | 'novo-vs-existente' }[] = [];
+
+    const overlaps = (aTime: string, bTime: string) => {
+      const aS = toMin(aTime), bS = toMin(bTime);
+      return aS < bS + duration && bS < aS + duration;
+    };
+
+    // novo vs novo
+    for (let i = 0; i < previewRecordings.length; i++) {
+      for (let j = i + 1; j < previewRecordings.length; j++) {
+        const a = previewRecordings[i], b = previewRecordings[j];
+        if (a.videomakerId === b.videomakerId && a.date === b.date && overlaps(a.startTime, b.startTime)) {
+          conflicts.push({ videomakerName: vmName(a.videomakerId), date: a.date, a, b, kind: 'novo-vs-novo' });
+        }
+      }
+    }
+
+    // novo vs existente (ignora canceladas e tipos de menor prioridade que serão removidos)
+    const lower = new Set(['extra', 'backup', 'secundaria']);
+    for (const novo of previewRecordings) {
+      for (const exist of recordings) {
+        if (exist.status === 'cancelada') continue;
+        if (lower.has(exist.type)) continue;
+        if (exist.videomakerId !== novo.videomakerId || exist.date !== novo.date) continue;
+        if (overlaps(novo.startTime, exist.startTime)) {
+          conflicts.push({ videomakerName: vmName(novo.videomakerId), date: novo.date, a: novo, b: exist, kind: 'novo-vs-existente' });
+        }
+      }
+    }
+
+    return conflicts.map(c => ({
+      ...c,
+      aLabel: `${cliName(c.a.clientId)} ${c.a.startTime}`,
+      bLabel: `${cliName(c.b.clientId)} ${c.b.startTime}${c.kind === 'novo-vs-existente' ? ` (${c.b.type})` : ''}`,
+    }));
+  }, [previewRecordings, recordings, users, clients, settings]);
+
+
 
   const today = new Date();
 
@@ -2513,6 +2556,26 @@ export default function Schedule() {
               {previewRange ? `${format(new Date(previewRange.start + 'T12:00:00'), "MMMM 'de' yyyy", { locale: ptBR })}` : 'o mês'}.
               Revise antes de confirmar.
             </p>
+            {previewConflicts.length > 0 && (
+              <div className="border border-destructive/50 bg-destructive/10 rounded-md p-3 space-y-2">
+                <div className="flex items-center gap-2 text-destructive font-medium text-sm">
+                  <AlertTriangle size={16} />
+                  {previewConflicts.length} conflito(s) de horário detectado(s)
+                </div>
+                <div className="max-h-40 overflow-y-auto space-y-1 text-xs text-foreground">
+                  {previewConflicts.map((c, i) => (
+                    <div key={i} className="flex flex-wrap gap-1 items-center">
+                      <Badge variant="outline" className="text-[10px]">{c.videomakerName}</Badge>
+                      <span className="text-muted-foreground">{format(new Date(c.date + 'T12:00:00'), 'dd/MM', { locale: ptBR })}:</span>
+                      <span>{c.aLabel}</span>
+                      <span className="text-muted-foreground">×</span>
+                      <span>{c.bLabel}</span>
+                      <Badge variant="secondary" className="text-[10px]">{c.kind === 'novo-vs-novo' ? 'novo×novo' : 'novo×existente'}</Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="max-h-[50vh] overflow-y-auto border rounded-md divide-y">
               {previewByClient.map(group => (
                 <div key={group.clientId} className="p-3">

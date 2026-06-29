@@ -571,6 +571,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addRecording, updateRecording, cancelRecording, deleteRecording,
       deleteRecordingsBulk: data.deleteRecordingsBulk, cancelRecordingsBulk: data.cancelRecordingsBulk,
       cancelAndReschedule, generateScheduleForClient, regenerateScheduleForClient, generateFixedSchedulesForMonth,
+      previewFixedSchedulesForMonth, commitFixedSchedules,
       autoFillVacanciesForDate, organizeSchedule,
 
       addTask, updateTask, deleteTask,

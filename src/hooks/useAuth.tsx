@@ -34,6 +34,22 @@ export interface Profile {
   font_scale?: string;
 }
 
+interface VpsAuthUser {
+  id: string;
+  email: string;
+  name?: string;
+  role?: AppRole;
+  avatar_url?: string;
+  job_title?: string;
+}
+
+interface VpsAuthPayload {
+  token?: string;
+  user?: VpsAuthUser;
+  id?: string;
+  email?: string;
+}
+
 interface AuthContextType {
   user: { id: string; email: string } | null;
   profile: Profile | null;
@@ -56,6 +72,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<{ access_token: string } | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const refreshVpsSession = useCallback(async (token: string): Promise<VpsAuthPayload | null> => {
+    try {
+      const response = await fetch(`${VPS_API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const payload = await response.json().catch(() => null) as VpsAuthPayload | null;
+      if (!response.ok || !payload?.token) return null;
+
+      localStorage.setItem(TOKEN_KEY, payload.token);
+      return payload;
+    } catch (error) {
+      console.warn('refreshVpsSession failed:', error);
+      return null;
+    }
+  }, []);
 
   const fetchProfile = useCallback(async (userId: string) => {
     const hasVpsToken = typeof window !== 'undefined' && !!localStorage.getItem(TOKEN_KEY);
@@ -137,22 +174,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY);
     if (token) {
-      // Validate token via /api/auth/me
-      fetch(`${VPS_API_BASE}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then(res => res.ok ? res.json() : Promise.reject())
-        .then(data => {
-          const userData = data.user || data;
+      let cancelled = false;
+
+      async function restoreVpsSession() {
+        try {
+          const response = await fetch(`${VPS_API_BASE}/auth/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          let activeToken = token;
+          let data: VpsAuthPayload | VpsAuthUser | null = response.ok
+            ? await response.json().catch(() => null)
+            : null;
+
+          if (!response.ok || !data) {
+            const refreshed = await refreshVpsSession(token);
+            if (!refreshed?.token) throw new Error('Session expired');
+            activeToken = refreshed.token;
+            data = refreshed;
+          }
+
+          if (cancelled) return;
+          const userData = 'user' in data && data.user ? data.user : data;
+          if (!userData?.id || !userData?.email) throw new Error('Invalid auth payload');
           const u = { id: userData.id, email: userData.email };
           setUser(u);
-          setSession({ access_token: token });
+          setSession({ access_token: activeToken });
           fetchProfile(u.id);
-        })
-        .catch(() => {
+        } catch {
+          if (cancelled) return;
           localStorage.removeItem(TOKEN_KEY);
-        })
-        .finally(() => setLoading(false));
+          setUser(null);
+          setProfile(null);
+          setSession(null);
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      }
+
+      restoreVpsSession();
+      return () => { cancelled = true; };
     } else {
       // Check Supabase session as fallback (preview environment)
       supabaseReal.auth.getSession().then(({ data: { session } }) => {
@@ -165,7 +226,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       });
     }
-  }, [fetchProfile]);
+  }, [fetchProfile, refreshVpsSession]);
+
+  useEffect(() => {
+    const handleTokenRefresh = (event: Event) => {
+      const token = (event as CustomEvent<{ token?: string }>).detail?.token;
+      if (token) setSession({ access_token: token });
+    };
+
+    window.addEventListener('pulse:auth-token-refreshed', handleTokenRefresh);
+    return () => window.removeEventListener('pulse:auth-token-refreshed', handleTokenRefresh);
+  }, []);
 
   const signIn = async (email: string, password: string) => {
     try {

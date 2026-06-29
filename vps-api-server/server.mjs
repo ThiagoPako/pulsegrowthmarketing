@@ -268,9 +268,9 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30d';
 const JWT_REFRESH_GRACE_SECONDS = Number(process.env.JWT_REFRESH_GRACE_SECONDS || 60 * 60 * 24 * 14);
 
 // ─── Supabase clients (transitional — will be removed later) ──
-const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 function getAdminClient() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
@@ -279,9 +279,10 @@ function getAdminClient() {
 
 function getUserClient(authHeader) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  });
+  const options = authHeader
+    ? { global: { headers: { Authorization: authHeader } } }
+    : undefined;
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, options);
 }
 
 // ─── Auth helpers (JWT-based) ───────────────────────────────
@@ -472,7 +473,7 @@ async function getLocalAuthUserByEmail(email) {
        LIMIT 1`,
       [normalizedEmail]
     );
-    return rows[0] || await getLocalAuthUserById(userId);
+    return rows[0] || null;
   } catch (error) {
     console.error('Local auth lookup with profile join failed:', error?.message || error);
 

@@ -41,6 +41,8 @@ interface AppContextType {
   generateScheduleForClient: (client: Client, options?: FixedScheduleGenerationOptions) => Promise<number>;
   regenerateScheduleForClient: (client: Client, options?: FixedScheduleGenerationOptions) => Promise<{ deleted: number; created: number }>;
   generateFixedSchedulesForMonth: (clientsToGenerate: Client[], startDate: string, endDate: string) => Promise<number>;
+  previewFixedSchedulesForMonth: (clientsToGenerate: Client[], startDate: string, endDate: string) => Recording[];
+  commitFixedSchedules: (recordings: Recording[]) => Promise<number>;
   autoFillVacanciesForDate: (date: string) => Promise<number>;
   organizeSchedule: (startDate: string, endDate: string) => Promise<{ updated: number; cancelled: number }>;
 

@@ -782,53 +782,74 @@ async function getUserPrimaryRole(userId, fallbackRole = 'editor') {
 
 async function storeUserPassword(userId, rawPassword) {
   const hash = await bcrypt.hash(rawPassword, 12);
-
-  if (await hasProfilesPasswordHashColumn().catch(() => false)) {
-    await pool.query(
-      'UPDATE profiles SET password_hash = $1, updated_at = NOW() WHERE id = $2',
-      [hash, userId]
-    );
-    return;
-  }
-
   await ensureAuthSupportTables();
 
-  const { rows } = await pool.query(
-    'SELECT id, email FROM profiles WHERE id = $1 LIMIT 1',
-    [userId]
-  );
-  const profile = rows[0];
-  if (!profile) throw new Error('Perfil não encontrado');
+  const profileColumns = await getExistingColumns('profiles').catch(() => new Set());
+  const hasProfilesTable = profileColumns.has('id');
+  const hasProfileEmail = profileColumns.has('email');
+  let profile = null;
+
+  if (hasProfilesTable && hasProfileEmail) {
+    const { rows } = await pool.query(
+      'SELECT id, email FROM profiles WHERE id = $1 LIMIT 1',
+      [userId]
+    );
+    profile = rows[0] || null;
+  }
+
+  if (hasProfilesTable && profileColumns.has('password_hash')) {
+    const updatedAtSet = profileColumns.has('updated_at') ? ', updated_at = NOW()' : '';
+    await pool.query(
+      `UPDATE profiles SET password_hash = $1${updatedAtSet} WHERE id = $2`,
+      [hash, userId]
+    );
+  }
+
+  if (!profile) {
+    const { rows } = await pool.query(
+      'SELECT id, email FROM auth_users WHERE id = $1 LIMIT 1',
+      [userId]
+    );
+    profile = rows[0] || null;
+  }
+
+  if (!profile?.email) throw new Error('Perfil não encontrado');
 
   const normalizedEmail = profile.email.toLowerCase().trim();
-  const { rows: existingAuthUsers } = await pool.query(
-    'SELECT id FROM auth_users WHERE lower(email) = lower($1) LIMIT 1',
-    [normalizedEmail]
+  const { rowCount } = await pool.query(
+    'UPDATE auth_users SET password_hash = $1, updated_at = NOW() WHERE id = $2 OR lower(email) = lower($3)',
+    [hash, userId, normalizedEmail]
   );
 
-  if (existingAuthUsers.length > 0) {
+  if (rowCount === 0) {
     await pool.query(
-      'UPDATE auth_users SET password_hash = $1, updated_at = NOW() WHERE lower(email) = lower($2)',
-      [hash, normalizedEmail]
+      `INSERT INTO auth_users (id, email, password_hash)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (email) DO UPDATE
+       SET password_hash = EXCLUDED.password_hash,
+           updated_at = NOW()`,
+      [profile.id || userId, normalizedEmail, hash]
     );
-    return;
   }
-
-  await pool.query(
-    'INSERT INTO auth_users (id, email, password_hash) VALUES ($1, $2, $3)',
-    [profile.id, normalizedEmail, hash]
-  );
 }
 
-async function verifyStoredPassword(rawPassword, passwordHash) {
-  if (!passwordHash) return false;
+async function verifyStoredPassword(rawPassword, ...passwordHashes) {
+  const uniqueHashes = [...new Set(
+    passwordHashes
+      .filter((hash) => typeof hash === 'string')
+      .map((hash) => hash.trim())
+      .filter(Boolean)
+  )];
 
-  try {
-    return await bcrypt.compare(rawPassword, passwordHash);
-  } catch (error) {
-    console.error('Password hash verification failed:', error?.message || error);
-    return false;
+  for (const passwordHash of uniqueHashes) {
+    try {
+      if (await bcrypt.compare(rawPassword, passwordHash)) return true;
+    } catch (error) {
+      console.error('Password hash verification failed:', error?.message || error);
+    }
   }
+
+  return false;
 }
 
 async function authenticateWithLegacyAuth(email, password) {

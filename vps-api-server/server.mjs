@@ -17,6 +17,7 @@ import { createClient } from '@supabase/supabase-js';
 import pg from 'pg';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 // Keep DATE columns as YYYY-MM-DD strings. Converting them to JS Date objects
 // shifts calendar-only values one day back in Brazilian timezones when JSON-serialized.
@@ -359,6 +360,36 @@ async function verifyAdmin(req) {
 let profilesPasswordHashColumnPromise;
 
 let authSupportTablesPromise;
+const tableColumnsPromiseCache = new Map();
+
+async function getExistingColumns(tableName) {
+  const normalizedTable = String(tableName || '').trim();
+  if (!normalizedTable) return new Set();
+
+  if (!tableColumnsPromiseCache.has(normalizedTable)) {
+    tableColumnsPromiseCache.set(
+      normalizedTable,
+      pool.query(
+        `SELECT column_name
+           FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = $1`,
+        [normalizedTable]
+      )
+        .then(({ rows }) => new Set(rows.map((row) => row.column_name)))
+        .catch((error) => {
+          tableColumnsPromiseCache.delete(normalizedTable);
+          throw error;
+        })
+    );
+  }
+
+  return tableColumnsPromiseCache.get(normalizedTable);
+}
+
+function selectColumn(columns, columnName, fallbackSql = `NULL::text`) {
+  return columns.has(columnName) ? columnName : `${fallbackSql} AS ${columnName}`;
+}
 
 async function ensureAuthSupportTables() {
   if (!authSupportTablesPromise) {
@@ -396,21 +427,38 @@ async function getLocalAuthUserByEmail(email) {
 
   try {
     await ensureAuthSupportTables();
+    const profileColumns = await getExistingColumns('profiles').catch(() => new Set());
+    const hasProfilesTable = profileColumns.size > 0;
+    const profileName = hasProfilesTable && profileColumns.has('name') ? 'p.name' : 'NULL::text';
+    const profileEmail = hasProfilesTable && profileColumns.has('email') ? 'p.email' : 'NULL::text';
+    const profileRole = hasProfilesTable && profileColumns.has('role') ? 'p.role::text' : 'NULL::text';
+    const profileAvatar = hasProfilesTable && profileColumns.has('avatar_url') ? 'p.avatar_url' : 'NULL::text';
+    const profileDisplayName = hasProfilesTable && profileColumns.has('display_name') ? 'p.display_name' : 'NULL::text';
+    const profileJobTitle = hasProfilesTable && profileColumns.has('job_title') ? 'p.job_title' : 'NULL::text';
+    const profileJoin = hasProfilesTable && profileColumns.has('id') && profileColumns.has('email')
+      ? 'LEFT JOIN profiles p ON p.id = au.id OR lower(p.email) = lower(au.email)'
+      : hasProfilesTable && profileColumns.has('id')
+        ? 'LEFT JOIN profiles p ON p.id = au.id'
+        : '';
+    const userRolesColumns = await getExistingColumns('user_roles').catch(() => new Set());
+    const userRolesJoin = userRolesColumns.has('user_id') && userRolesColumns.has('role')
+      ? 'LEFT JOIN user_roles ur ON ur.user_id = au.id'
+      : '';
+    const userRole = userRolesJoin ? 'ur.role::text' : 'NULL::text';
+
     const { rows } = await pool.query(
       `SELECT
          au.id,
-         COALESCE(p.name, split_part(au.email, '@', 1)) AS name,
+         COALESCE(${profileName}, split_part(au.email, '@', 1)) AS name,
          au.email,
-         COALESCE(p.role::text, ur.role::text, 'admin') AS role,
-         p.avatar_url,
-         p.display_name,
-         p.job_title,
+         COALESCE(${profileRole}, ${userRole}, 'admin') AS role,
+         ${profileAvatar} AS avatar_url,
+         ${profileDisplayName} AS display_name,
+         ${profileJobTitle} AS job_title,
          au.password_hash
        FROM auth_users au
-       LEFT JOIN profiles p
-         ON p.id = au.id OR lower(p.email) = lower(au.email)
-       LEFT JOIN user_roles ur
-         ON ur.user_id = au.id
+        ${profileJoin}
+        ${userRolesJoin}
        WHERE lower(au.email) = lower($1)
        LIMIT 1`,
       [normalizedEmail]
@@ -466,11 +514,23 @@ async function hasProfilesPasswordHashColumn() {
 
 async function getAuthProfileByEmail(email) {
   const normalizedEmail = email.toLowerCase().trim();
+  const profileColumns = await getExistingColumns('profiles').catch(() => new Set());
+  const hasProfilesTable = profileColumns.size > 0;
+  const profileSelect = [
+    profileColumns.has('id') ? 'id' : 'NULL::uuid AS id',
+    selectColumn(profileColumns, 'name', `split_part(email, '@', 1)`),
+    selectColumn(profileColumns, 'email'),
+    profileColumns.has('role') ? 'role::text AS role' : `'editor'::text AS role`,
+    selectColumn(profileColumns, 'avatar_url'),
+    selectColumn(profileColumns, 'display_name'),
+    selectColumn(profileColumns, 'job_title'),
+    profileColumns.has('password_hash') ? 'password_hash' : 'NULL::text AS password_hash',
+  ].join(', ');
 
-  if (await hasProfilesPasswordHashColumn().catch(() => false)) {
+  if (hasProfilesTable && profileColumns.has('email') && profileColumns.has('password_hash')) {
     try {
       const { rows } = await pool.query(
-        'SELECT id, name, email, role, avatar_url, display_name, job_title, password_hash FROM profiles WHERE lower(email) = lower($1) LIMIT 1',
+        `SELECT ${profileSelect} FROM profiles WHERE lower(email) = lower($1) LIMIT 1`,
         [normalizedEmail]
       );
       return rows[0] || await getLocalAuthUserByEmail(normalizedEmail);
@@ -481,9 +541,20 @@ async function getAuthProfileByEmail(email) {
   }
 
   try {
+    if (!hasProfilesTable || !profileColumns.has('email') || !profileColumns.has('id')) {
+      return getLocalAuthUserByEmail(normalizedEmail);
+    }
+
     await ensureAuthSupportTables();
     const { rows } = await pool.query(
-      `SELECT p.id, p.name, p.email, p.role, p.avatar_url, p.display_name, p.job_title, au.password_hash
+      `SELECT p.id,
+              ${profileColumns.has('name') ? 'p.name' : `split_part(p.email, '@', 1) AS name`},
+              p.email,
+              ${profileColumns.has('role') ? 'p.role::text AS role' : `'editor'::text AS role`},
+              ${profileColumns.has('avatar_url') ? 'p.avatar_url' : 'NULL::text AS avatar_url'},
+              ${profileColumns.has('display_name') ? 'p.display_name' : 'NULL::text AS display_name'},
+              ${profileColumns.has('job_title') ? 'p.job_title' : 'NULL::text AS job_title'},
+              au.password_hash
        FROM profiles p
        LEFT JOIN auth_users au
          ON au.id = p.id OR lower(au.email) = lower(p.email)
@@ -497,7 +568,7 @@ async function getAuthProfileByEmail(email) {
     console.error('Auth support lookup failed, falling back to profiles only:', error?.message || error);
     try {
       const { rows } = await pool.query(
-        `SELECT id, name, email, role, avatar_url, display_name, job_title, NULL::text AS password_hash
+        `SELECT ${profileSelect}
          FROM profiles
          WHERE lower(email) = lower($1)
          LIMIT 1`,
@@ -512,21 +583,66 @@ async function getAuthProfileByEmail(email) {
 }
 
 async function getAuthProfileById(userId) {
-  if (await hasProfilesPasswordHashColumn().catch(() => false)) {
-    const { rows } = await pool.query(
-      'SELECT id, name, email, role, avatar_url, display_name, job_title, password_hash FROM profiles WHERE id = $1 LIMIT 1',
-      [userId]
-    );
-    return rows[0] || null;
+  const profileColumns = await getExistingColumns('profiles').catch(() => new Set());
+  const hasProfilesTable = profileColumns.size > 0;
+
+  if (hasProfilesTable && profileColumns.has('id') && profileColumns.has('password_hash')) {
+    try {
+      const { rows } = await pool.query(
+        `SELECT id,
+                ${profileColumns.has('name') ? 'name' : profileColumns.has('email') ? `split_part(email, '@', 1) AS name` : 'NULL::text AS name'},
+                ${profileColumns.has('email') ? 'email' : 'NULL::text AS email'},
+                ${profileColumns.has('role') ? 'role::text AS role' : `'editor'::text AS role`},
+                ${profileColumns.has('avatar_url') ? 'avatar_url' : 'NULL::text AS avatar_url'},
+                ${profileColumns.has('display_name') ? 'display_name' : 'NULL::text AS display_name'},
+                ${profileColumns.has('job_title') ? 'job_title' : 'NULL::text AS job_title'},
+                password_hash
+           FROM profiles
+          WHERE id = $1
+          LIMIT 1`,
+        [userId]
+      );
+      return rows[0] || null;
+    } catch (error) {
+      console.error('Profile auth lookup by id failed, using auth_users fallback:', error?.message || error);
+    }
   }
 
   try {
+    if (!hasProfilesTable || !profileColumns.has('id')) {
+      const { rows } = await pool.query(
+        `SELECT id,
+                split_part(email, '@', 1) AS name,
+                email,
+                'admin'::text AS role,
+                NULL::text AS avatar_url,
+                split_part(email, '@', 1) AS display_name,
+                NULL::text AS job_title,
+                password_hash
+           FROM auth_users
+          WHERE id = $1
+          LIMIT 1`,
+        [userId]
+      );
+      return rows[0] || null;
+    }
+
     await ensureAuthSupportTables();
+    const authJoinCondition = profileColumns.has('email')
+      ? 'au.id = p.id OR lower(au.email) = lower(p.email)'
+      : 'au.id = p.id';
     const { rows } = await pool.query(
-      `SELECT p.id, p.name, p.email, p.role, p.avatar_url, p.display_name, p.job_title, au.password_hash
+      `SELECT p.id,
+              ${profileColumns.has('name') ? 'p.name' : profileColumns.has('email') ? `split_part(p.email, '@', 1) AS name` : 'NULL::text AS name'},
+              ${profileColumns.has('email') ? 'p.email' : 'au.email'},
+              ${profileColumns.has('role') ? 'p.role::text AS role' : `'editor'::text AS role`},
+              ${profileColumns.has('avatar_url') ? 'p.avatar_url' : 'NULL::text AS avatar_url'},
+              ${profileColumns.has('display_name') ? 'p.display_name' : 'NULL::text AS display_name'},
+              ${profileColumns.has('job_title') ? 'p.job_title' : 'NULL::text AS job_title'},
+              au.password_hash
        FROM profiles p
        LEFT JOIN auth_users au
-         ON au.id = p.id OR lower(au.email) = lower(p.email)
+         ON ${authJoinCondition}
        WHERE p.id = $1
        LIMIT 1`,
       [userId]
@@ -535,8 +651,16 @@ async function getAuthProfileById(userId) {
     return rows[0] || null;
   } catch (error) {
     console.error('Auth support lookup by id failed, falling back to profiles only:', error?.message || error);
+    if (!hasProfilesTable || !profileColumns.has('id')) return null;
     const { rows } = await pool.query(
-      `SELECT id, name, email, role, avatar_url, display_name, job_title, NULL::text AS password_hash
+      `SELECT id,
+              ${profileColumns.has('name') ? 'name' : profileColumns.has('email') ? `split_part(email, '@', 1) AS name` : 'NULL::text AS name'},
+              ${profileColumns.has('email') ? 'email' : 'NULL::text AS email'},
+              ${profileColumns.has('role') ? 'role::text AS role' : `'editor'::text AS role`},
+              ${profileColumns.has('avatar_url') ? 'avatar_url' : 'NULL::text AS avatar_url'},
+              ${profileColumns.has('display_name') ? 'display_name' : 'NULL::text AS display_name'},
+              ${profileColumns.has('job_title') ? 'job_title' : 'NULL::text AS job_title'},
+              NULL::text AS password_hash
        FROM profiles
        WHERE id = $1
        LIMIT 1`,
@@ -713,10 +837,42 @@ app.get('/api/auth/me', async (req, res) => {
   try {
     await ensureAuthSupportTables();
     const { user } = await verifyUser(req);
-    const { rows } = await pool.query(
-      'SELECT p.id, p.name, p.email, p.avatar_url, p.display_name, p.job_title, p.bio, p.birthday, COALESCE(ur.role::text, p.role::text, $2) AS role FROM profiles p LEFT JOIN user_roles ur ON ur.user_id = p.id WHERE p.id = $1 LIMIT 1',
-      [user.id, user.role || 'editor']
-    );
+    const profileColumns = await getExistingColumns('profiles').catch(() => new Set());
+    const roleColumns = await getExistingColumns('user_roles').catch(() => new Set());
+    const profileSelect = profileColumns.has('id')
+      ? `SELECT p.id,
+                ${profileColumns.has('name') ? 'p.name' : profileColumns.has('email') ? `split_part(p.email, '@', 1) AS name` : 'NULL::text AS name'},
+                ${profileColumns.has('email') ? 'p.email' : '$3::text AS email'},
+                ${profileColumns.has('avatar_url') ? 'p.avatar_url' : 'NULL::text AS avatar_url'},
+                ${profileColumns.has('display_name') ? 'p.display_name' : 'NULL::text AS display_name'},
+                ${profileColumns.has('job_title') ? 'p.job_title' : 'NULL::text AS job_title'},
+                ${profileColumns.has('bio') ? 'p.bio' : 'NULL::text AS bio'},
+                ${profileColumns.has('birthday') ? 'p.birthday' : 'NULL::date AS birthday'},
+                COALESCE(${roleColumns.has('role') ? 'ur.role::text' : 'NULL::text'}, ${profileColumns.has('role') ? 'p.role::text' : 'NULL::text'}, $2) AS role
+           FROM profiles p
+           ${roleColumns.has('user_id') && roleColumns.has('role') ? 'LEFT JOIN user_roles ur ON ur.user_id = p.id' : ''}
+          WHERE p.id = $1
+          LIMIT 1`
+      : null;
+    const { rows } = profileSelect
+      ? await pool.query(profileSelect, [user.id, user.role || 'editor', user.email || ''])
+      : { rows: [] };
+
+    if (rows.length === 0) {
+      const fallback = await getAuthProfileById(user.id);
+      if (fallback) {
+        return res.json({
+          id: fallback.id,
+          email: fallback.email,
+          name: fallback.display_name || fallback.name,
+          role: fallback.role || user.role || 'editor',
+          avatar_url: fallback.avatar_url,
+          job_title: fallback.job_title,
+          bio: fallback.bio,
+          birthday: fallback.birthday,
+        });
+      }
+    }
     if (rows.length === 0) return res.status(404).json({ error: 'Perfil não encontrado' });
 
     const profile = rows[0];
@@ -3104,7 +3260,6 @@ import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
 import { Readable } from 'stream';
 
 const execFileAsync = promisify(execFile);

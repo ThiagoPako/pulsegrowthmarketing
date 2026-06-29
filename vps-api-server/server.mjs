@@ -319,8 +319,16 @@ async function verifyUser(req) {
   try {
     // Try JWT first (new system)
     const decoded = verifyToken(token);
+    const profile = await getAuthProfileById(decoded.sub).catch(() => null);
+    const role = profile
+      ? await getUserPrimaryRole(profile.id, profile.role || decoded.role || 'editor')
+      : decoded.role;
     return {
-      user: { id: decoded.sub, email: decoded.email, role: decoded.role },
+      user: {
+        id: profile?.id || decoded.sub,
+        email: profile?.email || decoded.email,
+        role,
+      },
       userClient: getUserClient(authHeader),
     };
   } catch {

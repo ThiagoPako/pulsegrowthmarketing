@@ -96,7 +96,7 @@ export default function Schedule() {
   const {
     clients, users, recordings, scripts, settings, activeRecordings,
     currentUser, updateScript, addRecording, updateRecording, cancelRecording, deleteRecording, cancelAndReschedule,
-    regenerateScheduleForClient, generateFixedSchedulesForMonth, autoFillVacanciesForDate, organizeSchedule, startActiveRecording, stopActiveRecording,
+    regenerateScheduleForClient, generateFixedSchedulesForMonth, previewFixedSchedulesForMonth, commitFixedSchedules, autoFillVacanciesForDate, organizeSchedule, startActiveRecording, stopActiveRecording,
     hasConflict, isWithinWorkHours,
 
 
@@ -1116,6 +1116,10 @@ export default function Schedule() {
   };
 
   const [generatingAll, setGeneratingAll] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewRecordings, setPreviewRecordings] = useState<Recording[]>([]);
+  const [previewRange, setPreviewRange] = useState<{ start: string; end: string } | null>(null);
+
   const handleGenerateAllFixed = async () => {
     const fixedClients = clients.filter(c => c.fixedDay && c.status === 'ativo');
     if (fixedClients.length === 0) {
@@ -1132,16 +1136,27 @@ export default function Schedule() {
       toast.error('Nenhum videomaker ativo encontrado para gerar as agendas fixas');
       return;
     }
-    setGeneratingAll(true);
     const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
     const end = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
+    const preview = previewFixedSchedulesForMonth(fixedClients, start, end);
+    if (preview.length === 0) {
+      toast.info('Todas as agendas fixas deste mês já estão preenchidas');
+      return;
+    }
+    setPreviewRecordings(preview);
+    setPreviewRange({ start, end });
+    setPreviewOpen(true);
+  };
+
+  const handleConfirmGeneration = async () => {
+    setGeneratingAll(true);
     try {
-      const totalCreated = await generateFixedSchedulesForMonth(fixedClients, start, end);
+      const totalCreated = await commitFixedSchedules(previewRecordings);
       if (totalCreated > 0) {
         toast.success(`${totalCreated} gravação(ões) fixa(s) criada(s) para o mês completo`);
-      } else {
-        toast.info('Todas as agendas fixas deste mês já estão preenchidas');
       }
+      setPreviewOpen(false);
+      setPreviewRecordings([]);
     } catch (err) {
       console.error('Erro ao gerar agendas fixas:', err);
       toast.error('Erro ao gerar agendas fixas');
@@ -1149,6 +1164,23 @@ export default function Schedule() {
       setGeneratingAll(false);
     }
   };
+
+  const previewByClient = useMemo(() => {
+    const map = new Map<string, Recording[]>();
+    for (const rec of previewRecordings) {
+      const list = map.get(rec.clientId) || [];
+      list.push(rec);
+      map.set(rec.clientId, list);
+    }
+    return Array.from(map.entries())
+      .map(([clientId, recs]) => ({
+        clientId,
+        clientName: clients.find(c => c.id === clientId)?.companyName || 'Cliente',
+        recordings: recs.sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime)),
+      }))
+      .sort((a, b) => a.clientName.localeCompare(b.clientName));
+  }, [previewRecordings, clients]);
+
 
   const today = new Date();
 
@@ -2466,6 +2498,46 @@ export default function Schedule() {
               <Textarea value={eventForm.description} onChange={e => setEventForm({ ...eventForm, description: e.target.value })} rows={3} />
             </div>
             <Button onClick={handleEditEvent} className="w-full">Salvar Alterações</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={previewOpen} onOpenChange={(open) => { if (!generatingAll) setPreviewOpen(open); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Confirmar geração de agendas fixas</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {previewRecordings.length} gravação(ões) serão criadas para{' '}
+              {previewRange ? `${format(new Date(previewRange.start + 'T12:00:00'), "MMMM 'de' yyyy", { locale: ptBR })}` : 'o mês'}.
+              Revise antes de confirmar.
+            </p>
+            <div className="max-h-[50vh] overflow-y-auto border rounded-md divide-y">
+              {previewByClient.map(group => (
+                <div key={group.clientId} className="p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium">{group.clientName}</span>
+                    <Badge variant="secondary">{group.recordings.length} gravação(ões)</Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {group.recordings.map(rec => (
+                      <span key={rec.id} className="text-xs px-2 py-1 rounded bg-muted">
+                        {format(new Date(rec.date + 'T12:00:00'), 'dd/MM', { locale: ptBR })} • {rec.startTime}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setPreviewOpen(false)} disabled={generatingAll}>
+                Cancelar
+              </Button>
+              <Button onClick={handleConfirmGeneration} disabled={generatingAll}>
+                {generatingAll ? 'Gerando...' : `Confirmar geração (${previewRecordings.length})`}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

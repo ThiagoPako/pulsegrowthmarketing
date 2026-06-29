@@ -41,6 +41,8 @@ interface AppContextType {
   generateScheduleForClient: (client: Client, options?: FixedScheduleGenerationOptions) => Promise<number>;
   regenerateScheduleForClient: (client: Client, options?: FixedScheduleGenerationOptions) => Promise<{ deleted: number; created: number }>;
   generateFixedSchedulesForMonth: (clientsToGenerate: Client[], startDate: string, endDate: string) => Promise<number>;
+  previewFixedSchedulesForMonth: (clientsToGenerate: Client[], startDate: string, endDate: string) => Recording[];
+  commitFixedSchedules: (recordings: Recording[]) => Promise<number>;
   autoFillVacanciesForDate: (date: string) => Promise<number>;
   organizeSchedule: (startDate: string, endDate: string) => Promise<{ updated: number; cancelled: number }>;
 
@@ -248,15 +250,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return fixedRecs.length;
   }, [data, users]);
 
-  const generateFixedSchedulesForMonth = useCallback(async (clientsToGenerate: Client[], startDate: string, endDate: string): Promise<number> => {
+  const previewFixedSchedulesForMonth = useCallback((clientsToGenerate: Client[], startDate: string, endDate: string): Recording[] => {
     const availableVideomakerIds = Array.from(new Set([
       ...users.filter(user => user.role === 'videomaker').map(user => user.id),
       ...data.recordings.map(recording => recording.videomakerId),
       ...clientsToGenerate.map(client => client.videomaker),
     ].filter(Boolean)));
     const activeFixedClients = clientsToGenerate.filter(c => c.fixedDay && c.status === 'ativo');
-    if (activeFixedClients.length === 0) return 0;
-    if (availableVideomakerIds.length === 0) return 0;
+    if (activeFixedClients.length === 0) return [];
+    if (availableVideomakerIds.length === 0) return [];
 
     const generatedRecordings: Recording[] = [];
     const currentRecordings = [...data.recordings];
@@ -293,31 +295,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       currentRecordings.push(...newClientRecordings);
     }
 
-    if (generatedRecordings.length > 0) {
-      const durationWithBuffer = (data.settings.recordingDuration || 90) + BUFFER_BETWEEN_RECORDINGS;
-      const conflictingLowerPriorityIds = data.recordings
-        .filter(recording => LOWER_PRIORITY_TYPES_FOR_FIXED.has(recording.type) && recording.status !== 'cancelada')
-        .filter(extra => generatedRecordings.some(fixed => {
-          if (extra.videomakerId !== fixed.videomakerId || extra.date !== fixed.date) return false;
-          const extraStart = timeToMinutes(extra.startTime);
-          const fixedStart = timeToMinutes(fixed.startTime);
-          return fixedStart < extraStart + durationWithBuffer && fixedStart + durationWithBuffer > extraStart;
-        }))
-        .map(recording => recording.id);
+    return generatedRecordings;
+  }, [data, users]);
 
-      if (conflictingLowerPriorityIds.length > 0) {
-        await data.cancelRecordingsBulk(conflictingLowerPriorityIds);
-      }
+  const commitFixedSchedules = useCallback(async (generatedRecordings: Recording[]): Promise<number> => {
+    if (generatedRecordings.length === 0) return 0;
 
-      const saved = await data.addRecordingsBulk(generatedRecordings);
-      if (!saved) {
-        throw new Error('A API da VPS recusou a criação das gravações fixas.');
-      }
-      await data.refetch();
+    const durationWithBuffer = (data.settings.recordingDuration || 90) + BUFFER_BETWEEN_RECORDINGS;
+    const conflictingLowerPriorityIds = data.recordings
+      .filter(recording => LOWER_PRIORITY_TYPES_FOR_FIXED.has(recording.type) && recording.status !== 'cancelada')
+      .filter(extra => generatedRecordings.some(fixed => {
+        if (extra.videomakerId !== fixed.videomakerId || extra.date !== fixed.date) return false;
+        const extraStart = timeToMinutes(extra.startTime);
+        const fixedStart = timeToMinutes(fixed.startTime);
+        return fixedStart < extraStart + durationWithBuffer && fixedStart + durationWithBuffer > extraStart;
+      }))
+      .map(recording => recording.id);
+
+    if (conflictingLowerPriorityIds.length > 0) {
+      await data.cancelRecordingsBulk(conflictingLowerPriorityIds);
     }
 
+    const saved = await data.addRecordingsBulk(generatedRecordings);
+    if (!saved) {
+      throw new Error('A API da VPS recusou a criação das gravações fixas.');
+    }
+    await data.refetch();
     return generatedRecordings.length;
-  }, [data, users]);
+  }, [data]);
+
+  const generateFixedSchedulesForMonth = useCallback(async (clientsToGenerate: Client[], startDate: string, endDate: string): Promise<number> => {
+    const generated = previewFixedSchedulesForMonth(clientsToGenerate, startDate, endDate);
+    return commitFixedSchedules(generated);
+  }, [previewFixedSchedulesForMonth, commitFixedSchedules]);
 
   /** Delete future agendada recordings for a client and regenerate (fixed only) */
   const regenerateScheduleForClient = useCallback(async (client: Client, options: FixedScheduleGenerationOptions = {}): Promise<{ deleted: number; created: number }> => {
@@ -561,6 +571,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addRecording, updateRecording, cancelRecording, deleteRecording,
       deleteRecordingsBulk: data.deleteRecordingsBulk, cancelRecordingsBulk: data.cancelRecordingsBulk,
       cancelAndReschedule, generateScheduleForClient, regenerateScheduleForClient, generateFixedSchedulesForMonth,
+      previewFixedSchedulesForMonth, commitFixedSchedules,
       autoFillVacanciesForDate, organizeSchedule,
 
       addTask, updateTask, deleteTask,

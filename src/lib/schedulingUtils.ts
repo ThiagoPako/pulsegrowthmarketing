@@ -1,8 +1,9 @@
-import { format, endOfMonth, addDays, getDay, startOfMonth, differenceInCalendarWeeks } from 'date-fns';
+import { format, addDays, getDay, startOfMonth, differenceInCalendarWeeks } from 'date-fns';
 import type { Client, Recording, DayOfWeek, CompanySettings, RecordingType } from '@/types';
 
 /** Buffer time (in minutes) between recordings for the videomaker to upload materials */
 const BUFFER_BETWEEN_RECORDINGS = 30;
+const FIXED_SCHEDULE_HORIZON_DAYS = 60;
 
 const DAY_TO_NUM: Record<DayOfWeek, number> = {
   domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6,
@@ -24,12 +25,12 @@ function getWeekOfMonth(date: Date): number {
   return Math.ceil(date.getDate() / 7);
 }
 
-/** Get all dates for a specific day of week from today until end of current month,
+/** Get all dates for a specific day of week from today across a rolling future window,
  *  filtered by selectedWeeks (e.g. [1,2,3] means only weeks 1, 2, 3 of the month) */
 export function getDatesUntilEndOfMonth(dayOfWeek: DayOfWeek, selectedWeeks?: number[]): string[] {
   const today = new Date();
   const todayStr = format(today, 'yyyy-MM-dd');
-  const monthEnd = endOfMonth(today);
+  const horizonEnd = addDays(today, FIXED_SCHEDULE_HORIZON_DAYS);
   const dates: string[] = [];
   
   // Start from today
@@ -40,7 +41,7 @@ export function getDatesUntilEndOfMonth(dayOfWeek: DayOfWeek, selectedWeeks?: nu
     current = addDays(current, 1);
   }
   
-  while (current <= monthEnd) {
+  while (current <= horizonEnd) {
     const dateStr = format(current, 'yyyy-MM-dd');
     if (dateStr >= todayStr) {
       // Filter by selectedWeeks if provided

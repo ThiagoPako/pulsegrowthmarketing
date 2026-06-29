@@ -190,7 +190,7 @@ export function generateFixedRecordings(
       
       for (const timeStr of slots) {
         const alreadyAtTime = clientDayRecs.some(r => r.startTime === timeStr);
-        if (vmDayRecs.length < 4 && !alreadyAtTime && !hasConflictCheck(client.videomaker, date, timeStr, allRecs, duration)) {
+        if (vmDayRecs.length < 4 && !alreadyAtTime && !hasConflictCheck(client.videomaker, date, timeStr, allRecs, duration, undefined, 'fixa')) {
           const rec: Recording = {
             id: crypto.randomUUID(),
             clientId: client.id,
@@ -211,7 +211,7 @@ export function generateFixedRecordings(
       const targetTime = client.fixedTime || '08:30'; // fallback
       const alreadyScheduled = clientDayRecs.length > 0;
       
-      if (!alreadyScheduled && vmDayRecs.length < 4 && !hasConflictCheck(client.videomaker, date, targetTime, allRecs, duration)) {
+      if (!alreadyScheduled && vmDayRecs.length < 4 && !hasConflictCheck(client.videomaker, date, targetTime, allRecs, duration, undefined, 'fixa')) {
         const rec: Recording = {
           id: crypto.randomUUID(),
           clientId: client.id,

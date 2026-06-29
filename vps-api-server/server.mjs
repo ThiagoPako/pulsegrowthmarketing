@@ -311,6 +311,7 @@ async function isAdminUser(user) {
   if (!user) return false;
   if (user.role === 'admin' || user.role === 'social_media') return true;
   try {
+    await ensureAuthSupportTables();
     const { rows } = await pool.query(
       'SELECT 1 FROM user_roles WHERE user_id = $1 AND role IN ($2, $3) LIMIT 1',
       [user.id, 'admin', 'social_media']
@@ -526,6 +527,7 @@ app.post('/api/auth/login', async (req, res) => {
 // ─── Get current user ───────────────────────────────────────
 app.get('/api/auth/me', async (req, res) => {
   try {
+    await ensureAuthSupportTables();
     const { user } = await verifyUser(req);
     const { rows } = await pool.query(
       'SELECT p.id, p.name, p.email, p.avatar_url, p.display_name, p.job_title, p.bio, p.birthday, ur.role FROM profiles p LEFT JOIN user_roles ur ON ur.user_id = p.id WHERE p.id = $1 LIMIT 1',

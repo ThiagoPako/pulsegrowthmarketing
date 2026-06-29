@@ -558,6 +558,39 @@ async function storeUserPassword(userId, rawPassword) {
   );
 }
 
+async function verifyStoredPassword(rawPassword, passwordHash) {
+  if (!passwordHash) return false;
+
+  try {
+    return await bcrypt.compare(rawPassword, passwordHash);
+  } catch (error) {
+    console.error('Password hash verification failed:', error?.message || error);
+    return false;
+  }
+}
+
+async function authenticateWithLegacyAuth(email, password) {
+  const legacyClient = getUserClient('');
+  if (!legacyClient) return null;
+
+  const { data, error } = await legacyClient.auth.signInWithPassword({ email, password });
+  if (error || !data?.user) return null;
+
+  const legacyEmail = data.user.email || email;
+  const profile = await getAuthProfileById(data.user.id).catch(() => null)
+    || await getAuthProfileByEmail(legacyEmail).catch(() => null);
+
+  if (!profile) return null;
+
+  try {
+    await storeUserPassword(profile.id, password);
+  } catch (syncError) {
+    console.error('Legacy password sync failed:', syncError?.message || syncError);
+  }
+
+  return profile;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // AUTH ROUTES
 // ═══════════════════════════════════════════════════════════════
@@ -568,12 +601,18 @@ app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email e senha são obrigatórios' });
 
-    const profile = await getAuthProfileByEmail(email);
-    if (!profile) return res.status(401).json({ error: 'Email ou senha inválidos' });
-    if (!profile.password_hash) return res.status(401).json({ error: 'Senha não configurada. Solicite ao administrador.' });
+    let profile = await getAuthProfileByEmail(email);
+    let valid = await verifyStoredPassword(password, profile?.password_hash);
 
-    const valid = await bcrypt.compare(password, profile.password_hash);
-    if (!valid) return res.status(401).json({ error: 'Email ou senha inválidos' });
+    if (!valid) {
+      const legacyProfile = await authenticateWithLegacyAuth(email, password);
+      if (legacyProfile) {
+        profile = legacyProfile;
+        valid = true;
+      }
+    }
+
+    if (!profile || !valid) return res.status(401).json({ error: 'Email ou senha inválidos' });
 
     const role = await getUserPrimaryRole(profile.id, profile.role || 'editor');
 

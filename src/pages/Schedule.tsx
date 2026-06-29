@@ -96,7 +96,7 @@ export default function Schedule() {
   const {
     clients, users, recordings, scripts, settings, activeRecordings,
     currentUser, updateScript, addRecording, updateRecording, cancelRecording, deleteRecording, cancelAndReschedule,
-    regenerateScheduleForClient, generateFixedSchedulesForMonth, autoFillVacanciesForDate, organizeSchedule, startActiveRecording, stopActiveRecording,
+    regenerateScheduleForClient, generateFixedSchedulesForMonth, previewFixedSchedulesForMonth, commitFixedSchedules, autoFillVacanciesForDate, organizeSchedule, startActiveRecording, stopActiveRecording,
     hasConflict, isWithinWorkHours,
 
 

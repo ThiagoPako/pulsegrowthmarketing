@@ -2556,6 +2556,26 @@ export default function Schedule() {
               {previewRange ? `${format(new Date(previewRange.start + 'T12:00:00'), "MMMM 'de' yyyy", { locale: ptBR })}` : 'o mês'}.
               Revise antes de confirmar.
             </p>
+            {previewConflicts.length > 0 && (
+              <div className="border border-destructive/50 bg-destructive/10 rounded-md p-3 space-y-2">
+                <div className="flex items-center gap-2 text-destructive font-medium text-sm">
+                  <AlertTriangle size={16} />
+                  {previewConflicts.length} conflito(s) de horário detectado(s)
+                </div>
+                <div className="max-h-40 overflow-y-auto space-y-1 text-xs text-foreground">
+                  {previewConflicts.map((c, i) => (
+                    <div key={i} className="flex flex-wrap gap-1 items-center">
+                      <Badge variant="outline" className="text-[10px]">{c.videomakerName}</Badge>
+                      <span className="text-muted-foreground">{format(new Date(c.date + 'T12:00:00'), 'dd/MM', { locale: ptBR })}:</span>
+                      <span>{c.aLabel}</span>
+                      <span className="text-muted-foreground">×</span>
+                      <span>{c.bLabel}</span>
+                      <Badge variant="secondary" className="text-[10px]">{c.kind === 'novo-vs-novo' ? 'novo×novo' : 'novo×existente'}</Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="max-h-[50vh] overflow-y-auto border rounded-md divide-y">
               {previewByClient.map(group => (
                 <div key={group.clientId} className="p-3">

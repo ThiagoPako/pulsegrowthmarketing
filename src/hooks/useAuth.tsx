@@ -268,7 +268,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: message };
       }
 
-      if (res.status === 502 || !contentType.includes('application/json')) {
+      if (res.status >= 500 || !contentType.includes('application/json')) {
         // VPS unavailable, try Supabase Auth fallback
         try {
           const { data: sbData, error: sbError } = await supabaseReal.auth.signInWithPassword({ email, password });

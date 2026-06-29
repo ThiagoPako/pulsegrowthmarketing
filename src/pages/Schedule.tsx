@@ -2501,6 +2501,46 @@ export default function Schedule() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={previewOpen} onOpenChange={(open) => { if (!generatingAll) setPreviewOpen(open); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Confirmar geração de agendas fixas</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {previewRecordings.length} gravação(ões) serão criadas para{' '}
+              {previewRange ? `${format(new Date(previewRange.start + 'T12:00:00'), "MMMM 'de' yyyy", { locale: ptBR })}` : 'o mês'}.
+              Revise antes de confirmar.
+            </p>
+            <div className="max-h-[50vh] overflow-y-auto border rounded-md divide-y">
+              {previewByClient.map(group => (
+                <div key={group.clientId} className="p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium">{group.clientName}</span>
+                    <Badge variant="secondary">{group.recordings.length} gravação(ões)</Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {group.recordings.map(rec => (
+                      <span key={rec.id} className="text-xs px-2 py-1 rounded bg-muted">
+                        {format(new Date(rec.date + 'T12:00:00'), 'dd/MM', { locale: ptBR })} • {rec.startTime}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setPreviewOpen(false)} disabled={generatingAll}>
+                Cancelar
+              </Button>
+              <Button onClick={handleConfirmGeneration} disabled={generatingAll}>
+                {generatingAll ? 'Gerando...' : `Confirmar geração (${previewRecordings.length})`}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

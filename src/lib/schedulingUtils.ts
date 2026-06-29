@@ -4,6 +4,7 @@ import type { Client, Recording, DayOfWeek, CompanySettings, RecordingType } fro
 /** Buffer time (in minutes) between recordings for the videomaker to upload materials */
 const BUFFER_BETWEEN_RECORDINGS = 30;
 const FIXED_SCHEDULE_HORIZON_DAYS = 60;
+const LOWER_PRIORITY_TYPES_FOR_FIXED = new Set<RecordingType>(['extra', 'backup', 'secundaria']);
 
 const DAY_TO_NUM: Record<DayOfWeek, number> = {
   domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6,
@@ -121,10 +122,13 @@ export function hasConflictCheck(
     if (r.id === excludeId || r.status === 'cancelada') return false;
     if (r.videomakerId !== videomakerId || r.date !== date) return false;
     
-    // Se o novo agendamento for fixa ou avulso (hierarquia superior), 
-    // ele ignora conflitos com gravações do tipo 'extra'.
-    const isHighPriority = newType === 'fixa' || newType === 'avulso';
-    if (isHighPriority && r.type === 'extra') return false;
+    // Agendas fixas precisam completar o mês mesmo se houver encaixes ocultos
+    // (extra/backup/secundária). Esses tipos são cancelados depois pela rotina
+    // mensal e não devem bloquear a criação da agenda fixa.
+    if (newType === 'fixa' && LOWER_PRIORITY_TYPES_FOR_FIXED.has(r.type)) return false;
+
+    // Avulsos continuam tendo prioridade sobre extras, sem derrubar agendas fixas.
+    if (newType === 'avulso' && r.type === 'extra') return false;
 
     const existStart = timeToMinutes(r.startTime);
     // Existing recording occupies: its duration + 30min buffer for upload
@@ -180,13 +184,13 @@ export function generateFixedRecordings(
       r.videomakerId === client.videomaker &&
       r.date === date &&
       r.status !== 'cancelada' &&
-      r.type !== 'extra'
+      !LOWER_PRIORITY_TYPES_FOR_FIXED.has(r.type)
     );
     const clientDayRecs = allRecs.filter(r =>
       r.clientId === client.id &&
       r.date === date &&
       r.status !== 'cancelada' &&
-      r.type !== 'extra'
+      r.type === 'fixa'
     );
     
     if (client.fullShiftRecording) {

@@ -373,7 +373,7 @@ async function ensureAuthSupportTables() {
 
       CREATE TABLE IF NOT EXISTS user_roles (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+        user_id UUID NOT NULL,
         role TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         UNIQUE (user_id, role)
@@ -417,6 +417,58 @@ async function ensureAuthSupportTables() {
   return authSupportTablesPromise;
 }
 
+async function getLocalAuthUserByEmail(email) {
+  const normalizedEmail = email.toLowerCase().trim();
+
+  try {
+    await ensureAuthSupportTables();
+    const { rows } = await pool.query(
+      `SELECT
+         au.id,
+         COALESCE(p.name, split_part(au.email, '@', 1)) AS name,
+         au.email,
+         COALESCE(p.role::text, ur.role::text, 'admin') AS role,
+         p.avatar_url,
+         p.display_name,
+         p.job_title,
+         au.password_hash
+       FROM auth_users au
+       LEFT JOIN profiles p
+         ON p.id = au.id OR lower(p.email) = lower(au.email)
+       LEFT JOIN user_roles ur
+         ON ur.user_id = au.id
+       WHERE lower(au.email) = lower($1)
+       LIMIT 1`,
+      [normalizedEmail]
+    );
+    return rows[0] || null;
+  } catch (error) {
+    console.error('Local auth lookup with profile join failed:', error?.message || error);
+
+    try {
+      const { rows } = await pool.query(
+        `SELECT
+           id,
+           split_part(email, '@', 1) AS name,
+           email,
+           'admin'::text AS role,
+           NULL::text AS avatar_url,
+           split_part(email, '@', 1) AS display_name,
+           NULL::text AS job_title,
+           password_hash
+         FROM auth_users
+         WHERE lower(email) = lower($1)
+         LIMIT 1`,
+        [normalizedEmail]
+      );
+      return rows[0] || null;
+    } catch (fallbackError) {
+      console.error('Local auth fallback lookup failed:', fallbackError?.message || fallbackError);
+      return null;
+    }
+  }
+}
+
 async function hasProfilesPasswordHashColumn() {
   if (!profilesPasswordHashColumnPromise) {
     profilesPasswordHashColumnPromise = pool.query(`
@@ -442,11 +494,16 @@ async function getAuthProfileByEmail(email) {
   const normalizedEmail = email.toLowerCase().trim();
 
   if (await hasProfilesPasswordHashColumn().catch(() => false)) {
-    const { rows } = await pool.query(
-      'SELECT id, name, email, role, avatar_url, display_name, job_title, password_hash FROM profiles WHERE lower(email) = lower($1) LIMIT 1',
-      [normalizedEmail]
-    );
-    return rows[0] || null;
+    try {
+      const { rows } = await pool.query(
+        'SELECT id, name, email, role, avatar_url, display_name, job_title, password_hash FROM profiles WHERE lower(email) = lower($1) LIMIT 1',
+        [normalizedEmail]
+      );
+      return rows[0] || await getLocalAuthUserByEmail(normalizedEmail);
+    } catch (error) {
+      console.error('Profile auth lookup failed, using local auth table:', error?.message || error);
+      return getLocalAuthUserByEmail(normalizedEmail);
+    }
   }
 
   try {
@@ -461,17 +518,22 @@ async function getAuthProfileByEmail(email) {
       [normalizedEmail]
     );
 
-    return rows[0] || null;
+    return rows[0] || await getLocalAuthUserByEmail(normalizedEmail);
   } catch (error) {
     console.error('Auth support lookup failed, falling back to profiles only:', error?.message || error);
-    const { rows } = await pool.query(
-      `SELECT id, name, email, role, avatar_url, display_name, job_title, NULL::text AS password_hash
-       FROM profiles
-       WHERE lower(email) = lower($1)
-       LIMIT 1`,
-      [normalizedEmail]
-    );
-    return rows[0] || null;
+    try {
+      const { rows } = await pool.query(
+        `SELECT id, name, email, role, avatar_url, display_name, job_title, NULL::text AS password_hash
+         FROM profiles
+         WHERE lower(email) = lower($1)
+         LIMIT 1`,
+        [normalizedEmail]
+      );
+      return rows[0] || await getLocalAuthUserByEmail(normalizedEmail);
+    } catch (profileFallbackError) {
+      console.error('Profiles fallback lookup failed, using local auth table:', profileFallbackError?.message || profileFallbackError);
+      return getLocalAuthUserByEmail(normalizedEmail);
+    }
   }
 }
 

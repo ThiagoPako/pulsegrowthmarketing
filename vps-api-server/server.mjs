@@ -464,7 +464,7 @@ async function getLocalAuthUserByEmail(email) {
        LIMIT 1`,
       [normalizedEmail]
     );
-    return rows[0] || null;
+    return rows[0] || await getLocalAuthUserById(userId);
   } catch (error) {
     console.error('Local auth lookup with profile join failed:', error?.message || error);
 
@@ -4336,6 +4336,10 @@ function cityScopeExpression(columnName = 'city') {
   return `replace(lower(coalesce(nullif(btrim(${safeColumn}), ''), 'minacu')), 'ç', 'c')`;
 }
 
+function cityScopeCondition(columnName = 'city', placeholder) {
+  return `${cityScopeExpression(columnName)} = ${placeholder}`;
+}
+
 // Resolve a cidade ativa do request: header x-pulse-city, validado contra user_cities.
 // Fallback: primary do usuário, ou 'minacu' se não houver registro.
 async function resolveActiveCity(req, userId, userObj = null) {
@@ -4951,7 +4955,7 @@ app.delete('/api/recordings/:id', async (req, res) => {
     // Mark linked scripts as not recorded
     await pool.query("UPDATE scripts SET recorded = false, updated_at = NOW() WHERE recording_id = $1", [id]);
     await pool.query(
-      `DELETE FROM recordings WHERE id = $1${scopeCity ? ' AND city = $2' : ''}`,
+      `DELETE FROM recordings WHERE id = $1${scopeCity ? ` AND ${cityScopeCondition('city', '$2')}` : ''}`,
       scopeCity ? [id, activeCity] : [id]
     );
     res.json({ success: true });
@@ -4964,7 +4968,7 @@ app.delete('/api/recordings/future/:clientId', async (req, res) => {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
     const today = new Date().toISOString().split('T')[0];
     const { rowCount } = await pool.query(
-      `DELETE FROM recordings WHERE client_id = $1 AND status = 'agendada' AND date >= $2${scopeCity ? ' AND city = $3' : ''}`,
+      `DELETE FROM recordings WHERE client_id = $1 AND status = 'agendada' AND date >= $2${scopeCity ? ` AND ${cityScopeCondition('city', '$3')}` : ''}`,
       scopeCity ? [req.params.clientId, today, activeCity] : [req.params.clientId, today]
     );
     res.json({ deleted: rowCount });
@@ -4976,7 +4980,7 @@ app.get('/api/kanban-tasks', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'kanban_tasks');
     const { rows } = await pool.query(
-      `SELECT * FROM kanban_tasks${scopeCity ? ' WHERE city = $1' : ''} ORDER BY created_at DESC`,
+      `SELECT * FROM kanban_tasks${scopeCity ? ` WHERE ${cityScopeCondition('city', '$1')}` : ''} ORDER BY created_at DESC`,
       scopeCity ? [activeCity] : []
     );
     res.json(rows);
@@ -5017,7 +5021,7 @@ app.put('/api/kanban-tasks/:id', async (req, res) => {
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     sets.push('updated_at = NOW()');
     vals.push(id);
-    const cityClause = scopeCity ? ` AND city = $${idx + 1}` : '';
+    const cityClause = scopeCity ? ` AND ${cityScopeCondition('city', `$${idx + 1}`)}` : '';
     if (scopeCity) vals.push(activeCity);
     const { rows } = await pool.query(`UPDATE kanban_tasks SET ${sets.join(', ')} WHERE id = $${idx}${cityClause} RETURNING *`, vals);
     res.json(rows[0]);
@@ -5040,7 +5044,7 @@ app.get('/api/scripts', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'scripts');
     const { rows } = await pool.query(
-      `SELECT * FROM scripts${scopeCity ? ' WHERE city = $1' : ''} ORDER BY created_at DESC`,
+      `SELECT * FROM scripts${scopeCity ? ` WHERE ${cityScopeCondition('city', '$1')}` : ''} ORDER BY created_at DESC`,
       scopeCity ? [activeCity] : []
     );
     res.json(rows);
@@ -5087,7 +5091,7 @@ app.put('/api/scripts/:id', async (req, res) => {
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     sets.push('updated_at = NOW()');
     vals.push(id);
-    const cityClause = scopeCity ? ` AND city = $${idx + 1}` : '';
+    const cityClause = scopeCity ? ` AND ${cityScopeCondition('city', `$${idx + 1}`)}` : '';
     if (scopeCity) vals.push(activeCity);
     const { rows } = await pool.query(`UPDATE scripts SET ${sets.join(', ')} WHERE id = $${idx}${cityClause} RETURNING *`, vals);
     res.json(rows[0]);
@@ -5135,7 +5139,7 @@ app.get('/api/active-recordings', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'active_recordings');
     const { rows } = await pool.query(
-      `SELECT * FROM active_recordings${scopeCity ? ' WHERE city = $1' : ''}`,
+      `SELECT * FROM active_recordings${scopeCity ? ` WHERE ${cityScopeCondition('city', '$1')}` : ''}`,
       scopeCity ? [activeCity] : []
     );
     res.json(rows);

@@ -885,7 +885,12 @@ app.post('/api/auth/login', async (req, res) => {
     if (!email || !password) return res.status(400).json({ error: 'Email e senha são obrigatórios' });
 
     let profile = await getAuthProfileByEmail(email);
-    let valid = await verifyStoredPassword(password, profile?.password_hash);
+    let valid = await verifyStoredPassword(
+      password,
+      profile?.password_hash,
+      profile?.auth_password_hash,
+      profile?.profile_password_hash,
+    );
 
     if (!valid) {
       const legacyProfile = await authenticateWithLegacyAuth(email, password);

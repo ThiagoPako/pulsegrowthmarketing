@@ -315,10 +315,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         existing.status !== 'cancelada' &&
         existing.clientId === rec.clientId &&
         existing.date === rec.date &&
-        (existing.startTime === rec.startTime || (existing.type === 'fixa'))
+        existing.startTime === rec.startTime
       );
       return !dup;
     });
+
 
     if (generatedRecordings.length === 0) {
       await data.refetch();

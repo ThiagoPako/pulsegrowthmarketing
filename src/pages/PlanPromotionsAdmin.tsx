@@ -270,6 +270,17 @@ export default function PlanPromotionsAdmin() {
     load();
   }
 
+  async function updateRedemptions(p: Promo, value: number) {
+    const safe = Math.max(0, Math.floor(value || 0));
+    const { error } = await supabase.from('plan_promotions' as any)
+      .update({ redemptions_count: safe })
+      .eq('id', p.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Clientes fechados atualizado');
+    setItems(prev => prev.map(it => it.id === p.id ? { ...it, redemptions_count: safe } : it));
+  }
+
+
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-6">
       <div className="flex items-center gap-3">

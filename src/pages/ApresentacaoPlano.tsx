@@ -799,6 +799,77 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
   );
 }
 
+function StagePromoStory({ plan, promo }: { plan: any; promo: any }) {
+  const reasons = [
+    { icon: Rocket, title: 'Promoção de Inauguração', desc: 'Estamos chegando na sua cidade e queremos os primeiros cases de sucesso. Por isso liberamos um desconto que não vai se repetir.' },
+    { icon: Award, title: 'Vagas limitadas por cidade', desc: 'Trabalhamos com poucos clientes por região para garantir exclusividade de nicho e dedicação total da equipe.' },
+    { icon: Zap, title: 'Resultado desde o primeiro mês', desc: 'Roteiros frase a frase, gravação direcionada e tráfego pago rodando já nos primeiros dias.' },
+  ];
+  const scarcity = [
+    { label: 'Desconto', value: `${promo.discount_percent}% OFF` },
+    { label: 'Válido por', value: `${promo.duration_months} ${promo.duration_months === 1 ? 'mês' : 'meses'}` },
+    { label: 'Vagas', value: 'Limitadas' },
+  ];
+  return (
+    <Slide>
+      <div className="w-full max-w-5xl">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-6">
+          <Badge className="mb-3 bg-orange-500/10 text-orange-600 border-orange-500/30 uppercase tracking-wider">
+            <Sparkles className="h-3 w-3 mr-1" /> Oportunidade única
+          </Badge>
+          <h2 className="text-4xl md:text-6xl font-bold leading-tight" style={{ fontFamily: 'var(--font-display)' }}>
+            Promoção <span className="bg-gradient-to-r from-orange-500 via-red-500 to-yellow-500 bg-clip-text text-transparent">{promo.title}</span>
+          </h2>
+          <p className="mt-3 text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
+            Antes de mostrar o valor com desconto, entenda <strong>por que</strong> essa condição existe — e por que ela vai acabar.
+          </p>
+        </motion.div>
+
+        {/* Scarcity bar */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.15 }}
+          className="grid grid-cols-3 gap-2 md:gap-4 mb-6"
+        >
+          {scarcity.map((s) => (
+            <div key={s.label} className="rounded-2xl border-2 border-orange-500/40 bg-orange-500/5 p-3 md:p-4 text-center">
+              <div className="text-[10px] md:text-xs uppercase tracking-wider text-muted-foreground font-semibold">{s.label}</div>
+              <div className="text-lg md:text-2xl font-bold text-orange-600 mt-1" style={{ fontFamily: 'var(--font-display)' }}>{s.value}</div>
+            </div>
+          ))}
+        </motion.div>
+
+        {/* Reasons */}
+        <div className="grid md:grid-cols-3 gap-3 md:gap-4">
+          {reasons.map((r, i) => {
+            const RIcon = r.icon;
+            return (
+              <motion.div
+                key={r.title}
+                initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 + i * 0.1 }}
+                className="rounded-2xl border border-border bg-card p-4 md:p-5 hover:border-orange-500/50 transition-colors"
+              >
+                <div className="h-10 w-10 rounded-xl bg-orange-500/10 text-orange-600 flex items-center justify-center mb-3">
+                  <RIcon className="h-5 w-5" />
+                </div>
+                <div className="font-bold text-base md:text-lg mb-1">{r.title}</div>
+                <div className="text-sm text-muted-foreground leading-relaxed">{r.desc}</div>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}
+          className="mt-6 text-center text-sm md:text-base text-muted-foreground"
+        >
+          Aperte <kbd className="px-2 py-0.5 rounded bg-muted border border-border text-foreground font-mono text-xs">↓</kbd> para ver o <strong className="text-orange-600">{plan.name}</strong> com o desconto aplicado.
+        </motion.div>
+      </div>
+    </Slide>
+  );
+}
+
+
 function Row({ label, value, dark }: { label: string; value: React.ReactNode; dark?: boolean }) {
   return (
     <div className="flex items-center justify-between">

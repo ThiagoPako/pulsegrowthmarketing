@@ -501,11 +501,23 @@ export default function EditorKanban() {
     if (!draggedTask.edited_by && user) {
       updateData.edited_by = user.id;
     }
-    // Auto-assign to current editor if not yet assigned
-    if (!draggedTask.assigned_to && user) {
-      updateData.assigned_to = user.id;
+    // Auto-assign to current editor if not yet assigned (atomic guard below)
+    const shouldAutoClaim = !draggedTask.assigned_to && !!user;
+    if (shouldAutoClaim) {
+      updateData.assigned_to = user!.id;
     }
-    const { error } = await supabase.from('content_tasks').update(updateData).eq('id', draggedTask.id);
+    let query = supabase.from('content_tasks').update(updateData).eq('id', draggedTask.id);
+    if (shouldAutoClaim) {
+      // Only update if still unassigned — prevents two people claiming the same video
+      query = (query as any).is('assigned_to', null);
+    }
+    const { data: updatedRows, error } = await (query as any).select('id');
+    if (!error && shouldAutoClaim && (!updatedRows || updatedRows.length === 0)) {
+      toast.error('🚫 Este vídeo já foi pego por outra pessoa!');
+      setDraggedTask(null);
+      fetchTasks();
+      return;
+    }
     if (error) {
       toast.error('Erro ao mover cartão');
     } else {

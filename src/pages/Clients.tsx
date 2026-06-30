@@ -154,6 +154,32 @@ export default function Clients() {
 
   const videomakers = users.filter(u => u.role === 'videomaker');
 
+  // Fallback: when client.videomaker is empty (legacy/missing assignment),
+  // derive the responsible videomaker from the most frequent in their recordings.
+  const videomakerByClient = useMemo(() => {
+    const map: Record<string, string> = {};
+    const counts: Record<string, Record<string, number>> = {};
+    for (const r of recordings) {
+      if (!r.clientId || !r.videomakerId) continue;
+      counts[r.clientId] = counts[r.clientId] || {};
+      counts[r.clientId][r.videomakerId] = (counts[r.clientId][r.videomakerId] || 0) + 1;
+    }
+    for (const [cid, vmCounts] of Object.entries(counts)) {
+      const top = Object.entries(vmCounts).sort((a, b) => b[1] - a[1])[0];
+      if (top) map[cid] = top[0];
+    }
+    return map;
+  }, [recordings]);
+
+  const getClientVideomakerId = useCallback((c: Client) => {
+    return c.videomaker || videomakerByClient[c.id] || '';
+  }, [videomakerByClient]);
+
+  const getClientVideomakerName = useCallback((c: Client) => {
+    const vmId = getClientVideomakerId(c);
+    return users.find(u => u.id === vmId)?.name || '—';
+  }, [getClientVideomakerId, users]);
+
   const shiftSlotTimes = useMemo(() => {
     const buildSlots = (startTime: string, endTime: string) => {
       const slots: string[] = [];

@@ -339,65 +339,108 @@ function Slide({ children }: { children: React.ReactNode }) {
 }
 
 function StageIntro() {
-  const items = [
-    { icon: Film, title: 'Produção audiovisual', desc: 'Reels, vídeos e criativos com roteiro, gravação e edição própria.' },
-    { icon: PenTool, title: 'Conteúdo estratégico', desc: 'Linha editorial, design e copy alinhados ao seu posicionamento.' },
-    { icon: Megaphone, title: 'Tráfego pago', desc: 'Meta Ads e Google Ads com gestão diária e dashboards em tempo real.' },
-    { icon: BarChart3, title: 'Gestão & relatórios', desc: 'Portal do cliente, CRM e acompanhamento mensal de resultados.' },
+  const stats = [
+    { icon: Calendar, value: '+5', unit: 'anos', label: 'de mercado' },
+    { icon: Users, value: '+4', unit: 'anos', label: 'com clientes ativos' },
+    { icon: TrendingUp, value: '100%', unit: '', label: 'foco em vendas' },
+    { icon: Trophy, value: 'Time', unit: 'próprio', label: 'do início ao fim' },
+  ];
+  const pillars = [
+    { icon: Target, title: 'Conteúdo que vende', desc: 'Roteiros e criativos pensados pra gerar lead, agendamento e fechamento — não vaidade.' },
+    { icon: Megaphone, title: 'Tráfego pago profissional', desc: 'Meta Ads e Google Ads com gestor especialista, otimização diária e dashboards em tempo real.' },
+    { icon: Film, title: 'Produção audiovisual própria', desc: 'Videomakers profissionais com método "Frase a Frase" — gravamos com quem nunca gravou.' },
+    { icon: BarChart3, title: 'Operação comercial integrada', desc: 'CRM, portal do cliente, relatórios e acompanhamento até o fechamento da venda.' },
   ];
   return (
     <Slide>
-      <div className="w-full text-center">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-          <Badge className="mb-5 bg-primary/10 text-primary border-primary/20">
-            <Sparkles className="h-3 w-3 mr-1" /> Quem somos
-          </Badge>
-        </motion.div>
-        <motion.h1
-          className="text-4xl sm:text-5xl md:text-7xl font-bold leading-[1.05] mb-5"
-          style={{ fontFamily: 'var(--font-display)' }}
-          initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
-        >
-          A <span className="bg-gradient-to-r from-primary via-orange-500 to-primary bg-clip-text text-transparent">Pulse Growth Marketing</span><br />
-          opera o digital da sua empresa <span className="text-primary">de ponta a ponta</span>.
-        </motion.h1>
-        <motion.p
-          className="text-base md:text-xl text-muted-foreground max-w-3xl mx-auto mb-10"
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }}
-        >
-          Time próprio de estratégia, produção, mídia paga e comercial.
-          Você ganha previsibilidade, presença diária e dados pra decidir.
-        </motion.p>
+      <div className="w-full max-h-[calc(100vh-9rem)] overflow-y-auto pr-1">
+        <div className="text-center max-w-6xl mx-auto">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+            <Badge className="mb-4 bg-primary/10 text-primary border-primary/30 px-3 py-1">
+              <Sparkles className="h-3 w-3 mr-1.5" /> Agência de vendas, não de seguidores
+            </Badge>
+          </motion.div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5 max-w-5xl mx-auto">
-          {items.map((it, i) => (
-            <motion.div
-              key={it.title}
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 + i * 0.1 }}
-              className="rounded-2xl border border-border bg-card/80 backdrop-blur p-4 md:p-5 text-left hover:border-primary/50 hover:shadow-lg transition-all"
-            >
-              <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
-                <it.icon className="h-5 w-5 md:h-6 md:w-6 text-primary" />
-              </div>
-              <div className="font-bold text-sm md:text-base mb-1">{it.title}</div>
-              <div className="text-xs md:text-sm text-muted-foreground">{it.desc}</div>
-            </motion.div>
-          ))}
+          <motion.h1
+            className="text-3xl sm:text-5xl md:text-6xl font-bold leading-[1.05] mb-4"
+            style={{ fontFamily: 'var(--font-display)' }}
+            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+          >
+            A <span className="bg-gradient-to-r from-primary via-orange-500 to-primary bg-clip-text text-transparent">Pulse Growth Marketing</span><br />
+            transforma conteúdo em <span className="text-primary">vendas reais</span>.
+          </motion.h1>
+
+          <motion.p
+            className="text-base md:text-xl text-muted-foreground max-w-3xl mx-auto mb-6 leading-relaxed"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }}
+          >
+            Somos uma <strong className="text-foreground">empresa de vendas</strong> que usa marketing digital como ferramenta.
+            Mais de <strong className="text-foreground">5 anos de mercado</strong>, com clientes ativos há
+            <strong className="text-foreground"> mais de 4 anos</strong> — porque o que entregamos é resultado, não relatório bonito.
+          </motion.p>
+
+          {/* STATS — prova de mercado */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
+            className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8"
+          >
+            {stats.map((s, i) => (
+              <motion.div
+                key={s.label}
+                initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.55 + i * 0.08, type: 'spring', stiffness: 140 }}
+                className="relative overflow-hidden rounded-2xl border-2 border-primary/30 bg-gradient-to-br from-card via-card to-primary/10 p-4 shadow-lg"
+              >
+                <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-primary/10 blur-2xl" />
+                <div className="relative">
+                  <div className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center mb-2 mx-auto shadow-md">
+                    <s.icon className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="text-3xl md:text-4xl font-black bg-gradient-to-br from-primary to-orange-600 bg-clip-text text-transparent leading-none" style={{ fontFamily: 'var(--font-display)' }}>
+                    {s.value}
+                  </div>
+                  {s.unit && <div className="text-xs font-bold text-foreground/80 mt-0.5">{s.unit}</div>}
+                  <div className="text-[11px] md:text-xs text-muted-foreground mt-1 leading-snug">{s.label}</div>
+                </div>
+              </motion.div>
+            ))}
+          </motion.div>
+
+          {/* PILARES */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 max-w-5xl mx-auto text-left">
+            {pillars.map((it, i) => (
+              <motion.div
+                key={it.title}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.9 + i * 0.08 }}
+                className="group rounded-2xl border border-border bg-card/80 backdrop-blur p-4 md:p-5 hover:border-primary/50 hover:shadow-lg hover:-translate-y-0.5 transition-all flex gap-3"
+              >
+                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary to-orange-600 text-primary-foreground flex items-center justify-center shrink-0 shadow-md">
+                  <it.icon className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-bold text-sm md:text-base mb-1">{it.title}</div>
+                  <div className="text-xs md:text-sm text-muted-foreground leading-snug">{it.desc}</div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.3 }}
+            className="mt-6 inline-flex items-center gap-2 text-sm text-muted-foreground"
+          >
+            <ChevronDown className="h-4 w-4 animate-bounce text-primary" />
+            Pressione <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono text-xs">↓</kbd> para conhecer o plano
+          </motion.div>
         </div>
-
-        <motion.div
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.1 }}
-          className="mt-8 inline-flex items-center gap-2 text-sm text-muted-foreground"
-        >
-          <ChevronDown className="h-4 w-4 animate-bounce text-primary" />
-          Pressione <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono text-xs">↓</kbd> para conhecer o plano
-        </motion.div>
       </div>
     </Slide>
   );
 }
+
+
 
 function StagePlan({ plan, Icon }: { plan: any; Icon: any }) {
   return (

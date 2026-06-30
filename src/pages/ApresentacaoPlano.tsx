@@ -357,9 +357,9 @@ export default function ApresentacaoPlano() {
         const inheritedFeatures = Array.from(new Set(previousPlans.flatMap(p => p.features)));
         const ownExtras = plan.features.filter(f => !/tudo do/i.test(f));
         return (
-          <section className="py-16 md:py-24 bg-gradient-to-br from-primary/5 via-orange-500/5 to-primary/5">
+          <section className="py-12 md:py-16 bg-gradient-to-br from-primary/5 via-orange-500/5 to-primary/5">
             <div className="container mx-auto px-4 md:px-6 max-w-6xl">
-              <motion.div {...fadeUp} className="text-center mb-10 md:mb-14">
+              <motion.div {...fadeUp} className="text-center mb-8 md:mb-10">
                 <Badge className="mb-4 bg-yellow-300 text-yellow-950 font-bold">
                   <Crown className="h-3 w-3 mr-1" /> Plano top de linha
                 </Badge>
@@ -418,9 +418,9 @@ export default function ApresentacaoPlano() {
       })()}
 
       {/* ENTREGAS — categorizadas */}
-      <section className="py-16 md:py-24">
+      <section className="py-12 md:py-16">
         <div className="container mx-auto px-4 md:px-6 max-w-6xl">
-          <motion.div {...fadeUp} className="text-center mb-10 md:mb-16">
+          <motion.div {...fadeUp} className="text-center mb-8 md:mb-10">
             <Badge className="mb-4 bg-primary text-primary-foreground">{plan.features.length} entregas mensais</Badge>
             <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
               Tudo que está <span className="text-primary">incluso</span>
@@ -462,9 +462,9 @@ export default function ApresentacaoPlano() {
       </section>
 
       {/* INVESTIMENTO — destaque ANUAL */}
-      <section className="py-16 md:py-24 bg-gradient-to-b from-secondary/30 to-background">
+      <section className="py-12 md:py-16 bg-gradient-to-b from-secondary/30 to-background">
         <div className="container mx-auto px-4 md:px-6 max-w-5xl">
-          <motion.div {...fadeUp} className="text-center mb-10 md:mb-14">
+          <motion.div {...fadeUp} className="text-center mb-8 md:mb-10">
             <Badge variant="outline" className="mb-4">Investimento</Badge>
             <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
               Economize fechando <span className="text-primary">o plano anual</span>
@@ -785,9 +785,9 @@ export default function ApresentacaoPlano() {
 
 
       {/* DIFERENCIAIS */}
-      <section className="py-16 md:py-24">
+      <section className="py-12 md:py-16">
         <div className="container mx-auto px-4 md:px-6 max-w-5xl">
-          <motion.div {...fadeUp} className="text-center mb-10 md:mb-16">
+          <motion.div {...fadeUp} className="text-center mb-8 md:mb-10">
             <Badge variant="outline" className="mb-4">Por que a Pulse?</Badge>
             <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
               Mais que uma agência, um <span className="text-primary">time dedicado</span>
@@ -820,9 +820,9 @@ export default function ApresentacaoPlano() {
       </section>
 
       {/* PORTAL */}
-      <section className="py-16 md:py-24 bg-secondary/30">
+      <section className="py-12 md:py-16 bg-secondary/30">
         <div className="container mx-auto px-4 md:px-6 max-w-6xl">
-          <motion.div {...fadeUp} className="text-center mb-10 md:mb-16">
+          <motion.div {...fadeUp} className="text-center mb-8 md:mb-10">
             <Badge variant="outline" className="mb-4">Diferencial exclusivo</Badge>
             <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
               Portal do Cliente <span className="text-primary">Pulse</span>
@@ -853,9 +853,9 @@ export default function ApresentacaoPlano() {
 
       {/* EQUIPE */}
       {(true) && (
-        <section className="py-16 md:py-24">
+        <section className="py-12 md:py-16">
           <div className="container mx-auto px-4 md:px-6 max-w-6xl">
-            <motion.div {...fadeUp} className="text-center mb-10 md:mb-16">
+            <motion.div {...fadeUp} className="text-center mb-8 md:mb-10">
               <Badge variant="outline" className="mb-4"><Users className="h-3 w-3 mr-1" /> Nosso time</Badge>
               <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
                 Quem cuida do <span className="text-primary">seu projeto</span>
@@ -902,7 +902,7 @@ export default function ApresentacaoPlano() {
 
       {/* PORTAL EM AÇÃO — vídeos reais de clientes */}
       {showcaseVideos.length > 0 && (
-        <section className="py-16 md:py-24 bg-secondary/30">
+        <section className="py-12 md:py-16 bg-secondary/30">
           <div className="container mx-auto px-4 md:px-6 max-w-6xl">
             <motion.div {...fadeUp} className="text-center mb-10 md:mb-12">
               <Badge variant="outline" className="mb-4"><PlayCircle className="h-3 w-3 mr-1" /> Veja na prática</Badge>
@@ -944,7 +944,7 @@ export default function ApresentacaoPlano() {
       )}
 
       {/* CTA */}
-      <section className="py-16 md:py-24 pb-32 md:pb-24 relative overflow-hidden">
+      <section className="py-12 md:py-16 pb-32 md:pb-24 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary via-orange-600 to-primary -z-10" />
         <div className="absolute inset-0 -z-10">
           <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full bg-white/10 blur-3xl animate-pulse" />

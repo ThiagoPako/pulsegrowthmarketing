@@ -151,7 +151,7 @@ export default function ApresentacaoPlano() {
     };
     window.addEventListener('keydown', handler, { capture: true });
     return () => window.removeEventListener('keydown', handler, { capture: true } as any);
-  }, [prevKey, nextKey]);
+  }, [prevKey, nextKey, totalStages]);
 
   const pricing = useMemo(() => {
     if (!plan) return null;

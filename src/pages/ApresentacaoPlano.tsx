@@ -473,25 +473,38 @@ export default function ApresentacaoPlano() {
                     </div>
                     {promoSemMes !== null ? (
                       <>
+                        <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+                          De
+                        </div>
                         <div className="flex items-baseline gap-2">
-                          <span className="text-2xl text-muted-foreground line-through" style={{ fontFamily: 'var(--font-display)' }}>
+                          <span className="text-2xl text-muted-foreground line-through decoration-2" style={{ fontFamily: 'var(--font-display)' }}>
                             {semestral.monthly}
                           </span>
+                          <span className="text-xs text-muted-foreground">/mês</span>
+                          <Badge className="bg-orange-500/15 text-orange-600 border-orange-500/30 font-bold">
+                            -{promo.discount_percent}%
+                          </Badge>
                         </div>
-                        <div className="flex items-baseline gap-2 mb-2">
+                        <div className="text-xs text-orange-600 uppercase tracking-wider mt-3 mb-1 font-semibold">
+                          Por apenas
+                        </div>
+                        <div className="flex items-baseline gap-2 mb-3">
                           <span className="text-4xl md:text-5xl font-bold text-orange-600" style={{ fontFamily: 'var(--font-display)' }}>
                             {brl(promoSemMes)}
                           </span>
                           <span className="text-sm text-muted-foreground">/mês</span>
                         </div>
-                        <div className="text-sm font-semibold text-orange-600">
+                        <div className="inline-flex items-center gap-1.5 bg-orange-500/10 text-orange-600 rounded-full px-3 py-1 text-xs md:text-sm font-bold mb-2">
+                          <PiggyBank className="h-3.5 w-3.5" /> Você economiza {brl(sem - promoSemMes)}/mês
+                        </div>
+                        <div className="text-xs font-semibold text-orange-600">
                           Promoção válida nos {promo.duration_months} primeiros meses
                         </div>
                       </>
                     ) : (
                       <>
                         <div className="flex items-baseline gap-2 mb-4">
-                          <span className="text-4xl md:text-5xl font-bold text-muted-foreground line-through decoration-2" style={{ fontFamily: 'var(--font-display)' }}>
+                          <span className="text-4xl md:text-5xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
                             {semestral.monthly}
                           </span>
                           <span className="text-sm text-muted-foreground">/mês</span>

@@ -725,7 +725,7 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
                 </div>
                 <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-3 space-y-1.5 text-sm">
                   <Row label="De" value={<span className="line-through">{brl(sem)}/mês</span>} />
-                  <Row label="Desconto" value={<Badge className="bg-orange-500 text-white">-{promo.discount_percent}%</Badge>} />
+                  <Row label="Desconto" value={<Badge className="bg-orange-500 text-white">-{semPromo?.discount_percent}%</Badge>} />
                   <Row label="Você economiza" value={<span className="font-bold text-orange-600">{brl(sem - promoSemMes)}/mês</span>} />
                 </div>
               </>

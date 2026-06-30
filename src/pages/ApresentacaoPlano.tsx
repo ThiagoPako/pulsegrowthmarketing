@@ -5,8 +5,9 @@ import { toast } from 'sonner';
 import {
   Check, ArrowRight, ArrowLeft, Sparkles, Target, TrendingUp,
   Calendar, BarChart3, Palette, X, Film, Image as ImageIcon, Megaphone, PenTool,
-  Crown, PiggyBank, MessageCircle, Link2, ChevronDown, ChevronUp, Rocket, Users,
+  Crown, PiggyBank, MessageCircle, Link2, ChevronDown, ChevronUp, Rocket, Users, Trophy,
   PlayCircle, Award, Zap, Maximize2, Minimize2,
+
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';

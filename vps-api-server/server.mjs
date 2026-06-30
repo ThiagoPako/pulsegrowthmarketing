@@ -205,6 +205,27 @@ function parseFilterArray(value) {
     .filter(Boolean);
 }
 
+function splitOrFilterParts(value) {
+  const input = String(value || '');
+  const parts = [];
+  let current = '';
+  let depth = 0;
+
+  for (const char of input) {
+    if (char === '(') depth += 1;
+    if (char === ')') depth = Math.max(0, depth - 1);
+    if (char === ',' && depth === 0) {
+      if (current.trim()) parts.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+
+  if (current.trim()) parts.push(current.trim());
+  return parts;
+}
+
 async function ensureProposalTables() {
   if (!proposalTablesEnsuredPromise) {
     proposalTablesEnsuredPromise = pool.query(`

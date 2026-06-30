@@ -61,6 +61,7 @@ export default function ApresentacaoPlano() {
   const baseRoute = isPublic ? '/p/planos' : '/apresentacao';
   const [stage, setStage] = useState(0);
   const [promo, setPromo] = useState<any | null>(null);
+  const [semPromo, setSemPromo] = useState<any | null>(null);
   const { activeCity } = useCity();
 
   const plan = plano ? getPlan(plano) : undefined;

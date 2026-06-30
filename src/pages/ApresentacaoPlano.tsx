@@ -462,16 +462,54 @@ export default function ApresentacaoPlano() {
               <>
                 {promo && (
                   <motion.div
-                    initial={{ opacity: 0, y: -20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0, y: -20, scale: 0.96 }}
+                    whileInView={{ opacity: 1, y: 0, scale: 1 }}
                     viewport={{ once: true }}
-                    className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-yellow-400 via-orange-500 to-red-500 text-white p-6 md:p-8 mb-6 shadow-2xl"
+                    transition={{ duration: 0.6, ease: 'easeOut' }}
+                    className="relative overflow-hidden rounded-3xl text-white p-6 md:p-8 mb-6 shadow-2xl"
                   >
-                    <div className="absolute -top-12 -left-12 w-72 h-72 rounded-full bg-white/10 blur-3xl" />
+                    {/* Gradiente animado de fundo */}
+                    <motion.div
+                      className="absolute inset-0 -z-10"
+                      style={{ backgroundSize: '300% 300%' }}
+                      animate={{
+                        background: [
+                          'linear-gradient(135deg, #facc15 0%, #f97316 50%, #ef4444 100%)',
+                          'linear-gradient(135deg, #ef4444 0%, #facc15 50%, #f97316 100%)',
+                          'linear-gradient(135deg, #f97316 0%, #ef4444 50%, #facc15 100%)',
+                          'linear-gradient(135deg, #facc15 0%, #f97316 50%, #ef4444 100%)',
+                        ],
+                      }}
+                      transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+                    />
+                    {/* Brilho pulsante */}
+                    <motion.div
+                      className="absolute -top-16 -left-16 w-80 h-80 rounded-full bg-white/20 blur-3xl"
+                      animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.6, 0.3] }}
+                      transition={{ duration: 4, repeat: Infinity }}
+                    />
+                    <motion.div
+                      className="absolute -bottom-16 -right-16 w-80 h-80 rounded-full bg-yellow-200/30 blur-3xl"
+                      animate={{ scale: [1.2, 1, 1.2], opacity: [0.4, 0.2, 0.4] }}
+                      transition={{ duration: 5, repeat: Infinity }}
+                    />
+                    {/* Faísca atravessando */}
+                    <motion.div
+                      className="absolute inset-y-0 w-32 bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-12"
+                      initial={{ x: '-100%' }}
+                      animate={{ x: '500%' }}
+                      transition={{ duration: 3, repeat: Infinity, repeatDelay: 2, ease: 'easeInOut' }}
+                    />
                     <div className="relative flex flex-col md:flex-row items-center justify-between gap-4">
-                      <div>
-                        <Badge className="bg-white text-orange-600 font-bold mb-2">🔥 {promo.title}</Badge>
-                        <div className="text-2xl md:text-4xl font-bold leading-tight" style={{ fontFamily: 'var(--font-display)' }}>
+                      <div className="flex-1">
+                        <motion.div
+                          animate={{ scale: [1, 1.05, 1] }}
+                          transition={{ duration: 2, repeat: Infinity }}
+                          className="inline-block"
+                        >
+                          <Badge className="bg-white text-orange-600 font-bold mb-2 shadow-lg">🔥 {promo.title}</Badge>
+                        </motion.div>
+                        <div className="text-2xl md:text-4xl font-bold leading-tight drop-shadow-lg" style={{ fontFamily: 'var(--font-display)' }}>
                           {promo.discount_percent}% OFF nos primeiros {promo.duration_months} {promo.duration_months === 1 ? 'mês' : 'meses'}
                         </div>
                         {promo.description && (
@@ -488,7 +526,12 @@ export default function ApresentacaoPlano() {
                                 <span>{left} de {promo.max_redemptions} restantes</span>
                               </div>
                               <div className="h-2 bg-white/20 rounded-full overflow-hidden">
-                                <div className="h-full bg-white rounded-full transition-all" style={{ width: `${pctTaken}%` }} />
+                                <motion.div
+                                  className="h-full bg-white rounded-full"
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${pctTaken}%` }}
+                                  transition={{ duration: 1, delay: 0.3 }}
+                                />
                               </div>
                               <p className="text-xs opacity-90 mt-1">
                                 {taken === 0 ? 'Seja um dos primeiros a garantir!' : `${taken} cliente${taken > 1 ? 's já garantiram' : ' já garantiu'} — corra antes que esgote.`}
@@ -507,6 +550,13 @@ export default function ApresentacaoPlano() {
                           </p>
                         )}
                       </div>
+                      <motion.div
+                        animate={{ rotate: [0, 10, -10, 0] }}
+                        transition={{ duration: 3, repeat: Infinity }}
+                        className="hidden md:flex w-24 h-24 rounded-full bg-white/20 backdrop-blur items-center justify-center text-5xl shrink-0 shadow-2xl"
+                      >
+                        🚀
+                      </motion.div>
                     </div>
                   </motion.div>
                 )}

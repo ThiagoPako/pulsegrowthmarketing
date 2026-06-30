@@ -9,9 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Trash2, Save, Tag, ArrowLeft } from 'lucide-react';
+import { Plus, Trash2, Save, Tag, ArrowLeft, Rocket, Zap, Check, Flame, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PLANS } from '@/data/plans';
+import { motion } from 'framer-motion';
 
 type Promo = {
   id: string;
@@ -28,6 +29,80 @@ type Promo = {
   max_redemptions: number | null;
   redemptions_count: number;
 };
+
+type PresetDef = {
+  id: string;
+  icon: typeof Rocket;
+  badge: string;
+  title: string;
+  subtitle: string;
+  highlight?: boolean;
+  payload: Omit<Promo, 'id' | 'redemptions_count'>;
+};
+
+const PRESETS: PresetDef[] = [
+  {
+    id: 'aceleracao-comercial-pulse',
+    icon: Rocket,
+    badge: '🔥 Em destaque',
+    title: 'Aceleração Comercial Pulse',
+    subtitle: 'Mantém os 10% do anual + 30% OFF nos primeiros 6 meses. Promoção de lançamento.',
+    highlight: true,
+    payload: {
+      city: null,
+      plan_key: null,
+      applies_to: 'anual',
+      title: 'Aceleração Comercial Pulse',
+      description: 'Feche o plano anual e ganhe 30% OFF nos primeiros 6 meses + os 10% de desconto do contrato anual já inclusos.',
+      discount_percent: 30,
+      duration_months: 6,
+      active: true,
+      starts_at: null,
+      ends_at: null,
+      max_redemptions: null,
+    },
+  },
+  {
+    id: 'lancamento-uruacu',
+    icon: Flame,
+    badge: '🎯 Por cidade',
+    title: 'Lançamento Uruaçu — 10 primeiros',
+    subtitle: '30% OFF nos primeiros 6 meses para os 10 primeiros clientes de Uruaçu.',
+    payload: {
+      city: 'uruacu',
+      plan_key: null,
+      applies_to: 'anual',
+      title: 'Lançamento Uruaçu',
+      description: 'Promoção de lançamento — 30% OFF nos primeiros 6 meses para os 10 primeiros clientes.',
+      discount_percent: 30,
+      duration_months: 6,
+      active: true,
+      starts_at: null,
+      ends_at: null,
+      max_redemptions: 10,
+    },
+  },
+  {
+    id: 'semestral-10',
+    icon: Zap,
+    badge: '⚡ Tática',
+    title: '10% OFF no semestral',
+    subtitle: 'Desconto adicional para destravar quem ainda não fecha anual.',
+    payload: {
+      city: null,
+      plan_key: null,
+      applies_to: 'semestral',
+      title: '10% OFF no semestral',
+      description: 'Desconto adicional de 10% no contrato semestral por 6 meses.',
+      discount_percent: 10,
+      duration_months: 6,
+      active: true,
+      starts_at: null,
+      ends_at: null,
+      max_redemptions: null,
+    },
+  },
+];
 
 const empty: Omit<Promo, 'id' | 'redemptions_count'> = {
   city: null,
@@ -50,6 +125,7 @@ export default function PlanPromotionsAdmin() {
   const [form, setForm] = useState<typeof empty>(empty);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showCustom, setShowCustom] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -64,8 +140,51 @@ export default function PlanPromotionsAdmin() {
 
   useEffect(() => { load(); }, []);
 
+  // Verifica se um preset está ativo (match por título)
+  const isPresetActive = (preset: PresetDef) =>
+    items.some(p => p.active && p.title.trim().toLowerCase() === preset.payload.title.trim().toLowerCase());
+
+  async function activatePreset(preset: PresetDef) {
+    setSaving(true);
+    try {
+      // Desativa qualquer promoção com o mesmo título
+      const existing = items.filter(p => p.title.trim().toLowerCase() === preset.payload.title.trim().toLowerCase());
+      if (existing.length > 0) {
+        await supabase.from('plan_promotions' as any)
+          .update({ active: true })
+          .eq('id', existing[0].id);
+        toast.success(`${preset.title} ativada`);
+      } else {
+        const { error } = await supabase.from('plan_promotions' as any).insert(preset.payload);
+        if (error) throw error;
+        toast.success(`${preset.title} criada e ativada`);
+      }
+      load();
+    } catch (e: any) {
+      toast.error('Erro: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deactivatePreset(preset: PresetDef) {
+    const existing = items.filter(p => p.title.trim().toLowerCase() === preset.payload.title.trim().toLowerCase() && p.active);
+    if (existing.length === 0) return;
+    setSaving(true);
+    try {
+      for (const e of existing) {
+        await supabase.from('plan_promotions' as any).update({ active: false }).eq('id', e.id);
+      }
+      toast.success(`${preset.title} desativada`);
+      load();
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function startEdit(p: Promo) {
     setEditingId(p.id);
+    setShowCustom(true);
     const { id, redemptions_count, ...rest } = p;
     setForm(rest);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -121,7 +240,7 @@ export default function PlanPromotionsAdmin() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
+    <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="outline" size="sm" onClick={() => navigate('/apresentacao')}>
           <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
@@ -131,13 +250,92 @@ export default function PlanPromotionsAdmin() {
         </div>
         <div>
           <h1 className="text-2xl font-bold">Promoções de Planos</h1>
-          <p className="text-sm text-muted-foreground">Crie ofertas por cidade e plano (ex.: 30% off nos primeiros 6 meses no anual).</p>
+          <p className="text-sm text-muted-foreground">Escolha qual promoção fica ativa nas páginas de apresentação.</p>
         </div>
       </div>
 
+      {/* PRESETS — seleção rápida */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" /> Promoções prontas
+          </h2>
+          <span className="text-xs text-muted-foreground">Clique para ativar/desativar</span>
+        </div>
+        <div className="grid md:grid-cols-3 gap-4">
+          {PRESETS.map((preset) => {
+            const active = isPresetActive(preset);
+            const Icon = preset.icon;
+            return (
+              <motion.button
+                key={preset.id}
+                type="button"
+                whileHover={{ y: -4 }}
+                onClick={() => active ? deactivatePreset(preset) : activatePreset(preset)}
+                disabled={saving}
+                className={`relative text-left rounded-2xl p-5 border-2 transition-all overflow-hidden ${
+                  active
+                    ? 'border-primary bg-gradient-to-br from-primary/15 via-orange-500/10 to-primary/5 shadow-lg'
+                    : preset.highlight
+                    ? 'border-primary/30 bg-card hover:border-primary/60'
+                    : 'border-border bg-card hover:border-primary/40'
+                }`}
+              >
+                {active && (
+                  <motion.div
+                    className="absolute inset-0 -z-0 opacity-30"
+                    animate={{ background: [
+                      'radial-gradient(circle at 20% 20%, hsl(var(--primary)/.4), transparent 60%)',
+                      'radial-gradient(circle at 80% 80%, hsl(var(--primary)/.4), transparent 60%)',
+                      'radial-gradient(circle at 20% 20%, hsl(var(--primary)/.4), transparent 60%)',
+                    ]}}
+                    transition={{ duration: 4, repeat: Infinity }}
+                  />
+                )}
+                <div className="relative">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${active ? 'bg-primary text-primary-foreground' : 'bg-primary/10 text-primary'}`}>
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    {active ? (
+                      <Badge className="bg-emerald-500 text-white border-0">
+                        <Check className="h-3 w-3 mr-1" /> Ativa
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px]">{preset.badge}</Badge>
+                    )}
+                  </div>
+                  <h3 className="font-bold text-base mb-1 leading-tight">{preset.title}</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{preset.subtitle}</p>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    <Badge variant="outline" className="text-[10px]">{preset.payload.discount_percent}% OFF</Badge>
+                    <Badge variant="outline" className="text-[10px]">{preset.payload.duration_months} meses</Badge>
+                    <Badge variant="outline" className="text-[10px]">{preset.payload.applies_to}</Badge>
+                    {preset.payload.city && <Badge variant="outline" className="text-[10px]">{preset.payload.city}</Badge>}
+                    {preset.payload.max_redemptions && <Badge variant="outline" className="text-[10px]">{preset.payload.max_redemptions} vagas</Badge>}
+                  </div>
+                </div>
+              </motion.button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Toggle Custom */}
+      <div className="flex items-center justify-between border-t border-border pt-4">
+        <div>
+          <h2 className="text-base font-semibold">Promoção personalizada</h2>
+          <p className="text-xs text-muted-foreground">Crie uma oferta com regras específicas (cidade, plano, vagas, datas).</p>
+        </div>
+        <Button variant={showCustom ? 'secondary' : 'outline'} size="sm" onClick={() => { setShowCustom(s => !s); if (showCustom) resetForm(); }}>
+          {showCustom ? 'Fechar' : <><Plus className="h-4 w-4 mr-1" /> Nova personalizada</>}
+        </Button>
+      </div>
+
+      {showCustom && (
       <Card>
         <CardHeader>
-          <CardTitle>{editingId ? 'Editar promoção' : 'Nova promoção'}</CardTitle>
+          <CardTitle>{editingId ? 'Editar promoção' : 'Nova promoção personalizada'}</CardTitle>
           <CardDescription>Deixe cidade ou plano em branco para aplicar a todos.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -202,7 +400,6 @@ export default function PlanPromotionsAdmin() {
               <Input type="number" min={1} value={form.max_redemptions ?? ''}
                 placeholder="Ex: 10 (vazio = ilimitado)"
                 onChange={e => setForm({ ...form, max_redemptions: e.target.value ? Number(e.target.value) : null })} />
-              <p className="text-xs text-muted-foreground">Ex: primeiros 10 clientes de Uruaçu que fecharem.</p>
             </div>
           </div>
           <div className="space-y-2">
@@ -223,32 +420,33 @@ export default function PlanPromotionsAdmin() {
           </div>
         </CardContent>
       </Card>
+      )}
 
+      {/* Lista de cadastradas (gerenciamento) */}
       <Card>
         <CardHeader>
-          <CardTitle>Promoções cadastradas</CardTitle>
+          <CardTitle className="text-base">Todas as promoções cadastradas</CardTitle>
+          <CardDescription>Histórico — você pode reativar, editar ou excluir.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {loading && <p className="text-sm text-muted-foreground">Carregando...</p>}
           {!loading && items.length === 0 && (
-            <p className="text-sm text-muted-foreground">Nenhuma promoção cadastrada.</p>
+            <p className="text-sm text-muted-foreground">Nenhuma promoção cadastrada ainda. Ative uma das promoções prontas acima.</p>
           )}
           {items.map(p => (
-            <div key={p.id} className="p-4 border border-border rounded-xl bg-muted/30 flex flex-col md:flex-row md:items-center gap-3 justify-between">
+            <div key={p.id} className="p-3 border border-border rounded-xl bg-muted/30 flex flex-col md:flex-row md:items-center gap-3 justify-between">
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <span className="font-semibold">{p.title}</span>
+                  <span className="font-semibold text-sm">{p.title}</span>
                   {p.active
                     ? <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-500/20">Ativa</Badge>
                     : <Badge variant="outline">Inativa</Badge>}
-                  <Badge variant="outline">{p.city ?? 'Todas cidades'}</Badge>
-                  <Badge variant="outline">{p.plan_key ? PLANS.find(x => x.key === p.plan_key)?.name : 'Todos planos'}</Badge>
-                  <Badge variant="outline">{p.applies_to}</Badge>
+                  <Badge variant="outline" className="text-[10px]">{p.city ?? 'Todas cidades'}</Badge>
+                  <Badge variant="outline" className="text-[10px]">{p.plan_key ? PLANS.find(x => x.key === p.plan_key)?.name : 'Todos planos'}</Badge>
                 </div>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {p.discount_percent}% off por {p.duration_months} {p.duration_months === 1 ? 'mês' : 'meses'}
                   {p.max_redemptions ? ` • ${p.redemptions_count}/${p.max_redemptions} vagas usadas` : ''}
-                  {p.description ? ` • ${p.description}` : ''}
                 </p>
               </div>
               <div className="flex gap-2">

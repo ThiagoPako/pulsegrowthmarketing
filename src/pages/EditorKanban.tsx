@@ -470,6 +470,14 @@ export default function EditorKanban() {
     setDragOverColumn(null);
     if (!draggedTask || draggedTask.kanban_column === targetColumn) { setDraggedTask(null); return; }
 
+    // Block editors/videomakers from moving a task already claimed by someone else
+    if (isEditorRole && draggedTask.assigned_to && draggedTask.assigned_to !== user?.id) {
+      toast.error('🚫 Este vídeo já foi pego por outra pessoa!');
+      setDraggedTask(null);
+      fetchTasks();
+      return;
+    }
+
     // Validate transition
     const validationError = validateTransition(draggedTask, targetColumn);
     if (validationError) {

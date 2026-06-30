@@ -6,7 +6,7 @@ import {
   Check, ArrowRight, ArrowLeft, Sparkles, Target, TrendingUp,
   Calendar, BarChart3, Palette, X, Film, Image as ImageIcon, Megaphone, PenTool,
   Crown, PiggyBank, MessageCircle, Link2, ChevronDown, ChevronUp, Rocket, Users,
-  PlayCircle, Award, Zap,
+  PlayCircle, Award, Zap, Maximize2, Minimize2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -62,6 +62,23 @@ export default function ApresentacaoPlano() {
   const [stage, setStage] = useState(0);
   const [promo, setPromo] = useState<any | null>(null);
   const [semPromo, setSemPromo] = useState<any | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch { /* ignore */ }
+  };
+
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
   const { activeCity } = useCity();
 
   const plan = plano ? getPlan(plano) : undefined;
@@ -178,6 +195,10 @@ export default function ApresentacaoPlano() {
             <Link2 className="h-4 w-4 md:mr-1" />
             <span className="hidden md:inline">Link público</span>
           </Button>
+          <Button variant="outline" size="sm" onClick={toggleFullscreen} className="backdrop-blur bg-background/80 h-8 px-2" aria-label={isFullscreen ? 'Sair da tela cheia' : 'Tela cheia'}>
+            {isFullscreen ? <Minimize2 className="h-4 w-4 md:mr-1" /> : <Maximize2 className="h-4 w-4 md:mr-1" />}
+            <span className="hidden md:inline">{isFullscreen ? 'Sair' : 'Tela cheia'}</span>
+          </Button>
           <Button variant="outline" size="sm" onClick={() => window.close()} className="backdrop-blur bg-background/80 h-8 px-2" aria-label="Fechar">
             <X className="h-4 w-4" />
           </Button>
@@ -197,30 +218,30 @@ export default function ApresentacaoPlano() {
       </div>
 
       {/* SLIDE - scroll vertical entre etapas */}
-      <div className="absolute inset-0 pt-20 pb-20 overflow-hidden">
+      <div className="absolute inset-0 pt-16 pb-16 md:pt-20 md:pb-20 overflow-hidden">
         <motion.div
           animate={{ y: `-${stage * 100}%` }}
           transition={{ duration: 0.8, ease: [0.65, 0, 0.35, 1] }}
           className="h-full w-full"
         >
-          <div className="h-full w-full px-4 md:px-8 flex items-center justify-center">
+          <div className="h-full w-full px-3 md:px-8 flex items-start md:items-center justify-center overflow-y-auto">
             <StageIntro />
           </div>
-          <div className="h-full w-full px-4 md:px-8 flex items-center justify-center">
+          <div className="h-full w-full px-3 md:px-8 flex items-start md:items-center justify-center overflow-y-auto">
             <StagePlan plan={plan} Icon={Icon} />
           </div>
-          <div className="h-full w-full px-4 md:px-8 flex items-center justify-center">
+          <div className="h-full w-full px-3 md:px-8 flex items-start md:items-center justify-center overflow-y-auto">
             <StageDeliveries plan={plan} categories={categories} />
           </div>
-          <div className="h-full w-full px-4 md:px-8 flex items-center justify-center">
+          <div className="h-full w-full px-3 md:px-8 flex items-start md:items-center justify-center overflow-y-auto">
             {pricing && <StageInvest plan={plan} pricing={pricing} promo={promo} applyPromo={false} />}
           </div>
           {promo && (
             <>
-              <div className="h-full w-full px-4 md:px-8 flex items-center justify-center">
+              <div className="h-full w-full px-3 md:px-8 flex items-start md:items-center justify-center overflow-y-auto">
                 <StagePromoStory plan={plan} promo={promo} />
               </div>
-              <div className="h-full w-full px-4 md:px-8 flex items-center justify-center">
+              <div className="h-full w-full px-3 md:px-8 flex items-start md:items-center justify-center overflow-y-auto">
                 {pricing && <StageInvest plan={plan} pricing={pricing} promo={promo} applyPromo={true} />}
               </div>
             </>
@@ -298,7 +319,7 @@ function Slide({ children }: { children: React.ReactNode }) {
       variants={slideVariants}
       initial="enter" animate="center" exit="exit"
       transition={slideTransition}
-      className="w-full h-full max-w-7xl mx-auto flex items-center justify-center"
+      className="w-full min-h-full max-w-7xl mx-auto flex items-center justify-center py-2"
     >
       {children}
     </motion.div>

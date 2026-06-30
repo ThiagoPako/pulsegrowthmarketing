@@ -10,6 +10,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import FacebookPixel from '@/components/FacebookPixel';
+import { useAuth } from '@/hooks/useAuth';
+
+// Navigates to the team area: dashboard if logged in, otherwise login page
+function useGoToTeamArea() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  return () => navigate(user ? '/dashboard' : '/login');
+}
 
 
 const WHATSAPP_LINK = 'https://wa.me/5562985382981?text=Olá!%20Vim%20pelo%20site%20e%20gostaria%20de%20saber%20mais%20sobre%20os%20serviços%20da%20Pulse.';
@@ -138,6 +146,7 @@ function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [activeSection, setActiveSection] = useState('');
   const navigate = useNavigate();
+  const goToTeamArea = useGoToTeamArea();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -233,7 +242,7 @@ function Navbar() {
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
-              <Button variant="ghost" size="sm" onClick={() => navigate('/login')} className="hidden sm:inline-flex text-xs sm:text-sm h-8 sm:h-9 gap-1.5">
+              <Button variant="ghost" size="sm" onClick={() => goToTeamArea()} className="hidden sm:inline-flex text-xs sm:text-sm h-8 sm:h-9 gap-1.5">
                 <LogIn size={14} /> Área da Equipe
               </Button>
               <Button variant="ghost" size="sm" onClick={() => navigate('/clube')} className="hidden sm:inline-flex text-xs sm:text-sm h-8 sm:h-9 gap-1.5">
@@ -322,7 +331,7 @@ function Navbar() {
                 <Button variant="outline" size="lg" onClick={() => { setOpen(false); navigate('/clube'); }} className="w-full py-6 gap-2">
                   <Gift size={18} /> Clube de Descontos
                 </Button>
-                <Button variant="outline" size="lg" onClick={() => { setOpen(false); navigate('/login'); }} className="w-full py-6 gap-2">
+                <Button variant="outline" size="lg" onClick={() => { setOpen(false); goToTeamArea(); }} className="w-full py-6 gap-2">
                   <LogIn size={18} /> Área da Equipe
                 </Button>
               </motion.div>
@@ -337,6 +346,7 @@ function Navbar() {
 // ─── Hero ───────────────────────────────────────────────────
 function Hero() {
   const navigate = useNavigate();
+  const goToTeamArea = useGoToTeamArea();
   const ref = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] });
   const bgY = useTransform(scrollYProgress, [0, 1], ['0%', '30%']);
@@ -435,7 +445,7 @@ function Hero() {
               </Button>
             </motion.div>
             <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-              <Button size="lg" variant="ghost" onClick={() => navigate('/login')} className="gap-2 text-sm sm:text-base px-6 sm:px-8 py-5 sm:py-6 w-full sm:w-auto hover:bg-primary/10 hover:text-primary transition-colors">
+              <Button size="lg" variant="ghost" onClick={() => goToTeamArea()} className="gap-2 text-sm sm:text-base px-6 sm:px-8 py-5 sm:py-6 w-full sm:w-auto hover:bg-primary/10 hover:text-primary transition-colors">
                 <LogIn size={16} /> Área da Equipe
               </Button>
             </motion.div>

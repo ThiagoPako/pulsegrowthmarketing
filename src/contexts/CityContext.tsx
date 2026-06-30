@@ -28,7 +28,7 @@ function readStored(): CityCode {
 }
 
 export function CityProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [activeCity, setActiveCityState] = useState<CityCode>(readStored);
   const [availableCities, setAvailableCities] = useState<CityCode[]>(['minacu']);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,6 +42,11 @@ export function CityProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     async function loadCities() {
       if (!user) {
+        const hasStoredToken = typeof window !== 'undefined' && !!localStorage.getItem(TOKEN_KEY);
+        if (authLoading || hasStoredToken) {
+          setIsLoading(true);
+          return;
+        }
         setAvailableCities(['minacu']);
         setIsLoading(false);
         return;
@@ -75,7 +80,7 @@ export function CityProvider({ children }: { children: ReactNode }) {
     }
     loadCities();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, authLoading]);
 
   const setActiveCity = useCallback((city: CityCode) => {
     localStorage.setItem(STORAGE_KEY, city);

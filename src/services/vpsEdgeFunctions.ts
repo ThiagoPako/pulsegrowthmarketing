@@ -84,10 +84,13 @@ export async function invokeVpsFunction(
       response = await fetch(url, fetchOptions);
     }
 
-    const data = await response.json();
+    const data = await response.json().catch(() => null);
 
     if (!response.ok) {
-      return { data: null, error: { message: data.error || `HTTP ${response.status}` } };
+      const message = typeof data?.error === 'string'
+        ? data.error
+        : data?.error?.message || data?.message || `HTTP ${response.status}`;
+      return { data: null, error: { message } };
     }
 
     return { data, error: null };

@@ -242,7 +242,7 @@ function Navbar() {
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
-              <Button variant="ghost" size="sm" onClick={() => navigate('/login')} className="hidden sm:inline-flex text-xs sm:text-sm h-8 sm:h-9 gap-1.5">
+              <Button variant="ghost" size="sm" onClick={() => goToTeamArea()} className="hidden sm:inline-flex text-xs sm:text-sm h-8 sm:h-9 gap-1.5">
                 <LogIn size={14} /> Área da Equipe
               </Button>
               <Button variant="ghost" size="sm" onClick={() => navigate('/clube')} className="hidden sm:inline-flex text-xs sm:text-sm h-8 sm:h-9 gap-1.5">
@@ -331,7 +331,7 @@ function Navbar() {
                 <Button variant="outline" size="lg" onClick={() => { setOpen(false); navigate('/clube'); }} className="w-full py-6 gap-2">
                   <Gift size={18} /> Clube de Descontos
                 </Button>
-                <Button variant="outline" size="lg" onClick={() => { setOpen(false); navigate('/login'); }} className="w-full py-6 gap-2">
+                <Button variant="outline" size="lg" onClick={() => { setOpen(false); goToTeamArea(); }} className="w-full py-6 gap-2">
                   <LogIn size={18} /> Área da Equipe
                 </Button>
               </motion.div>
@@ -445,7 +445,7 @@ function Hero() {
               </Button>
             </motion.div>
             <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-              <Button size="lg" variant="ghost" onClick={() => navigate('/login')} className="gap-2 text-sm sm:text-base px-6 sm:px-8 py-5 sm:py-6 w-full sm:w-auto hover:bg-primary/10 hover:text-primary transition-colors">
+              <Button size="lg" variant="ghost" onClick={() => goToTeamArea()} className="gap-2 text-sm sm:text-base px-6 sm:px-8 py-5 sm:py-6 w-full sm:w-auto hover:bg-primary/10 hover:text-primary transition-colors">
                 <LogIn size={16} /> Área da Equipe
               </Button>
             </motion.div>

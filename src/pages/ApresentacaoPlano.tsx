@@ -385,8 +385,45 @@ export default function ApresentacaoPlano() {
             const totalEconomia = diffMes * 12;
             const pct = sem > 0 ? Math.round((diffMes / sem) * 100) : 0;
 
+            const promoTargetAnnual = promo && (promo.applies_to === 'anual' || promo.applies_to === 'ambos');
+            const promoTargetSemestral = promo && (promo.applies_to === 'semestral' || promo.applies_to === 'ambos');
+            const promoAnualMes = promoTargetAnnual ? an * (1 - Number(promo.discount_percent) / 100) : null;
+            const promoSemMes = promoTargetSemestral ? sem * (1 - Number(promo.discount_percent) / 100) : null;
+
             return (
               <>
+                {promo && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-yellow-400 via-orange-500 to-red-500 text-white p-6 md:p-8 mb-6 shadow-2xl"
+                  >
+                    <div className="absolute -top-12 -left-12 w-72 h-72 rounded-full bg-white/10 blur-3xl" />
+                    <div className="relative flex flex-col md:flex-row items-center justify-between gap-4">
+                      <div>
+                        <Badge className="bg-white text-orange-600 font-bold mb-2">🔥 {promo.title}</Badge>
+                        <div className="text-2xl md:text-4xl font-bold leading-tight" style={{ fontFamily: 'var(--font-display)' }}>
+                          {promo.discount_percent}% OFF nos primeiros {promo.duration_months} {promo.duration_months === 1 ? 'mês' : 'meses'}
+                        </div>
+                        {promo.description && (
+                          <p className="text-sm md:text-base opacity-95 mt-1">{promo.description}</p>
+                        )}
+                        {promoAnualMes !== null && (
+                          <p className="text-sm md:text-base mt-2 font-semibold">
+                            Anual sai por <span className="bg-white/20 px-2 py-0.5 rounded">{brl(promoAnualMes)}/mês</span> nos {promo.duration_months} primeiros meses
+                          </p>
+                        )}
+                        {promoSemMes !== null && (
+                          <p className="text-sm md:text-base mt-1 font-semibold">
+                            Semestral sai por <span className="bg-white/20 px-2 py-0.5 rounded">{brl(promoSemMes)}/mês</span> nos {promo.duration_months} primeiros meses
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
                 {/* Banner de economia */}
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}

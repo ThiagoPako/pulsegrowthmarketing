@@ -470,8 +470,8 @@ function getTriggers(key: string): Array<{ icon: any; title: string; desc: strin
     ],
     boost: [
       { icon: TrendingUp, title: 'Quer escalar sem virar empresa enterprise', desc: 'Volume robusto de conteúdo, stories diários e ads avançado pelo melhor custo-benefício.' },
-      { icon: Calendar, title: 'Presença diária, sem você se preocupar', desc: '20 stories, 6 reels e posts no automático — operação 100% nossa.' },
-      { icon: Crown, title: 'É o plano que MAIS converte', desc: 'Mais de 70% dos nossos clientes escolhem o Boost — equilíbrio perfeito entre entrega e investimento.' },
+      { icon: Calendar, title: 'Presença diária, sem você se preocupar', desc: '20 stories, 6 reels e posts no automático, operação 100% nossa.' },
+      { icon: Crown, title: 'É o plano que MAIS converte', desc: 'Mais de 70% dos nossos clientes escolhem o Boost, equilíbrio perfeito entre entrega e investimento.' },
     ],
     premium: [
       { icon: Target, title: 'Quer autoridade + vendas previsíveis', desc: 'Conteúdo + tráfego + CRM + treinamento comercial integrados.' },
@@ -510,12 +510,12 @@ function getQuantities(key: string) {
 }
 
 const DIFFERENTIALS = [
-  { icon: Palette,    title: 'Designer da nossa equipe',  desc: 'Adriele, designer interna, cria suas artes com identidade própria — nada genérico, nada terceirizado.' },
-  { icon: Film,       title: 'Videomakers profissionais', desc: 'Time próprio que direciona a gravação no local — sabemos filmar até quem NUNCA gravou na vida.' },
-  { icon: PenTool,    title: 'Roteiros frase a frase',    desc: 'Método Pulse: cada vídeo com roteiro pronto, focado em VENDAS — você só lê e grava.' },
+  { icon: Palette,    title: 'Designer da nossa equipe',  desc: 'Adriele, designer interna, cria suas artes com identidade própria, nada genérico, nada terceirizado.' },
+  { icon: Film,       title: 'Videomakers profissionais', desc: 'Time próprio que direciona a gravação no local, sabemos filmar até quem NUNCA gravou na vida.' },
+  { icon: PenTool,    title: 'Roteiros frase a frase',    desc: 'Método Pulse: cada vídeo com roteiro pronto, focado em VENDAS, você só lê e grava.' },
   { icon: Megaphone,  title: 'Gestor de tráfego especialista', desc: 'Profissional dedicado em Meta Ads + Google Ads, otimização diária com foco em ROI.' },
   { icon: BarChart3,  title: 'Portal do Cliente exclusivo', desc: 'Acompanha conteúdo, agenda de gravação, anúncios e relatórios em tempo real, 24/7.' },
-  { icon: Crown,      title: 'A gente NÃO terceiriza culpa', desc: 'Da geração de leads ao fechamento da venda — assumimos o resultado e buscamos a solução.' },
+  { icon: Crown,      title: 'A gente NÃO terceiriza culpa', desc: 'Da geração de leads ao fechamento da venda, assumimos o resultado e buscamos a solução.' },
 ];
 
 function StageDeliveries({ plan, categories }: { plan: any; categories: Category[] }) {
@@ -545,7 +545,7 @@ function StageDeliveries({ plan, categories }: { plan: any; categories: Category
           </motion.h2>
         </div>
 
-        {/* QUANTIDADES — destaque grande */}
+        {/* QUANTIDADES, destaque grande */}
         {highlights.length > 0 && (
           <div className={`grid gap-3 md:gap-4 mb-6 ${highlights.length === 4 ? 'grid-cols-2 md:grid-cols-4' : highlights.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
             {highlights.map((h, i) => (
@@ -572,7 +572,7 @@ function StageDeliveries({ plan, categories }: { plan: any; categories: Category
           </div>
         )}
 
-        {/* DIFERENCIAIS — gatilhos do time */}
+        {/* DIFERENCIAIS, gatilhos do time */}
         <motion.div
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }}
           className="rounded-3xl border-2 border-primary/20 bg-gradient-to-br from-card to-secondary/30 p-5 md:p-6 mb-6"
@@ -605,7 +605,7 @@ function StageDeliveries({ plan, categories }: { plan: any; categories: Category
           </div>
         </motion.div>
 
-        {/* LISTA COMPLETA — colapsada visualmente */}
+        {/* LISTA COMPLETA, colapsada visualmente */}
         <motion.div
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }}
         >
@@ -741,7 +741,7 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
               <Crown className="h-3 w-3 mr-1" /> Recomendado
             </Badge>
             <div className="text-xs font-semibold mb-2 opacity-90 uppercase tracking-wider">
-              Contrato {anual.label} — melhor custo
+              Contrato {anual.label}, melhor custo
             </div>
             {promoAnualMes !== null ? (
               <>
@@ -802,8 +802,8 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
 function StagePromoStory({ plan, promo }: { plan: any; promo: any }) {
   const reasons = [
     { icon: Rocket, title: 'Promoção de Inauguração', desc: 'Estamos chegando na sua cidade e queremos os primeiros cases de sucesso. Por isso liberamos um desconto que não vai se repetir.' },
-    { icon: Award, title: 'Vagas limitadas por cidade', desc: 'Trabalhamos com poucos clientes por região para garantir exclusividade de nicho e dedicação total da equipe.' },
-    { icon: Zap, title: 'Resultado desde o primeiro mês', desc: 'Roteiros frase a frase, gravação direcionada e tráfego pago rodando já nos primeiros dias.' },
+    { icon: Award, title: 'Vagas limitadas por cidade', desc: 'Trabalhamos com poucos clientes por região para garantir dedicação total da equipe a cada projeto.' },
+    { icon: Zap, title: 'Estrutura completa desde o início', desc: 'Roteiros frase a frase, gravação direcionada, edição profissional e estratégia de conteúdo focada em vendas.' },
   ];
   const scarcity = [
     { label: 'Desconto', value: `${promo.discount_percent}% OFF` },
@@ -821,7 +821,7 @@ function StagePromoStory({ plan, promo }: { plan: any; promo: any }) {
             Promoção <span className="bg-gradient-to-r from-orange-500 via-red-500 to-yellow-500 bg-clip-text text-transparent">{promo.title}</span>
           </h2>
           <p className="mt-3 text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
-            Antes de mostrar o valor com desconto, entenda <strong>por que</strong> essa condição existe — e por que ela vai acabar.
+            Antes de mostrar o valor com desconto, entenda <strong>por que</strong> essa condição existe e por que ela vai acabar.
           </p>
         </motion.div>
 

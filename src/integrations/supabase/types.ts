@@ -55,6 +55,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "active_recordings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "active_recordings_recording_id_fkey"
             columns: ["recording_id"]
             isOneToOne: true
@@ -300,6 +307,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "billing_messages_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "billing_messages_revenue_id_fkey"
             columns: ["revenue_id"]
             isOneToOne: false
@@ -349,6 +363,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients_public_logos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "briefing_versions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -433,6 +454,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients_public_logos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_endomarketing_contracts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
             referencedColumns: ["id"]
           },
           {
@@ -525,6 +553,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients_public_logos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
             referencedColumns: ["id"]
           },
           {
@@ -646,6 +681,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "client_portal_contents_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "client_portal_contents_uploaded_by_fkey"
             columns: ["uploaded_by"]
             isOneToOne: false
@@ -701,6 +743,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients_public_logos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_portal_notifications_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
             referencedColumns: ["id"]
           },
           {
@@ -1254,6 +1303,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "content_tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "content_tasks_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
@@ -1430,6 +1486,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients_public_logos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_records_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
             referencedColumns: ["id"]
           },
           {
@@ -1619,6 +1682,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "design_tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "design_tasks_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
@@ -1689,6 +1759,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients_public_logos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discount_campaigns_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
             referencedColumns: ["id"]
           },
           {
@@ -2019,6 +2096,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "endomarketing_partner_tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "endomarketing_partner_tasks_contract_id_fkey"
             columns: ["contract_id"]
             isOneToOne: false
@@ -2129,6 +2213,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients_public_logos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_recordings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
             referencedColumns: ["id"]
           },
           {
@@ -2402,6 +2493,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "financial_contracts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "financial_contracts_plan_id_fkey"
             columns: ["plan_id"]
             isOneToOne: false
@@ -2478,6 +2576,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients_public_logos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flyer_items_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
             referencedColumns: ["id"]
           },
           {
@@ -2610,6 +2715,13 @@ export type Database = {
             referencedRelation: "clients_public_logos"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "integration_logs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       kanban_tasks: {
@@ -2659,6 +2771,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients_public_logos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kanban_tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -2905,6 +3024,13 @@ export type Database = {
             referencedRelation: "clients_public_logos"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "onboarding_tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       partners: {
@@ -3127,6 +3253,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients_public_logos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portal_video_views_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
             referencedColumns: ["id"]
           },
           {
@@ -3399,6 +3532,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "recordings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "recordings_videomaker_id_fkey"
             columns: ["videomaker_id"]
             isOneToOne: false
@@ -3460,6 +3600,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients_public_logos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revenues_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
             referencedColumns: ["id"]
           },
           {
@@ -3578,6 +3725,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients_public_logos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scripts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
             referencedColumns: ["id"]
           },
           {
@@ -3726,6 +3880,13 @@ export type Database = {
             referencedRelation: "clients_public_logos"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "social_accounts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       social_media_deliveries: {
@@ -3796,6 +3957,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients_public_logos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_media_deliveries_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
             referencedColumns: ["id"]
           },
           {
@@ -4019,6 +4187,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "traffic_campaigns_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "traffic_campaigns_content_task_id_fkey"
             columns: ["content_task_id"]
             isOneToOne: false
@@ -4178,6 +4353,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients_public_logos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_presentations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
             referencedColumns: ["id"]
           },
           {
@@ -4531,6 +4713,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "whatsapp_confirmations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "whatsapp_confirmations_recording_id_fkey"
             columns: ["recording_id"]
             isOneToOne: false
@@ -4591,6 +4780,13 @@ export type Database = {
             referencedRelation: "clients_public_logos"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "whatsapp_messages_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
@@ -4615,6 +4811,62 @@ export type Database = {
           logo_url?: string | null
         }
         Relationships: []
+      }
+      clients_safe: {
+        Row: {
+          city: string | null
+          client_type: string | null
+          color: string | null
+          company_name: string | null
+          created_at: string | null
+          id: string | null
+          logo_url: string | null
+          niche: string | null
+          plan_id: string | null
+          responsible_person: string | null
+          status: string | null
+          updated_at: string | null
+          weekly_goal: number | null
+        }
+        Insert: {
+          city?: string | null
+          client_type?: string | null
+          color?: string | null
+          company_name?: string | null
+          created_at?: string | null
+          id?: string | null
+          logo_url?: string | null
+          niche?: string | null
+          plan_id?: string | null
+          responsible_person?: string | null
+          status?: string | null
+          updated_at?: string | null
+          weekly_goal?: number | null
+        }
+        Update: {
+          city?: string | null
+          client_type?: string | null
+          color?: string | null
+          company_name?: string | null
+          created_at?: string | null
+          id?: string | null
+          logo_url?: string | null
+          niche?: string | null
+          plan_id?: string | null
+          responsible_person?: string | null
+          status?: string | null
+          updated_at?: string | null
+          weekly_goal?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clients_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {

@@ -514,9 +514,18 @@ async function ensureAuthSupportTables() {
         UNIQUE (user_id, role)
       );
 
+      CREATE TABLE IF NOT EXISTS login_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID,
+        user_name TEXT NOT NULL DEFAULT '',
+        user_role TEXT NOT NULL DEFAULT '',
+        logged_in_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
       CREATE INDEX IF NOT EXISTS idx_auth_users_email_lower ON auth_users (lower(email));
       CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles (user_id);
       CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles (role);
+      CREATE INDEX IF NOT EXISTS idx_login_logs_logged_in_at ON login_logs (logged_in_at DESC);
     `).catch((error) => {
       authSupportTablesPromise = null;
       throw error;

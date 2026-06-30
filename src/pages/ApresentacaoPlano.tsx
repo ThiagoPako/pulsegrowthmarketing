@@ -1007,6 +1007,59 @@ function StagePromoStory({ plan, promo }: { plan: any; promo: any }) {
           ))}
         </motion.div>
 
+        {/* Vagas progress bar */}
+        {(() => {
+          const total = promo.max_redemptions || 10;
+          const filled = Math.min(promo.redemptions_count ?? 2, total);
+          const remaining = Math.max(total - filled, 0);
+          const pct = (filled / total) * 100;
+          return (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+              className="mb-6 rounded-2xl border-2 border-orange-500/40 bg-gradient-to-br from-orange-500/10 via-red-500/5 to-transparent p-4 md:p-5 shadow-lg shadow-orange-500/10"
+            >
+              <div className="flex items-end justify-between mb-2 gap-3 flex-wrap">
+                <div>
+                  <div className="text-[10px] md:text-xs uppercase tracking-wider text-muted-foreground font-semibold">Vagas preenchidas na cidade</div>
+                  <div className="text-2xl md:text-3xl font-extrabold text-foreground" style={{ fontFamily: 'var(--font-display)' }}>
+                    <span className="text-orange-600">{filled}</span>
+                    <span className="text-muted-foreground"> / {total}</span>
+                  </div>
+                </div>
+                <motion.div
+                  animate={{ scale: [1, 1.05, 1] }}
+                  transition={{ duration: 1.8, repeat: Infinity }}
+                  className="px-3 py-1.5 rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs md:text-sm font-bold shadow-md"
+                >
+                  {remaining > 0 ? `Restam apenas ${remaining} vagas` : 'Esgotado'}
+                </motion.div>
+              </div>
+              <div className="relative h-4 md:h-5 rounded-full bg-muted overflow-hidden border border-orange-500/30">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${pct}%` }}
+                  transition={{ delay: 0.5, duration: 1.2, ease: 'easeOut' }}
+                  className="relative h-full bg-gradient-to-r from-orange-500 via-red-500 to-yellow-500 rounded-full"
+                >
+                  <motion.div
+                    aria-hidden
+                    animate={{ x: ['-100%', '300%'] }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                    className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/50 to-transparent skew-x-12"
+                  />
+                </motion.div>
+                {Array.from({ length: total - 1 }).map((_, i) => (
+                  <div key={i} className="absolute top-0 bottom-0 w-px bg-background/40" style={{ left: `${((i + 1) / total) * 100}%` }} />
+                ))}
+              </div>
+              <div className="mt-2 text-xs md:text-sm text-muted-foreground">
+                A promoção encerra quando completarmos <strong className="text-foreground">{total} clientes fechados</strong> nesta cidade.
+              </div>
+            </motion.div>
+          );
+        })()}
+
+
         {/* Reasons */}
         <div className="grid sm:grid-cols-2 gap-3 md:gap-4">
           {reasons.map((r, i) => {

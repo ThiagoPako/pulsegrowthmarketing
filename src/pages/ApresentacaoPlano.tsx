@@ -410,6 +410,25 @@ export default function ApresentacaoPlano() {
                         {promo.description && (
                           <p className="text-sm md:text-base opacity-95 mt-1">{promo.description}</p>
                         )}
+                        {promo.max_redemptions != null && (() => {
+                          const left = Math.max(0, promo.max_redemptions - (promo.redemptions_count ?? 0));
+                          const taken = promo.redemptions_count ?? 0;
+                          const pctTaken = Math.round((taken / promo.max_redemptions) * 100);
+                          return (
+                            <div className="mt-3 bg-white/15 backdrop-blur rounded-2xl p-3 max-w-md">
+                              <div className="flex items-center justify-between text-sm font-bold mb-1">
+                                <span>⚡ Vagas limitadas</span>
+                                <span>{left} de {promo.max_redemptions} restantes</span>
+                              </div>
+                              <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+                                <div className="h-full bg-white rounded-full transition-all" style={{ width: `${pctTaken}%` }} />
+                              </div>
+                              <p className="text-xs opacity-90 mt-1">
+                                {taken === 0 ? 'Seja um dos primeiros a garantir!' : `${taken} cliente${taken > 1 ? 's já garantiram' : ' já garantiu'} — corra antes que esgote.`}
+                              </p>
+                            </div>
+                          );
+                        })()}
                         {promoAnualMes !== null && (
                           <p className="text-sm md:text-base mt-2 font-semibold">
                             Anual sai por <span className="bg-white/20 px-2 py-0.5 rounded">{brl(promoAnualMes)}/mês</span> nos {promo.duration_months} primeiros meses

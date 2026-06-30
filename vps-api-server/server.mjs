@@ -949,7 +949,21 @@ async function verifyStoredPassword(rawPassword, ...passwordHashes) {
 
   for (const passwordHash of uniqueHashes) {
     try {
+      // Current format used by the VPS auth system.
       if (await bcrypt.compare(rawPassword, passwordHash)) return true;
+
+      // Defensive compatibility with restored/migrated VPS data. Some old
+      // installs stored a direct SHA-256 hash, the portal salted SHA-256 hash,
+      // or (in a few manual imports) the temporary/plain value in password_hash.
+      // On successful login the caller upgrades the value to bcrypt via
+      // storeUserPassword(), so these paths are only migration bridges.
+      const sha256 = crypto.createHash('sha256').update(rawPassword).digest('hex');
+      if (/^[a-f0-9]{64}$/i.test(passwordHash) && passwordHash.toLowerCase() === sha256) return true;
+
+      const saltedSha256 = crypto.createHash('sha256').update(rawPassword + 'pulse_portal_salt_2026').digest('hex');
+      if (/^[a-f0-9]{64}$/i.test(passwordHash) && passwordHash.toLowerCase() === saltedSha256) return true;
+
+      if (!passwordHash.startsWith('$2') && passwordHash === rawPassword) return true;
     } catch (error) {
       console.error('Password hash verification failed:', error?.message || error);
     }
@@ -958,7 +972,27 @@ async function verifyStoredPassword(rawPassword, ...passwordHashes) {
   return false;
 }
 
+async function upgradePasswordHashIfNeeded(profile, rawPassword) {
+  if (!profile?.id || !rawPassword) return;
+
+  try {
+    const hashes = [profile.password_hash, profile.auth_password_hash, profile.profile_password_hash]
+      .filter((hash) => typeof hash === 'string')
+      .map((hash) => hash.trim())
+      .filter(Boolean);
+    const hasBcryptHash = hashes.some((hash) => /^\$2[aby]\$/.test(hash));
+
+    if (!hasBcryptHash) {
+      await storeUserPassword(profile.id, rawPassword);
+    }
+  } catch (error) {
+    console.error('Password hash upgrade failed:', error?.message || error);
+  }
+}
+
 async function authenticateWithLegacyAuth(email, password) {
+  if (process.env.ALLOW_LEGACY_SUPABASE_AUTH !== 'true') return null;
+
   const legacyClient = getUserClient('');
   if (!legacyClient) return null;
 
@@ -990,7 +1024,8 @@ app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email e senha são obrigatórios' });
 
-    let profile = await getAuthProfileByEmail(email);
+    const normalizedEmail = String(email).toLowerCase().trim();
+    let profile = await getAuthProfileByEmail(normalizedEmail);
     let valid = await verifyStoredPassword(
       password,
       profile?.password_hash,
@@ -1008,9 +1043,20 @@ app.post('/api/auth/login', async (req, res) => {
 
     if (!profile || !valid) return res.status(401).json({ error: 'Email ou senha inválidos' });
 
+    await upgradePasswordHashIfNeeded(profile, password);
+
     const role = await getUserPrimaryRole(profile.id, profile.role || 'editor');
 
     const token = signToken({ sub: profile.id, email: profile.email, role });
+
+    try {
+      const authColumns = await getExistingColumns('auth_users').catch(() => new Set());
+      if (authColumns.has('last_sign_in')) {
+        await pool.query('UPDATE auth_users SET last_sign_in = NOW() WHERE id = $1 OR lower(email) = lower($2)', [profile.id, profile.email]);
+      }
+    } catch (lastSignInError) {
+      console.error('Failed to update last_sign_in:', lastSignInError?.message || lastSignInError);
+    }
 
     res.json({
       token,
@@ -1163,7 +1209,7 @@ app.post('/api/auth/change-password', async (req, res) => {
     if (!profile) return res.status(404).json({ error: 'Perfil não encontrado' });
 
     if (profile.password_hash && currentPassword) {
-      const valid = await bcrypt.compare(currentPassword, profile.password_hash);
+      const valid = await verifyStoredPassword(currentPassword, profile.password_hash, profile.auth_password_hash, profile.profile_password_hash);
       if (!valid) return res.status(401).json({ error: 'Senha atual incorreta' });
     }
 
@@ -1252,13 +1298,17 @@ async function saveUserCities(userId, cities, primary) {
 
 app.post('/api/auth/create-user', async (req, res) => {
   try {
-    await verifyAdmin(req);
-    const { name, email, password, role, cities, primaryCity } = req.body;
+    const { name, email, password, role, cities, primaryCity, isSelfRegister } = req.body;
+
+    if (!isSelfRegister) {
+      await verifyAdmin(req);
+    }
+
     if (!name || !email || !password) return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
     if (password.length < 6) return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
 
     const normalizedEmail = email.toLowerCase().trim();
-    const { rows: existing } = await pool.query('SELECT id FROM profiles WHERE email = $1', [normalizedEmail]);
+    const { rows: existing } = await pool.query('SELECT id FROM profiles WHERE lower(email) = lower($1)', [normalizedEmail]);
     if (existing.length > 0) return res.status(409).json({ error: 'Email já cadastrado no sistema' });
 
     if (!(await hasProfilesPasswordHashColumn())) {
@@ -1275,6 +1325,7 @@ app.post('/api/auth/create-user', async (req, res) => {
         'INSERT INTO profiles (id, name, email, role, password_hash) VALUES ($1, $2, $3, $4, $5)',
         [id, name, normalizedEmail, userRole, hash]
       );
+      await storeUserPassword(id, password);
     } else {
       await pool.query(
         'INSERT INTO profiles (id, name, email, role) VALUES ($1, $2, $3, $4)',

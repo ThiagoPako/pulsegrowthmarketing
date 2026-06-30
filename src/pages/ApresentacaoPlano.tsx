@@ -725,14 +725,26 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
                 </div>
                 {(() => {
                   const meses = Math.min(6, semPromo?.duration_months || 6);
-                  const totalSem = (sem - promoSemMes) * meses;
+                  const economiaMes = sem - promoSemMes;
+                  const totalSem = economiaMes * meses;
                   return (
-                    <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-3 space-y-1.5 text-sm">
-                      <Row label="De" value={<span className="line-through">{brl(sem)}/mês</span>} />
-                      <Row label="Desconto" value={<Badge className="bg-orange-500 text-white">-{semPromo?.discount_percent}%</Badge>} />
-                      <Row label="Você economiza" value={<span className="font-bold text-orange-600">{brl(sem - promoSemMes)}/mês</span>} />
-                      <Row label={`Economia total (${meses} ${meses === 1 ? 'mês' : 'meses'})`} value={<span className="font-bold text-orange-600">{brl(totalSem)}</span>} />
-                    </div>
+                    <>
+                      <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-3 space-y-1.5 text-sm mb-3">
+                        <Row label="De" value={<span className="line-through">{brl(sem)}/mês</span>} />
+                        <Row label="Desconto" value={<Badge className="bg-orange-500 text-white">-{semPromo?.discount_percent}%</Badge>} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="rounded-xl bg-orange-500 text-white p-3 text-center shadow-lg">
+                          <div className="text-[10px] uppercase tracking-wider opacity-90 font-semibold">Deixa de pagar</div>
+                          <div className="text-xl md:text-2xl font-bold leading-tight" style={{ fontFamily: 'var(--font-display)' }}>{brl(economiaMes)}<span className="text-xs font-medium opacity-90">/mês</span></div>
+                        </div>
+                        <div className="rounded-xl bg-gradient-to-br from-orange-600 to-red-600 text-white p-3 text-center shadow-lg">
+                          <div className="text-[10px] uppercase tracking-wider opacity-90 font-semibold">Economia total</div>
+                          <div className="text-xl md:text-2xl font-bold leading-tight" style={{ fontFamily: 'var(--font-display)' }}>{brl(totalSem)}</div>
+                          <div className="text-[10px] opacity-90">em {meses} {meses === 1 ? 'mês' : 'meses'}</div>
+                        </div>
+                      </div>
+                    </>
                   );
                 })()}
               </>

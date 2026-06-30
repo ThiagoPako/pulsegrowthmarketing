@@ -18,7 +18,11 @@ fi
 
 cd /var/www/pulsegrowthmarketing/vps-api-server
 npm install
-pm2 restart pulse-api || pm2 start server.mjs --name pulse-api
+pm2 delete pulse-api 2>/dev/null || true
+pm2 start /var/www/pulsegrowthmarketing/vps-api-server/server.mjs \
+  --name pulse-api \
+  --cwd /var/www/pulsegrowthmarketing/vps-api-server \
+  --update-env
 pm2 save
 
 nginx -t && systemctl reload nginx

@@ -5,7 +5,6 @@ import { useAuth, type Profile } from '@/hooks/useAuth';
 import { useCity } from '@/contexts/CityContext';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { supabase } from '@/lib/vpsDb';
-import { supabase as supabaseReal } from '@/integrations/supabase/client';
 import { usePresenceHeartbeat } from '@/hooks/usePresence';
 import { generateFixedRecordings, findAvailableSlots, organizeRecordingsForDate } from '@/lib/schedulingUtils';
 import { sendRecordingScheduledNotification } from '@/services/whatsappService';
@@ -110,10 +109,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const hasVpsToken = typeof window !== 'undefined' && !!localStorage.getItem('pulse_jwt');
     if (cityLoading) return;
-    const profileClient = hasVpsToken ? (supabase as any) : supabaseReal;
+    if (!hasVpsToken) {
+      setUsers([]);
+      return;
+    }
     Promise.all([
-      profileClient.from('profiles').select('*'),
-      profileClient.from('user_roles').select('user_id, role'),
+      supabase.from('profiles').select('*'),
+      supabase.from('user_roles').select('user_id, role'),
     ]).then(([profilesRes, rolesRes]) => {
       const profiles = profilesRes.data || [];
       const roleByUserId = new Map(

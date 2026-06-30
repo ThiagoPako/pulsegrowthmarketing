@@ -367,12 +367,17 @@ async function verifyUser(req) {
       },
       userClient: getUserClient(authHeader),
     };
-  } catch {
-    // Fallback to Supabase Auth (transitional)
+  } catch (error) {
+    if (process.env.ALLOW_LEGACY_SUPABASE_AUTH !== 'true') {
+      throw new Error('Unauthorized');
+    }
+
+    // Optional one-time migration bridge for legacy tokens. Disabled by default
+    // because production authentication must be VPS/JWT only.
     const userClient = getUserClient(authHeader);
     if (!userClient) throw new Error('Unauthorized');
-    const { data, error } = await userClient.auth.getUser(token);
-    if (error || !data?.user) throw new Error('Unauthorized');
+    const { data, error: legacyAuthError } = await userClient.auth.getUser(token);
+    if (legacyAuthError || !data?.user) throw new Error('Unauthorized');
     return { user: data.user, userClient };
   }
 }
@@ -494,8 +499,12 @@ async function ensureAuthSupportTables() {
         email TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_sign_in TIMESTAMPTZ
       );
+
+      ALTER TABLE auth_users
+        ADD COLUMN IF NOT EXISTS last_sign_in TIMESTAMPTZ;
 
       CREATE TABLE IF NOT EXISTS user_roles (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -505,9 +514,18 @@ async function ensureAuthSupportTables() {
         UNIQUE (user_id, role)
       );
 
+      CREATE TABLE IF NOT EXISTS login_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID,
+        user_name TEXT NOT NULL DEFAULT '',
+        user_role TEXT NOT NULL DEFAULT '',
+        logged_in_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
       CREATE INDEX IF NOT EXISTS idx_auth_users_email_lower ON auth_users (lower(email));
       CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles (user_id);
       CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles (role);
+      CREATE INDEX IF NOT EXISTS idx_login_logs_logged_in_at ON login_logs (logged_in_at DESC);
     `).catch((error) => {
       authSupportTablesPromise = null;
       throw error;
@@ -949,7 +967,21 @@ async function verifyStoredPassword(rawPassword, ...passwordHashes) {
 
   for (const passwordHash of uniqueHashes) {
     try {
+      // Current format used by the VPS auth system.
       if (await bcrypt.compare(rawPassword, passwordHash)) return true;
+
+      // Defensive compatibility with restored/migrated VPS data. Some old
+      // installs stored a direct SHA-256 hash, the portal salted SHA-256 hash,
+      // or (in a few manual imports) the temporary/plain value in password_hash.
+      // On successful login the caller upgrades the value to bcrypt via
+      // storeUserPassword(), so these paths are only migration bridges.
+      const sha256 = crypto.createHash('sha256').update(rawPassword).digest('hex');
+      if (/^[a-f0-9]{64}$/i.test(passwordHash) && passwordHash.toLowerCase() === sha256) return true;
+
+      const saltedSha256 = crypto.createHash('sha256').update(rawPassword + 'pulse_portal_salt_2026').digest('hex');
+      if (/^[a-f0-9]{64}$/i.test(passwordHash) && passwordHash.toLowerCase() === saltedSha256) return true;
+
+      if (!passwordHash.startsWith('$2') && passwordHash === rawPassword) return true;
     } catch (error) {
       console.error('Password hash verification failed:', error?.message || error);
     }
@@ -958,7 +990,28 @@ async function verifyStoredPassword(rawPassword, ...passwordHashes) {
   return false;
 }
 
+async function upgradePasswordHashIfNeeded(profile, rawPassword) {
+  if (!profile?.id || !rawPassword) return;
+
+  try {
+    const hashes = [profile.password_hash, profile.auth_password_hash, profile.profile_password_hash]
+      .filter((hash) => typeof hash === 'string')
+      .map((hash) => hash.trim())
+      .filter(Boolean);
+    const hasBcryptHash = hashes.some((hash) => /^\$2[aby]\$/.test(hash));
+    const hasLegacyHash = hashes.some((hash) => !/^\$2[aby]\$/.test(hash));
+
+    if (!hasBcryptHash || hasLegacyHash) {
+      await storeUserPassword(profile.id, rawPassword);
+    }
+  } catch (error) {
+    console.error('Password hash upgrade failed:', error?.message || error);
+  }
+}
+
 async function authenticateWithLegacyAuth(email, password) {
+  if (process.env.ALLOW_LEGACY_SUPABASE_AUTH !== 'true') return null;
+
   const legacyClient = getUserClient('');
   if (!legacyClient) return null;
 
@@ -990,7 +1043,8 @@ app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email e senha são obrigatórios' });
 
-    let profile = await getAuthProfileByEmail(email);
+    const normalizedEmail = String(email).toLowerCase().trim();
+    let profile = await getAuthProfileByEmail(normalizedEmail);
     let valid = await verifyStoredPassword(
       password,
       profile?.password_hash,
@@ -1008,9 +1062,20 @@ app.post('/api/auth/login', async (req, res) => {
 
     if (!profile || !valid) return res.status(401).json({ error: 'Email ou senha inválidos' });
 
+    await upgradePasswordHashIfNeeded(profile, password);
+
     const role = await getUserPrimaryRole(profile.id, profile.role || 'editor');
 
     const token = signToken({ sub: profile.id, email: profile.email, role });
+
+    try {
+      const authColumns = await getExistingColumns('auth_users').catch(() => new Set());
+      if (authColumns.has('last_sign_in')) {
+        await pool.query('UPDATE auth_users SET last_sign_in = NOW() WHERE id = $1 OR lower(email) = lower($2)', [profile.id, profile.email]);
+      }
+    } catch (lastSignInError) {
+      console.error('Failed to update last_sign_in:', lastSignInError?.message || lastSignInError);
+    }
 
     res.json({
       token,
@@ -1163,7 +1228,7 @@ app.post('/api/auth/change-password', async (req, res) => {
     if (!profile) return res.status(404).json({ error: 'Perfil não encontrado' });
 
     if (profile.password_hash && currentPassword) {
-      const valid = await bcrypt.compare(currentPassword, profile.password_hash);
+      const valid = await verifyStoredPassword(currentPassword, profile.password_hash, profile.auth_password_hash, profile.profile_password_hash);
       if (!valid) return res.status(401).json({ error: 'Senha atual incorreta' });
     }
 
@@ -1252,22 +1317,27 @@ async function saveUserCities(userId, cities, primary) {
 
 app.post('/api/auth/create-user', async (req, res) => {
   try {
-    await verifyAdmin(req);
-    const { name, email, password, role, cities, primaryCity } = req.body;
+    const { name, email, password, role, cities, primaryCity, isSelfRegister } = req.body;
+
+    if (!isSelfRegister) {
+      await verifyAdmin(req);
+    }
+
     if (!name || !email || !password) return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
     if (password.length < 6) return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
 
     const normalizedEmail = email.toLowerCase().trim();
-    const { rows: existing } = await pool.query('SELECT id FROM profiles WHERE email = $1', [normalizedEmail]);
+    const { rows: existing } = await pool.query('SELECT id FROM profiles WHERE lower(email) = lower($1)', [normalizedEmail]);
     if (existing.length > 0) return res.status(409).json({ error: 'Email já cadastrado no sistema' });
 
     if (!(await hasProfilesPasswordHashColumn())) {
+      await ensureAuthSupportTables();
       const { rows: existingAuth } = await pool.query('SELECT id FROM auth_users WHERE lower(email) = lower($1) LIMIT 1', [normalizedEmail]);
       if (existingAuth.length > 0) return res.status(409).json({ error: 'Email já cadastrado no sistema' });
     }
 
     const id = crypto.randomUUID();
-    const userRole = role || 'editor';
+    const userRole = isSelfRegister ? 'videomaker' : (role || 'editor');
 
     if (await hasProfilesPasswordHashColumn()) {
       const hash = await bcrypt.hash(password, 12);
@@ -1275,6 +1345,7 @@ app.post('/api/auth/create-user', async (req, res) => {
         'INSERT INTO profiles (id, name, email, role, password_hash) VALUES ($1, $2, $3, $4, $5)',
         [id, name, normalizedEmail, userRole, hash]
       );
+      await storeUserPassword(id, password);
     } else {
       await pool.query(
         'INSERT INTO profiles (id, name, email, role) VALUES ($1, $2, $3, $4)',
@@ -4353,7 +4424,7 @@ const ALLOWED_TABLES = [
   'tv_settings','fieldwork_activities',
   'training_presentations','training_slides',
   'training_tracks','training_modules','training_lessons','user_training_progress',
-  'user_permissions',
+  'user_permissions','login_logs',
 ];
 
 // ═══════════════════════════════════════════════════════════════

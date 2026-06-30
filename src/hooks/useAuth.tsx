@@ -1,14 +1,11 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { supabase } from '@/lib/vpsDb';
-import { supabase as supabaseReal } from '@/integrations/supabase/client';
 
 async function logLoginEntry(userId: string) {
   try {
-    const hasVpsToken = typeof window !== 'undefined' && !!localStorage.getItem(TOKEN_KEY);
-    const profileClient = hasVpsToken ? (supabase as any) : supabaseReal;
-    const { data: prof } = await profileClient.from('profiles').select('name, role').eq('id', userId).maybeSingle();
+    const { data: prof } = await supabase.from('profiles').select('name, role').eq('id', userId).maybeSingle();
     if (prof) {
-      await supabaseReal.from('login_logs').insert({
+      await supabase.from('login_logs').insert({
         user_id: userId,
         user_name: (prof as any)?.name || '',
         user_role: (prof as any)?.role || '',
@@ -108,14 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const token = typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
 
     if (!hasVpsToken) {
-      const { data: sbData, error: sbErr } = await supabaseReal
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      if (sbData && !sbErr) {
-        setProfile(sbData as unknown as Profile);
-      }
+      setProfile(null);
       return;
     }
 
@@ -167,19 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       return;
     }
-
-    // Fallback: try Supabase directly (preview environment)
-    const { data: sbData, error: sbErr } = await supabaseReal
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    if (sbData && !sbErr) {
-      setProfile({
-        ...(sbData as unknown as Profile),
-        role: (authProfile?.role as AppRole) || (sbData as unknown as Profile).role,
-      });
-    }
+    setProfile(null);
   }, []);
 
   // On mount, check for existing JWT token
@@ -230,16 +208,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       restoreVpsSession();
       return () => { cancelled = true; };
     } else {
-      // Check Supabase session as fallback (preview environment)
-      supabaseReal.auth.getSession().then(({ data: { session } }) => {
-        if (session?.user) {
-          const u = { id: session.user.id, email: session.user.email || '' };
-          setUser(u);
-          setSession({ access_token: session.access_token });
-          fetchProfile(u.id);
-        }
-        setLoading(false);
-      });
+      setUser(null);
+      setProfile(null);
+      setSession(null);
+      setLoading(false);
     }
   }, [fetchProfile, refreshVpsSession]);
 

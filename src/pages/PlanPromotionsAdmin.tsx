@@ -47,7 +47,7 @@ export default function PlanPromotionsAdmin() {
   const navigate = useNavigate();
   const [items, setItems] = useState<Promo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState<Omit<Promo, 'id'>>(empty);
+  const [form, setForm] = useState<typeof empty>(empty);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -66,7 +66,7 @@ export default function PlanPromotionsAdmin() {
 
   function startEdit(p: Promo) {
     setEditingId(p.id);
-    const { id, ...rest } = p;
+    const { id, redemptions_count, ...rest } = p;
     setForm(rest);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }

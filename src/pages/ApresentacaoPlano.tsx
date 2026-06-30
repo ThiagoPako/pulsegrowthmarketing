@@ -122,7 +122,7 @@ export default function ApresentacaoPlano() {
       else if (e.key === 'ArrowRight') { e.preventDefault(); goNextPlan(); }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); goPrevPlan(); }
       else if (e.key === 'Home') { e.preventDefault(); setStage(0); }
-      else if (e.key === 'End') { e.preventDefault(); setStage(TOTAL_STAGES - 1); }
+      else if (e.key === 'End') { e.preventDefault(); setStage(totalStages - 1); }
       else if (e.key === 'Escape') { window.close(); }
     };
     window.addEventListener('keydown', handler, { capture: true });
@@ -179,7 +179,7 @@ export default function ApresentacaoPlano() {
 
       {/* PROGRESS DOTS */}
       <div className="absolute top-14 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2">
-        {Array.from({ length: TOTAL_STAGES }).map((_, i) => (
+        {Array.from({ length: totalStages }).map((_, i) => (
           <button
             key={i}
             onClick={() => setStage(i)}
@@ -238,7 +238,7 @@ export default function ApresentacaoPlano() {
               <ArrowLeft className="h-5 w-5" />
             </button>
           )}
-          {stage < TOTAL_STAGES - 1 ? (
+          {stage < totalStages - 1 ? (
             <button onClick={nextStage}
               className="h-11 px-5 rounded-full bg-primary text-primary-foreground shadow-xl hover:scale-105 transition-all flex items-center gap-2 font-semibold animate-pulse"
               aria-label="Próxima etapa">

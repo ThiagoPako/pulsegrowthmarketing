@@ -62,6 +62,23 @@ export default function ApresentacaoPlano() {
   const [stage, setStage] = useState(0);
   const [promo, setPromo] = useState<any | null>(null);
   const [semPromo, setSemPromo] = useState<any | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch { /* ignore */ }
+  };
+
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
   const { activeCity } = useCity();
 
   const plan = plano ? getPlan(plano) : undefined;

@@ -93,7 +93,8 @@ export default function ApresentacaoPlano() {
         // Promo do semestral: pode coexistir com a principal
         const sem = matches.find((p: any) => p.applies_to === 'semestral' || p.applies_to === 'ambos') || null;
         setPromo(main);
-        setSemPromo(sem && sem !== main ? sem : (main && (main.applies_to === 'semestral' || main.applies_to === 'ambos') ? main : null));
+        const mainAny: any = main;
+        setSemPromo(sem && sem !== main ? sem : (mainAny && (mainAny.applies_to === 'semestral' || mainAny.applies_to === 'ambos') ? mainAny : null));
       } catch (err) { console.warn('promo error', err); }
     })();
   }, [plan, activeCity]);

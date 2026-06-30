@@ -719,19 +719,23 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
             </div>
             {promoSemMes !== null ? (
               <>
-                <div className="flex items-baseline gap-2 mb-3">
-                  <span className="text-4xl md:text-5xl font-bold text-orange-600" style={{ fontFamily: 'var(--font-display)' }}>{brl(promoSemMes)}</span>
-                  <span className="text-sm text-muted-foreground">/mês</span>
-                </div>
                 {(() => {
                   const meses = Math.min(6, semPromo?.duration_months || 6);
                   const economiaMes = sem - promoSemMes;
                   const totalSem = economiaMes * meses;
                   return (
                     <>
-                      <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-3 space-y-1.5 text-sm mb-3">
-                        <Row label="De" value={<span className="line-through">{brl(sem)}/mês</span>} />
-                        <Row label="Desconto" value={<Badge className="bg-orange-500 text-white">-{semPromo?.discount_percent}%</Badge>} />
+                      {/* PREÇO FINAL GIGANTE */}
+                      <div className="mb-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-base md:text-lg line-through text-muted-foreground">{brl(sem)}/mês</span>
+                          <Badge className="bg-orange-500 text-white font-bold">-{semPromo?.discount_percent}%</Badge>
+                        </div>
+                        <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Você paga apenas</div>
+                        <div className="flex items-baseline gap-2 leading-none">
+                          <span className="text-6xl md:text-7xl font-extrabold text-orange-600 drop-shadow-sm" style={{ fontFamily: 'var(--font-display)' }}>{brl(promoSemMes)}</span>
+                          <span className="text-base text-muted-foreground font-semibold">/mês</span>
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="rounded-xl bg-orange-500 text-white p-3 text-center shadow-lg">

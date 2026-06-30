@@ -1148,9 +1148,13 @@ export default function Schedule() {
     setPreviewLoading(true);
     setPreviewOpen(true);
 
-    // Defer pesado para o próximo tick para o loading aparecer
-    setTimeout(() => {
+    // Defer pesado para o próximo tick para o loading aparecer + recarrega gravações existentes
+    setTimeout(async () => {
       try {
+        // Garante que temos as gravações fixas já existentes do mês atualizadas antes de calcular
+        await Promise.resolve(refetchData?.());
+        // Pequena espera para garantir que o estado de recordings foi atualizado
+        await new Promise(r => setTimeout(r, 150));
         const preview = previewFixedSchedulesForMonth(fixedClients, start, end);
         setPreviewRecordings(preview);
       } catch (err) {

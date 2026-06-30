@@ -487,64 +487,150 @@ function Stat({ icon: I, label, value, highlight }: { icon: any; label: string; 
   );
 }
 
+function getQuantities(key: string) {
+  const map: Record<string, { reels: number; artes: number; stories: number; criativos: number; posts: number }> = {
+    starter: { reels: 4,  artes: 2, stories: 0,  criativos: 2, posts: 0 },
+    boost:   { reels: 6,  artes: 4, stories: 20, criativos: 4, posts: 2 },
+    premium: { reels: 8,  artes: 6, stories: 20, criativos: 4, posts: 0 },
+    elite:   { reels: 12, artes: 8, stories: 40, criativos: 4, posts: 0 },
+  };
+  return map[key] || map.boost;
+}
+
+const DIFFERENTIALS = [
+  { icon: Palette,    title: 'Designer da nossa equipe',  desc: 'Adriele, designer interna, cria suas artes com identidade própria — nada genérico, nada terceirizado.' },
+  { icon: Film,       title: 'Videomakers profissionais', desc: 'Time próprio que direciona a gravação no local — sabemos filmar até quem NUNCA gravou na vida.' },
+  { icon: PenTool,    title: 'Roteiros frase a frase',    desc: 'Método Pulse: cada vídeo com roteiro pronto, focado em VENDAS — você só lê e grava.' },
+  { icon: Megaphone,  title: 'Gestor de tráfego especialista', desc: 'Profissional dedicado em Meta Ads + Google Ads, otimização diária com foco em ROI.' },
+  { icon: BarChart3,  title: 'Portal do Cliente exclusivo', desc: 'Acompanha conteúdo, agenda de gravação, anúncios e relatórios em tempo real, 24/7.' },
+  { icon: Crown,      title: 'A gente NÃO terceiriza culpa', desc: 'Da geração de leads ao fechamento da venda — assumimos o resultado e buscamos a solução.' },
+];
+
 function StageDeliveries({ plan, categories }: { plan: any; categories: Category[] }) {
+  const q = getQuantities(plan.key);
+  const highlights = [
+    { icon: Film,      qty: q.reels,     unit: 'Reels',    sub: 'editados por videomakers profissionais', show: q.reels > 0 },
+    { icon: ImageIcon, qty: q.artes,     unit: 'Artes',    sub: 'criadas pela nossa designer interna',    show: q.artes > 0 },
+    { icon: PlayCircle,qty: q.stories,   unit: 'Stories',  sub: 'distribuídos com estratégia semanal',    show: q.stories > 0 },
+    { icon: Megaphone, qty: q.criativos, unit: 'Criativos',sub: 'em vídeo p/ anúncios Meta + Google',     show: q.criativos > 0 },
+  ].filter((h) => h.show);
+
   return (
     <Slide>
-      <div className="w-full">
-        <div className="text-center mb-6">
+      <div className="w-full max-h-[calc(100vh-10rem)] overflow-y-auto pr-2">
+        <div className="text-center mb-5">
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1 }}>
             <Badge className="bg-primary text-primary-foreground mb-3 text-sm px-4 py-1.5">
-              <Sparkles className="h-3.5 w-3.5 mr-1.5" /> {plan.features.length} entregas mensais
+              <Sparkles className="h-3.5 w-3.5 mr-1.5" /> O que você recebe TODO MÊS no {plan.name}
             </Badge>
           </motion.div>
           <motion.h2
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-            className="text-3xl md:text-6xl font-bold leading-tight"
+            className="text-3xl md:text-5xl font-bold leading-tight"
             style={{ fontFamily: 'var(--font-display)' }}
           >
-            Tudo que está <span className="bg-gradient-to-r from-primary to-orange-500 bg-clip-text text-transparent">incluso</span> no {plan.name}
+            Produção <span className="bg-gradient-to-r from-primary to-orange-500 bg-clip-text text-transparent">profissional</span> entregue por time próprio
           </motion.h2>
         </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 max-h-[60vh] overflow-y-auto pr-1">
-          {categories.map((cat, idx) => (
-            <motion.div
-              key={cat.title}
-              initial={{ opacity: 0, y: 30, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ delay: 0.35 + idx * 0.08 }}
-              className="rounded-2xl border-2 border-border bg-gradient-to-br from-card to-secondary/30 p-4 md:p-5 hover:border-primary/60 hover:shadow-xl transition-all"
-            >
-              <div className="flex items-center gap-2.5 mb-3 pb-3 border-b border-border">
-                <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
-                  <cat.icon className="h-5 w-5 text-primary" />
+        {/* QUANTIDADES — destaque grande */}
+        {highlights.length > 0 && (
+          <div className={`grid gap-3 md:gap-4 mb-6 ${highlights.length === 4 ? 'grid-cols-2 md:grid-cols-4' : highlights.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+            {highlights.map((h, i) => (
+              <motion.div
+                key={h.unit}
+                initial={{ opacity: 0, y: 30, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ delay: 0.3 + i * 0.08, type: 'spring', stiffness: 120 }}
+                className="relative overflow-hidden rounded-2xl border-2 border-primary/30 bg-gradient-to-br from-card via-card to-primary/10 p-4 md:p-5 shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all"
+              >
+                <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-primary/10 blur-2xl" />
+                <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center mb-2 shadow-lg">
+                  <h.icon className="h-5 w-5" />
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-4xl md:text-5xl font-black leading-none bg-gradient-to-br from-primary to-orange-600 bg-clip-text text-transparent" style={{ fontFamily: 'var(--font-display)' }}>
+                    {h.qty}
+                  </span>
+                  <span className="text-sm md:text-base font-bold">{h.unit}</span>
+                </div>
+                <p className="text-[11px] md:text-xs text-muted-foreground mt-1.5 leading-snug">{h.sub}</p>
+              </motion.div>
+            ))}
+          </div>
+        )}
+
+        {/* DIFERENCIAIS — gatilhos do time */}
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }}
+          className="rounded-3xl border-2 border-primary/20 bg-gradient-to-br from-card to-secondary/30 p-5 md:p-6 mb-6"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <div className="h-px flex-1 bg-border" />
+            <Badge className="bg-background border border-primary/40 text-primary">
+              <Crown className="h-3 w-3 mr-1" /> Por que é diferente de qualquer agência
+            </Badge>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {DIFFERENTIALS.map((d, i) => (
+              <motion.div
+                key={d.title}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.8 + i * 0.07 }}
+                className="flex gap-3 rounded-xl bg-background/70 border border-border p-3 hover:border-primary/50 hover:bg-primary/5 transition-all"
+              >
+                <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                  <d.icon className="h-4.5 w-4.5 text-primary" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-bold text-sm md:text-base truncate" style={{ fontFamily: 'var(--font-display)' }}>{cat.title}</h3>
-                  <p className="text-[10px] text-muted-foreground">{cat.items.length} {cat.items.length === 1 ? 'entrega' : 'entregas'}</p>
+                  <div className="font-bold text-sm leading-tight">{d.title}</div>
+                  <div className="text-xs text-muted-foreground leading-snug mt-0.5">{d.desc}</div>
                 </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* LISTA COMPLETA — colapsada visualmente */}
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Lista completa das {plan.features.length} entregas mensais</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {categories.map((cat, idx) => (
+              <div
+                key={cat.title}
+                className="rounded-2xl border border-border bg-card p-4"
+              >
+                <div className="flex items-center gap-2 mb-2.5 pb-2.5 border-b border-border">
+                  <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                    <cat.icon className="h-4 w-4 text-primary" />
+                  </div>
+                  <h3 className="font-bold text-sm truncate" style={{ fontFamily: 'var(--font-display)' }}>{cat.title}</h3>
+                </div>
+                <ul className="space-y-1.5">
+                  {cat.items.map((f) => (
+                    <li key={f} className="flex items-start gap-2 text-xs">
+                      <Check className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                      <span className="leading-snug">{f}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul className="space-y-1.5">
-                {cat.items.map((f, i) => (
-                  <motion.li
-                    key={f}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.5 + idx * 0.08 + i * 0.04 }}
-                    className="flex items-start gap-2 text-xs md:text-sm"
-                  >
-                    <Check className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-                    <span className="font-medium leading-snug">{f}</span>
-                  </motion.li>
-                ))}
-              </ul>
-            </motion.div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </motion.div>
       </div>
     </Slide>
   );
 }
+
 
 function StageInvest({ plan, pricing, promo }: { plan: any; pricing: any; promo: any }) {
   const { semestral, anual, sem, an, diffMes, totalEconomia, pct, promoAnualMes, promoSemMes } = pricing;

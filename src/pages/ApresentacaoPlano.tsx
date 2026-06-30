@@ -385,32 +385,101 @@ function StagePlan({ plan, Icon }: { plan: any; Icon: any }) {
 
         <motion.div
           initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }}
-          className="relative rounded-3xl border-2 border-primary/30 bg-gradient-to-br from-card to-primary/5 p-7 md:p-9 shadow-2xl"
+          className="relative rounded-3xl border-2 border-primary/40 bg-gradient-to-br from-card via-card to-primary/10 p-6 md:p-8 shadow-[0_25px_80px_-20px_hsl(var(--primary)/0.45)]"
         >
-          <div className="absolute -top-4 left-7">
+          {/* glow */}
+          <div className="absolute -inset-px rounded-3xl bg-gradient-to-br from-primary/20 via-transparent to-orange-500/10 -z-10 blur-xl" />
+
+          <div className="absolute -top-4 left-6 flex gap-2">
             <Badge className="bg-primary text-primary-foreground shadow-lg px-3 py-1">
-              <Target className="h-3.5 w-3.5 mr-1.5" /> Ideal pra você
+              <Target className="h-3.5 w-3.5 mr-1.5" /> Feito pra você
+            </Badge>
+            <Badge className="bg-background border border-primary/40 text-primary shadow px-2.5 py-1">
+              <Sparkles className="h-3 w-3 mr-1" /> Alta conversão
             </Badge>
           </div>
-          <p className="text-lg md:text-2xl leading-relaxed font-medium text-foreground mt-2">
+
+          <p className="text-base md:text-xl leading-relaxed font-semibold text-foreground mt-3 mb-5">
             {plan.ideal}
           </p>
-          <div className="mt-6 pt-6 border-t border-border grid grid-cols-3 gap-3 text-center">
-            <Stat icon={Award} label="Entregas/mês" value={plan.features.length} />
-            <Stat icon={Zap} label="Time" value="Dedicado" />
-            <Stat icon={Users} label="Resultado" value="Real" />
+
+          {/* Gatilhos: dores que resolve */}
+          <div className="space-y-2.5 mb-5">
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold flex items-center gap-2">
+              <span className="h-px flex-1 bg-border" />
+              Se você se identifica com isso, é o seu plano
+              <span className="h-px flex-1 bg-border" />
+            </div>
+            {getTriggers(plan.key).map((t, i) => (
+              <motion.div
+                key={t.title}
+                initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.7 + i * 0.08 }}
+                className="flex items-start gap-3 rounded-xl bg-background/60 border border-border p-3 hover:border-primary/50 hover:bg-primary/5 transition-all group"
+              >
+                <div className="w-9 h-9 rounded-lg bg-primary/15 group-hover:bg-primary group-hover:text-primary-foreground flex items-center justify-center shrink-0 transition-all">
+                  <t.icon className="h-4.5 w-4.5 text-primary group-hover:text-primary-foreground" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-bold text-sm leading-tight">{t.title}</div>
+                  <div className="text-xs text-muted-foreground leading-snug mt-0.5">{t.desc}</div>
+                </div>
+              </motion.div>
+            ))}
           </div>
+
+          {/* Stats com gatilho */}
+          <div className="pt-5 border-t border-border grid grid-cols-3 gap-3 text-center">
+            <Stat icon={Award} label="Entregas/mês" value={plan.features.length} highlight />
+            <Stat icon={Zap} label="Time" value="Dedicado" />
+            <Stat icon={TrendingUp} label="Foco" value="Crescer" />
+          </div>
+
+          {/* Selo de garantia */}
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.1 }}
+            className="mt-5 flex items-center gap-2 text-xs text-muted-foreground bg-secondary/50 rounded-lg px-3 py-2"
+          >
+            <Crown className="h-4 w-4 text-primary shrink-0" />
+            <span><strong className="text-foreground">Sem fidelidade abusiva.</strong> Resultado mensurável desde o 1º mês.</span>
+          </motion.div>
         </motion.div>
       </div>
     </Slide>
   );
 }
 
-function Stat({ icon: I, label, value }: { icon: any; label: string; value: any }) {
+function getTriggers(key: string): Array<{ icon: any; title: string; desc: string }> {
+  const common = {
+    starter: [
+      { icon: Rocket, title: 'Quer começar do jeito certo', desc: 'Sem improviso: linha editorial, identidade e tráfego desde o dia 1.' },
+      { icon: PlayCircle, title: 'Cansou de postar sem retorno', desc: 'Conteúdo profissional + anúncio rodando pra gerar clientes de verdade.' },
+      { icon: PiggyBank, title: 'Investimento enxuto, entrega séria', desc: 'O menor ticket com produção própria de vídeo e gestão de mídia inclusos.' },
+    ],
+    boost: [
+      { icon: TrendingUp, title: 'Quer escalar sem virar empresa enterprise', desc: 'Volume robusto de conteúdo, stories diários e ads avançado pelo melhor custo-benefício.' },
+      { icon: Calendar, title: 'Presença diária, sem você se preocupar', desc: '20 stories, 6 reels e posts no automático — operação 100% nossa.' },
+      { icon: Crown, title: 'É o plano que MAIS converte', desc: 'Mais de 70% dos nossos clientes escolhem o Boost — equilíbrio perfeito entre entrega e investimento.' },
+    ],
+    premium: [
+      { icon: Target, title: 'Quer autoridade + vendas previsíveis', desc: 'Conteúdo + tráfego + CRM + treinamento comercial integrados.' },
+      { icon: Users, title: 'Tem equipe comercial e quer alimentá-la', desc: 'CRM no WhatsApp/Instagram/Facebook + scripts e treinamento de vendas.' },
+      { icon: BarChart3, title: 'Decide com dados, não com achismo', desc: 'Dashboard em tempo real, sazonalidade planejada, campanhas comerciais ativas.' },
+    ],
+    elite: [
+      { icon: Crown, title: 'Quer dominar o mercado da sua região', desc: 'Operação digital completa: máxima frequência, máxima exposição.' },
+      { icon: Megaphone, title: 'Influência + relacionamento + escala', desc: 'Gerenciamento de influenciadores e grupo dedicado com seu comercial.' },
+      { icon: Award, title: 'Top performance, top acompanhamento', desc: 'Monitoramento avançado de CRM com análise de atendimento e treinamentos recorrentes.' },
+    ],
+  } as const;
+  return (common as any)[key] || common.boost;
+}
+
+function Stat({ icon: I, label, value, highlight }: { icon: any; label: string; value: any; highlight?: boolean }) {
   return (
     <div>
-      <div className="inline-flex w-10 h-10 rounded-xl bg-primary/10 items-center justify-center mb-1">
-        <I className="h-5 w-5 text-primary" />
+      <div className={`inline-flex w-10 h-10 rounded-xl items-center justify-center mb-1 ${highlight ? 'bg-primary text-primary-foreground' : 'bg-primary/10 text-primary'}`}>
+        <I className="h-5 w-5" />
       </div>
       <div className="text-lg md:text-xl font-bold leading-tight">{value}</div>
       <div className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wider">{label}</div>

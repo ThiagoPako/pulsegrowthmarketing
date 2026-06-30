@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useNavigate, useParams, useLocation, Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -187,14 +187,26 @@ export default function ApresentacaoPlano() {
         ))}
       </div>
 
-      {/* SLIDE */}
-      <div className="absolute inset-0 pt-20 pb-20 px-4 md:px-8 flex items-center justify-center">
-        <AnimatePresence mode="wait">
-          {stage === 0 && <StageIntro key="s0" />}
-          {stage === 1 && <StagePlan key="s1" plan={plan} Icon={Icon} />}
-          {stage === 2 && <StageDeliveries key="s2" plan={plan} categories={categories} />}
-          {stage === 3 && pricing && <StageInvest key="s3" plan={plan} pricing={pricing} promo={promo} />}
-        </AnimatePresence>
+      {/* SLIDE - scroll vertical entre etapas */}
+      <div className="absolute inset-0 pt-20 pb-20 overflow-hidden">
+        <motion.div
+          animate={{ y: `-${stage * 100}%` }}
+          transition={{ duration: 0.8, ease: [0.65, 0, 0.35, 1] }}
+          className="h-full w-full"
+        >
+          <div className="h-full w-full px-4 md:px-8 flex items-center justify-center">
+            <StageIntro />
+          </div>
+          <div className="h-full w-full px-4 md:px-8 flex items-center justify-center">
+            <StagePlan plan={plan} Icon={Icon} />
+          </div>
+          <div className="h-full w-full px-4 md:px-8 flex items-center justify-center">
+            <StageDeliveries plan={plan} categories={categories} />
+          </div>
+          <div className="h-full w-full px-4 md:px-8 flex items-center justify-center">
+            {pricing && <StageInvest plan={plan} pricing={pricing} promo={promo} />}
+          </div>
+        </motion.div>
       </div>
 
       {/* CONTROLES INFERIORES */}

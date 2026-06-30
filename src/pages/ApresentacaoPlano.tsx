@@ -218,30 +218,30 @@ export default function ApresentacaoPlano() {
       </div>
 
       {/* SLIDE - scroll vertical entre etapas */}
-      <div className="absolute inset-0 pt-20 pb-20 overflow-hidden">
+      <div className="absolute inset-0 pt-16 pb-16 md:pt-20 md:pb-20 overflow-hidden">
         <motion.div
           animate={{ y: `-${stage * 100}%` }}
           transition={{ duration: 0.8, ease: [0.65, 0, 0.35, 1] }}
           className="h-full w-full"
         >
-          <div className="h-full w-full px-4 md:px-8 flex items-center justify-center">
+          <div className="h-full w-full px-3 md:px-8 flex items-start md:items-center justify-center overflow-y-auto">
             <StageIntro />
           </div>
-          <div className="h-full w-full px-4 md:px-8 flex items-center justify-center">
+          <div className="h-full w-full px-3 md:px-8 flex items-start md:items-center justify-center overflow-y-auto">
             <StagePlan plan={plan} Icon={Icon} />
           </div>
-          <div className="h-full w-full px-4 md:px-8 flex items-center justify-center">
+          <div className="h-full w-full px-3 md:px-8 flex items-start md:items-center justify-center overflow-y-auto">
             <StageDeliveries plan={plan} categories={categories} />
           </div>
-          <div className="h-full w-full px-4 md:px-8 flex items-center justify-center">
+          <div className="h-full w-full px-3 md:px-8 flex items-start md:items-center justify-center overflow-y-auto">
             {pricing && <StageInvest plan={plan} pricing={pricing} promo={promo} applyPromo={false} />}
           </div>
           {promo && (
             <>
-              <div className="h-full w-full px-4 md:px-8 flex items-center justify-center">
+              <div className="h-full w-full px-3 md:px-8 flex items-start md:items-center justify-center overflow-y-auto">
                 <StagePromoStory plan={plan} promo={promo} />
               </div>
-              <div className="h-full w-full px-4 md:px-8 flex items-center justify-center">
+              <div className="h-full w-full px-3 md:px-8 flex items-start md:items-center justify-center overflow-y-auto">
                 {pricing && <StageInvest plan={plan} pricing={pricing} promo={promo} applyPromo={true} />}
               </div>
             </>

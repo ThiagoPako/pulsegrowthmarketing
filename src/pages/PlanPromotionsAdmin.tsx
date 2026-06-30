@@ -270,6 +270,17 @@ export default function PlanPromotionsAdmin() {
     load();
   }
 
+  async function updateRedemptions(p: Promo, value: number) {
+    const safe = Math.max(0, Math.floor(value || 0));
+    const { error } = await supabase.from('plan_promotions' as any)
+      .update({ redemptions_count: safe })
+      .eq('id', p.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Clientes fechados atualizado');
+    setItems(prev => prev.map(it => it.id === p.id ? { ...it, redemptions_count: safe } : it));
+  }
+
+
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-6">
       <div className="flex items-center gap-3">
@@ -490,6 +501,20 @@ export default function PlanPromotionsAdmin() {
                   {p.discount_percent}% off por {p.duration_months} {p.duration_months === 1 ? 'mês' : 'meses'}
                   {p.max_redemptions ? ` • ${p.redemptions_count}/${p.max_redemptions} vagas usadas` : ''}
                 </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <Label className="text-xs text-muted-foreground">Clientes fechados:</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={p.max_redemptions ?? undefined}
+                    defaultValue={p.redemptions_count}
+                    className="h-8 w-24"
+                    onBlur={e => {
+                      const v = Number(e.target.value);
+                      if (v !== p.redemptions_count) updateRedemptions(p, v);
+                    }}
+                  />
+                </div>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => toggleActive(p)}>
@@ -502,6 +527,7 @@ export default function PlanPromotionsAdmin() {
               </div>
             </div>
           ))}
+
         </CardContent>
       </Card>
     </div>

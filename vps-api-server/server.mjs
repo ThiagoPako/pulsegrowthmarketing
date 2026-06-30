@@ -367,8 +367,13 @@ async function verifyUser(req) {
       },
       userClient: getUserClient(authHeader),
     };
-  } catch {
-    // Fallback to Supabase Auth (transitional)
+  } catch (error) {
+    if (process.env.ALLOW_LEGACY_SUPABASE_AUTH !== 'true') {
+      throw new Error('Unauthorized');
+    }
+
+    // Optional one-time migration bridge for legacy tokens. Disabled by default
+    // because production authentication must be VPS/JWT only.
     const userClient = getUserClient(authHeader);
     if (!userClient) throw new Error('Unauthorized');
     const { data, error } = await userClient.auth.getUser(token);
@@ -1317,7 +1322,7 @@ app.post('/api/auth/create-user', async (req, res) => {
     }
 
     const id = crypto.randomUUID();
-    const userRole = role || 'editor';
+    const userRole = isSelfRegister ? 'videomaker' : (role || 'editor');
 
     if (await hasProfilesPasswordHashColumn()) {
       const hash = await bcrypt.hash(password, 12);

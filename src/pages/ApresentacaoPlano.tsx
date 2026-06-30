@@ -612,6 +612,51 @@ function StageDeliveries({ plan, categories }: { plan: any; categories: Category
           </div>
         </motion.div>
 
+        {/* IMPLEMENTAÇÃO DE CONTAS DE ANÚNCIOS, passo a passo */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.0 }}
+          className="rounded-3xl border-2 border-primary/30 bg-gradient-to-br from-primary/5 via-card to-orange-500/5 p-5 md:p-6 mb-6"
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <Badge className="bg-primary text-primary-foreground">
+              <Rocket className="h-3 w-3 mr-1" /> Implementação gratuita de contas de anúncios
+            </Badge>
+          </div>
+          <h3 className="text-xl md:text-2xl font-bold mb-1" style={{ fontFamily: 'var(--font-display)' }}>
+            Você não precisa entender nada de Meta Ads. Cuidamos de tudo.
+          </h3>
+          <p className="text-xs md:text-sm text-muted-foreground mb-4">
+            Estrutura completa montada do zero pelo nosso time, pronta para rodar anúncios profissionais.
+          </p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { n: 1, t: 'Página + Instagram', d: 'Se não tiver, criamos a página do Facebook do cliente e integramos com o Instagram.' },
+              { n: 2, t: 'Business Suite + Conta empresarial', d: 'Criamos o Meta Business Suite e configuramos a conta empresarial completa.' },
+              { n: 3, t: 'Pixel do Meta Ads', d: 'Criação do Pixel e integração com site e WhatsApp para rastrear todas as conversões.' },
+              { n: 4, t: 'Conta de Anúncios + Públicos', d: 'Criamos a conta de anúncios, configuramos os públicos e deixamos tudo pronto para os primeiros criativos.' },
+            ].map((s, i) => (
+              <motion.div
+                key={s.n}
+                initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.1 + i * 0.08 }}
+                className="relative rounded-xl border border-primary/20 bg-background/80 p-3.5 hover:border-primary/60 transition-all"
+              >
+                <div className="absolute -top-2.5 -left-2.5 w-7 h-7 rounded-full bg-gradient-to-br from-primary to-orange-600 text-primary-foreground flex items-center justify-center text-xs font-bold shadow-lg">
+                  {s.n}
+                </div>
+                <div className="font-bold text-sm leading-tight mb-1 mt-1">{s.t}</div>
+                <div className="text-[11px] md:text-xs text-muted-foreground leading-snug">{s.d}</div>
+              </motion.div>
+            ))}
+          </div>
+          <div className="mt-4 flex items-start gap-2 rounded-xl bg-primary/10 border border-primary/30 p-3">
+            <Check className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+            <p className="text-xs md:text-sm">
+              <strong>Resultado:</strong> no fim da implementação, sua empresa tem página, Business Suite, pixel rastreando, conta de anúncios e públicos configurados, pronta para receber os primeiros anúncios profissionais.
+            </p>
+          </div>
+        </motion.div>
+
+
         {/* LISTA COMPLETA, colapsada visualmente */}
         <motion.div
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }}

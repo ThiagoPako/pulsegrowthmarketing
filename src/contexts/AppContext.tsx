@@ -304,6 +304,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const commitFixedSchedules = useCallback(async (generatedRecordings: Recording[]): Promise<number> => {
     if (generatedRecordings.length === 0) return 0;
 
+    // Deduplicação final contra o snapshot mais recente de gravações,
+    // evitando duplicar fixas se o popup ficou aberto enquanto outras foram criadas.
+    const seen = new Set<string>();
+    generatedRecordings = generatedRecordings.filter(rec => {
+      const key = `${rec.clientId}|${rec.date}|${rec.startTime}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      const dup = data.recordings.some(existing =>
+        existing.status !== 'cancelada' &&
+        existing.clientId === rec.clientId &&
+        existing.date === rec.date &&
+        (existing.startTime === rec.startTime || (existing.type === 'fixa'))
+      );
+      return !dup;
+    });
+
+    if (generatedRecordings.length === 0) {
+      await data.refetch();
+      return 0;
+    }
+
+
     const durationWithBuffer = (data.settings.recordingDuration || 90) + BUFFER_BETWEEN_RECORDINGS;
     const conflictingLowerPriorityIds = data.recordings
       .filter(recording => LOWER_PRIORITY_TYPES_FOR_FIXED.has(recording.type) && recording.status !== 'cancelada')

@@ -341,11 +341,12 @@ function Slide({ children }: { children: React.ReactNode }) {
 
 function StageIntro() {
   const stats = [
-    { icon: Calendar, value: '+5', unit: 'anos', label: 'de mercado' },
-    { icon: Users, value: '+4', unit: 'anos', label: 'com clientes ativos' },
-    { icon: TrendingUp, value: '100%', unit: '', label: 'foco em vendas' },
-    { icon: Trophy, value: 'Time', unit: 'próprio', label: 'do início ao fim' },
+    { icon: Calendar, value: '+4', unit: 'anos', label: 'de mercado consolidado' },
+    { icon: Users, value: 'Desde', unit: 'o início', label: 'clientes ativos com a gente' },
+    { icon: Trophy, value: 'Grandes', unit: 'cases', label: 'de sucesso comprovados' },
+    { icon: TrendingUp, value: '100%', unit: '', label: 'foco em gerar vendas' },
   ];
+
   const pillars = [
     { icon: Target, title: 'Conteúdo que vende', desc: 'Roteiros e criativos pensados pra gerar lead, agendamento e fechamento — não vaidade.' },
     { icon: Megaphone, title: 'Tráfego pago profissional', desc: 'Meta Ads e Google Ads com gestor especialista, otimização diária e dashboards em tempo real.' },

@@ -1322,6 +1322,7 @@ app.post('/api/auth/create-user', async (req, res) => {
     if (existing.length > 0) return res.status(409).json({ error: 'Email já cadastrado no sistema' });
 
     if (!(await hasProfilesPasswordHashColumn())) {
+      await ensureAuthSupportTables();
       const { rows: existingAuth } = await pool.query('SELECT id FROM auth_users WHERE lower(email) = lower($1) LIMIT 1', [normalizedEmail]);
       if (existingAuth.length > 0) return res.status(409).json({ error: 'Email já cadastrado no sistema' });
     }

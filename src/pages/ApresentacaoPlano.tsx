@@ -116,6 +116,18 @@ export default function ApresentacaoPlano() {
     })();
   }, [plan, activeCity]);
 
+  // Realtime: atualiza vagas automaticamente quando redemptions_count mudar
+  useEffect(() => {
+    if (!promo?.id) return;
+    const channel = supabase
+      .channel(`promo-${promo.id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'plan_promotions', filter: `id=eq.${promo.id}` },
+        (payload) => { setPromo((prev: any) => prev ? { ...prev, ...payload.new } : prev); })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [promo?.id]);
+
+
   const currentIndex = plano ? PRESENTATION_ORDER.indexOf(plano as any) : -1;
   const prevKey = currentIndex > 0 ? PRESENTATION_ORDER[currentIndex - 1] : null;
   const nextKey = currentIndex >= 0 && currentIndex < PRESENTATION_ORDER.length - 1

@@ -399,12 +399,18 @@ export default function EditorKanban() {
 
   const handleClaimTask = async (task: EditorTask) => {
     if (!user) return;
-    const { error } = await supabase.from('content_tasks').update({
+    // Atomic claim: only succeeds if the task is still unassigned.
+    const { data, error } = await supabase.from('content_tasks').update({
       assigned_to: user.id,
       edited_by: user.id,
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
+    } as any).eq('id', task.id).is('assigned_to', null).select('id');
     if (error) { toast.error('Erro ao marcar tarefa'); return; }
+    if (!data || (Array.isArray(data) && data.length === 0)) {
+      toast.error('🚫 Este vídeo já foi pego por outra pessoa!');
+      fetchTasks();
+      return;
+    }
     const editorName = users.find(u => u.id === user.id)?.name || 'Você';
     toast.success(`🚩 ${editorName} marcou esta tarefa!`, { description: task.title });
     fetchTasks();

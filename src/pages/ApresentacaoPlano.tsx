@@ -723,11 +723,18 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
                   <span className="text-4xl md:text-5xl font-bold text-orange-600" style={{ fontFamily: 'var(--font-display)' }}>{brl(promoSemMes)}</span>
                   <span className="text-sm text-muted-foreground">/mês</span>
                 </div>
-                <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-3 space-y-1.5 text-sm">
-                  <Row label="De" value={<span className="line-through">{brl(sem)}/mês</span>} />
-                  <Row label="Desconto" value={<Badge className="bg-orange-500 text-white">-{semPromo?.discount_percent}%</Badge>} />
-                  <Row label="Você economiza" value={<span className="font-bold text-orange-600">{brl(sem - promoSemMes)}/mês</span>} />
-                </div>
+                {(() => {
+                  const meses = Math.min(6, semPromo?.duration_months || 6);
+                  const totalSem = (sem - promoSemMes) * meses;
+                  return (
+                    <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-3 space-y-1.5 text-sm">
+                      <Row label="De" value={<span className="line-through">{brl(sem)}/mês</span>} />
+                      <Row label="Desconto" value={<Badge className="bg-orange-500 text-white">-{semPromo?.discount_percent}%</Badge>} />
+                      <Row label="Você economiza" value={<span className="font-bold text-orange-600">{brl(sem - promoSemMes)}/mês</span>} />
+                      <Row label={`Economia total (${meses} ${meses === 1 ? 'mês' : 'meses'})`} value={<span className="font-bold text-orange-600">{brl(totalSem)}</span>} />
+                    </div>
+                  );
+                })()}
               </>
             ) : (
               <>

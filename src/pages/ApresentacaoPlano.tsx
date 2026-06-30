@@ -61,6 +61,7 @@ export default function ApresentacaoPlano() {
   const baseRoute = isPublic ? '/p/planos' : '/apresentacao';
   const [stage, setStage] = useState(0);
   const [promo, setPromo] = useState<any | null>(null);
+  const [semPromo, setSemPromo] = useState<any | null>(null);
   const { activeCity } = useCity();
 
   const plan = plano ? getPlan(plano) : undefined;
@@ -87,7 +88,13 @@ export default function ApresentacaoPlano() {
           if (p.max_redemptions != null && (p.redemptions_count ?? 0) >= p.max_redemptions) return false;
           return true;
         });
-        setPromo(matches[0] || null);
+        // Promo principal: prioriza anual/ambos (banner/storytelling)
+        const main = matches.find((p: any) => p.applies_to === 'anual' || p.applies_to === 'ambos') || matches[0] || null;
+        // Promo do semestral: pode coexistir com a principal
+        const sem = matches.find((p: any) => p.applies_to === 'semestral' || p.applies_to === 'ambos') || null;
+        setPromo(main);
+        const mainAny: any = main;
+        setSemPromo(sem && sem !== main ? sem : (mainAny && (mainAny.applies_to === 'semestral' || mainAny.applies_to === 'ambos') ? mainAny : null));
       } catch (err) { console.warn('promo error', err); }
     })();
   }, [plan, activeCity]);
@@ -139,11 +146,11 @@ export default function ApresentacaoPlano() {
     const totalEconomia = diffMes * 12;
     const pct = sem > 0 ? Math.round((diffMes / sem) * 100) : 0;
     const promoTargetAnnual = promo && (promo.applies_to === 'anual' || promo.applies_to === 'ambos');
-    const promoTargetSem = promo && (promo.applies_to === 'semestral' || promo.applies_to === 'ambos');
+    const semSource: any = semPromo || (promo && (promo.applies_to === 'semestral' || promo.applies_to === 'ambos') ? promo : null);
     const promoAnualMes = promoTargetAnnual ? an * (1 - Number(promo.discount_percent) / 100) : null;
-    const promoSemMes = promoTargetSem ? sem * (1 - Number(promo.discount_percent) / 100) : null;
-    return { semestral, anual, sem, an, diffMes, totalEconomia, pct, promoAnualMes, promoSemMes };
-  }, [plan, promo]);
+    const promoSemMes = semSource ? sem * (1 - Number(semSource.discount_percent) / 100) : null;
+    return { semestral, anual, sem, an, diffMes, totalEconomia, pct, promoAnualMes, promoSemMes, semPromo: semSource };
+  }, [plan, promo, semPromo]);
 
   if (!plan) return <Navigate to={isPublic ? '/p/planos' : '/apresentacao'} replace />;
 
@@ -648,6 +655,7 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
   const { semestral, anual, sem, an, diffMes, totalEconomia, pct } = pricing;
   const promoAnualMes = applyPromo ? pricing.promoAnualMes : null;
   const promoSemMes = applyPromo ? pricing.promoSemMes : null;
+  const semPromo = pricing.semPromo || promo;
   const hasPromo = !!promo && applyPromo;
 
   return (
@@ -703,7 +711,7 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
           >
             {promoSemMes !== null && (
               <Badge className="absolute -top-3 left-5 bg-orange-500 text-white font-bold shadow-lg">
-                🔥 {promo.discount_percent}% OFF
+                🔥 {semPromo?.discount_percent}% OFF
               </Badge>
             )}
             <div className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wider">
@@ -717,7 +725,7 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
                 </div>
                 <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-3 space-y-1.5 text-sm">
                   <Row label="De" value={<span className="line-through">{brl(sem)}/mês</span>} />
-                  <Row label="Desconto" value={<Badge className="bg-orange-500 text-white">-{promo.discount_percent}%</Badge>} />
+                  <Row label="Desconto" value={<Badge className="bg-orange-500 text-white">-{semPromo?.discount_percent}%</Badge>} />
                   <Row label="Você economiza" value={<span className="font-bold text-orange-600">{brl(sem - promoSemMes)}/mês</span>} />
                 </div>
               </>

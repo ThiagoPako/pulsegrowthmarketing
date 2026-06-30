@@ -144,25 +144,45 @@ export default function PlanPromotionsAdmin() {
   const isPresetActive = (preset: PresetDef) =>
     items.some(p => p.active && p.title.trim().toLowerCase() === preset.payload.title.trim().toLowerCase());
 
+  // Presets que podem coexistir (anual + semestral). Ao ativar um deles,
+  // outros nesse grupo NÃO são desativados.
+  const COEXIST_IDS = new Set(['aceleracao-comercial-pulse', 'semestral-10']);
+
+  async function activatePresetById(presetId: string, coexistWith: Set<string>) {
+    const preset = PRESETS.find(p => p.id === presetId);
+    if (!preset) return;
+    const titleKey = preset.payload.title.trim().toLowerCase();
+    // Desativa outras promoções ativas que NÃO estão no grupo de coexistência
+    const others = items.filter(p =>
+      p.active &&
+      p.title.trim().toLowerCase() !== titleKey &&
+      !PRESETS.some(pr => coexistWith.has(pr.id) && pr.payload.title.trim().toLowerCase() === p.title.trim().toLowerCase())
+    );
+    for (const a of others) {
+      await supabase.from('plan_promotions' as any).update({ active: false }).eq('id', a.id);
+    }
+    const existing = items.filter(p => p.title.trim().toLowerCase() === titleKey);
+    if (existing.length > 0) {
+      await supabase.from('plan_promotions' as any)
+        .update({ ...preset.payload, active: true })
+        .eq('id', existing[0].id);
+    } else {
+      const { error } = await supabase.from('plan_promotions' as any).insert(preset.payload);
+      if (error) throw error;
+    }
+  }
+
   async function activatePreset(preset: PresetDef) {
     setSaving(true);
     try {
-      // 1. Desativa TODAS as promoções ativas (apenas uma vigente por vez)
-      const activeOthers = items.filter(p => p.active && p.title.trim().toLowerCase() !== preset.payload.title.trim().toLowerCase());
-      for (const a of activeOthers) {
-        await supabase.from('plan_promotions' as any).update({ active: false }).eq('id', a.id);
-      }
-      // 2. Ativa ou cria o preset escolhido
-      const existing = items.filter(p => p.title.trim().toLowerCase() === preset.payload.title.trim().toLowerCase());
-      if (existing.length > 0) {
-        await supabase.from('plan_promotions' as any)
-          .update({ ...preset.payload, active: true })
-          .eq('id', existing[0].id);
-        toast.success(`${preset.title} ativada — outras promoções foram desativadas`);
+      if (preset.id === 'aceleracao-comercial-pulse') {
+        // Ativa Aceleração + bônus 10% no semestral juntos
+        await activatePresetById('aceleracao-comercial-pulse', COEXIST_IDS);
+        await activatePresetById('semestral-10', COEXIST_IDS);
+        toast.success('Aceleração Pulse ativada + 10% OFF no semestral incluso');
       } else {
-        const { error } = await supabase.from('plan_promotions' as any).insert(preset.payload);
-        if (error) throw error;
-        toast.success(`${preset.title} criada e ativada`);
+        await activatePresetById(preset.id, COEXIST_IDS);
+        toast.success(`${preset.title} ativada`);
       }
       load();
     } catch (e: any) {
@@ -172,9 +192,14 @@ export default function PlanPromotionsAdmin() {
     }
   }
 
-
   async function deactivatePreset(preset: PresetDef) {
-    const existing = items.filter(p => p.title.trim().toLowerCase() === preset.payload.title.trim().toLowerCase() && p.active);
+    const titles = [preset.payload.title.trim().toLowerCase()];
+    // Se desativar a Aceleração, também desativa o bônus semestral
+    if (preset.id === 'aceleracao-comercial-pulse') {
+      const sem = PRESETS.find(p => p.id === 'semestral-10');
+      if (sem) titles.push(sem.payload.title.trim().toLowerCase());
+    }
+    const existing = items.filter(p => titles.includes(p.title.trim().toLowerCase()) && p.active);
     if (existing.length === 0) return;
     setSaving(true);
     try {

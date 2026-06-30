@@ -920,7 +920,7 @@ export default function ApresentacaoPlano() {
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
             <Button size="lg" variant="secondary" className="text-base h-12 px-8 shadow-xl hover:scale-105 transition-transform" asChild>
-              <a href="https://wa.me/5562999999999" target="_blank" rel="noreferrer">
+              <a href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`Olá! Quero fechar o plano ${plan.name} da Pulse.`)}`} target="_blank" rel="noreferrer">
                 Falar com a equipe <ArrowRight className="h-4 w-4 ml-1" />
               </a>
             </Button>

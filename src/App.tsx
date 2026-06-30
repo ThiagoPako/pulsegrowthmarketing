@@ -68,6 +68,7 @@ const TestimonialsAdmin = lazy(() => import("@/pages/TestimonialsAdmin"));
 const LandingPageAdmin = lazy(() => import("@/pages/LandingPageAdmin"));
 const Apresentacao = lazy(() => import("@/pages/Apresentacao"));
 const ApresentacaoPlano = lazy(() => import("@/pages/ApresentacaoPlano"));
+const PlanPromotionsAdmin = lazy(() => import("@/pages/PlanPromotionsAdmin"));
 const CommercialProposal = lazy(() => import("@/pages/CommercialProposal"));
 const ProposalViewer = lazy(() => import("@/pages/ProposalViewer"));
 const RecordingControl = lazy(() => import("@/pages/RecordingControl"));
@@ -192,6 +193,7 @@ function AppRoutes() {
         <Route path="/landing-admin" element={<ProtectedRoute><LandingPageAdmin /></ProtectedRoute>} />
         <Route path="/propostas" element={<ProtectedRoute><CommercialProposal /></ProtectedRoute>} />
         <Route path="/apresentacao" element={<ProtectedRoute><Apresentacao /></ProtectedRoute>} />
+        <Route path="/apresentacao/promocoes" element={<ProtectedRoute><PlanPromotionsAdmin /></ProtectedRoute>} />
         <Route path="/apresentacao/:plano" element={<ProtectedRoute><ApresentacaoPlano /></ProtectedRoute>} />
         {/* Rotas públicas para envio ao cliente (sem login) */}
         <Route path="/p/planos" element={<Apresentacao />} />

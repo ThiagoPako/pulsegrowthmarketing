@@ -3114,6 +3114,54 @@ export type Database = {
         }
         Relationships: []
       }
+      plan_promotions: {
+        Row: {
+          active: boolean
+          applies_to: string
+          city: string | null
+          created_at: string
+          description: string | null
+          discount_percent: number
+          duration_months: number
+          ends_at: string | null
+          id: string
+          plan_key: string | null
+          starts_at: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          applies_to?: string
+          city?: string | null
+          created_at?: string
+          description?: string | null
+          discount_percent?: number
+          duration_months?: number
+          ends_at?: string | null
+          id?: string
+          plan_key?: string | null
+          starts_at?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          applies_to?: string
+          city?: string | null
+          created_at?: string
+          description?: string | null
+          discount_percent?: number
+          duration_months?: number
+          ends_at?: string | null
+          id?: string
+          plan_key?: string | null
+          starts_at?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       plan_videos: {
         Row: {
           id: string

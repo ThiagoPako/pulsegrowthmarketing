@@ -376,8 +376,8 @@ async function verifyUser(req) {
     // because production authentication must be VPS/JWT only.
     const userClient = getUserClient(authHeader);
     if (!userClient) throw new Error('Unauthorized');
-    const { data, error } = await userClient.auth.getUser(token);
-    if (error || !data?.user) throw new Error('Unauthorized');
+    const { data, error: legacyAuthError } = await userClient.auth.getUser(token);
+    if (legacyAuthError || !data?.user) throw new Error('Unauthorized');
     return { user: data.user, userClient };
   }
 }

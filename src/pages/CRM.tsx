@@ -142,8 +142,26 @@ export default function CRM() {
     },
   });
 
+  const incrementActivePromosIfClosed = async (leadId: string, newStatus: LeadStatus) => {
+    if (newStatus !== 'contracted') return;
+    const { data: prev } = await supabase.from('crm_leads').select('status').eq('id', leadId).maybeSingle();
+    if ((prev as any)?.status === 'contracted') return;
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: promos } = await supabase
+      .from('plan_promotions' as any)
+      .select('id, max_redemptions, redemptions_count, starts_at, ends_at')
+      .eq('active', true);
+    for (const p of (promos as any[]) || []) {
+      if (p.starts_at && p.starts_at > today) continue;
+      if (p.ends_at && p.ends_at < today) continue;
+      if (p.max_redemptions != null && (p.redemptions_count ?? 0) >= p.max_redemptions) continue;
+      await supabase.rpc('increment_promotion_redemption' as any, { _promo_id: p.id });
+    }
+  };
+
   const updateLeadStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: LeadStatus }) => {
+      await incrementActivePromosIfClosed(id, status);
       const { error } = await supabase
         .from('crm_leads')
         .update({ status } as any)
@@ -155,6 +173,7 @@ export default function CRM() {
       toast.success('Lead atualizado!');
     },
   });
+
 
   const updateLead = useMutation({
     mutationFn: async (lead: Partial<Lead> & { id: string }) => {

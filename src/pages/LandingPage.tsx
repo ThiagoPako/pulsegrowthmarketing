@@ -10,6 +10,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import FacebookPixel from '@/components/FacebookPixel';
+import { useAuth } from '@/hooks/useAuth';
+
+// Navigates to the team area: dashboard if logged in, otherwise login page
+function useGoToTeamArea() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  return () => navigate(user ? '/dashboard' : '/login');
+}
 
 
 const WHATSAPP_LINK = 'https://wa.me/5562985382981?text=Olá!%20Vim%20pelo%20site%20e%20gostaria%20de%20saber%20mais%20sobre%20os%20serviços%20da%20Pulse.';

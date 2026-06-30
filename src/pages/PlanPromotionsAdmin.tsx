@@ -261,15 +261,22 @@ export default function PlanPromotionsAdmin() {
       </div>
 
       {/* PRESETS — seleção rápida */}
+      {(() => {
+        const hasActive = PRESETS.some(p => isPresetActive(p));
+        const visiblePresets = hasActive ? PRESETS.filter(p => isPresetActive(p)) : PRESETS;
+        return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" /> Promoções prontas
+            <Sparkles className="h-4 w-4 text-primary" />
+            {hasActive ? 'Promoção ativa' : 'Promoções prontas'}
           </h2>
-          <span className="text-xs text-muted-foreground">Clique para ativar/desativar</span>
+          <span className="text-xs text-muted-foreground">
+            {hasActive ? 'Desative para escolher outra' : 'Clique para ativar'}
+          </span>
         </div>
-        <div className="grid md:grid-cols-3 gap-4">
-          {PRESETS.map((preset) => {
+        <div className={`grid gap-4 ${hasActive ? 'md:grid-cols-1 max-w-2xl' : 'md:grid-cols-3'}`}>
+          {visiblePresets.map((preset) => {
             const active = isPresetActive(preset);
             const Icon = preset.icon;
             return (

@@ -711,7 +711,7 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
           >
             {promoSemMes !== null && (
               <Badge className="absolute -top-3 left-5 bg-orange-500 text-white font-bold shadow-lg">
-                🔥 {promo.discount_percent}% OFF
+                🔥 {semPromo?.discount_percent}% OFF
               </Badge>
             )}
             <div className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wider">

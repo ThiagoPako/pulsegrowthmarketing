@@ -518,71 +518,32 @@ export default function ApresentacaoPlano() {
                       animate={{ x: '500%' }}
                       transition={{ duration: 3, repeat: Infinity, repeatDelay: 2, ease: 'easeInOut' }}
                     />
-                    <div className="relative flex items-center gap-3 md:gap-4">
+                    <div className="relative flex items-center gap-3">
                       <motion.div
                         animate={{ rotate: [0, 8, -8, 0] }}
                         transition={{ duration: 3, repeat: Infinity }}
-                        className="text-3xl md:text-4xl shrink-0 drop-shadow-lg"
+                        className="text-2xl md:text-3xl shrink-0 drop-shadow-lg"
                       >
                         🚀
                       </motion.div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center flex-wrap gap-x-2 gap-y-1">
-                          <Badge className="bg-white text-orange-600 font-bold shadow-sm text-[10px] md:text-xs whitespace-nowrap">
-                            🔥 {promo.title}
-                          </Badge>
-                          <span className="text-lg md:text-2xl font-bold leading-tight drop-shadow" style={{ fontFamily: 'var(--font-display)' }}>
-                            {promo.discount_percent}% OFF · {promo.duration_months} {promo.duration_months === 1 ? 'mês' : 'meses'}
-                          </span>
-                        </div>
-                        {(promoAnualMes !== null || promoSemMes !== null) && (
-                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs md:text-sm font-semibold mt-1 opacity-95">
-                            {promoAnualMes !== null && (
-                              <span>Anual: <span className="bg-white/20 px-1.5 rounded">{brl(promoAnualMes)}/mês</span></span>
-                            )}
-                            {promoSemMes !== null && (
-                              <span>Semestral: <span className="bg-white/20 px-1.5 rounded">{brl(promoSemMes)}/mês</span></span>
-                            )}
-                          </div>
-                        )}
-                        {promo.max_redemptions != null && (() => {
-                          const left = Math.max(0, promo.max_redemptions - (promo.redemptions_count ?? 0));
-                          const pctTaken = Math.round(((promo.redemptions_count ?? 0) / promo.max_redemptions) * 100);
-                          return (
-                            <div className="mt-1.5">
-                              <div className="flex items-center justify-between text-[11px] md:text-xs font-bold">
-                                <span>⚡ Vagas: {left}/{promo.max_redemptions}</span>
-                              </div>
-                              <div className="h-1.5 bg-white/20 rounded-full overflow-hidden mt-0.5">
-                                <motion.div
-                                  className="h-full bg-white rounded-full"
-                                  initial={{ width: 0 }}
-                                  animate={{ width: `${pctTaken}%` }}
-                                  transition={{ duration: 1, delay: 0.3 }}
-                                />
-                              </div>
-                            </div>
-                          );
-                        })()}
+                      <div className="flex-1 min-w-0 flex items-center flex-wrap gap-x-2 gap-y-1">
+                        <span className="text-base md:text-xl font-bold leading-tight drop-shadow truncate" style={{ fontFamily: 'var(--font-display)' }}>
+                          {promo.title}
+                        </span>
+                        <Badge className="bg-white text-orange-600 font-bold shadow-sm text-[10px] md:text-xs whitespace-nowrap">
+                          {promo.discount_percent}% OFF
+                        </Badge>
                       </div>
                       <a
                         href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`Olá! Quero garantir a promoção ${promo.title} no plano ${plan.name}.`)}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="hidden sm:inline-flex shrink-0 items-center gap-1 bg-white text-orange-600 font-bold rounded-full px-4 py-2 text-xs md:text-sm shadow-lg hover:scale-105 transition-transform whitespace-nowrap"
+                        className="shrink-0 inline-flex items-center gap-1 bg-white text-orange-600 font-bold rounded-full px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm shadow-lg hover:scale-105 transition-transform whitespace-nowrap"
                       >
                         Garantir <ArrowRight className="h-3.5 w-3.5" />
                       </a>
                     </div>
-                    {/* CTA mobile fullwidth */}
-                    <a
-                      href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`Olá! Quero garantir a promoção ${promo.title} no plano ${plan.name}.`)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="sm:hidden mt-3 flex items-center justify-center gap-1 bg-white text-orange-600 font-bold rounded-full px-4 py-2 text-sm shadow-lg"
-                    >
-                      Garantir promoção <ArrowRight className="h-4 w-4" />
-                    </a>
+
                   </motion.div>
                 )}
 

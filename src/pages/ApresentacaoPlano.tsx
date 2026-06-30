@@ -88,7 +88,12 @@ export default function ApresentacaoPlano() {
           if (p.max_redemptions != null && (p.redemptions_count ?? 0) >= p.max_redemptions) return false;
           return true;
         });
-        setPromo(matches[0] || null);
+        // Promo principal: prioriza anual/ambos (banner/storytelling)
+        const main = matches.find((p: any) => p.applies_to === 'anual' || p.applies_to === 'ambos') || matches[0] || null;
+        // Promo do semestral: pode coexistir com a principal
+        const sem = matches.find((p: any) => p.applies_to === 'semestral' || p.applies_to === 'ambos') || null;
+        setPromo(main);
+        setSemPromo(sem && sem !== main ? sem : (main && (main.applies_to === 'semestral' || main.applies_to === 'ambos') ? main : null));
       } catch (err) { console.warn('promo error', err); }
     })();
   }, [plan, activeCity]);

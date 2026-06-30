@@ -100,7 +100,8 @@ export default function ApresentacaoPlano() {
 
   const goPrevPlan = () => { if (prevKey) navigate(`${baseRoute}/${prevKey}`); };
   const goNextPlan = () => { if (nextKey) navigate(`${baseRoute}/${nextKey}`); };
-  const nextStage = () => setStage((s) => Math.min(s + 1, TOTAL_STAGES - 1));
+  const totalStages = getTotalStages(!!promo);
+  const nextStage = () => setStage((s) => Math.min(s + 1, totalStages - 1));
   const prevStage = () => setStage((s) => Math.max(s - 1, 0));
 
   const copyPublicLink = async () => {

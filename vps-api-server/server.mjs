@@ -101,6 +101,17 @@ const CLIENT_PORTAL_BASE_FIELDS = [
 let clientsArtRequestsLimitColumnPromise;
 let proposalTablesEnsuredPromise;
 const tableJsonColumnsPromiseCache = new Map();
+const SCHEMA_CACHE_TTL_MS = 5 * 60 * 1000;
+
+function getSchemaCacheValue(cache, key) {
+  const cached = cache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.cachedAt > SCHEMA_CACHE_TTL_MS) {
+    cache.delete(key);
+    return null;
+  }
+  return cached.value;
+}
 
 async function hasClientsArtRequestsLimitColumn() {
   if (!clientsArtRequestsLimitColumnPromise) {
@@ -161,10 +172,13 @@ async function hasNullableClientIdOnContentTasks() {
 }
 
 async function getTableJsonColumns(tableName) {
+  const cached = getSchemaCacheValue(tableJsonColumnsPromiseCache, tableName);
+  if (cached) return cached;
+
   if (!tableJsonColumnsPromiseCache.has(tableName)) {
     tableJsonColumnsPromiseCache.set(
       tableName,
-      pool.query(
+      { cachedAt: Date.now(), value: pool.query(
         `
           SELECT column_name
           FROM information_schema.columns
@@ -178,11 +192,11 @@ async function getTableJsonColumns(tableName) {
         .catch((error) => {
           tableJsonColumnsPromiseCache.delete(tableName);
           throw error;
-        })
+        }) }
     );
   }
 
-  return tableJsonColumnsPromiseCache.get(tableName);
+  return tableJsonColumnsPromiseCache.get(tableName).value;
 }
 
 function serializeValueForColumn(columnName, value, jsonColumns) {
@@ -363,14 +377,62 @@ async function verifyUser(req) {
   }
 }
 
+async function getLinkedUserIds(user) {
+  const directId = user?.id ? String(user.id) : '';
+  const email = user?.email ? String(user.email).trim().toLowerCase() : '';
+  const ids = new Set(directId ? [directId] : []);
+
+  try {
+    const profileColumns = await getExistingColumns('profiles').catch(() => new Set());
+    const authColumns = await getExistingColumns('auth_users').catch(() => new Set());
+    const queries = [];
+
+    if (profileColumns.has('id') && (directId || (email && profileColumns.has('email')))) {
+      queries.push(
+        pool.query(
+          `SELECT id::text AS id
+             FROM profiles
+            WHERE ($1 <> '' AND id::text = $1)
+               OR ($2 <> '' ${profileColumns.has('email') ? 'AND lower(email) = $2' : 'AND false'})`,
+          [directId, email]
+        )
+      );
+    }
+
+    if (authColumns.has('id') && (directId || (email && authColumns.has('email')))) {
+      queries.push(
+        pool.query(
+          `SELECT id::text AS id
+             FROM auth_users
+            WHERE ($1 <> '' AND id::text = $1)
+               OR ($2 <> '' ${authColumns.has('email') ? 'AND lower(email) = $2' : 'AND false'})`,
+          [directId, email]
+        )
+      );
+    }
+
+    const results = await Promise.all(queries);
+    for (const result of results) {
+      for (const row of result.rows || []) {
+        if (row?.id) ids.add(String(row.id));
+      }
+    }
+  } catch (error) {
+    console.error('Linked user id lookup failed:', error?.message || error);
+  }
+
+  return Array.from(ids).filter(Boolean);
+}
+
 async function isAdminUser(user) {
   if (!user) return false;
   if (user.role === 'admin' || user.role === 'social_media') return true;
   try {
     await ensureAuthSupportTables();
+    const linkedIds = await getLinkedUserIds(user);
     const { rows } = await pool.query(
-      'SELECT 1 FROM user_roles WHERE user_id = $1 AND role IN ($2, $3) LIMIT 1',
-      [user.id, 'admin', 'social_media']
+      'SELECT 1 FROM user_roles WHERE user_id::text = ANY($1::text[]) AND role IN ($2, $3) LIMIT 1',
+      [linkedIds, 'admin', 'social_media']
     );
     return rows.length > 0;
   } catch {
@@ -396,10 +458,13 @@ async function getExistingColumns(tableName) {
   const normalizedTable = String(tableName || '').trim();
   if (!normalizedTable) return new Set();
 
+  const cached = getSchemaCacheValue(tableColumnsPromiseCache, normalizedTable);
+  if (cached) return cached;
+
   if (!tableColumnsPromiseCache.has(normalizedTable)) {
     tableColumnsPromiseCache.set(
       normalizedTable,
-      pool.query(
+      { cachedAt: Date.now(), value: pool.query(
         `SELECT column_name
            FROM information_schema.columns
           WHERE table_schema = 'public'
@@ -410,11 +475,11 @@ async function getExistingColumns(tableName) {
         .catch((error) => {
           tableColumnsPromiseCache.delete(normalizedTable);
           throw error;
-        })
+        }) }
     );
   }
 
-  return tableColumnsPromiseCache.get(normalizedTable);
+  return tableColumnsPromiseCache.get(normalizedTable).value;
 }
 
 function selectColumn(columns, columnName, fallbackSql = `NULL::text`) {
@@ -1059,20 +1124,21 @@ app.get('/api/me/cities', async (req, res) => {
   try {
     await ensureUserCitiesTable();
     const { user } = await verifyUser(req);
+    const linkedUserIds = await getLinkedUserIds(user);
 
     // Admins sempre têm acesso a todas as cidades, independente de user_cities
     if (await isAdminUser(user)) {
       const { rows: adminRows } = await pool.query(
-        'SELECT city, is_primary FROM user_cities WHERE user_id = $1',
-        [user.id]
+        'SELECT city, is_primary FROM user_cities WHERE user_id::text = ANY($1::text[])',
+        [linkedUserIds]
       );
       const primary = adminRows.find(r => r.is_primary)?.city || 'minacu';
       return res.json({ cities: ['minacu', 'uruacu'], primary });
     }
 
     const { rows } = await pool.query(
-      'SELECT city, is_primary FROM user_cities WHERE user_id = $1 ORDER BY is_primary DESC, city ASC',
-      [user.id]
+      'SELECT city, is_primary FROM user_cities WHERE user_id::text = ANY($1::text[]) ORDER BY is_primary DESC, city ASC',
+      [linkedUserIds]
     );
     if (rows.length === 0) {
       return res.json({ cities: ['minacu'], primary: 'minacu' });
@@ -4321,7 +4387,8 @@ const TABLES_WITH_CITY = new Set([
 // Evita 42703 (column does not exist) se a migração ainda não rodou para alguma tabela.
 const _cityColumnCache = new Map();
 async function tableHasCityColumn(tableName) {
-  if (_cityColumnCache.has(tableName)) return _cityColumnCache.get(tableName);
+  const cached = getSchemaCacheValue(_cityColumnCache, tableName);
+  if (cached !== null) return cached;
   try {
     const { rows } = await pool.query(
       `SELECT 1 FROM information_schema.columns
@@ -4329,7 +4396,7 @@ async function tableHasCityColumn(tableName) {
       [tableName]
     );
     const has = rows.length > 0;
-    _cityColumnCache.set(tableName, has);
+    _cityColumnCache.set(tableName, { value: has, cachedAt: Date.now() });
     return has;
   } catch {
     return false;
@@ -4369,6 +4436,15 @@ function cityScopeExpression(columnName = 'city') {
   return `replace(lower(coalesce(nullif(btrim(${safeColumn}::text), ''), 'minacu')), 'ç', 'c')`;
 }
 
+function cityVisibilityExpression(columnName = 'city', placeholder) {
+  const safeColumn = columnName
+    .split('.')
+    .map((part) => sanitizeIdentifier(part))
+    .join('.');
+  const scopedColumn = cityScopeExpression(columnName);
+  return `(${scopedColumn} = ${placeholder} OR ${safeColumn} IS NULL OR nullif(btrim(${safeColumn}::text), '') IS NULL)`;
+}
+
 function cityScopeCondition(columnName = 'city', placeholder) {
   return `${cityScopeExpression(columnName)} = ${placeholder}`;
 }
@@ -4378,6 +4454,7 @@ function cityScopeCondition(columnName = 'city', placeholder) {
 async function resolveActiveCity(req, userId, userObj = null) {
   const requested = normalizeCityValue(req.headers['x-pulse-city']);
   const requestedValid = requested && ALLOWED_CITIES.has(requested) ? requested : null;
+  const linkedUserIds = await getLinkedUserIds(userObj || { id: userId });
 
   // Admins podem acessar qualquer cidade sem precisar de registro em user_cities
   try {
@@ -4391,8 +4468,8 @@ async function resolveActiveCity(req, userId, userObj = null) {
 
   try {
     const { rows } = await pool.query(
-      'SELECT city, is_primary FROM user_cities WHERE user_id = $1',
-      [userId]
+      'SELECT city, is_primary FROM user_cities WHERE user_id::text = ANY($1::text[])',
+      [linkedUserIds.length ? linkedUserIds : [String(userId)]]
     );
     if (rows.length === 0) return assertValidCity(requestedValid || 'minacu');
     const allowed = rows.map(r => normalizeCityValue(r.city)).filter(Boolean);
@@ -4595,7 +4672,7 @@ app.post('/api/db/query', async (req, res) => {
 
         // Multi-city: força filtro de cidade no SELECT
         if (scopeCity) {
-          query += (query.includes(' WHERE ') ? ' AND ' : ' WHERE ') + `${cityScopeExpression(`${safeTable}.city`)} = $${paramIdx}`;
+          query += (query.includes(' WHERE ') ? ' AND ' : ' WHERE ') + `${cityVisibilityExpression(`${safeTable}.city`, `$${paramIdx}`)}`;
           params.push(activeCity);
           paramIdx++;
         }
@@ -4707,7 +4784,7 @@ app.post('/api/db/query', async (req, res) => {
         }
         // Multi-city: impede UPDATE cruzado
         if (scopeCity) {
-          query += (query.includes(' WHERE ') ? ' AND ' : ' WHERE ') + `${cityScopeExpression('city')} = $${paramIdx}`;
+          query += (query.includes(' WHERE ') ? ' AND ' : ' WHERE ') + `${cityVisibilityExpression('city', `$${paramIdx}`)}`;
           params.push(activeCity);
           paramIdx++;
         }
@@ -4745,7 +4822,7 @@ app.post('/api/db/query', async (req, res) => {
         }
         // Multi-city: impede DELETE cruzado
         if (scopeCity) {
-          query += (query.includes(' WHERE ') ? ' AND ' : ' WHERE ') + `${cityScopeExpression('city')} = $${paramIdx}`;
+          query += (query.includes(' WHERE ') ? ' AND ' : ' WHERE ') + `${cityVisibilityExpression('city', `$${paramIdx}`)}`;
           params.push(activeCity);
           paramIdx++;
         }
@@ -4792,7 +4869,7 @@ app.get('/api/clients', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
     const { rows } = scopeCity
-      ? await pool.query(`SELECT * FROM clients WHERE ${cityScopeExpression('city')} = $1 ORDER BY company_name`, [activeCity])
+      ? await pool.query(`SELECT * FROM clients WHERE ${cityVisibilityExpression('city', '$1')} ORDER BY company_name`, [activeCity])
       : await pool.query('SELECT * FROM clients ORDER BY company_name');
     res.json(rows);
   } catch (e) { res.status(e.message === 'Unauthorized' ? 401 : 500).json({ error: e.message }); }
@@ -4870,7 +4947,7 @@ app.put('/api/clients/:id', async (req, res) => {
     let whereSql = `WHERE id = $${idx}`;
     if (scopeCity) {
       vals.push(activeCity);
-      whereSql += ` AND ${cityScopeExpression('city')} = $${idx + 1}`;
+      whereSql += ` AND ${cityVisibilityExpression('city', `$${idx + 1}`)}`;
     }
     const { rows } = await pool.query(`UPDATE clients SET ${sets.join(', ')} ${whereSql} RETURNING *`, vals);
     res.json(rows[0]);
@@ -4965,7 +5042,7 @@ app.get('/api/recordings', async (req, res) => {
           ELSE r.status
         END AS effective_status
       FROM recordings r
-      ${scopeCity ? `WHERE ${cityScopeExpression('r.city')} = $1` : ''}
+      ${scopeCity ? `WHERE ${cityVisibilityExpression('r.city', '$1')}` : ''}
       ORDER BY r.date DESC, r.start_time ASC
     `, scopeCity ? [activeCity] : []);
 
@@ -5060,7 +5137,7 @@ app.put('/api/recordings/:id', async (req, res) => {
     }
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     vals.push(id);
-    const cityClause = scopeCity ? ` AND ${cityScopeExpression('city')} = $${idx + 1}` : '';
+    const cityClause = scopeCity ? ` AND ${cityVisibilityExpression('city', `$${idx + 1}`)}` : '';
     if (scopeCity) vals.push(activeCity);
     const { rows } = await pool.query(`UPDATE recordings SET ${sets.join(', ')} WHERE id = $${idx}${cityClause} RETURNING *`, vals);
     res.json(rows[0]);
@@ -5089,7 +5166,7 @@ app.delete('/api/recordings/:id', async (req, res) => {
     // Mark linked scripts as not recorded
     await pool.query("UPDATE scripts SET recorded = false, updated_at = NOW() WHERE recording_id = $1", [id]);
     await pool.query(
-      `DELETE FROM recordings WHERE id = $1${scopeCity ? ` AND ${cityScopeCondition('city', '$2')}` : ''}`,
+      `DELETE FROM recordings WHERE id = $1${scopeCity ? ` AND ${cityVisibilityExpression('city', '$2')}` : ''}`,
       scopeCity ? [id, activeCity] : [id]
     );
     res.json({ success: true });
@@ -5102,7 +5179,7 @@ app.delete('/api/recordings/future/:clientId', async (req, res) => {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
     const today = new Date().toISOString().split('T')[0];
     const { rowCount } = await pool.query(
-      `DELETE FROM recordings WHERE client_id = $1 AND status = 'agendada' AND date >= $2${scopeCity ? ` AND ${cityScopeCondition('city', '$3')}` : ''}`,
+      `DELETE FROM recordings WHERE client_id = $1 AND status = 'agendada' AND date >= $2${scopeCity ? ` AND ${cityVisibilityExpression('city', '$3')}` : ''}`,
       scopeCity ? [req.params.clientId, today, activeCity] : [req.params.clientId, today]
     );
     res.json({ deleted: rowCount });
@@ -5114,7 +5191,7 @@ app.get('/api/kanban-tasks', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'kanban_tasks');
     const { rows } = await pool.query(
-      `SELECT * FROM kanban_tasks${scopeCity ? ` WHERE ${cityScopeCondition('city', '$1')}` : ''} ORDER BY created_at DESC`,
+      `SELECT * FROM kanban_tasks${scopeCity ? ` WHERE ${cityVisibilityExpression('city', '$1')}` : ''} ORDER BY created_at DESC`,
       scopeCity ? [activeCity] : []
     );
     res.json(rows);
@@ -5155,7 +5232,7 @@ app.put('/api/kanban-tasks/:id', async (req, res) => {
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     sets.push('updated_at = NOW()');
     vals.push(id);
-    const cityClause = scopeCity ? ` AND ${cityScopeCondition('city', `$${idx + 1}`)}` : '';
+    const cityClause = scopeCity ? ` AND ${cityVisibilityExpression('city', `$${idx + 1}`)}` : '';
     if (scopeCity) vals.push(activeCity);
     const { rows } = await pool.query(`UPDATE kanban_tasks SET ${sets.join(', ')} WHERE id = $${idx}${cityClause} RETURNING *`, vals);
     res.json(rows[0]);
@@ -5166,7 +5243,7 @@ app.delete('/api/kanban-tasks/:id', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'kanban_tasks');
     await pool.query(
-      `DELETE FROM kanban_tasks WHERE id = $1${scopeCity ? ` AND ${cityScopeCondition('city', '$2')}` : ''}`,
+      `DELETE FROM kanban_tasks WHERE id = $1${scopeCity ? ` AND ${cityVisibilityExpression('city', '$2')}` : ''}`,
       scopeCity ? [req.params.id, activeCity] : [req.params.id]
     );
     res.json({ success: true });
@@ -5178,7 +5255,7 @@ app.get('/api/scripts', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'scripts');
     const { rows } = await pool.query(
-      `SELECT * FROM scripts${scopeCity ? ` WHERE ${cityScopeCondition('city', '$1')}` : ''} ORDER BY created_at DESC`,
+      `SELECT * FROM scripts${scopeCity ? ` WHERE ${cityVisibilityExpression('city', '$1')}` : ''} ORDER BY created_at DESC`,
       scopeCity ? [activeCity] : []
     );
     res.json(rows);
@@ -5225,7 +5302,7 @@ app.put('/api/scripts/:id', async (req, res) => {
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     sets.push('updated_at = NOW()');
     vals.push(id);
-    const cityClause = scopeCity ? ` AND ${cityScopeCondition('city', `$${idx + 1}`)}` : '';
+    const cityClause = scopeCity ? ` AND ${cityVisibilityExpression('city', `$${idx + 1}`)}` : '';
     if (scopeCity) vals.push(activeCity);
     const { rows } = await pool.query(`UPDATE scripts SET ${sets.join(', ')} WHERE id = $${idx}${cityClause} RETURNING *`, vals);
     res.json(rows[0]);
@@ -5236,7 +5313,7 @@ app.delete('/api/scripts/:id', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'scripts');
     await pool.query(
-      `DELETE FROM scripts WHERE id = $1${scopeCity ? ` AND ${cityScopeCondition('city', '$2')}` : ''}`,
+      `DELETE FROM scripts WHERE id = $1${scopeCity ? ` AND ${cityVisibilityExpression('city', '$2')}` : ''}`,
       scopeCity ? [req.params.id, activeCity] : [req.params.id]
     );
     res.json({ success: true });
@@ -5273,7 +5350,7 @@ app.get('/api/active-recordings', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'active_recordings');
     const { rows } = await pool.query(
-      `SELECT * FROM active_recordings${scopeCity ? ` WHERE ${cityScopeCondition('city', '$1')}` : ''}`,
+      `SELECT * FROM active_recordings${scopeCity ? ` WHERE ${cityVisibilityExpression('city', '$1')}` : ''}`,
       scopeCity ? [activeCity] : []
     );
     res.json(rows);
@@ -5286,7 +5363,7 @@ app.post('/api/active-recordings', async (req, res) => {
     const r = req.body;
     // Remove existing for this recording
     await pool.query(
-      `DELETE FROM active_recordings WHERE recording_id = $1${scopeCity ? ` AND ${cityScopeCondition('city', '$2')}` : ''}`,
+      `DELETE FROM active_recordings WHERE recording_id = $1${scopeCity ? ` AND ${cityVisibilityExpression('city', '$2')}` : ''}`,
       scopeCity ? [r.recording_id, activeCity] : [r.recording_id]
     );
     const { rows } = await pool.query(

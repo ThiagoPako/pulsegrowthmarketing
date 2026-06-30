@@ -307,6 +307,7 @@ export function useSupabaseData() {
     const token = localStorage.getItem('pulse_jwt');
     if (cityLoading) return;
     if (!token) { setLoading(false); return; }
+    setLoading(true);
     const [cRes, rRes, tRes, sRes, setRes, arRes] = await Promise.all([
       invokeVpsFunction('clients', { method: 'GET' }),
       invokeVpsFunction('recordings', { method: 'GET' }),
@@ -315,28 +316,31 @@ export function useSupabaseData() {
       invokeVpsFunction('company-settings', { method: 'GET' }),
       invokeVpsFunction('active-recordings', { method: 'GET' }),
     ]);
-    if (cRes.data && !cRes.error) {
-      const allClients = (Array.isArray(cRes.data) ? cRes.data : []).map(rowToClient);
-      setClients(allClients);
-    }
+    const hasClientsPayload = !cRes.error && Array.isArray(cRes.data);
+    const allClientRows = hasClientsPayload ? cRes.data : [];
+    const allClients = allClientRows.map(rowToClient);
+    if (hasClientsPayload) setClients(allClients);
     
     // Create a set of active client IDs for filtering other data
     const activeClientIds = new Set(
-      (Array.isArray(cRes.data) ? cRes.data : [])
+      allClientRows
         .filter((c: any) => c.status !== 'cancelado')
         .map((c: any) => c.id)
     );
+    const shouldFilterByActiveClients = hasClientsPayload && activeClientIds.size > 0;
 
     if (rRes.data && !rRes.error) {
       const allRecordings = (Array.isArray(rRes.data) ? rRes.data : []).map(rowToRecording);
       // Filter out recordings for canceled clients unless they are not 'agendada' (keep history)
-      setRecordings(allRecordings.filter(r => activeClientIds.has(r.clientId) || r.status !== 'agendada'));
+      setRecordings(shouldFilterByActiveClients ? allRecordings.filter(r => activeClientIds.has(r.clientId) || r.status !== 'agendada') : allRecordings);
     }
     if (tRes.data && !tRes.error) {
-      setTasks((Array.isArray(tRes.data) ? tRes.data : []).map(rowToTask).filter(t => activeClientIds.has(t.clientId)));
+      const allTasks = (Array.isArray(tRes.data) ? tRes.data : []).map(rowToTask);
+      setTasks(shouldFilterByActiveClients ? allTasks.filter(t => !t.clientId || activeClientIds.has(t.clientId)) : allTasks);
     }
     if (sRes.data && !sRes.error) {
-      setScripts((Array.isArray(sRes.data) ? sRes.data : []).map(rowToScript).filter(s => activeClientIds.has(s.clientId)));
+      const allScripts = (Array.isArray(sRes.data) ? sRes.data : []).map(rowToScript);
+      setScripts(shouldFilterByActiveClients ? allScripts.filter(s => !s.clientId || activeClientIds.has(s.clientId)) : allScripts);
     }
     if (setRes.data && !setRes.error && setRes.data) {
       const settingsData = Array.isArray(setRes.data) ? setRes.data[0] : setRes.data;

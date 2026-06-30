@@ -2241,7 +2241,7 @@ export default function Clients() {
                     )}
                     <div className="flex-1" />
                     <Button variant="ghost" size="icon" className="h-8 w-8" title="Ficha PDF" onClick={() => {
-                      const vmName = users.find(u => u.id === c.videomaker)?.name || '—';
+                      const vmName = getClientVideomakerName(c);
                       generateClientCardPdf(c, vmName);
                     }}><Printer size={15} /></Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => handleOpen(c)}><Pencil size={15} /></Button>

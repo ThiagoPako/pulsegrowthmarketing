@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { ArrowRight, Sparkles, Check, ExternalLink, X, Link2, MessageCircle } from 'lucide-react';
+import { ArrowRight, Sparkles, Check, ExternalLink, X, Link2, MessageCircle, Tag } from 'lucide-react';
 const WHATSAPP_NUMBER = '5562985382981';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -43,10 +43,16 @@ export default function Apresentacao() {
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
       <div className="fixed top-3 right-3 z-50 flex items-center gap-1.5 md:gap-2">
         {!isPublic && (
-          <Button variant="default" size="sm" onClick={() => copyPublicLink()} className="backdrop-blur shadow-lg h-8 px-2 md:px-3" aria-label="Copiar link público">
-            <Link2 className="h-4 w-4 md:mr-1" />
-            <span className="hidden md:inline">Copiar link público</span>
-          </Button>
+          <>
+            <Button variant="outline" size="sm" onClick={() => navigate('/apresentacao/promocoes')} className="backdrop-blur bg-background/80 h-8 px-2 md:px-3" aria-label="Promoções">
+              <Tag className="h-4 w-4 md:mr-1" />
+              <span className="hidden md:inline">Promoções</span>
+            </Button>
+            <Button variant="default" size="sm" onClick={() => copyPublicLink()} className="backdrop-blur shadow-lg h-8 px-2 md:px-3" aria-label="Copiar link público">
+              <Link2 className="h-4 w-4 md:mr-1" />
+              <span className="hidden md:inline">Copiar link público</span>
+            </Button>
+          </>
         )}
         <Button variant="outline" size="sm" onClick={() => isPublic ? window.close() : navigate(-1)} className="backdrop-blur bg-background/80 h-8 px-2 md:px-3" aria-label={isPublic ? 'Fechar' : 'Sair'}>
           <X className="h-4 w-4 md:mr-1" />

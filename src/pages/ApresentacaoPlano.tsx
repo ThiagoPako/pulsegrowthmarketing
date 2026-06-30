@@ -418,7 +418,8 @@ export default function ApresentacaoPlano() {
       })()}
 
       {/* ENTREGAS — categorizadas */}
-      <section className="py-12 md:py-16">
+      <section id="entregas" className="py-12 md:py-16 bg-secondary/30">
+
         <div className="container mx-auto px-4 md:px-6 max-w-6xl">
           <motion.div {...fadeUp} className="text-center mb-8 md:mb-10">
             <Badge className="mb-4 bg-primary text-primary-foreground">{plan.features.length} entregas mensais</Badge>

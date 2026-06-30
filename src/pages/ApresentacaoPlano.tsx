@@ -195,6 +195,10 @@ export default function ApresentacaoPlano() {
             <Link2 className="h-4 w-4 md:mr-1" />
             <span className="hidden md:inline">Link público</span>
           </Button>
+          <Button variant="outline" size="sm" onClick={toggleFullscreen} className="backdrop-blur bg-background/80 h-8 px-2" aria-label={isFullscreen ? 'Sair da tela cheia' : 'Tela cheia'}>
+            {isFullscreen ? <Minimize2 className="h-4 w-4 md:mr-1" /> : <Maximize2 className="h-4 w-4 md:mr-1" />}
+            <span className="hidden md:inline">{isFullscreen ? 'Sair' : 'Tela cheia'}</span>
+          </Button>
           <Button variant="outline" size="sm" onClick={() => window.close()} className="backdrop-blur bg-background/80 h-8 px-2" aria-label="Fechar">
             <X className="h-4 w-4" />
           </Button>

@@ -149,6 +149,7 @@ export default function ApresentacaoPlano() {
           if (p.ends_at && p.ends_at < today) return false;
           if (p.plan_key && p.plan_key !== plan.key) return false;
           if (p.city && p.city !== activeCity) return false;
+          if (p.max_redemptions != null && (p.redemptions_count ?? 0) >= p.max_redemptions) return false;
           return true;
         });
         setPromo(matches[0] || null);

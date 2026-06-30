@@ -928,7 +928,7 @@ function StagePromoStory({ plan, promo }: { plan: any; promo: any }) {
   const scarcity = [
     { label: 'Desconto', value: `${promo.discount_percent}% OFF` },
     { label: 'Válido por', value: `${promo.duration_months} ${promo.duration_months === 1 ? 'mês' : 'meses'}` },
-    { label: 'Vagas', value: 'Limitadas' },
+    { label: 'Vagas', value: 'Apenas 10' },
   ];
   return (
     <Slide>

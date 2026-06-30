@@ -644,9 +644,11 @@ function StageDeliveries({ plan, categories }: { plan: any; categories: Category
 }
 
 
-function StageInvest({ plan, pricing, promo }: { plan: any; pricing: any; promo: any }) {
-  const { semestral, anual, sem, an, diffMes, totalEconomia, pct, promoAnualMes, promoSemMes } = pricing;
-  const hasPromo = !!promo;
+function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; pricing: any; promo: any; applyPromo?: boolean }) {
+  const { semestral, anual, sem, an, diffMes, totalEconomia, pct } = pricing;
+  const promoAnualMes = applyPromo ? pricing.promoAnualMes : null;
+  const promoSemMes = applyPromo ? pricing.promoSemMes : null;
+  const hasPromo = !!promo && applyPromo;
 
   return (
     <Slide>

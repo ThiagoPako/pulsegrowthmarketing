@@ -247,6 +247,7 @@ export default function PlanPromotionsAdmin() {
                 </div>
                 <p className="text-sm text-muted-foreground">
                   {p.discount_percent}% off por {p.duration_months} {p.duration_months === 1 ? 'mês' : 'meses'}
+                  {p.max_redemptions ? ` • ${p.redemptions_count}/${p.max_redemptions} vagas usadas` : ''}
                   {p.description ? ` • ${p.description}` : ''}
                 </p>
               </div>

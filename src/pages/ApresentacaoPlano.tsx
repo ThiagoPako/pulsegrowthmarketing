@@ -376,9 +376,11 @@ function StageIntro() {
             className="text-base md:text-xl text-muted-foreground max-w-3xl mx-auto mb-6 leading-relaxed"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }}
           >
-            Somos uma <strong className="text-foreground">empresa de vendas</strong> que usa marketing digital como ferramenta.
-            Mais de <strong className="text-foreground">5 anos de mercado</strong>, com clientes ativos há
-            <strong className="text-foreground"> mais de 4 anos</strong> — porque o que entregamos é resultado, não relatório bonito.
+            Somos uma <strong className="text-foreground">empresa de vendas</strong> que usa o marketing digital como ferramenta.
+            Mais de <strong className="text-foreground">4 anos de mercado consolidado</strong>, com <strong className="text-foreground">grandes cases de sucesso</strong> e
+            clientes que estão com a gente <strong className="text-foreground">desde o início da nossa empresa</strong>.
+            A relação se mantém pelo que acontece no resultado do cliente, mês após mês.
+
           </motion.p>
 
           {/* STATS — prova de mercado */}

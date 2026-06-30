@@ -802,8 +802,8 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
 function StagePromoStory({ plan, promo }: { plan: any; promo: any }) {
   const reasons = [
     { icon: Rocket, title: 'Promoção de Inauguração', desc: 'Estamos chegando na sua cidade e queremos os primeiros cases de sucesso. Por isso liberamos um desconto que não vai se repetir.' },
-    { icon: Award, title: 'Vagas limitadas por cidade', desc: 'Trabalhamos com poucos clientes por região para garantir exclusividade de nicho e dedicação total da equipe.' },
-    { icon: Zap, title: 'Resultado desde o primeiro mês', desc: 'Roteiros frase a frase, gravação direcionada e tráfego pago rodando já nos primeiros dias.' },
+    { icon: Award, title: 'Vagas limitadas por cidade', desc: 'Trabalhamos com poucos clientes por região para garantir dedicação total da equipe a cada projeto.' },
+    { icon: Zap, title: 'Estrutura completa desde o início', desc: 'Roteiros frase a frase, gravação direcionada, edição profissional e estratégia de conteúdo focada em vendas.' },
   ];
   const scarcity = [
     { label: 'Desconto', value: `${promo.discount_percent}% OFF` },

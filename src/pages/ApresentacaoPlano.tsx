@@ -473,32 +473,44 @@ export default function ApresentacaoPlano() {
                     </div>
                     {promoSemMes !== null ? (
                       <>
-                        <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                          De
+                        <div className="text-xs text-orange-600 uppercase tracking-wider mb-1 font-semibold">
+                          Preço final promocional
                         </div>
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-2xl text-muted-foreground line-through decoration-2" style={{ fontFamily: 'var(--font-display)' }}>
-                            {semestral.monthly}
-                          </span>
-                          <span className="text-xs text-muted-foreground">/mês</span>
-                          <Badge className="bg-orange-500/15 text-orange-600 border-orange-500/30 font-bold">
-                            -{promo.discount_percent}%
-                          </Badge>
-                        </div>
-                        <div className="text-xs text-orange-600 uppercase tracking-wider mt-3 mb-1 font-semibold">
-                          Por apenas
-                        </div>
-                        <div className="flex items-baseline gap-2 mb-3">
+                        <div className="flex items-baseline gap-2 mb-4">
                           <span className="text-4xl md:text-5xl font-bold text-orange-600" style={{ fontFamily: 'var(--font-display)' }}>
                             {brl(promoSemMes)}
                           </span>
                           <span className="text-sm text-muted-foreground">/mês</span>
                         </div>
-                        <div className="inline-flex items-center gap-1.5 bg-orange-500/10 text-orange-600 rounded-full px-3 py-1 text-xs md:text-sm font-bold mb-2">
-                          <PiggyBank className="h-3.5 w-3.5" /> Você economiza {brl(sem - promoSemMes)}/mês
+
+                        {/* Breakdown */}
+                        <div className="rounded-2xl border border-orange-500/30 bg-orange-500/5 p-4 space-y-2 mb-3">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Preço original</span>
+                            <span className="font-semibold line-through">{brl(sem)}/mês</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Desconto promocional</span>
+                            <Badge className="bg-orange-500 text-white font-bold">-{promo.discount_percent}%</Badge>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Você economiza</span>
+                            <span className="font-semibold text-orange-600 inline-flex items-center gap-1">
+                              <PiggyBank className="h-3.5 w-3.5" /> {brl(sem - promoSemMes)}/mês
+                            </span>
+                          </div>
+                          <div className="border-t border-orange-500/20 pt-2 flex items-center justify-between">
+                            <span className="text-sm font-semibold">Valor final</span>
+                            <span className="text-lg font-bold text-orange-600">{brl(promoSemMes)}/mês</span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+                            <span>Economia total no período</span>
+                            <span className="font-semibold">{brl((sem - promoSemMes) * promo.duration_months)}</span>
+                          </div>
                         </div>
+
                         <div className="text-xs font-semibold text-orange-600">
-                          Promoção válida nos {promo.duration_months} primeiros meses
+                          🔥 Promoção válida nos {promo.duration_months} primeiros {promo.duration_months === 1 ? 'mês' : 'meses'}
                         </div>
                       </>
                     ) : (

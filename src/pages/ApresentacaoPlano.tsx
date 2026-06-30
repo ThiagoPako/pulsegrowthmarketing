@@ -921,7 +921,7 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
 function StagePromoStory({ plan, promo }: { plan: any; promo: any }) {
   const reasons = [
     { icon: Rocket, title: 'Promoção de Inauguração', desc: 'Estamos chegando agora na sua cidade e queremos os primeiros cases de sucesso. Por isso liberamos uma condição que não vai se repetir.' },
-    { icon: Award, title: 'Vagas limitadas por cidade', desc: 'Trabalhamos com poucos clientes por região para garantir dedicação total da equipe a cada projeto.' },
+    { icon: Award, title: 'Apenas 10 vagas por cidade', desc: 'A promoção vale somente para as 10 primeiras empresas que fecharem conosco na cidade. Depois disso, encerra — sem exceção.' },
     { icon: Target, title: 'Queremos provar nosso método', desc: 'Estrutura completa, roteiros frase a frase, gravação direcionada e estratégia focada em vendas — sem terceirizar culpa.' },
     { icon: Zap, title: 'Janela curta de entrada', desc: 'A promoção encerra assim que preenchermos as vagas da cidade. Depois disso volta ao valor cheio.' },
   ];

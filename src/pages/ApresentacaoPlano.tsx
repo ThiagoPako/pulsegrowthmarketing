@@ -821,7 +821,7 @@ function StagePromoStory({ plan, promo }: { plan: any; promo: any }) {
             Promoção <span className="bg-gradient-to-r from-orange-500 via-red-500 to-yellow-500 bg-clip-text text-transparent">{promo.title}</span>
           </h2>
           <p className="mt-3 text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
-            Antes de mostrar o valor com desconto, entenda <strong>por que</strong> essa condição existe — e por que ela vai acabar.
+            Antes de mostrar o valor com desconto, entenda <strong>por que</strong> essa condição existe e por que ela vai acabar.
           </p>
         </motion.div>
 

@@ -319,7 +319,7 @@ function Slide({ children }: { children: React.ReactNode }) {
       variants={slideVariants}
       initial="enter" animate="center" exit="exit"
       transition={slideTransition}
-      className="w-full h-full max-w-7xl mx-auto flex items-center justify-center"
+      className="w-full min-h-full max-w-7xl mx-auto flex items-center justify-center py-2"
     >
       {children}
     </motion.div>

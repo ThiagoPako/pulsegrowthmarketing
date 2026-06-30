@@ -25,9 +25,11 @@ type Promo = {
   active: boolean;
   starts_at: string | null;
   ends_at: string | null;
+  max_redemptions: number | null;
+  redemptions_count: number;
 };
 
-const empty: Omit<Promo, 'id'> = {
+const empty: Omit<Promo, 'id' | 'redemptions_count'> = {
   city: null,
   plan_key: null,
   applies_to: 'anual',
@@ -38,13 +40,14 @@ const empty: Omit<Promo, 'id'> = {
   active: true,
   starts_at: null,
   ends_at: null,
+  max_redemptions: null,
 };
 
 export default function PlanPromotionsAdmin() {
   const navigate = useNavigate();
   const [items, setItems] = useState<Promo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState<Omit<Promo, 'id'>>(empty);
+  const [form, setForm] = useState<typeof empty>(empty);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -63,7 +66,7 @@ export default function PlanPromotionsAdmin() {
 
   function startEdit(p: Promo) {
     setEditingId(p.id);
-    const { id, ...rest } = p;
+    const { id, redemptions_count, ...rest } = p;
     setForm(rest);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -194,6 +197,13 @@ export default function PlanPromotionsAdmin() {
               <Label>Fim (opcional)</Label>
               <Input type="date" value={form.ends_at ?? ''} onChange={e => setForm({ ...form, ends_at: e.target.value || null })} />
             </div>
+            <div className="space-y-2">
+              <Label>Limite de clientes (vagas)</Label>
+              <Input type="number" min={1} value={form.max_redemptions ?? ''}
+                placeholder="Ex: 10 (vazio = ilimitado)"
+                onChange={e => setForm({ ...form, max_redemptions: e.target.value ? Number(e.target.value) : null })} />
+              <p className="text-xs text-muted-foreground">Ex: primeiros 10 clientes de Uruaçu que fecharem.</p>
+            </div>
           </div>
           <div className="space-y-2">
             <Label>Descrição (aparece no banner)</Label>
@@ -237,6 +247,7 @@ export default function PlanPromotionsAdmin() {
                 </div>
                 <p className="text-sm text-muted-foreground">
                   {p.discount_percent}% off por {p.duration_months} {p.duration_months === 1 ? 'mês' : 'meses'}
+                  {p.max_redemptions ? ` • ${p.redemptions_count}/${p.max_redemptions} vagas usadas` : ''}
                   {p.description ? ` • ${p.description}` : ''}
                 </p>
               </div>

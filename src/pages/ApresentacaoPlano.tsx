@@ -149,6 +149,7 @@ export default function ApresentacaoPlano() {
           if (p.ends_at && p.ends_at < today) return false;
           if (p.plan_key && p.plan_key !== plan.key) return false;
           if (p.city && p.city !== activeCity) return false;
+          if (p.max_redemptions != null && (p.redemptions_count ?? 0) >= p.max_redemptions) return false;
           return true;
         });
         setPromo(matches[0] || null);
@@ -321,6 +322,73 @@ export default function ApresentacaoPlano() {
         </div>
       </section>
 
+      {/* HERANÇA dos planos anteriores (Elite ou qualquer plano que tenha "Tudo do ... +") */}
+      {plan.features.some(f => /tudo do/i.test(f)) && (() => {
+        const idx = PRESENTATION_ORDER.indexOf(plan.key as any);
+        const previousPlans = PRESENTATION_ORDER.slice(0, idx).map(k => PLANS.find(p => p.key === k)!).filter(Boolean);
+        const inheritedFeatures = Array.from(new Set(previousPlans.flatMap(p => p.features)));
+        const ownExtras = plan.features.filter(f => !/tudo do/i.test(f));
+        return (
+          <section className="py-16 md:py-24 bg-gradient-to-br from-primary/5 via-orange-500/5 to-primary/5">
+            <div className="container mx-auto px-4 md:px-6 max-w-6xl">
+              <motion.div {...fadeUp} className="text-center mb-10 md:mb-14">
+                <Badge className="mb-4 bg-yellow-300 text-yellow-950 font-bold">
+                  <Crown className="h-3 w-3 mr-1" /> Plano top de linha
+                </Badge>
+                <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
+                  Você leva <span className="text-primary">tudo dos planos anteriores</span> + os aditivos do {plan.name}
+                </h2>
+                <p className="text-base md:text-lg text-muted-foreground max-w-3xl mx-auto">
+                  O {plan.name} é a operação completa: cobertura de eventos, mais reels semanais e tudo que já está incluso em {previousPlans.map(p => p.name).join(', ')}.
+                </p>
+              </motion.div>
+
+              <div className="grid md:grid-cols-2 gap-6">
+                <motion.div {...fadeUp} className="rounded-3xl border-2 border-border bg-card p-6 md:p-8">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
+                      <Layers className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold">Herdado dos planos anteriores</h3>
+                      <p className="text-xs text-muted-foreground">{inheritedFeatures.length} entregas acumuladas</p>
+                    </div>
+                  </div>
+                  <ul className="space-y-2 max-h-96 overflow-y-auto pr-2">
+                    {inheritedFeatures.map((f, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm">
+                        <Check className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                        <span className="text-foreground/90">{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </motion.div>
+
+                <motion.div {...fadeUp} className="rounded-3xl border-2 border-primary bg-gradient-to-br from-primary via-orange-600 to-primary text-primary-foreground p-6 md:p-8 shadow-2xl">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center">
+                      <Sparkles className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold">Aditivos exclusivos do {plan.name}</h3>
+                      <p className="text-xs opacity-90">Cobertura, mais reels e diferenciais premium</p>
+                    </div>
+                  </div>
+                  <ul className="space-y-2">
+                    {ownExtras.map((f, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm font-semibold">
+                        <Sparkles className="h-4 w-4 text-yellow-200 mt-0.5 shrink-0" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </motion.div>
+              </div>
+            </div>
+          </section>
+        );
+      })()}
+
       {/* ENTREGAS — categorizadas */}
       <section className="py-16 md:py-24">
         <div className="container mx-auto px-4 md:px-6 max-w-6xl">
@@ -409,6 +477,25 @@ export default function ApresentacaoPlano() {
                         {promo.description && (
                           <p className="text-sm md:text-base opacity-95 mt-1">{promo.description}</p>
                         )}
+                        {promo.max_redemptions != null && (() => {
+                          const left = Math.max(0, promo.max_redemptions - (promo.redemptions_count ?? 0));
+                          const taken = promo.redemptions_count ?? 0;
+                          const pctTaken = Math.round((taken / promo.max_redemptions) * 100);
+                          return (
+                            <div className="mt-3 bg-white/15 backdrop-blur rounded-2xl p-3 max-w-md">
+                              <div className="flex items-center justify-between text-sm font-bold mb-1">
+                                <span>⚡ Vagas limitadas</span>
+                                <span>{left} de {promo.max_redemptions} restantes</span>
+                              </div>
+                              <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+                                <div className="h-full bg-white rounded-full transition-all" style={{ width: `${pctTaken}%` }} />
+                              </div>
+                              <p className="text-xs opacity-90 mt-1">
+                                {taken === 0 ? 'Seja um dos primeiros a garantir!' : `${taken} cliente${taken > 1 ? 's já garantiram' : ' já garantiu'} — corra antes que esgote.`}
+                              </p>
+                            </div>
+                          );
+                        })()}
                         {promoAnualMes !== null && (
                           <p className="text-sm md:text-base mt-2 font-semibold">
                             Anual sai por <span className="bg-white/20 px-2 py-0.5 rounded">{brl(promoAnualMes)}/mês</span> nos {promo.duration_months} primeiros meses

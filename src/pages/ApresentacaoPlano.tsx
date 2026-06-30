@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { supabase as vpsDb } from '@/lib/vpsDb';
 import { getPlan, PLANS } from '@/data/plans';
+import { useCity } from '@/contexts/CityContext';
 
 const SHOWCASE_CLIENTS = ['shallon', 'super brasil', 'casa & decor'];
 
@@ -86,6 +87,8 @@ export default function ApresentacaoPlano() {
   const baseRoute = isPublic ? '/p/planos' : '/apresentacao';
   const [team, setTeam] = useState<any[]>([]);
   const [showcaseVideos, setShowcaseVideos] = useState<Array<{ id: string; title: string; file_url: string; thumbnail_url?: string; client_name: string }>>([]);
+  const [promo, setPromo] = useState<any | null>(null);
+  const { activeCity } = useCity();
 
   const plan = plano ? getPlan(plano) : undefined;
 

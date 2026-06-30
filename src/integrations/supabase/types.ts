@@ -3125,7 +3125,9 @@ export type Database = {
           duration_months: number
           ends_at: string | null
           id: string
+          max_redemptions: number | null
           plan_key: string | null
+          redemptions_count: number
           starts_at: string | null
           title: string
           updated_at: string
@@ -3140,7 +3142,9 @@ export type Database = {
           duration_months?: number
           ends_at?: string | null
           id?: string
+          max_redemptions?: number | null
           plan_key?: string | null
+          redemptions_count?: number
           starts_at?: string | null
           title: string
           updated_at?: string
@@ -3155,7 +3159,9 @@ export type Database = {
           duration_months?: number
           ends_at?: string | null
           id?: string
+          max_redemptions?: number | null
           plan_key?: string | null
+          redemptions_count?: number
           starts_at?: string | null
           title?: string
           updated_at?: string
@@ -4929,6 +4935,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      increment_promotion_redemption: {
+        Args: { _promo_id: string }
+        Returns: number
       }
       notify_role: {
         Args: {

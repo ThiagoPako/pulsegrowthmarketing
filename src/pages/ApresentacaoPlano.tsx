@@ -532,27 +532,83 @@ export default function ApresentacaoPlano() {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.15 }}
-                    className="relative rounded-3xl p-6 md:p-8 border-2 border-primary bg-gradient-to-br from-primary via-orange-600 to-primary text-primary-foreground shadow-2xl md:scale-105"
+                    className={`relative rounded-3xl p-6 md:p-8 border-2 border-primary bg-gradient-to-br from-primary via-orange-600 to-primary text-primary-foreground shadow-2xl md:scale-105 ${promoAnualMes !== null ? 'ring-4 ring-yellow-300/50' : ''}`}
                   >
                     <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-300 text-yellow-950 font-bold shadow-lg whitespace-nowrap">
                       <Crown className="h-3 w-3 mr-1" /> Mais escolhido
                     </Badge>
+                    {promoAnualMes !== null && (
+                      <Badge className="absolute -top-3 right-4 bg-red-500 text-white font-bold shadow-lg">
+                        🔥 -{promo.discount_percent}%
+                      </Badge>
+                    )}
                     <div className="text-xs md:text-sm font-semibold mb-2 text-primary-foreground/90 uppercase tracking-wider">
                       Contrato {anual.label}
                     </div>
-                    <div className="flex items-baseline gap-2 mb-2">
-                      <span className="text-5xl md:text-6xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
-                        {anual.monthly}
-                      </span>
-                      <span className="text-sm text-primary-foreground/80">/mês</span>
-                    </div>
-                    <div className="inline-flex items-center gap-1.5 bg-yellow-300 text-yellow-950 rounded-full px-3 py-1 text-xs md:text-sm font-bold mt-2">
-                      <PiggyBank className="h-3.5 w-3.5" /> Economiza {brl(diffMes)}/mês
-                    </div>
-                    {anual.save && (
-                      <div className="text-sm font-semibold text-yellow-100 mt-3 flex items-center gap-1">
-                        💰 {anual.save}
-                      </div>
+
+                    {promoAnualMes !== null ? (
+                      <>
+                        <div className="text-xs uppercase tracking-wider mb-1 text-yellow-100 font-semibold">
+                          Preço final promocional
+                        </div>
+                        <div className="flex items-baseline gap-2 mb-4">
+                          <span className="text-5xl md:text-6xl font-bold text-yellow-200" style={{ fontFamily: 'var(--font-display)' }}>
+                            {brl(promoAnualMes)}
+                          </span>
+                          <span className="text-sm text-primary-foreground/80">/mês</span>
+                        </div>
+
+                        {/* Breakdown */}
+                        <div className="rounded-2xl border border-white/30 bg-white/10 backdrop-blur p-4 space-y-2 mb-3">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="opacity-90">Preço original</span>
+                            <span className="font-semibold line-through">{brl(an)}/mês</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="opacity-90">Desconto promocional</span>
+                            <Badge className="bg-red-500 text-white font-bold">-{promo.discount_percent}%</Badge>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="opacity-90">Você economiza</span>
+                            <span className="font-semibold inline-flex items-center gap-1">
+                              <PiggyBank className="h-3.5 w-3.5" /> {brl(an - promoAnualMes)}/mês
+                            </span>
+                          </div>
+                          <div className="border-t border-white/20 pt-2 flex items-center justify-between">
+                            <span className="text-sm font-semibold">Valor final</span>
+                            <span className="text-lg font-bold text-yellow-200">{brl(promoAnualMes)}/mês</span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs opacity-90 pt-1">
+                            <span>Economia total no período promo</span>
+                            <span className="font-semibold">{brl((an - promoAnualMes) * promo.duration_months)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs opacity-90">
+                            <span>+ Economia anual vs semestral</span>
+                            <span className="font-semibold">{brl(totalEconomia)}</span>
+                          </div>
+                        </div>
+
+                        <div className="text-xs font-semibold text-yellow-100">
+                          🔥 Promoção válida nos {promo.duration_months} primeiros {promo.duration_months === 1 ? 'mês' : 'meses'}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-baseline gap-2 mb-2">
+                          <span className="text-5xl md:text-6xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
+                            {anual.monthly}
+                          </span>
+                          <span className="text-sm text-primary-foreground/80">/mês</span>
+                        </div>
+                        <div className="inline-flex items-center gap-1.5 bg-yellow-300 text-yellow-950 rounded-full px-3 py-1 text-xs md:text-sm font-bold mt-2">
+                          <PiggyBank className="h-3.5 w-3.5" /> Economiza {brl(diffMes)}/mês
+                        </div>
+                        {anual.save && (
+                          <div className="text-sm font-semibold text-yellow-100 mt-3 flex items-center gap-1">
+                            💰 {anual.save}
+                          </div>
+                        )}
+                      </>
                     )}
                   </motion.div>
                 </div>

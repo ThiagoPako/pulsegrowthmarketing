@@ -491,11 +491,11 @@ export default function ApresentacaoPlano() {
               <>
                 {promo && (
                   <motion.div
-                    initial={{ opacity: 0, y: -20, scale: 0.96 }}
+                    initial={{ opacity: 0, y: -10, scale: 0.98 }}
                     whileInView={{ opacity: 1, y: 0, scale: 1 }}
                     viewport={{ once: true }}
-                    transition={{ duration: 0.6, ease: 'easeOut' }}
-                    className="relative overflow-hidden rounded-3xl text-white p-6 md:p-8 mb-6 shadow-2xl"
+                    transition={{ duration: 0.5, ease: 'easeOut' }}
+                    className="relative overflow-hidden rounded-2xl text-white px-4 py-3 md:px-5 md:py-4 mb-5 shadow-xl"
                   >
                     {/* Gradiente animado de fundo */}
                     <motion.div
@@ -511,50 +511,49 @@ export default function ApresentacaoPlano() {
                       }}
                       transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
                     />
-                    {/* Brilho pulsante */}
-                    <motion.div
-                      className="absolute -top-16 -left-16 w-80 h-80 rounded-full bg-white/20 blur-3xl"
-                      animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.6, 0.3] }}
-                      transition={{ duration: 4, repeat: Infinity }}
-                    />
-                    <motion.div
-                      className="absolute -bottom-16 -right-16 w-80 h-80 rounded-full bg-yellow-200/30 blur-3xl"
-                      animate={{ scale: [1.2, 1, 1.2], opacity: [0.4, 0.2, 0.4] }}
-                      transition={{ duration: 5, repeat: Infinity }}
-                    />
                     {/* Faísca atravessando */}
                     <motion.div
-                      className="absolute inset-y-0 w-32 bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-12"
+                      className="absolute inset-y-0 w-24 bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-12 pointer-events-none"
                       initial={{ x: '-100%' }}
                       animate={{ x: '500%' }}
                       transition={{ duration: 3, repeat: Infinity, repeatDelay: 2, ease: 'easeInOut' }}
                     />
-                    <div className="relative flex flex-col md:flex-row items-center justify-between gap-4">
-                      <div className="flex-1">
-                        <motion.div
-                          animate={{ scale: [1, 1.05, 1] }}
-                          transition={{ duration: 2, repeat: Infinity }}
-                          className="inline-block"
-                        >
-                          <Badge className="bg-white text-orange-600 font-bold mb-2 shadow-lg">🔥 {promo.title}</Badge>
-                        </motion.div>
-                        <div className="text-2xl md:text-4xl font-bold leading-tight drop-shadow-lg" style={{ fontFamily: 'var(--font-display)' }}>
-                          {promo.discount_percent}% OFF nos primeiros {promo.duration_months} {promo.duration_months === 1 ? 'mês' : 'meses'}
+                    <div className="relative flex items-center gap-3 md:gap-4">
+                      <motion.div
+                        animate={{ rotate: [0, 8, -8, 0] }}
+                        transition={{ duration: 3, repeat: Infinity }}
+                        className="text-3xl md:text-4xl shrink-0 drop-shadow-lg"
+                      >
+                        🚀
+                      </motion.div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center flex-wrap gap-x-2 gap-y-1">
+                          <Badge className="bg-white text-orange-600 font-bold shadow-sm text-[10px] md:text-xs whitespace-nowrap">
+                            🔥 {promo.title}
+                          </Badge>
+                          <span className="text-lg md:text-2xl font-bold leading-tight drop-shadow" style={{ fontFamily: 'var(--font-display)' }}>
+                            {promo.discount_percent}% OFF · {promo.duration_months} {promo.duration_months === 1 ? 'mês' : 'meses'}
+                          </span>
                         </div>
-                        {promo.description && (
-                          <p className="text-sm md:text-base opacity-95 mt-1">{promo.description}</p>
+                        {(promoAnualMes !== null || promoSemMes !== null) && (
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs md:text-sm font-semibold mt-1 opacity-95">
+                            {promoAnualMes !== null && (
+                              <span>Anual: <span className="bg-white/20 px-1.5 rounded">{brl(promoAnualMes)}/mês</span></span>
+                            )}
+                            {promoSemMes !== null && (
+                              <span>Semestral: <span className="bg-white/20 px-1.5 rounded">{brl(promoSemMes)}/mês</span></span>
+                            )}
+                          </div>
                         )}
                         {promo.max_redemptions != null && (() => {
                           const left = Math.max(0, promo.max_redemptions - (promo.redemptions_count ?? 0));
-                          const taken = promo.redemptions_count ?? 0;
-                          const pctTaken = Math.round((taken / promo.max_redemptions) * 100);
+                          const pctTaken = Math.round(((promo.redemptions_count ?? 0) / promo.max_redemptions) * 100);
                           return (
-                            <div className="mt-3 bg-white/15 backdrop-blur rounded-2xl p-3 max-w-md">
-                              <div className="flex items-center justify-between text-sm font-bold mb-1">
-                                <span>⚡ Vagas limitadas</span>
-                                <span>{left} de {promo.max_redemptions} restantes</span>
+                            <div className="mt-1.5">
+                              <div className="flex items-center justify-between text-[11px] md:text-xs font-bold">
+                                <span>⚡ Vagas: {left}/{promo.max_redemptions}</span>
                               </div>
-                              <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+                              <div className="h-1.5 bg-white/20 rounded-full overflow-hidden mt-0.5">
                                 <motion.div
                                   className="h-full bg-white rounded-full"
                                   initial={{ width: 0 }}
@@ -562,33 +561,31 @@ export default function ApresentacaoPlano() {
                                   transition={{ duration: 1, delay: 0.3 }}
                                 />
                               </div>
-                              <p className="text-xs opacity-90 mt-1">
-                                {taken === 0 ? 'Seja um dos primeiros a garantir!' : `${taken} cliente${taken > 1 ? 's já garantiram' : ' já garantiu'} — corra antes que esgote.`}
-                              </p>
                             </div>
                           );
                         })()}
-                        {promoAnualMes !== null && (
-                          <p className="text-sm md:text-base mt-2 font-semibold">
-                            Anual sai por <span className="bg-white/20 px-2 py-0.5 rounded">{brl(promoAnualMes)}/mês</span> nos {promo.duration_months} primeiros meses
-                          </p>
-                        )}
-                        {promoSemMes !== null && (
-                          <p className="text-sm md:text-base mt-1 font-semibold">
-                            Semestral sai por <span className="bg-white/20 px-2 py-0.5 rounded">{brl(promoSemMes)}/mês</span> nos {promo.duration_months} primeiros meses
-                          </p>
-                        )}
                       </div>
-                      <motion.div
-                        animate={{ rotate: [0, 10, -10, 0] }}
-                        transition={{ duration: 3, repeat: Infinity }}
-                        className="hidden md:flex w-24 h-24 rounded-full bg-white/20 backdrop-blur items-center justify-center text-5xl shrink-0 shadow-2xl"
+                      <a
+                        href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`Olá! Quero garantir a promoção ${promo.title} no plano ${plan.name}.`)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="hidden sm:inline-flex shrink-0 items-center gap-1 bg-white text-orange-600 font-bold rounded-full px-4 py-2 text-xs md:text-sm shadow-lg hover:scale-105 transition-transform whitespace-nowrap"
                       >
-                        🚀
-                      </motion.div>
+                        Garantir <ArrowRight className="h-3.5 w-3.5" />
+                      </a>
                     </div>
+                    {/* CTA mobile fullwidth */}
+                    <a
+                      href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`Olá! Quero garantir a promoção ${promo.title} no plano ${plan.name}.`)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="sm:hidden mt-3 flex items-center justify-center gap-1 bg-white text-orange-600 font-bold rounded-full px-4 py-2 text-sm shadow-lg"
+                    >
+                      Garantir promoção <ArrowRight className="h-4 w-4" />
+                    </a>
                   </motion.div>
                 )}
+
 
                 {/* Banner de economia */}
                 <motion.div

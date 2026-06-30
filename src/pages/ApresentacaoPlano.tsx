@@ -218,6 +218,7 @@ export default function ApresentacaoPlano() {
               </div>
             </>
           )}
+        </motion.div>
       </div>
 
       {/* CONTROLES INFERIORES */}

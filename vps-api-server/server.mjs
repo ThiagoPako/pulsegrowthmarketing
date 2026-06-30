@@ -4409,7 +4409,7 @@ const ALLOWED_TABLES = [
   'tv_settings','fieldwork_activities',
   'training_presentations','training_slides',
   'training_tracks','training_modules','training_lessons','user_training_progress',
-  'user_permissions',
+  'user_permissions','login_logs',
 ];
 
 // ═══════════════════════════════════════════════════════════════

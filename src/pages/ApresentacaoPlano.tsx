@@ -920,9 +920,10 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
 
 function StagePromoStory({ plan, promo }: { plan: any; promo: any }) {
   const reasons = [
-    { icon: Rocket, title: 'Promoção de Inauguração', desc: 'Estamos chegando na sua cidade e queremos os primeiros cases de sucesso. Por isso liberamos um desconto que não vai se repetir.' },
+    { icon: Rocket, title: 'Promoção de Inauguração', desc: 'Estamos chegando agora na sua cidade e queremos os primeiros cases de sucesso. Por isso liberamos uma condição que não vai se repetir.' },
     { icon: Award, title: 'Vagas limitadas por cidade', desc: 'Trabalhamos com poucos clientes por região para garantir dedicação total da equipe a cada projeto.' },
-    { icon: Zap, title: 'Estrutura completa desde o início', desc: 'Roteiros frase a frase, gravação direcionada, edição profissional e estratégia de conteúdo focada em vendas.' },
+    { icon: Target, title: 'Queremos provar nosso método', desc: 'Estrutura completa, roteiros frase a frase, gravação direcionada e estratégia focada em vendas — sem terceirizar culpa.' },
+    { icon: Zap, title: 'Janela curta de entrada', desc: 'A promoção encerra assim que preenchermos as vagas da cidade. Depois disso volta ao valor cheio.' },
   ];
   const scarcity = [
     { label: 'Desconto', value: `${promo.discount_percent}% OFF` },
@@ -931,54 +932,115 @@ function StagePromoStory({ plan, promo }: { plan: any; promo: any }) {
   ];
   return (
     <Slide>
-      <div className="w-full max-w-5xl">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-6">
-          <Badge className="mb-3 bg-orange-500/10 text-orange-600 border-orange-500/30 uppercase tracking-wider">
-            <Sparkles className="h-3 w-3 mr-1" /> Oportunidade única
-          </Badge>
-          <h2 className="text-4xl md:text-6xl font-bold leading-tight" style={{ fontFamily: 'var(--font-display)' }}>
-            Promoção <span className="bg-gradient-to-r from-orange-500 via-red-500 to-yellow-500 bg-clip-text text-transparent">{promo.title}</span>
+      <div className="w-full max-w-5xl relative">
+        {/* glow background */}
+        <motion.div
+          aria-hidden
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1 }}
+          className="absolute inset-0 -z-10 pointer-events-none"
+        >
+          <div className="absolute top-0 left-1/4 w-[420px] h-[420px] rounded-full bg-orange-500/20 blur-3xl animate-pulse" />
+          <div className="absolute bottom-0 right-1/4 w-[420px] h-[420px] rounded-full bg-red-500/20 blur-3xl animate-pulse" style={{ animationDelay: '1.2s' }} />
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: -20, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 200, damping: 18 }}
+          className="text-center mb-6"
+        >
+          <motion.div
+            initial={{ scale: 0, rotate: -15 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ delay: 0.1, type: 'spring', stiffness: 260, damping: 14 }}
+            className="inline-flex items-center gap-2 mb-4 px-4 py-1.5 rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold text-xs md:text-sm uppercase tracking-wider shadow-lg shadow-orange-500/40"
+          >
+            <motion.span
+              animate={{ rotate: [0, 15, -15, 0] }}
+              transition={{ duration: 1.6, repeat: Infinity, repeatDelay: 1 }}
+            >
+              <Sparkles className="h-4 w-4" />
+            </motion.span>
+            Oportunidade única
+          </motion.div>
+          <h2 className="text-4xl md:text-6xl font-extrabold leading-tight" style={{ fontFamily: 'var(--font-display)' }}>
+            Por que essa <br className="md:hidden" />
+            <motion.span
+              initial={{ backgroundPosition: '0% 50%' }}
+              animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+              transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}
+              className="bg-gradient-to-r from-orange-500 via-red-500 to-yellow-500 bg-clip-text text-transparent"
+              style={{ backgroundSize: '200% 200%' }}
+            >
+              {promo.title}
+            </motion.span>
+            <br />existe agora?
           </h2>
           <p className="mt-3 text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
-            Antes de mostrar o valor com desconto, entenda <strong>por que</strong> essa condição existe e por que ela vai acabar.
+            Não é desconto aleatório. É uma condição estratégica com <strong className="text-foreground">prazo, motivo e quantidade limitada</strong>.
           </p>
         </motion.div>
 
         {/* Scarcity bar */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.15 }}
+          initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.25, type: 'spring' }}
           className="grid grid-cols-3 gap-2 md:gap-4 mb-6"
         >
-          {scarcity.map((s) => (
-            <div key={s.label} className="rounded-2xl border-2 border-orange-500/40 bg-orange-500/5 p-3 md:p-4 text-center">
-              <div className="text-[10px] md:text-xs uppercase tracking-wider text-muted-foreground font-semibold">{s.label}</div>
-              <div className="text-lg md:text-2xl font-bold text-orange-600 mt-1" style={{ fontFamily: 'var(--font-display)' }}>{s.value}</div>
-            </div>
+          {scarcity.map((s, i) => (
+            <motion.div
+              key={s.label}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35 + i * 0.08, type: 'spring', stiffness: 180 }}
+              whileHover={{ y: -4, scale: 1.03 }}
+              className="relative overflow-hidden rounded-2xl border-2 border-orange-500/50 bg-gradient-to-br from-orange-500/10 to-red-500/5 p-3 md:p-4 text-center shadow-lg shadow-orange-500/10"
+            >
+              <motion.div
+                aria-hidden
+                animate={{ x: ['-100%', '200%'] }}
+                transition={{ duration: 2.5, repeat: Infinity, repeatDelay: 1.5 + i * 0.5, ease: 'easeInOut' }}
+                className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-12"
+              />
+              <div className="relative text-[10px] md:text-xs uppercase tracking-wider text-muted-foreground font-semibold">{s.label}</div>
+              <div className="relative text-lg md:text-2xl font-extrabold text-orange-600 mt-1" style={{ fontFamily: 'var(--font-display)' }}>{s.value}</div>
+            </motion.div>
           ))}
         </motion.div>
 
         {/* Reasons */}
-        <div className="grid md:grid-cols-3 gap-3 md:gap-4">
+        <div className="grid sm:grid-cols-2 gap-3 md:gap-4">
           {reasons.map((r, i) => {
             const RIcon = r.icon;
             return (
               <motion.div
                 key={r.title}
-                initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 + i * 0.1 }}
-                className="rounded-2xl border border-border bg-card p-4 md:p-5 hover:border-orange-500/50 transition-colors"
+                initial={{ opacity: 0, x: i % 2 === 0 ? -30 : 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.45 + i * 0.1, type: 'spring', stiffness: 140, damping: 18 }}
+                whileHover={{ y: -4, borderColor: 'rgb(249 115 22 / 0.6)' }}
+                className="group relative overflow-hidden rounded-2xl border border-border bg-card p-4 md:p-5 hover:shadow-xl hover:shadow-orange-500/10 transition-all"
               >
-                <div className="h-10 w-10 rounded-xl bg-orange-500/10 text-orange-600 flex items-center justify-center mb-3">
-                  <RIcon className="h-5 w-5" />
+                <div className="absolute -top-12 -right-12 w-32 h-32 rounded-full bg-orange-500/10 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative flex items-start gap-3">
+                  <motion.div
+                    whileHover={{ rotate: 8, scale: 1.1 }}
+                    transition={{ type: 'spring', stiffness: 300 }}
+                    className="shrink-0 h-11 w-11 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 text-white flex items-center justify-center shadow-md shadow-orange-500/30"
+                  >
+                    <RIcon className="h-5 w-5" />
+                  </motion.div>
+                  <div>
+                    <div className="font-bold text-base md:text-lg mb-1">{r.title}</div>
+                    <div className="text-sm text-muted-foreground leading-relaxed">{r.desc}</div>
+                  </div>
                 </div>
-                <div className="font-bold text-base md:text-lg mb-1">{r.title}</div>
-                <div className="text-sm text-muted-foreground leading-relaxed">{r.desc}</div>
               </motion.div>
             );
           })}
         </div>
 
         <motion.div
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}
           className="mt-6 text-center text-sm md:text-base text-muted-foreground"
         >
           Aperte <kbd className="px-2 py-0.5 rounded bg-muted border border-border text-foreground font-mono text-xs">↓</kbd> para ver o <strong className="text-orange-600">{plan.name}</strong> com o desconto aplicado.
@@ -987,6 +1049,7 @@ function StagePromoStory({ plan, promo }: { plan: any; promo: any }) {
     </Slide>
   );
 }
+
 
 
 function Row({ label, value, dark }: { label: string; value: React.ReactNode; dark?: boolean }) {

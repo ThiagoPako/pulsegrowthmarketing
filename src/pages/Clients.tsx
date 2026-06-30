@@ -154,6 +154,32 @@ export default function Clients() {
 
   const videomakers = users.filter(u => u.role === 'videomaker');
 
+  // Fallback: when client.videomaker is empty (legacy/missing assignment),
+  // derive the responsible videomaker from the most frequent in their recordings.
+  const videomakerByClient = useMemo(() => {
+    const map: Record<string, string> = {};
+    const counts: Record<string, Record<string, number>> = {};
+    for (const r of recordings) {
+      if (!r.clientId || !r.videomakerId) continue;
+      counts[r.clientId] = counts[r.clientId] || {};
+      counts[r.clientId][r.videomakerId] = (counts[r.clientId][r.videomakerId] || 0) + 1;
+    }
+    for (const [cid, vmCounts] of Object.entries(counts)) {
+      const top = Object.entries(vmCounts).sort((a, b) => b[1] - a[1])[0];
+      if (top) map[cid] = top[0];
+    }
+    return map;
+  }, [recordings]);
+
+  const getClientVideomakerId = useCallback((c: Client) => {
+    return c.videomaker || videomakerByClient[c.id] || '';
+  }, [videomakerByClient]);
+
+  const getClientVideomakerName = useCallback((c: Client) => {
+    const vmId = getClientVideomakerId(c);
+    return users.find(u => u.id === vmId)?.name || '—';
+  }, [getClientVideomakerId, users]);
+
   const shiftSlotTimes = useMemo(() => {
     const buildSlots = (startTime: string, endTime: string) => {
       const slots: string[] = [];
@@ -2141,7 +2167,7 @@ export default function Clients() {
                   <p className="font-semibold text-base leading-tight truncate">{c.companyName}</p>
                   {!isDesignerOnly && (
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {DAY_LABELS[c.fixedDay]} · {c.fullShiftRecording ? `Turno ${c.preferredShift === 'tarde' ? 'Tarde' : 'Manhã'}` : c.fixedTime} · {users.find(u => u.id === c.videomaker)?.name || '—'}
+                      {DAY_LABELS[c.fixedDay]} · {c.fullShiftRecording ? `Turno ${c.preferredShift === 'tarde' ? 'Tarde' : 'Manhã'}` : c.fixedTime} · {getClientVideomakerName(c)}
                     </p>
                   )}
                   <div className="flex gap-1.5 mt-2 flex-wrap">
@@ -2215,7 +2241,7 @@ export default function Clients() {
                     )}
                     <div className="flex-1" />
                     <Button variant="ghost" size="icon" className="h-8 w-8" title="Ficha PDF" onClick={() => {
-                      const vmName = users.find(u => u.id === c.videomaker)?.name || '—';
+                      const vmName = getClientVideomakerName(c);
                       generateClientCardPdf(c, vmName);
                     }}><Printer size={15} /></Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => handleOpen(c)}><Pencil size={15} /></Button>

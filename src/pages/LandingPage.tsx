@@ -346,6 +346,7 @@ function Navbar() {
 // ─── Hero ───────────────────────────────────────────────────
 function Hero() {
   const navigate = useNavigate();
+  const goToTeamArea = useGoToTeamArea();
   const ref = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] });
   const bgY = useTransform(scrollYProgress, [0, 1], ['0%', '30%']);

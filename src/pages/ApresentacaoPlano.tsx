@@ -50,7 +50,8 @@ function categorizeFeatures(features: string[]): Category[] {
   return Object.values(buckets).filter((b) => b.items.length > 0);
 }
 
-const TOTAL_STAGES = 4;
+// stages: 4 sem promo, 6 com promo (preço normal → storytelling promo → preço com promo)
+const getTotalStages = (hasPromo: boolean) => (hasPromo ? 6 : 4);
 
 export default function ApresentacaoPlano() {
   const { plano } = useParams<{ plano: string }>();

@@ -146,11 +146,11 @@ export default function ApresentacaoPlano() {
     const totalEconomia = diffMes * 12;
     const pct = sem > 0 ? Math.round((diffMes / sem) * 100) : 0;
     const promoTargetAnnual = promo && (promo.applies_to === 'anual' || promo.applies_to === 'ambos');
-    const promoTargetSem = promo && (promo.applies_to === 'semestral' || promo.applies_to === 'ambos');
+    const semSource: any = semPromo || (promo && (promo.applies_to === 'semestral' || promo.applies_to === 'ambos') ? promo : null);
     const promoAnualMes = promoTargetAnnual ? an * (1 - Number(promo.discount_percent) / 100) : null;
-    const promoSemMes = promoTargetSem ? sem * (1 - Number(promo.discount_percent) / 100) : null;
-    return { semestral, anual, sem, an, diffMes, totalEconomia, pct, promoAnualMes, promoSemMes };
-  }, [plan, promo]);
+    const promoSemMes = semSource ? sem * (1 - Number(semSource.discount_percent) / 100) : null;
+    return { semestral, anual, sem, an, diffMes, totalEconomia, pct, promoAnualMes, promoSemMes, semPromo: semSource };
+  }, [plan, promo, semPromo]);
 
   if (!plan) return <Navigate to={isPublic ? '/p/planos' : '/apresentacao'} replace />;
 

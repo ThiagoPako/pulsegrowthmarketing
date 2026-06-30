@@ -499,8 +499,12 @@ async function ensureAuthSupportTables() {
         email TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_sign_in TIMESTAMPTZ
       );
+
+      ALTER TABLE auth_users
+        ADD COLUMN IF NOT EXISTS last_sign_in TIMESTAMPTZ;
 
       CREATE TABLE IF NOT EXISTS user_roles (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -986,8 +990,9 @@ async function upgradePasswordHashIfNeeded(profile, rawPassword) {
       .map((hash) => hash.trim())
       .filter(Boolean);
     const hasBcryptHash = hashes.some((hash) => /^\$2[aby]\$/.test(hash));
+    const hasLegacyHash = hashes.some((hash) => !/^\$2[aby]\$/.test(hash));
 
-    if (!hasBcryptHash) {
+    if (!hasBcryptHash || hasLegacyHash) {
       await storeUserPassword(profile.id, rawPassword);
     }
   } catch (error) {

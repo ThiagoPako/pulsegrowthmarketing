@@ -197,6 +197,13 @@ export default function PlanPromotionsAdmin() {
               <Label>Fim (opcional)</Label>
               <Input type="date" value={form.ends_at ?? ''} onChange={e => setForm({ ...form, ends_at: e.target.value || null })} />
             </div>
+            <div className="space-y-2">
+              <Label>Limite de clientes (vagas)</Label>
+              <Input type="number" min={1} value={form.max_redemptions ?? ''}
+                placeholder="Ex: 10 (vazio = ilimitado)"
+                onChange={e => setForm({ ...form, max_redemptions: e.target.value ? Number(e.target.value) : null })} />
+              <p className="text-xs text-muted-foreground">Ex: primeiros 10 clientes de Uruaçu que fecharem.</p>
+            </div>
           </div>
           <div className="space-y-2">
             <Label>Descrição (aparece no banner)</Label>

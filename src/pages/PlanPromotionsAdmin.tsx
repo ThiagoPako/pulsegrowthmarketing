@@ -147,13 +147,18 @@ export default function PlanPromotionsAdmin() {
   async function activatePreset(preset: PresetDef) {
     setSaving(true);
     try {
-      // Desativa qualquer promoção com o mesmo título
+      // 1. Desativa TODAS as promoções ativas (apenas uma vigente por vez)
+      const activeOthers = items.filter(p => p.active && p.title.trim().toLowerCase() !== preset.payload.title.trim().toLowerCase());
+      for (const a of activeOthers) {
+        await supabase.from('plan_promotions' as any).update({ active: false }).eq('id', a.id);
+      }
+      // 2. Ativa ou cria o preset escolhido
       const existing = items.filter(p => p.title.trim().toLowerCase() === preset.payload.title.trim().toLowerCase());
       if (existing.length > 0) {
         await supabase.from('plan_promotions' as any)
-          .update({ active: true })
+          .update({ ...preset.payload, active: true })
           .eq('id', existing[0].id);
-        toast.success(`${preset.title} ativada`);
+        toast.success(`${preset.title} ativada — outras promoções foram desativadas`);
       } else {
         const { error } = await supabase.from('plan_promotions' as any).insert(preset.payload);
         if (error) throw error;
@@ -166,6 +171,7 @@ export default function PlanPromotionsAdmin() {
       setSaving(false);
     }
   }
+
 
   async function deactivatePreset(preset: PresetDef) {
     const existing = items.filter(p => p.title.trim().toLowerCase() === preset.payload.title.trim().toLowerCase() && p.active);
@@ -255,15 +261,22 @@ export default function PlanPromotionsAdmin() {
       </div>
 
       {/* PRESETS — seleção rápida */}
+      {(() => {
+        const hasActive = PRESETS.some(p => isPresetActive(p));
+        const visiblePresets = hasActive ? PRESETS.filter(p => isPresetActive(p)) : PRESETS;
+        return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" /> Promoções prontas
+            <Sparkles className="h-4 w-4 text-primary" />
+            {hasActive ? 'Promoção ativa' : 'Promoções prontas'}
           </h2>
-          <span className="text-xs text-muted-foreground">Clique para ativar/desativar</span>
+          <span className="text-xs text-muted-foreground">
+            {hasActive ? 'Desative para escolher outra' : 'Clique para ativar'}
+          </span>
         </div>
-        <div className="grid md:grid-cols-3 gap-4">
-          {PRESETS.map((preset) => {
+        <div className={`grid gap-4 ${hasActive ? 'md:grid-cols-1 max-w-2xl' : 'md:grid-cols-3'}`}>
+          {visiblePresets.map((preset) => {
             const active = isPresetActive(preset);
             const Icon = preset.icon;
             return (
@@ -320,6 +333,10 @@ export default function PlanPromotionsAdmin() {
           })}
         </div>
       </div>
+        );
+      })()}
+
+
 
       {/* Toggle Custom */}
       <div className="flex items-center justify-between border-t border-border pt-4">

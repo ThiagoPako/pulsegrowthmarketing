@@ -206,9 +206,18 @@ export default function ApresentacaoPlano() {
             <StageDeliveries plan={plan} categories={categories} />
           </div>
           <div className="h-full w-full px-4 md:px-8 flex items-center justify-center">
-            {pricing && <StageInvest plan={plan} pricing={pricing} promo={promo} />}
+            {pricing && <StageInvest plan={plan} pricing={pricing} promo={promo} applyPromo={false} />}
           </div>
-        </motion.div>
+          {promo && (
+            <>
+              <div className="h-full w-full px-4 md:px-8 flex items-center justify-center">
+                <StagePromoStory plan={plan} promo={promo} />
+              </div>
+              <div className="h-full w-full px-4 md:px-8 flex items-center justify-center">
+                {pricing && <StageInvest plan={plan} pricing={pricing} promo={promo} applyPromo={true} />}
+              </div>
+            </>
+          )}
       </div>
 
       {/* CONTROLES INFERIORES */}

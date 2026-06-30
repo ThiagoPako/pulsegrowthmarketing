@@ -560,12 +560,14 @@ const DIFFERENTIALS = [
 
 function StageDeliveries({ plan, categories }: { plan: any; categories: Category[] }) {
   const q = getQuantities(plan.key);
+  const hasSocialMedia = (plan.features as string[]).some((f) => /social media/i.test(f));
   const highlights = [
     { icon: Film,      qty: q.reels,     unit: 'Reels',    sub: 'editados por videomakers profissionais', show: q.reels > 0 },
     { icon: ImageIcon, qty: q.artes,     unit: 'Artes',    sub: 'criadas pela nossa designer interna',    show: q.artes > 0 },
     { icon: PlayCircle,qty: q.stories,   unit: 'Stories',  sub: 'distribuídos com estratégia semanal',    show: q.stories > 0 },
     { icon: Megaphone, qty: q.criativos, unit: 'Criativos',sub: 'em vídeo p/ anúncios Meta + Google',     show: q.criativos > 0 },
   ].filter((h) => h.show);
+
 
   return (
     <Slide>

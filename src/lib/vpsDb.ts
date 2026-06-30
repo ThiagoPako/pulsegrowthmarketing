@@ -17,54 +17,12 @@ function getActiveCity(): string {
 }
 
 
-function getSupabaseFallbackToken(): string | null {
-  if (typeof window === 'undefined') return null;
-
-  try {
-    for (let index = 0; index < localStorage.length; index += 1) {
-      const key = localStorage.key(index);
-      if (!key || !key.includes('auth-token')) continue;
-
-      const rawValue = localStorage.getItem(key);
-      if (!rawValue) continue;
-
-      const parsedValue = JSON.parse(rawValue);
-
-      if (typeof parsedValue?.access_token === 'string') {
-        return parsedValue.access_token;
-      }
-
-      if (typeof parsedValue?.currentSession?.access_token === 'string') {
-        return parsedValue.currentSession.access_token;
-      }
-
-      if (Array.isArray(parsedValue)) {
-        const sessionCandidate = parsedValue.find(
-          (entry) => typeof entry?.access_token === 'string' || typeof entry?.currentSession?.access_token === 'string',
-        );
-
-        if (typeof sessionCandidate?.access_token === 'string') {
-          return sessionCandidate.access_token;
-        }
-
-        if (typeof sessionCandidate?.currentSession?.access_token === 'string') {
-          return sessionCandidate.currentSession.access_token;
-        }
-      }
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
-}
-
 function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'x-pulse-city': getActiveCity(),
   };
-  const token = localStorage.getItem(TOKEN_KEY) || getSupabaseFallbackToken();
+  const token = localStorage.getItem(TOKEN_KEY);
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -314,6 +272,7 @@ class QueryBuilder {
     } else if (this._operation === 'upsert') {
       body.data = this._data;
       if (this._onConflict) body.onConflict = this._onConflict;
+      if (this._returning) { body.returning = true; body.single = this._single; }
     } else if (this._operation === 'delete') {
       body.filters = this._filters;
     }

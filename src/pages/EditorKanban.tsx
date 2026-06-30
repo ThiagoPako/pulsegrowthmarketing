@@ -399,12 +399,18 @@ export default function EditorKanban() {
 
   const handleClaimTask = async (task: EditorTask) => {
     if (!user) return;
-    const { error } = await supabase.from('content_tasks').update({
+    // Atomic claim: only succeeds if the task is still unassigned.
+    const { data, error } = await supabase.from('content_tasks').update({
       assigned_to: user.id,
       edited_by: user.id,
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
+    } as any).eq('id', task.id).is('assigned_to', null).select('id');
     if (error) { toast.error('Erro ao marcar tarefa'); return; }
+    if (!data || (Array.isArray(data) && data.length === 0)) {
+      toast.error('🚫 Este vídeo já foi pego por outra pessoa!');
+      fetchTasks();
+      return;
+    }
     const editorName = users.find(u => u.id === user.id)?.name || 'Você';
     toast.success(`🚩 ${editorName} marcou esta tarefa!`, { description: task.title });
     fetchTasks();
@@ -464,6 +470,14 @@ export default function EditorKanban() {
     setDragOverColumn(null);
     if (!draggedTask || draggedTask.kanban_column === targetColumn) { setDraggedTask(null); return; }
 
+    // Block editors/videomakers from moving a task already claimed by someone else
+    if (isEditorRole && draggedTask.assigned_to && draggedTask.assigned_to !== user?.id) {
+      toast.error('🚫 Este vídeo já foi pego por outra pessoa!');
+      setDraggedTask(null);
+      fetchTasks();
+      return;
+    }
+
     // Validate transition
     const validationError = validateTransition(draggedTask, targetColumn);
     if (validationError) {
@@ -487,11 +501,23 @@ export default function EditorKanban() {
     if (!draggedTask.edited_by && user) {
       updateData.edited_by = user.id;
     }
-    // Auto-assign to current editor if not yet assigned
-    if (!draggedTask.assigned_to && user) {
-      updateData.assigned_to = user.id;
+    // Auto-assign to current editor if not yet assigned (atomic guard below)
+    const shouldAutoClaim = !draggedTask.assigned_to && !!user;
+    if (shouldAutoClaim) {
+      updateData.assigned_to = user!.id;
     }
-    const { error } = await supabase.from('content_tasks').update(updateData).eq('id', draggedTask.id);
+    let query = supabase.from('content_tasks').update(updateData).eq('id', draggedTask.id);
+    if (shouldAutoClaim) {
+      // Only update if still unassigned — prevents two people claiming the same video
+      query = (query as any).is('assigned_to', null);
+    }
+    const { data: updatedRows, error } = await (query as any).select('id');
+    if (!error && shouldAutoClaim && (!updatedRows || updatedRows.length === 0)) {
+      toast.error('🚫 Este vídeo já foi pego por outra pessoa!');
+      setDraggedTask(null);
+      fetchTasks();
+      return;
+    }
     if (error) {
       toast.error('Erro ao mover cartão');
     } else {

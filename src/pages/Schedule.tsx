@@ -1117,8 +1117,10 @@ export default function Schedule() {
 
   const [generatingAll, setGeneratingAll] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [previewRecordings, setPreviewRecordings] = useState<Recording[]>([]);
   const [previewRange, setPreviewRange] = useState<{ start: string; end: string } | null>(null);
+  const [previewFixedClients, setPreviewFixedClients] = useState<Client[]>([]);
 
   const handleGenerateAllFixed = async () => {
     const fixedClients = clients.filter(c => c.fixedDay && c.status === 'ativo');
@@ -1138,17 +1140,33 @@ export default function Schedule() {
     }
     const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
     const end = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
-    const preview = previewFixedSchedulesForMonth(fixedClients, start, end);
-    if (preview.length === 0) {
-      toast.info('Todas as agendas fixas deste mês já estão preenchidas');
-      return;
-    }
-    setPreviewRecordings(preview);
+
+    // Abre o popup imediatamente com loading e calcula o preview em background
+    setPreviewFixedClients(fixedClients);
     setPreviewRange({ start, end });
+    setPreviewRecordings([]);
+    setPreviewLoading(true);
     setPreviewOpen(true);
+
+    // Defer pesado para o próximo tick para o loading aparecer
+    setTimeout(() => {
+      try {
+        const preview = previewFixedSchedulesForMonth(fixedClients, start, end);
+        setPreviewRecordings(preview);
+      } catch (err) {
+        console.error('Erro ao calcular preview de agendas fixas:', err);
+        toast.error('Erro ao calcular preview das agendas fixas');
+      } finally {
+        setPreviewLoading(false);
+      }
+    }, 50);
   };
 
   const handleConfirmGeneration = async () => {
+    if (previewRecordings.length === 0) {
+      toast.info('Nenhuma nova gravação para criar');
+      return;
+    }
     setGeneratingAll(true);
     try {
       const totalCreated = await commitFixedSchedules(previewRecordings);
@@ -1157,6 +1175,7 @@ export default function Schedule() {
       }
       setPreviewOpen(false);
       setPreviewRecordings([]);
+      setPreviewFixedClients([]);
     } catch (err) {
       console.error('Erro ao gerar agendas fixas:', err);
       toast.error('Erro ao gerar agendas fixas');
@@ -1166,20 +1185,46 @@ export default function Schedule() {
   };
 
   const previewByClient = useMemo(() => {
-    const map = new Map<string, Recording[]>();
+    const newByClient = new Map<string, Recording[]>();
     for (const rec of previewRecordings) {
-      const list = map.get(rec.clientId) || [];
+      const list = newByClient.get(rec.clientId) || [];
       list.push(rec);
-      map.set(rec.clientId, list);
+      newByClient.set(rec.clientId, list);
     }
-    return Array.from(map.entries())
-      .map(([clientId, recs]) => ({
-        clientId,
-        clientName: clients.find(c => c.id === clientId)?.companyName || 'Cliente',
-        recordings: recs.sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime)),
-      }))
-      .sort((a, b) => a.clientName.localeCompare(b.clientName));
-  }, [previewRecordings, clients]);
+
+    const rangeStart = previewRange?.start || '';
+    const rangeEnd = previewRange?.end || '';
+
+    return previewFixedClients
+      .map(client => {
+        const newRecs = (newByClient.get(client.id) || []).sort(
+          (a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime)
+        );
+        const existingRecs = recordings
+          .filter(r =>
+            r.clientId === client.id &&
+            r.type === 'fixa' &&
+            r.status !== 'cancelada' &&
+            r.date >= rangeStart &&
+            r.date <= rangeEnd
+          )
+          .sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime));
+        return {
+          clientId: client.id,
+          clientName: client.companyName || 'Cliente',
+          recordings: newRecs,
+          existingCount: existingRecs.length,
+          existingRecordings: existingRecs,
+        };
+      })
+      .sort((a, b) => {
+        // Quem tem novas gravações primeiro
+        if ((b.recordings.length > 0 ? 1 : 0) !== (a.recordings.length > 0 ? 1 : 0)) {
+          return (b.recordings.length > 0 ? 1 : 0) - (a.recordings.length > 0 ? 1 : 0);
+        }
+        return a.clientName.localeCompare(b.clientName);
+      });
+  }, [previewRecordings, previewFixedClients, recordings, previewRange]);
 
   const previewConflicts = useMemo(() => {
     const duration = (settings.recordingDuration || 90) + 30; // buffer
@@ -2545,59 +2590,89 @@ export default function Schedule() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={previewOpen} onOpenChange={(open) => { if (!generatingAll) setPreviewOpen(open); }}>
+      <Dialog open={previewOpen} onOpenChange={(open) => { if (!generatingAll && !previewLoading) setPreviewOpen(open); }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Confirmar geração de agendas fixas</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              {previewRecordings.length} gravação(ões) serão criadas para{' '}
-              {previewRange ? `${format(new Date(previewRange.start + 'T12:00:00'), "MMMM 'de' yyyy", { locale: ptBR })}` : 'o mês'}.
-              Revise antes de confirmar.
+              {previewLoading
+                ? 'Carregando gravações fixas do mês...'
+                : `${previewRecordings.length} nova(s) gravação(ões) serão criadas para ${previewFixedClients.length} cliente(s) fixo(s) em `}
+              {!previewLoading && previewRange && (
+                <span className="font-medium text-foreground">
+                  {format(new Date(previewRange.start + 'T12:00:00'), "MMMM 'de' yyyy", { locale: ptBR })}
+                </span>
+              )}
+              {!previewLoading && '.'}
             </p>
-            {previewConflicts.length > 0 && (
-              <div className="border border-destructive/50 bg-destructive/10 rounded-md p-3 space-y-2">
-                <div className="flex items-center gap-2 text-destructive font-medium text-sm">
-                  <AlertTriangle size={16} />
-                  {previewConflicts.length} conflito(s) de horário detectado(s)
-                </div>
-                <div className="max-h-40 overflow-y-auto space-y-1 text-xs text-foreground">
-                  {previewConflicts.map((c, i) => (
-                    <div key={i} className="flex flex-wrap gap-1 items-center">
-                      <Badge variant="outline" className="text-[10px]">{c.videomakerName}</Badge>
-                      <span className="text-muted-foreground">{format(new Date(c.date + 'T12:00:00'), 'dd/MM', { locale: ptBR })}:</span>
-                      <span>{c.aLabel}</span>
-                      <span className="text-muted-foreground">×</span>
-                      <span>{c.bLabel}</span>
-                      <Badge variant="secondary" className="text-[10px]">{c.kind === 'novo-vs-novo' ? 'novo×novo' : 'novo×existente'}</Badge>
+
+            {previewLoading ? (
+              <div className="flex flex-col items-center justify-center py-10 gap-3">
+                <RefreshCw size={28} className="animate-spin text-primary" />
+                <span className="text-sm text-muted-foreground">Calculando agendas...</span>
+              </div>
+            ) : (
+              <>
+                {previewConflicts.length > 0 && (
+                  <div className="border border-destructive/50 bg-destructive/10 rounded-md p-3 space-y-2">
+                    <div className="flex items-center gap-2 text-destructive font-medium text-sm">
+                      <AlertTriangle size={16} />
+                      {previewConflicts.length} conflito(s) de horário detectado(s)
+                    </div>
+                    <div className="max-h-40 overflow-y-auto space-y-1 text-xs text-foreground">
+                      {previewConflicts.map((c, i) => (
+                        <div key={i} className="flex flex-wrap gap-1 items-center">
+                          <Badge variant="outline" className="text-[10px]">{c.videomakerName}</Badge>
+                          <span className="text-muted-foreground">{format(new Date(c.date + 'T12:00:00'), 'dd/MM', { locale: ptBR })}:</span>
+                          <span>{c.aLabel}</span>
+                          <span className="text-muted-foreground">×</span>
+                          <span>{c.bLabel}</span>
+                          <Badge variant="secondary" className="text-[10px]">{c.kind === 'novo-vs-novo' ? 'novo×novo' : 'novo×existente'}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="max-h-[50vh] overflow-y-auto border rounded-md divide-y">
+                  {previewByClient.map(group => (
+                    <div key={group.clientId} className="p-3">
+                      <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                        <span className="font-medium">{group.clientName}</span>
+                        <div className="flex gap-1.5 flex-wrap">
+                          {group.existingCount > 0 && (
+                            <Badge variant="outline" className="text-[10px]">
+                              {group.existingCount} já agendada(s)
+                            </Badge>
+                          )}
+                          <Badge variant={group.recordings.length > 0 ? 'default' : 'secondary'}>
+                            {group.recordings.length > 0
+                              ? `+${group.recordings.length} nova(s)`
+                              : 'Mês completo'}
+                          </Badge>
+                        </div>
+                      </div>
+                      {group.recordings.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {group.recordings.map(rec => (
+                            <span key={rec.id} className="text-xs px-2 py-1 rounded bg-primary/10 text-primary border border-primary/20">
+                              {format(new Date(rec.date + 'T12:00:00'), 'dd/MM', { locale: ptBR })} • {rec.startTime}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
-              </div>
+              </>
             )}
-            <div className="max-h-[50vh] overflow-y-auto border rounded-md divide-y">
-              {previewByClient.map(group => (
-                <div key={group.clientId} className="p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium">{group.clientName}</span>
-                    <Badge variant="secondary">{group.recordings.length} gravação(ões)</Badge>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {group.recordings.map(rec => (
-                      <span key={rec.id} className="text-xs px-2 py-1 rounded bg-muted">
-                        {format(new Date(rec.date + 'T12:00:00'), 'dd/MM', { locale: ptBR })} • {rec.startTime}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setPreviewOpen(false)} disabled={generatingAll}>
+              <Button variant="outline" onClick={() => setPreviewOpen(false)} disabled={generatingAll || previewLoading}>
                 Cancelar
               </Button>
-              <Button onClick={handleConfirmGeneration} disabled={generatingAll}>
+              <Button onClick={handleConfirmGeneration} disabled={generatingAll || previewLoading || previewRecordings.length === 0}>
                 {generatingAll ? 'Gerando...' : `Confirmar geração (${previewRecordings.length})`}
               </Button>
             </div>

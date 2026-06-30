@@ -277,6 +277,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: null };}
 
       if (res.status === 401 || res.status === 400) {
+        // VPS rejeitou — tenta Supabase como fallback (usuários cadastrados só lá)
+        try {
+          const { data: sbData, error: sbError } = await supabaseReal.auth.signInWithPassword({ email, password });
+          if (!sbError && sbData?.user) {
+            const u = { id: sbData.user.id, email: sbData.user.email || email };
+            setUser(u);
+            setSession({ access_token: sbData.session?.access_token || '' });
+            await fetchProfile(u.id);
+            logLoginEntry(u.id);
+            return { error: null };
+          }
+        } catch {
+          // ignora e cai no erro padrão abaixo
+        }
         const message = payload && typeof payload === 'object' && 'error' in payload
           ? String(payload.error)
           : 'Email ou senha inválidos';

@@ -5,7 +5,7 @@ import {
   Rocket, Video, BarChart3, Palette, Users, Calendar, CheckCircle2,
   ArrowRight, Play, Star, ChevronDown, MessageCircle, Instagram,
   TrendingUp, Zap, Shield, Clock, Award, Phone, Mail, MapPin,
-  Menu, X, Sparkles, Target, Megaphone, Camera, Film, PenTool, Gift,
+  Menu, X, Sparkles, Target, Megaphone, Camera, Film, PenTool, Gift, LogIn,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
@@ -233,6 +233,9 @@ function Navbar() {
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
+              <Button variant="ghost" size="sm" onClick={() => navigate('/login')} className="hidden sm:inline-flex text-xs sm:text-sm h-8 sm:h-9 gap-1.5">
+                <LogIn size={14} /> Área da Equipe
+              </Button>
               <Button variant="ghost" size="sm" onClick={() => navigate('/clube')} className="hidden sm:inline-flex text-xs sm:text-sm h-8 sm:h-9 gap-1.5">
                 <Gift size={14} /> Clube de Descontos
               </Button>
@@ -318,6 +321,9 @@ function Navbar() {
                 </Button>
                 <Button variant="outline" size="lg" onClick={() => { setOpen(false); navigate('/clube'); }} className="w-full py-6 gap-2">
                   <Gift size={18} /> Clube de Descontos
+                </Button>
+                <Button variant="outline" size="lg" onClick={() => { setOpen(false); navigate('/login'); }} className="w-full py-6 gap-2">
+                  <LogIn size={18} /> Área da Equipe
                 </Button>
               </motion.div>
             </div>
@@ -425,6 +431,11 @@ function Hero() {
             <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
               <Button size="lg" variant="outline" onClick={() => document.getElementById('servicos')?.scrollIntoView({ behavior: 'smooth' })} className="gap-2 text-sm sm:text-base px-6 sm:px-8 py-5 sm:py-6 w-full sm:w-auto border-border/80 hover:border-primary/40 transition-colors">
                 <Play size={16} /> Ver serviços
+              </Button>
+            </motion.div>
+            <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+              <Button size="lg" variant="ghost" onClick={() => navigate('/login')} className="gap-2 text-sm sm:text-base px-6 sm:px-8 py-5 sm:py-6 w-full sm:w-auto hover:bg-primary/10 hover:text-primary transition-colors">
+                <LogIn size={16} /> Área da Equipe
               </Button>
             </motion.div>
           </motion.div>

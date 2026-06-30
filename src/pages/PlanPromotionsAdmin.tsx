@@ -25,9 +25,11 @@ type Promo = {
   active: boolean;
   starts_at: string | null;
   ends_at: string | null;
+  max_redemptions: number | null;
+  redemptions_count: number;
 };
 
-const empty: Omit<Promo, 'id'> = {
+const empty: Omit<Promo, 'id' | 'redemptions_count'> = {
   city: null,
   plan_key: null,
   applies_to: 'anual',
@@ -38,6 +40,7 @@ const empty: Omit<Promo, 'id'> = {
   active: true,
   starts_at: null,
   ends_at: null,
+  max_redemptions: null,
 };
 
 export default function PlanPromotionsAdmin() {

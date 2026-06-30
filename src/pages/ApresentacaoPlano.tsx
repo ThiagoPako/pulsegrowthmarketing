@@ -461,18 +461,44 @@ export default function ApresentacaoPlano() {
                     initial={{ opacity: 0, y: 30 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
-                    className="relative rounded-3xl p-6 md:p-8 border-2 border-border bg-card opacity-90"
+                    className={`relative rounded-3xl p-6 md:p-8 border-2 bg-card ${promoSemMes !== null ? 'border-orange-500 shadow-xl' : 'border-border opacity-90'}`}
                   >
+                    {promoSemMes !== null && (
+                      <Badge className="absolute -top-3 left-4 bg-orange-500 text-white font-bold shadow-lg">
+                        🔥 {promo.discount_percent}% OFF
+                      </Badge>
+                    )}
                     <div className="text-xs md:text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wider">
                       Contrato {semestral.label}
                     </div>
-                    <div className="flex items-baseline gap-2 mb-4">
-                      <span className="text-4xl md:text-5xl font-bold text-muted-foreground line-through decoration-2" style={{ fontFamily: 'var(--font-display)' }}>
-                        {semestral.monthly}
-                      </span>
-                      <span className="text-sm text-muted-foreground">/mês</span>
-                    </div>
-                    <div className="text-sm text-muted-foreground">Sem desconto de fidelidade</div>
+                    {promoSemMes !== null ? (
+                      <>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-2xl text-muted-foreground line-through" style={{ fontFamily: 'var(--font-display)' }}>
+                            {semestral.monthly}
+                          </span>
+                        </div>
+                        <div className="flex items-baseline gap-2 mb-2">
+                          <span className="text-4xl md:text-5xl font-bold text-orange-600" style={{ fontFamily: 'var(--font-display)' }}>
+                            {brl(promoSemMes)}
+                          </span>
+                          <span className="text-sm text-muted-foreground">/mês</span>
+                        </div>
+                        <div className="text-sm font-semibold text-orange-600">
+                          Promoção válida nos {promo.duration_months} primeiros meses
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-baseline gap-2 mb-4">
+                          <span className="text-4xl md:text-5xl font-bold text-muted-foreground line-through decoration-2" style={{ fontFamily: 'var(--font-display)' }}>
+                            {semestral.monthly}
+                          </span>
+                          <span className="text-sm text-muted-foreground">/mês</span>
+                        </div>
+                        <div className="text-sm text-muted-foreground">Sem desconto de fidelidade</div>
+                      </>
+                    )}
                   </motion.div>
 
                   {/* Anual — destaque */}

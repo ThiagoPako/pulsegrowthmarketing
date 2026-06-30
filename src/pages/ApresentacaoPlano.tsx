@@ -614,6 +614,37 @@ function StageDeliveries({ plan, categories }: { plan: any; categories: Category
           </div>
         )}
 
+        {/* SOCIAL MEDIA DEDICADO, destaque exclusivo */}
+        {hasSocialMedia && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ delay: 0.6, type: 'spring', stiffness: 110 }}
+            className="relative overflow-hidden rounded-3xl border-2 border-primary/40 bg-gradient-to-br from-primary/15 via-card to-orange-500/10 p-5 md:p-6 mb-6 shadow-xl"
+          >
+            <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-primary/20 blur-3xl animate-pulse" />
+            <div className="absolute -bottom-10 -left-10 w-40 h-40 rounded-full bg-orange-500/20 blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+            <div className="relative flex flex-col md:flex-row items-start md:items-center gap-4">
+              <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-gradient-to-br from-primary to-orange-600 text-primary-foreground flex items-center justify-center shadow-lg shrink-0">
+                <Crown className="h-7 w-7 md:h-8 md:w-8" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <Badge className="bg-primary text-primary-foreground mb-2">
+                  <Sparkles className="h-3 w-3 mr-1" /> Inclui Social Media Dedicado
+                </Badge>
+                <h3 className="text-xl md:text-2xl font-bold leading-tight mb-1" style={{ fontFamily: 'var(--font-display)' }}>
+                  Uma profissional <span className="bg-gradient-to-r from-primary to-orange-500 bg-clip-text text-transparent">cuidando do seu Instagram todos os dias</span>
+                </h3>
+                <p className="text-xs md:text-sm text-muted-foreground leading-snug">
+                  Planejamento de conteúdo, postagens, respostas, interação com seguidores e acompanhamento de métricas — tudo feito por uma social media dedicada da nossa equipe.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+
+
         {/* DIFERENCIAIS, gatilhos do time */}
         <motion.div
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }}

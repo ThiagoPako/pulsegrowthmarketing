@@ -265,60 +265,88 @@ export default function ApresentacaoPlano() {
         <span>Esc fechar</span>
       </div>
 
-      {/* HERO */}
-      <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+      {/* HERO compacto com preço + CTA acima da dobra */}
+      <section className="relative pt-20 pb-10 md:pt-24 md:pb-14 overflow-hidden">
         <div className="absolute inset-0 -z-10">
-          <div className="absolute top-0 -left-32 w-[600px] h-[600px] rounded-full bg-primary/20 blur-3xl animate-pulse" />
-          <div className="absolute bottom-0 -right-32 w-[600px] h-[600px] rounded-full bg-primary/30 blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-orange-500/10 blur-3xl" />
+          <div className="absolute top-0 -left-32 w-[500px] h-[500px] rounded-full bg-primary/20 blur-3xl animate-pulse" />
+          <div className="absolute bottom-0 -right-32 w-[500px] h-[500px] rounded-full bg-primary/30 blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
         </div>
 
-        <div className="container mx-auto px-4 md:px-6 text-center relative z-10 pt-16 md:pt-0">
-          <motion.img src={LOGO_URL} alt="Pulse" className="h-14 md:h-20 mx-auto mb-4 md:mb-6" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8 }} />
+        <div className="container mx-auto px-4 md:px-6 relative z-10">
+          <div className="grid lg:grid-cols-[1.2fr_1fr] gap-8 lg:gap-12 items-center max-w-6xl mx-auto">
+            {/* Coluna esquerda: identidade do plano */}
+            <div className="text-center lg:text-left">
+              <motion.img src={LOGO_URL} alt="Pulse" className="h-10 md:h-12 mx-auto lg:mx-0 mb-4" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6 }} />
 
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-            <Badge className="mb-4 md:mb-6 bg-primary/10 text-primary border-primary/20">
-              <Sparkles className="h-3 w-3 mr-1" /> Plano apresentado
-            </Badge>
-          </motion.div>
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="flex flex-wrap justify-center lg:justify-start gap-2 mb-4">
+                <Badge className="bg-primary/10 text-primary border-primary/20">
+                  <Sparkles className="h-3 w-3 mr-1" /> Plano {plan.name}
+                </Badge>
+                <Badge variant="outline">{plan.features.length} entregas/mês</Badge>
+              </motion.div>
 
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }} className="w-20 h-20 md:w-24 md:h-24 rounded-3xl bg-gradient-to-br from-primary to-orange-600 flex items-center justify-center mx-auto mb-4 md:mb-6 shadow-2xl">
-            <Icon className="h-10 w-10 md:h-12 md:w-12 text-primary-foreground" />
-          </motion.div>
+              <div className="flex items-center justify-center lg:justify-start gap-4 mb-4">
+                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }} className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-gradient-to-br from-primary to-orange-600 flex items-center justify-center shadow-xl shrink-0">
+                  <Icon className="h-7 w-7 md:h-8 md:w-8 text-primary-foreground" />
+                </motion.div>
+                <motion.h1
+                  className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight leading-none"
+                  style={{ fontFamily: 'var(--font-display)' }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  <span className="bg-gradient-to-r from-primary via-orange-500 to-primary bg-clip-text text-transparent">{plan.name}</span>
+                </motion.h1>
+              </div>
 
-          <motion.h1
-            className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-4 leading-tight"
-            style={{ fontFamily: 'var(--font-display)' }}
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4, duration: 0.7 }}
-          >
-            <span className="bg-gradient-to-r from-primary via-orange-500 to-primary bg-clip-text text-transparent">{plan.name}</span>
-          </motion.h1>
-          <motion.p className="text-lg md:text-2xl text-foreground/90 max-w-2xl mx-auto mb-3 md:mb-4 font-semibold px-2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
-            {plan.tagline}
-          </motion.p>
-          <motion.p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto mb-8 md:mb-10 px-2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}>
-            {plan.description}
-          </motion.p>
+              <motion.p className="text-lg md:text-xl text-foreground/90 mb-2 font-semibold" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
+                {plan.tagline}
+              </motion.p>
+              <motion.p className="text-sm md:text-base text-muted-foreground mb-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
+                {plan.description}
+              </motion.p>
 
-          <motion.div className="flex items-center justify-center gap-2 text-sm text-muted-foreground" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}>
-            <ArrowRight className="h-4 w-4 animate-pulse" />
-            Role para ver tudo que está incluso
-          </motion.div>
-        </div>
-      </section>
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }} className="rounded-2xl border border-border bg-card p-4 mb-5 text-left">
+                <div className="text-xs font-semibold text-primary uppercase tracking-wider mb-1">Ideal para você se…</div>
+                <p className="text-sm text-foreground/90 leading-relaxed">{plan.ideal}</p>
+              </motion.div>
 
-      {/* PARA QUEM É */}
-      <section className="py-14 md:py-20 bg-secondary/30">
-        <div className="container mx-auto px-4 md:px-6 max-w-4xl">
-          <motion.div {...fadeUp} className="text-center">
-            <Badge variant="outline" className="mb-4">Ideal para</Badge>
-            <h2 className="text-2xl md:text-4xl font-bold mb-4 md:mb-6" style={{ fontFamily: 'var(--font-display)' }}>
-              Esse plano é <span className="text-primary">perfeito</span> para você se...
-            </h2>
-            <p className="text-base md:text-xl text-muted-foreground leading-relaxed">{plan.ideal}</p>
-          </motion.div>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }} className="flex flex-wrap gap-3 justify-center lg:justify-start">
+                <Button size="lg" className="h-12 px-6 shadow-xl" asChild>
+                  <a href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`Olá! Quero fechar o plano ${plan.name} da Pulse.`)}`} target="_blank" rel="noreferrer">
+                    Quero esse plano <ArrowRight className="h-4 w-4 ml-1" />
+                  </a>
+                </Button>
+                <Button size="lg" variant="outline" className="h-12 px-6" onClick={() => document.getElementById('entregas')?.scrollIntoView({ behavior: 'smooth' })}>
+                  Ver entregas
+                </Button>
+              </motion.div>
+            </div>
+
+            {/* Coluna direita: card de preço */}
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.4 }} className="relative">
+              {(() => {
+                const anual = plan.pricing[plan.pricing.length - 1];
+                const semestral = plan.pricing[0];
+                return (
+                  <div className="rounded-3xl border-2 border-primary bg-gradient-to-br from-primary via-orange-600 to-primary text-primary-foreground p-6 md:p-7 shadow-2xl">
+                    <Badge className="bg-yellow-300 text-yellow-950 font-bold mb-3"><Crown className="h-3 w-3 mr-1" /> Recomendado</Badge>
+                    <div className="text-xs uppercase tracking-wider opacity-90 mb-1">Contrato {anual.label} — melhor custo</div>
+                    <div className="flex items-baseline gap-2 mb-3">
+                      <span className="text-5xl md:text-6xl font-bold leading-none" style={{ fontFamily: 'var(--font-display)' }}>{anual.monthly}</span>
+                      <span className="text-sm opacity-80">/mês</span>
+                    </div>
+                    {anual.save && <div className="text-sm font-semibold text-yellow-100 mb-3">💰 {anual.save}</div>}
+                    <div className="border-t border-white/20 pt-3 mt-3 text-sm opacity-90">
+                      Ou {semestral.monthly}/mês no contrato {semestral.label}.
+                    </div>
+                    <div className="text-xs opacity-80 mt-3">Veja o detalhamento completo do investimento mais abaixo.</div>
+                  </div>
+                );
+              })()}
+            </motion.div>
+          </div>
         </div>
       </section>
 
@@ -329,9 +357,9 @@ export default function ApresentacaoPlano() {
         const inheritedFeatures = Array.from(new Set(previousPlans.flatMap(p => p.features)));
         const ownExtras = plan.features.filter(f => !/tudo do/i.test(f));
         return (
-          <section className="py-16 md:py-24 bg-gradient-to-br from-primary/5 via-orange-500/5 to-primary/5">
+          <section className="py-12 md:py-16 bg-gradient-to-br from-primary/5 via-orange-500/5 to-primary/5">
             <div className="container mx-auto px-4 md:px-6 max-w-6xl">
-              <motion.div {...fadeUp} className="text-center mb-10 md:mb-14">
+              <motion.div {...fadeUp} className="text-center mb-8 md:mb-10">
                 <Badge className="mb-4 bg-yellow-300 text-yellow-950 font-bold">
                   <Crown className="h-3 w-3 mr-1" /> Plano top de linha
                 </Badge>
@@ -390,9 +418,10 @@ export default function ApresentacaoPlano() {
       })()}
 
       {/* ENTREGAS — categorizadas */}
-      <section className="py-16 md:py-24">
+      <section id="entregas" className="py-12 md:py-16 bg-secondary/30">
+
         <div className="container mx-auto px-4 md:px-6 max-w-6xl">
-          <motion.div {...fadeUp} className="text-center mb-10 md:mb-16">
+          <motion.div {...fadeUp} className="text-center mb-8 md:mb-10">
             <Badge className="mb-4 bg-primary text-primary-foreground">{plan.features.length} entregas mensais</Badge>
             <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
               Tudo que está <span className="text-primary">incluso</span>
@@ -434,9 +463,9 @@ export default function ApresentacaoPlano() {
       </section>
 
       {/* INVESTIMENTO — destaque ANUAL */}
-      <section className="py-16 md:py-24 bg-gradient-to-b from-secondary/30 to-background">
+      <section className="py-12 md:py-16 bg-gradient-to-b from-secondary/30 to-background">
         <div className="container mx-auto px-4 md:px-6 max-w-5xl">
-          <motion.div {...fadeUp} className="text-center mb-10 md:mb-14">
+          <motion.div {...fadeUp} className="text-center mb-8 md:mb-10">
             <Badge variant="outline" className="mb-4">Investimento</Badge>
             <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
               Economize fechando <span className="text-primary">o plano anual</span>
@@ -757,9 +786,9 @@ export default function ApresentacaoPlano() {
 
 
       {/* DIFERENCIAIS */}
-      <section className="py-16 md:py-24">
+      <section className="py-12 md:py-16">
         <div className="container mx-auto px-4 md:px-6 max-w-5xl">
-          <motion.div {...fadeUp} className="text-center mb-10 md:mb-16">
+          <motion.div {...fadeUp} className="text-center mb-8 md:mb-10">
             <Badge variant="outline" className="mb-4">Por que a Pulse?</Badge>
             <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
               Mais que uma agência, um <span className="text-primary">time dedicado</span>
@@ -792,9 +821,9 @@ export default function ApresentacaoPlano() {
       </section>
 
       {/* PORTAL */}
-      <section className="py-16 md:py-24 bg-secondary/30">
+      <section className="py-12 md:py-16 bg-secondary/30">
         <div className="container mx-auto px-4 md:px-6 max-w-6xl">
-          <motion.div {...fadeUp} className="text-center mb-10 md:mb-16">
+          <motion.div {...fadeUp} className="text-center mb-8 md:mb-10">
             <Badge variant="outline" className="mb-4">Diferencial exclusivo</Badge>
             <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
               Portal do Cliente <span className="text-primary">Pulse</span>
@@ -825,9 +854,9 @@ export default function ApresentacaoPlano() {
 
       {/* EQUIPE */}
       {(true) && (
-        <section className="py-16 md:py-24">
+        <section className="py-12 md:py-16">
           <div className="container mx-auto px-4 md:px-6 max-w-6xl">
-            <motion.div {...fadeUp} className="text-center mb-10 md:mb-16">
+            <motion.div {...fadeUp} className="text-center mb-8 md:mb-10">
               <Badge variant="outline" className="mb-4"><Users className="h-3 w-3 mr-1" /> Nosso time</Badge>
               <h2 className="text-3xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>
                 Quem cuida do <span className="text-primary">seu projeto</span>
@@ -874,7 +903,7 @@ export default function ApresentacaoPlano() {
 
       {/* PORTAL EM AÇÃO — vídeos reais de clientes */}
       {showcaseVideos.length > 0 && (
-        <section className="py-16 md:py-24 bg-secondary/30">
+        <section className="py-12 md:py-16 bg-secondary/30">
           <div className="container mx-auto px-4 md:px-6 max-w-6xl">
             <motion.div {...fadeUp} className="text-center mb-10 md:mb-12">
               <Badge variant="outline" className="mb-4"><PlayCircle className="h-3 w-3 mr-1" /> Veja na prática</Badge>
@@ -916,7 +945,7 @@ export default function ApresentacaoPlano() {
       )}
 
       {/* CTA */}
-      <section className="py-16 md:py-24 pb-32 md:pb-24 relative overflow-hidden">
+      <section className="py-12 md:py-16 pb-32 md:pb-24 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary via-orange-600 to-primary -z-10" />
         <div className="absolute inset-0 -z-10">
           <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full bg-white/10 blur-3xl animate-pulse" />

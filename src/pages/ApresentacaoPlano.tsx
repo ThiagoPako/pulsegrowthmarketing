@@ -655,6 +655,7 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
   const { semestral, anual, sem, an, diffMes, totalEconomia, pct } = pricing;
   const promoAnualMes = applyPromo ? pricing.promoAnualMes : null;
   const promoSemMes = applyPromo ? pricing.promoSemMes : null;
+  const semPromo = pricing.semPromo || promo;
   const hasPromo = !!promo && applyPromo;
 
   return (

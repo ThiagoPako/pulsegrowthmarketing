@@ -133,7 +133,30 @@ export default function ApresentacaoPlano() {
         console.warn('showcase videos error', err);
       }
     })();
-  }, [plan]);
+
+    (async () => {
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const { data } = await supabase
+          .from('plan_promotions' as any)
+          .select('*')
+          .eq('active', true)
+          .or(`plan_key.is.null,plan_key.eq.${plan.key}`)
+          .or(`city.is.null,city.eq.${activeCity}`)
+          .order('discount_percent', { ascending: false });
+        const matches = (data || []).filter((p: any) => {
+          if (p.starts_at && p.starts_at > today) return false;
+          if (p.ends_at && p.ends_at < today) return false;
+          if (p.plan_key && p.plan_key !== plan.key) return false;
+          if (p.city && p.city !== activeCity) return false;
+          return true;
+        });
+        setPromo(matches[0] || null);
+      } catch (err) {
+        console.warn('promotions error', err);
+      }
+    })();
+  }, [plan, activeCity]);
 
   const currentIndex = plano ? PRESENTATION_ORDER.indexOf(plano as any) : -1;
   const prevKey = currentIndex > 0 ? PRESENTATION_ORDER[currentIndex - 1] : null;

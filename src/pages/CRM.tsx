@@ -177,6 +177,7 @@ export default function CRM() {
 
   const updateLead = useMutation({
     mutationFn: async (lead: Partial<Lead> & { id: string }) => {
+      if (lead.status) await incrementActivePromosIfClosed(lead.id, lead.status);
       const { error } = await supabase
         .from('crm_leads')
         .update({
@@ -190,6 +191,7 @@ export default function CRM() {
         .eq('id', lead.id);
       if (error) throw error;
     },
+
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
       toast.success('Lead atualizado com sucesso!');

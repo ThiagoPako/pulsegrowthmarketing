@@ -147,13 +147,18 @@ export default function PlanPromotionsAdmin() {
   async function activatePreset(preset: PresetDef) {
     setSaving(true);
     try {
-      // Desativa qualquer promoção com o mesmo título
+      // 1. Desativa TODAS as promoções ativas (apenas uma vigente por vez)
+      const activeOthers = items.filter(p => p.active && p.title.trim().toLowerCase() !== preset.payload.title.trim().toLowerCase());
+      for (const a of activeOthers) {
+        await supabase.from('plan_promotions' as any).update({ active: false }).eq('id', a.id);
+      }
+      // 2. Ativa ou cria o preset escolhido
       const existing = items.filter(p => p.title.trim().toLowerCase() === preset.payload.title.trim().toLowerCase());
       if (existing.length > 0) {
         await supabase.from('plan_promotions' as any)
-          .update({ active: true })
+          .update({ ...preset.payload, active: true })
           .eq('id', existing[0].id);
-        toast.success(`${preset.title} ativada`);
+        toast.success(`${preset.title} ativada — outras promoções foram desativadas`);
       } else {
         const { error } = await supabase.from('plan_promotions' as any).insert(preset.payload);
         if (error) throw error;
@@ -166,6 +171,7 @@ export default function PlanPromotionsAdmin() {
       setSaving(false);
     }
   }
+
 
   async function deactivatePreset(preset: PresetDef) {
     const existing = items.filter(p => p.title.trim().toLowerCase() === preset.payload.title.trim().toLowerCase() && p.active);

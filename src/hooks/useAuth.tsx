@@ -64,6 +64,14 @@ interface AuthContextType {
 
 const VPS_API_BASE = 'https://agenciapulse.tech/api';
 const TOKEN_KEY = 'pulse_jwt';
+const CITY_KEY = 'pulse:active_city';
+
+function getActiveCityHeader(): string {
+  if (typeof window === 'undefined') return 'minacu';
+  const inMemoryCity = (window as any).__PULSE_ACTIVE_CITY__;
+  if (inMemoryCity === 'minacu' || inMemoryCity === 'uruacu') return inMemoryCity;
+  return localStorage.getItem(CITY_KEY) === 'uruacu' ? 'uruacu' : 'minacu';
+}
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
@@ -80,6 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+            'x-pulse-city': getActiveCityHeader(),
         },
       });
 
@@ -114,7 +123,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (token) {
       try {
         const response = await fetch(`${VPS_API_BASE}/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'x-pulse-city': getActiveCityHeader(),
+          },
         });
 
         if (response.ok) {
@@ -179,7 +191,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async function restoreVpsSession() {
         try {
           const response = await fetch(`${VPS_API_BASE}/auth/me`, {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'x-pulse-city': getActiveCityHeader(),
+            },
           });
 
           let activeToken = token;

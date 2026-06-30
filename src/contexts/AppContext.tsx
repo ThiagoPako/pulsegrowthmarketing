@@ -2,6 +2,7 @@ import React, { createContext, useContext, useCallback, useState, useEffect } fr
 import { getDay } from 'date-fns';
 
 import { useAuth, type Profile } from '@/hooks/useAuth';
+import { useCity } from '@/contexts/CityContext';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { supabase } from '@/lib/vpsDb';
 import { supabase as supabaseReal } from '@/integrations/supabase/client';
@@ -90,6 +91,7 @@ const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { profile, signOut, loading: authLoading, user } = useAuth();
+  const { activeCity, isLoading: cityLoading } = useCity();
   const data = useSupabaseData();
 
   const currentUser = profile ? profileToUser(profile) : null;
@@ -99,14 +101,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Re-fetch data when auth finishes loading and user is available
   useEffect(() => {
-    if (!authLoading && user) {
+    if (!authLoading && !cityLoading && user) {
       data.refetch();
     }
-  }, [authLoading, user]);
+  }, [authLoading, cityLoading, activeCity, user]);
   
   const [users, setUsers] = useState<User[]>([]);
   useEffect(() => {
     const hasVpsToken = typeof window !== 'undefined' && !!localStorage.getItem('pulse_jwt');
+    if (cityLoading) return;
     const profileClient = hasVpsToken ? (supabase as any) : supabaseReal;
     Promise.all([
       profileClient.from('profiles').select('*'),
@@ -122,7 +125,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         role: roleByUserId.get(p.id) || p.role,
       } as Profile)));
     });
-  }, [profile]);
+  }, [profile, cityLoading, activeCity]);
 
   const logout = useCallback(async () => { await signOut(); }, [signOut]);
 

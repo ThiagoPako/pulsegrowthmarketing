@@ -205,6 +205,27 @@ function parseFilterArray(value) {
     .filter(Boolean);
 }
 
+function splitOrFilterParts(value) {
+  const input = String(value || '');
+  const parts = [];
+  let current = '';
+  let depth = 0;
+
+  for (const char of input) {
+    if (char === '(') depth += 1;
+    if (char === ')') depth = Math.max(0, depth - 1);
+    if (char === ',' && depth === 0) {
+      if (current.trim()) parts.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+
+  if (current.trim()) parts.push(current.trim());
+  return parts;
+}
+
 async function ensureProposalTables() {
   if (!proposalTablesEnsuredPromise) {
     proposalTablesEnsuredPromise = pool.query(`
@@ -4421,7 +4442,7 @@ function isCrmLeadManagementPayload(data) {
 app.post('/api/db/query', async (req, res) => {
   try {
     const { user } = await verifyUser(req);
-    const { table, operation, data, filters, select, order, limit: queryLimit, single, joins } = req.body;
+    const { table, operation, data, filters, select, order, limit: queryLimit, single, joins, onConflict } = req.body;
 
     const safeTable = sanitizeIdentifier(table);
     if (!ALLOWED_TABLES.includes(safeTable)) {
@@ -4488,6 +4509,69 @@ app.post('/api/db/query', async (req, res) => {
               case 'is': whereClauses.push(`${safeTable}.${col} IS ${f.value === null ? 'NULL' : 'NOT NULL'}`); break;
               case 'in': whereClauses.push(`${safeTable}.${col} = ANY($${paramIdx})`); params.push(f.value); paramIdx++; break;
               case 'contains': whereClauses.push(`${safeTable}.${col} @> $${paramIdx}`); params.push(f.value); paramIdx++; break;
+              case 'or': {
+                const orClauses = [];
+                for (const part of splitOrFilterParts(f.value)) {
+                  const [rawColumn, rawOp, ...rawValueParts] = part.split('.');
+                  const orColumn = sanitizeIdentifier(rawColumn || '');
+                  const orOp = String(rawOp || '').trim();
+                  const rawValue = rawValueParts.join('.');
+                  if (!orColumn || !orOp) continue;
+
+                  switch (orOp) {
+                    case 'eq':
+                      orClauses.push(`${safeTable}.${orColumn} = $${paramIdx}`);
+                      params.push(rawValue);
+                      paramIdx++;
+                      break;
+                    case 'neq':
+                      orClauses.push(`${safeTable}.${orColumn} != $${paramIdx}`);
+                      params.push(rawValue);
+                      paramIdx++;
+                      break;
+                    case 'gt':
+                      orClauses.push(`${safeTable}.${orColumn} > $${paramIdx}`);
+                      params.push(rawValue);
+                      paramIdx++;
+                      break;
+                    case 'gte':
+                      orClauses.push(`${safeTable}.${orColumn} >= $${paramIdx}`);
+                      params.push(rawValue);
+                      paramIdx++;
+                      break;
+                    case 'lt':
+                      orClauses.push(`${safeTable}.${orColumn} < $${paramIdx}`);
+                      params.push(rawValue);
+                      paramIdx++;
+                      break;
+                    case 'lte':
+                      orClauses.push(`${safeTable}.${orColumn} <= $${paramIdx}`);
+                      params.push(rawValue);
+                      paramIdx++;
+                      break;
+                    case 'like':
+                      orClauses.push(`${safeTable}.${orColumn} LIKE $${paramIdx}`);
+                      params.push(rawValue);
+                      paramIdx++;
+                      break;
+                    case 'ilike':
+                      orClauses.push(`${safeTable}.${orColumn} ILIKE $${paramIdx}`);
+                      params.push(rawValue);
+                      paramIdx++;
+                      break;
+                    case 'is':
+                      orClauses.push(`${safeTable}.${orColumn} IS ${rawValue === 'null' ? 'NULL' : 'NOT NULL'}`);
+                      break;
+                    case 'in':
+                      orClauses.push(`${safeTable}.${orColumn} = ANY($${paramIdx})`);
+                      params.push(parseFilterArray(rawValue));
+                      paramIdx++;
+                      break;
+                  }
+                }
+                if (orClauses.length > 0) whereClauses.push(`(${orClauses.join(' OR ')})`);
+                break;
+              }
               case 'not': {
                 const nestedOp = f.value?.op;
                 const nestedValue = f.value?.value;
@@ -4552,6 +4636,44 @@ app.post('/api/db/query', async (req, res) => {
           allResults.push(rows[0]);
         }
         result = { data: allResults.length === 1 ? allResults[0] : allResults, error: null };
+        break;
+      }
+
+      case 'upsert': {
+        const items = Array.isArray(data) ? data : [data];
+        const allResults = [];
+        const jsonColumns = await getTableJsonColumns(safeTable);
+
+        for (const item of items) {
+          const itemScoped = scopeCity
+            ? { ...item, city: assertValidCity(activeCity) }
+            : (item && item.city !== undefined ? { ...item, city: assertValidCity(item.city) } : item);
+          const entries = Object.entries(itemScoped || {}).map(([key, value]) => [sanitizeIdentifier(key), value]);
+          if (entries.length === 0) continue;
+
+          const keys = entries.map(([key]) => key);
+          const values = entries.map(([key, value]) => serializeValueForColumn(key, value, jsonColumns));
+          const placeholders = values.map((_, i) => `$${i + 1}`);
+          const conflictColumns = String(onConflict || 'id')
+            .split(',')
+            .map((column) => sanitizeIdentifier(column.trim()))
+            .filter(Boolean);
+          const conflictSet = new Set(conflictColumns);
+          const updateKeys = keys.filter((key) => !conflictSet.has(key));
+          const updateSet = updateKeys.length > 0
+            ? updateKeys.map((key) => `${key} = EXCLUDED.${key}`).join(', ')
+            : `${conflictColumns[0] || keys[0]} = EXCLUDED.${conflictColumns[0] || keys[0]}`;
+
+          const { rows } = await pool.query(
+            `INSERT INTO ${safeTable} (${keys.join(', ')}) VALUES (${placeholders.join(', ')})
+             ON CONFLICT (${(conflictColumns.length ? conflictColumns : ['id']).join(', ')}) DO UPDATE SET ${updateSet}
+             RETURNING *`,
+            values
+          );
+          allResults.push(rows[0]);
+        }
+
+        result = { data: single ? (allResults[0] || null) : (allResults.length === 1 ? allResults[0] : allResults), error: null };
         break;
       }
 

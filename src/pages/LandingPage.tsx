@@ -146,6 +146,7 @@ function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [activeSection, setActiveSection] = useState('');
   const navigate = useNavigate();
+  const goToTeamArea = useGoToTeamArea();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);

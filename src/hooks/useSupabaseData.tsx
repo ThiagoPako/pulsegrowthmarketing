@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/vpsDb';
+import { useCity } from '@/contexts/CityContext';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import type { Client, Recording, KanbanTask, Script, CompanySettings, DayOfWeek, ActiveRecording, ContentType, RecordingType, RecordingStatus, ConfirmationStatus, KanbanColumn, ScriptVideoType, ScriptPriority, ScriptContentFormat } from '@/types';
 
@@ -297,12 +298,14 @@ export function useSupabaseData() {
   const [activeRecordings, setActiveRecordings] = useState<ActiveRecording[]>([]);
   const [loading, setLoading] = useState(true);
   const hasFetched = useRef(false);
+  const { activeCity, isLoading: cityLoading } = useCity();
 
   // Wait for auth token before fetching
   const hasToken = !!localStorage.getItem('pulse_jwt');
 
   const fetchAll = useCallback(async () => {
     const token = localStorage.getItem('pulse_jwt');
+    if (cityLoading) return;
     if (!token) { setLoading(false); return; }
     const [cRes, rRes, tRes, sRes, setRes, arRes] = await Promise.all([
       invokeVpsFunction('clients', { method: 'GET' }),
@@ -344,12 +347,13 @@ export function useSupabaseData() {
     if (arRes.data && !arRes.error) setActiveRecordings((Array.isArray(arRes.data) ? arRes.data : []).map(rowToActiveRecording));
     setLoading(false);
     hasFetched.current = true;
-  }, []);
+  }, [cityLoading]);
 
   // ── Initial fetch — only when token exists ──
   useEffect(() => {
+    if (cityLoading) return;
     fetchAll();
-  }, [fetchAll]);
+  }, [cityLoading, activeCity, fetchAll]);
 
   // ── Listen for auth changes (login/logout) and re-fetch ──
   useEffect(() => {
@@ -384,7 +388,7 @@ export function useSupabaseData() {
   // ── Polling for data changes (replaces Supabase Realtime) ──
   useEffect(() => {
     const token = localStorage.getItem('pulse_jwt');
-    if (!token) return;
+    if (!token || cityLoading) return;
 
     // Realtime subscription for content_tasks
     const channel = supabase
@@ -408,7 +412,7 @@ export function useSupabaseData() {
       clearInterval(interval);
       (channel as any).unsubscribe?.();
     };
-  }, [fetchAll]);
+  }, [cityLoading, activeCity, fetchAll]);
 
   // ── Bulk insert recordings ──
   const addRecordingsBulk = useCallback(async (recs: Recording[]): Promise<boolean> => {

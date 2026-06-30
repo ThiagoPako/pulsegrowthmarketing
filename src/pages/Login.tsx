@@ -17,8 +17,14 @@ export default function Login() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password;
+    if (!cleanEmail || !cleanPassword) {
+      toast.error('Preencha email e senha');
+      return;
+    }
     setLoading(true);
-    const { error } = await signIn(email, password);
+    const { error } = await signIn(cleanEmail, cleanPassword);
     setLoading(false);
     if (error) {
       toast.error(error);

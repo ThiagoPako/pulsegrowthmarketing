@@ -86,17 +86,21 @@ export function useMyPermissions() {
   const query = useQuery({
     queryKey: ['my-permissions'],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return { modules: [] as string[], role: '' };
+      const { data } = await supabase.auth.getUser();
+      const user = data?.user;
+      if (!user?.id) return { modules: [] as string[], role: '' };
 
-      const [permRes, profileRes] = await Promise.all([
-        supabase.from('user_permissions').select('module').eq('user_id', user.id),
-        supabase.from('profiles').select('role').eq('id', user.id).single(),
-      ]);
+      // Use role directly from /auth/me (already joined with user_roles) — avoids profile/role mismatch
+      const authRole = (user as any).role || '';
+
+      const permRes = await supabase
+        .from('user_permissions')
+        .select('module')
+        .eq('user_id', user.id);
 
       return {
         modules: (permRes.data || []).map((d: any) => d.module as string),
-        role: profileRes.data?.role || '',
+        role: authRole,
       };
     },
   });

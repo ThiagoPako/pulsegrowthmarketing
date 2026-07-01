@@ -152,6 +152,7 @@ export default function ApresentacaoPlano() {
   };
 
   useEffect(() => {
+    if (isMobile) return;
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
@@ -166,7 +167,7 @@ export default function ApresentacaoPlano() {
     };
     window.addEventListener('keydown', handler, { capture: true });
     return () => window.removeEventListener('keydown', handler, { capture: true } as any);
-  }, [prevKey, nextKey, totalStages]);
+  }, [prevKey, nextKey, totalStages, isMobile]);
 
   const pricing = useMemo(() => {
     if (!plan) return null;

@@ -190,6 +190,90 @@ export default function ApresentacaoPlano() {
   const Icon = plan.icon;
   const categories = categorizeFeatures(plan.features);
 
+  const stagesContent = (
+    <>
+      <StageIntro />
+      <StagePlan plan={plan} Icon={Icon} />
+      <StageDeliveries plan={plan} categories={categories} />
+      {pricing && <StageInvest plan={plan} pricing={pricing} promo={promo} applyPromo={false} />}
+      {promo && (
+        <>
+          <StagePromoStory plan={plan} promo={promo} />
+          {pricing && <StageInvest plan={plan} pricing={pricing} promo={promo} applyPromo={true} />}
+        </>
+      )}
+    </>
+  );
+
+  // ============== MOBILE: scroll vertical natural, sem etapas ==============
+  if (isMobile) {
+    const mobileStages = [
+      <StageIntro key="s0" />,
+      <StagePlan key="s1" plan={plan} Icon={Icon} />,
+      <StageDeliveries key="s2" plan={plan} categories={categories} />,
+      pricing && <StageInvest key="s3" plan={plan} pricing={pricing} promo={promo} applyPromo={false} />,
+      promo && <StagePromoStory key="s4" plan={plan} promo={promo} />,
+      promo && pricing && <StageInvest key="s5" plan={plan} pricing={pricing} promo={promo} applyPromo={true} />,
+    ].filter(Boolean);
+
+    return (
+      <div className="min-h-screen w-full bg-background text-foreground relative">
+        <div className="absolute inset-0 -z-10 pointer-events-none">
+          <div className="absolute top-0 -left-32 w-[400px] h-[400px] rounded-full bg-primary/15 blur-3xl" />
+          <div className="absolute bottom-0 -right-32 w-[400px] h-[400px] rounded-full bg-primary/20 blur-3xl" />
+        </div>
+
+        {/* TOP BAR mobile */}
+        <div className="sticky top-0 z-50 flex items-center justify-between gap-2 px-3 py-2 bg-background/90 backdrop-blur border-b border-border">
+          <div className="flex items-center gap-2">
+            <img src={LOGO_URL} alt="Pulse" className="h-7" />
+            <Badge variant="outline" className="text-xs">
+              {currentIndex + 1}/{PRESENTATION_ORDER.length}
+            </Badge>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Button variant="outline" size="sm" onClick={copyPublicLink} className="h-8 px-2" aria-label="Copiar link">
+              <Link2 className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => window.close()} className="h-8 px-2" aria-label="Fechar">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Todas as etapas empilhadas para scroll natural */}
+        <div className="flex flex-col">
+          {mobileStages.map((el, i) => (
+            <section key={i} className="w-full px-3 py-10 border-b border-border/50 last:border-b-0">
+              {el}
+            </section>
+          ))}
+        </div>
+
+        {/* Nav planos fixa no rodapé */}
+        <div className="sticky bottom-0 z-50 flex items-center justify-between gap-2 px-3 py-2 bg-background/90 backdrop-blur border-t border-border">
+          {prevKey ? (
+            <button onClick={goPrevPlan} className="h-10 px-3 rounded-full border border-border bg-background flex items-center gap-1 text-sm">
+              <ArrowLeft className="h-4 w-4" /> Anterior
+            </button>
+          ) : <span />}
+          {nextKey ? (
+            <button onClick={goNextPlan} className="h-10 px-3 rounded-full bg-primary text-primary-foreground flex items-center gap-1 text-sm font-semibold">
+              Próximo plano <ArrowRight className="h-4 w-4" />
+            </button>
+          ) : (
+            <a href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`Olá! Quero fechar o plano ${plan.name}.`)}`}
+              target="_blank" rel="noreferrer"
+              className="h-10 px-3 rounded-full bg-[#25D366] text-white flex items-center gap-1 text-sm font-semibold">
+              <MessageCircle className="h-4 w-4" /> Falar agora
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ============== DESKTOP: etapas com navegação por teclado ==============
   return (
     <div className="h-screen w-screen overflow-hidden bg-background text-foreground relative">
       {/* gradientes de fundo */}

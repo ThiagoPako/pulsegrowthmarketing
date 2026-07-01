@@ -1442,9 +1442,12 @@ function StageComparison({ plan, pricing, promo }: { plan: any; pricing: any; pr
   const services = buildServicesForPlan(plan.key);
   const monthly = services.filter((s) => !s.oneTime).reduce((acc, s) => acc + s.qty * s.unitPrice, 0);
   const oneTime = services.filter((s) => s.oneTime).reduce((acc, s) => acc + s.qty * s.unitPrice, 0);
+  const avulsoTotal12 = monthly * 12 + oneTime;
 
   const planMonthly = promo && pricing.promoAnualMes ? pricing.promoAnualMes : pricing.an;
+  const planTotal12 = planMonthly * 12;
   const savingsMonthly = Math.max(monthly - planMonthly, 0);
+  const savings12 = Math.max(avulsoTotal12 - planTotal12, 0);
   const savingsPct = monthly > 0 ? Math.round((savingsMonthly / monthly) * 100) : 0;
 
   const pillars = [

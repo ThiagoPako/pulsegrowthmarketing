@@ -1464,16 +1464,16 @@ function StageComparison({ plan, pricing, promo }: { plan: any; pricing: any; pr
           className="text-center mb-6"
         >
           <Badge variant="outline" className="mb-3 uppercase tracking-wider text-[10px] md:text-xs">
-            <PiggyBank className="h-3.5 w-3.5 mr-1" /> Comparativo real de mercado
+            <PiggyBank className="h-3.5 w-3.5 mr-1" /> Tabela oficial de serviços avulsos
           </Badge>
           <h2 className="text-3xl md:text-5xl font-extrabold leading-tight" style={{ fontFamily: 'var(--font-display)' }}>
             E se você contratasse <br className="md:hidden" />
             <span className="bg-gradient-to-r from-primary via-orange-500 to-red-500 bg-clip-text text-transparent">
-              cada serviço separado?
+              cada serviço avulso?
             </span>
           </h2>
           <p className="mt-2 text-sm md:text-base text-muted-foreground max-w-3xl mx-auto">
-            Preços reais praticados no mercado. Somando tudo que está incluso no <strong className="text-foreground">{plan.name}</strong>, veja quanto sairia.
+            Estes são os valores que a <strong className="text-foreground">Pulse</strong> pratica para clientes que optam por contratar serviços avulsos. Somando tudo que está incluso no <strong className="text-foreground">{plan.name}</strong>, veja quanto sairia.
           </p>
         </motion.div>
 

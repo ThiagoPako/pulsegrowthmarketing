@@ -772,6 +772,30 @@ function StageDeliveries({ plan, categories }: { plan: any; categories: Category
           </div>
         )}
 
+        {/* TOTAL DE ENTREGAS */}
+        {totalEntregas > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}
+            className="mb-6 rounded-2xl border-2 border-primary/40 bg-gradient-to-r from-primary/15 via-primary/5 to-orange-500/10 px-5 py-4 flex items-center justify-between gap-3"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shadow-lg">
+                <Award className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold">Total de entregas por mês</div>
+                <div className="text-sm text-foreground/80 leading-snug">Somando reels, artes, stories e criativos de anúncio.</div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-4xl md:text-5xl font-black leading-none bg-gradient-to-br from-primary to-orange-600 bg-clip-text text-transparent" style={{ fontFamily: 'var(--font-display)' }}>
+                {totalEntregas}
+              </div>
+              <div className="text-[11px] uppercase tracking-wider font-bold text-primary">entregáveis/mês</div>
+            </div>
+          </motion.div>
+        )}
+
         {/* SOCIAL MEDIA DEDICADO, destaque exclusivo */}
         {hasSocialMedia && (
           <motion.div

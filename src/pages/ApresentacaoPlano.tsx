@@ -1540,7 +1540,22 @@ function StageComparison({ plan, pricing, promo }: { plan: any; pricing: any; pr
               <div className="text-xs md:text-sm opacity-95">
                 {savingsPct}% mais barato que contratar tudo separado.
               </div>
+              <div className="mt-3 pt-3 border-t border-white/20 space-y-0.5">
+                <div className="flex items-center justify-between text-[11px] md:text-xs opacity-95">
+                  <span>Avulso em 12 meses{oneTime > 0 ? ' (+ setup)' : ''}</span>
+                  <span className="font-semibold tabular-nums line-through">{brl(avulsoTotal12)}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] md:text-xs opacity-95">
+                  <span>Plano em 12 meses</span>
+                  <span className="font-semibold tabular-nums">{brl(planTotal12)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm md:text-base font-extrabold mt-1">
+                  <span>Economia total no contrato</span>
+                  <span className="tabular-nums">{brl(savings12)}</span>
+                </div>
+              </div>
             </motion.div>
+
 
             <div className="mt-4 text-xs md:text-sm text-muted-foreground leading-relaxed">
               Sem contar coordenação, gestão de qualidade, retrabalho, prazos e o risco de cada fornecedor entregar em ritmo diferente.

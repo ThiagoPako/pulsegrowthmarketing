@@ -6,8 +6,7 @@ import {
   Check, ArrowRight, ArrowLeft, Sparkles, Target, TrendingUp,
   Calendar, BarChart3, Palette, X, Film, Image as ImageIcon, Megaphone, PenTool,
   Crown, PiggyBank, MessageCircle, Link2, ChevronDown, ChevronUp, Rocket, Users, Trophy,
-  PlayCircle, Award, Zap, Maximize2, Minimize2,
-
+  PlayCircle, Award, Zap, Maximize2, Minimize2, MapPin, GraduationCap, MessageSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -616,7 +615,7 @@ function StagePlan({ plan, Icon }: { plan: any; Icon: any }) {
 
           {/* Stats com gatilho */}
           <div className="pt-5 border-t border-border grid grid-cols-3 gap-3 text-center">
-            <Stat icon={Award} label="Entregas/mês" value={plan.features.length} highlight />
+            <Stat icon={Award} label="Entregas/mês" value={(() => { const q = getQuantities(plan.key); return q.reels + q.artes + q.stories + q.criativos + q.posts; })()} highlight />
             <Stat icon={Zap} label="Time" value="Dedicado" />
             <Stat icon={TrendingUp} label="Foco" value="Crescer" />
           </div>
@@ -694,7 +693,32 @@ const DIFFERENTIALS = [
 
 function StageDeliveries({ plan, categories }: { plan: any; categories: Category[] }) {
   const q = getQuantities(plan.key);
-  const hasSocialMedia = (plan.features as string[]).some((f) => /social media/i.test(f));
+  const totalEntregas = q.reels + q.artes + q.stories + q.criativos + q.posts;
+  const featuresText = (plan.features as string[]).join(' | ').toLowerCase();
+  const hasSocialMedia = /social media/.test(featuresText);
+  const hasCRM = /crm/.test(featuresText);
+  const hasGMN = /google meu neg/.test(featuresText);
+  const hasTreinamento = /treinamento comercial/.test(featuresText);
+  const premiumHighlights = [
+    hasCRM && {
+      icon: MessageSquare,
+      badge: 'CRM Integrado',
+      title: 'Todas as conversas em UM só lugar',
+      desc: 'Instagram + Facebook + WhatsApp centralizados. Nenhum lead esquecido, nenhuma venda perdida por falta de resposta.',
+    },
+    hasGMN && {
+      icon: MapPin,
+      badge: 'Google Meu Negócio',
+      title: 'Apareça quando o cliente PROCURA você no Google',
+      desc: 'Perfil monitorado e otimizado: fotos, horários, avaliações e posts. É onde 90% das buscas locais convertem em cliente na porta.',
+    },
+    hasTreinamento && {
+      icon: GraduationCap,
+      badge: 'Treinamento Comercial',
+      title: 'Sua equipe vendendo como profissional',
+      desc: 'Treinamos seu time de vendas para receber o lead quente que a gente gera e transformar em contrato fechado. Não adianta gerar lead se ninguém sabe vender.',
+    },
+  ].filter(Boolean) as Array<{ icon: any; badge: string; title: string; desc: string }>;
   const highlights = [
     { icon: Film,      qty: q.reels,     unit: 'Reels',    sub: 'editados por videomakers profissionais', show: q.reels > 0 },
     { icon: ImageIcon, qty: q.artes,     unit: 'Artes',    sub: 'criadas pela nossa designer interna',    show: q.artes > 0 },
@@ -748,6 +772,30 @@ function StageDeliveries({ plan, categories }: { plan: any; categories: Category
           </div>
         )}
 
+        {/* TOTAL DE ENTREGAS */}
+        {totalEntregas > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}
+            className="mb-6 rounded-2xl border-2 border-primary/40 bg-gradient-to-r from-primary/15 via-primary/5 to-orange-500/10 px-5 py-4 flex items-center justify-between gap-3"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shadow-lg">
+                <Award className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold">Total de entregas por mês</div>
+                <div className="text-sm text-foreground/80 leading-snug">Somando reels, artes, stories e criativos de anúncio.</div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-4xl md:text-5xl font-black leading-none bg-gradient-to-br from-primary to-orange-600 bg-clip-text text-transparent" style={{ fontFamily: 'var(--font-display)' }}>
+                {totalEntregas}
+              </div>
+              <div className="text-[11px] uppercase tracking-wider font-bold text-primary">entregáveis/mês</div>
+            </div>
+          </motion.div>
+        )}
+
         {/* SOCIAL MEDIA DEDICADO, destaque exclusivo */}
         {hasSocialMedia && (
           <motion.div
@@ -770,12 +818,55 @@ function StageDeliveries({ plan, categories }: { plan: any; categories: Category
                   Uma profissional <span className="bg-gradient-to-r from-primary to-orange-500 bg-clip-text text-transparent">cuidando do seu Instagram todos os dias</span>
                 </h3>
                 <p className="text-xs md:text-sm text-muted-foreground leading-snug">
-                  Planejamento de conteúdo, postagens, respostas, interação com seguidores e acompanhamento de métricas — tudo feito por uma social media dedicada da nossa equipe.
+                  Planejamento de conteúdo, publicação de posts e stories, monitoramento de métricas e engajamento estratégico — feito por uma social media dedicada da nossa equipe. <strong className="text-foreground">O atendimento aos clientes continua com você;</strong> a social media cuida da presença e da imagem da marca.
                 </p>
               </div>
             </div>
           </motion.div>
         )}
+
+        {/* DESTAQUES COMERCIAIS: CRM + GMN + Treinamento */}
+        {premiumHighlights.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.65 }}
+            className="mb-6"
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-px flex-1 bg-border" />
+              <Badge className="bg-primary text-primary-foreground">
+                <Crown className="h-3 w-3 mr-1" /> O que faz esse plano vender de verdade
+              </Badge>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+            <div className={`grid gap-3 md:gap-4 ${premiumHighlights.length === 3 ? 'md:grid-cols-3' : premiumHighlights.length === 2 ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
+              {premiumHighlights.map((h, i) => (
+                <motion.div
+                  key={h.badge}
+                  initial={{ opacity: 0, y: 24, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ delay: 0.7 + i * 0.1, type: 'spring', stiffness: 110 }}
+                  className="relative overflow-hidden rounded-2xl border-2 border-primary/40 bg-gradient-to-br from-primary/10 via-card to-orange-500/10 p-5 shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all"
+                >
+                  <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full bg-primary/20 blur-3xl" />
+                  <div className="relative">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-orange-600 text-primary-foreground flex items-center justify-center shadow-lg mb-3">
+                      <h.icon className="h-6 w-6" />
+                    </div>
+                    <Badge className="bg-primary text-primary-foreground mb-2 text-[10px]">
+                      <Sparkles className="h-2.5 w-2.5 mr-1" /> {h.badge}
+                    </Badge>
+                    <h4 className="font-bold text-base md:text-lg leading-tight mb-1.5" style={{ fontFamily: 'var(--font-display)' }}>
+                      {h.title}
+                    </h4>
+                    <p className="text-xs md:text-sm text-muted-foreground leading-snug">{h.desc}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+
 
 
 
@@ -863,7 +954,7 @@ function StageDeliveries({ plan, categories }: { plan: any; categories: Category
         >
           <div className="flex items-center gap-2 mb-3">
             <div className="h-px flex-1 bg-border" />
-            <span className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Lista completa das {plan.features.length} entregas mensais</span>
+            <span className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Lista completa dos serviços inclusos</span>
             <div className="h-px flex-1 bg-border" />
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">

@@ -1451,9 +1451,9 @@ function StageComparison({ plan, pricing, promo }: { plan: any; pricing: any; pr
   const savingsPct = monthly > 0 ? Math.round((savingsMonthly / monthly) * 100) : 0;
 
   const pillars = [
-    { icon: Users, title: 'Time de 10 pessoas por trás do seu plano', desc: 'Designer, videomakers, editores, social media, gestor de tráfego, comercial e atendimento — todos coordenados por sistema próprio de gestão de tarefas.' },
-    { icon: Zap, title: 'Entrega em tempo recorde', desc: 'Sistema de gerenciamento com prazos, priorização e SLA. Nada perdido, nada travado — cada tarefa tem responsável e deadline.' },
-    { icon: Award, title: 'Contrato justo: sem cliente preso', desc: 'Se a Pulse não entregar o combinado, o cliente pode romper sem custo. O prazo do contrato existe apenas para diluir e viabilizar o valor mensal.' },
+    { icon: Users, title: 'Time de 10 especialistas', desc: 'Designer, videomakers, editores, social media, tráfego e comercial — todos dedicados ao seu resultado.' },
+    { icon: Zap, title: 'Gestão profissional de tarefas', desc: 'Sistema próprio com prazos, responsáveis e SLA. Cada entrega acompanhada em tempo real.' },
+    { icon: Award, title: 'Compromisso com entrega', desc: 'O contrato existe só para diluir o investimento e torná-lo acessível. Se não entregarmos o combinado, você não paga o que não recebeu.' },
   ];
 
   return (

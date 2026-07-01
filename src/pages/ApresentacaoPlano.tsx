@@ -65,6 +65,7 @@ export default function ApresentacaoPlano() {
   const [promo, setPromo] = useState<any | null>(null);
   const [semPromo, setSemPromo] = useState<any | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const isMobile = useIsMobile();
 
   const toggleFullscreen = async () => {
     try {

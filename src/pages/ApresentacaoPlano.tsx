@@ -1538,7 +1538,7 @@ function StageComparison({ plan, pricing, promo }: { plan: any; pricing: any; pr
                 {brl(savingsMonthly)}/mês
               </div>
               <div className="text-xs md:text-sm opacity-95">
-                {savingsPct}% mais barato que contratar tudo separado.
+                {savingsPct}% mais barato que contratar avulso.
               </div>
               <div className="mt-3 pt-3 border-t border-white/20 space-y-0.5">
                 <div className="flex items-center justify-between text-[11px] md:text-xs opacity-95">

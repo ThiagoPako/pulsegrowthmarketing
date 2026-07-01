@@ -51,8 +51,8 @@ function categorizeFeatures(features: string[]): Category[] {
   return Object.values(buckets).filter((b) => b.items.length > 0);
 }
 
-// stages: 4 sem promo, 6 com promo (preço normal → storytelling promo → preço com promo)
-const getTotalStages = (hasPromo: boolean) => (hasPromo ? 6 : 4);
+// stages: 5 sem promo, 7 com promo (preço normal → storytelling promo → preço com promo → comparativo)
+const getTotalStages = (hasPromo: boolean) => (hasPromo ? 7 : 5);
 
 export default function ApresentacaoPlano() {
   const { plano } = useParams<{ plano: string }>();

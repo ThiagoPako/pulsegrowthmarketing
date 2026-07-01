@@ -213,6 +213,7 @@ export default function ApresentacaoPlano() {
       pricing && <StageInvest key="s3" plan={plan} pricing={pricing} promo={promo} applyPromo={false} />,
       promo && <StagePromoStory key="s4" plan={plan} promo={promo} />,
       promo && pricing && <StageInvest key="s5" plan={plan} pricing={pricing} promo={promo} applyPromo={true} />,
+      pricing && <StageComparison key="s6" plan={plan} pricing={pricing} promo={promo} />,
     ].filter(Boolean);
 
     return (

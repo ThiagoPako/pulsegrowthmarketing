@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { getPlan, PLANS } from '@/data/plans';
 import { useCity } from '@/contexts/CityContext';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const WHATSAPP_NUMBER = '5562985382981';
 const LOGO_URL = '/pulse-logo.png';

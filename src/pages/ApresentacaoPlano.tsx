@@ -693,7 +693,32 @@ const DIFFERENTIALS = [
 
 function StageDeliveries({ plan, categories }: { plan: any; categories: Category[] }) {
   const q = getQuantities(plan.key);
-  const hasSocialMedia = (plan.features as string[]).some((f) => /social media/i.test(f));
+  const totalEntregas = q.reels + q.artes + q.stories + q.criativos + q.posts;
+  const featuresText = (plan.features as string[]).join(' | ').toLowerCase();
+  const hasSocialMedia = /social media/.test(featuresText);
+  const hasCRM = /crm/.test(featuresText);
+  const hasGMN = /google meu neg/.test(featuresText);
+  const hasTreinamento = /treinamento comercial/.test(featuresText);
+  const premiumHighlights = [
+    hasCRM && {
+      icon: MessageSquare,
+      badge: 'CRM Integrado',
+      title: 'Todas as conversas em UM só lugar',
+      desc: 'Instagram + Facebook + WhatsApp centralizados. Nenhum lead esquecido, nenhuma venda perdida por falta de resposta.',
+    },
+    hasGMN && {
+      icon: MapPin,
+      badge: 'Google Meu Negócio',
+      title: 'Apareça quando o cliente PROCURA você no Google',
+      desc: 'Perfil monitorado e otimizado: fotos, horários, avaliações e posts. É onde 90% das buscas locais convertem em cliente na porta.',
+    },
+    hasTreinamento && {
+      icon: GraduationCap,
+      badge: 'Treinamento Comercial',
+      title: 'Sua equipe vendendo como profissional',
+      desc: 'Treinamos seu time de vendas para receber o lead quente que a gente gera e transformar em contrato fechado. Não adianta gerar lead se ninguém sabe vender.',
+    },
+  ].filter(Boolean) as Array<{ icon: any; badge: string; title: string; desc: string }>;
   const highlights = [
     { icon: Film,      qty: q.reels,     unit: 'Reels',    sub: 'editados por videomakers profissionais', show: q.reels > 0 },
     { icon: ImageIcon, qty: q.artes,     unit: 'Artes',    sub: 'criadas pela nossa designer interna',    show: q.artes > 0 },

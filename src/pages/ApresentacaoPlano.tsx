@@ -862,7 +862,7 @@ function StageDeliveries({ plan, categories }: { plan: any; categories: Category
         >
           <div className="flex items-center gap-2 mb-3">
             <div className="h-px flex-1 bg-border" />
-            <span className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Lista completa das {plan.features.length} entregas mensais</span>
+            <span className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Lista completa dos serviços inclusos</span>
             <div className="h-px flex-1 bg-border" />
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">

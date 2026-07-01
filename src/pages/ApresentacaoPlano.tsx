@@ -1485,7 +1485,7 @@ function StageComparison({ plan, pricing, promo }: { plan: any; pricing: any; pr
           >
             <div className="px-4 py-3 border-b border-border bg-muted/40 flex items-center gap-2">
               <BarChart3 className="h-4 w-4 text-primary" />
-              <div className="font-semibold text-sm md:text-base">Contratação avulsa (fora da Pulse)</div>
+              <div className="font-semibold text-sm md:text-base">Contratação avulsa na Pulse</div>
             </div>
             <div className="divide-y divide-border">
               {services.map((s, i) => (

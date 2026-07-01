@@ -825,6 +825,49 @@ function StageDeliveries({ plan, categories }: { plan: any; categories: Category
           </motion.div>
         )}
 
+        {/* DESTAQUES COMERCIAIS: CRM + GMN + Treinamento */}
+        {premiumHighlights.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.65 }}
+            className="mb-6"
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-px flex-1 bg-border" />
+              <Badge className="bg-primary text-primary-foreground">
+                <Crown className="h-3 w-3 mr-1" /> O que faz esse plano vender de verdade
+              </Badge>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+            <div className={`grid gap-3 md:gap-4 ${premiumHighlights.length === 3 ? 'md:grid-cols-3' : premiumHighlights.length === 2 ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
+              {premiumHighlights.map((h, i) => (
+                <motion.div
+                  key={h.badge}
+                  initial={{ opacity: 0, y: 24, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ delay: 0.7 + i * 0.1, type: 'spring', stiffness: 110 }}
+                  className="relative overflow-hidden rounded-2xl border-2 border-primary/40 bg-gradient-to-br from-primary/10 via-card to-orange-500/10 p-5 shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all"
+                >
+                  <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full bg-primary/20 blur-3xl" />
+                  <div className="relative">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-orange-600 text-primary-foreground flex items-center justify-center shadow-lg mb-3">
+                      <h.icon className="h-6 w-6" />
+                    </div>
+                    <Badge className="bg-primary text-primary-foreground mb-2 text-[10px]">
+                      <Sparkles className="h-2.5 w-2.5 mr-1" /> {h.badge}
+                    </Badge>
+                    <h4 className="font-bold text-base md:text-lg leading-tight mb-1.5" style={{ fontFamily: 'var(--font-display)' }}>
+                      {h.title}
+                    </h4>
+                    <p className="text-xs md:text-sm text-muted-foreground leading-snug">{h.desc}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+
+
 
 
         {/* DIFERENCIAIS, gatilhos do time */}

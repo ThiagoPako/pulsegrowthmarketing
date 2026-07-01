@@ -769,7 +769,7 @@ function StageDeliveries({ plan, categories }: { plan: any; categories: Category
                   Uma profissional <span className="bg-gradient-to-r from-primary to-orange-500 bg-clip-text text-transparent">cuidando do seu Instagram todos os dias</span>
                 </h3>
                 <p className="text-xs md:text-sm text-muted-foreground leading-snug">
-                  Planejamento de conteúdo, postagens, respostas, interação com seguidores e acompanhamento de métricas — tudo feito por uma social media dedicada da nossa equipe.
+                  Planejamento de conteúdo, publicação de posts e stories, monitoramento de métricas e engajamento estratégico — feito por uma social media dedicada da nossa equipe. <strong className="text-foreground">O atendimento aos clientes continua com você;</strong> a social media cuida da presença e da imagem da marca.
                 </p>
               </div>
             </div>

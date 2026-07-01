@@ -615,7 +615,7 @@ function StagePlan({ plan, Icon }: { plan: any; Icon: any }) {
 
           {/* Stats com gatilho */}
           <div className="pt-5 border-t border-border grid grid-cols-3 gap-3 text-center">
-            <Stat icon={Award} label="Entregas/mês" value={plan.features.length} highlight />
+            <Stat icon={Award} label="Entregas/mês" value={(() => { const q = getQuantities(plan.key); return q.reels + q.artes + q.stories + q.criativos + q.posts; })()} highlight />
             <Stat icon={Zap} label="Time" value="Dedicado" />
             <Stat icon={TrendingUp} label="Foco" value="Crescer" />
           </div>

@@ -51,8 +51,8 @@ function categorizeFeatures(features: string[]): Category[] {
   return Object.values(buckets).filter((b) => b.items.length > 0);
 }
 
-// stages: 4 sem promo, 6 com promo (preço normal → storytelling promo → preço com promo)
-const getTotalStages = (hasPromo: boolean) => (hasPromo ? 6 : 4);
+// stages: 5 sem promo, 7 com promo (preço normal → storytelling promo → preço com promo → comparativo)
+const getTotalStages = (hasPromo: boolean) => (hasPromo ? 7 : 5);
 
 export default function ApresentacaoPlano() {
   const { plano } = useParams<{ plano: string }>();
@@ -213,6 +213,7 @@ export default function ApresentacaoPlano() {
       pricing && <StageInvest key="s3" plan={plan} pricing={pricing} promo={promo} applyPromo={false} />,
       promo && <StagePromoStory key="s4" plan={plan} promo={promo} />,
       promo && pricing && <StageInvest key="s5" plan={plan} pricing={pricing} promo={promo} applyPromo={true} />,
+      pricing && <StageComparison key="s6" plan={plan} pricing={pricing} promo={promo} />,
     ].filter(Boolean);
 
     return (
@@ -345,6 +346,9 @@ export default function ApresentacaoPlano() {
               </div>
             </>
           )}
+          <div className="h-full w-full px-3 md:px-8 flex items-start md:items-center justify-center overflow-y-auto">
+            {pricing && <StageComparison plan={plan} pricing={pricing} promo={promo} />}
+          </div>
         </motion.div>
       </div>
 
@@ -1381,5 +1385,187 @@ function Row({ label, value, dark }: { label: string; value: React.ReactNode; da
       <span className={dark ? 'opacity-90' : 'text-muted-foreground'}>{label}</span>
       <span>{value}</span>
     </div>
+  );
+}
+
+// ==================== STAGE: COMPARATIVO DE SERVIÇOS AVULSOS ====================
+type Svc = { name: string; qty: number; unit: string; unitPrice: number; oneTime?: boolean; note?: string };
+
+function buildServicesForPlan(planKey: string): Svc[] {
+  const REELS = 350, ARTE = 70, TRAFEGO = 1500, SOCIAL = 850, IMPL_ADS = 700, REFORM = 700,
+        CRM_MES = 367, CRM_IMPL = 900, EVENTO = 1700, TREINO = 2750; // média 2500-3000
+
+  switch (planKey) {
+    case 'starter':
+      return [
+        { name: 'Reels profissionais', qty: 4, unit: 'reels/mês', unitPrice: REELS },
+        { name: 'Artes para feed/stories', qty: 2, unit: 'artes/mês', unitPrice: ARTE },
+        { name: 'Gestão de tráfego pago', qty: 1, unit: 'mês', unitPrice: TRAFEGO },
+        { name: 'Implementação de contas de anúncios', qty: 1, unit: 'única', unitPrice: IMPL_ADS, oneTime: true },
+      ];
+    case 'boost':
+      return [
+        { name: 'Reels profissionais', qty: 6, unit: 'reels/mês', unitPrice: REELS },
+        { name: 'Artes + posts', qty: 6, unit: 'artes/mês', unitPrice: ARTE },
+        { name: 'Reformulação completa de perfil', qty: 1, unit: 'única', unitPrice: REFORM, oneTime: true },
+        { name: 'Social media dedicado', qty: 1, unit: 'perfil/mês', unitPrice: SOCIAL },
+        { name: 'Gestão de tráfego (Google + Meta)', qty: 1, unit: 'mês', unitPrice: TRAFEGO },
+        { name: 'Implementação de contas de anúncios', qty: 1, unit: 'única', unitPrice: IMPL_ADS, oneTime: true },
+      ];
+    case 'premium':
+      return [
+        { name: 'Reels profissionais', qty: 8, unit: 'reels/mês', unitPrice: REELS },
+        { name: 'Artes mensais', qty: 6, unit: 'artes/mês', unitPrice: ARTE },
+        { name: 'Social media dedicado', qty: 1, unit: 'perfil/mês', unitPrice: SOCIAL },
+        { name: 'Gestão de tráfego avançada', qty: 1, unit: 'mês', unitPrice: TRAFEGO },
+        { name: 'CRM AtendeClique (Face + Insta + WhatsApp)', qty: 1, unit: 'mês', unitPrice: CRM_MES },
+        { name: 'Implementação do CRM', qty: 1, unit: 'única', unitPrice: CRM_IMPL, oneTime: true },
+        { name: 'Treinamento comercial + acompanhamento', qty: 1, unit: 'mês', unitPrice: TREINO },
+      ];
+    case 'elite':
+      return [
+        { name: 'Reels profissionais', qty: 12, unit: 'reels/mês', unitPrice: REELS },
+        { name: 'Artes mensais', qty: 8, unit: 'artes/mês', unitPrice: ARTE },
+        { name: 'Social media dedicado', qty: 1, unit: 'perfil/mês', unitPrice: SOCIAL },
+        { name: 'Gestão de tráfego premium (Google + Meta)', qty: 1, unit: 'mês', unitPrice: TRAFEGO },
+        { name: 'CRM AtendeClique (Face + Insta + WhatsApp)', qty: 1, unit: 'mês', unitPrice: CRM_MES },
+        { name: 'Implementação do CRM', qty: 1, unit: 'única', unitPrice: CRM_IMPL, oneTime: true },
+        { name: 'Treinamento comercial recorrente', qty: 1, unit: 'mês', unitPrice: TREINO },
+        { name: 'Cobertura de evento (3h + reels final)', qty: 1, unit: 'evento', unitPrice: EVENTO, oneTime: true, note: 'quando houver ação/lançamento' },
+      ];
+    default:
+      return [];
+  }
+}
+
+function StageComparison({ plan, pricing, promo }: { plan: any; pricing: any; promo: any }) {
+  const services = buildServicesForPlan(plan.key);
+  const monthly = services.filter((s) => !s.oneTime).reduce((acc, s) => acc + s.qty * s.unitPrice, 0);
+  const oneTime = services.filter((s) => s.oneTime).reduce((acc, s) => acc + s.qty * s.unitPrice, 0);
+
+  const planMonthly = promo && pricing.promoAnualMes ? pricing.promoAnualMes : pricing.an;
+  const savingsMonthly = Math.max(monthly - planMonthly, 0);
+  const savingsPct = monthly > 0 ? Math.round((savingsMonthly / monthly) * 100) : 0;
+
+  const pillars = [
+    { icon: Users, title: 'Time de 10 pessoas por trás do seu plano', desc: 'Designer, videomakers, editores, social media, gestor de tráfego, comercial e atendimento — todos coordenados por sistema próprio de gestão de tarefas.' },
+    { icon: Zap, title: 'Entrega em tempo recorde', desc: 'Sistema de gerenciamento com prazos, priorização e SLA. Nada perdido, nada travado — cada tarefa tem responsável e deadline.' },
+    { icon: Award, title: 'Contrato justo: sem cliente preso', desc: 'Se a Pulse não entregar o combinado, o cliente pode romper sem custo. O prazo do contrato existe apenas para diluir e viabilizar o valor mensal.' },
+  ];
+
+  return (
+    <Slide>
+      <div className="w-full max-w-6xl">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ type: 'spring', stiffness: 200, damping: 18 }}
+          className="text-center mb-6"
+        >
+          <Badge variant="outline" className="mb-3 uppercase tracking-wider text-[10px] md:text-xs">
+            <PiggyBank className="h-3.5 w-3.5 mr-1" /> Comparativo real de mercado
+          </Badge>
+          <h2 className="text-3xl md:text-5xl font-extrabold leading-tight" style={{ fontFamily: 'var(--font-display)' }}>
+            E se você contratasse <br className="md:hidden" />
+            <span className="bg-gradient-to-r from-primary via-orange-500 to-red-500 bg-clip-text text-transparent">
+              cada serviço separado?
+            </span>
+          </h2>
+          <p className="mt-2 text-sm md:text-base text-muted-foreground max-w-3xl mx-auto">
+            Preços reais praticados no mercado. Somando tudo que está incluso no <strong className="text-foreground">{plan.name}</strong>, veja quanto sairia.
+          </p>
+        </motion.div>
+
+        <div className="grid lg:grid-cols-5 gap-4 md:gap-6">
+          {/* Tabela de serviços */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }}
+            className="lg:col-span-3 rounded-2xl border border-border bg-card overflow-hidden"
+          >
+            <div className="px-4 py-3 border-b border-border bg-muted/40 flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-primary" />
+              <div className="font-semibold text-sm md:text-base">Contratação avulsa (fora da Pulse)</div>
+            </div>
+            <div className="divide-y divide-border">
+              {services.map((s, i) => (
+                <motion.div
+                  key={s.name}
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + i * 0.04 }}
+                  className="px-4 py-3 flex items-start justify-between gap-3 hover:bg-muted/30 transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-sm md:text-base">{s.name}</div>
+                    <div className="text-[11px] md:text-xs text-muted-foreground">
+                      {s.qty} × {brl(s.unitPrice)} / {s.unit}
+                      {s.note && <span className="ml-1 italic">({s.note})</span>}
+                      {s.oneTime && <span className="ml-1 text-orange-600 font-semibold">• pagamento único</span>}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-bold text-sm md:text-base tabular-nums">{brl(s.qty * s.unitPrice)}</div>
+                    <div className="text-[10px] md:text-xs text-muted-foreground">{s.oneTime ? 'setup' : '/ mês'}</div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+            <div className="px-4 py-3 border-t border-border bg-muted/40 space-y-1">
+              <Row label="Total mensal avulso" value={<span className="font-bold tabular-nums">{brl(monthly)}/mês</span>} />
+              {oneTime > 0 && <Row label="Setup / one-time" value={<span className="font-bold tabular-nums">{brl(oneTime)}</span>} />}
+            </div>
+          </motion.div>
+
+          {/* Card economia + plano Pulse */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25 }}
+            className="lg:col-span-2 rounded-2xl border-2 border-primary/60 bg-gradient-to-br from-primary/10 via-orange-500/5 to-transparent p-5 md:p-6 flex flex-col shadow-xl shadow-primary/10"
+          >
+            <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Com o {plan.name}</div>
+            <div className="mt-1 text-4xl md:text-5xl font-extrabold tabular-nums" style={{ fontFamily: 'var(--font-display)' }}>
+              {brl(planMonthly)}
+              <span className="text-base md:text-lg font-medium text-muted-foreground">/mês</span>
+            </div>
+            <div className="mt-1 text-xs md:text-sm text-muted-foreground line-through tabular-nums">
+              Avulso: {brl(monthly)}/mês
+            </div>
+
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.5, type: 'spring' }}
+              className="mt-4 rounded-xl bg-gradient-to-r from-primary to-orange-500 text-white p-4 shadow-lg"
+            >
+              <div className="text-[10px] md:text-xs uppercase tracking-wider opacity-90 font-semibold">Você economiza</div>
+              <div className="text-2xl md:text-3xl font-extrabold tabular-nums" style={{ fontFamily: 'var(--font-display)' }}>
+                {brl(savingsMonthly)}/mês
+              </div>
+              <div className="text-xs md:text-sm opacity-95">
+                {savingsPct}% mais barato que contratar tudo separado.
+              </div>
+            </motion.div>
+
+            <div className="mt-4 text-xs md:text-sm text-muted-foreground leading-relaxed">
+              Sem contar coordenação, gestão de qualidade, retrabalho, prazos e o risco de cada fornecedor entregar em ritmo diferente.
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Pilares: time + contrato */}
+        <div className="grid md:grid-cols-3 gap-3 md:gap-4 mt-5">
+          {pillars.map((p, i) => {
+            const PIcon = p.icon;
+            return (
+              <motion.div
+                key={p.title}
+                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.55 + i * 0.1, type: 'spring', stiffness: 160, damping: 18 }}
+                className="rounded-2xl border border-border bg-card p-4 md:p-5 hover:border-primary/50 transition-colors"
+              >
+                <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-orange-500 text-white flex items-center justify-center mb-2 shadow-md">
+                  <PIcon className="h-5 w-5" />
+                </div>
+                <div className="font-bold text-sm md:text-base mb-1">{p.title}</div>
+                <div className="text-xs md:text-sm text-muted-foreground leading-relaxed">{p.desc}</div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+    </Slide>
   );
 }

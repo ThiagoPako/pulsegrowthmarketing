@@ -346,6 +346,9 @@ export default function ApresentacaoPlano() {
               </div>
             </>
           )}
+          <div className="h-full w-full px-3 md:px-8 flex items-start md:items-center justify-center overflow-y-auto">
+            {pricing && <StageComparison plan={plan} pricing={pricing} promo={promo} />}
+          </div>
         </motion.div>
       </div>
 

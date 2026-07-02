@@ -12,7 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import {
   Film, Megaphone, Image, Palette, ExternalLink, Clock, AlertTriangle,
-  Check, Eye, Search, Scissors, Send, Link2, Flag, X, Rocket, Lightbulb
+  Check, Eye, Search, Scissors, Send, Link2, Flag, X, Rocket, Lightbulb, Layers
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
@@ -22,6 +22,8 @@ import { format, differenceInHours, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 import { motion, AnimatePresence } from 'framer-motion';
+import EditorTaskDetail from '@/components/editor/EditorTaskDetail';
+import type { EditorTask as EditorTaskFull } from '@/pages/EditorDashboard';
 
 const CONTENT_TYPES = [
   { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400', points: 10 },

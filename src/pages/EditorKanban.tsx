@@ -12,7 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import {
   Film, Megaphone, Image, Palette, ExternalLink, Clock, AlertTriangle,
-  Check, Eye, Search, Scissors, Send, Link2, Flag, X, Rocket
+  Check, Eye, Search, Scissors, Send, Link2, Flag, X, Rocket, Lightbulb
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
@@ -106,6 +106,17 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
   const isReview = task.kanban_column === 'revisao';
   const isMine = task.assigned_to === currentUserId;
   const isOptimize = task.content_type === 'otimizacao';
+  const [formatsOpen, setFormatsOpen] = useState(false);
+  const OPT_FORMATS = [
+    { title: '🎣 Gancho em Áudio + Takes', desc: 'Use a melhor frase do reel como gancho e cubra com takes soltos.', tip: 'Ideal para Story de 15s.' },
+    { title: '🎬 Mashup Multi-Vídeos', desc: 'Combine trechos de vários reels do cliente em um só.', tip: 'Ótimo pra criativo de anúncio.' },
+    { title: '⚡ Corte Rápido (Hook 3s)', desc: 'Comece com o clímax do vídeo nos primeiros 3s.', tip: 'Prende atenção no feed.' },
+    { title: '📱 Vertical Story Nativo', desc: 'Adapte pro formato 9:16 com stickers e enquetes.', tip: 'Aumenta interação.' },
+    { title: '💬 Legenda em Destaque', desc: 'Coloque a fala principal em texto grande na tela.', tip: 'Funciona sem áudio.' },
+    { title: '🔁 Loop Perfeito', desc: 'Faça o final conectar com o começo pra rodar em loop.', tip: 'Mais tempo de watch.' },
+    { title: '📊 Antes x Depois', desc: 'Mostre transformação/comparação usando os takes.', tip: 'Alto engajamento.' },
+    { title: '🎯 CTA Forte', desc: 'Reforce a chamada pra ação nos últimos 2s.', tip: 'Converte mais.' },
+  ];
 
   return (
     <div draggable onDragStart={e => onDragStart(e, task)}
@@ -157,6 +168,29 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
           )}
         </div>
         <p className="text-sm font-semibold text-foreground leading-tight">{task.title}</p>
+
+        {/* Optimization rocket guide + formats */}
+        {isOptimize && (
+          <div className="rounded-lg border border-fuchsia-400/40 bg-gradient-to-br from-fuchsia-500/10 to-violet-500/10 p-2.5 space-y-2">
+            <div className="flex gap-2">
+              <div className="shrink-0 w-7 h-7 rounded-full bg-gradient-to-br from-fuchsia-500 to-violet-500 flex items-center justify-center shadow shadow-fuchsia-500/40 animate-pulse">
+                <Rocket size={13} className="text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-black text-fuchsia-700 dark:text-fuchsia-300 leading-tight">Ei, editor! Bora otimizar? 🚀</p>
+                <p className="text-[10px] text-foreground/75 leading-snug mt-0.5">
+                  Esse é um <b>Reel aprovado</b>. Reaproveita as gravações e gera <b>Stories, Criativos ou cortes extras</b> a partir dele. ✨
+                </p>
+              </div>
+            </div>
+            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setFormatsOpen(true); }}
+              className="w-full h-7 text-[10px] gap-1 border-fuchsia-400/50 text-fuchsia-700 dark:text-fuchsia-300 hover:bg-fuchsia-500/10">
+              <Lightbulb size={11} /> Ver formatos de otimização
+            </Button>
+          </div>
+        )}
+
+
         
         {/* Script alteration badges */}
         {(task as any).script_alteration_type === 'altered' && (
@@ -320,9 +354,36 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
           </motion.div>
         )}
       </div>
+
+      {/* Formats dialog */}
+      {isOptimize && (
+        <Dialog open={formatsOpen} onOpenChange={setFormatsOpen}>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Lightbulb size={18} className="text-fuchsia-500" /> Formatos de Otimização
+              </DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {OPT_FORMATS.map((f, i) => (
+                <div key={i} className="rounded-lg border border-fuchsia-400/30 bg-gradient-to-br from-fuchsia-500/5 to-violet-500/5 p-3">
+                  <p className="text-sm font-bold text-foreground mb-1">{f.title}</p>
+                  <p className="text-xs text-foreground/80 mb-1.5">{f.desc}</p>
+                  <p className="text-[10px] text-fuchsia-600 dark:text-fuchsia-300 font-semibold">💡 {f.tip}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+              <p className="text-xs font-bold text-amber-700 dark:text-amber-400">⭐ Regra de ouro</p>
+              <p className="text-[11px] text-foreground/80 mt-1">Gancho nos primeiros 3s, corte a cada 1-2s pra manter ritmo, e sempre feche com CTA claro.</p>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
+
 
 export default function EditorKanban() {
   const { clients, scripts, users } = useApp();

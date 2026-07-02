@@ -480,7 +480,13 @@ export default function ClientPortal() {
     institucional: 'Vídeos Institucionais',
     anuncio: 'Anúncios',
     arte: 'Artes & Design',
+    otimizacao: '🚀 Conteúdos Otimizados',
   };
+
+  const optimizedContents = useMemo(
+    () => visibleContents.filter(c => c.content_type === 'otimizacao'),
+    [visibleContents]
+  );
 
   return (
     <div className="min-h-screen bg-[#080810] text-white selection:bg-white/20 overflow-x-hidden">

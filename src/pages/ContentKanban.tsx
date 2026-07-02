@@ -1791,6 +1791,12 @@ function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, lin
             <span className="text-[9px] font-bold text-white uppercase tracking-widest">🚨 Imediato</span>
           </div>
         )}
+        {task.content_type === 'otimizacao' && (
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-fuchsia-500 via-pink-500 to-violet-500 animate-pulse shadow-lg shadow-fuchsia-500/40">
+            <Rocket size={11} className="text-white animate-bounce" />
+            <span className="text-[9px] font-black text-white uppercase tracking-[0.2em]">Otimizar</span>
+          </div>
+        )}
 
         {/* Actions on hover */}
         {!viewOnly && (

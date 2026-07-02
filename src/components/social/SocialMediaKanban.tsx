@@ -248,6 +248,7 @@ export default function SocialMediaKanban({
   onTogglePriority,
   sendingWhatsApp,
   onDragMove,
+  onDelete,
   highlightTaskId,
 }: SocialMediaKanbanProps) {
   const [showRocket, setShowRocket] = useState(false);

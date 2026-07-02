@@ -437,15 +437,37 @@ export default function InternalReports() {
       {/* Period filter */}
       <Card>
         <CardContent className="p-4 flex flex-wrap gap-4 items-end">
-          <div className="space-y-1">
+          <div className="space-y-2 w-full">
             <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Período</Label>
-            <div className="flex gap-1.5">
-              {([['week', 'Semanal'], ['month', 'Mensal'], ['previous_month', 'Mês anterior']] as const).map(([val, lbl]) => (
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                ['today', 'Hoje'],
+                ['week', 'Semana'],
+                ['month', 'Mês'],
+                ['previous_month', 'Mês anterior'],
+                ['all', 'Tudo'],
+                ['custom', 'Período'],
+              ] as const).map(([val, lbl]) => (
                 <Button key={val} variant={periodType === val ? 'default' : 'outline'} size="sm" onClick={() => setPeriodType(val)}>
                   {lbl}
                 </Button>
               ))}
             </div>
+            {periodType === 'custom' && (
+              <div className="flex flex-wrap gap-3 items-end pt-1">
+                <div>
+                  <Label className="text-xs">De</Label>
+                  <Input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="w-40" />
+                </div>
+                <div>
+                  <Label className="text-xs">Até</Label>
+                  <Input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="w-40" />
+                </div>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {dateRange.start} → {dateRange.end}
+            </p>
           </div>
         </CardContent>
       </Card>

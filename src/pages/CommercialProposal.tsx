@@ -30,7 +30,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import ScopeDescription from '@/components/ScopeDescription';
 
-type ProposalType = 'marketing' | 'sistema' | 'endomarketing' | 'personalizada' | 'cronograma';
+type ProposalType = 'marketing' | 'sistema' | 'endomarketing' | 'personalizada' | 'cronograma' | 'videos';
 
 interface BonusService {
   id: string;
@@ -97,6 +97,7 @@ const PROPOSAL_TYPE_LABELS: Record<ProposalType, string> = {
   endomarketing: 'Endomarketing',
   personalizada: 'Proposta Única',
   cronograma: 'Cronograma Completo',
+  videos: 'Vídeos Avulsos',
 };
 
 const PAYMENT_METHODS = [
@@ -265,6 +266,17 @@ export default function CommercialProposal() {
   const [cronogramaTotalCustomValue, setCronogramaTotalCustomValue] = useState('');
   const [generatingTimeline, setGeneratingTimeline] = useState(false);
 
+  // Videos avulsos fields
+  const [videosQty, setVideosQty] = useState('4');
+  const [videosUnitPrice, setVideosUnitPrice] = useState('350');
+  const [videosDeliveryDays, setVideosDeliveryDays] = useState('15');
+  const [videosDescription, setVideosDescription] = useState('');
+  const [videosExtras, setVideosExtras] = useState<{ id: string; name: string; value: number }[]>([]);
+  const [newVideosExtraName, setNewVideosExtraName] = useState('');
+  const [newVideosExtraValue, setNewVideosExtraValue] = useState('');
+  const [videosPaymentMethod, setVideosPaymentMethod] = useState('pix');
+  const [videosInstallments, setVideosInstallments] = useState('1');
+
   // ── Clear proposal ──
   const DRAFT_KEY = 'pulse_proposal_draft';
   const clearProposal = useCallback(() => {
@@ -297,6 +309,10 @@ export default function CommercialProposal() {
     setCronogramaMethodology(''); setCronogramaProjectName('');
     setCronogramaTotalDays(''); setCronogramaPaymentMethod('pix'); setCronogramaInstallments('1');
     setCronogramaPricingMode('individual'); setCronogramaTotalCustomValue('');
+    setVideosQty('4'); setVideosUnitPrice('350'); setVideosDeliveryDays('15');
+    setVideosDescription(''); setVideosExtras([]);
+    setNewVideosExtraName(''); setNewVideosExtraValue('');
+    setVideosPaymentMethod('pix'); setVideosInstallments('1');
     setEditingProposalId(null);
     setShareLink('');
     localStorage.removeItem(DRAFT_KEY);
@@ -373,6 +389,16 @@ export default function CommercialProposal() {
         setCronogramaTotalCustomValue(sys.totalValue != null ? String(sys.totalValue) : '');
         setSelectedIncludedServices(Array.isArray(sys.selectedIncludedServices) ? sys.selectedIncludedServices : []);
         setContractDuration(sys.contractDuration || 'semestral');
+      }
+      // Videos
+      if (p.proposal_type === 'videos') {
+        setVideosQty(sys.quantity != null ? String(sys.quantity) : '4');
+        setVideosUnitPrice(sys.unitPrice != null ? String(sys.unitPrice) : '350');
+        setVideosDeliveryDays(sys.deliveryDays != null ? String(sys.deliveryDays) : '15');
+        setVideosDescription(sys.description || '');
+        setVideosExtras(Array.isArray(sys.extras) ? sys.extras : []);
+        setVideosPaymentMethod(sys.paymentMethod || 'pix');
+        setVideosInstallments(String(sys.installments || '1'));
       }
       if (p.token) setShareLink(`${window.location.origin}/proposta/${p.token}`);
       setShowSavedProposals(false);
@@ -699,6 +725,8 @@ export default function CommercialProposal() {
     if (proposalType === 'personalizada' && !customMonthlyValue) { toast.error('Preencha o valor da proposta'); return; }
     if (proposalType === 'cronograma' && cronogramaDeliverables.length === 0) { toast.error('Gere ou adicione entregas ao cronograma'); return; }
     if (proposalType === 'cronograma' && cronogramaPricingMode === 'total' && !cronogramaTotalCustomValue) { toast.error('Informe o valor total do serviço'); return; }
+    if (proposalType === 'videos' && (parseInt(videosQty) || 0) <= 0) { toast.error('Informe a quantidade de vídeos'); return; }
+    if (proposalType === 'videos' && (parseFloat(videosUnitPrice) || 0) <= 0) { toast.error('Informe o valor unitário do vídeo'); return; }
     setSavingProposal(true);
     try {
       const systemData = proposalType === 'sistema' ? {
@@ -755,9 +783,24 @@ export default function CommercialProposal() {
         contractDuration,
       } : {};
 
+      const videosExtrasTotal = videosExtras.reduce((s, e) => s + (Number(e.value) || 0), 0);
+      const videosBaseTotal = (parseInt(videosQty) || 0) * (parseFloat(videosUnitPrice) || 0);
+      const videosData = proposalType === 'videos' ? {
+        quantity: parseInt(videosQty) || 0,
+        unitPrice: parseFloat(videosUnitPrice) || 0,
+        deliveryDays: parseInt(videosDeliveryDays) || 15,
+        description: videosDescription,
+        extras: videosExtras,
+        paymentMethod: videosPaymentMethod,
+        installments: parseInt(videosInstallments) || 1,
+        totalValue: videosBaseTotal + videosExtrasTotal,
+      } : {};
+
       let saveSystemData: any = systemData;
       if (proposalType === 'personalizada') saveSystemData = customData;
       if (proposalType === 'cronograma') saveSystemData = cronogramaData;
+      if (proposalType === 'videos') saveSystemData = videosData;
+
 
       // Enrich team members with the freshest avatarUrl from current users list
       // to guarantee that the photos rendered in the preview also persist on the
@@ -866,6 +909,13 @@ export default function CommercialProposal() {
         if (discount > 0) totalValue = totalValue * (1 - discount / 100);
         installments = crono.installments || 1;
         description = `Cronograma - ${proposal.client_company}`;
+      } else if (pType === 'videos') {
+        const vid = proposal.system_data || {};
+        totalValue = vid.totalValue || ((vid.quantity || 0) * (vid.unitPrice || 0));
+        const discount = proposal.custom_discount || 0;
+        if (discount > 0) totalValue = totalValue * (1 - discount / 100);
+        installments = vid.installments || 1;
+        description = `Vídeos Avulsos - ${proposal.client_company}`;
       }
 
       if (totalValue <= 0) return;
@@ -929,6 +979,7 @@ export default function CommercialProposal() {
     endomarketing: Megaphone,
     personalizada: Target,
     cronograma: CalendarDays,
+    videos: Film,
   };
 
   // ===== RENDER FORM SECTIONS =====
@@ -1724,7 +1775,141 @@ export default function CommercialProposal() {
     );
   };
 
+  const renderVideosForm = () => {
+    const qty = parseInt(videosQty) || 0;
+    const unit = parseFloat(videosUnitPrice) || 0;
+    const extrasTotal = videosExtras.reduce((s, e) => s + (Number(e.value) || 0), 0);
+    const base = qty * unit;
+    const total = base + extrasTotal;
+    const installments = parseInt(videosInstallments) || 1;
+    const parcela = installments > 0 ? total / installments : total;
+    return (
+      <>
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Film className="h-4 w-4 text-primary" /> Vídeos Avulsos
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-xs text-muted-foreground">
+              Cada Reels inclui: <strong className="text-foreground">Captação profissional</strong>, <strong className="text-foreground">Direção de cena</strong>, <strong className="text-foreground">Roteiro estratégico</strong> e <strong className="text-foreground">Edição premium</strong> (cor, legendas e sound design).
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div>
+                <Label>Quantidade de Reels</Label>
+                <Input type="number" min={1} value={videosQty} onChange={e => setVideosQty(e.target.value)} />
+              </div>
+              <div>
+                <Label>Valor por Reels (R$)</Label>
+                <Input type="number" min={0} step="0.01" value={videosUnitPrice} onChange={e => setVideosUnitPrice(e.target.value)} />
+              </div>
+              <div>
+                <Label>Prazo de entrega (dias)</Label>
+                <Input type="number" min={1} value={videosDeliveryDays} onChange={e => setVideosDeliveryDays(e.target.value)} />
+              </div>
+              <div>
+                <Label>Desconto (%)</Label>
+                <Input type="number" min={0} max={50} value={customDiscount} onChange={e => setCustomDiscount(Number(e.target.value))} />
+              </div>
+            </div>
+
+            <div>
+              <Label>Descrição / observações do projeto</Label>
+              <Textarea rows={3} value={videosDescription} onChange={e => setVideosDescription(e.target.value)} placeholder="Ex: 4 Reels institucionais para lançamento do novo produto..." />
+            </div>
+
+            <Separator />
+
+            <div>
+              <Label className="mb-2 block">Serviços adicionais (opcional)</Label>
+              {videosExtras.length > 0 && (
+                <div className="space-y-2 mb-3">
+                  {videosExtras.map(ex => (
+                    <div key={ex.id} className="flex items-center justify-between bg-accent/30 rounded-lg p-2">
+                      <div>
+                        <p className="font-medium text-sm">{ex.name}</p>
+                        <p className="text-xs text-primary">{fmt(Number(ex.value) || 0)}</p>
+                      </div>
+                      <Button size="icon" variant="ghost" onClick={() => setVideosExtras(prev => prev.filter(x => x.id !== ex.id))}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="grid grid-cols-3 gap-2">
+                <Input className="col-span-2" placeholder="Ex: Cobertura de evento" value={newVideosExtraName} onChange={e => setNewVideosExtraName(e.target.value)} />
+                <Input type="number" placeholder="Valor" value={newVideosExtraValue} onChange={e => setNewVideosExtraValue(e.target.value)} />
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2"
+                onClick={() => {
+                  if (!newVideosExtraName || !newVideosExtraValue) return;
+                  setVideosExtras(prev => [...prev, { id: crypto.randomUUID(), name: newVideosExtraName, value: parseFloat(newVideosExtraValue) || 0 }]);
+                  setNewVideosExtraName(''); setNewVideosExtraValue('');
+                }}
+                disabled={!newVideosExtraName || !newVideosExtraValue}
+              >
+                <Plus className="h-4 w-4 mr-1" /> Adicionar
+              </Button>
+            </div>
+
+            <Separator />
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Forma de pagamento</Label>
+                <Select value={videosPaymentMethod} onValueChange={setVideosPaymentMethod}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_METHODS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Parcelas</Label>
+                <Input type="number" min={1} max={12} value={videosInstallments} onChange={e => setVideosInstallments(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-primary/10 border border-primary/30 p-4 space-y-1">
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>{qty} Reels × {fmt(unit)}</span>
+                <span>{fmt(base)}</span>
+              </div>
+              {extrasTotal > 0 && (
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>Adicionais</span>
+                  <span>{fmt(extrasTotal)}</span>
+                </div>
+              )}
+              {customDiscount > 0 && (
+                <div className="flex justify-between text-sm text-emerald-600">
+                  <span>Desconto ({customDiscount}%)</span>
+                  <span>- {fmt(total * (customDiscount / 100))}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center pt-2 border-t border-primary/20">
+                <span className="font-bold">Total do projeto</span>
+                <span className="text-2xl font-bold text-primary">{fmt(total * (1 - customDiscount / 100))}</span>
+              </div>
+              {installments > 1 && (
+                <p className="text-xs text-muted-foreground text-right">
+                  ou {installments}x de {fmt(parcela * (1 - customDiscount / 100))}
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </>
+    );
+  };
+
   // ===== PREVIEW SECTIONS =====
+
 
   const renderSystemPreview = () => {
     const sysVal = parseFloat(systemValue) || 0;
@@ -2192,6 +2377,108 @@ export default function CommercialProposal() {
     );
   };
 
+  const renderVideosPreview = () => {
+    const qty = parseInt(videosQty) || 0;
+    const unit = parseFloat(videosUnitPrice) || 0;
+    const extrasTotal = videosExtras.reduce((s, e) => s + (Number(e.value) || 0), 0);
+    const base = qty * unit;
+    const total = (base + extrasTotal) * (1 - customDiscount / 100);
+    const installments = parseInt(videosInstallments) || 1;
+    const parcela = installments > 0 ? total / installments : total;
+    const paymentLabel = PAYMENT_METHODS.find(m => m.value === videosPaymentMethod)?.label || 'PIX';
+    const inclusions = [
+      { icon: Camera, label: 'Captação profissional', desc: 'Videomaker especializado no local do cliente' },
+      { icon: Film, label: 'Direção de cena', desc: 'Enquadramento, luz, áudio e direção de atuação' },
+      { icon: FileText, label: 'Roteiro estratégico', desc: 'Copy focado em vendas e engajamento' },
+      { icon: Scissors, label: 'Edição premium', desc: 'Tratamento de cor, legendas dinâmicas e sound design' },
+    ];
+    return (
+      <>
+        <div data-pdf-section className="p-8 md:p-12">
+          <h2 className="text-xl font-bold text-gray-800 mb-1 flex items-center gap-2">
+            <Film className="h-5 w-5 text-primary" /> Vídeos Avulsos
+          </h2>
+          <p className="text-sm text-gray-500 mb-5">Produção sob demanda de Reels profissionais para {clientCompany || 'sua marca'}.</p>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <div className="rounded-xl border p-4 text-center bg-primary/5">
+              <p className="text-4xl font-bold text-primary">{qty}</p>
+              <p className="text-[10px] uppercase tracking-wider text-gray-500 mt-1">Reels contratados</p>
+            </div>
+            <div className="rounded-xl border p-4 text-center">
+              <p className="text-2xl font-bold text-gray-800">{fmt(unit)}</p>
+              <p className="text-[10px] uppercase tracking-wider text-gray-500 mt-1">Valor por Reels</p>
+            </div>
+            <div className="rounded-xl border p-4 text-center">
+              <p className="text-2xl font-bold text-gray-800">{videosDeliveryDays}d</p>
+              <p className="text-[10px] uppercase tracking-wider text-gray-500 mt-1">Prazo de entrega</p>
+            </div>
+            <div className="rounded-xl border p-4 text-center">
+              <p className="text-2xl font-bold text-gray-800">{installments}x</p>
+              <p className="text-[10px] uppercase tracking-wider text-gray-500 mt-1">{paymentLabel}</p>
+            </div>
+          </div>
+
+          <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-primary" /> O que está incluso em cada Reels
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+            {inclusions.map((inc, i) => {
+              const Icon = inc.icon;
+              return (
+                <div key={i} className="flex items-start gap-3 rounded-xl border p-4 bg-white">
+                  <div className="rounded-lg p-2 bg-primary/10">
+                    <Icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm text-gray-800">{inc.label}</p>
+                    <p className="text-xs text-gray-500">{inc.desc}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {videosDescription && (
+            <div className="rounded-xl border bg-accent/20 p-4 mb-6">
+              <p className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Observações do projeto</p>
+              <p className="text-sm text-gray-700 whitespace-pre-line">{videosDescription}</p>
+            </div>
+          )}
+
+          {videosExtras.length > 0 && (
+            <div className="mb-6">
+              <h3 className="font-bold text-gray-800 mb-2">Serviços adicionais</h3>
+              <div className="space-y-2">
+                {videosExtras.map(ex => (
+                  <div key={ex.id} className="flex justify-between items-center border rounded-lg p-3 bg-white">
+                    <span className="text-sm text-gray-700">{ex.name}</span>
+                    <span className="text-sm font-bold text-primary">{fmt(Number(ex.value) || 0)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-2xl p-6 text-white" style={{ background: 'linear-gradient(135deg, hsl(16 82% 51%), hsl(16 82% 38%))' }}>
+            <p className="text-xs uppercase tracking-wider opacity-80">Investimento total</p>
+            <p className="text-4xl md:text-5xl font-bold mt-1">{fmt(total)}</p>
+            {installments > 1 && (
+              <p className="text-sm opacity-90 mt-1">
+                ou <strong>{installments}x de {fmt(parcela)}</strong> via {paymentLabel}
+              </p>
+            )}
+            {customDiscount > 0 && (
+              <p className="text-xs opacity-80 mt-2">Desconto de {customDiscount}% aplicado.</p>
+            )}
+          </div>
+        </div>
+      </>
+    );
+  };
+
+
+
   const renderMarketingPreview = () => (
     <>
       {selectedPlan && (
@@ -2435,6 +2722,8 @@ export default function CommercialProposal() {
                       totalValue = sys.monthlyValue || 0;
                     } else if (pType === 'cronograma') {
                       totalValue = sys.totalValue || (sys.deliverables || []).reduce((s: number, d: any) => s + ((d.unitPrice || 0) * (d.quantity || 1)), 0);
+                    } else if (pType === 'videos') {
+                      totalValue = sys.totalValue || ((sys.quantity || 0) * (sys.unitPrice || 0));
                     }
                     const discount = p.custom_discount || 0;
                     if (discount > 0) totalValue = totalValue * (1 - discount / 100);
@@ -2464,7 +2753,7 @@ export default function CommercialProposal() {
                           )}
                           <div className="flex items-center gap-1 text-muted-foreground">
                             <DollarSign className="h-3 w-3" />
-                            Valor: {fmt(totalValue)}{pType !== 'sistema' ? '/mês' : ''}
+                            Valor: {fmt(totalValue)}{(pType !== 'sistema' && pType !== 'videos') ? '/mês' : ''}
                           </div>
                           <div className="flex items-center gap-1">
                             {hasRevenues ? (
@@ -2586,8 +2875,8 @@ export default function CommercialProposal() {
           <Card className="lg:col-span-2">
             <CardHeader><CardTitle className="text-base">Tipo de Proposta</CardTitle></CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                {(['marketing', 'sistema', 'endomarketing', 'personalizada', 'cronograma'] as ProposalType[]).map(type => {
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                {(['marketing', 'sistema', 'endomarketing', 'personalizada', 'cronograma', 'videos'] as ProposalType[]).map(type => {
                   const Icon = typeIcons[type];
                   return (
                     <button
@@ -2632,6 +2921,7 @@ export default function CommercialProposal() {
           {proposalType === 'endomarketing' && renderEndoForm()}
           {proposalType === 'personalizada' && renderCustomForm()}
           {proposalType === 'cronograma' && renderCronogramaForm()}
+          {proposalType === 'videos' && renderVideosForm()}
 
           {/* Bonus - available for all types */}
           <Card>
@@ -2783,7 +3073,7 @@ export default function CommercialProposal() {
               <div className="relative p-6 md:p-10 text-white">
                 <img src={pulseLogo} alt="Pulse Growth Marketing" className="h-12 md:h-14 mb-4 drop-shadow-2xl" />
                 <h1 className="text-2xl md:text-3xl font-bold mb-1">
-                  {proposalType === 'sistema' ? 'Proposta de Sistema' : proposalType === 'endomarketing' ? 'Proposta de Endomarketing' : proposalType === 'cronograma' ? 'Cronograma Completo' : 'Proposta Comercial'}
+                  {proposalType === 'sistema' ? 'Proposta de Sistema' : proposalType === 'endomarketing' ? 'Proposta de Endomarketing' : proposalType === 'cronograma' ? 'Cronograma Completo' : proposalType === 'videos' ? 'Proposta de Vídeos' : 'Proposta Comercial'}
                 </h1>
                 <p className="text-white/80 text-sm">Preparada exclusivamente para</p>
                 <p className="text-xl font-bold mt-0.5">{clientCompany || 'Nome da Empresa'}</p>
@@ -2801,6 +3091,7 @@ export default function CommercialProposal() {
             {proposalType === 'endomarketing' && renderEndoPreview()}
           {proposalType === 'personalizada' && renderCustomPreview()}
             {proposalType === 'cronograma' && renderCronogramaPreview()}
+            {proposalType === 'videos' && renderVideosPreview()}
 
             {/* Bonus Section */}
             {bonusServices.length > 0 && (

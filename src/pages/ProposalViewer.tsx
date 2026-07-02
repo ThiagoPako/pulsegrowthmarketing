@@ -216,7 +216,7 @@ export default function ProposalViewer() {
   const discount = proposal.custom_discount || 0;
   const isExpired = new Date(proposal.validity_date) < new Date();
   const isResolved = proposal.status === 'aceita' || proposal.status === 'recusada';
-  const headerTitle = proposalType === 'sistema' ? 'Proposta de Sistema' : proposalType === 'endomarketing' ? 'Proposta de Endomarketing' : proposalType === 'personalizada' ? 'Proposta Personalizada' : proposalType === 'cronograma' ? 'Cronograma Completo' : 'Proposta Comercial';
+  const headerTitle = proposalType === 'sistema' ? 'Proposta de Sistema' : proposalType === 'endomarketing' ? 'Proposta de Endomarketing' : proposalType === 'personalizada' ? 'Proposta Personalizada' : proposalType === 'cronograma' ? 'Cronograma Completo' : proposalType === 'videos' ? 'Proposta de Vídeos' : 'Proposta Comercial';
 
   const accentColor = 'hsl(16 82% 51%)';
   const accentDark = 'hsl(16 82% 38%)';
@@ -916,7 +916,105 @@ export default function ProposalViewer() {
     );
   };
 
+  // ===== VIDEOS AVULSOS =====
+  const renderVideosContent = () => {
+    const qty = Number(systemData.quantity) || 0;
+    const unit = Number(systemData.unitPrice) || 0;
+    const extras: any[] = Array.isArray(systemData.extras) ? systemData.extras : [];
+    const extrasTotal = extras.reduce((s, e) => s + (Number(e.value) || 0), 0);
+    const base = qty * unit;
+    const rawTotal = Number(systemData.totalValue) || (base + extrasTotal);
+    const total = rawTotal * (1 - discount / 100);
+    const installments = Number(systemData.installments) || 1;
+    const parcela = installments > 0 ? total / installments : total;
+    const paymentLabel = ({ pix: 'PIX', boleto: 'Boleto Bancário', cartao: 'Cartão de Crédito', transferencia: 'Transferência Bancária' } as any)[systemData.paymentMethod] || 'PIX';
+    const inclusions = [
+      { icon: Camera, label: 'Captação profissional', desc: 'Videomaker especializado no local do cliente' },
+      { icon: Film, label: 'Direção de cena', desc: 'Enquadramento, luz, áudio e direção de atuação' },
+      { icon: FileText, label: 'Roteiro estratégico', desc: 'Copy focado em vendas e engajamento' },
+      { icon: Scissors, label: 'Edição premium', desc: 'Tratamento de cor, legendas dinâmicas e sound design' },
+    ];
+    return (
+      <>
+        <AnimatedSection className="px-6 md:px-10 py-8">
+          <div className="flex items-center gap-2 mb-1">
+            <Film className="h-5 w-5" style={{ color: accentColor }} />
+            <h2 className="text-xl font-bold text-gray-800">Vídeos Avulsos</h2>
+          </div>
+          <p className="text-sm text-gray-500 mb-5">Produção sob demanda de Reels profissionais para {proposal.client_company}.</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <StatCard icon={Film} value={qty} label="Reels" delay={0.1} />
+            <StatCard icon={Sparkles} value={fmt(unit)} label="Valor/Reels" delay={0.15} />
+            <StatCard icon={Clock} value={`${systemData.deliveryDays || 15}d`} label="Prazo" delay={0.2} />
+            <StatCard icon={CheckCircle2} value={`${installments}x`} label={paymentLabel} delay={0.25} />
+          </div>
+        </AnimatedSection>
+
+        <AnimatedSection className="px-6 md:px-10 pb-8">
+          <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-3">
+            <CheckCircle2 className="h-5 w-5" style={{ color: accentColor }} /> O que está incluso em cada Reels
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {inclusions.map((inc, i) => {
+              const Icon = inc.icon;
+              return (
+                <motion.div key={i} initial={{ y: 20, opacity: 0 }} whileInView={{ y: 0, opacity: 1 }} viewport={{ once: true }} transition={{ delay: i * 0.05 }} className="flex items-start gap-3 rounded-xl border border-gray-100 p-4 bg-white">
+                  <div className="rounded-lg p-2" style={{ background: 'hsl(16 82% 96%)' }}>
+                    <Icon className="h-5 w-5" style={{ color: accentColor }} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm text-gray-800">{inc.label}</p>
+                    <p className="text-xs text-gray-500">{inc.desc}</p>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </AnimatedSection>
+
+        {systemData.description && (
+          <AnimatedSection className="px-6 md:px-10 pb-8">
+            <div className="rounded-xl border p-4" style={{ background: 'hsl(16 82% 98%)' }}>
+              <p className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Observações do projeto</p>
+              <p className="text-sm text-gray-700 whitespace-pre-line">{systemData.description}</p>
+            </div>
+          </AnimatedSection>
+        )}
+
+        {extras.length > 0 && (
+          <AnimatedSection className="px-6 md:px-10 pb-8">
+            <h3 className="font-bold text-gray-800 mb-2">Serviços adicionais</h3>
+            <div className="space-y-2">
+              {extras.map((ex, i) => (
+                <div key={i} className="flex justify-between items-center border rounded-lg p-3 bg-white">
+                  <span className="text-sm text-gray-700">{ex.name}</span>
+                  <span className="text-sm font-bold" style={{ color: accentColor }}>{fmt(Number(ex.value) || 0)}</span>
+                </div>
+              ))}
+            </div>
+          </AnimatedSection>
+        )}
+
+        <AnimatedSection className="px-6 md:px-10 pb-10">
+          <div className="rounded-2xl p-6 text-white" style={{ background: `linear-gradient(135deg, ${accentColor}, ${accentDark})` }}>
+            <p className="text-xs uppercase tracking-wider opacity-80">Investimento total</p>
+            <p className="text-4xl md:text-5xl font-bold mt-1">{fmt(total)}</p>
+            {installments > 1 && (
+              <p className="text-sm opacity-90 mt-1">
+                ou <strong>{installments}x de {fmt(parcela)}</strong> via {paymentLabel}
+              </p>
+            )}
+            {discount > 0 && (
+              <p className="text-xs opacity-80 mt-2">Desconto de {discount}% aplicado.</p>
+            )}
+          </div>
+        </AnimatedSection>
+      </>
+    );
+  };
+
   return (
+
     <div className="min-h-screen" style={{ background: 'linear-gradient(180deg, hsl(16 82% 97%), #f8f8f8)' }}>
       <Toaster position="top-center" />
 
@@ -991,6 +1089,7 @@ export default function ProposalViewer() {
           {proposalType === 'endomarketing' && renderEndoContent()}
           {proposalType === 'personalizada' && renderCustomContent()}
           {proposalType === 'cronograma' && renderCronogramaContent()}
+          {proposalType === 'videos' && renderVideosContent()}
 
           {/* Bonus */}
           {bonus.length > 0 && (

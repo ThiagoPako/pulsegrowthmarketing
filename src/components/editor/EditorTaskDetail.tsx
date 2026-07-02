@@ -970,16 +970,19 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
               {(task.kanban_column === 'edicao' && isEditing) || task.kanban_column === 'alteracao' ? (
                 <motion.div whileTap={{ scale: 0.92 }}>
                   <Button onClick={sendForApproval}
-                    disabled={saving || (!videoLink.trim() && !task.edited_video_link)}
+                    disabled={saving || !hasAnyVideo}
                     className="gap-1.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white shadow-md">
                     <Send size={14} /> Finalizar e Enviar
                   </Button>
                 </motion.div>
               ) : null}
 
-              {!videoLink.trim() && !task.edited_video_link && (task.kanban_column === 'edicao' || task.kanban_column === 'alteracao') && (
-                <p className="text-[10px] text-destructive self-center">Adicione o vídeo editado primeiro</p>
+              {!hasAnyVideo && (task.kanban_column === 'edicao' || task.kanban_column === 'alteracao') && (
+                <p className="text-[10px] text-destructive self-center">
+                  {isOptimize ? 'Anexe pelo menos 1 vídeo nos slots antes de enviar' : 'Adicione o vídeo editado primeiro'}
+                </p>
               )}
+
 
               {task.kanban_column === 'revisao' && (
                 <motion.div whileTap={{ scale: 0.92 }}>

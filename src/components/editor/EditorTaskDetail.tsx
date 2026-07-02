@@ -1079,6 +1079,132 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── FORMATOS DE OTIMIZAÇÃO ── */}
+      <Dialog open={formatsOpen} onOpenChange={setFormatsOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <div className="p-1.5 rounded-lg bg-gradient-to-br from-fuchsia-500 to-violet-500">
+                <Rocket size={16} className="text-white" />
+              </div>
+              <span className="bg-gradient-to-r from-fuchsia-600 via-pink-600 to-violet-600 bg-clip-text text-transparent">
+                Formatos de Otimização
+              </span>
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground">
+              Ideias prontas para transformar o material existente em vídeos curtos e novos. Escolha o formato, monte e envie nos slots. 🎬
+            </p>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+            {[
+              {
+                icon: Music,
+                title: 'Gancho em Áudio + Takes',
+                color: 'from-pink-500/15 to-fuchsia-500/15 border-pink-400/40',
+                iconBg: 'from-pink-500 to-fuchsia-500',
+                desc: 'Use um áudio viral ou uma frase de impacto como gancho e cubra com takes já gravados do cliente.',
+                steps: ['Escolha um áudio/frase em alta', 'Corte takes que casem com o ritmo', 'Adicione legendas fortes nos primeiros 3s'],
+                use: 'Reels e TikTok',
+              },
+              {
+                icon: Wand2,
+                title: 'Takes + Música + Gancho + CTA',
+                color: 'from-purple-500/15 to-violet-500/15 border-purple-400/40',
+                iconBg: 'from-purple-500 to-violet-500',
+                desc: 'Estrutura clássica que vende: prende no início, entrega valor no meio e chama pra ação no fim.',
+                steps: ['Gancho visual/textual (0-3s)', 'Takes com música envolvente (3-20s)', 'CTA claro no final (WhatsApp, endereço, promoção)'],
+                use: 'Anúncios e Criativos',
+              },
+              {
+                icon: Layers,
+                title: 'Mashup Multi-Vídeos',
+                color: 'from-blue-500/15 to-cyan-500/15 border-blue-400/40',
+                iconBg: 'from-blue-500 to-cyan-500',
+                desc: 'Junte cortes de vários vídeos antigos do cliente pra contar uma nova história ou mostrar variedade.',
+                steps: ['Escolha um tema (ex: bastidores, produtos, equipe)', 'Selecione 4-8 takes rápidos', 'Unifique com transição/música'],
+                use: 'Institucional curto',
+              },
+              {
+                icon: Scissors,
+                title: 'Corte Vertical de Reel',
+                color: 'from-emerald-500/15 to-teal-500/15 border-emerald-400/40',
+                iconBg: 'from-emerald-500 to-teal-500',
+                desc: 'Recorte o melhor momento do Reel original em 7-15s pra usar como Story ou anúncio direto.',
+                steps: ['Identifique o pico do vídeo', 'Corte 7-15s com legenda destacada', 'Exporte 9:16 sem marca d\'água'],
+                use: 'Stories e Ads curtos',
+              },
+              {
+                icon: Zap,
+                title: 'Antes e Depois / Transformação',
+                color: 'from-amber-500/15 to-orange-500/15 border-amber-400/40',
+                iconBg: 'from-amber-500 to-orange-500',
+                desc: 'Use takes que mostrem contraste (antes/depois, montagem, resultado). Alto engajamento garantido.',
+                steps: ['Selecione 2 momentos que contrastam', 'Transição rápida entre eles', 'Legenda: "Antes" → "Depois"'],
+                use: 'Reels de resultado',
+              },
+              {
+                icon: MessageSquare,
+                title: 'Depoimento Turbinado',
+                color: 'from-rose-500/15 to-red-500/15 border-rose-400/40',
+                iconBg: 'from-rose-500 to-red-500',
+                desc: 'Pegue um depoimento gravado, corte só a parte mais forte e cubra com b-roll do cliente.',
+                steps: ['Isole a frase mais impactante', 'Cubra com takes relacionados', 'Legendas grandes e CTA no fim'],
+                use: 'Prova social',
+              },
+              {
+                icon: Camera,
+                title: 'POV / Bastidores',
+                color: 'from-indigo-500/15 to-blue-500/15 border-indigo-400/40',
+                iconBg: 'from-indigo-500 to-blue-500',
+                desc: 'Monte um "dia na vida" ou bastidor usando takes soltos que não viraram Reel principal.',
+                steps: ['Escolha um ângulo (POV do dono, POV do cliente...)', 'Sequencie takes em ordem lógica', 'Trilha calma + legendas curtas'],
+                use: 'Conexão e humanização',
+              },
+              {
+                icon: Sparkles as any,
+                title: 'Recap / Melhores Momentos',
+                color: 'from-yellow-500/15 to-amber-500/15 border-yellow-400/40',
+                iconBg: 'from-yellow-500 to-amber-500',
+                desc: 'Compilação dos melhores momentos da semana/mês. Ótimo pra reaproveitar material aprovado.',
+                steps: ['Selecione 5-10 highlights', 'Ordene por impacto (do bom pro melhor)', 'Música crescente + CTA final'],
+                use: 'Recap mensal',
+              },
+            ].map((fmt, i) => {
+              const Icon = fmt.icon as any;
+              return (
+                <div key={i} className={`rounded-xl border bg-gradient-to-br ${fmt.color} p-3 space-y-2`}>
+                  <div className="flex items-center gap-2">
+                    <div className={`p-1.5 rounded-lg bg-gradient-to-br ${fmt.iconBg} shadow`}>
+                      <Icon size={13} className="text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-black text-foreground leading-tight">{fmt.title}</p>
+                      <p className="text-[10px] text-muted-foreground">{fmt.use}</p>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-foreground/80 leading-relaxed">{fmt.desc}</p>
+                  <div className="pt-1.5 border-t border-white/20 dark:border-white/10 space-y-1">
+                    {fmt.steps.map((s, si) => (
+                      <div key={si} className="flex items-start gap-1.5">
+                        <span className="text-[10px] font-black text-fuchsia-600 dark:text-fuchsia-400 mt-0.5">{si + 1}.</span>
+                        <span className="text-[11px] text-foreground/75 leading-snug">{s}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-3 p-3 rounded-lg bg-fuchsia-500/10 border border-fuchsia-400/30">
+            <p className="text-[11px] text-foreground/80 leading-relaxed">
+              💡 <b>Regra de ouro:</b> vídeos curtos (7-30s), gancho nos primeiros 3 segundos, legendas grandes e sempre um CTA. Reaproveite ao máximo — o objetivo é multiplicar entregas sem gravar de novo.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

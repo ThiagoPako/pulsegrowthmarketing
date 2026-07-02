@@ -268,7 +268,7 @@ export default function Reports() {
     // Denominator: content produced in period from multiple sources
     const editorApproved = editorTasks.filter(t => {
       const d = (t.approved_at || t.updated_at || '').slice(0, 10);
-      return t.kanban_column === 'aprovado' && d >= dateRange.start && d <= dateRange.end;
+      return  (t.kanban_column === 'aprovado' || t.kanban_column === 'agendamentos' || t.kanban_column === 'acompanhamento' || t.kanban_column === 'arquivado' || !!t.approved_at) && d >= dateRange.start && d <= dateRange.end;
     }).length;
     const designCompleted = designTasks.filter(t => {
       const d = (t.completed_at || '').slice(0, 10);

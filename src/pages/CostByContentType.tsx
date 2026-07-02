@@ -15,7 +15,7 @@ interface DeliveryRecord {
   arts_produced: number; delivery_status: string;
 }
 interface EditorTask { client_id: string; content_type: string; kanban_column: string; approved_at: string | null; updated_at: string; }
-interface DesignTask { client_id: string; kanban_column: string; completed_at: string | null; updated_at?: string; }
+interface DesignTask { client_id: string; kanban_column: string; completed_at: string | null; updated_at?: string; attachment_url?: string | null; editable_file_url?: string | null; mockup_url?: string | null; }
 interface SocialDelivery { client_id: string; content_type: string; delivered_at: string; status: string; }
 
 const VIDEO_ROLES = ['videomaker', 'editor', 'social_media'];

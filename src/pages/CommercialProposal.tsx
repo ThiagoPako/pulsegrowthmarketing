@@ -390,6 +390,15 @@ export default function CommercialProposal() {
         setSelectedIncludedServices(Array.isArray(sys.selectedIncludedServices) ? sys.selectedIncludedServices : []);
         setContractDuration(sys.contractDuration || 'semestral');
       }
+      // Videos
+      if (p.proposal_type === 'videos') {
+        setVideosQty(sys.quantity != null ? String(sys.quantity) : '4');
+        setVideosUnitPrice(sys.unitPrice != null ? String(sys.unitPrice) : '350');
+        setVideosDeliveryDays(sys.deliveryDays != null ? String(sys.deliveryDays) : '15');
+        setVideosDescription(sys.description || '');
+        setVideosExtras(Array.isArray(sys.extras) ? sys.extras : []);
+        setVideosPaymentMethod(sys.paymentMethod || 'pix');
+        setVideosInstallments(String(sys.installments || '1'));
       if (p.token) setShareLink(`${window.location.origin}/proposta/${p.token}`);
       setShowSavedProposals(false);
       setShowPreview(false);

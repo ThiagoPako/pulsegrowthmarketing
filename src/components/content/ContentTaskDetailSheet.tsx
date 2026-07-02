@@ -1253,8 +1253,101 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
             >
               <Lightbulb size={14} /> Abrir guia com infográficos
             </a>
+
+            {/* ─── OPTIMIZATION SLOTS ─────────────────────── */}
+            <div className="space-y-2 pt-2 border-t border-fuchsia-300/30">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-fuchsia-700 dark:text-fuchsia-300">
+                  🎬 Slots de conteúdo otimizado
+                </p>
+                <span className="text-[10px] text-fuchsia-700/70 dark:text-fuchsia-300/70">
+                  {optSlots.filter(s => s.link.trim()).length}/{optSlots.length} preenchidos
+                </span>
+              </div>
+              {optSlots.map((slot, idx) => {
+                const meta = slot.type === 'story'
+                  ? { label: 'Story', icon: Image, color: 'from-pink-500/10 to-pink-500/5 border-pink-400/40 text-pink-700 dark:text-pink-300' }
+                  : slot.type === 'criativo'
+                  ? { label: 'Criativo', icon: Megaphone, color: 'from-purple-500/10 to-purple-500/5 border-purple-400/40 text-purple-700 dark:text-purple-300' }
+                  : { label: 'Reels', icon: Film, color: 'from-blue-500/10 to-blue-500/5 border-blue-400/40 text-blue-700 dark:text-blue-300' };
+                const Icon = meta.icon;
+                const filled = slot.link.trim().length > 0;
+                const isUploading = uploadingSlotId === slot.id;
+                return (
+                  <div key={slot.id} className={`rounded-lg border bg-gradient-to-r ${meta.color} p-2.5 space-y-1.5`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Icon size={13} />
+                        <span className="text-[11px] font-bold uppercase tracking-wider">
+                          Slot {idx + 1} · {meta.label}
+                        </span>
+                        {filled && <CheckCircle2 size={13} className="text-green-500" />}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => persistOptSlots(optSlots.filter(s => s.id !== slot.id))}
+                        className="text-[10px] text-red-500 hover:text-red-700"
+                        title="Remover slot"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        placeholder="Cole um link ou faça upload →"
+                        value={slot.link}
+                        onChange={e => setOptSlots(prev => prev.map(s => s.id === slot.id ? { ...s, link: e.target.value } : s))}
+                        onBlur={() => persistOptSlots(optSlots)}
+                        className="h-8 text-xs"
+                        disabled={isUploading}
+                      />
+                      <label className={`inline-flex items-center justify-center h-8 px-2 rounded-md border border-fuchsia-400/40 text-fuchsia-600 hover:bg-fuchsia-500/10 cursor-pointer transition-colors ${isUploading ? 'opacity-50 pointer-events-none' : ''}`} title="Enviar arquivo">
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="video/*,image/*"
+                          onChange={e => {
+                            const f = e.target.files?.[0];
+                            if (f) uploadOptSlotFile(slot.id, f);
+                            e.target.value = '';
+                          }}
+                        />
+                        {isUploading ? (
+                          <span className="text-[10px] font-bold">{slotProgress}%</span>
+                        ) : (
+                          <Upload size={13} />
+                        )}
+                      </label>
+                      {filled && (
+                        <a href={slot.link} target="_blank" rel="noopener noreferrer" className="text-fuchsia-600 hover:text-fuchsia-800" title="Abrir">
+                          <ExternalLink size={13} />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {(['story', 'criativo', 'reels'] as const).map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => persistOptSlots([...optSlots, { id: `s_${Date.now()}_${t}`, type: t, link: '' }])}
+                    className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md border border-fuchsia-400/40 text-fuchsia-700 dark:text-fuchsia-300 hover:bg-fuchsia-500/10"
+                  >
+                    + {t === 'story' ? 'Story' : t === 'criativo' ? 'Criativo' : 'Reels'}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground italic pt-1">
+                Ao enviar para <b>Revisão</b>, cada slot preenchido vira um cartão separado com a tag OTIMIZAÇÃO.
+              </p>
+            </div>
           </div>
         )}
+
+
+
 
 
 

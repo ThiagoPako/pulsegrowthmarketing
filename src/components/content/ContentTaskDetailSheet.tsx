@@ -1450,6 +1450,15 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                             <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700" onClick={() => setShowAdjustmentForm(true)}>
                               <MessageSquareWarning size={14} /> Solicitar Ajustes
                             </Button>
+                            {task.content_type === 'reels' && (
+                              <Button
+                                size="sm"
+                                onClick={handleOptimizeContent}
+                                className="w-full gap-2 justify-start text-white bg-gradient-to-r from-fuchsia-500 via-pink-500 to-violet-500 hover:from-fuchsia-600 hover:via-pink-600 hover:to-violet-600 shadow-md shadow-fuchsia-500/30 animate-pulse"
+                              >
+                                <Rocket size={14} /> Otimizar Conteúdo (Stories + Criativos)
+                              </Button>
+                            )}
                           </>
                         )}
                         {task.kanban_column === 'revisao' && isEditor && (

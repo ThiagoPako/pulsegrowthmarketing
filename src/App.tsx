@@ -46,6 +46,7 @@ const FinancialMovements = lazy(() => import("@/pages/FinancialMovements"));
 const FinancialPartners = lazy(() => import("@/pages/FinancialPartners"));
 const FinancialChat = lazy(() => import("@/pages/FinancialChat"));
 const FinancialApiSettings = lazy(() => import("@/pages/FinancialApiSettings"));
+const FinancialEmpresaSaude = lazy(() => import("@/pages/FinancialEmpresaSaude"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 const ClientOnboarding = lazy(() => import("@/pages/ClientOnboarding"));
 const DesignerKanban = lazy(() => import("@/pages/DesignerKanban"));

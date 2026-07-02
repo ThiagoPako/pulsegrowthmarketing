@@ -92,11 +92,18 @@ export default function InternalReports() {
 
   const dateRange = useMemo(() => {
     const now = new Date();
+    if (periodType === 'today') {
+      const d = format(now, 'yyyy-MM-dd'); return { start: d, end: d };
+    }
     if (periodType === 'week') return { start: format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd'), end: format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd') };
     if (periodType === 'month') return { start: format(startOfMonth(now), 'yyyy-MM-dd'), end: format(endOfMonth(now), 'yyyy-MM-dd') };
-    const prev = subMonths(now, 1);
-    return { start: format(startOfMonth(prev), 'yyyy-MM-dd'), end: format(endOfMonth(prev), 'yyyy-MM-dd') };
-  }, [periodType]);
+    if (periodType === 'previous_month') {
+      const prev = subMonths(now, 1);
+      return { start: format(startOfMonth(prev), 'yyyy-MM-dd'), end: format(endOfMonth(prev), 'yyyy-MM-dd') };
+    }
+    if (periodType === 'custom') return { start: customFrom, end: customTo };
+    return { start: '0000-01-01', end: '9999-12-31' };
+  }, [periodType, customFrom, customTo]);
 
   const filtered = useMemo(() => {
     return records.filter(r => {

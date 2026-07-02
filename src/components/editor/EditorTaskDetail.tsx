@@ -16,7 +16,7 @@ import {
   Eye, ExternalLink, Upload, Send, History, MessageSquare, Clock,
   AlertTriangle, Check, Film, Megaphone, Image, Palette, Link2, Play,
   Video, Camera, CircleCheck, CircleDot, Circle, Rocket, Star, Trophy,
-  PartyPopper, Pause, Lightbulb, Music, Wand2, Scissors, Layers, Zap
+  PartyPopper, Pause, Lightbulb, Music, Wand2, Scissors, Layers, Zap, Sparkles
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import { highlightQuotes } from '@/lib/highlightQuotes';

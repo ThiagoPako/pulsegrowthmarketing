@@ -159,7 +159,7 @@ function ScoreCelebration({ points, show, onDone }: { points: number; show: bool
   );
 }
 
-type OptSlot = { id: string; type: 'story' | 'criativo' | 'extra'; link: string; label?: string };
+type OptSlot = { id: string; type: 'story' | 'criativo' | 'reels'; link: string; label?: string };
 const OPT_MARKER = '[[OPT_SLOTS]]';
 
 function parseSlots(description: string | null): { slots: OptSlot[]; baseDescription: string } {
@@ -170,7 +170,14 @@ function parseSlots(description: string | null): { slots: OptSlot[]; baseDescrip
   const raw = description.slice(idx + OPT_MARKER.length).trim();
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return { slots: parsed, baseDescription: base };
+    if (Array.isArray(parsed)) {
+      // Backward compat: coerce legacy 'extra' → 'reels'
+      const normalized = parsed.map((s: any) => ({
+        ...s,
+        type: (s.type === 'extra' ? 'reels' : s.type) as OptSlot['type'],
+      }));
+      return { slots: normalized, baseDescription: base };
+    }
   } catch {}
   return { slots: [], baseDescription: base };
 }
@@ -183,8 +190,10 @@ function makeDefaultSlots(): OptSlot[] {
   return [
     { id: `s_${Date.now()}_1`, type: 'story', link: '', label: 'Story' },
     { id: `s_${Date.now()}_2`, type: 'criativo', link: '', label: 'Criativo' },
+    { id: `s_${Date.now()}_3`, type: 'reels', link: '', label: 'Reels' },
   ];
 }
+
 
 export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }: Props) {
   const { clients, scripts, users } = useApp();

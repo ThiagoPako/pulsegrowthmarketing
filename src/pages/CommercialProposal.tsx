@@ -725,6 +725,8 @@ export default function CommercialProposal() {
     if (proposalType === 'personalizada' && !customMonthlyValue) { toast.error('Preencha o valor da proposta'); return; }
     if (proposalType === 'cronograma' && cronogramaDeliverables.length === 0) { toast.error('Gere ou adicione entregas ao cronograma'); return; }
     if (proposalType === 'cronograma' && cronogramaPricingMode === 'total' && !cronogramaTotalCustomValue) { toast.error('Informe o valor total do serviço'); return; }
+    if (proposalType === 'videos' && (parseInt(videosQty) || 0) <= 0) { toast.error('Informe a quantidade de vídeos'); return; }
+    if (proposalType === 'videos' && (parseFloat(videosUnitPrice) || 0) <= 0) { toast.error('Informe o valor unitário do vídeo'); return; }
     setSavingProposal(true);
     try {
       const systemData = proposalType === 'sistema' ? {

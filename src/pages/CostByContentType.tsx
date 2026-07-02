@@ -6,43 +6,42 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Target, Film, Megaphone, Image as ImageIcon, DollarSign, Calculator } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { Target, Film, Megaphone, Image as ImageIcon, Palette, DollarSign, Calculator } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, subMonths, differenceInCalendarMonths } from 'date-fns';
 
 interface DeliveryRecord {
   client_id: string; date: string;
   reels_produced: number; creatives_produced: number; stories_produced: number;
-  arts_produced: number; extras_produced: number; delivery_status: string;
+  arts_produced: number; delivery_status: string;
 }
 interface EditorTask { client_id: string; content_type: string; kanban_column: string; approved_at: string | null; updated_at: string; }
+interface DesignTask { client_id: string; kanban_column: string; completed_at: string | null; updated_at?: string; }
 interface SocialDelivery { client_id: string; content_type: string; delivered_at: string; status: string; }
 
+const PRODUCTION_ROLES = ['videomaker', 'editor', 'designer', 'social_media'];
+
 export default function CostByContentType() {
-  const { clients } = useApp();
+  const { clients, users } = useApp();
   const [records, setRecords] = useState<DeliveryRecord[]>([]);
   const [editorTasks, setEditorTasks] = useState<EditorTask[]>([]);
+  const [designTasks, setDesignTasks] = useState<DesignTask[]>([]);
   const [socialDeliveries, setSocialDeliveries] = useState<SocialDelivery[]>([]);
-  const [salaryExpenses, setSalaryExpenses] = useState<{ amount: number; date: string }[]>([]);
   const [selectedClient, setSelectedClient] = useState('all');
   const [periodType, setPeriodType] = useState<'current' | 'previous' | 'custom'>('current');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
 
   const fetchData = useCallback(async () => {
-    const [rRes, sRes, edRes, salCatRes] = await Promise.all([
-      supabase.from('delivery_records').select('client_id,date,reels_produced,creatives_produced,stories_produced,arts_produced,extras_produced,delivery_status'),
+    const [rRes, sRes, edRes, dRes] = await Promise.all([
+      supabase.from('delivery_records').select('client_id,date,reels_produced,creatives_produced,stories_produced,arts_produced,delivery_status'),
       supabase.from('social_media_deliveries').select('client_id,content_type,delivered_at,status'),
       supabase.from('content_tasks').select('client_id,content_type,kanban_column,approved_at,updated_at'),
-      supabase.from('expense_categories').select('id, name').or('name.ilike.%salário%,name.ilike.%salario%'),
+      supabase.from('design_tasks').select('client_id,kanban_column,completed_at,updated_at'),
     ]);
     if (rRes.data) setRecords(rRes.data as DeliveryRecord[]);
     if (sRes.data) setSocialDeliveries(sRes.data as SocialDelivery[]);
     if (edRes.data) setEditorTasks(edRes.data as EditorTask[]);
-    const ids = (salCatRes.data || []).map((c: any) => c.id);
-    if (ids.length > 0) {
-      const expRes = await supabase.from('expenses').select('amount, date').in('category_id', ids);
-      if (expRes.data) setSalaryExpenses(expRes.data as any[]);
-    }
+    if (dRes.data) setDesignTasks(dRes.data as DesignTask[]);
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -62,46 +61,66 @@ export default function CostByContentType() {
     const inPeriod = (iso?: string | null) => { if (!iso) return false; const d = iso.slice(0, 10); return d >= dateRange.start && d <= dateRange.end; };
     const clientOk = (cid: string) => selectedClient === 'all' || cid === selectedClient;
 
+    // === QUANTIDADES ===
     const realizadas = records.filter(r => clientOk(r.client_id) && r.date >= dateRange.start && r.date <= dateRange.end && ['realizada','encaixe','extra'].includes(r.delivery_status));
-    const recReels = realizadas.reduce((a, r) => a + r.reels_produced, 0);
-    const recCri = realizadas.reduce((a, r) => a + r.creatives_produced, 0);
-    const recSto = realizadas.reduce((a, r) => a + r.stories_produced, 0);
+    const recReels = realizadas.reduce((a, r) => a + (r.reels_produced || 0), 0);
+    const recCri = realizadas.reduce((a, r) => a + (r.creatives_produced || 0), 0);
+    const recSto = realizadas.reduce((a, r) => a + (r.stories_produced || 0), 0);
+    const recArts = realizadas.reduce((a, r) => a + (r.arts_produced || 0), 0);
 
-    const relevantTasks = editorTasks.filter(t => clientOk(t.client_id) && inPeriod(t.approved_at || t.updated_at));
+    const relevantTasks = editorTasks.filter(t => clientOk(t.client_id) && t.kanban_column === 'aprovado' && inPeriod(t.approved_at || t.updated_at));
     const ctReels = relevantTasks.filter(t => ['reels','reel'].includes(norm(t.content_type))).length;
     const ctCri = relevantTasks.filter(t => ['criativo','creative'].includes(norm(t.content_type))).length;
     const ctSto = relevantTasks.filter(t => ['story','stories'].includes(norm(t.content_type))).length;
 
-    const socials = socialDeliveries.filter(d => clientOk(d.client_id) && (d.delivered_at || '').slice(0, 10) >= dateRange.start && (d.delivered_at || '').slice(0, 10) <= dateRange.end);
-    const sReels = socials.filter(d => norm(d.content_type) === 'reels' && d.status === 'postado').length;
-    const sCri = socials.filter(d => norm(d.content_type) === 'criativo' && d.status === 'postado').length;
-    const sSto = socials.filter(d => norm(d.content_type) === 'story' && d.status === 'postado').length;
+    const socials = socialDeliveries.filter(d => clientOk(d.client_id) && (d.delivered_at || '').slice(0, 10) >= dateRange.start && (d.delivered_at || '').slice(0, 10) <= dateRange.end && d.status === 'postado');
+    const sReels = socials.filter(d => norm(d.content_type) === 'reels').length;
+    const sCri = socials.filter(d => norm(d.content_type) === 'criativo').length;
+    const sSto = socials.filter(d => norm(d.content_type) === 'story').length;
+
+    const dtArts = designTasks.filter(t => clientOk(t.client_id) && t.kanban_column === 'aprovado' && inPeriod(t.completed_at || t.updated_at || null)).length;
 
     const reels = Math.max(recReels, ctReels, sReels);
     const criativos = Math.max(recCri, ctCri, sCri);
     const stories = Math.max(recSto, ctSto, sSto);
+    const artes = Math.max(recArts, dtArts);
 
-    const totalSalaries = salaryExpenses.filter(e => e.date >= dateRange.start && e.date <= dateRange.end).reduce((a, e) => a + Number(e.amount), 0);
-    const wReels = reels * 10, wCri = criativos * 5, wSto = stories * 3;
-    const wTotal = wReels + wCri + wSto;
+    // === SALÁRIOS (baseado em team_members.monthly_salary) ===
+    // Multiplica pela quantidade de meses do período
+    const start = new Date(dateRange.start);
+    const end = new Date(dateRange.end);
+    const months = Math.max(1, differenceInCalendarMonths(end, start) + 1);
+
+    const monthlyTotalSalaries = users
+      .filter(u => PRODUCTION_ROLES.includes(u.role))
+      .reduce((a, u) => a + (u.monthlySalary || 0), 0);
+    const totalSalaries = monthlyTotalSalaries * months;
+
+    // Alocação proporcional por peso de esforço
+    const wReels = reels * 10, wCri = criativos * 5, wArt = artes * 4, wSto = stories * 3;
+    const wTotal = wReels + wCri + wArt + wSto;
     const salReels = wTotal > 0 ? (totalSalaries * wReels) / wTotal : 0;
     const salCri = wTotal > 0 ? (totalSalaries * wCri) / wTotal : 0;
+    const salArt = wTotal > 0 ? (totalSalaries * wArt) / wTotal : 0;
     const salSto = wTotal > 0 ? (totalSalaries * wSto) / wTotal : 0;
 
     return {
-      totalSalaries, reels, criativos, stories,
+      totalSalaries, monthlyTotalSalaries, months,
+      reels, criativos, stories, artes,
       cReels: reels > 0 ? salReels / reels : 0,
       cCri: criativos > 0 ? salCri / criativos : 0,
+      cArt: artes > 0 ? salArt / artes : 0,
       cSto: stories > 0 ? salSto / stories : 0,
-      salReels, salCri, salSto,
+      salReels, salCri, salArt, salSto,
     };
-  }, [records, editorTasks, socialDeliveries, salaryExpenses, selectedClient, dateRange]);
+  }, [records, editorTasks, designTasks, socialDeliveries, users, selectedClient, dateRange]);
 
   const fmt = (n: number) => n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
 
   const items = [
     { icon: Film, label: 'Reels', qty: data.reels, cost: data.cReels, total: data.salReels, color: 'text-blue-600', border: 'hsl(217,91%,60%)' },
     { icon: Megaphone, label: 'Criativos', qty: data.criativos, cost: data.cCri, total: data.salCri, color: 'text-purple-600', border: 'hsl(262,83%,58%)' },
+    { icon: Palette, label: 'Artes', qty: data.artes, cost: data.cArt, total: data.salArt, color: 'text-orange-600', border: 'hsl(24,95%,53%)' },
     { icon: ImageIcon, label: 'Stories', qty: data.stories, cost: data.cSto, total: data.salSto, color: 'text-pink-600', border: 'hsl(330,81%,60%)' },
   ];
 
@@ -111,7 +130,7 @@ export default function CostByContentType() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Target size={24} className="text-primary" /> Custo por Tipo de Conteúdo
         </h1>
-        <p className="text-sm text-muted-foreground">Alocação proporcional dos salários por peso de esforço (Reels=10, Criativo=5, Story=3)</p>
+        <p className="text-sm text-muted-foreground">Alocação proporcional dos salários da equipe de produção por peso de esforço (Reels=10, Criativo=5, Arte=4, Story=3)</p>
       </div>
 
       <Card>
@@ -151,19 +170,35 @@ export default function CostByContentType() {
           <CardContent className="p-4">
             <DollarSign size={18} className="text-destructive mb-2" />
             <p className="text-xl font-bold">{fmt(data.totalSalaries)}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Total Salários (Período)</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Salários no Período ({data.months}m)</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <DollarSign size={18} className="text-muted-foreground mb-2" />
+            <p className="text-xl font-bold">{fmt(data.monthlyTotalSalaries)}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Folha Mensal (Produção)</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <Calculator size={18} className="text-amber-600 mb-2" />
-            <p className="text-xl font-bold">{data.reels + data.criativos + data.stories}</p>
+            <p className="text-xl font-bold">{data.reels + data.criativos + data.stories + data.artes}</p>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Conteúdos Produzidos</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {data.monthlyTotalSalaries === 0 && (
+        <Card className="border-amber-500/50 bg-amber-500/5">
+          <CardContent className="p-4 text-sm">
+            <p className="font-semibold text-amber-700 dark:text-amber-400">⚠ Nenhum salário cadastrado</p>
+            <p className="text-xs text-muted-foreground mt-1">Cadastre o salário mensal dos colaboradores em <b>Equipe</b> (campo "Salário Mensal") para os custos aparecerem aqui.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {items.map((it, i) => (
           <Card key={i} className="overflow-hidden border-l-4" style={{ borderLeftColor: it.border }}>
             <CardContent className="p-4">

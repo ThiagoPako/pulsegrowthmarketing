@@ -438,6 +438,7 @@ export default function InternalReports() {
         <TabsList>
           <TabsTrigger value="videomakers" className="gap-1.5"><Film size={14} /> Videomakers</TabsTrigger>
           <TabsTrigger value="editors" className="gap-1.5"><Scissors size={14} /> Editores</TabsTrigger>
+          <TabsTrigger value="designers" className="gap-1.5"><Palette size={14} /> Designers</TabsTrigger>
         </TabsList>
 
         {/* ════════ VIDEOMAKERS TAB ════════ */}

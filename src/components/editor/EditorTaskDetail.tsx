@@ -263,6 +263,44 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
     onRefresh();
   };
 
+  const [uploadingSlotId, setUploadingSlotId] = useState<string | null>(null);
+  const [slotProgress, setSlotProgress] = useState(0);
+
+  const uploadSlotFile = async (slotId: string, file: File) => {
+    if (!file) return;
+    const maxSize = 2 * 1024 * 1024 * 1024;
+    if (file.size > maxSize) { toast.error('Máximo: 2GB'); return; }
+    if (!file.type.startsWith('video/') && !file.type.startsWith('image/')) {
+      toast.error('Selecione um arquivo de vídeo ou imagem válido');
+      return;
+    }
+    setUploadingSlotId(slotId);
+    setSlotProgress(0);
+    try {
+      const folder = `content/${task.client_id}/${task.id}/slots`;
+      const url = await uploadFileToVps(file, {
+        folder,
+        retries: 3,
+        onProgress: (p) => setSlotProgress(p.percent),
+      });
+      const nextSlots = slots.map(s => s.id === slotId ? { ...s, link: url } : s);
+      setSlots(nextSlots);
+      const newDesc = serializeSlots(baseDescription, nextSlots);
+      await supabase.from('content_tasks').update({
+        description: newDesc, updated_at: new Date().toISOString(),
+      }).eq('id', task.id);
+      await logAction('Upload de slot de otimização', url);
+      toast.success('Arquivo enviado ao slot 🎬');
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao enviar arquivo');
+    } finally {
+      setUploadingSlotId(null);
+      setSlotProgress(0);
+    }
+  };
+
+
 
   useEffect(() => {
     if (!open || !task.script_id || contextScript) { setFetchedScript(null); return; }

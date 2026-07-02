@@ -91,6 +91,7 @@ const navCategories: NavCategory[] = [
       { path: '/financeiro/chat', label: 'Chat IA', icon: Bot, roles: ['admin'] },
       { path: '/financeiro/apis', label: 'APIs', icon: Plug, roles: ['admin'] },
       { path: '/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin', 'social_media'] },
+      { path: '/relatorios/custo-conteudo', label: 'Custo por Conteúdo', icon: BarChart3, roles: ['admin'] },
       { path: '/whatsapp', label: 'WhatsApp', icon: MessageSquare, roles: ['admin', 'social_media'] },
       { path: '/automacoes', label: 'Automações', icon: Bot, roles: ['admin', 'social_media'] },
       { path: '/panfletagem', label: 'Panfletagem', icon: Car, roles: ['admin'] },

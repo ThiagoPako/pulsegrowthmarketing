@@ -725,8 +725,14 @@ export default function CommercialProposal() {
     if (proposalType === 'personalizada' && !customMonthlyValue) { toast.error('Preencha o valor da proposta'); return; }
     if (proposalType === 'cronograma' && cronogramaDeliverables.length === 0) { toast.error('Gere ou adicione entregas ao cronograma'); return; }
     if (proposalType === 'cronograma' && cronogramaPricingMode === 'total' && !cronogramaTotalCustomValue) { toast.error('Informe o valor total do serviço'); return; }
-    if (proposalType === 'videos' && (parseInt(videosQty) || 0) <= 0) { toast.error('Informe a quantidade de vídeos'); return; }
-    if (proposalType === 'videos' && (parseFloat(videosUnitPrice) || 0) <= 0) { toast.error('Informe o valor unitário do vídeo'); return; }
+    if (proposalType === 'videos') {
+      if ((parseInt(videosQty) || 0) <= 0) { toast.error('Informe uma quantidade de Reels maior que zero'); return; }
+      if ((parseFloat(videosUnitPrice) || 0) <= 0) { toast.error('O valor unitário do Reels deve ser maior que zero'); return; }
+      const invalidExtra = videosExtras.find(e => !(Number(e.value) > 0));
+      if (invalidExtra) { toast.error(`O adicional "${invalidExtra.name}" deve ter valor maior que zero`); return; }
+      const disc = Number(customDiscount) || 0;
+      if (disc < 0 || disc > 50) { toast.error('O desconto deve estar entre 0% e 50%'); return; }
+    }
     setSavingProposal(true);
     try {
       const systemData = proposalType === 'sistema' ? {

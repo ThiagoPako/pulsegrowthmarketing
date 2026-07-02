@@ -909,6 +909,13 @@ export default function CommercialProposal() {
         if (discount > 0) totalValue = totalValue * (1 - discount / 100);
         installments = crono.installments || 1;
         description = `Cronograma - ${proposal.client_company}`;
+      } else if (pType === 'videos') {
+        const vid = proposal.system_data || {};
+        totalValue = vid.totalValue || ((vid.quantity || 0) * (vid.unitPrice || 0));
+        const discount = proposal.custom_discount || 0;
+        if (discount > 0) totalValue = totalValue * (1 - discount / 100);
+        installments = vid.installments || 1;
+        description = `Vídeos Avulsos - ${proposal.client_company}`;
       }
 
       if (totalValue <= 0) return;

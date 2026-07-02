@@ -1797,8 +1797,19 @@ export default function CommercialProposal() {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div>
-                <Label>Quantidade de Reels</Label>
-                <Input type="number" min={1} value={videosQty} onChange={e => setVideosQty(e.target.value)} />
+                <Label>Quantidade de Reels <span className="text-destructive">*</span></Label>
+                <Input
+                  type="number"
+                  min={1}
+                  required
+                  value={videosQty}
+                  onChange={e => setVideosQty(e.target.value)}
+                  aria-invalid={qty <= 0}
+                  className={qty <= 0 ? 'border-destructive focus-visible:ring-destructive' : ''}
+                />
+                {qty <= 0 && (
+                  <p className="text-xs text-destructive mt-1">Informe uma quantidade maior que zero.</p>
+                )}
               </div>
               <div>
                 <Label>Valor por Reels (R$)</Label>

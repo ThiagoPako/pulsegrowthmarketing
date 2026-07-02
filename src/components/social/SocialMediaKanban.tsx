@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import {
   Film, Palette, Image, Megaphone, CheckCircle2, Clock, CalendarClock,
   Send, Zap, Eye, MessageSquare, AlertTriangle, ExternalLink, Link2,
-  Scissors, Flame, Rocket, Sparkles, ChevronLeft, ChevronRight, Download
+  Scissors, Flame, Rocket, Sparkles, ChevronLeft, ChevronRight, Download, Trash2
 } from 'lucide-react';
 import DeadlineBadge from '@/components/DeadlineBadge';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -112,6 +112,7 @@ interface SocialMediaKanbanProps {
   onTogglePriority: (taskId: string, current: boolean) => void;
   sendingWhatsApp: boolean;
   onDragMove?: (delivery: SocialDelivery, targetColumnId: string, socialStatus: string, contentColumn: string) => void;
+  onDelete?: (d: SocialDelivery) => void;
   highlightTaskId?: string | null;
 }
 
@@ -247,6 +248,7 @@ export default function SocialMediaKanban({
   onTogglePriority,
   sendingWhatsApp,
   onDragMove,
+  onDelete,
   highlightTaskId,
 }: SocialMediaKanbanProps) {
   const [showRocket, setShowRocket] = useState(false);
@@ -432,6 +434,7 @@ export default function SocialMediaKanban({
                             forwardLabel={adj.next?.title}
                             backwardLabel={adj.prev?.title}
                             isHighlighted={highlightTaskId != null && item.content_task_id === highlightTaskId}
+                            onDelete={onDelete ? () => onDelete(item) : undefined}
                           />
                         );
                       })
@@ -511,6 +514,7 @@ function DeliveryCard({
   forwardLabel,
   backwardLabel,
   isHighlighted,
+  onDelete,
 }: {
   delivery: SocialDelivery;
   index: number;
@@ -531,6 +535,7 @@ function DeliveryCard({
   forwardLabel?: string;
   backwardLabel?: string;
   isHighlighted?: boolean;
+  onDelete?: () => void;
 }) {
   const typeConf = getTypeConfig(d.content_type);
   const td = d.content_task_id ? taskDeadlines[d.content_task_id] : null;
@@ -561,7 +566,24 @@ function DeliveryCard({
       >
         <CardContent className="p-3 space-y-2">
           {/* Title */}
-          <p className="text-sm font-medium text-foreground leading-tight line-clamp-2">{d.title}</p>
+          <div className="flex items-start gap-2">
+            <p className="text-sm font-medium text-foreground leading-tight line-clamp-2 flex-1">{d.title}</p>
+            {onDelete && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (window.confirm(`Excluir "${d.title}"? Esta ação removerá também a tarefa de conteúdo vinculada e é irreversível.`)) {
+                    onDelete();
+                  }
+                }}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive shrink-0"
+                title="Excluir card"
+              >
+                <Trash2 size={13} />
+              </button>
+            )}
+          </div>
+
 
           {/* Badges */}
           <div className="flex items-center gap-1.5 flex-wrap">

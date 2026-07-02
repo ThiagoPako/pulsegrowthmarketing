@@ -29,7 +29,7 @@ export const AVAILABLE_MODULES: ModuleDef[] = [
   { key: 'crm', label: 'CRM', icon: '📋', description: 'Pipeline de vendas e CRM', paths: ['/crm'] },
   { key: 'endomarketing', label: 'Endomarketing', icon: '📣', description: 'Módulo completo de endomarketing', paths: ['/endomarketing', '/endomarketing/contratos', '/endomarketing/tarefas', '/endomarketing/relatorios', '/endomarketing/calendario'] },
   { key: 'financeiro', label: 'Financeiro', icon: '💰', description: 'Módulo financeiro completo', paths: ['/financeiro', '/financeiro/contratos', '/financeiro/receitas', '/financeiro/despesas', '/financeiro/inadimplencia', '/financeiro/relatorios', '/financeiro/configuracoes', '/financeiro/caixa', '/financeiro/movimentacoes', '/financeiro/parceiros', '/financeiro/chat', '/financeiro/apis'] },
-  { key: 'relatorios', label: 'Relatórios', icon: '📊', description: 'Relatórios gerais', paths: ['/relatorios'] },
+  { key: 'relatorios', label: 'Relatórios', icon: '📊', description: 'Relatórios gerais', paths: ['/relatorios', '/relatorios/custo-conteudo'] },
   { key: 'whatsapp', label: 'WhatsApp', icon: '💬', description: 'Automação WhatsApp', paths: ['/whatsapp'] },
   { key: 'configuracoes', label: 'Configurações', icon: '⚙️', description: 'Configurações do sistema', paths: ['/configuracoes'] },
   { key: 'portal_videos', label: 'Vídeos Portal', icon: '🎬', description: 'Vídeos de boas-vindas e novidades', paths: ['/portal-videos'] },

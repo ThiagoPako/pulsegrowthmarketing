@@ -436,6 +436,12 @@ export default function ClientPortal() {
     return months;
   }, [visibleContents]);
 
+  // All optimized content across seasons (dedicated tab)
+  const optimizedContents = useMemo(
+    () => visibleContents.filter(c => c.content_type === 'otimizacao'),
+    [visibleContents]
+  );
+
   // Metrics
   const reelsCount = seasonContents.filter(c => c.content_type === 'reel').length;
   const creativosCount = seasonContents.filter(c => c.content_type === 'criativo').length;

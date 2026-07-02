@@ -168,7 +168,8 @@ export default function Reports() {
   const filteredSocial = useMemo(() => {
     return socialDeliveries.filter(d => {
       if (selectedClient !== 'all' && d.client_id !== selectedClient) return false;
-      return d.delivered_at >= dateRange.start && d.delivered_at <= dateRange.end;
+      const day = (d.delivered_at || '').slice(0, 10);
+      return day >= dateRange.start && day <= dateRange.end;
     });
   }, [socialDeliveries, selectedClient, dateRange]);
 
@@ -255,11 +256,19 @@ export default function Reports() {
           units = vmRecs.length;
           vmRecs.forEach(r => { clientUnits[r.client_id] = (clientUnits[r.client_id] || 0) + 1; });
         } else if (user.role === 'editor') {
-          const edTasks = editorTasks.filter(t => t.edited_by === user.id && t.kanban_column === 'aprovado' && t.updated_at >= dateRange.start && t.updated_at <= dateRange.end);
+          const edTasks = editorTasks.filter(t => {
+            if (t.edited_by !== user.id || t.kanban_column !== 'aprovado') return false;
+            const day = (t.approved_at || t.updated_at || '').slice(0, 10);
+            return day >= dateRange.start && day <= dateRange.end;
+          });
           units = edTasks.length;
           edTasks.forEach(t => { clientUnits[t.client_id] = (clientUnits[t.client_id] || 0) + 1; });
         } else if (user.role === 'designer') {
-          const dTasks = designTasks.filter(t => t.assigned_to === user.id && t.kanban_column === 'aprovado' && t.completed_at && t.completed_at >= dateRange.start && t.completed_at <= dateRange.end);
+          const dTasks = designTasks.filter(t => {
+            if (t.assigned_to !== user.id || t.kanban_column !== 'aprovado' || !t.completed_at) return false;
+            const day = t.completed_at.slice(0, 10);
+            return day >= dateRange.start && day <= dateRange.end;
+          });
           units = dTasks.length;
           dTasks.forEach(t => { clientUnits[t.client_id] = (clientUnits[t.client_id] || 0) + 1; });
         }

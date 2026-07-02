@@ -263,6 +263,44 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
     onRefresh();
   };
 
+  const [uploadingSlotId, setUploadingSlotId] = useState<string | null>(null);
+  const [slotProgress, setSlotProgress] = useState(0);
+
+  const uploadSlotFile = async (slotId: string, file: File) => {
+    if (!file) return;
+    const maxSize = 2 * 1024 * 1024 * 1024;
+    if (file.size > maxSize) { toast.error('Máximo: 2GB'); return; }
+    if (!file.type.startsWith('video/') && !file.type.startsWith('image/')) {
+      toast.error('Selecione um arquivo de vídeo ou imagem válido');
+      return;
+    }
+    setUploadingSlotId(slotId);
+    setSlotProgress(0);
+    try {
+      const folder = `content/${task.client_id}/${task.id}/slots`;
+      const url = await uploadFileToVps(file, {
+        folder,
+        retries: 3,
+        onProgress: (p) => setSlotProgress(p.percent),
+      });
+      const nextSlots = slots.map(s => s.id === slotId ? { ...s, link: url } : s);
+      setSlots(nextSlots);
+      const newDesc = serializeSlots(baseDescription, nextSlots);
+      await supabase.from('content_tasks').update({
+        description: newDesc, updated_at: new Date().toISOString(),
+      }).eq('id', task.id);
+      await logAction('Upload de slot de otimização', url);
+      toast.success('Arquivo enviado ao slot 🎬');
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao enviar arquivo');
+    } finally {
+      setUploadingSlotId(null);
+      setSlotProgress(0);
+    }
+  };
+
+
 
   useEffect(() => {
     if (!open || !task.script_id || contextScript) { setFetchedScript(null); return; }
@@ -767,10 +805,28 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
                             value={slot.link}
                             onChange={e => updateSlot(slot.id, { link: e.target.value })}
                             className="h-8 text-xs flex-1"
+                            disabled={uploadingSlotId === slot.id}
                           />
-                          <Button size="sm" onClick={() => saveSlot(slot.id)} className="h-8 px-2 text-xs">
+                          <Button size="sm" onClick={() => saveSlot(slot.id)} className="h-8 px-2 text-xs" disabled={uploadingSlotId === slot.id}>
                             <Link2 size={11} />
                           </Button>
+                          <label className={`inline-flex items-center justify-center h-8 px-2 rounded-md border border-fuchsia-400/40 text-fuchsia-600 hover:bg-fuchsia-500/10 cursor-pointer transition-colors ${uploadingSlotId === slot.id ? 'opacity-50 pointer-events-none' : ''}`} title="Enviar arquivo">
+                            <input
+                              type="file"
+                              accept="video/*,image/*"
+                              className="hidden"
+                              onChange={e => {
+                                const f = e.target.files?.[0];
+                                if (f) uploadSlotFile(slot.id, f);
+                                e.currentTarget.value = '';
+                              }}
+                            />
+                            {uploadingSlotId === slot.id ? (
+                              <span className="text-[10px] font-bold">{slotProgress}%</span>
+                            ) : (
+                              <Upload size={11} />
+                            )}
+                          </label>
                           {isFilled && (
                             <Button asChild size="sm" variant="outline" className="h-8 px-2">
                               <a href={slot.link} target="_blank" rel="noopener noreferrer">
@@ -783,6 +839,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
                     );
                   })}
                 </div>
+
 
                 <div className="flex flex-wrap gap-1.5 pt-1 border-t border-fuchsia-500/20">
                   <Button size="sm" variant="outline" onClick={() => addSlot('story')} className="h-7 text-[11px] gap-1 border-pink-400/40 text-pink-600 hover:bg-pink-500/10">

@@ -438,19 +438,34 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   /* ─── Finalize & Send for Approval (with celebration) ───── */
   const sendForApproval = async () => {
     const currentLink = videoLink.trim() || task.edited_video_link;
-    if (!currentLink) { toast.error('Adicione o vídeo editado primeiro'); return; }
+    if (isOptimize) {
+      // Persist any pending slot edits first
+      const newDesc = serializeSlots(baseDescription, slots);
+      await supabase.from('content_tasks').update({
+        description: newDesc, updated_at: new Date().toISOString(),
+      }).eq('id', task.id);
+      const filled = slots.filter(s => s.link.trim().length > 0);
+      if (filled.length === 0 && !currentLink) {
+        toast.error('Anexe pelo menos 1 vídeo nos slots de otimização antes de enviar');
+        return;
+      }
+    } else {
+      if (!currentLink) { toast.error('Adicione o vídeo editado primeiro'); return; }
+    }
     setSaving(true);
+    const firstSlotLink = isOptimize ? slots.find(s => s.link.trim())?.link.trim() : null;
     await supabase.from('content_tasks').update({
       kanban_column: 'revisao',
       assigned_to: null,
+      edited_video_link: currentLink || firstSlotLink || null,
       updated_at: new Date().toISOString(),
     }).eq('id', task.id);
     const cl = clients.find(c => c.id === task.client_id);
-    const ctx = buildSyncContext({ ...task, edited_video_link: currentLink } as any, {
+    const ctx = buildSyncContext({ ...task, edited_video_link: currentLink || firstSlotLink } as any, {
       userId: user?.id, clientName: cl?.companyName, clientWhatsapp: (cl as any)?.whatsapp,
     });
     await syncContentTaskColumnChange('revisao', ctx);
-    await logAction('Enviado para aprovação');
+    await logAction('Enviado para aprovação', isOptimize ? `${slots.filter(s => s.link.trim()).length} slots otimizados` : undefined);
 
     // Trigger celebration
     const pts = cfg ? (getTypeConfig(task.content_type).points || 0) : 5;
@@ -461,6 +476,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
     onRefresh();
     setSaving(false);
   };
+
 
   const markAsFinished = async () => {
     setSaving(true);

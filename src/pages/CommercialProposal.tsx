@@ -97,6 +97,7 @@ const PROPOSAL_TYPE_LABELS: Record<ProposalType, string> = {
   endomarketing: 'Endomarketing',
   personalizada: 'Proposta Única',
   cronograma: 'Cronograma Completo',
+  videos: 'Vídeos Avulsos',
 };
 
 const PAYMENT_METHODS = [

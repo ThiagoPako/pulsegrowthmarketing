@@ -948,6 +948,57 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     onOpenChange(false);
   };
 
+  const handleOptimizeContent = async () => {
+    // Create optimization copy in "edicao" column - keeps original intact
+    try {
+      const now = new Date().toISOString();
+      const { data: existing } = await supabase
+        .from('content_tasks')
+        .select('id')
+        .eq('client_id', task.client_id)
+        .eq('content_type', 'otimizacao')
+        .eq('title', `[OTIMIZAÇÃO] ${task.title}`)
+        .limit(1);
+      if (existing && existing.length > 0) {
+        toast.info('Já existe uma otimização em andamento para este conteúdo');
+        return;
+      }
+      const payload: any = {
+        client_id: task.client_id,
+        title: `[OTIMIZAÇÃO] ${task.title}`,
+        content_type: 'otimizacao',
+        kanban_column: 'edicao',
+        description: `Otimização gerada a partir do conteúdo aprovado. Aproveitar as gravações originais para criar Stories, Criativos e cortes adicionais.`,
+        recording_id: (task as any).recording_id || null,
+        script_id: (task as any).script_id || null,
+        drive_link: task.drive_link || null,
+        created_by: user?.id || null,
+        assigned_to: null,
+        edited_by: null,
+        edited_video_link: null,
+        editing_started_at: null,
+        editing_priority: false,
+        immediate_alteration: false,
+        position: 0,
+        created_at: now,
+        updated_at: now,
+      };
+      // Try to link parent if column exists
+      (payload as any).parent_task_id = task.id;
+
+      const { error } = await supabase.from('content_tasks').insert(payload);
+      if (error) {
+        // Retry without parent_task_id (in case column not yet migrated)
+        delete (payload as any).parent_task_id;
+        const retry = await supabase.from('content_tasks').insert(payload);
+        if (retry.error) throw retry.error;
+      }
+      toast.success('🚀 Card de Otimização criado na Edição!');
+    } catch (e: any) {
+      toast.error('Erro ao criar otimização: ' + (e?.message || 'erro'));
+    }
+  };
+
   const handleMoveToNext = async (targetColumn: string) => {
     if (targetColumn === 'edicao' && !task.drive_link) {
       toast.error('Adicione o link dos materiais (Drive) primeiro');

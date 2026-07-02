@@ -366,34 +366,10 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
         )}
       </div>
 
-      {/* Formats dialog */}
-      {isOptimize && (
-        <Dialog open={formatsOpen} onOpenChange={setFormatsOpen}>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Lightbulb size={18} className="text-fuchsia-500" /> Formatos de Otimização
-              </DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {OPT_FORMATS.map((f, i) => (
-                <div key={i} className="rounded-lg border border-fuchsia-400/30 bg-gradient-to-br from-fuchsia-500/5 to-violet-500/5 p-3">
-                  <p className="text-sm font-bold text-foreground mb-1">{f.title}</p>
-                  <p className="text-xs text-foreground/80 mb-1.5">{f.desc}</p>
-                  <p className="text-[10px] text-fuchsia-600 dark:text-fuchsia-300 font-semibold">💡 {f.tip}</p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
-              <p className="text-xs font-bold text-amber-700 dark:text-amber-400">⭐ Regra de ouro</p>
-              <p className="text-[11px] text-foreground/80 mt-1">Gancho nos primeiros 3s, corte a cada 1-2s pra manter ritmo, e sempre feche com CTA claro.</p>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
     </div>
   );
 }
+
 
 
 export default function EditorKanban() {

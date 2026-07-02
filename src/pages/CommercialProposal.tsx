@@ -266,6 +266,17 @@ export default function CommercialProposal() {
   const [cronogramaTotalCustomValue, setCronogramaTotalCustomValue] = useState('');
   const [generatingTimeline, setGeneratingTimeline] = useState(false);
 
+  // Videos avulsos fields
+  const [videosQty, setVideosQty] = useState('4');
+  const [videosUnitPrice, setVideosUnitPrice] = useState('350');
+  const [videosDeliveryDays, setVideosDeliveryDays] = useState('15');
+  const [videosDescription, setVideosDescription] = useState('');
+  const [videosExtras, setVideosExtras] = useState<{ id: string; name: string; value: number }[]>([]);
+  const [newVideosExtraName, setNewVideosExtraName] = useState('');
+  const [newVideosExtraValue, setNewVideosExtraValue] = useState('');
+  const [videosPaymentMethod, setVideosPaymentMethod] = useState('pix');
+  const [videosInstallments, setVideosInstallments] = useState('1');
+
   // ── Clear proposal ──
   const DRAFT_KEY = 'pulse_proposal_draft';
   const clearProposal = useCallback(() => {

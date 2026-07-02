@@ -39,7 +39,7 @@ export default function CostByContentType() {
       supabase.from('delivery_records').select('client_id,date,reels_produced,creatives_produced,stories_produced,arts_produced,delivery_status'),
       supabase.from('social_media_deliveries').select('client_id,content_type,delivered_at,status'),
       supabase.from('content_tasks').select('client_id,content_type,kanban_column,approved_at,updated_at'),
-      supabase.from('design_tasks').select('client_id,kanban_column,completed_at,updated_at'),
+      supabase.from('design_tasks').select('client_id,kanban_column,completed_at,updated_at,attachment_url,editable_file_url,mockup_url'),
     ]);
     if (rRes.data) setRecords(rRes.data as DeliveryRecord[]);
     if (sRes.data) setSocialDeliveries(sRes.data as SocialDelivery[]);

@@ -106,6 +106,17 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
   const isReview = task.kanban_column === 'revisao';
   const isMine = task.assigned_to === currentUserId;
   const isOptimize = task.content_type === 'otimizacao';
+  const [formatsOpen, setFormatsOpen] = useState(false);
+  const OPT_FORMATS = [
+    { title: '🎣 Gancho em Áudio + Takes', desc: 'Use a melhor frase do reel como gancho e cubra com takes soltos.', tip: 'Ideal para Story de 15s.' },
+    { title: '🎬 Mashup Multi-Vídeos', desc: 'Combine trechos de vários reels do cliente em um só.', tip: 'Ótimo pra criativo de anúncio.' },
+    { title: '⚡ Corte Rápido (Hook 3s)', desc: 'Comece com o clímax do vídeo nos primeiros 3s.', tip: 'Prende atenção no feed.' },
+    { title: '📱 Vertical Story Nativo', desc: 'Adapte pro formato 9:16 com stickers e enquetes.', tip: 'Aumenta interação.' },
+    { title: '💬 Legenda em Destaque', desc: 'Coloque a fala principal em texto grande na tela.', tip: 'Funciona sem áudio.' },
+    { title: '🔁 Loop Perfeito', desc: 'Faça o final conectar com o começo pra rodar em loop.', tip: 'Mais tempo de watch.' },
+    { title: '📊 Antes x Depois', desc: 'Mostre transformação/comparação usando os takes.', tip: 'Alto engajamento.' },
+    { title: '🎯 CTA Forte', desc: 'Reforce a chamada pra ação nos últimos 2s.', tip: 'Converte mais.' },
+  ];
 
   return (
     <div draggable onDragStart={e => onDragStart(e, task)}

@@ -6,9 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from 'date-fns';
-import { HeartPulse, TrendingUp, TrendingDown, DollarSign, Percent, Wallet } from 'lucide-react';
+import { HeartPulse, TrendingUp, TrendingDown, DollarSign, Percent, Wallet, FileText } from 'lucide-react';
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import { motion } from 'framer-motion';
+import { exportReportPDF } from '@/lib/pdfExport';
 
 type PeriodPreset = 'current' | 'previous' | 'quarter' | 'year' | 'custom';
 

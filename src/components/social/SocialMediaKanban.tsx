@@ -112,6 +112,7 @@ interface SocialMediaKanbanProps {
   onTogglePriority: (taskId: string, current: boolean) => void;
   sendingWhatsApp: boolean;
   onDragMove?: (delivery: SocialDelivery, targetColumnId: string, socialStatus: string, contentColumn: string) => void;
+  onDelete?: (d: SocialDelivery) => void;
   highlightTaskId?: string | null;
 }
 

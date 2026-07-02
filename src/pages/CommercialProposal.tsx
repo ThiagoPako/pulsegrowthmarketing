@@ -2685,6 +2685,7 @@ export default function CommercialProposal() {
           {proposalType === 'endomarketing' && renderEndoForm()}
           {proposalType === 'personalizada' && renderCustomForm()}
           {proposalType === 'cronograma' && renderCronogramaForm()}
+          {proposalType === 'videos' && renderVideosForm()}
 
           {/* Bonus - available for all types */}
           <Card>

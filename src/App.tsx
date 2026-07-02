@@ -87,6 +87,7 @@ const LinkShortener = lazy(() => import("@/pages/LinkShortener"));
 const ShortLinkRedirect = lazy(() => import("@/pages/ShortLinkRedirect"));
 const Training = lazy(() => import("@/pages/Training"));
 const TrainingRegister = lazy(() => import("@/pages/TrainingRegister"));
+const OptimizationFormatsGuide = lazy(() => import("@/pages/OptimizationFormatsGuide"));
 
 
 const queryClient = new QueryClient({

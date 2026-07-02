@@ -2517,7 +2517,7 @@ export default function CommercialProposal() {
                           )}
                           <div className="flex items-center gap-1 text-muted-foreground">
                             <DollarSign className="h-3 w-3" />
-                            Valor: {fmt(totalValue)}{pType !== 'sistema' ? '/mês' : ''}
+                            Valor: {fmt(totalValue)}{(pType !== 'sistema' && pType !== 'videos') ? '/mês' : ''}
                           </div>
                           <div className="flex items-center gap-1">
                             {hasRevenues ? (

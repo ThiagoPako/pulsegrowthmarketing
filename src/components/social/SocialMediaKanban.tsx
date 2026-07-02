@@ -434,6 +434,7 @@ export default function SocialMediaKanban({
                             forwardLabel={adj.next?.title}
                             backwardLabel={adj.prev?.title}
                             isHighlighted={highlightTaskId != null && item.content_task_id === highlightTaskId}
+                            onDelete={onDelete ? () => onDelete(item) : undefined}
                           />
                         );
                       })

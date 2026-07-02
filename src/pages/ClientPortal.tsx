@@ -801,7 +801,9 @@ export default function ClientPortal() {
                 </motion.div>
               )}
 
-              {Object.entries(contentByType).map(([type, items], idx) => (
+              {Object.entries(contentByType)
+                .filter(([type]) => type !== 'otimizacao')
+                .map(([type, items], idx) => (
                 <ContentRow
                   key={type}
                   label={ROW_LABELS[type] || type}

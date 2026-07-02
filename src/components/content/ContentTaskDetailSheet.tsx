@@ -68,6 +68,35 @@ const KANBAN_COLUMNS = [
   { id: 'acompanhamento', label: 'Acompanhamento', icon: '👀' },
 ];
 
+// ─── OPTIMIZATION SLOTS HELPERS ─────────────────────────────
+type OptSlot = { id: string; type: 'story' | 'criativo' | 'reels'; link: string };
+const OPT_MARKER = '[[OPT_SLOTS]]';
+function parseOptSlots(description: string | null): { slots: OptSlot[]; baseDescription: string } {
+  if (!description) return { slots: [], baseDescription: '' };
+  const idx = description.indexOf(OPT_MARKER);
+  if (idx < 0) return { slots: [], baseDescription: description };
+  const base = description.slice(0, idx).trim();
+  const raw = description.slice(idx + OPT_MARKER.length).trim();
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return { slots: parsed, baseDescription: base };
+  } catch {}
+  return { slots: [], baseDescription: base };
+}
+function serializeOptSlots(baseDescription: string, slots: OptSlot[]): string {
+  return `${baseDescription || ''}\n\n${OPT_MARKER}${JSON.stringify(slots)}`.trim();
+}
+function defaultOptSlots(): OptSlot[] {
+  const t = Date.now();
+  return [
+    { id: `s_${t}_1`, type: 'story', link: '' },
+    { id: `s_${t}_2`, type: 'criativo', link: '' },
+    { id: `s_${t}_3`, type: 'reels', link: '' },
+  ];
+}
+
+
+
 const PLATFORMS = ['Instagram', 'Facebook'];
 
 // Rocket Launch Button with floating animation
@@ -647,6 +676,21 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
   // Video upload state
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const videoInputRef = useRef<HTMLInputElement>(null);
+
+  // Optimization slots state
+  const [optSlots, setOptSlots] = useState<OptSlot[]>([]);
+  const [optBaseDesc, setOptBaseDesc] = useState<string>('');
+  const [uploadingSlotId, setUploadingSlotId] = useState<string | null>(null);
+  const [slotProgress, setSlotProgress] = useState(0);
+
+  useEffect(() => {
+    if (!task || task.content_type !== 'otimizacao') return;
+    const p = parseOptSlots(task.description);
+    setOptBaseDesc(p.baseDescription);
+    setOptSlots(p.slots.length > 0 ? p.slots : defaultOptSlots());
+  }, [task?.id, task?.description, task?.content_type]);
+
+
   
 
   // Fetch history
@@ -1001,7 +1045,101 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     }
   };
 
+  const persistOptSlots = async (nextSlots: OptSlot[]) => {
+    setOptSlots(nextSlots);
+    const newDesc = serializeOptSlots(optBaseDesc, nextSlots);
+    await supabase.from('content_tasks').update({
+      description: newDesc, updated_at: new Date().toISOString(),
+    } as any).eq('id', task.id);
+  };
+
+  const uploadOptSlotFile = async (slotId: string, file: File) => {
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024 * 1024) { toast.error('Máximo: 2GB'); return; }
+    if (!file.type.startsWith('video/') && !file.type.startsWith('image/')) {
+      toast.error('Envie um vídeo ou imagem válido'); return;
+    }
+    setUploadingSlotId(slotId);
+    setSlotProgress(0);
+    try {
+      const url = await uploadFileToVps(file, {
+        folder: `content/${task.client_id}/${task.id}/slots`,
+        retries: 3,
+        onProgress: (p: any) => setSlotProgress(p.percent),
+      } as any);
+      const next = optSlots.map(s => s.id === slotId ? { ...s, link: url } : s);
+      await persistOptSlots(next);
+      toast.success('Arquivo enviado ao slot 🎬');
+      onRefresh();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro no upload');
+    } finally {
+      setUploadingSlotId(null);
+      setSlotProgress(0);
+    }
+  };
+
+  const splitOptimizationIntoCards = async () => {
+    const filled = optSlots.filter(s => s.link.trim().length > 0);
+    if (filled.length === 0) {
+      toast.error('Anexe pelo menos 1 vídeo em algum slot antes de enviar');
+      return;
+    }
+    const now = new Date().toISOString();
+    const baseTitle = task.title.replace(/^\[OTIMIZAÇÃO\]\s*/i, '').trim();
+    const typeLabel: Record<OptSlot['type'], string> = {
+      story: 'STORY', criativo: 'CRIATIVO', reels: 'REELS',
+    };
+    const payloads = filled.map((s, idx) => ({
+      client_id: task.client_id,
+      title: `[OTIMIZAÇÃO · ${typeLabel[s.type]}] ${baseTitle}`,
+      content_type: s.type === 'reels' ? 'reels' : s.type, // 'story' | 'criativo' | 'reels'
+      kanban_column: 'revisao',
+      description: `Conteúdo otimizado a partir do Reels: "${baseTitle}".\n\n${OPT_MARKER}${JSON.stringify([{ id: `parent_${task.id}`, type: s.type, link: s.link, parentOptimization: true, parentTitle: baseTitle }])}`,
+      recording_id: (task as any).recording_id || null,
+      script_id: (task as any).script_id || null,
+      drive_link: task.drive_link || null,
+      edited_video_link: s.link,
+      created_by: user?.id || null,
+      assigned_to: null,
+      edited_by: (task as any).edited_by || user?.id || null,
+      editing_started_at: null,
+      editing_priority: false,
+      immediate_alteration: false,
+      position: idx,
+      parent_task_id: task.id,
+      created_at: now,
+      updated_at: now,
+    }));
+
+    for (const payload of payloads) {
+      let { error } = await supabase.from('content_tasks').insert(payload as any);
+      if (error) {
+        // fallback if parent_task_id column missing
+        const { parent_task_id, ...rest } = payload as any;
+        const retry = await supabase.from('content_tasks').insert(rest);
+        if (retry.error) { toast.error('Erro ao criar cards: ' + retry.error.message); return; }
+      }
+    }
+
+    // Remove the original optimization container card
+    await supabase.from('content_tasks').delete().eq('id', task.id);
+    await supabase.from('task_history').insert({
+      task_id: task.id, user_id: user?.id || null,
+      action: `Otimização dividida em ${filled.length} card(s) de revisão`,
+    } as any);
+
+    toast.success(`🚀 ${filled.length} card(s) enviados para revisão!`);
+    onRefresh();
+    onOpenChange(false);
+  };
+
   const handleMoveToNext = async (targetColumn: string) => {
+    // Special flow: optimization card → split into per-slot review cards
+    if (task.content_type === 'otimizacao' && targetColumn === 'revisao') {
+      await splitOptimizationIntoCards();
+      return;
+    }
     if (targetColumn === 'edicao' && !task.drive_link) {
       toast.error('Adicione o link dos materiais (Drive) primeiro');
       return;
@@ -1021,6 +1159,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     onRefresh();
     onOpenChange(false);
   };
+
 
   const getUserName = (userId: string | null) => {
     if (!userId) return 'Sistema';
@@ -1114,8 +1253,101 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
             >
               <Lightbulb size={14} /> Abrir guia com infográficos
             </a>
+
+            {/* ─── OPTIMIZATION SLOTS ─────────────────────── */}
+            <div className="space-y-2 pt-2 border-t border-fuchsia-300/30">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-fuchsia-700 dark:text-fuchsia-300">
+                  🎬 Slots de conteúdo otimizado
+                </p>
+                <span className="text-[10px] text-fuchsia-700/70 dark:text-fuchsia-300/70">
+                  {optSlots.filter(s => s.link.trim()).length}/{optSlots.length} preenchidos
+                </span>
+              </div>
+              {optSlots.map((slot, idx) => {
+                const meta = slot.type === 'story'
+                  ? { label: 'Story', icon: Image, color: 'from-pink-500/10 to-pink-500/5 border-pink-400/40 text-pink-700 dark:text-pink-300' }
+                  : slot.type === 'criativo'
+                  ? { label: 'Criativo', icon: Megaphone, color: 'from-purple-500/10 to-purple-500/5 border-purple-400/40 text-purple-700 dark:text-purple-300' }
+                  : { label: 'Reels', icon: Film, color: 'from-blue-500/10 to-blue-500/5 border-blue-400/40 text-blue-700 dark:text-blue-300' };
+                const Icon = meta.icon;
+                const filled = slot.link.trim().length > 0;
+                const isUploading = uploadingSlotId === slot.id;
+                return (
+                  <div key={slot.id} className={`rounded-lg border bg-gradient-to-r ${meta.color} p-2.5 space-y-1.5`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Icon size={13} />
+                        <span className="text-[11px] font-bold uppercase tracking-wider">
+                          Slot {idx + 1} · {meta.label}
+                        </span>
+                        {filled && <CheckCircle2 size={13} className="text-green-500" />}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => persistOptSlots(optSlots.filter(s => s.id !== slot.id))}
+                        className="text-[10px] text-red-500 hover:text-red-700"
+                        title="Remover slot"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        placeholder="Cole um link ou faça upload →"
+                        value={slot.link}
+                        onChange={e => setOptSlots(prev => prev.map(s => s.id === slot.id ? { ...s, link: e.target.value } : s))}
+                        onBlur={() => persistOptSlots(optSlots)}
+                        className="h-8 text-xs"
+                        disabled={isUploading}
+                      />
+                      <label className={`inline-flex items-center justify-center h-8 px-2 rounded-md border border-fuchsia-400/40 text-fuchsia-600 hover:bg-fuchsia-500/10 cursor-pointer transition-colors ${isUploading ? 'opacity-50 pointer-events-none' : ''}`} title="Enviar arquivo">
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="video/*,image/*"
+                          onChange={e => {
+                            const f = e.target.files?.[0];
+                            if (f) uploadOptSlotFile(slot.id, f);
+                            e.target.value = '';
+                          }}
+                        />
+                        {isUploading ? (
+                          <span className="text-[10px] font-bold">{slotProgress}%</span>
+                        ) : (
+                          <Upload size={13} />
+                        )}
+                      </label>
+                      {filled && (
+                        <a href={slot.link} target="_blank" rel="noopener noreferrer" className="text-fuchsia-600 hover:text-fuchsia-800" title="Abrir">
+                          <ExternalLink size={13} />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {(['story', 'criativo', 'reels'] as const).map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => persistOptSlots([...optSlots, { id: `s_${Date.now()}_${t}`, type: t, link: '' }])}
+                    className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md border border-fuchsia-400/40 text-fuchsia-700 dark:text-fuchsia-300 hover:bg-fuchsia-500/10"
+                  >
+                    + {t === 'story' ? 'Story' : t === 'criativo' ? 'Criativo' : 'Reels'}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground italic pt-1">
+                Ao enviar para <b>Revisão</b>, cada slot preenchido vira um cartão separado com a tag OTIMIZAÇÃO.
+              </p>
+            </div>
           </div>
         )}
+
+
+
 
 
 

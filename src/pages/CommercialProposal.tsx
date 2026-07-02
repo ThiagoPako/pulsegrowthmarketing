@@ -1880,18 +1880,32 @@ export default function CommercialProposal() {
               )}
               <div className="grid grid-cols-3 gap-2">
                 <Input className="col-span-2" placeholder="Ex: Cobertura de evento" value={newVideosExtraName} onChange={e => setNewVideosExtraName(e.target.value)} />
-                <Input type="number" placeholder="Valor" value={newVideosExtraValue} onChange={e => setNewVideosExtraValue(e.target.value)} />
+                <Input
+                  type="number"
+                  min={0.01}
+                  step="0.01"
+                  placeholder="Valor"
+                  value={newVideosExtraValue}
+                  onChange={e => setNewVideosExtraValue(e.target.value)}
+                  aria-invalid={!!newVideosExtraValue && (parseFloat(newVideosExtraValue) || 0) <= 0}
+                  className={(!!newVideosExtraValue && (parseFloat(newVideosExtraValue) || 0) <= 0) ? 'border-destructive focus-visible:ring-destructive' : ''}
+                />
               </div>
+              {!!newVideosExtraValue && (parseFloat(newVideosExtraValue) || 0) <= 0 && (
+                <p className="text-xs text-destructive mt-1">O valor do adicional deve ser maior que zero.</p>
+              )}
               <Button
                 size="sm"
                 variant="outline"
                 className="mt-2"
                 onClick={() => {
-                  if (!newVideosExtraName || !newVideosExtraValue) return;
-                  setVideosExtras(prev => [...prev, { id: crypto.randomUUID(), name: newVideosExtraName, value: parseFloat(newVideosExtraValue) || 0 }]);
+                  const v = parseFloat(newVideosExtraValue) || 0;
+                  if (!newVideosExtraName.trim()) { toast.error('Informe o nome do adicional'); return; }
+                  if (v <= 0) { toast.error('O valor do adicional deve ser maior que zero'); return; }
+                  setVideosExtras(prev => [...prev, { id: crypto.randomUUID(), name: newVideosExtraName.trim(), value: v }]);
                   setNewVideosExtraName(''); setNewVideosExtraValue('');
                 }}
-                disabled={!newVideosExtraName || !newVideosExtraValue}
+                disabled={!newVideosExtraName.trim() || (parseFloat(newVideosExtraValue) || 0) <= 0}
               >
                 <Plus className="h-4 w-4 mr-1" /> Adicionar
               </Button>

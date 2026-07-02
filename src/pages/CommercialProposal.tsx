@@ -979,6 +979,7 @@ export default function CommercialProposal() {
     endomarketing: Megaphone,
     personalizada: Target,
     cronograma: CalendarDays,
+    videos: Film,
   };
 
   // ===== RENDER FORM SECTIONS =====

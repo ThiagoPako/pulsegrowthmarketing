@@ -203,6 +203,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [videomakerName, setVideomakerName] = useState<string | null>(null);
   const [videomakerAvatar, setVideomakerAvatar] = useState<string | null>(null);
+  const [formatsOpen, setFormatsOpen] = useState(false);
   const [fetchedScript, setFetchedScript] = useState<any>(null);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationPoints, setCelebrationPoints] = useState(0);

@@ -1245,6 +1245,22 @@ export default function SocialMediaDeliveries() {
           onTogglePriority={handleTogglePriorityFromQueue}
           sendingWhatsApp={sendingWhatsApp}
           onDragMove={handleKanbanDragMove}
+          onDelete={async (d) => {
+            try {
+              if (d.content_task_id) {
+                const { deleteContentTask } = await import('@/lib/contentDeleteSync');
+                await deleteContentTask(d.content_task_id);
+              } else {
+                const { deleteSocialDelivery } = await import('@/lib/contentDeleteSync');
+                await deleteSocialDelivery(d.id);
+              }
+              toast.success('Card excluído');
+              fetchData();
+            } catch (err) {
+              console.error('Delete error:', err);
+              toast.error('Erro ao excluir card');
+            }
+          }}
           highlightTaskId={highlightTaskId}
         />
 

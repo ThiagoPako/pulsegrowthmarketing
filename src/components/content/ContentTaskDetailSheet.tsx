@@ -68,6 +68,35 @@ const KANBAN_COLUMNS = [
   { id: 'acompanhamento', label: 'Acompanhamento', icon: '👀' },
 ];
 
+// ─── OPTIMIZATION SLOTS HELPERS ─────────────────────────────
+type OptSlot = { id: string; type: 'story' | 'criativo' | 'reels'; link: string };
+const OPT_MARKER = '[[OPT_SLOTS]]';
+function parseOptSlots(description: string | null): { slots: OptSlot[]; baseDescription: string } {
+  if (!description) return { slots: [], baseDescription: '' };
+  const idx = description.indexOf(OPT_MARKER);
+  if (idx < 0) return { slots: [], baseDescription: description };
+  const base = description.slice(0, idx).trim();
+  const raw = description.slice(idx + OPT_MARKER.length).trim();
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return { slots: parsed, baseDescription: base };
+  } catch {}
+  return { slots: [], baseDescription: base };
+}
+function serializeOptSlots(baseDescription: string, slots: OptSlot[]): string {
+  return `${baseDescription || ''}\n\n${OPT_MARKER}${JSON.stringify(slots)}`.trim();
+}
+function defaultOptSlots(): OptSlot[] {
+  const t = Date.now();
+  return [
+    { id: `s_${t}_1`, type: 'story', link: '' },
+    { id: `s_${t}_2`, type: 'criativo', link: '' },
+    { id: `s_${t}_3`, type: 'reels', link: '' },
+  ];
+}
+
+
+
 const PLATFORMS = ['Instagram', 'Facebook'];
 
 // Rocket Launch Button with floating animation

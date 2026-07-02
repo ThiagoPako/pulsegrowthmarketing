@@ -566,7 +566,24 @@ function DeliveryCard({
       >
         <CardContent className="p-3 space-y-2">
           {/* Title */}
-          <p className="text-sm font-medium text-foreground leading-tight line-clamp-2">{d.title}</p>
+          <div className="flex items-start gap-2">
+            <p className="text-sm font-medium text-foreground leading-tight line-clamp-2 flex-1">{d.title}</p>
+            {onDelete && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (window.confirm(`Excluir "${d.title}"? Esta ação removerá também a tarefa de conteúdo vinculada e é irreversível.`)) {
+                    onDelete();
+                  }
+                }}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive shrink-0"
+                title="Excluir card"
+              >
+                <Trash2 size={13} />
+              </button>
+            )}
+          </div>
+
 
           {/* Badges */}
           <div className="flex items-center gap-1.5 flex-wrap">

@@ -2639,8 +2639,8 @@ export default function CommercialProposal() {
           <Card className="lg:col-span-2">
             <CardHeader><CardTitle className="text-base">Tipo de Proposta</CardTitle></CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                {(['marketing', 'sistema', 'endomarketing', 'personalizada', 'cronograma'] as ProposalType[]).map(type => {
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                {(['marketing', 'sistema', 'endomarketing', 'personalizada', 'cronograma', 'videos'] as ProposalType[]).map(type => {
                   const Icon = typeIcons[type];
                   return (
                     <button

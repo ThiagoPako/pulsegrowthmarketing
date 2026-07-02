@@ -29,6 +29,7 @@ const WhatsAppDashboard = lazy(() => import("@/pages/WhatsAppDashboard"));
 const Plans = lazy(() => import("@/pages/Plans"));
 const DeliveryRecords = lazy(() => import("@/pages/DeliveryRecords"));
 const Reports = lazy(() => import("@/pages/Reports"));
+const CostByContentType = lazy(() => import("@/pages/CostByContentType"));
 const InternalReports = lazy(() => import("@/pages/InternalReports"));
 const SocialMediaDeliveries = lazy(() => import("@/pages/SocialMediaDeliveries"));
 const ContentKanban = lazy(() => import("@/pages/ContentKanban"));

@@ -231,11 +231,22 @@ export default function Reports() {
   const costKpis = useMemo(() => {
     const filteredSalaries = salaryExpenses.filter(e => e.date >= dateRange.start && e.date <= dateRange.end);
     const totalSalaries = filteredSalaries.reduce((a, e) => a + Number(e.amount), 0);
-    const totalVideos = stats.totalContent;
+    // Denominator: content produced in period from multiple sources
+    const editorApproved = editorTasks.filter(t => {
+      const d = (t.approved_at || t.updated_at || '').slice(0, 10);
+      return t.kanban_column === 'aprovado' && d >= dateRange.start && d <= dateRange.end;
+    }).length;
+    const designCompleted = designTasks.filter(t => {
+      const d = (t.completed_at || '').slice(0, 10);
+      return t.kanban_column === 'concluido' && d >= dateRange.start && d <= dateRange.end;
+    }).length;
+    const socialDelivered = filteredSocial.length;
+    const recordedContent = stats.totalContent;
+    const totalVideos = Math.max(recordedContent, editorApproved + designCompleted, socialDelivered);
     const costPerVideo = totalVideos > 0 ? totalSalaries / totalVideos : 0;
     const videosPerSalary = totalSalaries > 0 ? totalVideos / (totalSalaries / 1000) : 0;
     return { totalSalaries, costPerVideo, totalVideos, videosPerSalary };
-  }, [salaryExpenses, dateRange, stats.totalContent]);
+  }, [salaryExpenses, dateRange, stats.totalContent, editorTasks, designTasks, filteredSocial]);
 
   const detailedCosts = useMemo(() => {
     const rule = settings.costAllocationRule || 'approved';

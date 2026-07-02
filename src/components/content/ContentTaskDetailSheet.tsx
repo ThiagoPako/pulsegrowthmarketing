@@ -676,6 +676,21 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
   // Video upload state
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const videoInputRef = useRef<HTMLInputElement>(null);
+
+  // Optimization slots state
+  const [optSlots, setOptSlots] = useState<OptSlot[]>([]);
+  const [optBaseDesc, setOptBaseDesc] = useState<string>('');
+  const [uploadingSlotId, setUploadingSlotId] = useState<string | null>(null);
+  const [slotProgress, setSlotProgress] = useState(0);
+
+  useEffect(() => {
+    if (!task || task.content_type !== 'otimizacao') return;
+    const p = parseOptSlots(task.description);
+    setOptBaseDesc(p.baseDescription);
+    setOptSlots(p.slots.length > 0 ? p.slots : defaultOptSlots());
+  }, [task?.id, task?.description, task?.content_type]);
+
+
   
 
   // Fetch history

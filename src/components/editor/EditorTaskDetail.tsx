@@ -768,14 +768,14 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setFormatsOpen(true)}
-                      className="h-7 px-2 text-[10px] gap-1 border-fuchsia-400/50 text-fuchsia-600 dark:text-fuchsia-300 hover:bg-fuchsia-500/10"
+                    <a
+                      href="/treinamento/otimizacao-conteudo"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="h-7 px-2 text-[10px] gap-1 border border-fuchsia-400/50 text-fuchsia-600 dark:text-fuchsia-300 hover:bg-fuchsia-500/10 rounded-md inline-flex items-center transition"
                     >
-                      <Lightbulb size={11} /> Ver formatos
-                    </Button>
+                      <Lightbulb size={11} className="mr-1" /> Ver formatos
+                    </a>
                     <Badge className="text-[10px] bg-fuchsia-500/20 text-fuchsia-600 dark:text-fuchsia-300 border-fuchsia-500/40">
                       {filledSlots.length}/{slots.length} preenchidos
                     </Badge>

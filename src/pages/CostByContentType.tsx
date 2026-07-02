@@ -15,10 +15,13 @@ interface DeliveryRecord {
   arts_produced: number; delivery_status: string;
 }
 interface EditorTask { client_id: string; content_type: string; kanban_column: string; approved_at: string | null; updated_at: string; }
-interface DesignTask { client_id: string; kanban_column: string; completed_at: string | null; updated_at?: string; }
+interface DesignTask { client_id: string; kanban_column: string; completed_at: string | null; updated_at?: string; attachment_url?: string | null; editable_file_url?: string | null; mockup_url?: string | null; }
 interface SocialDelivery { client_id: string; content_type: string; delivered_at: string; status: string; }
 
-const PRODUCTION_ROLES = ['videomaker', 'editor', 'designer', 'social_media'];
+const VIDEO_ROLES = ['videomaker', 'editor', 'social_media'];
+const DESIGNER_ROLES = ['designer'];
+
+
 
 export default function CostByContentType() {
   const { clients, users } = useApp();
@@ -36,7 +39,7 @@ export default function CostByContentType() {
       supabase.from('delivery_records').select('client_id,date,reels_produced,creatives_produced,stories_produced,arts_produced,delivery_status'),
       supabase.from('social_media_deliveries').select('client_id,content_type,delivered_at,status'),
       supabase.from('content_tasks').select('client_id,content_type,kanban_column,approved_at,updated_at'),
-      supabase.from('design_tasks').select('client_id,kanban_column,completed_at,updated_at'),
+      supabase.from('design_tasks').select('client_id,kanban_column,completed_at,updated_at,attachment_url,editable_file_url,mockup_url'),
     ]);
     if (rRes.data) setRecords(rRes.data as DeliveryRecord[]);
     if (sRes.data) setSocialDeliveries(sRes.data as SocialDelivery[]);
@@ -78,34 +81,47 @@ export default function CostByContentType() {
     const sCri = socials.filter(d => norm(d.content_type) === 'criativo').length;
     const sSto = socials.filter(d => norm(d.content_type) === 'story').length;
 
-    const dtArts = designTasks.filter(t => clientOk(t.client_id) && t.kanban_column === 'aprovado' && inPeriod(t.completed_at || t.updated_at || null)).length;
+    // Conta artes anexadas em cada card aprovado (attachment + mockup contam separadamente)
+    const dtArts = designTasks
+      .filter(t => clientOk(t.client_id) && t.kanban_column === 'aprovado' && inPeriod(t.completed_at || t.updated_at || null))
+      .reduce((a, t) => a + (t.attachment_url ? 1 : 0) + (t.mockup_url ? 1 : 0) + (t.editable_file_url ? 1 : 0), 0);
+
 
     const reels = Math.max(recReels, ctReels, sReels);
     const criativos = Math.max(recCri, ctCri, sCri);
     const stories = Math.max(recSto, ctSto, sSto);
     const artes = Math.max(recArts, dtArts);
 
-    // === SALÁRIOS (baseado em team_members.monthly_salary) ===
-    // Multiplica pela quantidade de meses do período
+    // === SALÁRIOS por pool (sem sobreposição) ===
     const start = new Date(dateRange.start);
     const end = new Date(dateRange.end);
     const months = Math.max(1, differenceInCalendarMonths(end, start) + 1);
 
-    const monthlyTotalSalaries = users
-      .filter(u => PRODUCTION_ROLES.includes(u.role))
+    const monthlyVideoPool = users
+      .filter(u => VIDEO_ROLES.includes(u.role))
       .reduce((a, u) => a + (u.monthlySalary || 0), 0);
-    const totalSalaries = monthlyTotalSalaries * months;
+    const monthlyDesignerPool = users
+      .filter(u => DESIGNER_ROLES.includes(u.role))
+      .reduce((a, u) => a + (u.monthlySalary || 0), 0);
 
-    // Alocação proporcional por peso de esforço
-    const wReels = reels * 10, wCri = criativos * 5, wArt = artes * 4, wSto = stories * 3;
-    const wTotal = wReels + wCri + wArt + wSto;
-    const salReels = wTotal > 0 ? (totalSalaries * wReels) / wTotal : 0;
-    const salCri = wTotal > 0 ? (totalSalaries * wCri) / wTotal : 0;
-    const salArt = wTotal > 0 ? (totalSalaries * wArt) / wTotal : 0;
-    const salSto = wTotal > 0 ? (totalSalaries * wSto) / wTotal : 0;
+    const videoPool = monthlyVideoPool * months;
+    const designerPool = monthlyDesignerPool * months;
+    const monthlyTotalSalaries = monthlyVideoPool + monthlyDesignerPool;
+    const totalSalaries = videoPool + designerPool;
+
+    // Pool vídeo: Reels=1.0, Criativo=0.5, Story=0.2
+    const wReels = reels * 1.0, wCri = criativos * 0.5, wSto = stories * 0.2;
+    const wTotal = wReels + wCri + wSto;
+    const salReels = wTotal > 0 ? (videoPool * wReels) / wTotal : 0;
+    const salCri = wTotal > 0 ? (videoPool * wCri) / wTotal : 0;
+    const salSto = wTotal > 0 ? (videoPool * wSto) / wTotal : 0;
+
+    // Pool designer: 100% para artes
+    const salArt = designerPool;
 
     return {
       totalSalaries, monthlyTotalSalaries, months,
+      videoPool, designerPool, monthlyVideoPool, monthlyDesignerPool,
       reels, criativos, stories, artes,
       cReels: reels > 0 ? salReels / reels : 0,
       cCri: criativos > 0 ? salCri / criativos : 0,
@@ -113,6 +129,7 @@ export default function CostByContentType() {
       cSto: stories > 0 ? salSto / stories : 0,
       salReels, salCri, salArt, salSto,
     };
+
   }, [records, editorTasks, designTasks, socialDeliveries, users, selectedClient, dateRange]);
 
   const fmt = (n: number) => n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
@@ -130,7 +147,7 @@ export default function CostByContentType() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Target size={24} className="text-primary" /> Custo por Tipo de Conteúdo
         </h1>
-        <p className="text-sm text-muted-foreground">Alocação proporcional dos salários da equipe de produção por peso de esforço (Reels=10, Criativo=5, Arte=4, Story=3)</p>
+        <p className="text-sm text-muted-foreground">Pool Vídeo (Videomaker + Editor + Social Media) alocado por esforço: Reels=1.0, Criativo=0.5, Story=0.2. Pool Designer 100% dividido pelas artes anexadas nos cards aprovados.</p>
       </div>
 
       <Card>
@@ -166,18 +183,27 @@ export default function CostByContentType() {
       </Card>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card className="border-l-4" style={{ borderLeftColor: 'hsl(var(--destructive))' }}>
+        <Card className="border-l-4" style={{ borderLeftColor: 'hsl(217,91%,60%)' }}>
           <CardContent className="p-4">
-            <DollarSign size={18} className="text-destructive mb-2" />
-            <p className="text-xl font-bold">{fmt(data.totalSalaries)}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Salários no Período ({data.months}m)</p>
+            <DollarSign size={18} className="text-blue-600 mb-2" />
+            <p className="text-xl font-bold">{fmt(data.videoPool)}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Pool Vídeo ({data.months}m) — Videomaker + Editor + Social</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Folha mensal: {fmt(data.monthlyVideoPool)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4" style={{ borderLeftColor: 'hsl(24,95%,53%)' }}>
+          <CardContent className="p-4">
+            <DollarSign size={18} className="text-orange-600 mb-2" />
+            <p className="text-xl font-bold">{fmt(data.designerPool)}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Pool Designer ({data.months}m)</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Folha mensal: {fmt(data.monthlyDesignerPool)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <DollarSign size={18} className="text-muted-foreground mb-2" />
-            <p className="text-xl font-bold">{fmt(data.monthlyTotalSalaries)}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Folha Mensal (Produção)</p>
+            <p className="text-xl font-bold">{fmt(data.totalSalaries)}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Total no Período</p>
           </CardContent>
         </Card>
         <Card>
@@ -188,6 +214,7 @@ export default function CostByContentType() {
           </CardContent>
         </Card>
       </div>
+
 
       {data.monthlyTotalSalaries === 0 && (
         <Card className="border-amber-500/50 bg-amber-500/5">

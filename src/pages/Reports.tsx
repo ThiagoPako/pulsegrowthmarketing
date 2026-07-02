@@ -168,7 +168,8 @@ export default function Reports() {
   const filteredSocial = useMemo(() => {
     return socialDeliveries.filter(d => {
       if (selectedClient !== 'all' && d.client_id !== selectedClient) return false;
-      return d.delivered_at >= dateRange.start && d.delivered_at <= dateRange.end;
+      const day = (d.delivered_at || '').slice(0, 10);
+      return day >= dateRange.start && day <= dateRange.end;
     });
   }, [socialDeliveries, selectedClient, dateRange]);
 

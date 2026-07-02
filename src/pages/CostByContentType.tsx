@@ -147,7 +147,7 @@ export default function CostByContentType() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Target size={24} className="text-primary" /> Custo por Tipo de Conteúdo
         </h1>
-        <p className="text-sm text-muted-foreground">Alocação proporcional dos salários da equipe de produção por peso de esforço (Reels=10, Criativo=5, Arte=4, Story=3)</p>
+        <p className="text-sm text-muted-foreground">Pool Vídeo (Videomaker + Editor + Social Media) alocado por esforço: Reels=1.0, Criativo=0.5, Story=0.2. Pool Designer 100% dividido pelas artes anexadas nos cards aprovados.</p>
       </div>
 
       <Card>

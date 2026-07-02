@@ -72,6 +72,9 @@ interface FixedScheduleGenerationOptions {
 
 
 function profileToUser(profile: Profile): User {
+  const rawMonthlySalary = (profile as any).monthly_salary ?? (profile as any).monthlySalary ?? 0;
+  const monthlySalary = Number(rawMonthlySalary) || 0;
+
   return {
     id: profile.id,
     name: profile.name,
@@ -82,7 +85,7 @@ function profileToUser(profile: Profile): User {
     displayName: profile.display_name || undefined,
     jobTitle: profile.job_title || undefined,
     fontScale: profile.font_scale || undefined,
-    monthlySalary: (profile as any).monthly_salary || 0,
+    monthlySalary,
   };
 }
 

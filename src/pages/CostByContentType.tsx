@@ -10,18 +10,88 @@ import { Target, Film, Megaphone, Image as ImageIcon, Palette, DollarSign, Calcu
 import { format, startOfMonth, endOfMonth, subMonths, differenceInCalendarMonths } from 'date-fns';
 
 interface DeliveryRecord {
-  client_id: string; date: string;
-  reels_produced: number; creatives_produced: number; stories_produced: number;
-  arts_produced: number; delivery_status: string;
+  client_id: string | null;
+  date: string;
+  reels_produced: number | string | null;
+  creatives_produced: number | string | null;
+  stories_produced: number | string | null;
+  arts_produced: number | string | null;
+  delivery_status: string;
 }
-interface EditorTask { client_id: string; content_type: string; kanban_column: string; approved_at: string | null; updated_at: string; }
-interface DesignTask { client_id: string; kanban_column: string; completed_at: string | null; updated_at?: string; attachment_url?: string | null; editable_file_url?: string | null; mockup_url?: string | null; }
-interface SocialDelivery { client_id: string; content_type: string; delivered_at: string; status: string; }
+interface EditorTask {
+  client_id: string | null;
+  content_type: string | null;
+  kanban_column: string;
+  approved_at: string | null;
+  updated_at: string | null;
+  created_at?: string | null;
+}
+interface DesignTask {
+  client_id: string | null;
+  kanban_column: string;
+  completed_at: string | null;
+  updated_at?: string | null;
+  created_at?: string | null;
+  attachment_url?: string | null;
+  attachment_urls?: string[] | null;
+  editable_file_url?: string | null;
+  mockup_url?: string | null;
+}
+interface SocialDelivery {
+  client_id: string | null;
+  content_type: string | null;
+  delivered_at: string | null;
+  posted_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  status: string;
+}
 
 const VIDEO_ROLES = ['videomaker', 'editor', 'social_media'];
 const DESIGNER_ROLES = ['designer'];
+const VIDEO_EFFORT = { reels: 1, criativo: 0.5, story: 0.2 } as const;
 
+// Colunas/estados que representam conteúdo produzido. Antes só "aprovado" era contado,
+// por isso muitos períodos apareciam sem custo mesmo com cards em envio/agendamento/arquivados.
+const PRODUCED_EDITOR_COLUMNS = new Set(['aprovado', 'envio', 'agendamentos', 'acompanhamento', 'arquivado', 'publicado', 'finalizado']);
+const PRODUCED_DESIGN_COLUMNS = new Set(['aprovado', 'enviar_cliente', 'em_analise', 'concluida', 'aprovada_cliente']);
+const PRODUCED_SOCIAL_STATUSES = new Set(['postado', 'publicado', 'posted', 'agendado', 'scheduled', 'entregue', 'delivered']);
 
+const toNumber = (value: number | string | null | undefined): number => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value !== 'string') return 0;
+  const normalized = value.replace(/\./g, '').replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const normalizeText = (value?: string | null) => (value || '')
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim();
+
+const normalizeContentType = (value?: string | null): 'reels' | 'criativo' | 'story' | 'arte' | 'outro' => {
+  const type = normalizeText(value);
+  if (['reel', 'reels', 'video', 'videos'].includes(type)) return 'reels';
+  if (['criativo', 'criativos', 'creative', 'creatives', 'ads', 'ad'].includes(type)) return 'criativo';
+  if (['story', 'stories', 'storie'].includes(type)) return 'story';
+  if (['arte', 'artes', 'feed', 'post', 'carrossel', 'carrossel feed'].includes(type)) return 'arte';
+  return 'outro';
+};
+
+const inDateRange = (value: string | null | undefined, start: string, end: string) => {
+  if (!value) return false;
+  const day = value.slice(0, 10);
+  return day >= start && day <= end;
+};
+
+const countDesignAttachments = (task: DesignTask): number => {
+  const urls = Array.isArray(task.attachment_urls) ? task.attachment_urls.filter(Boolean) : [];
+  const singleAttachment = task.attachment_url && !urls.includes(task.attachment_url) ? 1 : 0;
+  const mockup = task.mockup_url ? 1 : 0;
+  return urls.length + singleAttachment + mockup;
+};
 
 export default function CostByContentType() {
   const { clients, users } = useApp();
@@ -37,9 +107,9 @@ export default function CostByContentType() {
   const fetchData = useCallback(async () => {
     const [rRes, sRes, edRes, dRes] = await Promise.all([
       supabase.from('delivery_records').select('client_id,date,reels_produced,creatives_produced,stories_produced,arts_produced,delivery_status'),
-      supabase.from('social_media_deliveries').select('client_id,content_type,delivered_at,status'),
-      supabase.from('content_tasks').select('client_id,content_type,kanban_column,approved_at,updated_at'),
-      supabase.from('design_tasks').select('client_id,kanban_column,completed_at,updated_at,attachment_url,editable_file_url,mockup_url'),
+      supabase.from('social_media_deliveries').select('client_id,content_type,delivered_at,posted_at,created_at,updated_at,status'),
+      supabase.from('content_tasks').select('client_id,content_type,kanban_column,approved_at,updated_at,created_at'),
+      supabase.from('design_tasks').select('client_id,kanban_column,completed_at,updated_at,created_at,attachment_url,attachment_urls,editable_file_url,mockup_url'),
     ]);
     if (rRes.data) setRecords(rRes.data as DeliveryRecord[]);
     if (sRes.data) setSocialDeliveries(sRes.data as SocialDelivery[]);
@@ -60,33 +130,42 @@ export default function CostByContentType() {
   }, [periodType, customStart, customEnd]);
 
   const data = useMemo(() => {
-    const norm = (t?: string) => (t || '').toLowerCase().trim();
-    const inPeriod = (iso?: string | null) => { if (!iso) return false; const d = iso.slice(0, 10); return d >= dateRange.start && d <= dateRange.end; };
-    const clientOk = (cid: string) => selectedClient === 'all' || cid === selectedClient;
+    const clientOk = (cid?: string | null) => selectedClient === 'all' || cid === selectedClient;
 
     // === QUANTIDADES ===
-    const realizadas = records.filter(r => clientOk(r.client_id) && r.date >= dateRange.start && r.date <= dateRange.end && ['realizada','encaixe','extra'].includes(r.delivery_status));
-    const recReels = realizadas.reduce((a, r) => a + (r.reels_produced || 0), 0);
-    const recCri = realizadas.reduce((a, r) => a + (r.creatives_produced || 0), 0);
-    const recSto = realizadas.reduce((a, r) => a + (r.stories_produced || 0), 0);
-    const recArts = realizadas.reduce((a, r) => a + (r.arts_produced || 0), 0);
+    const realizadas = records.filter(r => (
+      clientOk(r.client_id)
+      && inDateRange(r.date, dateRange.start, dateRange.end)
+      && ['realizada', 'encaixe', 'extra'].includes(normalizeText(r.delivery_status))
+    ));
+    const recReels = realizadas.reduce((a, r) => a + toNumber(r.reels_produced), 0);
+    const recCri = realizadas.reduce((a, r) => a + toNumber(r.creatives_produced), 0);
+    const recSto = realizadas.reduce((a, r) => a + toNumber(r.stories_produced), 0);
+    const recArts = realizadas.reduce((a, r) => a + toNumber(r.arts_produced), 0);
 
-    const relevantTasks = editorTasks.filter(t => clientOk(t.client_id) && t.kanban_column === 'aprovado' && inPeriod(t.approved_at || t.updated_at));
-    const ctReels = relevantTasks.filter(t => ['reels','reel'].includes(norm(t.content_type))).length;
-    const ctCri = relevantTasks.filter(t => ['criativo','creative'].includes(norm(t.content_type))).length;
-    const ctSto = relevantTasks.filter(t => ['story','stories'].includes(norm(t.content_type))).length;
+    const relevantTasks = editorTasks.filter(t => {
+      const column = normalizeText(t.kanban_column);
+      const referenceDate = t.approved_at || t.updated_at || t.created_at;
+      return clientOk(t.client_id) && (PRODUCED_EDITOR_COLUMNS.has(column) || !!t.approved_at) && inDateRange(referenceDate, dateRange.start, dateRange.end);
+    });
+    const ctReels = relevantTasks.filter(t => normalizeContentType(t.content_type) === 'reels').length;
+    const ctCri = relevantTasks.filter(t => normalizeContentType(t.content_type) === 'criativo').length;
+    const ctSto = relevantTasks.filter(t => normalizeContentType(t.content_type) === 'story').length;
 
-    const socials = socialDeliveries.filter(d => clientOk(d.client_id) && (d.delivered_at || '').slice(0, 10) >= dateRange.start && (d.delivered_at || '').slice(0, 10) <= dateRange.end && d.status === 'postado');
-    const sReels = socials.filter(d => norm(d.content_type) === 'reels').length;
-    const sCri = socials.filter(d => norm(d.content_type) === 'criativo').length;
-    const sSto = socials.filter(d => norm(d.content_type) === 'story').length;
+    const socials = socialDeliveries.filter(d => {
+      const referenceDate = d.posted_at || d.delivered_at || d.updated_at || d.created_at;
+      return clientOk(d.client_id) && inDateRange(referenceDate, dateRange.start, dateRange.end) && PRODUCED_SOCIAL_STATUSES.has(normalizeText(d.status));
+    });
+    const sReels = socials.filter(d => normalizeContentType(d.content_type) === 'reels').length;
+    const sCri = socials.filter(d => normalizeContentType(d.content_type) === 'criativo').length;
+    const sSto = socials.filter(d => normalizeContentType(d.content_type) === 'story').length;
 
-    // Conta artes anexadas em cada card aprovado (attachment + mockup contam separadamente)
+    // Conta artes anexadas em cada card produzido (attachment_urls + attachment/mockup contam separadamente).
     const dtArts = designTasks
-      .filter(t => clientOk(t.client_id) && t.kanban_column === 'aprovado' && inPeriod(t.completed_at || t.updated_at || null))
-      .reduce((a, t) => a + (t.attachment_url ? 1 : 0) + (t.mockup_url ? 1 : 0) + (t.editable_file_url ? 1 : 0), 0);
+      .filter(t => clientOk(t.client_id) && PRODUCED_DESIGN_COLUMNS.has(normalizeText(t.kanban_column)) && inDateRange(t.completed_at || t.updated_at || t.created_at, dateRange.start, dateRange.end))
+      .reduce((a, t) => a + countDesignAttachments(t), 0);
 
-
+    // Usa a maior fonte de quantidade para evitar duplicidade entre agenda, kanban e social.
     const reels = Math.max(recReels, ctReels, sReels);
     const criativos = Math.max(recCri, ctCri, sCri);
     const stories = Math.max(recSto, ctSto, sSto);
@@ -99,10 +178,10 @@ export default function CostByContentType() {
 
     const monthlyVideoPool = users
       .filter(u => VIDEO_ROLES.includes(u.role))
-      .reduce((a, u) => a + (u.monthlySalary || 0), 0);
+      .reduce((a, u) => a + toNumber(u.monthlySalary), 0);
     const monthlyDesignerPool = users
       .filter(u => DESIGNER_ROLES.includes(u.role))
-      .reduce((a, u) => a + (u.monthlySalary || 0), 0);
+      .reduce((a, u) => a + toNumber(u.monthlySalary), 0);
 
     const videoPool = monthlyVideoPool * months;
     const designerPool = monthlyDesignerPool * months;
@@ -110,7 +189,9 @@ export default function CostByContentType() {
     const totalSalaries = videoPool + designerPool;
 
     // Pool vídeo: Reels=1.0, Criativo=0.5, Story=0.2
-    const wReels = reels * 1.0, wCri = criativos * 0.5, wSto = stories * 0.2;
+    const wReels = reels * VIDEO_EFFORT.reels;
+    const wCri = criativos * VIDEO_EFFORT.criativo;
+    const wSto = stories * VIDEO_EFFORT.story;
     const wTotal = wReels + wCri + wSto;
     const salReels = wTotal > 0 ? (videoPool * wReels) / wTotal : 0;
     const salCri = wTotal > 0 ? (videoPool * wCri) / wTotal : 0;
@@ -132,13 +213,18 @@ export default function CostByContentType() {
 
   }, [records, editorTasks, designTasks, socialDeliveries, users, selectedClient, dateRange]);
 
-  const fmt = (n: number) => n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
+  const fmt = (n: number) => Number.isFinite(n) && n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00';
+  const formatCost = (cost: number, qty: number, pool: number) => {
+    if (qty <= 0) return 'Sem produção';
+    if (pool <= 0) return 'Sem salário';
+    return fmt(cost);
+  };
 
   const items = [
-    { icon: Film, label: 'Reels', qty: data.reels, cost: data.cReels, total: data.salReels, color: 'text-blue-600', border: 'hsl(217,91%,60%)' },
-    { icon: Megaphone, label: 'Criativos', qty: data.criativos, cost: data.cCri, total: data.salCri, color: 'text-purple-600', border: 'hsl(262,83%,58%)' },
-    { icon: Palette, label: 'Artes', qty: data.artes, cost: data.cArt, total: data.salArt, color: 'text-orange-600', border: 'hsl(24,95%,53%)' },
-    { icon: ImageIcon, label: 'Stories', qty: data.stories, cost: data.cSto, total: data.salSto, color: 'text-pink-600', border: 'hsl(330,81%,60%)' },
+    { icon: Film, label: 'Reels', qty: data.reels, cost: data.cReels, total: data.salReels, pool: data.videoPool, color: 'text-blue-600', border: 'hsl(217,91%,60%)' },
+    { icon: Megaphone, label: 'Criativos', qty: data.criativos, cost: data.cCri, total: data.salCri, pool: data.videoPool, color: 'text-purple-600', border: 'hsl(262,83%,58%)' },
+    { icon: Palette, label: 'Artes', qty: data.artes, cost: data.cArt, total: data.salArt, pool: data.designerPool, color: 'text-orange-600', border: 'hsl(24,95%,53%)' },
+    { icon: ImageIcon, label: 'Stories', qty: data.stories, cost: data.cSto, total: data.salSto, pool: data.videoPool, color: 'text-pink-600', border: 'hsl(330,81%,60%)' },
   ];
 
   return (
@@ -147,7 +233,7 @@ export default function CostByContentType() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Target size={24} className="text-primary" /> Custo por Tipo de Conteúdo
         </h1>
-        <p className="text-sm text-muted-foreground">Pool Vídeo (Videomaker + Editor + Social Media) alocado por esforço: Reels=1.0, Criativo=0.5, Story=0.2. Pool Designer 100% dividido pelas artes anexadas nos cards aprovados.</p>
+        <p className="text-sm text-muted-foreground">Pool Vídeo (Videomaker + Editor + Social Media) alocado por esforço: Reels=1.0, Criativo=0.5, Story=0.2. Pool Designer 100% dividido pelas artes anexadas nos cards produzidos.</p>
       </div>
 
       <Card>
@@ -233,7 +319,7 @@ export default function CostByContentType() {
                 <it.icon size={18} className={it.color} />
                 <span className="text-[10px] text-muted-foreground">{it.qty} produzidos</span>
               </div>
-              <p className="text-2xl font-bold">{fmt(it.cost)}</p>
+              <p className="text-2xl font-bold">{formatCost(it.cost, it.qty, it.pool)}</p>
               <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Custo por {it.label}</p>
               <p className="text-[10px] text-muted-foreground mt-1">Total alocado: {fmt(it.total)}</p>
             </CardContent>

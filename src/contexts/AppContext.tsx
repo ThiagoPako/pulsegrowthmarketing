@@ -109,28 +109,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [authLoading, cityLoading, activeCity, user]);
   
   const [users, setUsers] = useState<User[]>([]);
-  useEffect(() => {
+
+  const fetchUsers = useCallback(async () => {
     const hasVpsToken = typeof window !== 'undefined' && !!localStorage.getItem('pulse_jwt');
     if (cityLoading) return;
     if (!hasVpsToken) {
       setUsers([]);
       return;
     }
-    Promise.all([
+    const [profilesRes, rolesRes] = await Promise.all([
       supabase.from('profiles').select('*'),
       supabase.from('user_roles').select('user_id, role'),
-    ]).then(([profilesRes, rolesRes]) => {
-      const profiles = profilesRes.data || [];
-      const roleByUserId = new Map(
-        ((rolesRes.data || []) as Array<{ user_id: string; role: UserRole }>).map(roleRow => [roleRow.user_id, roleRow.role])
-      );
+    ]);
 
-      setUsers(profiles.map((p: any) => profileToUser({
-        ...p,
-        role: roleByUserId.get(p.id) || p.role,
-      } as Profile)));
-    });
-  }, [profile, cityLoading, activeCity]);
+    if (profilesRes.error) {
+      console.error('[AppContext] error loading profiles:', profilesRes.error);
+      return;
+    }
+
+    const profiles = profilesRes.data || [];
+    const roleByUserId = new Map(
+      ((rolesRes.data || []) as Array<{ user_id: string; role: UserRole }>).map(roleRow => [roleRow.user_id, roleRow.role])
+    );
+
+    setUsers(profiles.map((p: any) => profileToUser({
+      ...p,
+      role: roleByUserId.get(p.id) || p.role,
+    } as Profile)));
+  }, [cityLoading, activeCity]);
+
+  useEffect(() => { fetchUsers(); }, [fetchUsers, profile]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleProfilesUpdated = () => { fetchUsers(); };
+    window.addEventListener('pulse:profiles-updated', handleProfilesUpdated);
+    return () => window.removeEventListener('pulse:profiles-updated', handleProfilesUpdated);
+  }, [fetchUsers]);
 
   const logout = useCallback(async () => { await signOut(); }, [signOut]);
 

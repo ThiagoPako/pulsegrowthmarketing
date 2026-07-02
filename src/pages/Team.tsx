@@ -74,6 +74,7 @@ export default function Team() {
   const [cityTarget, setCityTarget] = useState<TeamMember | null>(null);
   const [cityEdit, setCityEdit] = useState<{ cities: CityCode[]; primary: CityCode }>({ cities: ['minacu'], primary: 'minacu' });
   const [savingCities, setSavingCities] = useState(false);
+  const [savingSalaryByUser, setSavingSalaryByUser] = useState<Record<string, boolean>>({});
 
   const [resetOpen, setResetOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState<TeamMember | null>(null);
@@ -127,6 +128,41 @@ export default function Team() {
   };
 
   useEffect(() => { fetchMembers(); fetchPartners(); fetchUserCities(); }, []);
+
+  const handleSaveSalary = async (member: TeamMember, rawValue: string) => {
+    const val = Number(String(rawValue || '0').replace(',', '.')) || 0;
+
+    setSavingSalaryByUser(prev => ({ ...prev, [member.id]: true }));
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ monthly_salary: val } as any)
+        .eq('id', member.id);
+
+      if (error) {
+        console.error('[Team] salary update error:', error);
+        toast.error(`Erro ao atualizar salário: ${error.message || 'verifique a VPS'}`);
+        await fetchMembers();
+        return;
+      }
+
+      if (Array.isArray(data) && data.length === 0) {
+        toast.error('Salário não foi salvo: nenhum usuário encontrado para atualizar.');
+        await fetchMembers();
+        return;
+      }
+
+      setMembers(prev => prev.map(m => m.id === member.id ? { ...m, monthlySalary: val } : m));
+      window.dispatchEvent(new CustomEvent('pulse:profiles-updated'));
+      toast.success('Salário atualizado!');
+    } finally {
+      setSavingSalaryByUser(prev => {
+        const next = { ...prev };
+        delete next[member.id];
+        return next;
+      });
+    }
+  };
 
   // Sync permissions when target changes
   useEffect(() => {
@@ -627,11 +663,8 @@ export default function Team() {
                               const val = Number(e.target.value) || 0;
                               setMembers(prev => prev.map(m => m.id === u.id ? { ...m, monthlySalary: val } : m));
                             }}
-                            onBlur={async (e) => {
-                              const val = Number(e.target.value) || 0;
-                              await supabase.from('profiles').update({ monthly_salary: val } as any).eq('id', u.id);
-                              toast.success('Salário atualizado!');
-                            }}
+                            onBlur={(e) => handleSaveSalary(u, e.target.value)}
+                            disabled={!!savingSalaryByUser[u.id]}
                           />
                         </div>
                         <p className="absolute -top-6 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground text-[9px] px-1.5 py-0.5 rounded border shadow-sm opacity-0 group-hover/salary:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">

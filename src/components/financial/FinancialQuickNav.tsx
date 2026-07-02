@@ -15,6 +15,7 @@ const navItems = [
   { path: '/financeiro/inadimplencia', label: 'Inadimplência', icon: AlertTriangle },
   { path: '/financeiro/parceiros', label: 'Parceiros', icon: Users },
   { path: '/financeiro/relatorios', label: 'Relatórios', icon: BarChart3 },
+  { path: '/financeiro/saude', label: 'Empresa Saúde', icon: HeartPulse },
   { path: '/financeiro/chat', label: 'Chat IA', icon: MessageCircle },
   { path: '/financeiro/configuracoes', label: 'Config', icon: Settings },
   { path: '/financeiro/apis', label: 'APIs', icon: Plug },

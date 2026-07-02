@@ -877,6 +877,16 @@ export default function EditorKanban() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Optimization detail sheet with slots */}
+      {detailTask && (
+        <EditorTaskDetail
+          task={detailTask as unknown as EditorTaskFull}
+          open={!!detailTask}
+          onOpenChange={(o) => { if (!o) setDetailTask(null); }}
+          onRefresh={fetchTasks}
+        />
+      )}
     </div>
   );
 }

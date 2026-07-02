@@ -309,6 +309,10 @@ export default function CommercialProposal() {
     setCronogramaMethodology(''); setCronogramaProjectName('');
     setCronogramaTotalDays(''); setCronogramaPaymentMethod('pix'); setCronogramaInstallments('1');
     setCronogramaPricingMode('individual'); setCronogramaTotalCustomValue('');
+    setVideosQty('4'); setVideosUnitPrice('350'); setVideosDeliveryDays('15');
+    setVideosDescription(''); setVideosExtras([]);
+    setNewVideosExtraName(''); setNewVideosExtraValue('');
+    setVideosPaymentMethod('pix'); setVideosInstallments('1');
     setEditingProposalId(null);
     setShareLink('');
     localStorage.removeItem(DRAFT_KEY);

@@ -1045,7 +1045,101 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     }
   };
 
+  const persistOptSlots = async (nextSlots: OptSlot[]) => {
+    setOptSlots(nextSlots);
+    const newDesc = serializeOptSlots(optBaseDesc, nextSlots);
+    await supabase.from('content_tasks').update({
+      description: newDesc, updated_at: new Date().toISOString(),
+    } as any).eq('id', task.id);
+  };
+
+  const uploadOptSlotFile = async (slotId: string, file: File) => {
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024 * 1024) { toast.error('Máximo: 2GB'); return; }
+    if (!file.type.startsWith('video/') && !file.type.startsWith('image/')) {
+      toast.error('Envie um vídeo ou imagem válido'); return;
+    }
+    setUploadingSlotId(slotId);
+    setSlotProgress(0);
+    try {
+      const url = await uploadFileToVps(file, {
+        folder: `content/${task.client_id}/${task.id}/slots`,
+        retries: 3,
+        onProgress: (p: any) => setSlotProgress(p.percent),
+      } as any);
+      const next = optSlots.map(s => s.id === slotId ? { ...s, link: url } : s);
+      await persistOptSlots(next);
+      toast.success('Arquivo enviado ao slot 🎬');
+      onRefresh();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro no upload');
+    } finally {
+      setUploadingSlotId(null);
+      setSlotProgress(0);
+    }
+  };
+
+  const splitOptimizationIntoCards = async () => {
+    const filled = optSlots.filter(s => s.link.trim().length > 0);
+    if (filled.length === 0) {
+      toast.error('Anexe pelo menos 1 vídeo em algum slot antes de enviar');
+      return;
+    }
+    const now = new Date().toISOString();
+    const baseTitle = task.title.replace(/^\[OTIMIZAÇÃO\]\s*/i, '').trim();
+    const typeLabel: Record<OptSlot['type'], string> = {
+      story: 'STORY', criativo: 'CRIATIVO', reels: 'REELS',
+    };
+    const payloads = filled.map((s, idx) => ({
+      client_id: task.client_id,
+      title: `[OTIMIZAÇÃO · ${typeLabel[s.type]}] ${baseTitle}`,
+      content_type: s.type === 'reels' ? 'reels' : s.type, // 'story' | 'criativo' | 'reels'
+      kanban_column: 'revisao',
+      description: `Conteúdo otimizado a partir do Reels: "${baseTitle}".\n\n${OPT_MARKER}${JSON.stringify([{ id: `parent_${task.id}`, type: s.type, link: s.link, parentOptimization: true, parentTitle: baseTitle }])}`,
+      recording_id: (task as any).recording_id || null,
+      script_id: (task as any).script_id || null,
+      drive_link: task.drive_link || null,
+      edited_video_link: s.link,
+      created_by: user?.id || null,
+      assigned_to: null,
+      edited_by: (task as any).edited_by || user?.id || null,
+      editing_started_at: null,
+      editing_priority: false,
+      immediate_alteration: false,
+      position: idx,
+      parent_task_id: task.id,
+      created_at: now,
+      updated_at: now,
+    }));
+
+    for (const payload of payloads) {
+      let { error } = await supabase.from('content_tasks').insert(payload as any);
+      if (error) {
+        // fallback if parent_task_id column missing
+        const { parent_task_id, ...rest } = payload as any;
+        const retry = await supabase.from('content_tasks').insert(rest);
+        if (retry.error) { toast.error('Erro ao criar cards: ' + retry.error.message); return; }
+      }
+    }
+
+    // Remove the original optimization container card
+    await supabase.from('content_tasks').delete().eq('id', task.id);
+    await supabase.from('task_history').insert({
+      task_id: task.id, user_id: user?.id || null,
+      action: `Otimização dividida em ${filled.length} card(s) de revisão`,
+    } as any);
+
+    toast.success(`🚀 ${filled.length} card(s) enviados para revisão!`);
+    onRefresh();
+    onOpenChange(false);
+  };
+
   const handleMoveToNext = async (targetColumn: string) => {
+    // Special flow: optimization card → split into per-slot review cards
+    if (task.content_type === 'otimizacao' && targetColumn === 'revisao') {
+      await splitOptimizationIntoCards();
+      return;
+    }
     if (targetColumn === 'edicao' && !task.drive_link) {
       toast.error('Adicione o link dos materiais (Drive) primeiro');
       return;
@@ -1065,6 +1159,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     onRefresh();
     onOpenChange(false);
   };
+
 
   const getUserName = (userId: string | null) => {
     if (!userId) return 'Sistema';

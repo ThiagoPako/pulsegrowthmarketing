@@ -725,8 +725,14 @@ export default function CommercialProposal() {
     if (proposalType === 'personalizada' && !customMonthlyValue) { toast.error('Preencha o valor da proposta'); return; }
     if (proposalType === 'cronograma' && cronogramaDeliverables.length === 0) { toast.error('Gere ou adicione entregas ao cronograma'); return; }
     if (proposalType === 'cronograma' && cronogramaPricingMode === 'total' && !cronogramaTotalCustomValue) { toast.error('Informe o valor total do serviço'); return; }
-    if (proposalType === 'videos' && (parseInt(videosQty) || 0) <= 0) { toast.error('Informe a quantidade de vídeos'); return; }
-    if (proposalType === 'videos' && (parseFloat(videosUnitPrice) || 0) <= 0) { toast.error('Informe o valor unitário do vídeo'); return; }
+    if (proposalType === 'videos') {
+      if ((parseInt(videosQty) || 0) <= 0) { toast.error('Informe uma quantidade de Reels maior que zero'); return; }
+      if ((parseFloat(videosUnitPrice) || 0) <= 0) { toast.error('O valor unitário do Reels deve ser maior que zero'); return; }
+      const invalidExtra = videosExtras.find(e => !(Number(e.value) > 0));
+      if (invalidExtra) { toast.error(`O adicional "${invalidExtra.name}" deve ter valor maior que zero`); return; }
+      const disc = Number(customDiscount) || 0;
+      if (disc < 0 || disc > 50) { toast.error('O desconto deve estar entre 0% e 50%'); return; }
+    }
     setSavingProposal(true);
     try {
       const systemData = proposalType === 'sistema' ? {
@@ -1812,8 +1818,20 @@ export default function CommercialProposal() {
                 )}
               </div>
               <div>
-                <Label>Valor por Reels (R$)</Label>
-                <Input type="number" min={0} step="0.01" value={videosUnitPrice} onChange={e => setVideosUnitPrice(e.target.value)} />
+                <Label>Valor por Reels (R$) <span className="text-destructive">*</span></Label>
+                <Input
+                  type="number"
+                  min={0.01}
+                  step="0.01"
+                  required
+                  value={videosUnitPrice}
+                  onChange={e => setVideosUnitPrice(e.target.value)}
+                  aria-invalid={unit <= 0}
+                  className={unit <= 0 ? 'border-destructive focus-visible:ring-destructive' : ''}
+                />
+                {unit <= 0 && (
+                  <p className="text-xs text-destructive mt-1">Valor deve ser maior que zero.</p>
+                )}
               </div>
               <div>
                 <Label>Prazo de entrega (dias)</Label>
@@ -1821,7 +1839,18 @@ export default function CommercialProposal() {
               </div>
               <div>
                 <Label>Desconto (%)</Label>
-                <Input type="number" min={0} max={50} value={customDiscount} onChange={e => setCustomDiscount(Number(e.target.value))} />
+                <Input
+                  type="number"
+                  min={0}
+                  max={50}
+                  value={customDiscount}
+                  onChange={e => setCustomDiscount(Number(e.target.value))}
+                  aria-invalid={customDiscount < 0 || customDiscount > 50}
+                  className={(customDiscount < 0 || customDiscount > 50) ? 'border-destructive focus-visible:ring-destructive' : ''}
+                />
+                {(customDiscount < 0 || customDiscount > 50) && (
+                  <p className="text-xs text-destructive mt-1">Desconto deve estar entre 0% e 50%.</p>
+                )}
               </div>
             </div>
 
@@ -1851,18 +1880,32 @@ export default function CommercialProposal() {
               )}
               <div className="grid grid-cols-3 gap-2">
                 <Input className="col-span-2" placeholder="Ex: Cobertura de evento" value={newVideosExtraName} onChange={e => setNewVideosExtraName(e.target.value)} />
-                <Input type="number" placeholder="Valor" value={newVideosExtraValue} onChange={e => setNewVideosExtraValue(e.target.value)} />
+                <Input
+                  type="number"
+                  min={0.01}
+                  step="0.01"
+                  placeholder="Valor"
+                  value={newVideosExtraValue}
+                  onChange={e => setNewVideosExtraValue(e.target.value)}
+                  aria-invalid={!!newVideosExtraValue && (parseFloat(newVideosExtraValue) || 0) <= 0}
+                  className={(!!newVideosExtraValue && (parseFloat(newVideosExtraValue) || 0) <= 0) ? 'border-destructive focus-visible:ring-destructive' : ''}
+                />
               </div>
+              {!!newVideosExtraValue && (parseFloat(newVideosExtraValue) || 0) <= 0 && (
+                <p className="text-xs text-destructive mt-1">O valor do adicional deve ser maior que zero.</p>
+              )}
               <Button
                 size="sm"
                 variant="outline"
                 className="mt-2"
                 onClick={() => {
-                  if (!newVideosExtraName || !newVideosExtraValue) return;
-                  setVideosExtras(prev => [...prev, { id: crypto.randomUUID(), name: newVideosExtraName, value: parseFloat(newVideosExtraValue) || 0 }]);
+                  const v = parseFloat(newVideosExtraValue) || 0;
+                  if (!newVideosExtraName.trim()) { toast.error('Informe o nome do adicional'); return; }
+                  if (v <= 0) { toast.error('O valor do adicional deve ser maior que zero'); return; }
+                  setVideosExtras(prev => [...prev, { id: crypto.randomUUID(), name: newVideosExtraName.trim(), value: v }]);
                   setNewVideosExtraName(''); setNewVideosExtraValue('');
                 }}
-                disabled={!newVideosExtraName || !newVideosExtraValue}
+                disabled={!newVideosExtraName.trim() || (parseFloat(newVideosExtraValue) || 0) <= 0}
               >
                 <Plus className="h-4 w-4 mr-1" /> Adicionar
               </Button>

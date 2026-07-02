@@ -991,7 +991,7 @@ export default function Reports() {
                           .filter(r => r.delivery_status === 'realizada' || r.delivery_status === 'encaixe' || r.delivery_status === 'extra')
                           .map(r => [
                             r.date,
-                            clients.find(c => c.id === r.client_id)?.name || '—',
+                            clients.find(c => c.id === r.client_id)?.companyName || '—',
                             r.videos_recorded,
                             r.reels_produced,
                             r.creatives_produced,

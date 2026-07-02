@@ -514,6 +514,7 @@ function DeliveryCard({
   forwardLabel,
   backwardLabel,
   isHighlighted,
+  onDelete,
 }: {
   delivery: SocialDelivery;
   index: number;
@@ -534,6 +535,7 @@ function DeliveryCard({
   forwardLabel?: string;
   backwardLabel?: string;
   isHighlighted?: boolean;
+  onDelete?: () => void;
 }) {
   const typeConf = getTypeConfig(d.content_type);
   const td = d.content_task_id ? taskDeadlines[d.content_task_id] : null;

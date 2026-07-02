@@ -168,6 +168,29 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
           )}
         </div>
         <p className="text-sm font-semibold text-foreground leading-tight">{task.title}</p>
+
+        {/* Optimization rocket guide + formats */}
+        {isOptimize && (
+          <div className="rounded-lg border border-fuchsia-400/40 bg-gradient-to-br from-fuchsia-500/10 to-violet-500/10 p-2.5 space-y-2">
+            <div className="flex gap-2">
+              <div className="shrink-0 w-7 h-7 rounded-full bg-gradient-to-br from-fuchsia-500 to-violet-500 flex items-center justify-center shadow shadow-fuchsia-500/40 animate-pulse">
+                <Rocket size={13} className="text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-black text-fuchsia-700 dark:text-fuchsia-300 leading-tight">Ei, editor! Bora otimizar? 🚀</p>
+                <p className="text-[10px] text-foreground/75 leading-snug mt-0.5">
+                  Esse é um <b>Reel aprovado</b>. Reaproveita as gravações e gera <b>Stories, Criativos ou cortes extras</b> a partir dele. ✨
+                </p>
+              </div>
+            </div>
+            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setFormatsOpen(true); }}
+              className="w-full h-7 text-[10px] gap-1 border-fuchsia-400/50 text-fuchsia-700 dark:text-fuchsia-300 hover:bg-fuchsia-500/10">
+              <Lightbulb size={11} /> Ver formatos de otimização
+            </Button>
+          </div>
+        )}
+
+
         
         {/* Script alteration badges */}
         {(task as any).script_alteration_type === 'altered' && (

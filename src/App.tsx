@@ -87,6 +87,7 @@ const LinkShortener = lazy(() => import("@/pages/LinkShortener"));
 const ShortLinkRedirect = lazy(() => import("@/pages/ShortLinkRedirect"));
 const Training = lazy(() => import("@/pages/Training"));
 const TrainingRegister = lazy(() => import("@/pages/TrainingRegister"));
+const OptimizationFormatsGuide = lazy(() => import("@/pages/OptimizationFormatsGuide"));
 
 
 const queryClient = new QueryClient({
@@ -211,6 +212,7 @@ function AppRoutes() {
         <Route path="/cancelamentos" element={<ProtectedRoute><CancellationReports /></ProtectedRoute>} />
         <Route path="/treinamento-gestao" element={<ProtectedRoute><TrainingManager /></ProtectedRoute>} />
         <Route path="/treinamento" element={<ProtectedRoute noLayout><Training /></ProtectedRoute>} />
+        <Route path="/treinamento/otimizacao-conteudo" element={<ProtectedRoute><OptimizationFormatsGuide /></ProtectedRoute>} />
         <Route path="/treinamento-registro" element={<TrainingRegister />} />
         <Route path="/evento/:token" element={<EventRegistration />} />
         <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />

@@ -12,7 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import {
   Film, Megaphone, Image, Palette, ExternalLink, Clock, AlertTriangle,
-  Check, Eye, Search, Scissors, Send, Link2, Flag, X, Rocket, Lightbulb
+  Check, Eye, Search, Scissors, Send, Link2, Flag, X, Rocket, Lightbulb, Layers
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
@@ -22,6 +22,8 @@ import { format, differenceInHours, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 import { motion, AnimatePresence } from 'framer-motion';
+import EditorTaskDetail from '@/components/editor/EditorTaskDetail';
+import type { EditorTask as EditorTaskFull } from '@/pages/EditorDashboard';
 
 const CONTENT_TYPES = [
   { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400', points: 10 },
@@ -85,13 +87,14 @@ function getTypeConfig(type: string) {
   return CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];
 }
 
-function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink, onClaimTask, onUnclaimTask, onReturnFromReview, draggedId, onDragStart, currentUserId, users }: {
+function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink, onClaimTask, onUnclaimTask, onReturnFromReview, onOpenDetail, draggedId, onDragStart, currentUserId, users }: {
   task: EditorTask; clients: any[]; onOpenScript: (id: string) => void;
   onSendToReview: (task: EditorTask) => void;
   onAddVideoLink: (task: EditorTask) => void;
   onClaimTask: (task: EditorTask) => void;
   onUnclaimTask: (task: EditorTask) => void;
   onReturnFromReview: (task: EditorTask) => void;
+  onOpenDetail: (task: EditorTask) => void;
   draggedId: string | null; onDragStart: (e: React.DragEvent, task: EditorTask) => void;
   currentUserId: string | undefined;
   users: any[];
@@ -106,17 +109,18 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
   const isReview = task.kanban_column === 'revisao';
   const isMine = task.assigned_to === currentUserId;
   const isOptimize = task.content_type === 'otimizacao';
-  const [formatsOpen, setFormatsOpen] = useState(false);
-  const OPT_FORMATS = [
-    { title: '🎣 Gancho em Áudio + Takes', desc: 'Use a melhor frase do reel como gancho e cubra com takes soltos.', tip: 'Ideal para Story de 15s.' },
-    { title: '🎬 Mashup Multi-Vídeos', desc: 'Combine trechos de vários reels do cliente em um só.', tip: 'Ótimo pra criativo de anúncio.' },
-    { title: '⚡ Corte Rápido (Hook 3s)', desc: 'Comece com o clímax do vídeo nos primeiros 3s.', tip: 'Prende atenção no feed.' },
-    { title: '📱 Vertical Story Nativo', desc: 'Adapte pro formato 9:16 com stickers e enquetes.', tip: 'Aumenta interação.' },
-    { title: '💬 Legenda em Destaque', desc: 'Coloque a fala principal em texto grande na tela.', tip: 'Funciona sem áudio.' },
-    { title: '🔁 Loop Perfeito', desc: 'Faça o final conectar com o começo pra rodar em loop.', tip: 'Mais tempo de watch.' },
-    { title: '📊 Antes x Depois', desc: 'Mostre transformação/comparação usando os takes.', tip: 'Alto engajamento.' },
-    { title: '🎯 CTA Forte', desc: 'Reforce a chamada pra ação nos últimos 2s.', tip: 'Converte mais.' },
-  ];
+
+  // Count filled optimization slots (parsed from description marker)
+  const optSlotCount = (() => {
+    if (!isOptimize || !task.description) return { filled: 0, total: 0 };
+    const idx = task.description.indexOf('[[OPT_SLOTS]]');
+    if (idx < 0) return { filled: 0, total: 0 };
+    try {
+      const arr = JSON.parse(task.description.slice(idx + '[[OPT_SLOTS]]'.length));
+      if (!Array.isArray(arr)) return { filled: 0, total: 0 };
+      return { filled: arr.filter((s: any) => (s.link || '').trim().length > 0).length, total: arr.length };
+    } catch { return { filled: 0, total: 0 }; }
+  })();
 
   return (
     <div draggable onDragStart={e => onDragStart(e, task)}
@@ -169,7 +173,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
         </div>
         <p className="text-sm font-semibold text-foreground leading-tight">{task.title}</p>
 
-        {/* Optimization rocket guide + formats */}
+        {/* Optimization rocket guide + open detail (with slots) + training link */}
         {isOptimize && (
           <div className="rounded-lg border border-fuchsia-400/40 bg-gradient-to-br from-fuchsia-500/10 to-violet-500/10 p-2.5 space-y-2">
             <div className="flex gap-2">
@@ -179,16 +183,23 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
               <div className="min-w-0">
                 <p className="text-[10px] font-black text-fuchsia-700 dark:text-fuchsia-300 leading-tight">Ei, editor! Bora otimizar? 🚀</p>
                 <p className="text-[10px] text-foreground/75 leading-snug mt-0.5">
-                  Esse é um <b>Reel aprovado</b>. Reaproveita as gravações e gera <b>Stories, Criativos ou cortes extras</b> a partir dele. ✨
+                  Reaproveita as gravações e gera <b>Stories, Criativos ou cortes extras</b>. Abra o card pra anexar cada peça em um slot. ✨
                 </p>
               </div>
             </div>
-            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setFormatsOpen(true); }}
-              className="w-full h-7 text-[10px] gap-1 border-fuchsia-400/50 text-fuchsia-700 dark:text-fuchsia-300 hover:bg-fuchsia-500/10">
-              <Lightbulb size={11} /> Ver formatos de otimização
+            <Button size="sm" onClick={(e) => { e.stopPropagation(); onOpenDetail(task); }}
+              className="w-full h-8 text-[11px] gap-1.5 bg-gradient-to-r from-fuchsia-500 to-violet-500 hover:from-fuchsia-600 hover:to-violet-600 text-white shadow-md shadow-fuchsia-500/30">
+              <Layers size={12} /> Abrir & anexar vídeos {optSlotCount.total > 0 && `(${optSlotCount.filled}/${optSlotCount.total})`}
             </Button>
+            <a href="/treinamento/otimizacao-conteudo" target="_blank" rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="w-full h-7 text-[10px] gap-1 border border-fuchsia-400/50 text-fuchsia-700 dark:text-fuchsia-300 hover:bg-fuchsia-500/10 rounded-md flex items-center justify-center transition">
+              <Lightbulb size={11} className="mr-1" /> Ver guia completo com infográficos
+              <ExternalLink size={9} className="ml-1" />
+            </a>
           </div>
         )}
+
 
 
         
@@ -355,34 +366,10 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
         )}
       </div>
 
-      {/* Formats dialog */}
-      {isOptimize && (
-        <Dialog open={formatsOpen} onOpenChange={setFormatsOpen}>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Lightbulb size={18} className="text-fuchsia-500" /> Formatos de Otimização
-              </DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {OPT_FORMATS.map((f, i) => (
-                <div key={i} className="rounded-lg border border-fuchsia-400/30 bg-gradient-to-br from-fuchsia-500/5 to-violet-500/5 p-3">
-                  <p className="text-sm font-bold text-foreground mb-1">{f.title}</p>
-                  <p className="text-xs text-foreground/80 mb-1.5">{f.desc}</p>
-                  <p className="text-[10px] text-fuchsia-600 dark:text-fuchsia-300 font-semibold">💡 {f.tip}</p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
-              <p className="text-xs font-bold text-amber-700 dark:text-amber-400">⭐ Regra de ouro</p>
-              <p className="text-[11px] text-foreground/80 mt-1">Gancho nos primeiros 3s, corte a cada 1-2s pra manter ritmo, e sempre feche com CTA claro.</p>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
     </div>
   );
 }
+
 
 
 export default function EditorKanban() {
@@ -402,6 +389,9 @@ export default function EditorKanban() {
   const [videoLinkTask, setVideoLinkTask] = useState<EditorTask | null>(null);
   const [videoLinkValue, setVideoLinkValue] = useState('');
   const [sendToReviewAfterLink, setSendToReviewAfterLink] = useState(false);
+
+  // Optimization detail sheet
+  const [detailTask, setDetailTask] = useState<EditorTask | null>(null);
 
   const fetchTasks = useCallback(async () => {
     const { data } = await supabase.from('content_tasks').select('*')
@@ -808,6 +798,7 @@ export default function EditorKanban() {
                       <TaskCard key={task.id} task={task} clients={clients} onOpenScript={openScript}
                         onSendToReview={handleSendToReview} onAddVideoLink={openVideoLinkDialog}
                         onClaimTask={handleClaimTask} onUnclaimTask={handleUnclaimTask} onReturnFromReview={handleReturnFromReview}
+                        onOpenDetail={setDetailTask}
                         currentUserId={user?.id} users={users}
                         draggedId={draggedTask?.id || null} onDragStart={handleDragStart} />
                     ))}
@@ -886,6 +877,16 @@ export default function EditorKanban() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Optimization detail sheet with slots */}
+      {detailTask && (
+        <EditorTaskDetail
+          task={detailTask as unknown as EditorTaskFull}
+          open={!!detailTask}
+          onOpenChange={(o) => { if (!o) setDetailTask(null); }}
+          onRefresh={fetchTasks}
+        />
+      )}
     </div>
   );
 }

@@ -2377,6 +2377,108 @@ export default function CommercialProposal() {
     );
   };
 
+  const renderVideosPreview = () => {
+    const qty = parseInt(videosQty) || 0;
+    const unit = parseFloat(videosUnitPrice) || 0;
+    const extrasTotal = videosExtras.reduce((s, e) => s + (Number(e.value) || 0), 0);
+    const base = qty * unit;
+    const total = (base + extrasTotal) * (1 - customDiscount / 100);
+    const installments = parseInt(videosInstallments) || 1;
+    const parcela = installments > 0 ? total / installments : total;
+    const paymentLabel = PAYMENT_METHODS.find(m => m.value === videosPaymentMethod)?.label || 'PIX';
+    const inclusions = [
+      { icon: Camera, label: 'Captação profissional', desc: 'Videomaker especializado no local do cliente' },
+      { icon: Film, label: 'Direção de cena', desc: 'Enquadramento, luz, áudio e direção de atuação' },
+      { icon: FileText, label: 'Roteiro estratégico', desc: 'Copy focado em vendas e engajamento' },
+      { icon: Scissors, label: 'Edição premium', desc: 'Tratamento de cor, legendas dinâmicas e sound design' },
+    ];
+    return (
+      <>
+        <div data-pdf-section className="p-8 md:p-12">
+          <h2 className="text-xl font-bold text-gray-800 mb-1 flex items-center gap-2">
+            <Film className="h-5 w-5 text-primary" /> Vídeos Avulsos
+          </h2>
+          <p className="text-sm text-gray-500 mb-5">Produção sob demanda de Reels profissionais para {clientCompany || 'sua marca'}.</p>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <div className="rounded-xl border p-4 text-center bg-primary/5">
+              <p className="text-4xl font-bold text-primary">{qty}</p>
+              <p className="text-[10px] uppercase tracking-wider text-gray-500 mt-1">Reels contratados</p>
+            </div>
+            <div className="rounded-xl border p-4 text-center">
+              <p className="text-2xl font-bold text-gray-800">{fmt(unit)}</p>
+              <p className="text-[10px] uppercase tracking-wider text-gray-500 mt-1">Valor por Reels</p>
+            </div>
+            <div className="rounded-xl border p-4 text-center">
+              <p className="text-2xl font-bold text-gray-800">{videosDeliveryDays}d</p>
+              <p className="text-[10px] uppercase tracking-wider text-gray-500 mt-1">Prazo de entrega</p>
+            </div>
+            <div className="rounded-xl border p-4 text-center">
+              <p className="text-2xl font-bold text-gray-800">{installments}x</p>
+              <p className="text-[10px] uppercase tracking-wider text-gray-500 mt-1">{paymentLabel}</p>
+            </div>
+          </div>
+
+          <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-primary" /> O que está incluso em cada Reels
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+            {inclusions.map((inc, i) => {
+              const Icon = inc.icon;
+              return (
+                <div key={i} className="flex items-start gap-3 rounded-xl border p-4 bg-white">
+                  <div className="rounded-lg p-2 bg-primary/10">
+                    <Icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm text-gray-800">{inc.label}</p>
+                    <p className="text-xs text-gray-500">{inc.desc}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {videosDescription && (
+            <div className="rounded-xl border bg-accent/20 p-4 mb-6">
+              <p className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Observações do projeto</p>
+              <p className="text-sm text-gray-700 whitespace-pre-line">{videosDescription}</p>
+            </div>
+          )}
+
+          {videosExtras.length > 0 && (
+            <div className="mb-6">
+              <h3 className="font-bold text-gray-800 mb-2">Serviços adicionais</h3>
+              <div className="space-y-2">
+                {videosExtras.map(ex => (
+                  <div key={ex.id} className="flex justify-between items-center border rounded-lg p-3 bg-white">
+                    <span className="text-sm text-gray-700">{ex.name}</span>
+                    <span className="text-sm font-bold text-primary">{fmt(Number(ex.value) || 0)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-2xl p-6 text-white" style={{ background: 'linear-gradient(135deg, hsl(16 82% 51%), hsl(16 82% 38%))' }}>
+            <p className="text-xs uppercase tracking-wider opacity-80">Investimento total</p>
+            <p className="text-4xl md:text-5xl font-bold mt-1">{fmt(total)}</p>
+            {installments > 1 && (
+              <p className="text-sm opacity-90 mt-1">
+                ou <strong>{installments}x de {fmt(parcela)}</strong> via {paymentLabel}
+              </p>
+            )}
+            {customDiscount > 0 && (
+              <p className="text-xs opacity-80 mt-2">Desconto de {customDiscount}% aplicado.</p>
+            )}
+          </div>
+        </div>
+      </>
+    );
+  };
+
+
+
   const renderMarketingPreview = () => (
     <>
       {selectedPlan && (

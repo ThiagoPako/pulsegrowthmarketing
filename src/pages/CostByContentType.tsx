@@ -18,7 +18,10 @@ interface EditorTask { client_id: string; content_type: string; kanban_column: s
 interface DesignTask { client_id: string; kanban_column: string; completed_at: string | null; updated_at?: string; }
 interface SocialDelivery { client_id: string; content_type: string; delivered_at: string; status: string; }
 
-const PRODUCTION_ROLES = ['videomaker', 'editor', 'designer', 'social_media'];
+const VIDEO_ROLES = ['videomaker', 'editor', 'social_media'];
+const DESIGNER_ROLES = ['designer'];
+
+
 
 export default function CostByContentType() {
   const { clients, users } = useApp();

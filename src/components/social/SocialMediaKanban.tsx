@@ -677,6 +677,59 @@ function DeliveryCard({
                   </div>
                 )}
                 <ReviewVideoLink contentTaskId={d.content_task_id} clientId={d.client_id} showDownload={true} />
+                {d.content_type === 'reels' && (
+                  <Button
+                    size="sm"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        const now = new Date().toISOString();
+                        const baseTitle = (d as any).title || 'Reels';
+                        const { data: existing } = await supabase
+                          .from('content_tasks')
+                          .select('id')
+                          .eq('client_id', d.client_id)
+                          .eq('content_type', 'otimizacao')
+                          .eq('title', `[OTIMIZAÇÃO] ${baseTitle}`)
+                          .limit(1);
+                        if (existing && existing.length > 0) {
+                          toast.info('Já existe uma otimização em andamento para este conteúdo');
+                          return;
+                        }
+                        const payload: any = {
+                          client_id: d.client_id,
+                          title: `[OTIMIZAÇÃO] ${baseTitle}`,
+                          content_type: 'otimizacao',
+                          kanban_column: 'edicao',
+                          description: 'Otimização gerada a partir do conteúdo postado. Aproveitar as gravações originais para criar Stories, Criativos e cortes adicionais.',
+                          drive_link: (d as any).drive_link || null,
+                          assigned_to: null,
+                          edited_by: null,
+                          edited_video_link: null,
+                          editing_started_at: null,
+                          editing_priority: false,
+                          immediate_alteration: false,
+                          position: 0,
+                          created_at: now,
+                          updated_at: now,
+                          parent_task_id: d.content_task_id || null,
+                        };
+                        const { error } = await supabase.from('content_tasks').insert(payload);
+                        if (error) {
+                          delete payload.parent_task_id;
+                          const retry = await supabase.from('content_tasks').insert(payload);
+                          if (retry.error) throw retry.error;
+                        }
+                        toast.success('🚀 Card de Otimização criado na Edição!');
+                      } catch (err: any) {
+                        toast.error('Erro ao criar otimização: ' + (err?.message || 'erro'));
+                      }
+                    }}
+                    className="w-full gap-1.5 h-7 text-[11px] font-bold text-white bg-gradient-to-r from-fuchsia-500 via-pink-500 to-violet-500 hover:from-fuchsia-600 hover:via-pink-600 hover:to-violet-600 shadow-sm shadow-fuchsia-500/30 animate-pulse"
+                  >
+                    <Rocket size={12} /> Otimizar Conteúdo
+                  </Button>
+                )}
               </div>
             )}
           </div>

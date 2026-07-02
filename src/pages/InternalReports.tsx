@@ -793,6 +793,11 @@ export default function InternalReports() {
             </Card>
           )}
         </TabsContent>
+
+        {/* ════════ DESIGNERS TAB ════════ */}
+        <TabsContent value="designers" className="space-y-4">
+          <DesignerReports />
+        </TabsContent>
       </Tabs>
     </div>
   );

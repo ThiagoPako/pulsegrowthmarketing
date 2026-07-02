@@ -2474,13 +2474,28 @@ export default function CommercialProposal() {
           <div className="rounded-2xl p-6 text-white" style={{ background: 'linear-gradient(135deg, hsl(16 82% 51%), hsl(16 82% 38%))' }}>
             <p className="text-xs uppercase tracking-wider opacity-80">Investimento total</p>
             <p className="text-4xl md:text-5xl font-bold mt-1">{fmt(total)}</p>
+            <div className="mt-3 space-y-1 text-xs opacity-90 border-t border-white/20 pt-3">
+              <div className="flex justify-between">
+                <span>{qty} Reels × {fmt(unit)}</span>
+                <span>{fmt(base)}</span>
+              </div>
+              {extrasTotal > 0 && (
+                <div className="flex justify-between">
+                  <span>Serviços adicionais</span>
+                  <span>{fmt(extrasTotal)}</span>
+                </div>
+              )}
+              {customDiscount > 0 && (
+                <div className="flex justify-between">
+                  <span>Desconto ({customDiscount}%)</span>
+                  <span>- {fmt((base + extrasTotal) * (customDiscount / 100))}</span>
+                </div>
+              )}
+            </div>
             {installments > 1 && (
-              <p className="text-sm opacity-90 mt-1">
+              <p className="text-sm opacity-95 mt-3">
                 ou <strong>{installments}x de {fmt(parcela)}</strong> via {paymentLabel}
               </p>
-            )}
-            {customDiscount > 0 && (
-              <p className="text-xs opacity-80 mt-2">Desconto de {customDiscount}% aplicado.</p>
             )}
           </div>
         </div>

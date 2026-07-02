@@ -533,6 +533,17 @@ export default function ClientPortal() {
               >
                 Biblioteca
               </button>
+              {optimizedContents.length > 0 && (
+                <button
+                  onClick={() => setActiveTab('otimizados')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all relative ${activeTab === 'otimizados' ? 'bg-gradient-to-r from-fuchsia-500/30 to-purple-500/30 text-white ring-1 ring-fuchsia-400/40' : 'text-fuchsia-300 hover:text-fuchsia-200'}`}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <Rocket size={12} className="animate-pulse" /> Otimizados
+                    <span className="text-[10px] font-bold bg-fuchsia-500/30 px-1.5 rounded-full">{optimizedContents.length}</span>
+                  </span>
+                </button>
+              )}
               <button
                 onClick={() => setActiveTab('designer')}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'designer' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}

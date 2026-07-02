@@ -190,17 +190,49 @@ export default function Reports() {
     const encaixes = filteredRecords.filter(r => r.delivery_status === 'encaixe');
     const extras = filteredRecords.filter(r => r.delivery_status === 'extra');
     const totalVideos = realizadas.reduce((a, r) => a + r.videos_recorded, 0);
-    const totalReels = realizadas.reduce((a, r) => a + r.reels_produced, 0);
-    const totalCreatives = realizadas.reduce((a, r) => a + r.creatives_produced, 0);
-    const totalStories = realizadas.reduce((a, r) => a + r.stories_produced, 0);
+    const recReels = realizadas.reduce((a, r) => a + r.reels_produced, 0);
+    const recCreatives = realizadas.reduce((a, r) => a + r.creatives_produced, 0);
+    const recStories = realizadas.reduce((a, r) => a + r.stories_produced, 0);
     const totalArts = realizadas.reduce((a, r) => a + r.arts_produced, 0);
     const totalExtras = realizadas.reduce((a, r) => a + r.extras_produced, 0);
     const cancelRate = filteredRecords.length > 0 ? ((canceladas.length / filteredRecords.length) * 100).toFixed(1) : '0';
-    
+
+    // Fallback source: content_tasks produced in period (based on approved_at or updated_at)
+    const inPeriod = (iso?: string | null) => {
+      if (!iso) return false;
+      const d = iso.slice(0, 10);
+      return d >= dateRange.start && d <= dateRange.end;
+    };
+    const normType = (t?: string) => (t || '').toLowerCase().trim();
+    const relevantTasks = editorTasks.filter(t => {
+      if (selectedClient !== 'all' && t.client_id !== selectedClient) return false;
+      const ref = t.approved_at || t.updated_at;
+      if (!inPeriod(ref)) return false;
+      // count produced/delivered (approved or beyond)
+      const col = (t.kanban_column || '').toLowerCase();
+      return !!t.approved_at || ['aprovado','envio','agendamentos','acompanhamento','postado','revisao','alteracao'].includes(col);
+    });
+    const ctReels = relevantTasks.filter(t => ['reels','reel'].includes(normType(t.content_type))).length;
+    const ctCriativos = relevantTasks.filter(t => ['criativo','creative'].includes(normType(t.content_type))).length;
+    const ctStories = relevantTasks.filter(t => ['story','stories'].includes(normType(t.content_type))).length;
+
+    // Social media deliveries
+    const socialReelsPosted = filteredSocial.filter(d => normType(d.content_type) === 'reels' && d.status === 'postado').length;
+    const socialCriativosPosted = filteredSocial.filter(d => normType(d.content_type) === 'criativo' && d.status === 'postado').length;
+    const socialStoriesPosted = filteredSocial.filter(d => normType(d.content_type) === 'story' && d.status === 'postado').length;
+    const socialArtesDelivered = filteredSocial.filter(d => normType(d.content_type) === 'arte').length;
+    const totalPosted = filteredSocial.filter(d => d.status === 'postado').length;
+    const totalSocialDelivered = filteredSocial.length;
+
+    // Guarantee non-zero when there's production in ANY authoritative source
+    const totalReels = Math.max(recReels, ctReels, socialReelsPosted);
+    const totalCreatives = Math.max(recCreatives, ctCriativos, socialCriativosPosted);
+    const totalStories = Math.max(recStories, ctStories, socialStoriesPosted);
+
     // Total content produced (gravados)
     const totalContent = totalReels + totalCreatives + totalStories + totalArts + totalExtras;
     const avgPerSession = realizadas.length > 0 ? (totalContent / realizadas.length).toFixed(1) : '0';
-    
+
     // Hours dedicated (sessions × duration)
     const totalMinutes = realizadas.length * recDuration;
     const totalHours = (totalMinutes / 60).toFixed(1);
@@ -210,22 +242,14 @@ export default function Reports() {
     const totalWaitMinutes = Math.round(totalWaitSeconds / 60);
     const waitCount = filteredWaitLogs.length;
 
-    // Social media deliveries
-    const socialReelsPosted = filteredSocial.filter(d => d.content_type === 'reels' && d.status === 'postado').length;
-    const socialCriativosPosted = filteredSocial.filter(d => d.content_type === 'criativo' && d.status === 'postado').length;
-    const socialStoriesPosted = filteredSocial.filter(d => d.content_type === 'story' && d.status === 'postado').length;
-    const socialArtesDelivered = filteredSocial.filter(d => d.content_type === 'arte').length;
-    const totalPosted = filteredSocial.filter(d => d.status === 'postado').length;
-    const totalSocialDelivered = filteredSocial.length;
-
-    return { 
-      realizadas: realizadas.length, canceladas: canceladas.length, encaixes: encaixes.length, extras: extras.length, 
+    return {
+      realizadas: realizadas.length, canceladas: canceladas.length, encaixes: encaixes.length, extras: extras.length,
       totalVideos, totalReels, totalCreatives, totalStories, totalArts, totalExtras, cancelRate,
       totalContent, avgPerSession, totalHours, totalMinutes,
       totalWaitSeconds, totalWaitMinutes, waitCount,
       socialReelsPosted, socialCriativosPosted, socialStoriesPosted, socialArtesDelivered, totalPosted, totalSocialDelivered,
     };
-  }, [filteredRecords, filteredSocial, filteredWaitLogs, recDuration]);
+  }, [filteredRecords, filteredSocial, filteredWaitLogs, recDuration, editorTasks, selectedClient, dateRange]);
 
   // Cost per video KPIs
   const costKpis = useMemo(() => {

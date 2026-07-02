@@ -1070,6 +1070,54 @@ export default function Reports() {
         </p>
       </div>
 
+      {/* Custo por Tipo de Conteúdo */}
+      <div>
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">🎯 Custo por Tipo de Conteúdo</h3>
+        {(() => {
+          const reels = stats.totalReels + stats.socialReelsPosted;
+          const criativos = stats.totalCreatives + stats.socialCriativosPosted;
+          const stories = stats.totalStories + stats.socialStoriesPosted;
+          // Weighted allocation of salaries based on effort points (Reels=10, Criativo=5, Story=3)
+          const wReels = reels * 10;
+          const wCri = criativos * 5;
+          const wSto = stories * 3;
+          const wTotal = wReels + wCri + wSto;
+          const salReels = wTotal > 0 ? (costKpis.totalSalaries * wReels) / wTotal : 0;
+          const salCri = wTotal > 0 ? (costKpis.totalSalaries * wCri) / wTotal : 0;
+          const salSto = wTotal > 0 ? (costKpis.totalSalaries * wSto) / wTotal : 0;
+          const cReels = reels > 0 ? salReels / reels : 0;
+          const cCri = criativos > 0 ? salCri / criativos : 0;
+          const cSto = stories > 0 ? salSto / stories : 0;
+          const fmt = (n: number) => n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
+          const items = [
+            { icon: Film, label: 'Reels', qty: reels, cost: cReels, total: salReels, color: 'text-blue-600', border: 'hsl(217,91%,60%)' },
+            { icon: Megaphone, label: 'Criativos', qty: criativos, cost: cCri, total: salCri, color: 'text-purple-600', border: 'hsl(262,83%,58%)' },
+            { icon: Image, label: 'Stories', qty: stories, cost: cSto, total: salSto, color: 'text-pink-600', border: 'hsl(330,81%,60%)' },
+          ];
+          return (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {items.map((it, i) => (
+                <Card key={i} className="overflow-hidden border-l-4" style={{ borderLeftColor: it.border }}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <it.icon size={18} className={it.color} />
+                      <span className="text-[10px] text-muted-foreground">{it.qty} produzidos</span>
+                    </div>
+                    <p className="text-2xl font-bold">{fmt(it.cost)}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Custo por {it.label}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">Total alocado: {fmt(it.total)}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          );
+        })()}
+        <p className="text-[10px] text-muted-foreground mt-1.5 italic">
+          Alocação proporcional dos salários por peso de esforço: Reels (10), Criativo (5), Story (3).
+        </p>
+      </div>
+
+
       {stats.totalSocialDelivered > 0 && (
         <div>
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">📱 Postagens & Entregas Social Media</h3>

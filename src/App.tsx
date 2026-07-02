@@ -46,6 +46,7 @@ const FinancialMovements = lazy(() => import("@/pages/FinancialMovements"));
 const FinancialPartners = lazy(() => import("@/pages/FinancialPartners"));
 const FinancialChat = lazy(() => import("@/pages/FinancialChat"));
 const FinancialApiSettings = lazy(() => import("@/pages/FinancialApiSettings"));
+const FinancialEmpresaSaude = lazy(() => import("@/pages/FinancialEmpresaSaude"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 const ClientOnboarding = lazy(() => import("@/pages/ClientOnboarding"));
 const DesignerKanban = lazy(() => import("@/pages/DesignerKanban"));
@@ -180,6 +181,7 @@ function AppRoutes() {
         <Route path="/financeiro/parceiros" element={<ProtectedRoute><FinancialPartners /></ProtectedRoute>} />
         <Route path="/financeiro/chat" element={<ProtectedRoute><FinancialChat /></ProtectedRoute>} />
         <Route path="/financeiro/apis" element={<ProtectedRoute><FinancialApiSettings /></ProtectedRoute>} />
+        <Route path="/financeiro/saude" element={<ProtectedRoute><FinancialEmpresaSaude /></ProtectedRoute>} />
         <Route path="/onboarding/:clientId" element={<ClientOnboarding />} />
         <Route path="/portal-login/:clientId" element={<ClientPortalLogin />} />
         <Route path="/portal-registro/:clientId" element={<ClientPortalRegister />} />

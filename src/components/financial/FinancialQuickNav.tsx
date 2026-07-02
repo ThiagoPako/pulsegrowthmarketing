@@ -2,7 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, DollarSign, CreditCard, AlertTriangle,
-  BarChart3, ArrowLeftRight, Wallet, Users, Settings, MessageCircle, Plug
+  BarChart3, ArrowLeftRight, Wallet, Users, Settings, MessageCircle, Plug, HeartPulse
 } from 'lucide-react';
 
 const navItems = [

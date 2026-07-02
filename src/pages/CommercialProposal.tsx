@@ -947,7 +947,7 @@ export default function CommercialProposal() {
         toast.success(`${inserted} receita(s) criada(s) para ${proposal.client_company}`);
         // Mark proposal as having revenues generated
         await vpsDb.from('commercial_proposals').update({
-          observations: `${proposal.observations || ''}\n[RECEITAS GERADAS: ${inserted} parcelas de R$ ${installmentValue.toFixed(2)}]`.trim(),
+          observations: `${proposal.observations || ''}\n[RECEITAS GERADAS: ${inserted} parcelas de ${fmt(installmentValue)}]`.trim(),
         } as any).eq('id', proposal.id);
       }
     } catch (err) {

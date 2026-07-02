@@ -483,11 +483,6 @@ export default function ClientPortal() {
     otimizacao: '🚀 Conteúdos Otimizados',
   };
 
-  const optimizedContents = useMemo(
-    () => visibleContents.filter(c => c.content_type === 'otimizacao'),
-    [visibleContents]
-  );
-
   return (
     <div className="min-h-screen bg-[#080810] text-white selection:bg-white/20 overflow-x-hidden">
       {/* Welcome / News video overlay */}

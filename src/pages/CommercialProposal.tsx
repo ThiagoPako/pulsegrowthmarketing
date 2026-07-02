@@ -30,7 +30,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import ScopeDescription from '@/components/ScopeDescription';
 
-type ProposalType = 'marketing' | 'sistema' | 'endomarketing' | 'personalizada' | 'cronograma';
+type ProposalType = 'marketing' | 'sistema' | 'endomarketing' | 'personalizada' | 'cronograma' | 'videos';
 
 interface BonusService {
   id: string;

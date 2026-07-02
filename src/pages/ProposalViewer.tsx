@@ -1089,6 +1089,7 @@ export default function ProposalViewer() {
           {proposalType === 'endomarketing' && renderEndoContent()}
           {proposalType === 'personalizada' && renderCustomContent()}
           {proposalType === 'cronograma' && renderCronogramaContent()}
+          {proposalType === 'videos' && renderVideosContent()}
 
           {/* Bonus */}
           {bonus.length > 0 && (

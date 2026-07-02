@@ -876,6 +876,7 @@ export default function ClientPortal() {
               </div>
             )}
           </motion.div>
+        ) : activeTab === 'criativa' ? (
           <ZonaCriativa clientId={client.id} clientColor={clientColor} isAuthenticated={isAuthenticated} />
         ) : activeTab === 'designer' ? (
           <PortalDesigner clientId={client.id} clientColor={clientColor} />

@@ -81,7 +81,11 @@ export default function CostByContentType() {
     const sCri = socials.filter(d => norm(d.content_type) === 'criativo').length;
     const sSto = socials.filter(d => norm(d.content_type) === 'story').length;
 
-    const dtArts = designTasks.filter(t => clientOk(t.client_id) && t.kanban_column === 'aprovado' && inPeriod(t.completed_at || t.updated_at || null)).length;
+    // Conta artes anexadas em cada card aprovado (attachment + mockup contam separadamente)
+    const dtArts = designTasks
+      .filter(t => clientOk(t.client_id) && t.kanban_column === 'aprovado' && inPeriod(t.completed_at || t.updated_at || null))
+      .reduce((a, t) => a + (t.attachment_url ? 1 : 0) + (t.mockup_url ? 1 : 0) + (t.editable_file_url ? 1 : 0), 0);
+
 
     const reels = Math.max(recReels, ctReels, sReels);
     const criativos = Math.max(recCri, ctCri, sCri);

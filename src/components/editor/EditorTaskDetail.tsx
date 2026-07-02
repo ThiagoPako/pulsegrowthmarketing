@@ -252,7 +252,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   };
 
   const addSlot = (type: OptSlot['type']) => {
-    persistSlots([...slots, { id: `s_${Date.now()}`, type, link: '', label: type === 'story' ? 'Story' : type === 'criativo' ? 'Criativo' : 'Extra' }]);
+    persistSlots([...slots, { id: `s_${Date.now()}`, type, link: '', label: type === 'story' ? 'Story' : type === 'criativo' ? 'Criativo' : 'Reels' }]);
   };
 
   const removeSlot = (id: string) => {

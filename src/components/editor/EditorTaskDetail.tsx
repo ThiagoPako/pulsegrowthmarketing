@@ -883,9 +883,10 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
                   <Button size="sm" variant="outline" onClick={() => addSlot('criativo')} className="h-7 text-[11px] gap-1 border-purple-400/40 text-purple-600 hover:bg-purple-500/10">
                     + Criativo
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => addSlot('extra')} className="h-7 text-[11px] gap-1 border-blue-400/40 text-blue-600 hover:bg-blue-500/10">
-                    + Extra
+                  <Button size="sm" variant="outline" onClick={() => addSlot('reels')} className="h-7 text-[11px] gap-1 border-blue-400/40 text-blue-600 hover:bg-blue-500/10">
+                    + Reels
                   </Button>
+
                 </div>
               </div>
             )}

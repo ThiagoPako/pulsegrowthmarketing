@@ -783,9 +783,24 @@ export default function CommercialProposal() {
         contractDuration,
       } : {};
 
+      const videosExtrasTotal = videosExtras.reduce((s, e) => s + (Number(e.value) || 0), 0);
+      const videosBaseTotal = (parseInt(videosQty) || 0) * (parseFloat(videosUnitPrice) || 0);
+      const videosData = proposalType === 'videos' ? {
+        quantity: parseInt(videosQty) || 0,
+        unitPrice: parseFloat(videosUnitPrice) || 0,
+        deliveryDays: parseInt(videosDeliveryDays) || 15,
+        description: videosDescription,
+        extras: videosExtras,
+        paymentMethod: videosPaymentMethod,
+        installments: parseInt(videosInstallments) || 1,
+        totalValue: videosBaseTotal + videosExtrasTotal,
+      } : {};
+
       let saveSystemData: any = systemData;
       if (proposalType === 'personalizada') saveSystemData = customData;
       if (proposalType === 'cronograma') saveSystemData = cronogramaData;
+      if (proposalType === 'videos') saveSystemData = videosData;
+
 
       // Enrich team members with the freshest avatarUrl from current users list
       // to guarantee that the photos rendered in the preview also persist on the

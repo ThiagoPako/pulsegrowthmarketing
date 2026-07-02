@@ -254,8 +254,17 @@ export default function Reports() {
 
   // Cost per video KPIs
   const costKpis = useMemo(() => {
-    const filteredSalaries = salaryExpenses.filter(e => e.date >= dateRange.start && e.date <= dateRange.end);
-    const totalSalaries = filteredSalaries.reduce((a, e) => a + Number(e.amount), 0);
+    // Compute months in selected period (min 1)
+    const startMs = new Date(dateRange.start + 'T00:00:00').getTime();
+    const endMs = new Date(dateRange.end + 'T23:59:59').getTime();
+    const days = Math.max(1, Math.ceil((endMs - startMs) / (1000 * 60 * 60 * 24)));
+    const months = Math.max(1, days / 30);
+    // Total salaries = sum of monthlySalary of production roles × months
+    const productionRoles = ['videomaker', 'editor', 'designer', 'social_media'];
+    const monthlyTotal = users
+      .filter(u => productionRoles.includes(u.role as string))
+      .reduce((a, u) => a + (u.monthlySalary || 0), 0);
+    const totalSalaries = monthlyTotal * months;
     // Denominator: content produced in period from multiple sources
     const editorApproved = editorTasks.filter(t => {
       const d = (t.approved_at || t.updated_at || '').slice(0, 10);
@@ -270,8 +279,8 @@ export default function Reports() {
     const totalVideos = Math.max(recordedContent, editorApproved + designCompleted, socialDelivered);
     const costPerVideo = totalVideos > 0 ? totalSalaries / totalVideos : 0;
     const videosPerSalary = totalSalaries > 0 ? totalVideos / (totalSalaries / 1000) : 0;
-    return { totalSalaries, costPerVideo, totalVideos, videosPerSalary };
-  }, [salaryExpenses, dateRange, stats.totalContent, editorTasks, designTasks, filteredSocial]);
+    return { totalSalaries, costPerVideo, totalVideos, videosPerSalary, monthlyTotal, months };
+  }, [users, dateRange, stats.totalContent, editorTasks, designTasks, filteredSocial]);
 
   const detailedCosts = useMemo(() => {
     const rule = settings.costAllocationRule || 'approved';

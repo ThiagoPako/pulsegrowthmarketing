@@ -484,38 +484,102 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   };
 
   /* ─── Finalize & Send for Approval (with celebration) ───── */
+  // Points per slot content type (mirrors EditorKanban CONTENT_TYPES)
+  const POINTS_PER_TYPE: Record<OptSlot['type'], number> = { reels: 10, criativo: 5, story: 3 };
+
   const sendForApproval = async () => {
     const currentLink = videoLink.trim() || task.edited_video_link;
+    const cl = clients.find(c => c.id === task.client_id);
+
     if (isOptimize) {
-      // Persist any pending slot edits first
+      // Persist current slot state first
       const newDesc = serializeSlots(baseDescription, slots);
       await supabase.from('content_tasks').update({
         description: newDesc, updated_at: new Date().toISOString(),
       }).eq('id', task.id);
+
       const filled = slots.filter(s => s.link.trim().length > 0);
-      if (filled.length === 0 && !currentLink) {
+      if (filled.length === 0) {
         toast.error('Anexe pelo menos 1 vídeo nos slots de otimização antes de enviar');
         return;
       }
-    } else {
-      if (!currentLink) { toast.error('Adicione o vídeo editado primeiro'); return; }
+
+      setSaving(true);
+      const now = new Date().toISOString();
+      const baseTitle = task.title.replace(/^\[OTIMIZAÇÃO(?:\s·\s\w+)?\]\s*/i, '').trim();
+      const typeLabel: Record<OptSlot['type'], string> = { story: 'STORY', criativo: 'CRIATIVO', reels: 'REELS' };
+
+      // Create one child card per filled slot, in "revisao"
+      for (let i = 0; i < filled.length; i++) {
+        const s = filled[i];
+        const payload: any = {
+          client_id: task.client_id,
+          title: `[OTIMIZAÇÃO · ${typeLabel[s.type]}] ${baseTitle}`,
+          content_type: s.type, // 'story' | 'criativo' | 'reels'
+          kanban_column: 'revisao',
+          description: `Conteúdo otimizado a partir do Reels: "${baseTitle}".`,
+          recording_id: (task as any).recording_id || null,
+          script_id: (task as any).script_id || null,
+          drive_link: (task as any).drive_link || null,
+          edited_video_link: s.link,
+          created_by: user?.id || null,
+          assigned_to: null,
+          edited_by: (task as any).edited_by || user?.id || null,
+          editing_started_at: null,
+          editing_priority: false,
+          immediate_alteration: false,
+          position: i,
+          parent_task_id: task.id,
+          created_at: now,
+          updated_at: now,
+        };
+        let { error } = await supabase.from('content_tasks').insert(payload);
+        if (error) {
+          const { parent_task_id, ...rest } = payload;
+          const retry = await supabase.from('content_tasks').insert(rest);
+          if (retry.error) {
+            toast.error('Erro ao criar cards: ' + retry.error.message);
+            setSaving(false);
+            return;
+          }
+        }
+        // Sync each child card as newly-in-review
+        const childCtx = buildSyncContext({ ...task, ...payload } as any, {
+          userId: user?.id, clientName: cl?.companyName, clientWhatsapp: (cl as any)?.whatsapp,
+        });
+        await syncContentTaskColumnChange('revisao', childCtx);
+      }
+
+      // Remove the container optimization card
+      await supabase.from('content_tasks').delete().eq('id', task.id);
+      await logAction('Otimização dividida em cards', `${filled.length} peças`);
+
+      // Sum points per slot type
+      const totalPts = filled.reduce((sum, s) => sum + (POINTS_PER_TYPE[s.type] || 0), 0);
+      setCelebrationPoints(totalPts);
+      setShowCelebration(true);
+
+      toast.success(`🚀 ${filled.length} card(s) enviados para revisão!`);
+      onRefresh();
+      setSaving(false);
+      return;
     }
+
+    // Non-optimization flow (original)
+    if (!currentLink) { toast.error('Adicione o vídeo editado primeiro'); return; }
     setSaving(true);
-    const firstSlotLink = isOptimize ? slots.find(s => s.link.trim())?.link.trim() : null;
     await supabase.from('content_tasks').update({
       kanban_column: 'revisao',
       assigned_to: null,
-      edited_video_link: currentLink || firstSlotLink || null,
+      edited_video_link: currentLink,
       updated_at: new Date().toISOString(),
     }).eq('id', task.id);
-    const cl = clients.find(c => c.id === task.client_id);
-    const ctx = buildSyncContext({ ...task, edited_video_link: currentLink || firstSlotLink } as any, {
+    const ctx = buildSyncContext({ ...task, edited_video_link: currentLink } as any, {
       userId: user?.id, clientName: cl?.companyName, clientWhatsapp: (cl as any)?.whatsapp,
     });
     await syncContentTaskColumnChange('revisao', ctx);
-    await logAction('Enviado para aprovação', isOptimize ? `${slots.filter(s => s.link.trim()).length} slots otimizados` : undefined);
+    await logAction('Enviado para aprovação');
 
-    // Trigger celebration
     const pts = cfg ? (getTypeConfig(task.content_type).points || 0) : 5;
     setCelebrationPoints(pts);
     setShowCelebration(true);
@@ -524,6 +588,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
     onRefresh();
     setSaving(false);
   };
+
 
 
   const markAsFinished = async () => {

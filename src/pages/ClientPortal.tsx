@@ -834,7 +834,48 @@ export default function ClientPortal() {
               )}
             </div>
           </motion.div>
-        ) : activeTab === 'criativa' ? (
+        ) : activeTab === 'otimizados' ? (
+          <motion.div key="otimizados" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8 pb-20">
+            {/* Hero explanatory banner */}
+            <div className="relative overflow-hidden rounded-3xl mb-8 p-6 sm:p-10 bg-gradient-to-br from-fuchsia-600/25 via-purple-600/20 to-indigo-600/25 border border-fuchsia-400/20">
+              <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-fuchsia-500/20 blur-3xl" />
+              <div className="absolute -bottom-16 -left-16 w-64 h-64 rounded-full bg-purple-500/20 blur-3xl" />
+              <div className="relative">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-fuchsia-500/25 border border-fuchsia-400/30 mb-4">
+                  <Rocket size={12} className="text-fuchsia-200 animate-pulse" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-fuchsia-100">Otimização de conteúdo</span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-black text-white leading-tight mb-2">
+                  Aproveitamos ao máximo suas gravações 🎬
+                </h2>
+                <p className="text-sm sm:text-base text-white/70 max-w-2xl">
+                  Cada gravação sua vira várias peças de conteúdo. Aqui estão os <span className="text-fuchsia-300 font-semibold">stories, criativos e cortes extras</span> que nossa equipe editou a partir dos seus vídeos originais — sem precisar gravar de novo. Mais entregas, menos tempo seu na frente da câmera.
+                </p>
+                <div className="flex flex-wrap gap-3 mt-5">
+                  <div className="px-3 py-1.5 rounded-full bg-white/10 border border-white/10 text-xs text-white/80">
+                    <span className="font-bold text-fuchsia-300">{optimizedContents.length}</span> conteúdos extras
+                  </div>
+                  <div className="px-3 py-1.5 rounded-full bg-white/10 border border-white/10 text-xs text-white/80">
+                    ⏱️ Zero tempo adicional de gravação
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {optimizedContents.length === 0 ? (
+              <div className="text-center py-24">
+                <Rocket size={48} className="mx-auto mb-4 text-fuchsia-400/30" />
+                <p className="text-lg text-white/40 font-medium">Nenhum conteúdo otimizado ainda</p>
+                <p className="text-sm text-white/25 mt-1">Assim que a equipe editar peças extras dos seus vídeos, elas aparecerão aqui.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+                {optimizedContents.map(content => (
+                  <ReelsCard key={content.id} content={content} clientColor={clientColor} onSelect={handleSelectContent} />
+                ))}
+              </div>
+            )}
+          </motion.div>
           <ZonaCriativa clientId={client.id} clientColor={clientColor} isAuthenticated={isAuthenticated} />
         ) : activeTab === 'designer' ? (
           <PortalDesigner clientId={client.id} clientColor={clientColor} />

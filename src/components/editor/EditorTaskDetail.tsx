@@ -159,6 +159,33 @@ function ScoreCelebration({ points, show, onDone }: { points: number; show: bool
   );
 }
 
+type OptSlot = { id: string; type: 'story' | 'criativo' | 'extra'; link: string; label?: string };
+const OPT_MARKER = '[[OPT_SLOTS]]';
+
+function parseSlots(description: string | null): { slots: OptSlot[]; baseDescription: string } {
+  if (!description) return { slots: [], baseDescription: '' };
+  const idx = description.indexOf(OPT_MARKER);
+  if (idx < 0) return { slots: [], baseDescription: description };
+  const base = description.slice(0, idx).trim();
+  const raw = description.slice(idx + OPT_MARKER.length).trim();
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return { slots: parsed, baseDescription: base };
+  } catch {}
+  return { slots: [], baseDescription: base };
+}
+
+function serializeSlots(baseDescription: string, slots: OptSlot[]): string {
+  return `${baseDescription || ''}\n\n${OPT_MARKER}${JSON.stringify(slots)}`.trim();
+}
+
+function makeDefaultSlots(): OptSlot[] {
+  return [
+    { id: `s_${Date.now()}_1`, type: 'story', link: '', label: 'Story' },
+    { id: `s_${Date.now()}_2`, type: 'criativo', link: '', label: 'Criativo' },
+  ];
+}
+
 export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }: Props) {
   const { clients, scripts, users } = useApp();
   const { user } = useAuth();
@@ -186,6 +213,56 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   const deadline = getDeadlineStatus(task.editing_deadline);
   const cfg = getTypeConfig(task.content_type);
   const isEditing = !!task.editing_started_at;
+  const isOptimize = task.content_type === 'otimizacao';
+
+  const initialParse = parseSlots(task.description);
+  const [slots, setSlots] = useState<OptSlot[]>(
+    isOptimize ? (initialParse.slots.length > 0 ? initialParse.slots : makeDefaultSlots()) : []
+  );
+  const [baseDescription, setBaseDescription] = useState<string>(initialParse.baseDescription);
+
+  useEffect(() => {
+    if (!open) return;
+    const p = parseSlots(task.description);
+    setBaseDescription(p.baseDescription);
+    if (isOptimize) setSlots(p.slots.length > 0 ? p.slots : makeDefaultSlots());
+  }, [open, task.id, task.description, isOptimize]);
+
+  const filledSlots = slots.filter(s => s.link.trim().length > 0);
+  const hasAnyVideo = isOptimize
+    ? (filledSlots.length > 0 || !!task.edited_video_link || !!videoLink.trim())
+    : (!!task.edited_video_link || !!videoLink.trim());
+
+  const persistSlots = async (nextSlots: OptSlot[]) => {
+    setSlots(nextSlots);
+    const newDesc = serializeSlots(baseDescription, nextSlots);
+    await supabase.from('content_tasks').update({
+      description: newDesc, updated_at: new Date().toISOString(),
+    }).eq('id', task.id);
+  };
+
+  const addSlot = (type: OptSlot['type']) => {
+    persistSlots([...slots, { id: `s_${Date.now()}`, type, link: '', label: type === 'story' ? 'Story' : type === 'criativo' ? 'Criativo' : 'Extra' }]);
+  };
+
+  const removeSlot = (id: string) => {
+    persistSlots(slots.filter(s => s.id !== id));
+  };
+
+  const updateSlot = (id: string, patch: Partial<OptSlot>) => {
+    setSlots(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
+  };
+
+  const saveSlot = async (id: string) => {
+    const newDesc = serializeSlots(baseDescription, slots);
+    await supabase.from('content_tasks').update({
+      description: newDesc, updated_at: new Date().toISOString(),
+    }).eq('id', task.id);
+    toast.success('Slot salvo');
+    await logAction('Slot de otimização salvo', slots.find(s => s.id === id)?.link || '');
+    onRefresh();
+  };
+
 
   useEffect(() => {
     if (!open || !task.script_id || contextScript) { setFetchedScript(null); return; }

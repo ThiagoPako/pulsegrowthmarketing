@@ -1094,6 +1094,60 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
           </div>
         </div>
 
+        {task.content_type === 'otimizacao' && (
+          <div className="mx-5 mt-4 rounded-xl border border-fuchsia-300/50 bg-gradient-to-br from-fuchsia-500/10 via-violet-500/10 to-purple-500/10 p-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="text-2xl animate-bounce">🚀</div>
+              <div className="flex-1 space-y-1">
+                <h4 className="text-sm font-bold text-fuchsia-700 dark:text-fuchsia-300">Missão: Otimizar Conteúdo</h4>
+                <p className="text-xs text-foreground/80 leading-relaxed">
+                  Aproveita o material desse Reels e gera <strong>Stories</strong>, <strong>Criativos</strong> e cortes extras.
+                  Multiplica o tempo de gravação do cliente e entrega o máximo de valor! 💪
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFormatsOpen(true)}
+              className="w-full text-xs font-bold uppercase tracking-wider py-2 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-700 text-white flex items-center justify-center gap-2 transition"
+            >
+              <Lightbulb size={14} /> Ver formatos de otimização
+            </button>
+          </div>
+        )}
+
+        <Dialog open={formatsOpen} onOpenChange={setFormatsOpen}>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><Rocket size={18} className="text-fuchsia-600" /> Formatos de Otimização</DialogTitle>
+              <DialogDescription>8 formatos comprovados para transformar 1 Reels em vários conteúdos.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              {[
+                { t: 'Gancho em Áudio + Takes', d: 'Use o melhor áudio do Reels + b-rolls diferentes.', p: 'Bom para Stories rápidos.' },
+                { t: 'Mashup Multi-Vídeos', d: 'Junte cortes de vários Reels do mesmo cliente.', p: 'Compilados semanais.' },
+                { t: 'Corte Vertical de 15s', d: 'Pegue o pico do vídeo e transforme em Story.', p: 'Retenção alta.' },
+                { t: 'Legenda Motion', d: 'Vídeo do cliente falando + texto grande animado.', p: 'Feed / Reels curtos.' },
+                { t: 'Antes x Depois', d: 'Compare situação inicial vs resultado.', p: 'Prova social.' },
+                { t: 'Bastidor', d: 'Mostre a gravação por trás das câmeras.', p: 'Story humanizado.' },
+                { t: 'Carrossel Criativo', d: 'Frames-chave viram arte estática.', p: 'Feed institucional.' },
+                { t: 'Depoimento Recortado', d: 'Frases de impacto isoladas.', p: 'Story ou Reels curto.' },
+              ].map((f, i) => (
+                <div key={i} className="p-3 rounded-lg border border-border bg-muted/30 space-y-1">
+                  <p className="text-sm font-bold text-foreground">{i + 1}. {f.t}</p>
+                  <p className="text-xs text-muted-foreground">{f.d}</p>
+                  <p className="text-[11px] text-fuchsia-600 dark:text-fuchsia-400"><strong>Ideal para:</strong> {f.p}</p>
+                </div>
+              ))}
+              <div className="p-3 rounded-lg border border-amber-300/40 bg-amber-500/10">
+                <p className="text-xs font-bold text-amber-700 dark:text-amber-400">🏆 Regra de Ouro</p>
+                <p className="text-xs text-foreground/80 mt-1">Gancho nos 3 primeiros segundos. CTA claro no final. Legendas sempre grandes e legíveis.</p>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+
         <ScrollArea className="flex-1">
           <div className="px-5 py-4">
             {/* ─── TWO COLUMN LAYOUT ──────────────────────── */}

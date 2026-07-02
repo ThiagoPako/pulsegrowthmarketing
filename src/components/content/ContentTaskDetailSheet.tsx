@@ -1720,6 +1720,19 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                           </div>
                         )}
 
+                        {/* Otimizar Conteúdo - disponível a partir da Revisão em todas as etapas seguintes */}
+                        {task.content_type === 'reels' &&
+                          canReview &&
+                          ['revisao', 'alteracao', 'envio', 'agendamentos', 'acompanhamento'].includes(task.kanban_column) && (
+                            <Button
+                              size="sm"
+                              onClick={handleOptimizeContent}
+                              className="w-full gap-2 justify-start text-white bg-gradient-to-r from-fuchsia-500 via-pink-500 to-violet-500 hover:from-fuchsia-600 hover:via-pink-600 hover:to-violet-600 shadow-md shadow-fuchsia-500/30 animate-pulse"
+                            >
+                              <Rocket size={14} /> Otimizar Conteúdo (Stories + Criativos)
+                            </Button>
+                          )}
+
                         {/* Alteração: Resubmit - editor, admin, ou videomaker em story */}
                         {task.kanban_column === 'alteracao' && (isEditor || canManage || (isVideomaker && task.content_type === 'story')) && (
                           <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-teal-600 border-teal-300 hover:bg-teal-50 dark:text-teal-400 dark:border-teal-700" onClick={handleResubmitFromAlteracao}>

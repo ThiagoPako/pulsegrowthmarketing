@@ -647,7 +647,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
   // Video upload state
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const videoInputRef = useRef<HTMLInputElement>(null);
-  const [formatsOpen, setFormatsOpen] = useState(false);
+  
 
   // Fetch history
   useEffect(() => {

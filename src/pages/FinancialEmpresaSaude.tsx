@@ -6,9 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from 'date-fns';
-import { HeartPulse, TrendingUp, TrendingDown, DollarSign, Percent, Wallet } from 'lucide-react';
+import { HeartPulse, TrendingUp, TrendingDown, DollarSign, Percent, Wallet, FileText } from 'lucide-react';
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import { motion } from 'framer-motion';
+import { exportReportPDF } from '@/lib/pdfExport';
 
 type PeriodPreset = 'current' | 'previous' | 'quarter' | 'year' | 'custom';
 
@@ -118,8 +119,59 @@ export default function FinancialEmpresaSaude() {
                   <Input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="w-40" />
                 </div>
               )}
-              <div className="ml-auto text-xs text-muted-foreground">
-                {dateRange.start} → {dateRange.end}
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">{dateRange.start} → {dateRange.end}</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => exportReportPDF({
+                    title: 'Empresa Saúde',
+                    subtitle: 'Faturamento, custos operacionais e margem de lucro (excluídas retiradas dos sócios).',
+                    period: dateRange,
+                    filename: `empresa-saude-${dateRange.start}_${dateRange.end}.pdf`,
+                    kpis: [
+                      { label: 'Total Faturado', value: fmt(data.totalRevenue) },
+                      { label: 'Gastos da Empresa', value: fmt(data.totalCompanyExpense), sub: `+ ${fmt(data.totalOwnerExpense)} sócios (excluído)` },
+                      { label: 'Lucro Líquido', value: fmt(data.profit) },
+                      { label: 'Margem de Lucro', value: `${data.margin.toFixed(1)}%` },
+                    ],
+                    tables: [
+                      {
+                        title: 'Gastos por Categoria',
+                        headers: ['Categoria', 'Total', '% do total'],
+                        rows: data.byCategory.map(c => [
+                          c.name,
+                          fmt(c.total),
+                          `${data.totalCompanyExpense > 0 ? ((c.total / data.totalCompanyExpense) * 100).toFixed(1) : '0'}%`,
+                        ]),
+                      },
+                      {
+                        title: 'Detalhamento dos Gastos',
+                        headers: ['Data', 'Descrição', 'Categoria', 'Valor'],
+                        rows: [...data.companyExpenses]
+                          .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+                          .map(e => [
+                            normalizeDate(e.date),
+                            e.description || '—',
+                            catById[e.category_id] || 'Sem categoria',
+                            fmt(Number(e.amount || 0)),
+                          ]),
+                      },
+                      ...(data.ownerExpenses.length ? [{
+                        title: 'Retiradas dos Sócios (excluídas)',
+                        headers: ['Data', 'Descrição', 'Valor'],
+                        rows: data.ownerExpenses.map(e => [
+                          normalizeDate(e.date),
+                          e.description || '—',
+                          fmt(Number(e.amount || 0)),
+                        ]),
+                      }] : []),
+                    ],
+                  })}
+                >
+                  <FileText size={14} /> Exportar PDF
+                </Button>
               </div>
             </div>
           </CardContent>

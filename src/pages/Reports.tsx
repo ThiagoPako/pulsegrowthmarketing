@@ -18,6 +18,7 @@ import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import jsPDF from 'jspdf';
 import pulseHeaderImg from '@/assets/pulse_header.png';
+import { exportReportPDF } from '@/lib/pdfExport';
 import type { UserRole } from '@/types';
 import { ROLE_LABELS } from '@/types';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -944,6 +945,67 @@ export default function Reports() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
+              <div className="p-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Consolidado</div>
+              <DropdownMenuItem
+                onClick={() => {
+                  const reels = stats.totalReels + stats.socialReelsPosted;
+                  const criativos = stats.totalCreatives + stats.socialCriativosPosted;
+                  const stories = stats.totalStories + stats.socialStoriesPosted;
+                  const wReels = reels * 10, wCri = criativos * 5, wSto = stories * 3;
+                  const wTotal = wReels + wCri + wSto;
+                  const salReels = wTotal > 0 ? (costKpis.totalSalaries * wReels) / wTotal : 0;
+                  const salCri = wTotal > 0 ? (costKpis.totalSalaries * wCri) / wTotal : 0;
+                  const salSto = wTotal > 0 ? (costKpis.totalSalaries * wSto) / wTotal : 0;
+                  const fmtBRL = (n: number) => `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                  exportReportPDF({
+                    title: 'Relatório Consolidado',
+                    subtitle: selectedClient === 'all' ? 'Todos os clientes' : (clients.find(c => c.id === selectedClient)?.companyName || ''),
+                    period: dateRange,
+                    filename: `relatorio-${dateRange.start}_${dateRange.end}.pdf`,
+                    kpis: [
+                      { label: 'Sessões Realizadas', value: String(stats.realizadas) },
+                      { label: 'Total de Conteúdos', value: String(stats.totalContent) },
+                      { label: 'Reels', value: String(stats.totalReels) },
+                      { label: 'Criativos', value: String(stats.totalCreatives) },
+                      { label: 'Stories', value: String(stats.totalStories) },
+                      { label: 'Artes', value: String(stats.totalArts) },
+                      { label: 'Postados (Social)', value: String(stats.totalPosted) },
+                      { label: 'Taxa de Cancelamento', value: `${stats.cancelRate}%` },
+                      { label: 'Salários no Período', value: fmtBRL(costKpis.totalSalaries) },
+                      { label: 'Custo por Conteúdo', value: fmtBRL(costKpis.costPerVideo) },
+                    ],
+                    tables: [
+                      {
+                        title: 'Custo por Tipo de Conteúdo',
+                        headers: ['Tipo', 'Quantidade', 'Custo Unitário', 'Total Alocado'],
+                        rows: [
+                          ['Reels', reels, reels > 0 ? fmtBRL(salReels / reels) : '—', fmtBRL(salReels)],
+                          ['Criativos', criativos, criativos > 0 ? fmtBRL(salCri / criativos) : '—', fmtBRL(salCri)],
+                          ['Stories', stories, stories > 0 ? fmtBRL(salSto / stories) : '—', fmtBRL(salSto)],
+                        ],
+                      },
+                      {
+                        title: 'Produção por Sessão',
+                        headers: ['Data', 'Cliente', 'Vídeos', 'Reels', 'Criativos', 'Stories'],
+                        rows: filteredRecords
+                          .filter(r => r.delivery_status === 'realizada' || r.delivery_status === 'encaixe' || r.delivery_status === 'extra')
+                          .map(r => [
+                            r.date,
+                            clients.find(c => c.id === r.client_id)?.companyName || '—',
+                            r.videos_recorded,
+                            r.reels_produced,
+                            r.creatives_produced,
+                            r.stories_produced,
+                          ]),
+                      },
+                    ],
+                  });
+                }}
+                className="gap-2 cursor-pointer"
+              >
+                <FileText size={14} className="text-primary" /> PDF Consolidado (KPIs + Tabelas)
+              </DropdownMenuItem>
+              <div className="h-px bg-border my-1" />
               <div className="p-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entregas (Cliente)</div>
               <DropdownMenuItem onClick={generatePDF} className="gap-2 cursor-pointer">
                 <FileText size={14} className="text-red-500" /> PDF de Entregas

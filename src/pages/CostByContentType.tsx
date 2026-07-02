@@ -71,7 +71,7 @@ export default function CostByContentType() {
     const recSto = realizadas.reduce((a, r) => a + (r.stories_produced || 0), 0);
     const recArts = realizadas.reduce((a, r) => a + (r.arts_produced || 0), 0);
 
-    const relevantTasks = editorTasks.filter(t => clientOk(t.client_id) && t.kanban_column === 'aprovado' && inPeriod(t.approved_at || t.updated_at));
+    const relevantTasks = editorTasks.filter(t => clientOk(t.client_id) &&  (t.kanban_column === 'aprovado' || t.kanban_column === 'agendamentos' || t.kanban_column === 'acompanhamento' || t.kanban_column === 'arquivado' || !!t.approved_at) && inPeriod(t.approved_at || t.updated_at));
     const ctReels = relevantTasks.filter(t => ['reels','reel'].includes(norm(t.content_type))).length;
     const ctCri = relevantTasks.filter(t => ['criativo','creative'].includes(norm(t.content_type))).length;
     const ctSto = relevantTasks.filter(t => ['story','stories'].includes(norm(t.content_type))).length;

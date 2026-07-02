@@ -3,6 +3,7 @@ import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/vpsDb';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -60,10 +61,15 @@ const CHART_COLORS = [
 ];
 const BAR_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
 
+type PeriodPreset = 'today' | 'week' | 'month' | 'previous_month' | 'all' | 'custom';
+
 export default function InternalReports() {
   const { users, clients, recordings } = useApp();
   const [records, setRecords] = useState<DeliveryRecord[]>([]);
-  const [periodType, setPeriodType] = useState<'week' | 'month' | 'previous_month'>('month');
+  const [periodType, setPeriodType] = useState<PeriodPreset>('month');
+  const nowRef = new Date();
+  const [customFrom, setCustomFrom] = useState<string>(format(startOfMonth(nowRef), 'yyyy-MM-dd'));
+  const [customTo, setCustomTo] = useState<string>(format(nowRef, 'yyyy-MM-dd'));
   const [selectedVm, setSelectedVm] = useState('all');
   const [waitLogs, setWaitLogs] = useState<any[]>([]);
 
@@ -87,11 +93,18 @@ export default function InternalReports() {
 
   const dateRange = useMemo(() => {
     const now = new Date();
+    if (periodType === 'today') {
+      const d = format(now, 'yyyy-MM-dd'); return { start: d, end: d };
+    }
     if (periodType === 'week') return { start: format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd'), end: format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd') };
     if (periodType === 'month') return { start: format(startOfMonth(now), 'yyyy-MM-dd'), end: format(endOfMonth(now), 'yyyy-MM-dd') };
-    const prev = subMonths(now, 1);
-    return { start: format(startOfMonth(prev), 'yyyy-MM-dd'), end: format(endOfMonth(prev), 'yyyy-MM-dd') };
-  }, [periodType]);
+    if (periodType === 'previous_month') {
+      const prev = subMonths(now, 1);
+      return { start: format(startOfMonth(prev), 'yyyy-MM-dd'), end: format(endOfMonth(prev), 'yyyy-MM-dd') };
+    }
+    if (periodType === 'custom') return { start: customFrom, end: customTo };
+    return { start: '0000-01-01', end: '9999-12-31' };
+  }, [periodType, customFrom, customTo]);
 
   const filtered = useMemo(() => {
     return records.filter(r => {
@@ -266,10 +279,13 @@ export default function InternalReports() {
   }, [editorTasks, editors]);
 
   const periodLabel = useMemo(() => {
+    if (periodType === 'today') return 'Hoje';
     if (periodType === 'week') return 'Semana atual';
     if (periodType === 'month') return format(new Date(), 'MMMM yyyy', { locale: ptBR });
-    return format(subMonths(new Date(), 1), 'MMMM yyyy', { locale: ptBR });
-  }, [periodType]);
+    if (periodType === 'previous_month') return format(subMonths(new Date(), 1), 'MMMM yyyy', { locale: ptBR });
+    if (periodType === 'all') return 'Todo o período';
+    return `${dateRange.start} → ${dateRange.end}`;
+  }, [periodType, dateRange]);
 
   // ── PDF Export ──
   const generatePDF = async () => {
@@ -421,15 +437,37 @@ export default function InternalReports() {
       {/* Period filter */}
       <Card>
         <CardContent className="p-4 flex flex-wrap gap-4 items-end">
-          <div className="space-y-1">
+          <div className="space-y-2 w-full">
             <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Período</Label>
-            <div className="flex gap-1.5">
-              {([['week', 'Semanal'], ['month', 'Mensal'], ['previous_month', 'Mês anterior']] as const).map(([val, lbl]) => (
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                ['today', 'Hoje'],
+                ['week', 'Semana'],
+                ['month', 'Mês'],
+                ['previous_month', 'Mês anterior'],
+                ['all', 'Tudo'],
+                ['custom', 'Período'],
+              ] as const).map(([val, lbl]) => (
                 <Button key={val} variant={periodType === val ? 'default' : 'outline'} size="sm" onClick={() => setPeriodType(val)}>
                   {lbl}
                 </Button>
               ))}
             </div>
+            {periodType === 'custom' && (
+              <div className="flex flex-wrap gap-3 items-end pt-1">
+                <div>
+                  <Label className="text-xs">De</Label>
+                  <Input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="w-40" />
+                </div>
+                <div>
+                  <Label className="text-xs">Até</Label>
+                  <Input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="w-40" />
+                </div>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {dateRange.start} → {dateRange.end}
+            </p>
           </div>
         </CardContent>
       </Card>

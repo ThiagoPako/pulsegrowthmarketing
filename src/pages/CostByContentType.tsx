@@ -183,18 +183,27 @@ export default function CostByContentType() {
       </Card>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card className="border-l-4" style={{ borderLeftColor: 'hsl(var(--destructive))' }}>
+        <Card className="border-l-4" style={{ borderLeftColor: 'hsl(217,91%,60%)' }}>
           <CardContent className="p-4">
-            <DollarSign size={18} className="text-destructive mb-2" />
-            <p className="text-xl font-bold">{fmt(data.totalSalaries)}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Salários no Período ({data.months}m)</p>
+            <DollarSign size={18} className="text-blue-600 mb-2" />
+            <p className="text-xl font-bold">{fmt(data.videoPool)}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Pool Vídeo ({data.months}m) — Videomaker + Editor + Social</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Folha mensal: {fmt(data.monthlyVideoPool)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4" style={{ borderLeftColor: 'hsl(24,95%,53%)' }}>
+          <CardContent className="p-4">
+            <DollarSign size={18} className="text-orange-600 mb-2" />
+            <p className="text-xl font-bold">{fmt(data.designerPool)}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Pool Designer ({data.months}m)</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Folha mensal: {fmt(data.monthlyDesignerPool)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <DollarSign size={18} className="text-muted-foreground mb-2" />
-            <p className="text-xl font-bold">{fmt(data.monthlyTotalSalaries)}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Folha Mensal (Produção)</p>
+            <p className="text-xl font-bold">{fmt(data.totalSalaries)}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Total no Período</p>
           </CardContent>
         </Card>
         <Card>
@@ -205,6 +214,7 @@ export default function CostByContentType() {
           </CardContent>
         </Card>
       </div>
+
 
       {data.monthlyTotalSalaries === 0 && (
         <Card className="border-amber-500/50 bg-amber-500/5">

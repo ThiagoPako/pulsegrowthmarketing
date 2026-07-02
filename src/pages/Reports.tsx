@@ -122,7 +122,7 @@ export default function Reports() {
       supabase.from('clients').select('id, plan_id'),
       supabase.from('social_media_deliveries').select('*').order('delivered_at', { ascending: false }),
       supabase.from('recording_wait_logs').select('*'),
-      supabase.from('expense_categories').select('id, name').ilike('name', '%salário%'),
+      supabase.from('expense_categories').select('id, name').or('name.ilike.%salário%,name.ilike.%salario%'),
       supabase.from('content_tasks').select('id, client_id, edited_by, content_type, kanban_column, approved_at, updated_at'),
       supabase.from('design_tasks').select('id, client_id, assigned_to, kanban_column, completed_at, format_type'),
     ]);
@@ -231,11 +231,22 @@ export default function Reports() {
   const costKpis = useMemo(() => {
     const filteredSalaries = salaryExpenses.filter(e => e.date >= dateRange.start && e.date <= dateRange.end);
     const totalSalaries = filteredSalaries.reduce((a, e) => a + Number(e.amount), 0);
-    const totalVideos = stats.totalContent;
+    // Denominator: content produced in period from multiple sources
+    const editorApproved = editorTasks.filter(t => {
+      const d = (t.approved_at || t.updated_at || '').slice(0, 10);
+      return t.kanban_column === 'aprovado' && d >= dateRange.start && d <= dateRange.end;
+    }).length;
+    const designCompleted = designTasks.filter(t => {
+      const d = (t.completed_at || '').slice(0, 10);
+      return t.kanban_column === 'concluido' && d >= dateRange.start && d <= dateRange.end;
+    }).length;
+    const socialDelivered = filteredSocial.length;
+    const recordedContent = stats.totalContent;
+    const totalVideos = Math.max(recordedContent, editorApproved + designCompleted, socialDelivered);
     const costPerVideo = totalVideos > 0 ? totalSalaries / totalVideos : 0;
     const videosPerSalary = totalSalaries > 0 ? totalVideos / (totalSalaries / 1000) : 0;
     return { totalSalaries, costPerVideo, totalVideos, videosPerSalary };
-  }, [salaryExpenses, dateRange, stats.totalContent]);
+  }, [salaryExpenses, dateRange, stats.totalContent, editorTasks, designTasks, filteredSocial]);
 
   const detailedCosts = useMemo(() => {
     const rule = settings.costAllocationRule || 'approved';

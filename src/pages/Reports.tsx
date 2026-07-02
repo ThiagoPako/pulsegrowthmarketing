@@ -959,7 +959,7 @@ export default function Reports() {
                   const fmtBRL = (n: number) => `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                   exportReportPDF({
                     title: 'Relatório Consolidado',
-                    subtitle: selectedClient === 'all' ? 'Todos os clientes' : (clients.find(c => c.id === selectedClient)?.name || ''),
+                    subtitle: selectedClient === 'all' ? 'Todos os clientes' : (clients.find(c => c.id === selectedClient)?.companyName || ''),
                     period: dateRange,
                     filename: `relatorio-${dateRange.start}_${dateRange.end}.pdf`,
                     kpis: [

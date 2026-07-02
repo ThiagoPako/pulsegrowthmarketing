@@ -771,6 +771,21 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
                   </Badge>
                 </div>
 
+                {/* Friendly guide from the rocket 🚀 */}
+                <div className="relative rounded-lg bg-white/60 dark:bg-white/[0.03] border border-fuchsia-400/30 p-3 pl-10">
+                  <div className="absolute left-2 top-2.5 w-6 h-6 rounded-full bg-gradient-to-br from-fuchsia-500 to-violet-500 flex items-center justify-center shadow shadow-fuchsia-500/40 animate-pulse">
+                    <Rocket size={12} className="text-white" />
+                  </div>
+                  <p className="text-[11px] font-bold text-fuchsia-700 dark:text-fuchsia-300 leading-tight mb-1">
+                    Ei, editor! Bora otimizar? 🚀
+                  </p>
+                  <p className="text-[11px] text-foreground/75 leading-relaxed">
+                    Esse card é um <b>Reel já aprovado</b> que vamos reaproveitar. Sua missão: assistir o vídeo original nos materiais e extrair <b>peças novas</b> dele — um <b>Story</b> vertical curtinho, um <b>Criativo</b> pra anúncio, ou um <b>corte extra</b> que funcione sozinho. Cada peça vai em um slot abaixo (por link ou upload). Precisa de mais espaço? Clica em <b>+ Story / + Criativo / + Extra</b>. Basta <b>1 slot preenchido</b> pra enviar. Bora aproveitar o material do cliente ao máximo! ✨
+                  </p>
+                </div>
+
+
+
                 <div className="space-y-2">
                   {slots.map((slot, idx) => {
                     const slotColor = slot.type === 'story'

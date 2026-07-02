@@ -390,6 +390,9 @@ export default function EditorKanban() {
   const [videoLinkValue, setVideoLinkValue] = useState('');
   const [sendToReviewAfterLink, setSendToReviewAfterLink] = useState(false);
 
+  // Optimization detail sheet
+  const [detailTask, setDetailTask] = useState<EditorTask | null>(null);
+
   const fetchTasks = useCallback(async () => {
     const { data } = await supabase.from('content_tasks').select('*')
       .in('kanban_column', ['edicao', 'revisao', 'alteracao', 'envio']);

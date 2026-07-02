@@ -1818,8 +1818,20 @@ export default function CommercialProposal() {
                 )}
               </div>
               <div>
-                <Label>Valor por Reels (R$)</Label>
-                <Input type="number" min={0} step="0.01" value={videosUnitPrice} onChange={e => setVideosUnitPrice(e.target.value)} />
+                <Label>Valor por Reels (R$) <span className="text-destructive">*</span></Label>
+                <Input
+                  type="number"
+                  min={0.01}
+                  step="0.01"
+                  required
+                  value={videosUnitPrice}
+                  onChange={e => setVideosUnitPrice(e.target.value)}
+                  aria-invalid={unit <= 0}
+                  className={unit <= 0 ? 'border-destructive focus-visible:ring-destructive' : ''}
+                />
+                {unit <= 0 && (
+                  <p className="text-xs text-destructive mt-1">Valor deve ser maior que zero.</p>
+                )}
               </div>
               <div>
                 <Label>Prazo de entrega (dias)</Label>
@@ -1827,7 +1839,18 @@ export default function CommercialProposal() {
               </div>
               <div>
                 <Label>Desconto (%)</Label>
-                <Input type="number" min={0} max={50} value={customDiscount} onChange={e => setCustomDiscount(Number(e.target.value))} />
+                <Input
+                  type="number"
+                  min={0}
+                  max={50}
+                  value={customDiscount}
+                  onChange={e => setCustomDiscount(Number(e.target.value))}
+                  aria-invalid={customDiscount < 0 || customDiscount > 50}
+                  className={(customDiscount < 0 || customDiscount > 50) ? 'border-destructive focus-visible:ring-destructive' : ''}
+                />
+                {(customDiscount < 0 || customDiscount > 50) && (
+                  <p className="text-xs text-destructive mt-1">Desconto deve estar entre 0% e 50%.</p>
+                )}
               </div>
             </div>
 

@@ -399,6 +399,7 @@ export default function CommercialProposal() {
         setVideosExtras(Array.isArray(sys.extras) ? sys.extras : []);
         setVideosPaymentMethod(sys.paymentMethod || 'pix');
         setVideosInstallments(String(sys.installments || '1'));
+      }
       if (p.token) setShareLink(`${window.location.origin}/proposta/${p.token}`);
       setShowSavedProposals(false);
       setShowPreview(false);

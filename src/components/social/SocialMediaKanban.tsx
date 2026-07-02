@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import {
   Film, Palette, Image, Megaphone, CheckCircle2, Clock, CalendarClock,
   Send, Zap, Eye, MessageSquare, AlertTriangle, ExternalLink, Link2,
-  Scissors, Flame, Rocket, Sparkles, ChevronLeft, ChevronRight, Download
+  Scissors, Flame, Rocket, Sparkles, ChevronLeft, ChevronRight, Download, Trash2
 } from 'lucide-react';
 import DeadlineBadge from '@/components/DeadlineBadge';
 import { motion, AnimatePresence } from 'framer-motion';

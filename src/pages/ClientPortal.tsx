@@ -29,10 +29,10 @@ import PortalEvents from '@/components/portal/PortalEvents';
 import PortalTraining from '@/components/portal/PortalTraining';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
-  reel: 'Reel', criativo: 'Criativo', institucional: 'Institucional', anuncio: 'Anúncio', arte: 'Arte',
+  reel: 'Reel', criativo: 'Criativo', institucional: 'Institucional', anuncio: 'Anúncio', arte: 'Arte', otimizacao: 'Otimizado',
 };
 const CONTENT_TYPE_ICONS: Record<string, any> = {
-  reel: Film, criativo: Palette, institucional: Video, anuncio: Video, arte: Image,
+  reel: Film, criativo: Palette, institucional: Video, anuncio: Video, arte: Image, otimizacao: Rocket,
 };
 const STATUS_LABELS: Record<string, string> = {
   pendente: 'Pendente', aprovado: 'Aprovado', ajuste_solicitado: 'Ajuste Solicitado', revisao_interna: 'Em Revisão',

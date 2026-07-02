@@ -671,6 +671,11 @@ export default function ClientPortal() {
         <button onClick={() => setActiveTab('library')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'library' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'library' ? { borderColor: `hsl(${clientColor})` } : {}}>
           Biblioteca
         </button>
+        {optimizedContents.length > 0 && (
+          <button onClick={() => setActiveTab('otimizados')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap inline-flex items-center gap-1 ${activeTab === 'otimizados' ? 'text-fuchsia-300 border-b-2 border-fuchsia-400' : 'text-fuchsia-300/70'}`}>
+            <Rocket size={11} className="animate-pulse" /> Otimizados
+          </button>
+        )}
         <button onClick={() => setActiveTab('criativa')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'criativa' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'criativa' ? { borderColor: `hsl(${clientColor})` } : {}}>
           Zona Criativa
         </button>

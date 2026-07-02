@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   Play, Pause, Maximize, Check, MessageSquare, X, ChevronLeft, ChevronRight,
   BarChart3, Send, Clock, Film, Image, Palette, Video, Award, Bell, Volume2,
-  VolumeX, Eye, TrendingUp, Sparkles, ChevronDown, Loader2, LogOut, Shield, Download
+  VolumeX, Eye, TrendingUp, Sparkles, ChevronDown, Loader2, LogOut, Shield, Download, Rocket
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';
@@ -29,10 +29,10 @@ import PortalEvents from '@/components/portal/PortalEvents';
 import PortalTraining from '@/components/portal/PortalTraining';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
-  reel: 'Reel', criativo: 'Criativo', institucional: 'Institucional', anuncio: 'Anúncio', arte: 'Arte',
+  reel: 'Reel', criativo: 'Criativo', institucional: 'Institucional', anuncio: 'Anúncio', arte: 'Arte', otimizacao: 'Otimizado',
 };
 const CONTENT_TYPE_ICONS: Record<string, any> = {
-  reel: Film, criativo: Palette, institucional: Video, anuncio: Video, arte: Image,
+  reel: Film, criativo: Palette, institucional: Video, anuncio: Video, arte: Image, otimizacao: Rocket,
 };
 const STATUS_LABELS: Record<string, string> = {
   pendente: 'Pendente', aprovado: 'Aprovado', ajuste_solicitado: 'Ajuste Solicitado', revisao_interna: 'Em Revisão',
@@ -65,7 +65,7 @@ interface ClientData {
   client_type?: string;
 }
 
-type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem' | 'designer' | 'descontos' | 'entregas' | 'rendimento' | 'eventos' | 'treinamento';
+type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem' | 'designer' | 'descontos' | 'entregas' | 'rendimento' | 'eventos' | 'treinamento' | 'otimizados';
 
 const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
@@ -436,6 +436,12 @@ export default function ClientPortal() {
     return months;
   }, [visibleContents]);
 
+  // All optimized content across seasons (dedicated tab)
+  const optimizedContents = useMemo(
+    () => visibleContents.filter(c => c.content_type === 'otimizacao'),
+    [visibleContents]
+  );
+
   // Metrics
   const reelsCount = seasonContents.filter(c => c.content_type === 'reel').length;
   const creativosCount = seasonContents.filter(c => c.content_type === 'criativo').length;
@@ -480,6 +486,7 @@ export default function ClientPortal() {
     institucional: 'Vídeos Institucionais',
     anuncio: 'Anúncios',
     arte: 'Artes & Design',
+    otimizacao: '🚀 Conteúdos Otimizados',
   };
 
   return (
@@ -526,6 +533,17 @@ export default function ClientPortal() {
               >
                 Biblioteca
               </button>
+              {optimizedContents.length > 0 && (
+                <button
+                  onClick={() => setActiveTab('otimizados')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all relative ${activeTab === 'otimizados' ? 'bg-gradient-to-r from-fuchsia-500/30 to-purple-500/30 text-white ring-1 ring-fuchsia-400/40' : 'text-fuchsia-300 hover:text-fuchsia-200'}`}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <Rocket size={12} className="animate-pulse" /> Otimizados
+                    <span className="text-[10px] font-bold bg-fuchsia-500/30 px-1.5 rounded-full">{optimizedContents.length}</span>
+                  </span>
+                </button>
+              )}
               <button
                 onClick={() => setActiveTab('designer')}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'designer' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
@@ -653,6 +671,11 @@ export default function ClientPortal() {
         <button onClick={() => setActiveTab('library')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'library' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'library' ? { borderColor: `hsl(${clientColor})` } : {}}>
           Biblioteca
         </button>
+        {optimizedContents.length > 0 && (
+          <button onClick={() => setActiveTab('otimizados')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap inline-flex items-center gap-1 ${activeTab === 'otimizados' ? 'text-fuchsia-300 border-b-2 border-fuchsia-400' : 'text-fuchsia-300/70'}`}>
+            <Rocket size={11} className="animate-pulse" /> Otimizados
+          </button>
+        )}
         <button onClick={() => setActiveTab('criativa')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'criativa' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'criativa' ? { borderColor: `hsl(${clientColor})` } : {}}>
           Zona Criativa
         </button>
@@ -778,7 +801,9 @@ export default function ClientPortal() {
                 </motion.div>
               )}
 
-              {Object.entries(contentByType).map(([type, items], idx) => (
+              {Object.entries(contentByType)
+                .filter(([type]) => type !== 'otimizacao')
+                .map(([type, items], idx) => (
                 <ContentRow
                   key={type}
                   label={ROW_LABELS[type] || type}
@@ -808,6 +833,48 @@ export default function ClientPortal() {
                 </div>
               )}
             </div>
+          </motion.div>
+        ) : activeTab === 'otimizados' ? (
+          <motion.div key="otimizados" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8 pb-20">
+            {/* Hero explanatory banner */}
+            <div className="relative overflow-hidden rounded-3xl mb-8 p-6 sm:p-10 bg-gradient-to-br from-fuchsia-600/25 via-purple-600/20 to-indigo-600/25 border border-fuchsia-400/20">
+              <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-fuchsia-500/20 blur-3xl" />
+              <div className="absolute -bottom-16 -left-16 w-64 h-64 rounded-full bg-purple-500/20 blur-3xl" />
+              <div className="relative">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-fuchsia-500/25 border border-fuchsia-400/30 mb-4">
+                  <Rocket size={12} className="text-fuchsia-200 animate-pulse" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-fuchsia-100">Otimização de conteúdo</span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-black text-white leading-tight mb-2">
+                  Aproveitamos ao máximo suas gravações 🎬
+                </h2>
+                <p className="text-sm sm:text-base text-white/70 max-w-2xl">
+                  Cada gravação sua vira várias peças de conteúdo. Aqui estão os <span className="text-fuchsia-300 font-semibold">stories, criativos e cortes extras</span> que nossa equipe editou a partir dos seus vídeos originais — sem precisar gravar de novo. Mais entregas, menos tempo seu na frente da câmera.
+                </p>
+                <div className="flex flex-wrap gap-3 mt-5">
+                  <div className="px-3 py-1.5 rounded-full bg-white/10 border border-white/10 text-xs text-white/80">
+                    <span className="font-bold text-fuchsia-300">{optimizedContents.length}</span> conteúdos extras
+                  </div>
+                  <div className="px-3 py-1.5 rounded-full bg-white/10 border border-white/10 text-xs text-white/80">
+                    ⏱️ Zero tempo adicional de gravação
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {optimizedContents.length === 0 ? (
+              <div className="text-center py-24">
+                <Rocket size={48} className="mx-auto mb-4 text-fuchsia-400/30" />
+                <p className="text-lg text-white/40 font-medium">Nenhum conteúdo otimizado ainda</p>
+                <p className="text-sm text-white/25 mt-1">Assim que a equipe editar peças extras dos seus vídeos, elas aparecerão aqui.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+                {optimizedContents.map(content => (
+                  <ReelsCard key={content.id} content={content} clientColor={clientColor} onSelect={handleSelectContent} />
+                ))}
+              </div>
+            )}
           </motion.div>
         ) : activeTab === 'criativa' ? (
           <ZonaCriativa clientId={client.id} clientColor={clientColor} isAuthenticated={isAuthenticated} />

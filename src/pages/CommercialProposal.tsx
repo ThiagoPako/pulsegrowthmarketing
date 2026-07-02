@@ -1775,7 +1775,141 @@ export default function CommercialProposal() {
     );
   };
 
+  const renderVideosForm = () => {
+    const qty = parseInt(videosQty) || 0;
+    const unit = parseFloat(videosUnitPrice) || 0;
+    const extrasTotal = videosExtras.reduce((s, e) => s + (Number(e.value) || 0), 0);
+    const base = qty * unit;
+    const total = base + extrasTotal;
+    const installments = parseInt(videosInstallments) || 1;
+    const parcela = installments > 0 ? total / installments : total;
+    return (
+      <>
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Film className="h-4 w-4 text-primary" /> Vídeos Avulsos
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-xs text-muted-foreground">
+              Cada Reels inclui: <strong className="text-foreground">Captação profissional</strong>, <strong className="text-foreground">Direção de cena</strong>, <strong className="text-foreground">Roteiro estratégico</strong> e <strong className="text-foreground">Edição premium</strong> (cor, legendas e sound design).
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div>
+                <Label>Quantidade de Reels</Label>
+                <Input type="number" min={1} value={videosQty} onChange={e => setVideosQty(e.target.value)} />
+              </div>
+              <div>
+                <Label>Valor por Reels (R$)</Label>
+                <Input type="number" min={0} step="0.01" value={videosUnitPrice} onChange={e => setVideosUnitPrice(e.target.value)} />
+              </div>
+              <div>
+                <Label>Prazo de entrega (dias)</Label>
+                <Input type="number" min={1} value={videosDeliveryDays} onChange={e => setVideosDeliveryDays(e.target.value)} />
+              </div>
+              <div>
+                <Label>Desconto (%)</Label>
+                <Input type="number" min={0} max={50} value={customDiscount} onChange={e => setCustomDiscount(Number(e.target.value))} />
+              </div>
+            </div>
+
+            <div>
+              <Label>Descrição / observações do projeto</Label>
+              <Textarea rows={3} value={videosDescription} onChange={e => setVideosDescription(e.target.value)} placeholder="Ex: 4 Reels institucionais para lançamento do novo produto..." />
+            </div>
+
+            <Separator />
+
+            <div>
+              <Label className="mb-2 block">Serviços adicionais (opcional)</Label>
+              {videosExtras.length > 0 && (
+                <div className="space-y-2 mb-3">
+                  {videosExtras.map(ex => (
+                    <div key={ex.id} className="flex items-center justify-between bg-accent/30 rounded-lg p-2">
+                      <div>
+                        <p className="font-medium text-sm">{ex.name}</p>
+                        <p className="text-xs text-primary">{fmt(Number(ex.value) || 0)}</p>
+                      </div>
+                      <Button size="icon" variant="ghost" onClick={() => setVideosExtras(prev => prev.filter(x => x.id !== ex.id))}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="grid grid-cols-3 gap-2">
+                <Input className="col-span-2" placeholder="Ex: Cobertura de evento" value={newVideosExtraName} onChange={e => setNewVideosExtraName(e.target.value)} />
+                <Input type="number" placeholder="Valor" value={newVideosExtraValue} onChange={e => setNewVideosExtraValue(e.target.value)} />
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2"
+                onClick={() => {
+                  if (!newVideosExtraName || !newVideosExtraValue) return;
+                  setVideosExtras(prev => [...prev, { id: crypto.randomUUID(), name: newVideosExtraName, value: parseFloat(newVideosExtraValue) || 0 }]);
+                  setNewVideosExtraName(''); setNewVideosExtraValue('');
+                }}
+                disabled={!newVideosExtraName || !newVideosExtraValue}
+              >
+                <Plus className="h-4 w-4 mr-1" /> Adicionar
+              </Button>
+            </div>
+
+            <Separator />
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Forma de pagamento</Label>
+                <Select value={videosPaymentMethod} onValueChange={setVideosPaymentMethod}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_METHODS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Parcelas</Label>
+                <Input type="number" min={1} max={12} value={videosInstallments} onChange={e => setVideosInstallments(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-primary/10 border border-primary/30 p-4 space-y-1">
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>{qty} Reels × {fmt(unit)}</span>
+                <span>{fmt(base)}</span>
+              </div>
+              {extrasTotal > 0 && (
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>Adicionais</span>
+                  <span>{fmt(extrasTotal)}</span>
+                </div>
+              )}
+              {customDiscount > 0 && (
+                <div className="flex justify-between text-sm text-emerald-600">
+                  <span>Desconto ({customDiscount}%)</span>
+                  <span>- {fmt(total * (customDiscount / 100))}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center pt-2 border-t border-primary/20">
+                <span className="font-bold">Total do projeto</span>
+                <span className="text-2xl font-bold text-primary">{fmt(total * (1 - customDiscount / 100))}</span>
+              </div>
+              {installments > 1 && (
+                <p className="text-xs text-muted-foreground text-right">
+                  ou {installments}x de {fmt(parcela * (1 - customDiscount / 100))}
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </>
+    );
+  };
+
   // ===== PREVIEW SECTIONS =====
+
 
   const renderSystemPreview = () => {
     const sysVal = parseFloat(systemValue) || 0;

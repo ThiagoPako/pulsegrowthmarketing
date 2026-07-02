@@ -278,10 +278,13 @@ export default function InternalReports() {
   }, [editorTasks, editors]);
 
   const periodLabel = useMemo(() => {
+    if (periodType === 'today') return 'Hoje';
     if (periodType === 'week') return 'Semana atual';
     if (periodType === 'month') return format(new Date(), 'MMMM yyyy', { locale: ptBR });
-    return format(subMonths(new Date(), 1), 'MMMM yyyy', { locale: ptBR });
-  }, [periodType]);
+    if (periodType === 'previous_month') return format(subMonths(new Date(), 1), 'MMMM yyyy', { locale: ptBR });
+    if (periodType === 'all') return 'Todo o período';
+    return `${dateRange.start} → ${dateRange.end}`;
+  }, [periodType, dateRange]);
 
   // ── PDF Export ──
   const generatePDF = async () => {

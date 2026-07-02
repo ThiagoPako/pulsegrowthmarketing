@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Download, Trophy, TrendingUp, Film, Users, BarChart3, Award, Target, Scissors } from 'lucide-react';
+import { Download, Trophy, TrendingUp, Film, Users, BarChart3, Award, Target, Scissors, Palette } from 'lucide-react';
+import DesignerReports from './DesignerReports';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import UserAvatar from '@/components/UserAvatar';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subMonths, subWeeks, isWithinInterval, parseISO } from 'date-fns';
@@ -437,6 +438,7 @@ export default function InternalReports() {
         <TabsList>
           <TabsTrigger value="videomakers" className="gap-1.5"><Film size={14} /> Videomakers</TabsTrigger>
           <TabsTrigger value="editors" className="gap-1.5"><Scissors size={14} /> Editores</TabsTrigger>
+          <TabsTrigger value="designers" className="gap-1.5"><Palette size={14} /> Designers</TabsTrigger>
         </TabsList>
 
         {/* ════════ VIDEOMAKERS TAB ════════ */}
@@ -790,6 +792,11 @@ export default function InternalReports() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        {/* ════════ DESIGNERS TAB ════════ */}
+        <TabsContent value="designers" className="space-y-4">
+          <DesignerReports />
         </TabsContent>
       </Tabs>
     </div>

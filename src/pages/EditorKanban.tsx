@@ -798,6 +798,7 @@ export default function EditorKanban() {
                       <TaskCard key={task.id} task={task} clients={clients} onOpenScript={openScript}
                         onSendToReview={handleSendToReview} onAddVideoLink={openVideoLinkDialog}
                         onClaimTask={handleClaimTask} onUnclaimTask={handleUnclaimTask} onReturnFromReview={handleReturnFromReview}
+                        onOpenDetail={setDetailTask}
                         currentUserId={user?.id} users={users}
                         draggedId={draggedTask?.id || null} onDragStart={handleDragStart} />
                     ))}

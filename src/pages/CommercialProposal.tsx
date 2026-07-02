@@ -2855,6 +2855,7 @@ export default function CommercialProposal() {
             {proposalType === 'endomarketing' && renderEndoPreview()}
           {proposalType === 'personalizada' && renderCustomPreview()}
             {proposalType === 'cronograma' && renderCronogramaPreview()}
+            {proposalType === 'videos' && renderVideosPreview()}
 
             {/* Bonus Section */}
             {bonusServices.length > 0 && (

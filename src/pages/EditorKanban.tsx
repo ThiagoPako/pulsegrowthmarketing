@@ -105,14 +105,23 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
 
   const isReview = task.kanban_column === 'revisao';
   const isMine = task.assigned_to === currentUserId;
+  const isOptimize = task.content_type === 'otimizacao';
 
   return (
     <div draggable onDragStart={e => onDragStart(e, task)}
       className={`group relative bg-card border rounded-lg cursor-grab active:cursor-grabbing transition-all hover:shadow-md ${
         draggedId === task.id ? 'opacity-40 scale-95' : ''
-      } ${isReview ? 'border-teal-500/40 bg-teal-500/5' : 'border-border'} ${
+      } ${isOptimize
+          ? 'border-fuchsia-500/60 bg-gradient-to-br from-fuchsia-500/10 via-purple-500/5 to-violet-500/10 ring-1 ring-fuchsia-500/30 shadow-fuchsia-500/20 shadow-md'
+          : isReview ? 'border-teal-500/40 bg-teal-500/5' : 'border-border'
+      } ${
         deadlineStatus.variant === 'destructive' && task.kanban_column === 'edicao' ? 'ring-1 ring-destructive/40' : ''
       }`}>
+      {isOptimize && (
+        <div className="absolute -top-2 left-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-fuchsia-500 via-pink-500 to-violet-500 text-white text-[9px] font-black uppercase tracking-widest shadow-lg shadow-fuchsia-500/50 animate-pulse">
+          <Rocket size={10} className="animate-bounce" /> Otimizar
+        </div>
+      )}
       <div className="h-1 w-full rounded-t-lg" style={{ backgroundColor: `hsl(${clientColor})` }} />
       <div className="p-3 space-y-2">
         <div className="flex items-start justify-between gap-2">

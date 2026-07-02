@@ -34,6 +34,7 @@ const CONTENT_TYPES = [
   { value: 'criativo', label: 'Criativos', icon: Megaphone, color: 'text-purple-700 bg-purple-50 border border-purple-200/60 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800' },
   { value: 'story', label: 'Story', icon: Image, color: 'text-pink-700 bg-pink-50 border border-pink-200/60 dark:bg-pink-900/30 dark:text-pink-400 dark:border-pink-800' },
   { value: 'arte', label: 'Arte', icon: Palette, color: 'text-amber-700 bg-amber-50 border border-amber-200/60 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800' },
+  { value: 'otimizacao', label: 'Otimização', icon: Rocket, color: 'text-fuchsia-700 bg-fuchsia-50 border border-fuchsia-200/60 dark:bg-fuchsia-900/30 dark:text-fuchsia-300 dark:border-fuchsia-800' },
 ];
 
 const normalizeDateValue = (value?: string | null, withTime = false) => {
@@ -947,6 +948,57 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     onOpenChange(false);
   };
 
+  const handleOptimizeContent = async () => {
+    // Create optimization copy in "edicao" column - keeps original intact
+    try {
+      const now = new Date().toISOString();
+      const { data: existing } = await supabase
+        .from('content_tasks')
+        .select('id')
+        .eq('client_id', task.client_id)
+        .eq('content_type', 'otimizacao')
+        .eq('title', `[OTIMIZAÇÃO] ${task.title}`)
+        .limit(1);
+      if (existing && existing.length > 0) {
+        toast.info('Já existe uma otimização em andamento para este conteúdo');
+        return;
+      }
+      const payload: any = {
+        client_id: task.client_id,
+        title: `[OTIMIZAÇÃO] ${task.title}`,
+        content_type: 'otimizacao',
+        kanban_column: 'edicao',
+        description: `Otimização gerada a partir do conteúdo aprovado. Aproveitar as gravações originais para criar Stories, Criativos e cortes adicionais.`,
+        recording_id: (task as any).recording_id || null,
+        script_id: (task as any).script_id || null,
+        drive_link: task.drive_link || null,
+        created_by: user?.id || null,
+        assigned_to: null,
+        edited_by: null,
+        edited_video_link: null,
+        editing_started_at: null,
+        editing_priority: false,
+        immediate_alteration: false,
+        position: 0,
+        created_at: now,
+        updated_at: now,
+      };
+      // Try to link parent if column exists
+      (payload as any).parent_task_id = task.id;
+
+      const { error } = await supabase.from('content_tasks').insert(payload);
+      if (error) {
+        // Retry without parent_task_id (in case column not yet migrated)
+        delete (payload as any).parent_task_id;
+        const retry = await supabase.from('content_tasks').insert(payload);
+        if (retry.error) throw retry.error;
+      }
+      toast.success('🚀 Card de Otimização criado na Edição!');
+    } catch (e: any) {
+      toast.error('Erro ao criar otimização: ' + (e?.message || 'erro'));
+    }
+  };
+
   const handleMoveToNext = async (targetColumn: string) => {
     if (targetColumn === 'edicao' && !task.drive_link) {
       toast.error('Adicione o link dos materiais (Drive) primeiro');
@@ -1398,6 +1450,15 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                             <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700" onClick={() => setShowAdjustmentForm(true)}>
                               <MessageSquareWarning size={14} /> Solicitar Ajustes
                             </Button>
+                            {task.content_type === 'reels' && (
+                              <Button
+                                size="sm"
+                                onClick={handleOptimizeContent}
+                                className="w-full gap-2 justify-start text-white bg-gradient-to-r from-fuchsia-500 via-pink-500 to-violet-500 hover:from-fuchsia-600 hover:via-pink-600 hover:to-violet-600 shadow-md shadow-fuchsia-500/30 animate-pulse"
+                              >
+                                <Rocket size={14} /> Otimizar Conteúdo (Stories + Criativos)
+                              </Button>
+                            )}
                           </>
                         )}
                         {task.kanban_column === 'revisao' && isEditor && (

@@ -12,7 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import {
   Film, Megaphone, Image, Palette, ExternalLink, Clock, AlertTriangle,
-  Check, Eye, Search, Scissors, Send, Link2, Flag, X
+  Check, Eye, Search, Scissors, Send, Link2, Flag, X, Rocket
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
@@ -28,6 +28,7 @@ const CONTENT_TYPES = [
   { value: 'criativo', label: 'Criativos', icon: Megaphone, color: 'text-purple-600 bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400', points: 5 },
   { value: 'story', label: 'Story', icon: Image, color: 'text-pink-600 bg-pink-100 dark:bg-pink-900/30 dark:text-pink-400', points: 3 },
   { value: 'arte', label: 'Arte', icon: Palette, color: 'text-amber-600 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400', points: 2 },
+  { value: 'otimizacao', label: 'Otimização', icon: Rocket, color: 'text-fuchsia-600 bg-fuchsia-100 dark:bg-fuchsia-900/30 dark:text-fuchsia-300', points: 8 },
 ];
 
 const EDITOR_COLUMNS = [
@@ -104,14 +105,23 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
 
   const isReview = task.kanban_column === 'revisao';
   const isMine = task.assigned_to === currentUserId;
+  const isOptimize = task.content_type === 'otimizacao';
 
   return (
     <div draggable onDragStart={e => onDragStart(e, task)}
       className={`group relative bg-card border rounded-lg cursor-grab active:cursor-grabbing transition-all hover:shadow-md ${
         draggedId === task.id ? 'opacity-40 scale-95' : ''
-      } ${isReview ? 'border-teal-500/40 bg-teal-500/5' : 'border-border'} ${
+      } ${isOptimize
+          ? 'border-fuchsia-500/60 bg-gradient-to-br from-fuchsia-500/10 via-purple-500/5 to-violet-500/10 ring-1 ring-fuchsia-500/30 shadow-fuchsia-500/20 shadow-md'
+          : isReview ? 'border-teal-500/40 bg-teal-500/5' : 'border-border'
+      } ${
         deadlineStatus.variant === 'destructive' && task.kanban_column === 'edicao' ? 'ring-1 ring-destructive/40' : ''
       }`}>
+      {isOptimize && (
+        <div className="absolute -top-2 left-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-fuchsia-500 via-pink-500 to-violet-500 text-white text-[9px] font-black uppercase tracking-widest shadow-lg shadow-fuchsia-500/50 animate-pulse">
+          <Rocket size={10} className="animate-bounce" /> Otimizar
+        </div>
+      )}
       <div className="h-1 w-full rounded-t-lg" style={{ backgroundColor: `hsl(${clientColor})` }} />
       <div className="p-3 space-y-2">
         <div className="flex items-start justify-between gap-2">

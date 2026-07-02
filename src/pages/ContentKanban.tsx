@@ -135,6 +135,7 @@ const CONTENT_TYPES = [
   { value: 'criativo', label: 'Criativos', icon: Megaphone, color: 'text-purple-700 bg-purple-50 border border-purple-200/60 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800' },
   { value: 'story', label: 'Story', icon: Image, color: 'text-pink-700 bg-pink-50 border border-pink-200/60 dark:bg-pink-900/30 dark:text-pink-400 dark:border-pink-800' },
   { value: 'arte', label: 'Arte', icon: Palette, color: 'text-amber-700 bg-amber-50 border border-amber-200/60 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800' },
+  { value: 'otimizacao', label: 'Otimização', icon: Rocket, color: 'text-fuchsia-700 bg-fuchsia-50 border border-fuchsia-200/60 dark:bg-fuchsia-900/30 dark:text-fuchsia-300 dark:border-fuchsia-800' },
 ];
 
 interface ContentTask {
@@ -1788,6 +1789,12 @@ function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, lin
         {task.immediate_alteration && task.kanban_column === 'alteracao' && (
           <div className="flex items-center gap-1.5 px-3 py-1 bg-red-600 animate-pulse">
             <span className="text-[9px] font-bold text-white uppercase tracking-widest">🚨 Imediato</span>
+          </div>
+        )}
+        {task.content_type === 'otimizacao' && (
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-fuchsia-500 via-pink-500 to-violet-500 animate-pulse shadow-lg shadow-fuchsia-500/40">
+            <Rocket size={11} className="text-white animate-bounce" />
+            <span className="text-[9px] font-black text-white uppercase tracking-[0.2em]">Otimizar</span>
           </div>
         )}
 

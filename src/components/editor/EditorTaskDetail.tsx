@@ -159,6 +159,33 @@ function ScoreCelebration({ points, show, onDone }: { points: number; show: bool
   );
 }
 
+type OptSlot = { id: string; type: 'story' | 'criativo' | 'extra'; link: string; label?: string };
+const OPT_MARKER = '[[OPT_SLOTS]]';
+
+function parseSlots(description: string | null): { slots: OptSlot[]; baseDescription: string } {
+  if (!description) return { slots: [], baseDescription: '' };
+  const idx = description.indexOf(OPT_MARKER);
+  if (idx < 0) return { slots: [], baseDescription: description };
+  const base = description.slice(0, idx).trim();
+  const raw = description.slice(idx + OPT_MARKER.length).trim();
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return { slots: parsed, baseDescription: base };
+  } catch {}
+  return { slots: [], baseDescription: base };
+}
+
+function serializeSlots(baseDescription: string, slots: OptSlot[]): string {
+  return `${baseDescription || ''}\n\n${OPT_MARKER}${JSON.stringify(slots)}`.trim();
+}
+
+function makeDefaultSlots(): OptSlot[] {
+  return [
+    { id: `s_${Date.now()}_1`, type: 'story', link: '', label: 'Story' },
+    { id: `s_${Date.now()}_2`, type: 'criativo', link: '', label: 'Criativo' },
+  ];
+}
+
 export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }: Props) {
   const { clients, scripts, users } = useApp();
   const { user } = useAuth();
@@ -186,6 +213,56 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   const deadline = getDeadlineStatus(task.editing_deadline);
   const cfg = getTypeConfig(task.content_type);
   const isEditing = !!task.editing_started_at;
+  const isOptimize = task.content_type === 'otimizacao';
+
+  const initialParse = parseSlots(task.description);
+  const [slots, setSlots] = useState<OptSlot[]>(
+    isOptimize ? (initialParse.slots.length > 0 ? initialParse.slots : makeDefaultSlots()) : []
+  );
+  const [baseDescription, setBaseDescription] = useState<string>(initialParse.baseDescription);
+
+  useEffect(() => {
+    if (!open) return;
+    const p = parseSlots(task.description);
+    setBaseDescription(p.baseDescription);
+    if (isOptimize) setSlots(p.slots.length > 0 ? p.slots : makeDefaultSlots());
+  }, [open, task.id, task.description, isOptimize]);
+
+  const filledSlots = slots.filter(s => s.link.trim().length > 0);
+  const hasAnyVideo = isOptimize
+    ? (filledSlots.length > 0 || !!task.edited_video_link || !!videoLink.trim())
+    : (!!task.edited_video_link || !!videoLink.trim());
+
+  const persistSlots = async (nextSlots: OptSlot[]) => {
+    setSlots(nextSlots);
+    const newDesc = serializeSlots(baseDescription, nextSlots);
+    await supabase.from('content_tasks').update({
+      description: newDesc, updated_at: new Date().toISOString(),
+    }).eq('id', task.id);
+  };
+
+  const addSlot = (type: OptSlot['type']) => {
+    persistSlots([...slots, { id: `s_${Date.now()}`, type, link: '', label: type === 'story' ? 'Story' : type === 'criativo' ? 'Criativo' : 'Extra' }]);
+  };
+
+  const removeSlot = (id: string) => {
+    persistSlots(slots.filter(s => s.id !== id));
+  };
+
+  const updateSlot = (id: string, patch: Partial<OptSlot>) => {
+    setSlots(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
+  };
+
+  const saveSlot = async (id: string) => {
+    const newDesc = serializeSlots(baseDescription, slots);
+    await supabase.from('content_tasks').update({
+      description: newDesc, updated_at: new Date().toISOString(),
+    }).eq('id', task.id);
+    toast.success('Slot salvo');
+    await logAction('Slot de otimização salvo', slots.find(s => s.id === id)?.link || '');
+    onRefresh();
+  };
+
 
   useEffect(() => {
     if (!open || !task.script_id || contextScript) { setFetchedScript(null); return; }
@@ -361,19 +438,34 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   /* ─── Finalize & Send for Approval (with celebration) ───── */
   const sendForApproval = async () => {
     const currentLink = videoLink.trim() || task.edited_video_link;
-    if (!currentLink) { toast.error('Adicione o vídeo editado primeiro'); return; }
+    if (isOptimize) {
+      // Persist any pending slot edits first
+      const newDesc = serializeSlots(baseDescription, slots);
+      await supabase.from('content_tasks').update({
+        description: newDesc, updated_at: new Date().toISOString(),
+      }).eq('id', task.id);
+      const filled = slots.filter(s => s.link.trim().length > 0);
+      if (filled.length === 0 && !currentLink) {
+        toast.error('Anexe pelo menos 1 vídeo nos slots de otimização antes de enviar');
+        return;
+      }
+    } else {
+      if (!currentLink) { toast.error('Adicione o vídeo editado primeiro'); return; }
+    }
     setSaving(true);
+    const firstSlotLink = isOptimize ? slots.find(s => s.link.trim())?.link.trim() : null;
     await supabase.from('content_tasks').update({
       kanban_column: 'revisao',
       assigned_to: null,
+      edited_video_link: currentLink || firstSlotLink || null,
       updated_at: new Date().toISOString(),
     }).eq('id', task.id);
     const cl = clients.find(c => c.id === task.client_id);
-    const ctx = buildSyncContext({ ...task, edited_video_link: currentLink } as any, {
+    const ctx = buildSyncContext({ ...task, edited_video_link: currentLink || firstSlotLink } as any, {
       userId: user?.id, clientName: cl?.companyName, clientWhatsapp: (cl as any)?.whatsapp,
     });
     await syncContentTaskColumnChange('revisao', ctx);
-    await logAction('Enviado para aprovação');
+    await logAction('Enviado para aprovação', isOptimize ? `${slots.filter(s => s.link.trim()).length} slots otimizados` : undefined);
 
     // Trigger celebration
     const pts = cfg ? (getTypeConfig(task.content_type).points || 0) : 5;
@@ -384,6 +476,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
     onRefresh();
     setSaving(false);
   };
+
 
   const markAsFinished = async () => {
     setSaving(true);
@@ -618,7 +711,95 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
               </div>
             )}
 
+            {/* ─── OPTIMIZATION SLOTS ─────────────────────────── */}
+            {isOptimize && (
+              <div className="rounded-xl border-2 border-fuchsia-500/40 bg-gradient-to-br from-fuchsia-500/10 via-purple-500/5 to-violet-500/10 p-4 space-y-3 shadow-lg shadow-fuchsia-500/10">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-gradient-to-br from-fuchsia-500 to-violet-500 shadow shadow-fuchsia-500/50">
+                      <Rocket size={14} className="text-white" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black bg-gradient-to-r from-fuchsia-600 via-pink-600 to-violet-600 bg-clip-text text-transparent uppercase tracking-wider">
+                        Otimização de Conteúdo
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        Aproveite as gravações para gerar Stories, Criativos e cortes extras. Mínimo 1 vídeo anexado.
+                      </p>
+                    </div>
+                  </div>
+                  <Badge className="text-[10px] bg-fuchsia-500/20 text-fuchsia-600 dark:text-fuchsia-300 border-fuchsia-500/40">
+                    {filledSlots.length}/{slots.length} preenchidos
+                  </Badge>
+                </div>
+
+                <div className="space-y-2">
+                  {slots.map((slot, idx) => {
+                    const slotColor = slot.type === 'story'
+                      ? 'from-pink-500/10 to-fuchsia-500/10 border-pink-400/30'
+                      : slot.type === 'criativo'
+                        ? 'from-purple-500/10 to-violet-500/10 border-purple-400/30'
+                        : 'from-blue-500/10 to-cyan-500/10 border-blue-400/30';
+                    const slotIcon = slot.type === 'story' ? Image : slot.type === 'criativo' ? Megaphone : Film;
+                    const SlotIcon = slotIcon;
+                    const isFilled = slot.link.trim().length > 0;
+                    return (
+                      <div key={slot.id} className={`rounded-lg border bg-gradient-to-r ${slotColor} p-2.5 space-y-1.5`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <SlotIcon size={12} className="text-foreground/70" />
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-foreground/80">
+                              Slot {idx + 1} · {slot.label || slot.type}
+                            </span>
+                            {isFilled && <Check size={11} className="text-emerald-500" />}
+                          </div>
+                          <button
+                            onClick={() => removeSlot(slot.id)}
+                            className="text-[10px] text-muted-foreground hover:text-destructive transition-colors"
+                            title="Remover slot"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <Input
+                            placeholder="Cole o link do vídeo (Drive, YouTube, upload...)"
+                            value={slot.link}
+                            onChange={e => updateSlot(slot.id, { link: e.target.value })}
+                            className="h-8 text-xs flex-1"
+                          />
+                          <Button size="sm" onClick={() => saveSlot(slot.id)} className="h-8 px-2 text-xs">
+                            <Link2 size={11} />
+                          </Button>
+                          {isFilled && (
+                            <Button asChild size="sm" variant="outline" className="h-8 px-2">
+                              <a href={slot.link} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink size={11} />
+                              </a>
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 pt-1 border-t border-fuchsia-500/20">
+                  <Button size="sm" variant="outline" onClick={() => addSlot('story')} className="h-7 text-[11px] gap-1 border-pink-400/40 text-pink-600 hover:bg-pink-500/10">
+                    + Story
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => addSlot('criativo')} className="h-7 text-[11px] gap-1 border-purple-400/40 text-purple-600 hover:bg-purple-500/10">
+                    + Criativo
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => addSlot('extra')} className="h-7 text-[11px] gap-1 border-blue-400/40 text-blue-600 hover:bg-blue-500/10">
+                    + Extra
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <Tabs defaultValue="upload" className="space-y-3">
+
               <TabsList className="h-8 flex flex-wrap">
                 <TabsTrigger value="upload" className="text-xs gap-1"><Upload size={11} /> Vídeo</TabsTrigger>
                 <TabsTrigger value="script" className="text-xs gap-1"><Eye size={11} /> Roteiro</TabsTrigger>
@@ -789,16 +970,19 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
               {(task.kanban_column === 'edicao' && isEditing) || task.kanban_column === 'alteracao' ? (
                 <motion.div whileTap={{ scale: 0.92 }}>
                   <Button onClick={sendForApproval}
-                    disabled={saving || (!videoLink.trim() && !task.edited_video_link)}
+                    disabled={saving || !hasAnyVideo}
                     className="gap-1.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white shadow-md">
                     <Send size={14} /> Finalizar e Enviar
                   </Button>
                 </motion.div>
               ) : null}
 
-              {!videoLink.trim() && !task.edited_video_link && (task.kanban_column === 'edicao' || task.kanban_column === 'alteracao') && (
-                <p className="text-[10px] text-destructive self-center">Adicione o vídeo editado primeiro</p>
+              {!hasAnyVideo && (task.kanban_column === 'edicao' || task.kanban_column === 'alteracao') && (
+                <p className="text-[10px] text-destructive self-center">
+                  {isOptimize ? 'Anexe pelo menos 1 vídeo nos slots antes de enviar' : 'Adicione o vídeo editado primeiro'}
+                </p>
               )}
+
 
               {task.kanban_column === 'revisao' && (
                 <motion.div whileTap={{ scale: 0.92 }}>

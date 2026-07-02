@@ -87,13 +87,14 @@ function getTypeConfig(type: string) {
   return CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];
 }
 
-function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink, onClaimTask, onUnclaimTask, onReturnFromReview, draggedId, onDragStart, currentUserId, users }: {
+function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink, onClaimTask, onUnclaimTask, onReturnFromReview, onOpenDetail, draggedId, onDragStart, currentUserId, users }: {
   task: EditorTask; clients: any[]; onOpenScript: (id: string) => void;
   onSendToReview: (task: EditorTask) => void;
   onAddVideoLink: (task: EditorTask) => void;
   onClaimTask: (task: EditorTask) => void;
   onUnclaimTask: (task: EditorTask) => void;
   onReturnFromReview: (task: EditorTask) => void;
+  onOpenDetail: (task: EditorTask) => void;
   draggedId: string | null; onDragStart: (e: React.DragEvent, task: EditorTask) => void;
   currentUserId: string | undefined;
   users: any[];
@@ -108,17 +109,18 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
   const isReview = task.kanban_column === 'revisao';
   const isMine = task.assigned_to === currentUserId;
   const isOptimize = task.content_type === 'otimizacao';
-  const [formatsOpen, setFormatsOpen] = useState(false);
-  const OPT_FORMATS = [
-    { title: '🎣 Gancho em Áudio + Takes', desc: 'Use a melhor frase do reel como gancho e cubra com takes soltos.', tip: 'Ideal para Story de 15s.' },
-    { title: '🎬 Mashup Multi-Vídeos', desc: 'Combine trechos de vários reels do cliente em um só.', tip: 'Ótimo pra criativo de anúncio.' },
-    { title: '⚡ Corte Rápido (Hook 3s)', desc: 'Comece com o clímax do vídeo nos primeiros 3s.', tip: 'Prende atenção no feed.' },
-    { title: '📱 Vertical Story Nativo', desc: 'Adapte pro formato 9:16 com stickers e enquetes.', tip: 'Aumenta interação.' },
-    { title: '💬 Legenda em Destaque', desc: 'Coloque a fala principal em texto grande na tela.', tip: 'Funciona sem áudio.' },
-    { title: '🔁 Loop Perfeito', desc: 'Faça o final conectar com o começo pra rodar em loop.', tip: 'Mais tempo de watch.' },
-    { title: '📊 Antes x Depois', desc: 'Mostre transformação/comparação usando os takes.', tip: 'Alto engajamento.' },
-    { title: '🎯 CTA Forte', desc: 'Reforce a chamada pra ação nos últimos 2s.', tip: 'Converte mais.' },
-  ];
+
+  // Count filled optimization slots (parsed from description marker)
+  const optSlotCount = (() => {
+    if (!isOptimize || !task.description) return { filled: 0, total: 0 };
+    const idx = task.description.indexOf('[[OPT_SLOTS]]');
+    if (idx < 0) return { filled: 0, total: 0 };
+    try {
+      const arr = JSON.parse(task.description.slice(idx + '[[OPT_SLOTS]]'.length));
+      if (!Array.isArray(arr)) return { filled: 0, total: 0 };
+      return { filled: arr.filter((s: any) => (s.link || '').trim().length > 0).length, total: arr.length };
+    } catch { return { filled: 0, total: 0 }; }
+  })();
 
   return (
     <div draggable onDragStart={e => onDragStart(e, task)}
@@ -171,7 +173,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
         </div>
         <p className="text-sm font-semibold text-foreground leading-tight">{task.title}</p>
 
-        {/* Optimization rocket guide + formats */}
+        {/* Optimization rocket guide + open detail (with slots) + training link */}
         {isOptimize && (
           <div className="rounded-lg border border-fuchsia-400/40 bg-gradient-to-br from-fuchsia-500/10 to-violet-500/10 p-2.5 space-y-2">
             <div className="flex gap-2">
@@ -181,16 +183,23 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
               <div className="min-w-0">
                 <p className="text-[10px] font-black text-fuchsia-700 dark:text-fuchsia-300 leading-tight">Ei, editor! Bora otimizar? 🚀</p>
                 <p className="text-[10px] text-foreground/75 leading-snug mt-0.5">
-                  Esse é um <b>Reel aprovado</b>. Reaproveita as gravações e gera <b>Stories, Criativos ou cortes extras</b> a partir dele. ✨
+                  Reaproveita as gravações e gera <b>Stories, Criativos ou cortes extras</b>. Abra o card pra anexar cada peça em um slot. ✨
                 </p>
               </div>
             </div>
-            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setFormatsOpen(true); }}
-              className="w-full h-7 text-[10px] gap-1 border-fuchsia-400/50 text-fuchsia-700 dark:text-fuchsia-300 hover:bg-fuchsia-500/10">
-              <Lightbulb size={11} /> Ver formatos de otimização
+            <Button size="sm" onClick={(e) => { e.stopPropagation(); onOpenDetail(task); }}
+              className="w-full h-8 text-[11px] gap-1.5 bg-gradient-to-r from-fuchsia-500 to-violet-500 hover:from-fuchsia-600 hover:to-violet-600 text-white shadow-md shadow-fuchsia-500/30">
+              <Layers size={12} /> Abrir & anexar vídeos {optSlotCount.total > 0 && `(${optSlotCount.filled}/${optSlotCount.total})`}
             </Button>
+            <a href="/treinamento/otimizacao-conteudo" target="_blank" rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="w-full h-7 text-[10px] gap-1 border border-fuchsia-400/50 text-fuchsia-700 dark:text-fuchsia-300 hover:bg-fuchsia-500/10 rounded-md flex items-center justify-center transition">
+              <Lightbulb size={11} className="mr-1" /> Ver guia completo com infográficos
+              <ExternalLink size={9} className="ml-1" />
+            </a>
           </div>
         )}
+
 
 
         

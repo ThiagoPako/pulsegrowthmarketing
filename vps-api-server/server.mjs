@@ -455,6 +455,7 @@ async function verifyAdmin(req) {
 
 
 let profilesPasswordHashColumnPromise;
+let profilesMonthlySalaryColumnPromise;
 
 let authSupportTablesPromise;
 const tableColumnsPromiseCache = new Map();
@@ -489,6 +490,30 @@ async function getExistingColumns(tableName) {
 
 function selectColumn(columns, columnName, fallbackSql = `NULL::text`) {
   return columns.has(columnName) ? columnName : `${fallbackSql} AS ${columnName}`;
+}
+
+async function ensureProfilesMonthlySalaryColumn() {
+  if (!profilesMonthlySalaryColumnPromise) {
+    profilesMonthlySalaryColumnPromise = pool.query(`
+      DO $$
+      BEGIN
+        IF to_regclass('public.profiles') IS NOT NULL THEN
+          ALTER TABLE public.profiles
+            ADD COLUMN IF NOT EXISTS monthly_salary NUMERIC(10,2) DEFAULT 0;
+        END IF;
+      END $$;
+    `)
+      .then((result) => {
+        tableColumnsPromiseCache.delete('profiles');
+        return result;
+      })
+      .catch((error) => {
+        profilesMonthlySalaryColumnPromise = null;
+        throw error;
+      });
+  }
+
+  return profilesMonthlySalaryColumnPromise;
 }
 
 async function ensureAuthSupportTables() {
@@ -526,10 +551,17 @@ async function ensureAuthSupportTables() {
       CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles (user_id);
       CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles (role);
       CREATE INDEX IF NOT EXISTS idx_login_logs_logged_in_at ON login_logs (logged_in_at DESC);
-    `).catch((error) => {
-      authSupportTablesPromise = null;
-      throw error;
-    });
+    `)
+      .then(async (result) => {
+        await ensureProfilesMonthlySalaryColumn().catch((error) => {
+          console.warn('Could not ensure profiles.monthly_salary:', error?.message || error);
+        });
+        return result;
+      })
+      .catch((error) => {
+        authSupportTablesPromise = null;
+        throw error;
+      });
   }
 
   return authSupportTablesPromise;
@@ -549,6 +581,7 @@ async function getLocalAuthUserByEmail(email) {
     const profileAvatar = hasProfilesTable && profileColumns.has('avatar_url') ? 'p.avatar_url' : 'NULL::text';
     const profileDisplayName = hasProfilesTable && profileColumns.has('display_name') ? 'p.display_name' : 'NULL::text';
     const profileJobTitle = hasProfilesTable && profileColumns.has('job_title') ? 'p.job_title' : 'NULL::text';
+    const profileMonthlySalary = hasProfilesTable && profileColumns.has('monthly_salary') ? 'p.monthly_salary' : '0::numeric';
     const profileJoin = hasProfilesTable && profileColumns.has('id') && profileColumns.has('email')
       ? 'LEFT JOIN profiles p ON p.id = au.id OR lower(p.email) = lower(au.email)'
       : hasProfilesTable && profileColumns.has('id')
@@ -569,6 +602,7 @@ async function getLocalAuthUserByEmail(email) {
          ${profileAvatar} AS avatar_url,
          ${profileDisplayName} AS display_name,
          ${profileJobTitle} AS job_title,
+         ${profileMonthlySalary} AS monthly_salary,
          au.password_hash
        FROM auth_users au
         ${profileJoin}
@@ -591,6 +625,7 @@ async function getLocalAuthUserByEmail(email) {
            NULL::text AS avatar_url,
            split_part(email, '@', 1) AS display_name,
            NULL::text AS job_title,
+            0::numeric AS monthly_salary,
            password_hash
          FROM auth_users
          WHERE lower(email) = lower($1)
@@ -619,6 +654,7 @@ async function getLocalAuthUserById(userId) {
     const profileAvatar = hasProfilesTable && profileColumns.has('avatar_url') ? 'p.avatar_url' : 'NULL::text';
     const profileDisplayName = hasProfilesTable && profileColumns.has('display_name') ? 'p.display_name' : 'NULL::text';
     const profileJobTitle = hasProfilesTable && profileColumns.has('job_title') ? 'p.job_title' : 'NULL::text';
+    const profileMonthlySalary = hasProfilesTable && profileColumns.has('monthly_salary') ? 'p.monthly_salary' : '0::numeric';
     const profileJoin = hasProfilesTable && profileColumns.has('id') && profileColumns.has('email')
       ? 'LEFT JOIN profiles p ON p.id = au.id OR lower(p.email) = lower(au.email)'
       : hasProfilesTable && profileColumns.has('id')
@@ -640,6 +676,7 @@ async function getLocalAuthUserById(userId) {
          ${profileAvatar} AS avatar_url,
          ${profileDisplayName} AS display_name,
          ${profileJobTitle} AS job_title,
+         ${profileMonthlySalary} AS monthly_salary,
          au.password_hash
        FROM auth_users au
         ${profileJoin}
@@ -663,6 +700,7 @@ async function getLocalAuthUserById(userId) {
            NULL::text AS avatar_url,
            split_part(email, '@', 1) AS display_name,
            NULL::text AS job_title,
+            0::numeric AS monthly_salary,
            password_hash
          FROM auth_users
          WHERE id = $1
@@ -710,6 +748,7 @@ async function getAuthProfileByEmail(email) {
     selectColumn(profileColumns, 'avatar_url'),
     selectColumn(profileColumns, 'display_name'),
     selectColumn(profileColumns, 'job_title'),
+    selectColumn(profileColumns, 'monthly_salary', '0::numeric'),
     profileColumns.has('password_hash') ? 'password_hash' : 'NULL::text AS password_hash',
   ].join(', ');
 
@@ -727,6 +766,7 @@ async function getAuthProfileByEmail(email) {
                 ${profileColumns.has('avatar_url') ? 'p.avatar_url' : 'NULL::text AS avatar_url'},
                 ${profileColumns.has('display_name') ? 'p.display_name' : 'NULL::text AS display_name'},
                 ${profileColumns.has('job_title') ? 'p.job_title' : 'NULL::text AS job_title'},
+                ${profileColumns.has('monthly_salary') ? 'p.monthly_salary' : '0::numeric AS monthly_salary'},
                 COALESCE(au.password_hash, p.password_hash) AS password_hash,
                 p.password_hash AS profile_password_hash,
                 au.password_hash AS auth_password_hash
@@ -758,6 +798,7 @@ async function getAuthProfileByEmail(email) {
               ${profileColumns.has('avatar_url') ? 'p.avatar_url' : 'NULL::text AS avatar_url'},
               ${profileColumns.has('display_name') ? 'p.display_name' : 'NULL::text AS display_name'},
               ${profileColumns.has('job_title') ? 'p.job_title' : 'NULL::text AS job_title'},
+              ${profileColumns.has('monthly_salary') ? 'p.monthly_salary' : '0::numeric AS monthly_salary'},
               au.password_hash
        FROM profiles p
        LEFT JOIN auth_users au
@@ -804,6 +845,7 @@ async function getAuthProfileById(userId) {
                 ${profileColumns.has('avatar_url') ? 'p.avatar_url' : 'NULL::text AS avatar_url'},
                 ${profileColumns.has('display_name') ? 'p.display_name' : 'NULL::text AS display_name'},
                 ${profileColumns.has('job_title') ? 'p.job_title' : 'NULL::text AS job_title'},
+                ${profileColumns.has('monthly_salary') ? 'p.monthly_salary' : '0::numeric AS monthly_salary'},
                 COALESCE(au.password_hash, p.password_hash) AS password_hash,
                 p.password_hash AS profile_password_hash,
                 au.password_hash AS auth_password_hash
@@ -830,6 +872,7 @@ async function getAuthProfileById(userId) {
                 NULL::text AS avatar_url,
                 split_part(email, '@', 1) AS display_name,
                 NULL::text AS job_title,
+                0::numeric AS monthly_salary,
                 password_hash
            FROM auth_users
           WHERE id = $1
@@ -851,6 +894,7 @@ async function getAuthProfileById(userId) {
               ${profileColumns.has('avatar_url') ? 'p.avatar_url' : 'NULL::text AS avatar_url'},
               ${profileColumns.has('display_name') ? 'p.display_name' : 'NULL::text AS display_name'},
               ${profileColumns.has('job_title') ? 'p.job_title' : 'NULL::text AS job_title'},
+              ${profileColumns.has('monthly_salary') ? 'p.monthly_salary' : '0::numeric AS monthly_salary'},
               au.password_hash
        FROM profiles p
        LEFT JOIN auth_users au
@@ -872,6 +916,7 @@ async function getAuthProfileById(userId) {
               ${profileColumns.has('avatar_url') ? 'avatar_url' : 'NULL::text AS avatar_url'},
               ${profileColumns.has('display_name') ? 'display_name' : 'NULL::text AS display_name'},
               ${profileColumns.has('job_title') ? 'job_title' : 'NULL::text AS job_title'},
+              ${profileColumns.has('monthly_salary') ? 'monthly_salary' : '0::numeric AS monthly_salary'},
               NULL::text AS password_hash
        FROM profiles
        WHERE id = $1
@@ -1141,6 +1186,7 @@ app.get('/api/auth/me', async (req, res) => {
                 ${profileColumns.has('job_title') ? 'p.job_title' : 'NULL::text AS job_title'},
                 ${profileColumns.has('bio') ? 'p.bio' : 'NULL::text AS bio'},
                 ${profileColumns.has('birthday') ? 'p.birthday' : 'NULL::date AS birthday'},
+                ${profileColumns.has('monthly_salary') ? 'p.monthly_salary' : '0::numeric AS monthly_salary'},
                 COALESCE(${roleColumns.has('role') ? 'ur.role::text' : 'NULL::text'}, ${profileColumns.has('role') ? 'p.role::text' : 'NULL::text'}, $2) AS role
            FROM profiles p
            ${roleColumns.has('user_id') && roleColumns.has('role') ? 'LEFT JOIN user_roles ur ON ur.user_id = p.id' : ''}
@@ -1163,6 +1209,7 @@ app.get('/api/auth/me', async (req, res) => {
           job_title: fallback.job_title,
           bio: fallback.bio,
           birthday: fallback.birthday,
+          monthly_salary: fallback.monthly_salary || 0,
         });
       }
     }
@@ -1178,6 +1225,7 @@ app.get('/api/auth/me', async (req, res) => {
       job_title: profile.job_title,
       bio: profile.bio,
       birthday: profile.birthday,
+      monthly_salary: profile.monthly_salary || 0,
     });
   } catch (error) {
     res.status(401).json({ error: 'Não autenticado' });
@@ -1598,7 +1646,7 @@ app.post('/api/financial-chat', async (req, res) => {
       pool.query(`SELECT s.*, c.company_name AS client_name FROM scripts s LEFT JOIN clients c ON c.id = s.client_id ORDER BY s.created_at DESC LIMIT 200`),
       pool.query(`SELECT dr.*, c.company_name AS client_name, pf.name AS videomaker_name FROM delivery_records dr LEFT JOIN clients c ON c.id = dr.client_id LEFT JOIN profiles pf ON pf.id = dr.videomaker_id WHERE dr.date >= $1 ORDER BY dr.date DESC LIMIT 200`, [startOfMonth]),
       pool.query(`SELECT sd.*, c.company_name AS client_name FROM social_media_deliveries sd LEFT JOIN clients c ON c.id = sd.client_id WHERE sd.delivered_at >= $1 ORDER BY sd.delivered_at DESC LIMIT 300`, [startOfMonth]).catch(() => ({ rows: [] })),
-      pool.query(`SELECT id, name, email, role, job_title FROM profiles`),
+      pool.query(`SELECT id, name, email, role, job_title, monthly_salary FROM profiles`),
       pool.query(`SELECT * FROM plans`),
       pool.query(`SELECT * FROM goals WHERE status != 'cancelada' ORDER BY end_date DESC LIMIT 20`).catch(() => ({ rows: [] })),
       pool.query(`SELECT cpc.*, c.company_name AS client_name FROM client_portal_contents cpc LEFT JOIN clients c ON c.id = cpc.client_id ORDER BY cpc.created_at DESC LIMIT 100`).catch(() => ({ rows: [] })),
@@ -4597,6 +4645,12 @@ app.post('/api/db/query', async (req, res) => {
       return res.status(403).json({ error: `Table "${safeTable}" is not allowed` });
     }
 
+    if (safeTable === 'profiles') {
+      await ensureProfilesMonthlySalaryColumn().catch((error) => {
+        console.warn('Could not ensure profiles.monthly_salary before generic query:', error?.message || error);
+      });
+    }
+
     if (safeTable === 'commercial_proposals' || safeTable === 'proposal_comments') {
       await ensureProposalTables();
     }
@@ -6389,7 +6443,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
 
     // 1. Get all team profiles
     const profiles = await safeQuery('profiles', `
-      SELECT p.id, p.name, p.role, p.avatar_url
+      SELECT p.id, p.name, p.role, p.avatar_url, p.monthly_salary
       FROM profiles p
       WHERE p.role IS NOT NULL
       ORDER BY p.name

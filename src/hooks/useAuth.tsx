@@ -29,6 +29,7 @@ export interface Profile {
   job_title?: string;
   bio?: string;
   font_scale?: string;
+  monthly_salary?: number | string | null;
 }
 
 interface VpsAuthUser {
@@ -154,6 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         job_title: authProfile.job_title,
         bio: authProfile.bio,
         font_scale: authProfile.font_scale,
+        monthly_salary: authProfile.monthly_salary ?? 0,
       });
       return;
     }

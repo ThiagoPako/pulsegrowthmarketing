@@ -24,13 +24,21 @@ async function tryDeleteVpsFile(url: string | null | undefined) {
  * Delete a content_task and ALL related records across every module.
  */
 export async function deleteContentTask(taskId: string) {
-  const { data: task } = await supabase
+  const { data: task, error: fetchError } = await supabase
     .from('content_tasks')
     .select('id, client_id, title, edited_video_link, recording_id, script_id')
     .eq('id', taskId)
     .single();
 
-  if (!task) return;
+  if (fetchError) {
+    console.error('[deleteContentTask] fetch error:', fetchError);
+  }
+
+  // Even if we can't fetch task metadata, still attempt the hard delete of the task itself.
+  const clientId = task?.client_id;
+  const title = task?.title;
+  const recordingId = task?.recording_id;
+  const editedVideoLink = task?.edited_video_link;
 
   // 1. Delete task_history
   await supabase.from('task_history').delete().eq('task_id', taskId);
@@ -39,48 +47,60 @@ export async function deleteContentTask(taskId: string) {
   await supabase.from('social_media_deliveries').delete().eq('content_task_id', taskId);
 
   // 3. Delete matching client_portal_contents + their comments/notifications
-  const { data: portalContents } = await supabase
-    .from('client_portal_contents')
-    .select('id, file_url, thumbnail_url')
-    .eq('client_id', task.client_id)
-    .eq('title', task.title);
-
-  if (portalContents?.length) {
-    for (const pc of portalContents) {
-      await supabase.from('client_portal_comments').delete().eq('content_id', pc.id);
-      await supabase.from('client_portal_notifications').delete().eq('link_content_id', pc.id);
-      await tryDeleteVpsFile(pc.file_url);
-      await tryDeleteVpsFile(pc.thumbnail_url);
-    }
-    await supabase
+  if (clientId && title) {
+    const { data: portalContents } = await supabase
       .from('client_portal_contents')
-      .delete()
-      .eq('client_id', task.client_id)
-      .eq('title', task.title);
+      .select('id, file_url, thumbnail_url')
+      .eq('client_id', clientId)
+      .eq('title', title);
+
+    if (portalContents?.length) {
+      for (const pc of portalContents) {
+        await supabase.from('client_portal_comments').delete().eq('content_id', pc.id);
+        await supabase.from('client_portal_notifications').delete().eq('link_content_id', pc.id);
+        await tryDeleteVpsFile(pc.file_url);
+        await tryDeleteVpsFile(pc.thumbnail_url);
+      }
+      await supabase
+        .from('client_portal_contents')
+        .delete()
+        .eq('client_id', clientId)
+        .eq('title', title);
+    }
   }
 
   // 4. Delete VPS file for edited video
-  await tryDeleteVpsFile(task.edited_video_link);
+  await tryDeleteVpsFile(editedVideoLink);
 
   // 5. Clean up recording if this was the only task using it
-  if (task.recording_id) {
-    // Check if other tasks share this recording
+  if (recordingId) {
     const { count } = await supabase
       .from('content_tasks')
       .select('id', { count: 'exact', head: true })
-      .eq('recording_id', task.recording_id)
+      .eq('recording_id', recordingId)
       .neq('id', taskId);
 
     if (count === 0) {
-      // No other tasks use this recording — safe to delete
-      await supabase.from('active_recordings').delete().eq('recording_id', task.recording_id);
-      await supabase.from('delivery_records').delete().eq('recording_id', task.recording_id);
-      await supabase.from('recordings').delete().eq('id', task.recording_id);
+      await supabase.from('active_recordings').delete().eq('recording_id', recordingId);
+      await supabase.from('delivery_records').delete().eq('recording_id', recordingId);
+      await supabase.from('recordings').delete().eq('id', recordingId);
     }
   }
 
-  // 6. Delete the content_task itself
-  await supabase.from('content_tasks').delete().eq('id', taskId);
+  // 6. Delete the content_task itself — verify a row was actually removed
+  const { data: deleted, error: delError } = await supabase
+    .from('content_tasks')
+    .delete()
+    .eq('id', taskId)
+    .select('id');
+
+  if (delError) {
+    console.error('[deleteContentTask] delete error:', delError);
+    throw new Error(delError.message || 'Falha ao excluir tarefa');
+  }
+  if (!deleted || (Array.isArray(deleted) && deleted.length === 0)) {
+    throw new Error('Tarefa não encontrada ou sem permissão para excluir');
+  }
 }
 
 /**

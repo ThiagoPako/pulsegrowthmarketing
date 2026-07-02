@@ -122,7 +122,7 @@ export default function Reports() {
       supabase.from('clients').select('id, plan_id'),
       supabase.from('social_media_deliveries').select('*').order('delivered_at', { ascending: false }),
       supabase.from('recording_wait_logs').select('*'),
-      supabase.from('expense_categories').select('id, name').ilike('name', '%salário%'),
+      supabase.from('expense_categories').select('id, name').or('name.ilike.%salário%,name.ilike.%salario%'),
       supabase.from('content_tasks').select('id, client_id, edited_by, content_type, kanban_column, approved_at, updated_at'),
       supabase.from('design_tasks').select('id, client_id, assigned_to, kanban_column, completed_at, format_type'),
     ]);

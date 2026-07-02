@@ -88,27 +88,36 @@ export default function CostByContentType() {
     const stories = Math.max(recSto, ctSto, sSto);
     const artes = Math.max(recArts, dtArts);
 
-    // === SALÁRIOS (baseado em team_members.monthly_salary) ===
-    // Multiplica pela quantidade de meses do período
+    // === SALÁRIOS por pool (sem sobreposição) ===
     const start = new Date(dateRange.start);
     const end = new Date(dateRange.end);
     const months = Math.max(1, differenceInCalendarMonths(end, start) + 1);
 
-    const monthlyTotalSalaries = users
-      .filter(u => PRODUCTION_ROLES.includes(u.role))
+    const monthlyVideoPool = users
+      .filter(u => VIDEO_ROLES.includes(u.role))
       .reduce((a, u) => a + (u.monthlySalary || 0), 0);
-    const totalSalaries = monthlyTotalSalaries * months;
+    const monthlyDesignerPool = users
+      .filter(u => DESIGNER_ROLES.includes(u.role))
+      .reduce((a, u) => a + (u.monthlySalary || 0), 0);
 
-    // Alocação proporcional por peso de esforço
-    const wReels = reels * 10, wCri = criativos * 5, wArt = artes * 4, wSto = stories * 3;
-    const wTotal = wReels + wCri + wArt + wSto;
-    const salReels = wTotal > 0 ? (totalSalaries * wReels) / wTotal : 0;
-    const salCri = wTotal > 0 ? (totalSalaries * wCri) / wTotal : 0;
-    const salArt = wTotal > 0 ? (totalSalaries * wArt) / wTotal : 0;
-    const salSto = wTotal > 0 ? (totalSalaries * wSto) / wTotal : 0;
+    const videoPool = monthlyVideoPool * months;
+    const designerPool = monthlyDesignerPool * months;
+    const monthlyTotalSalaries = monthlyVideoPool + monthlyDesignerPool;
+    const totalSalaries = videoPool + designerPool;
+
+    // Pool vídeo: Reels=1.0, Criativo=0.5, Story=0.2
+    const wReels = reels * 1.0, wCri = criativos * 0.5, wSto = stories * 0.2;
+    const wTotal = wReels + wCri + wSto;
+    const salReels = wTotal > 0 ? (videoPool * wReels) / wTotal : 0;
+    const salCri = wTotal > 0 ? (videoPool * wCri) / wTotal : 0;
+    const salSto = wTotal > 0 ? (videoPool * wSto) / wTotal : 0;
+
+    // Pool designer: 100% para artes
+    const salArt = designerPool;
 
     return {
       totalSalaries, monthlyTotalSalaries, months,
+      videoPool, designerPool, monthlyVideoPool, monthlyDesignerPool,
       reels, criativos, stories, artes,
       cReels: reels > 0 ? salReels / reels : 0,
       cCri: criativos > 0 ? salCri / criativos : 0,
@@ -116,6 +125,7 @@ export default function CostByContentType() {
       cSto: stories > 0 ? salSto / stories : 0,
       salReels, salCri, salArt, salSto,
     };
+
   }, [records, editorTasks, designTasks, socialDeliveries, users, selectedClient, dateRange]);
 
   const fmt = (n: number) => n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';

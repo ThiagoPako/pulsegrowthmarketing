@@ -699,6 +699,103 @@ export default function FinancialExpenses() {
             </Card>
           </motion.div>
         </TabsContent>
+
+        {/* ── Pró-labore Tab ── */}
+        <TabsContent value="prolabore" className="space-y-4 mt-4">
+          {!prolaboreCategory && (
+            <Card className="border-amber-200/50">
+              <CardContent className="p-4 text-sm text-amber-700 dark:text-amber-400">
+                Categoria <strong>Pró-labore</strong> não existe. Clique em <strong>+ Categoria</strong> acima e crie uma com esse nome para começar.
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Total geral */}
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <Card className="border-violet-200/50 overflow-hidden">
+              <CardContent className="pt-3 pb-3 bg-gradient-to-br from-violet-500/10 to-purple-500/10">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center"><Briefcase size={16} className="text-violet-600" /></div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground font-medium">Total Pró-labore no mês</p>
+                    <p className="text-sm font-bold text-foreground">{fmt(prolaboreTotal)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-blue-200/50 overflow-hidden">
+              <CardContent className="pt-3 pb-3 bg-gradient-to-br from-blue-500/10 to-indigo-500/10">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center"><Users size={16} className="text-blue-600" /></div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground font-medium">Sócios ativos</p>
+                    <p className="text-sm font-bold text-foreground">{prolaborePerSocio.length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-emerald-200/50 overflow-hidden">
+              <CardContent className="pt-3 pb-3 bg-gradient-to-br from-emerald-500/10 to-green-500/10">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center"><Wallet size={16} className="text-emerald-600" /></div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground font-medium">Retiradas no mês</p>
+                    <p className="text-sm font-bold text-foreground">{prolaboreExpenses.length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Cards por sócio */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {prolaborePerSocio.map((s, idx) => (
+              <motion.div key={s.name} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }}>
+                <Card className="border-l-4 border-l-violet-500">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-9 h-9 rounded-full bg-violet-500/15 flex items-center justify-center text-sm font-bold text-violet-700">{s.name.charAt(0).toUpperCase()}</div>
+                        <div>
+                          <p className="font-semibold text-sm">{s.name}</p>
+                          <p className="text-[10px] text-muted-foreground">{s.count} retirada{s.count > 1 ? 's' : ''} no mês</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total mês</p>
+                        <p className="text-lg font-bold text-violet-700">{fmt(s.total)}</p>
+                      </div>
+                    </div>
+                    <div className="border-t pt-2 space-y-1 max-h-40 overflow-y-auto">
+                      {s.entries.sort((a, b) => normalizeDate(b.date).localeCompare(normalizeDate(a.date))).map(e => {
+                        const d = normalizeDate(e.date);
+                        const [y, m, day] = d.split('-');
+                        return (
+                          <div key={e.id} className="flex items-center justify-between text-xs py-1 hover:bg-muted/40 rounded px-2">
+                            <span className="text-muted-foreground">{day}/{m}/{y}</span>
+                            <span className="flex-1 mx-2 truncate">{e.description || '—'}</span>
+                            <span className="font-semibold">{fmt(Number(e.amount))}</span>
+                            <div className="flex gap-0.5 ml-2">
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEdit(e)}><Pencil size={11} /></Button>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDeleteExpense(e.id)}><Trash2 size={11} /></Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+            {prolaborePerSocio.length === 0 && (
+              <Card className="col-span-full">
+                <CardContent className="p-8 text-center text-muted-foreground text-sm">
+                  💼 Nenhuma retirada de pró-labore neste mês. Clique em <strong>+ Nova Despesa</strong>, selecione a categoria <strong>Pró-labore</strong> e informe o nome do sócio no campo Responsável.
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
       </Tabs>
 
       {/* ── Bonus Dialog ── */}

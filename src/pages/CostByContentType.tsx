@@ -541,6 +541,18 @@ export default function CostByContentType() {
       })
       .sort((a, b) => b.price - a.price);
 
+    // === PRÓ-LABORE (sócios) — no período ===
+    const prolaboreInPeriod = prolaboreExpenses.filter(e => inDateRange(e.date, dateRange.start, dateRange.end));
+    const prolaboreTotal = prolaboreInPeriod.reduce((s, e) => s + toNumber(e.amount), 0);
+    const prolaborePerSocioMap = new Map<string, number>();
+    prolaboreInPeriod.forEach(e => {
+      const name = (e.responsible || e.description || 'Sem nome').trim();
+      prolaborePerSocioMap.set(name, (prolaborePerSocioMap.get(name) || 0) + toNumber(e.amount));
+    });
+    const prolaborePerSocio = Array.from(prolaborePerSocioMap.entries())
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total);
+
     return {
       totalSalaries, monthlyTotalSalaries, months,
       videoPool, editorPool, socialPool, copyPool, editorSocialPool, vmPool, vmEditingPool, designerPool,
@@ -565,8 +577,10 @@ export default function CostByContentType() {
       totalPerReels, totalPerCri, totalPerSto, totalPerArte,
       contributorBreakdown,
       planAnalysis,
+      prolaboreTotal,
+      prolaborePerSocio,
     };
-  }, [records, editorTasks, designTasks, socialDeliveries, salaryExpenses, users, selectedClient, dateRange, plans]);
+  }, [records, editorTasks, designTasks, socialDeliveries, salaryExpenses, prolaboreExpenses, users, selectedClient, dateRange, plans]);
 
   const fmt = (n: number) => Number.isFinite(n) && n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00';
   const formatCost = (cost: number, qty: number, pool: number) => {

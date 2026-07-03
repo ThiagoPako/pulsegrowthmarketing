@@ -694,13 +694,39 @@ export default function CostByContentType() {
         <Card>
           <CardContent className="p-4">
             <Calculator size={18} className="text-muted-foreground mb-2" />
-            <p className="text-xl font-bold">{fmt(data.totalSalaries)}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Total no Período</p>
+            <p className="text-xl font-bold">{fmt(data.totalSalaries + (includeProLabore ? data.prolaboreTotal : 0))}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+              Total no Período {includeProLabore && <span className="text-violet-600">(+ pró-labore)</span>}
+            </p>
             <p className="text-[10px] text-muted-foreground mt-1">{data.reels + data.criativos + data.stories + data.artes} conteúdos</p>
           </CardContent>
         </Card>
       </div>
 
+      {/* Detalhamento pró-labore por sócio */}
+      {data.prolaborePerSocio.length > 0 && (
+        <Card className={`border-l-4 ${includeProLabore ? 'border-l-violet-500 bg-violet-500/5' : 'border-l-muted'}`}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div>
+                <p className="text-sm font-semibold flex items-center gap-2">
+                  <DollarSign size={16} className="text-violet-600" /> Pró-labore dos sócios no período
+                </p>
+                <p className="text-xs text-muted-foreground">Fonte: Financeiro → Despesas → Pró-labore. {includeProLabore ? 'Somado ao Total no Período.' : 'Não está sendo somado — clique em "Incluir" acima.'}</p>
+              </div>
+              <p className="text-2xl font-bold text-violet-700">{fmt(data.prolaboreTotal)}</p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {data.prolaborePerSocio.map(s => (
+                <div key={s.name} className="flex items-center justify-between p-2 rounded bg-background border">
+                  <span className="text-xs font-medium truncate">{s.name}</span>
+                  <span className="text-sm font-bold">{fmt(s.total)}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {data.monthlyTotalSalaries === 0 && (
         <Card className="border-amber-500/50 bg-amber-500/5">

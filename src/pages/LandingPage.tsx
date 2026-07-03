@@ -1371,6 +1371,7 @@ function Contato() {
 
 // ─── Footer ─────────────────────────────────────────────────
 function Footer() {
+  const goToTeamArea = useGoToTeamArea();
   return (
     <footer className="py-8 border-t border-border/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
@@ -1380,7 +1381,20 @@ function Footer() {
           </div>
           <span className="font-display font-semibold text-foreground">Pulse Growth Marketing</span>
         </div>
-        <p>© {new Date().getFullYear()} Todos os direitos reservados.</p>
+        <div className="flex items-center gap-4">
+          <p>© {new Date().getFullYear()} Todos os direitos reservados.</p>
+          <button
+            onClick={() => goToTeamArea()}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-primary transition-colors"
+            aria-label="Área da Equipe"
+          >
+            <LogIn size={11} /> Área da Equipe
+          </button>
+        </div>
+      </div>
+    </footer>
+  );
+}
       </div>
     </footer>
   );

@@ -1,28 +1,44 @@
 import { motion } from 'framer-motion';
-import { ArrowRight, Sparkles, Check, ExternalLink, X, Link2, MessageCircle, Tag } from 'lucide-react';
+import { ArrowRight, Sparkles, Check, ExternalLink, X, Link2, MessageCircle, Tag, MapPin } from 'lucide-react';
 const WHATSAPP_NUMBER = '5562985382981';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { PLANS } from '@/data/plans';
+import { getPlansForCity } from '@/data/plans';
+import { useCity, CITY_LABELS, type CityCode } from '@/contexts/CityContext';
 
 const LOGO_URL = '/pulse-logo.png';
 
 export default function Apresentacao() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isPublic = location.pathname.startsWith('/p/');
   const baseRoute = isPublic ? '/p/planos' : '/apresentacao';
 
+  const { activeCity, availableCities, setActiveCity } = useCity();
+  const queryCity = searchParams.get('city') as CityCode | null;
+  const presentationCity: CityCode =
+    (queryCity === 'minacu' || queryCity === 'uruacu') ? queryCity : activeCity;
+
+  const changeCity = (city: CityCode) => {
+    if (isPublic) {
+      setSearchParams({ city });
+    } else {
+      setActiveCity(city);
+    }
+  };
+
   const openPlan = (key: string) => {
-    window.open(`${baseRoute}/${key}`, '_blank', 'noopener,noreferrer');
+    const suffix = isPublic ? `?city=${presentationCity}` : '';
+    window.open(`${baseRoute}/${key}${suffix}`, '_blank', 'noopener,noreferrer');
   };
 
   const copyPublicLink = async (planKey?: string) => {
     const url = planKey
-      ? `${window.location.origin}/p/planos/${planKey}`
-      : `${window.location.origin}/p/planos`;
+      ? `${window.location.origin}/p/planos/${planKey}?city=${presentationCity}`
+      : `${window.location.origin}/p/planos?city=${presentationCity}`;
     try {
       await navigator.clipboard.writeText(url);
       toast.success('Link público copiado!', { description: url });
@@ -31,13 +47,12 @@ export default function Apresentacao() {
     }
   };
 
-  // Ordem: Boost primeiro (foco), depois os outros
-  const ordered = [
-    PLANS.find((p) => p.key === 'starter')!,
-    PLANS.find((p) => p.key === 'boost')!,
-    PLANS.find((p) => p.key === 'premium')!,
-    PLANS.find((p) => p.key === 'elite')!,
-  ];
+  const cityPlans = getPlansForCity(presentationCity);
+  // Ordem: starter, boost, premium, elite
+  const ordered = ['starter', 'boost', 'premium', 'elite']
+    .map((k) => cityPlans.find((p) => p.key === k))
+    .filter(Boolean) as ReturnType<typeof getPlansForCity>;
+
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">

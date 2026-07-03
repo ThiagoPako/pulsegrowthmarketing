@@ -438,9 +438,7 @@ function Hero() {
                 <Play size={16} /> Ver serviços
               </Button>
             </motion.div>
-            <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-              <Button size="lg" variant="ghost" onClick={() => goToTeamArea()} className="gap-2 text-sm sm:text-base px-6 sm:px-8 py-5 sm:py-6 w-full sm:w-auto hover:bg-primary/10 hover:text-primary transition-colors">
-                <LogIn size={16} /> Área da Equipe
+
               </Button>
             </motion.div>
           </motion.div>

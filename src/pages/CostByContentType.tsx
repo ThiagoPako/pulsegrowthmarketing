@@ -225,15 +225,19 @@ export default function CostByContentType() {
     if (dRes.data) setDesignTasks(dRes.data as DesignTask[]);
     if (plRes.data) setPlans(plRes.data as PlanRow[]);
     if (catRes.data && expRes.data) {
+      const cats = catRes.data as ExpenseCategory[];
       const salaryCategoryIds = new Set(
-        (catRes.data as ExpenseCategory[])
-          .filter(category => normalizeText(category.name).includes('salario'))
-          .map(category => category.id)
+        cats.filter(c => normalizeText(c.name).includes('salario')).map(c => c.id)
       );
-      setSalaryExpenses((expRes.data as SalaryExpense[]).filter(expense => (
-        salaryCategoryIds.has(expense.category_id || '')
-        || normalizeText(expense.description).startsWith('salario -')
+      const prolaboreCategoryIds = new Set(
+        cats.filter(c => /pr[oó][- ]?labore/i.test(c.name || '')).map(c => c.id)
+      );
+      const allExp = expRes.data as SalaryExpense[];
+      setSalaryExpenses(allExp.filter(e => (
+        salaryCategoryIds.has(e.category_id || '')
+        || normalizeText(e.description).startsWith('salario -')
       )));
+      setProlaboreExpenses(allExp.filter(e => prolaboreCategoryIds.has(e.category_id || '')));
     }
   }, []);
 

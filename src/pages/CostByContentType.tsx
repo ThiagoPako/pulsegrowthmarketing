@@ -285,8 +285,9 @@ export default function CostByContentType() {
     const artes = Math.max(recArts, dtArts);
 
     // === SALÁRIOS por pool (sem sobreposição) ===
-    const start = new Date(dateRange.start);
-    const end = new Date(dateRange.end);
+    const parseLocal = (s: string) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1); };
+    const start = parseLocal(dateRange.start);
+    const end = parseLocal(dateRange.end);
     const months = Math.max(1, differenceInCalendarMonths(end, start) + 1);
 
     const { salaryByUser, unmatchedTotal: unmatchedSalaryTotal } = buildSalaryByUser(salaryExpenses, users, dateRange.start, dateRange.end, months);

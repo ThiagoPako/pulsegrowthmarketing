@@ -1395,10 +1395,6 @@ function Footer() {
     </footer>
   );
 }
-      </div>
-    </footer>
-  );
-}
 
 // ─── Client Logos Marquee ────────────────────────────────────
 function ClientLogos() {

@@ -324,9 +324,32 @@ export default function FinancialExpenses() {
     allExpenses.filter(e => salaryCategory && e.category_id === salaryCategory.id).reduce((s, e) => s + Number(e.amount), 0)
   , [allExpenses, salaryCategory]);
 
-  const otherTotal = useMemo(() =>
-    allExpenses.filter(e => !salaryCategory || e.category_id !== salaryCategory.id).reduce((s, e) => s + Number(e.amount), 0)
-  , [allExpenses, salaryCategory]);
+  const prolaboreExpenses = useMemo(() =>
+    allExpenses.filter(e => prolaboreCategory && e.category_id === prolaboreCategory.id)
+  , [allExpenses, prolaboreCategory]);
+
+  const prolaboreTotal = useMemo(() =>
+    prolaboreExpenses.reduce((s, e) => s + Number(e.amount), 0)
+  , [prolaboreExpenses]);
+
+  // Agrupa pró-labore por sócio (responsible ou nome extraído da descrição)
+  const prolaborePerSocio = useMemo(() => {
+    const map = new Map<string, { total: number; count: number; entries: Expense[] }>();
+    prolaboreExpenses.forEach(e => {
+      const name = (e.responsible || e.description || 'Sem nome').trim();
+      const cur = map.get(name) || { total: 0, count: 0, entries: [] };
+      cur.total += Number(e.amount);
+      cur.count += 1;
+      cur.entries.push(e);
+      map.set(name, cur);
+    });
+    return Array.from(map.entries()).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.total - a.total);
+  }, [prolaboreExpenses]);
+
+  const otherTotal = useMemo(() => {
+    const excludedIds = new Set([salaryCategory?.id, prolaboreCategory?.id].filter(Boolean));
+    return allExpenses.filter(e => !excludedIds.has(e.category_id || '')).reduce((s, e) => s + Number(e.amount), 0);
+  }, [allExpenses, salaryCategory, prolaboreCategory]);
 
   const handleSave = async (form: any, editingId: string | null) => {
     let success: boolean;

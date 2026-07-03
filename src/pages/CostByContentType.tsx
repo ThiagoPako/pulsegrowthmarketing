@@ -602,7 +602,7 @@ export default function CostByContentType() {
         <Card className="border-l-4" style={{ borderLeftColor: 'hsl(217,91%,60%)' }}>
           <CardContent className="p-4">
             <DollarSign size={18} className="text-blue-600 mb-2" />
-            <p className="text-xl font-bold">{fmt(data.editorPool)}</p>
+            <p className="text-xl font-bold">{fmt(data.editorSocialPool)}</p>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Pool Editor+Social ({data.months} {data.months === 1 ? 'mês' : 'meses'})</p>
             <p className="text-[10px] text-muted-foreground mt-1">Média mensal: {fmt(data.monthlyEditorPool)} · VM no financeiro: {fmt(data.vmPool)}</p>
           </CardContent>

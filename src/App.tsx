@@ -29,6 +29,7 @@ const WhatsAppDashboard = lazy(() => import("@/pages/WhatsAppDashboard"));
 const Plans = lazy(() => import("@/pages/Plans"));
 const DeliveryRecords = lazy(() => import("@/pages/DeliveryRecords"));
 const Reports = lazy(() => import("@/pages/Reports"));
+const ReportsHub = lazy(() => import("@/pages/ReportsHub"));
 const CostByContentType = lazy(() => import("@/pages/CostByContentType"));
 const InternalReports = lazy(() => import("@/pages/InternalReports"));
 const SocialMediaDeliveries = lazy(() => import("@/pages/SocialMediaDeliveries"));
@@ -159,7 +160,8 @@ function AppRoutes() {
         <Route path="/endomarketing/agenda" element={<Navigate to="/endomarketing/tarefas" replace />} />
         <Route path="/planos" element={<ProtectedRoute><Plans /></ProtectedRoute>} />
         <Route path="/entregas" element={<ProtectedRoute><DeliveryRecords /></ProtectedRoute>} />
-        <Route path="/relatorios" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+        <Route path="/relatorios" element={<ProtectedRoute><ReportsHub /></ProtectedRoute>} />
+        <Route path="/relatorios/geral" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
         <Route path="/desempenho" element={<ProtectedRoute><InternalReports /></ProtectedRoute>} />
         <Route path="/relatorios/custo-conteudo" element={<ProtectedRoute><CostByContentType /></ProtectedRoute>} />
         <Route path="/entregas-social" element={<ProtectedRoute><SocialMediaDeliveries /></ProtectedRoute>} />

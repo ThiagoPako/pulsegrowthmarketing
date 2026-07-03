@@ -22,7 +22,7 @@ import LoginLogWidget from '@/components/LoginLogWidget';
 import BirthdayCountdown from '@/components/BirthdayCountdown';
 import BonusCongratsBanner from '@/components/BonusCongratsBanner';
 import ClientLogo from '@/components/ClientLogo';
-import MuralDesabafo from '@/components/MuralDesabafo';
+
 import { getMessageStats } from '@/services/whatsappService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
 import { Badge } from '@/components/ui/badge';
@@ -1296,8 +1296,6 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Mural do Desabafo */}
-        <MuralDesabafo />
       </div>
     </div>
   );

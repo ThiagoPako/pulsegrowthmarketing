@@ -328,9 +328,6 @@ function Navbar() {
                 <Button variant="outline" size="lg" onClick={() => { setOpen(false); navigate('/clube'); }} className="w-full py-6 gap-2">
                   <Gift size={18} /> Clube de Descontos
                 </Button>
-                <Button variant="outline" size="lg" onClick={() => { setOpen(false); goToTeamArea(); }} className="w-full py-6 gap-2">
-                  <LogIn size={18} /> Área da Equipe
-                </Button>
               </motion.div>
             </div>
           </motion.div>

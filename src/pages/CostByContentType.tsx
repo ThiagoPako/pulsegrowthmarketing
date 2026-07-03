@@ -403,13 +403,17 @@ export default function CostByContentType() {
     designCountsByUser.forEach((n, uid) => designerDirect.set(uid, { reels: 0, criativo: 0, story: 0, artes: n }));
 
     const editorShare = distributeByRole(EDITOR_ROLES, { reels: edReels, criativo: edCri, story: edSto, artes: 0 }, editorDirect);
+    const socialShare = distributeByRole(SOCIAL_ROLES, { reels: edReels, criativo: edCri, story: edSto, artes: 0 }, new Map());
+    const copyShare = distributeByRole(COPY_ROLES, { reels: reels, criativo: criativos, story: stories, artes: 0 }, new Map());
     const vmShare = distributeByRole(VIDEOMAKER_ROLES, { reels: vmReels, criativo: vmCri, story: vmSto, artes: 0 }, vmDirect);
     const designerShare = distributeByRole(DESIGNER_ROLES, { reels: 0, criativo: 0, story: 0, artes: dtArts }, designerDirect);
 
     const contributorBreakdown = users
-      .filter(u => [...EDITOR_ROLES, ...VIDEOMAKER_ROLES, ...DESIGNER_ROLES].includes(u.role))
+      .filter(u => [...EDITOR_ROLES, ...SOCIAL_ROLES, ...COPY_ROLES, ...VIDEOMAKER_ROLES, ...DESIGNER_ROLES].includes(u.role))
       .map(u => {
         const src = EDITOR_ROLES.includes(u.role) ? editorShare
+          : SOCIAL_ROLES.includes(u.role) ? socialShare
+          : COPY_ROLES.includes(u.role) ? copyShare
           : VIDEOMAKER_ROLES.includes(u.role) ? vmShare
           : designerShare;
         const s = src.get(u.id) || { reels: 0, criativo: 0, story: 0, artes: 0 };

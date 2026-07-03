@@ -295,10 +295,13 @@ export default function CostByContentType() {
     const { salaryByUser, unmatchedTotal: unmatchedSalaryTotal } = buildSalaryByUser(salaryExpenses, users, dateRange.start, dateRange.end, months);
 
     const editorPool = users
-      .filter(u => u.role === 'editor')
+      .filter(u => EDITOR_ROLES.includes(u.role))
       .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);
     const socialPool = users
-      .filter(u => u.role === 'social_media')
+      .filter(u => SOCIAL_ROLES.includes(u.role))
+      .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);
+    const copyPool = users
+      .filter(u => COPY_ROLES.includes(u.role))
       .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);
     const editorSocialPool = editorPool + socialPool;
     const vmPool = users
@@ -307,13 +310,15 @@ export default function CostByContentType() {
     const designerPool = users
       .filter(u => DESIGNER_ROLES.includes(u.role))
       .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);
-    const monthlyEditorPool = editorSocialPool / months;
+    const monthlyEditorPool = editorPool / months;
+    const monthlySocialPool = socialPool / months;
+    const monthlyCopyPool = copyPool / months;
     const monthlyVmPool = vmPool / months;
     const monthlyDesignerPool = designerPool / months;
-    const monthlyVideoPool = monthlyEditorPool + monthlyVmPool;
+    const monthlyVideoPool = monthlyEditorPool + monthlySocialPool + monthlyVmPool;
     const videoPool = editorSocialPool + vmPool;
-    const monthlyTotalSalaries = monthlyVideoPool + monthlyDesignerPool;
-    const totalSalaries = videoPool + designerPool;
+    const monthlyTotalSalaries = monthlyVideoPool + monthlyDesignerPool + monthlyCopyPool;
+    const totalSalaries = videoPool + designerPool + copyPool;
 
     // Mapa userId -> role para classificar quem editou cada card
     const roleOf = new Map(users.map(u => [u.id, u.role]));

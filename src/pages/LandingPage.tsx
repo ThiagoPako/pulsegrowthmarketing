@@ -438,9 +438,6 @@ function Hero() {
                 <Play size={16} /> Ver serviços
               </Button>
             </motion.div>
-
-              </Button>
-            </motion.div>
           </motion.div>
 
           {/* Animated Counters */}

@@ -303,14 +303,18 @@ export default function CostByContentType() {
     // Pró-labore só vai para sócios (role = 'admin'). Não deve ser somado a colaboradores de produção
     // mesmo que compartilhem o primeiro nome (ex.: Victor sócio ≠ Victor Videomaker).
     if (includeProLabore) {
-      const socioAliases = users
-        .filter(u => u.role === 'admin')
-        .flatMap(u => [
-          { userId: u.id, key: normalizePersonKey(u.displayName) },
-          { userId: u.id, key: normalizePersonKey(u.name) },
-          { userId: u.id, key: normalizePersonKey(u.email?.split('@')[0]) },
-        ])
-        .filter(a => a.key.length >= 3);
+      // Aliases completos + primeiro nome (só entre admins — assim "Victor" bate no Victor Gabriel
+      // sem risco de colidir com Victor Videomaker ou Victor Oliveira Editor).
+      const admins = users.filter(u => u.role === 'admin');
+      const socioAliases = admins.flatMap(u => {
+        const full = [u.displayName, u.name, u.email?.split('@')[0]]
+          .map(normalizePersonKey)
+          .filter(k => k.length >= 3);
+        const firstNames = [u.displayName, u.name]
+          .map(v => normalizePersonKey((v || '').split(/\s+/)[0]))
+          .filter(k => k.length >= 3);
+        return [...full, ...firstNames].map(key => ({ userId: u.id, key }));
+      });
       prolaboreExpenses
         .filter(e => inDateRange(e.date, dateRange.start, dateRange.end))
         .forEach(e => {
@@ -318,7 +322,9 @@ export default function CostByContentType() {
           if (amount <= 0) return;
           const keys = [normalizePersonKey(e.responsible), normalizePersonKey(extractSalaryPersonName(e))].filter(Boolean);
           const descKey = normalizePersonKey(e.description);
-          const match = socioAliases.find(a => keys.includes(a.key)) || socioAliases.find(a => a.key.length >= 4 && descKey.includes(a.key));
+          const match = socioAliases.find(a => keys.includes(a.key))
+            || socioAliases.find(a => a.key.length >= 4 && descKey.includes(a.key))
+            || socioAliases.find(a => keys.some(k => k.startsWith(a.key + ' ') || k === a.key));
           if (match) salaryByUser.set(match.userId, (salaryByUser.get(match.userId) || 0) + amount);
         });
     }

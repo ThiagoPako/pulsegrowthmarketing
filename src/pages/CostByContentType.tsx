@@ -60,7 +60,9 @@ interface ExpenseCategory {
   name: string | null;
 }
 
-const EDITOR_ROLES = ['editor', 'social_media'];
+const EDITOR_ROLES = ['editor'];
+const SOCIAL_ROLES = ['social_media'];
+const COPY_ROLES = ['copywriter'];
 const VIDEOMAKER_ROLES = ['videomaker'];
 const DESIGNER_ROLES = ['designer'];
 const VIDEO_EFFORT = { reels: 1, criativo: 0.5, story: 0.2 } as const;
@@ -293,10 +295,13 @@ export default function CostByContentType() {
     const { salaryByUser, unmatchedTotal: unmatchedSalaryTotal } = buildSalaryByUser(salaryExpenses, users, dateRange.start, dateRange.end, months);
 
     const editorPool = users
-      .filter(u => u.role === 'editor')
+      .filter(u => EDITOR_ROLES.includes(u.role))
       .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);
     const socialPool = users
-      .filter(u => u.role === 'social_media')
+      .filter(u => SOCIAL_ROLES.includes(u.role))
+      .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);
+    const copyPool = users
+      .filter(u => COPY_ROLES.includes(u.role))
       .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);
     const editorSocialPool = editorPool + socialPool;
     const vmPool = users
@@ -305,13 +310,15 @@ export default function CostByContentType() {
     const designerPool = users
       .filter(u => DESIGNER_ROLES.includes(u.role))
       .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);
-    const monthlyEditorPool = editorSocialPool / months;
+    const monthlyEditorPool = editorPool / months;
+    const monthlySocialPool = socialPool / months;
+    const monthlyCopyPool = copyPool / months;
     const monthlyVmPool = vmPool / months;
     const monthlyDesignerPool = designerPool / months;
-    const monthlyVideoPool = monthlyEditorPool + monthlyVmPool;
+    const monthlyVideoPool = monthlyEditorPool + monthlySocialPool + monthlyVmPool;
     const videoPool = editorSocialPool + vmPool;
-    const monthlyTotalSalaries = monthlyVideoPool + monthlyDesignerPool;
-    const totalSalaries = videoPool + designerPool;
+    const monthlyTotalSalaries = monthlyVideoPool + monthlyDesignerPool + monthlyCopyPool;
+    const totalSalaries = videoPool + designerPool + copyPool;
 
     // Mapa userId -> role para classificar quem editou cada card
     const roleOf = new Map(users.map(u => [u.id, u.role]));
@@ -396,13 +403,17 @@ export default function CostByContentType() {
     designCountsByUser.forEach((n, uid) => designerDirect.set(uid, { reels: 0, criativo: 0, story: 0, artes: n }));
 
     const editorShare = distributeByRole(EDITOR_ROLES, { reels: edReels, criativo: edCri, story: edSto, artes: 0 }, editorDirect);
+    const socialShare = distributeByRole(SOCIAL_ROLES, { reels: edReels, criativo: edCri, story: edSto, artes: 0 }, new Map());
+    const copyShare = distributeByRole(COPY_ROLES, { reels: edReels + vmReels, criativo: edCri + vmCri, story: edSto + vmSto, artes: 0 }, new Map());
     const vmShare = distributeByRole(VIDEOMAKER_ROLES, { reels: vmReels, criativo: vmCri, story: vmSto, artes: 0 }, vmDirect);
     const designerShare = distributeByRole(DESIGNER_ROLES, { reels: 0, criativo: 0, story: 0, artes: dtArts }, designerDirect);
 
     const contributorBreakdown = users
-      .filter(u => [...EDITOR_ROLES, ...VIDEOMAKER_ROLES, ...DESIGNER_ROLES].includes(u.role))
+      .filter(u => [...EDITOR_ROLES, ...SOCIAL_ROLES, ...COPY_ROLES, ...VIDEOMAKER_ROLES, ...DESIGNER_ROLES].includes(u.role))
       .map(u => {
         const src = EDITOR_ROLES.includes(u.role) ? editorShare
+          : SOCIAL_ROLES.includes(u.role) ? socialShare
+          : COPY_ROLES.includes(u.role) ? copyShare
           : VIDEOMAKER_ROLES.includes(u.role) ? vmShare
           : designerShare;
         const s = src.get(u.id) || { reels: 0, criativo: 0, story: 0, artes: 0 };
@@ -484,9 +495,17 @@ export default function CostByContentType() {
     const vmPerSto = stories > 0 ? vmFullSto / stories : 0;
     const designerPerArte = artes > 0 ? designerPool / artes : 0;
 
-    const totalPerReels = editorPerReels + socialPerReels + vmPerReels;
-    const totalPerCri = editorPerCri + socialPerCri + vmPerCri;
-    const totalPerSto = editorPerSto + socialPerSto + vmPerSto;
+    // Copywriting rateado por esforço no total produzido
+    const copyReelsSal = wTotal > 0 ? (copyPool * wReels) / wTotal : 0;
+    const copyCriSal = wTotal > 0 ? (copyPool * wCri) / wTotal : 0;
+    const copyStoSal = wTotal > 0 ? (copyPool * wSto) / wTotal : 0;
+    const copyPerReels = reels > 0 ? copyReelsSal / reels : 0;
+    const copyPerCri = criativos > 0 ? copyCriSal / criativos : 0;
+    const copyPerSto = stories > 0 ? copyStoSal / stories : 0;
+
+    const totalPerReels = editorPerReels + socialPerReels + vmPerReels + copyPerReels;
+    const totalPerCri = editorPerCri + socialPerCri + vmPerCri + copyPerCri;
+    const totalPerSto = editorPerSto + socialPerSto + vmPerSto + copyPerSto;
     const totalPerArte = designerPerArte;
 
     // === ANÁLISE POR PACOTE ===
@@ -518,8 +537,8 @@ export default function CostByContentType() {
 
     return {
       totalSalaries, monthlyTotalSalaries, months,
-      videoPool, editorPool, socialPool, editorSocialPool, vmPool, vmEditingPool, designerPool,
-      monthlyVideoPool, monthlyEditorPool, monthlyVmPool, monthlyDesignerPool,
+      videoPool, editorPool, socialPool, copyPool, editorSocialPool, vmPool, vmEditingPool, designerPool,
+      monthlyVideoPool, monthlyEditorPool, monthlySocialPool, monthlyCopyPool, monthlyVmPool, monthlyDesignerPool,
       unmatchedSalaryTotal,
       reels, criativos, stories, artes,
       cReels: reels > 0 ? netReels / reels : 0,
@@ -534,6 +553,7 @@ export default function CostByContentType() {
       cVmSto: vmSto > 0 ? salVmSto / vmSto : 0,
       editorPerReels, editorPerCri, editorPerSto,
       socialPerReels, socialPerCri, socialPerSto,
+      copyPerReels, copyPerCri, copyPerSto,
       vmPerReels, vmPerCri, vmPerSto,
       designerPerArte,
       totalPerReels, totalPerCri, totalPerSto, totalPerArte,
@@ -598,35 +618,53 @@ export default function CostByContentType() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <Card className="border-l-4" style={{ borderLeftColor: 'hsl(142,71%,45%)' }}>
+          <CardContent className="p-4">
+            <DollarSign size={18} className="text-emerald-600 mb-2" />
+            <p className="text-xl font-bold">{fmt(data.editorPool)}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Time Editor ({data.months} {data.months === 1 ? 'mês' : 'meses'})</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Mensal: {fmt(data.monthlyEditorPool)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4" style={{ borderLeftColor: 'hsl(45,93%,47%)' }}>
+          <CardContent className="p-4">
+            <DollarSign size={18} className="text-amber-600 mb-2" />
+            <p className="text-xl font-bold">{fmt(data.socialPool)}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Time Social Media ({data.months} {data.months === 1 ? 'mês' : 'meses'})</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Mensal: {fmt(data.monthlySocialPool)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4" style={{ borderLeftColor: 'hsl(174,72%,40%)' }}>
+          <CardContent className="p-4">
+            <DollarSign size={18} className="text-teal-600 mb-2" />
+            <p className="text-xl font-bold">{fmt(data.copyPool)}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Time Copywriting ({data.months} {data.months === 1 ? 'mês' : 'meses'})</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Mensal: {fmt(data.monthlyCopyPool)}</p>
+          </CardContent>
+        </Card>
         <Card className="border-l-4" style={{ borderLeftColor: 'hsl(217,91%,60%)' }}>
           <CardContent className="p-4">
             <DollarSign size={18} className="text-blue-600 mb-2" />
-            <p className="text-xl font-bold">{fmt(data.editorSocialPool)}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Pool Editor+Social ({data.months} {data.months === 1 ? 'mês' : 'meses'})</p>
-            <p className="text-[10px] text-muted-foreground mt-1">Média mensal: {fmt(data.monthlyEditorPool)} · VM no financeiro: {fmt(data.vmPool)}</p>
+            <p className="text-xl font-bold">{fmt(data.vmPool)}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Time Videomaker ({data.months} {data.months === 1 ? 'mês' : 'meses'})</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Mensal: {fmt(data.monthlyVmPool)}</p>
           </CardContent>
         </Card>
         <Card className="border-l-4" style={{ borderLeftColor: 'hsl(24,95%,53%)' }}>
           <CardContent className="p-4">
             <DollarSign size={18} className="text-orange-600 mb-2" />
             <p className="text-xl font-bold">{fmt(data.designerPool)}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Pool Designer ({data.months} {data.months === 1 ? 'mês' : 'meses'})</p>
-            <p className="text-[10px] text-muted-foreground mt-1">Folha mensal: {fmt(data.monthlyDesignerPool)}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Time Designer ({data.months} {data.months === 1 ? 'mês' : 'meses'})</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Mensal: {fmt(data.monthlyDesignerPool)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <DollarSign size={18} className="text-muted-foreground mb-2" />
+            <Calculator size={18} className="text-muted-foreground mb-2" />
             <p className="text-xl font-bold">{fmt(data.totalSalaries)}</p>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Total no Período</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <Calculator size={18} className="text-amber-600 mb-2" />
-            <p className="text-xl font-bold">{data.reels + data.criativos + data.stories + data.artes}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Conteúdos Produzidos</p>
+            <p className="text-[10px] text-muted-foreground mt-1">{data.reels + data.criativos + data.stories + data.artes} conteúdos</p>
           </CardContent>
         </Card>
       </div>
@@ -754,22 +792,24 @@ export default function CostByContentType() {
                   <th className="text-right px-3 py-2">Videomaker (captação)</th>
                   <th className="text-right px-3 py-2">Editor (edição)</th>
                   <th className="text-right px-3 py-2">Social Media</th>
+                  <th className="text-right px-3 py-2">Copywriting</th>
                   <th className="text-right px-3 py-2">Designer</th>
                   <th className="text-right px-3 py-2 bg-primary/10">Custo total por unidade</th>
                 </tr>
               </thead>
               <tbody>
                 {[
-                  { label: '1 Reels', vm: data.vmPerReels, ed: data.editorPerReels, sc: data.socialPerReels, ds: 0, total: data.totalPerReels },
-                  { label: '1 Criativo', vm: data.vmPerCri, ed: data.editorPerCri, sc: data.socialPerCri, ds: 0, total: data.totalPerCri },
-                  { label: '1 Story', vm: data.vmPerSto, ed: data.editorPerSto, sc: data.socialPerSto, ds: 0, total: data.totalPerSto },
-                  { label: '1 Arte', vm: 0, ed: 0, sc: 0, ds: data.designerPerArte, total: data.totalPerArte },
+                  { label: '1 Reels', vm: data.vmPerReels, ed: data.editorPerReels, sc: data.socialPerReels, cp: data.copyPerReels, ds: 0, total: data.totalPerReels },
+                  { label: '1 Criativo', vm: data.vmPerCri, ed: data.editorPerCri, sc: data.socialPerCri, cp: data.copyPerCri, ds: 0, total: data.totalPerCri },
+                  { label: '1 Story', vm: data.vmPerSto, ed: data.editorPerSto, sc: data.socialPerSto, cp: data.copyPerSto, ds: 0, total: data.totalPerSto },
+                  { label: '1 Arte', vm: 0, ed: 0, sc: 0, cp: 0, ds: data.designerPerArte, total: data.totalPerArte },
                 ].map((r, i) => (
                   <tr key={i} className="border-t border-border/50">
                     <td className="px-3 py-2 font-medium">{r.label}</td>
                     <td className="px-3 py-2 text-right">{r.vm > 0 ? fmt(r.vm) : '—'}</td>
                     <td className="px-3 py-2 text-right">{r.ed > 0 ? fmt(r.ed) : '—'}</td>
                     <td className="px-3 py-2 text-right">{r.sc > 0 ? fmt(r.sc) : '—'}</td>
+                    <td className="px-3 py-2 text-right">{r.cp > 0 ? fmt(r.cp) : '—'}</td>
                     <td className="px-3 py-2 text-right">{r.ds > 0 ? fmt(r.ds) : '—'}</td>
                     <td className="px-3 py-2 text-right font-bold bg-primary/5">{r.total > 0 ? fmt(r.total) : '—'}</td>
                   </tr>

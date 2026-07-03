@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'videomaker' | 'social_media' | 'editor' | 'endomarketing' | 'parceiro' | 'fotografo' | 'designer';
+export type UserRole = 'admin' | 'videomaker' | 'social_media' | 'editor' | 'endomarketing' | 'parceiro' | 'fotografo' | 'designer' | 'copywriter';
 
 export interface User {
   id: string;
@@ -190,6 +190,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   parceiro: 'Parceiro',
   fotografo: 'Fotografia',
   designer: 'Designer',
+  copywriter: 'Copywriter',
 };
 
 export const COLUMN_LABELS: Record<KanbanColumn, string> = {

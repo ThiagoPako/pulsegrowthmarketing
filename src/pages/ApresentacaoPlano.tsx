@@ -83,8 +83,11 @@ export default function ApresentacaoPlano() {
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
   const { activeCity } = useCity();
+  const [searchParams] = useSearchParams();
+  const queryCity = searchParams.get('city');
+  const effectiveCity = (queryCity === 'minacu' || queryCity === 'uruacu') ? queryCity : activeCity;
 
-  const plan = plano ? getPlan(plano) : undefined;
+  const plan = plano ? getPlan(plano, effectiveCity) : undefined;
 
   useEffect(() => { setStage(0); }, [plano]);
 

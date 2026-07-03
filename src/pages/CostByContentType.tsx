@@ -758,10 +758,27 @@ export default function CostByContentType() {
                 {data.contributorBreakdown.length === 0 && (
                   <tr><td colSpan={8} className="text-center text-muted-foreground py-6">Sem colaboradores com salário ou cards no período.</td></tr>
                 )}
-                {data.contributorBreakdown.map(c => (
-                  <tr key={c.id} className="border-t border-border/50">
+                {data.contributorBreakdown.map(c => {
+                  const roleColor: Record<string, string> = {
+                    videomaker: 'bg-blue-500/5 hover:bg-blue-500/10 border-l-4 border-l-blue-500',
+                    editor: 'bg-purple-500/5 hover:bg-purple-500/10 border-l-4 border-l-purple-500',
+                    social_media: 'bg-pink-500/5 hover:bg-pink-500/10 border-l-4 border-l-pink-500',
+                    copywriter: 'bg-amber-500/5 hover:bg-amber-500/10 border-l-4 border-l-amber-500',
+                    designer: 'bg-emerald-500/5 hover:bg-emerald-500/10 border-l-4 border-l-emerald-500',
+                  };
+                  const roleBadge: Record<string, string> = {
+                    videomaker: 'bg-blue-500/15 text-blue-700 dark:text-blue-300',
+                    editor: 'bg-purple-500/15 text-purple-700 dark:text-purple-300',
+                    social_media: 'bg-pink-500/15 text-pink-700 dark:text-pink-300',
+                    copywriter: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+                    designer: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+                  };
+                  return (
+                  <tr key={c.id} className={`border-t border-border/50 transition-colors ${roleColor[c.role] || ''}`}>
                     <td className="px-3 py-2 font-medium">{c.name}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{c.role}</td>
+                    <td className="px-3 py-2">
+                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${roleBadge[c.role] || 'bg-muted text-muted-foreground'}`}>{c.role}</span>
+                    </td>
                     <td className="px-3 py-2 text-right">{fmt(c.salary)}</td>
                     <td className="px-3 py-2 text-right">{c.reels.toFixed(1)}</td>
                     <td className="px-3 py-2 text-right">{c.criativo.toFixed(1)}</td>
@@ -769,7 +786,8 @@ export default function CostByContentType() {
                     <td className="px-3 py-2 text-right">{c.artes.toFixed(1)}</td>
                     <td className="px-3 py-2 text-right font-semibold">{c.cards.toFixed(1)}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </CardContent>

@@ -752,22 +752,24 @@ export default function CostByContentType() {
                 <tr>
                   <th className="text-left px-3 py-2">Conteúdo</th>
                   <th className="text-right px-3 py-2">Videomaker (captação)</th>
-                  <th className="text-right px-3 py-2">Editor / Social (edição)</th>
+                  <th className="text-right px-3 py-2">Editor (edição)</th>
+                  <th className="text-right px-3 py-2">Social Media</th>
                   <th className="text-right px-3 py-2">Designer</th>
                   <th className="text-right px-3 py-2 bg-primary/10">Custo total por unidade</th>
                 </tr>
               </thead>
               <tbody>
                 {[
-                  { label: '1 Reels', vm: data.vmPerReels, ed: data.editorPerReels, ds: 0, total: data.totalPerReels },
-                  { label: '1 Criativo', vm: data.vmPerCri, ed: data.editorPerCri, ds: 0, total: data.totalPerCri },
-                  { label: '1 Story', vm: data.vmPerSto, ed: data.editorPerSto, ds: 0, total: data.totalPerSto },
-                  { label: '1 Arte', vm: 0, ed: 0, ds: data.designerPerArte, total: data.totalPerArte },
+                  { label: '1 Reels', vm: data.vmPerReels, ed: data.editorPerReels, sc: data.socialPerReels, ds: 0, total: data.totalPerReels },
+                  { label: '1 Criativo', vm: data.vmPerCri, ed: data.editorPerCri, sc: data.socialPerCri, ds: 0, total: data.totalPerCri },
+                  { label: '1 Story', vm: data.vmPerSto, ed: data.editorPerSto, sc: data.socialPerSto, ds: 0, total: data.totalPerSto },
+                  { label: '1 Arte', vm: 0, ed: 0, sc: 0, ds: data.designerPerArte, total: data.totalPerArte },
                 ].map((r, i) => (
                   <tr key={i} className="border-t border-border/50">
                     <td className="px-3 py-2 font-medium">{r.label}</td>
                     <td className="px-3 py-2 text-right">{r.vm > 0 ? fmt(r.vm) : '—'}</td>
                     <td className="px-3 py-2 text-right">{r.ed > 0 ? fmt(r.ed) : '—'}</td>
+                    <td className="px-3 py-2 text-right">{r.sc > 0 ? fmt(r.sc) : '—'}</td>
                     <td className="px-3 py-2 text-right">{r.ds > 0 ? fmt(r.ds) : '—'}</td>
                     <td className="px-3 py-2 text-right font-bold bg-primary/5">{r.total > 0 ? fmt(r.total) : '—'}</td>
                   </tr>

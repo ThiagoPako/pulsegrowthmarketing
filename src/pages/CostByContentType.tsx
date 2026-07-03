@@ -317,10 +317,10 @@ export default function CostByContentType() {
     });
 
     // Breakdown por colaborador — quando o card não tem assigned_to (comum),
-    // rateamos o total real da função entre os colaboradores dela, proporcional ao salário.
+    // rateamos o total real da função igualmente entre os colaboradores dela.
+    // Rateio igualitário (não proporcional ao salário) mantém o custo/card distinto por pessoa.
     const distributeByRole = (roles: string[], totals: { reels: number; criativo: number; story: number; artes: number }, directCounts: Map<string, { reels: number; criativo: number; story: number; artes: number }>) => {
       const roleUsers = users.filter(u => roles.includes(u.role));
-      const totalSalary = roleUsers.reduce((s, u) => s + (salaryByUser.get(u.id) || 0), 0);
       const share = new Map<string, { reels: number; criativo: number; story: number; artes: number }>();
       const claimed = { reels: 0, criativo: 0, story: 0, artes: 0 };
       directCounts.forEach((c, uid) => {
@@ -333,13 +333,13 @@ export default function CostByContentType() {
         story: Math.max(0, totals.story - claimed.story),
         artes: Math.max(0, totals.artes - claimed.artes),
       };
+      const n = Math.max(1, roleUsers.length);
       roleUsers.forEach(u => {
-        const w = totalSalary > 0 ? (salaryByUser.get(u.id) || 0) / totalSalary : 1 / Math.max(1, roleUsers.length);
         const cur = share.get(u.id) || { reels: 0, criativo: 0, story: 0, artes: 0 };
-        cur.reels += remaining.reels * w;
-        cur.criativo += remaining.criativo * w;
-        cur.story += remaining.story * w;
-        cur.artes += remaining.artes * w;
+        cur.reels += remaining.reels / n;
+        cur.criativo += remaining.criativo / n;
+        cur.story += remaining.story / n;
+        cur.artes += remaining.artes / n;
         share.set(u.id, cur);
       });
       return share;

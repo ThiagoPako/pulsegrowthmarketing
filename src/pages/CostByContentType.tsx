@@ -157,6 +157,18 @@ const countDesignAttachments = (task: DesignTask): number => {
   return urls.length + singleAttachment + mockup;
 };
 
+interface PlanRow {
+  id: string;
+  name: string | null;
+  price: number | string | null;
+  reels_qty: number | string | null;
+  creatives_qty: number | string | null;
+  stories_qty: number | string | null;
+  arts_qty: number | string | null;
+  recording_sessions?: number | string | null;
+  active?: boolean | null;
+}
+
 export default function CostByContentType() {
   const { clients, users } = useApp();
   const [records, setRecords] = useState<DeliveryRecord[]>([]);
@@ -164,24 +176,27 @@ export default function CostByContentType() {
   const [designTasks, setDesignTasks] = useState<DesignTask[]>([]);
   const [socialDeliveries, setSocialDeliveries] = useState<SocialDelivery[]>([]);
   const [salaryExpenses, setSalaryExpenses] = useState<SalaryExpense[]>([]);
+  const [plans, setPlans] = useState<PlanRow[]>([]);
   const [selectedClient, setSelectedClient] = useState('all');
   const [periodType, setPeriodType] = useState<'current' | 'previous' | 'custom'>('current');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
 
   const fetchData = useCallback(async () => {
-    const [rRes, sRes, edRes, dRes, catRes, expRes] = await Promise.all([
+    const [rRes, sRes, edRes, dRes, catRes, expRes, plRes] = await Promise.all([
       supabase.from('delivery_records').select('client_id,date,reels_produced,creatives_produced,stories_produced,arts_produced,delivery_status'),
       supabase.from('social_media_deliveries').select('client_id,content_type,delivered_at,posted_at,created_at,updated_at,status'),
       supabase.from('content_tasks').select('client_id,content_type,kanban_column,approved_at,updated_at,created_at,assigned_to'),
       supabase.from('design_tasks').select('client_id,kanban_column,completed_at,updated_at,created_at,attachment_url,attachment_urls,editable_file_url,mockup_url'),
       supabase.from('expense_categories').select('id,name'),
       supabase.from('expenses').select('date,amount,description,responsible,category_id,expense_type'),
+      supabase.from('plans').select('id,name,price,reels_qty,creatives_qty,stories_qty,arts_qty,recording_sessions,active'),
     ]);
     if (rRes.data) setRecords(rRes.data as DeliveryRecord[]);
     if (sRes.data) setSocialDeliveries(sRes.data as SocialDelivery[]);
     if (edRes.data) setEditorTasks(edRes.data as EditorTask[]);
     if (dRes.data) setDesignTasks(dRes.data as DesignTask[]);
+    if (plRes.data) setPlans(plRes.data as PlanRow[]);
     if (catRes.data && expRes.data) {
       const salaryCategoryIds = new Set(
         (catRes.data as ExpenseCategory[])
@@ -416,6 +431,52 @@ export default function CostByContentType() {
     const netSto = salSto + salVmSto;
     const netArt = salArt;
 
+    // === CUSTO UNITÁRIO POR FUNÇÃO (para análise de pacotes) ===
+    // VM inteiro rateado por esforço no total produzido
+    const vmFullReels = wTotal > 0 ? (vmPool * wReels) / wTotal : 0;
+    const vmFullCri = wTotal > 0 ? (vmPool * wCri) / wTotal : 0;
+    const vmFullSto = wTotal > 0 ? (vmPool * wSto) / wTotal : 0;
+
+    const editorPerReels = reels > 0 ? salReels / reels : 0;
+    const editorPerCri = criativos > 0 ? salCri / criativos : 0;
+    const editorPerSto = stories > 0 ? salSto / stories : 0;
+    const vmPerReels = reels > 0 ? vmFullReels / reels : 0;
+    const vmPerCri = criativos > 0 ? vmFullCri / criativos : 0;
+    const vmPerSto = stories > 0 ? vmFullSto / stories : 0;
+    const designerPerArte = artes > 0 ? designerPool / artes : 0;
+
+    const totalPerReels = editorPerReels + vmPerReels;
+    const totalPerCri = editorPerCri + vmPerCri;
+    const totalPerSto = editorPerSto + vmPerSto;
+    const totalPerArte = designerPerArte;
+
+    // === ANÁLISE POR PACOTE ===
+    const planAnalysis = plans
+      .filter(p => p.active !== false)
+      .map(p => {
+        const qReels = toNumber(p.reels_qty);
+        const qCri = toNumber(p.creatives_qty);
+        const qSto = toNumber(p.stories_qty);
+        const qArt = toNumber(p.arts_qty);
+        const price = toNumber(p.price);
+        const costReels = qReels * totalPerReels;
+        const costCri = qCri * totalPerCri;
+        const costSto = qSto * totalPerSto;
+        const costArt = qArt * totalPerArte;
+        const cost = costReels + costCri + costSto + costArt;
+        const margin = price - cost;
+        const marginPct = price > 0 ? (margin / price) * 100 : 0;
+        return {
+          id: p.id,
+          name: p.name || 'Sem nome',
+          price,
+          qReels, qCri, qSto, qArt,
+          costReels, costCri, costSto, costArt,
+          cost, margin, marginPct,
+        };
+      })
+      .sort((a, b) => b.price - a.price);
+
     return {
       totalSalaries, monthlyTotalSalaries, months,
       videoPool, editorPool, vmPool, vmEditingPool, designerPool,
@@ -432,11 +493,14 @@ export default function CostByContentType() {
       cVmReels: vmReels > 0 ? salVmReels / vmReels : 0,
       cVmCri: vmCri > 0 ? salVmCri / vmCri : 0,
       cVmSto: vmSto > 0 ? salVmSto / vmSto : 0,
+      editorPerReels, editorPerCri, editorPerSto,
+      vmPerReels, vmPerCri, vmPerSto,
+      designerPerArte,
+      totalPerReels, totalPerCri, totalPerSto, totalPerArte,
       contributorBreakdown,
+      planAnalysis,
     };
-
-
-  }, [records, editorTasks, designTasks, socialDeliveries, salaryExpenses, users, selectedClient, dateRange]);
+  }, [records, editorTasks, designTasks, socialDeliveries, salaryExpenses, users, selectedClient, dateRange, plans]);
 
   const fmt = (n: number) => Number.isFinite(n) && n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00';
   const formatCost = (cost: number, qty: number, pool: number) => {
@@ -610,12 +674,11 @@ export default function CostByContentType() {
                   <th className="text-right px-3 py-2">Stories</th>
                   <th className="text-right px-3 py-2">Artes</th>
                   <th className="text-right px-3 py-2">Total cards</th>
-                  <th className="text-right px-3 py-2">Custo médio/card</th>
                 </tr>
               </thead>
               <tbody>
                 {data.contributorBreakdown.length === 0 && (
-                  <tr><td colSpan={9} className="text-center text-muted-foreground py-6">Sem colaboradores com salário ou cards no período.</td></tr>
+                  <tr><td colSpan={8} className="text-center text-muted-foreground py-6">Sem colaboradores com salário ou cards no período.</td></tr>
                 )}
                 {data.contributorBreakdown.map(c => (
                   <tr key={c.id} className="border-t border-border/50">
@@ -627,7 +690,92 @@ export default function CostByContentType() {
                     <td className="px-3 py-2 text-right">{c.story.toFixed(1)}</td>
                     <td className="px-3 py-2 text-right">{c.artes.toFixed(1)}</td>
                     <td className="px-3 py-2 text-right font-semibold">{c.cards.toFixed(1)}</td>
-                    <td className="px-3 py-2 text-right">{c.cards > 0 && c.salary > 0 ? fmt(c.avgCost) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div>
+        <h2 className="text-lg font-semibold flex items-center gap-2 mt-6">
+          <DollarSign size={18} className="text-blue-600" /> Custo unitário por função
+        </h2>
+        <p className="text-xs text-muted-foreground mb-3">
+          Quanto a empresa paga por cada entrega, separado por função. Base: salário total do período dividido pelo total produzido, distribuído por esforço (Reels 1.0 · Criativo 0.5 · Story 0.2).
+        </p>
+        <Card>
+          <CardContent className="p-0 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="text-left px-3 py-2">Conteúdo</th>
+                  <th className="text-right px-3 py-2">Videomaker (captação)</th>
+                  <th className="text-right px-3 py-2">Editor / Social (edição)</th>
+                  <th className="text-right px-3 py-2">Designer</th>
+                  <th className="text-right px-3 py-2 bg-primary/10">Custo total por unidade</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { label: '1 Reels', vm: data.vmPerReels, ed: data.editorPerReels, ds: 0, total: data.totalPerReels },
+                  { label: '1 Criativo', vm: data.vmPerCri, ed: data.editorPerCri, ds: 0, total: data.totalPerCri },
+                  { label: '1 Story', vm: data.vmPerSto, ed: data.editorPerSto, ds: 0, total: data.totalPerSto },
+                  { label: '1 Arte', vm: 0, ed: 0, ds: data.designerPerArte, total: data.totalPerArte },
+                ].map((r, i) => (
+                  <tr key={i} className="border-t border-border/50">
+                    <td className="px-3 py-2 font-medium">{r.label}</td>
+                    <td className="px-3 py-2 text-right">{r.vm > 0 ? fmt(r.vm) : '—'}</td>
+                    <td className="px-3 py-2 text-right">{r.ed > 0 ? fmt(r.ed) : '—'}</td>
+                    <td className="px-3 py-2 text-right">{r.ds > 0 ? fmt(r.ds) : '—'}</td>
+                    <td className="px-3 py-2 text-right font-bold bg-primary/5">{r.total > 0 ? fmt(r.total) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div>
+        <h2 className="text-lg font-semibold flex items-center gap-2 mt-6">
+          <Calculator size={18} className="text-emerald-600" /> Análise por Pacote (custo × margem)
+        </h2>
+        <p className="text-xs text-muted-foreground mb-3">
+          Para cada plano ativo: custo estimado de produção (quantidades do plano × custo unitário total) versus preço de venda. Margem = preço − custo.
+        </p>
+        <Card>
+          <CardContent className="p-0 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="text-left px-3 py-2">Pacote</th>
+                  <th className="text-right px-3 py-2">Reels</th>
+                  <th className="text-right px-3 py-2">Criat.</th>
+                  <th className="text-right px-3 py-2">Stories</th>
+                  <th className="text-right px-3 py-2">Artes</th>
+                  <th className="text-right px-3 py-2">Preço</th>
+                  <th className="text-right px-3 py-2">Custo produção</th>
+                  <th className="text-right px-3 py-2">Margem R$</th>
+                  <th className="text-right px-3 py-2">Margem %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.planAnalysis.length === 0 && (
+                  <tr><td colSpan={9} className="text-center text-muted-foreground py-6">Nenhum plano ativo cadastrado.</td></tr>
+                )}
+                {data.planAnalysis.map(p => (
+                  <tr key={p.id} className="border-t border-border/50">
+                    <td className="px-3 py-2 font-medium">{p.name}</td>
+                    <td className="px-3 py-2 text-right">{p.qReels}</td>
+                    <td className="px-3 py-2 text-right">{p.qCri}</td>
+                    <td className="px-3 py-2 text-right">{p.qSto}</td>
+                    <td className="px-3 py-2 text-right">{p.qArt}</td>
+                    <td className="px-3 py-2 text-right">{fmt(p.price)}</td>
+                    <td className="px-3 py-2 text-right">{fmt(p.cost)}</td>
+                    <td className={`px-3 py-2 text-right font-semibold ${p.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmt(p.margin)}</td>
+                    <td className={`px-3 py-2 text-right font-bold ${p.marginPct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{p.marginPct.toFixed(1)}%</td>
                   </tr>
                 ))}
               </tbody>

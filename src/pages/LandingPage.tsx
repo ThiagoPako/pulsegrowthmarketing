@@ -242,9 +242,6 @@ function Navbar() {
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
-              <Button variant="ghost" size="sm" onClick={() => goToTeamArea()} className="hidden sm:inline-flex text-xs sm:text-sm h-8 sm:h-9 gap-1.5">
-                <LogIn size={14} /> Área da Equipe
-              </Button>
               <Button variant="ghost" size="sm" onClick={() => navigate('/clube')} className="hidden sm:inline-flex text-xs sm:text-sm h-8 sm:h-9 gap-1.5">
                 <Gift size={14} /> Clube de Descontos
               </Button>

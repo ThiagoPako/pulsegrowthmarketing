@@ -103,11 +103,21 @@ const isFixedSalaryExpense = (expense: SalaryExpense): boolean => {
 };
 
 const buildSalaryByUser = (expenses: SalaryExpense[], users: ReturnType<typeof useApp>['users'], start: string, end: string, months: number) => {
-  const aliases = users.flatMap(user => [
+  const rawAliases = users.flatMap(user => [
     { userId: user.id, key: normalizePersonKey(user.displayName) },
     { userId: user.id, key: normalizePersonKey(user.name) },
     { userId: user.id, key: normalizePersonKey(user.email?.split('@')[0]) },
   ]).filter(alias => alias.key.length >= 3);
+  // Remove aliases ambíguos (mesma chave usada por >1 usuário — ex.: "victor" bate em 3 pessoas)
+  const keyOwners = new Map<string, Set<string>>();
+  rawAliases.forEach(a => {
+    if (!keyOwners.has(a.key)) keyOwners.set(a.key, new Set());
+    keyOwners.get(a.key)!.add(a.userId);
+  });
+  const aliases = rawAliases
+    .filter(a => (keyOwners.get(a.key)?.size || 0) === 1)
+    // Chaves mais longas primeiro (nome completo antes de primeiro nome) para casar melhor via includes.
+    .sort((a, b) => b.key.length - a.key.length);
 
   // Agrupa por usuário: soma paga dentro do período e valor mensal mais recente fora dele.
   const inPeriodByUser = new Map<string, number>();

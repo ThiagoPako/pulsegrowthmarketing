@@ -622,11 +622,11 @@ export default function CostByContentType() {
                     <td className="px-3 py-2 font-medium">{c.name}</td>
                     <td className="px-3 py-2 text-muted-foreground">{c.role}</td>
                     <td className="px-3 py-2 text-right">{fmt(c.salary)}</td>
-                    <td className="px-3 py-2 text-right">{c.reels}</td>
-                    <td className="px-3 py-2 text-right">{c.criativo}</td>
-                    <td className="px-3 py-2 text-right">{c.story}</td>
-                    <td className="px-3 py-2 text-right">{c.artes}</td>
-                    <td className="px-3 py-2 text-right font-semibold">{c.cards}</td>
+                    <td className="px-3 py-2 text-right">{c.reels.toFixed(1)}</td>
+                    <td className="px-3 py-2 text-right">{c.criativo.toFixed(1)}</td>
+                    <td className="px-3 py-2 text-right">{c.story.toFixed(1)}</td>
+                    <td className="px-3 py-2 text-right">{c.artes.toFixed(1)}</td>
+                    <td className="px-3 py-2 text-right font-semibold">{c.cards.toFixed(1)}</td>
                     <td className="px-3 py-2 text-right">{c.cards > 0 && c.salary > 0 ? fmt(c.avgCost) : '—'}</td>
                   </tr>
                 ))}

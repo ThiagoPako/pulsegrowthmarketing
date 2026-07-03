@@ -518,7 +518,7 @@ export default function CostByContentType() {
 
     return {
       totalSalaries, monthlyTotalSalaries, months,
-      videoPool, editorPool, vmPool, vmEditingPool, designerPool,
+      videoPool, editorPool, socialPool, editorSocialPool, vmPool, vmEditingPool, designerPool,
       monthlyVideoPool, monthlyEditorPool, monthlyVmPool, monthlyDesignerPool,
       unmatchedSalaryTotal,
       reels, criativos, stories, artes,
@@ -533,6 +533,7 @@ export default function CostByContentType() {
       cVmCri: vmCri > 0 ? salVmCri / vmCri : 0,
       cVmSto: vmSto > 0 ? salVmSto / vmSto : 0,
       editorPerReels, editorPerCri, editorPerSto,
+      socialPerReels, socialPerCri, socialPerSto,
       vmPerReels, vmPerCri, vmPerSto,
       designerPerArte,
       totalPerReels, totalPerCri, totalPerSto, totalPerArte,

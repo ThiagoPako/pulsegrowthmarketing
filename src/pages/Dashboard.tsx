@@ -153,7 +153,13 @@ export default function Dashboard() {
     supabase.from('content_tasks').select('id, client_id, kanban_column, created_at, content_type').then(({ data }) => { if (data) setContentTasks(data); });
   }, []);
 
-  const [socialDeliveries, setSocialDeliveries] = useState<any[]>([]);
+  const [rawSocialDeliveries, setSocialDeliveries] = useState<any[]>([]);
+
+  // Filtragem central: nada de cliente cancelado deve aparecer na Dashboard
+  const deliveryRecords = useMemo(() => rawDeliveryRecords.filter(r => !r.client_id || activeClientIds.has(r.client_id)), [rawDeliveryRecords, activeClientIds]);
+  const socialDeliveries = useMemo(() => rawSocialDeliveries.filter(d => !d.client_id || activeClientIds.has(d.client_id)), [rawSocialDeliveries, activeClientIds]);
+  const contentTasks = useMemo(() => rawContentTasks.filter(t => !t.client_id || activeClientIds.has(t.client_id)), [rawContentTasks, activeClientIds]);
+  const liveEditorTasks = useMemo(() => rawLiveEditorTasks.filter(t => !t.client_id || activeClientIds.has(t.client_id)), [rawLiveEditorTasks, activeClientIds]);
   const [plansData, setPlansData] = useState<any[]>([]);
   const [clientPlans, setClientPlans] = useState<Record<string, string>>({});
   useEffect(() => {

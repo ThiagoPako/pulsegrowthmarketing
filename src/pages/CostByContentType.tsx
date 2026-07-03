@@ -316,14 +316,54 @@ export default function CostByContentType() {
       designCountsByUser.set(uid, (designCountsByUser.get(uid) || 0) + countDesignAttachments(t));
     });
 
-    // Breakdown por colaborador para validação vs lançamentos reais
+    // Breakdown por colaborador — quando o card não tem assigned_to (comum),
+    // rateamos o total real da função entre os colaboradores dela, proporcional ao salário.
+    const distributeByRole = (roles: string[], totals: { reels: number; criativo: number; story: number; artes: number }, directCounts: Map<string, { reels: number; criativo: number; story: number; artes: number }>) => {
+      const roleUsers = users.filter(u => roles.includes(u.role));
+      const totalSalary = roleUsers.reduce((s, u) => s + (salaryByUser.get(u.id) || 0), 0);
+      const share = new Map<string, { reels: number; criativo: number; story: number; artes: number }>();
+      const claimed = { reels: 0, criativo: 0, story: 0, artes: 0 };
+      directCounts.forEach((c, uid) => {
+        share.set(uid, { ...c });
+        claimed.reels += c.reels; claimed.criativo += c.criativo; claimed.story += c.story; claimed.artes += c.artes;
+      });
+      const remaining = {
+        reels: Math.max(0, totals.reels - claimed.reels),
+        criativo: Math.max(0, totals.criativo - claimed.criativo),
+        story: Math.max(0, totals.story - claimed.story),
+        artes: Math.max(0, totals.artes - claimed.artes),
+      };
+      roleUsers.forEach(u => {
+        const w = totalSalary > 0 ? (salaryByUser.get(u.id) || 0) / totalSalary : 1 / Math.max(1, roleUsers.length);
+        const cur = share.get(u.id) || { reels: 0, criativo: 0, story: 0, artes: 0 };
+        cur.reels += remaining.reels * w;
+        cur.criativo += remaining.criativo * w;
+        cur.story += remaining.story * w;
+        cur.artes += remaining.artes * w;
+        share.set(u.id, cur);
+      });
+      return share;
+    };
+
+    const editorDirect = new Map<string, { reels: number; criativo: number; story: number; artes: number }>();
+    edCountsByUser.forEach((c, uid) => editorDirect.set(uid, { ...c, artes: 0 }));
+    const vmDirect = new Map<string, { reels: number; criativo: number; story: number; artes: number }>();
+    vmCountsByUser.forEach((c, uid) => vmDirect.set(uid, { ...c, artes: 0 }));
+    const designerDirect = new Map<string, { reels: number; criativo: number; story: number; artes: number }>();
+    designCountsByUser.forEach((n, uid) => designerDirect.set(uid, { reels: 0, criativo: 0, story: 0, artes: n }));
+
+    const editorShare = distributeByRole(EDITOR_ROLES, { reels: edReels, criativo: edCri, story: edSto, artes: 0 }, editorDirect);
+    const vmShare = distributeByRole(VIDEOMAKER_ROLES, { reels: vmReels, criativo: vmCri, story: vmSto, artes: 0 }, vmDirect);
+    const designerShare = distributeByRole(DESIGNER_ROLES, { reels: 0, criativo: 0, story: 0, artes: dtArts }, designerDirect);
+
     const contributorBreakdown = users
       .filter(u => [...EDITOR_ROLES, ...VIDEOMAKER_ROLES, ...DESIGNER_ROLES].includes(u.role))
       .map(u => {
-        const ed = edCountsByUser.get(u.id) || { reels: 0, criativo: 0, story: 0 };
-        const vm = vmCountsByUser.get(u.id) || { reels: 0, criativo: 0, story: 0 };
-        const artes = designCountsByUser.get(u.id) || 0;
-        const cards = ed.reels + ed.criativo + ed.story + vm.reels + vm.criativo + vm.story + artes;
+        const src = EDITOR_ROLES.includes(u.role) ? editorShare
+          : VIDEOMAKER_ROLES.includes(u.role) ? vmShare
+          : designerShare;
+        const s = src.get(u.id) || { reels: 0, criativo: 0, story: 0, artes: 0 };
+        const cards = s.reels + s.criativo + s.story + s.artes;
         const salary = salaryByUser.get(u.id) || 0;
         return {
           id: u.id,
@@ -331,10 +371,10 @@ export default function CostByContentType() {
           role: u.role,
           salary,
           cards,
-          reels: ed.reels + vm.reels,
-          criativo: ed.criativo + vm.criativo,
-          story: ed.story + vm.story,
-          artes,
+          reels: s.reels,
+          criativo: s.criativo,
+          story: s.story,
+          artes: s.artes,
           avgCost: cards > 0 && salary > 0 ? salary / cards : 0,
         };
       })
@@ -555,7 +595,7 @@ export default function CostByContentType() {
           <Calculator size={18} className="text-emerald-600" /> Validação por Colaborador
         </h2>
         <p className="text-xs text-muted-foreground mb-3">
-          Compare o salário lançado no Financeiro com os cards realmente atribuídos (assigned_to) no período. Se um colaborador aparece sem cards, verifique se as tarefas estão atribuídas a ele; se aparece sem salário, cadastre em <b>Financeiro → Despesas → Salários</b>.
+          Total produzido pela função é rateado entre os colaboradores proporcional ao salário (cards sem <code>assigned_to</code> são distribuídos automaticamente). Se um colaborador tem cards com <code>assigned_to</code> preenchido, esses entram integralmente; o restante é rateado.
         </p>
         <Card>
           <CardContent className="p-0 overflow-x-auto">
@@ -582,11 +622,11 @@ export default function CostByContentType() {
                     <td className="px-3 py-2 font-medium">{c.name}</td>
                     <td className="px-3 py-2 text-muted-foreground">{c.role}</td>
                     <td className="px-3 py-2 text-right">{fmt(c.salary)}</td>
-                    <td className="px-3 py-2 text-right">{c.reels}</td>
-                    <td className="px-3 py-2 text-right">{c.criativo}</td>
-                    <td className="px-3 py-2 text-right">{c.story}</td>
-                    <td className="px-3 py-2 text-right">{c.artes}</td>
-                    <td className="px-3 py-2 text-right font-semibold">{c.cards}</td>
+                    <td className="px-3 py-2 text-right">{c.reels.toFixed(1)}</td>
+                    <td className="px-3 py-2 text-right">{c.criativo.toFixed(1)}</td>
+                    <td className="px-3 py-2 text-right">{c.story.toFixed(1)}</td>
+                    <td className="px-3 py-2 text-right">{c.artes.toFixed(1)}</td>
+                    <td className="px-3 py-2 text-right font-semibold">{c.cards.toFixed(1)}</td>
                     <td className="px-3 py-2 text-right">{c.cards > 0 && c.salary > 0 ? fmt(c.avgCost) : '—'}</td>
                   </tr>
                 ))}

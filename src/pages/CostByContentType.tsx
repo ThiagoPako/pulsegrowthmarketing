@@ -321,23 +321,30 @@ export default function CostByContentType() {
     // Pool designer: 100% para artes
     const salArt = designerPool;
 
+    // Custo líquido por conteúdo = soma do que empresa gastou (Editor+Social + Videomaker) naquele tipo
+    const netReels = salReels + salVmReels;
+    const netCri = salCri + salVmCri;
+    const netSto = salSto + salVmSto;
+    const netArt = salArt;
+
     return {
       totalSalaries, monthlyTotalSalaries, months,
       videoPool, editorPool, vmPool, vmEditingPool, designerPool,
       monthlyVideoPool, monthlyEditorPool, monthlyVmPool, monthlyDesignerPool,
       unmatchedSalaryTotal,
       reels, criativos, stories, artes,
-      cReels: reels > 0 ? salReels / reels : 0,
-      cCri: criativos > 0 ? salCri / criativos : 0,
-      cArt: artes > 0 ? salArt / artes : 0,
-      cSto: stories > 0 ? salSto / stories : 0,
-      salReels, salCri, salArt, salSto,
+      cReels: reels > 0 ? netReels / reels : 0,
+      cCri: criativos > 0 ? netCri / criativos : 0,
+      cArt: artes > 0 ? netArt / artes : 0,
+      cSto: stories > 0 ? netSto / stories : 0,
+      salReels: netReels, salCri: netCri, salArt: netArt, salSto: netSto,
       vmReels, vmCri, vmSto,
       salVmReels, salVmCri, salVmSto,
       cVmReels: vmReels > 0 ? salVmReels / vmReels : 0,
       cVmCri: vmCri > 0 ? salVmCri / vmCri : 0,
       cVmSto: vmSto > 0 ? salVmSto / vmSto : 0,
     };
+
 
   }, [records, editorTasks, designTasks, socialDeliveries, salaryExpenses, users, selectedClient, dateRange]);
 
@@ -349,11 +356,12 @@ export default function CostByContentType() {
   };
 
   const items = [
-    { icon: Film, label: 'Reels', qty: data.reels, cost: data.cReels, total: data.salReels, pool: data.editorPool, color: 'text-blue-600', border: 'hsl(217,91%,60%)' },
-    { icon: Megaphone, label: 'Criativos', qty: data.criativos, cost: data.cCri, total: data.salCri, pool: data.editorPool, color: 'text-purple-600', border: 'hsl(262,83%,58%)' },
+    { icon: Film, label: 'Reels', qty: data.reels, cost: data.cReels, total: data.salReels, pool: data.videoPool, color: 'text-blue-600', border: 'hsl(217,91%,60%)' },
+    { icon: Megaphone, label: 'Criativos', qty: data.criativos, cost: data.cCri, total: data.salCri, pool: data.videoPool, color: 'text-purple-600', border: 'hsl(262,83%,58%)' },
     { icon: Palette, label: 'Artes', qty: data.artes, cost: data.cArt, total: data.salArt, pool: data.designerPool, color: 'text-orange-600', border: 'hsl(24,95%,53%)' },
-    { icon: ImageIcon, label: 'Stories', qty: data.stories, cost: data.cSto, total: data.salSto, pool: data.editorPool, color: 'text-pink-600', border: 'hsl(330,81%,60%)' },
+    { icon: ImageIcon, label: 'Stories', qty: data.stories, cost: data.cSto, total: data.salSto, pool: data.videoPool, color: 'text-pink-600', border: 'hsl(330,81%,60%)' },
   ];
+
 
   return (
     <div className="space-y-6">
@@ -361,7 +369,7 @@ export default function CostByContentType() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Target size={24} className="text-primary" /> Custo por Tipo de Conteúdo
         </h1>
-        <p className="text-sm text-muted-foreground">Usa salários lançados em Financeiro &gt; Despesas &gt; Salários e a função cadastrada de cada colaborador. Editor/Social e Videomaker são alocados por esforço: Reels=1.0, Criativo=0.5, Story=0.2.</p>
+        <p className="text-sm text-muted-foreground">Custo líquido por conteúdo = soma dos salários (Editor/Social + Videomaker + Designer) alocados por esforço (Reels=1.0, Criativo=0.5, Story=0.2). Fonte: Financeiro &gt; Despesas &gt; Salários.</p>
       </div>
 
       <Card>

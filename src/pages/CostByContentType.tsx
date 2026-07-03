@@ -100,7 +100,7 @@ const isFixedSalaryExpense = (expense: SalaryExpense): boolean => {
   return !description.startsWith('bonus -') && !description.startsWith('bonificacao -');
 };
 
-const buildSalaryByUser = (expenses: SalaryExpense[], users: ReturnType<typeof useApp>['users'], start: string, end: string) => {
+const buildSalaryByUser = (expenses: SalaryExpense[], users: ReturnType<typeof useApp>['users'], start: string, end: string, months: number) => {
   const aliases = users.flatMap(user => [
     { userId: user.id, key: normalizePersonKey(user.displayName) },
     { userId: user.id, key: normalizePersonKey(user.name) },
@@ -111,7 +111,7 @@ const buildSalaryByUser = (expenses: SalaryExpense[], users: ReturnType<typeof u
   let unmatchedTotal = 0;
 
   expenses
-    .filter(expense => inDateRange(expense.date, start, end) && isFixedSalaryExpense(expense))
+    .filter(isFixedSalaryExpense)
     .forEach(expense => {
       const amount = toNumber(expense.amount);
       if (amount <= 0) return;
@@ -125,8 +125,9 @@ const buildSalaryByUser = (expenses: SalaryExpense[], users: ReturnType<typeof u
       const fallbackMatch = exactMatch || aliases.find(alias => alias.key.length >= 4 && descriptionKey.includes(alias.key));
 
       if (fallbackMatch) {
-        salaryByUser.set(fallbackMatch.userId, (salaryByUser.get(fallbackMatch.userId) || 0) + amount);
-      } else {
+        const amountInPeriod = inDateRange(expense.date, start, end) ? amount : amount * months;
+        salaryByUser.set(fallbackMatch.userId, (salaryByUser.get(fallbackMatch.userId) || 0) + amountInPeriod);
+      } else if (inDateRange(expense.date, start, end)) {
         unmatchedTotal += amount;
       }
     });
@@ -250,7 +251,7 @@ export default function CostByContentType() {
     const end = new Date(dateRange.end);
     const months = Math.max(1, differenceInCalendarMonths(end, start) + 1);
 
-    const { salaryByUser, unmatchedTotal: unmatchedSalaryTotal } = buildSalaryByUser(salaryExpenses, users, dateRange.start, dateRange.end);
+    const { salaryByUser, unmatchedTotal: unmatchedSalaryTotal } = buildSalaryByUser(salaryExpenses, users, dateRange.start, dateRange.end, months);
 
     const editorPool = users
       .filter(u => EDITOR_ROLES.includes(u.role))

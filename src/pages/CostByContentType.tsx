@@ -201,11 +201,13 @@ export default function CostByContentType() {
   const [designTasks, setDesignTasks] = useState<DesignTask[]>([]);
   const [socialDeliveries, setSocialDeliveries] = useState<SocialDelivery[]>([]);
   const [salaryExpenses, setSalaryExpenses] = useState<SalaryExpense[]>([]);
+  const [prolaboreExpenses, setProlaboreExpenses] = useState<SalaryExpense[]>([]);
   const [plans, setPlans] = useState<PlanRow[]>([]);
   const [selectedClient, setSelectedClient] = useState('all');
   const [periodType, setPeriodType] = useState<'current' | 'previous' | 'custom'>('current');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+  const [includeProLabore, setIncludeProLabore] = useState(false);
 
   const fetchData = useCallback(async () => {
     const [rRes, sRes, edRes, dRes, catRes, expRes, plRes] = await Promise.all([

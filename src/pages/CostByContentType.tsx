@@ -317,10 +317,10 @@ export default function CostByContentType() {
     });
 
     // Breakdown por colaborador — quando o card não tem assigned_to (comum),
-    // rateamos o total real da função entre os colaboradores dela, proporcional ao salário.
+    // rateamos o total real da função igualmente entre os colaboradores dela.
+    // Rateio igualitário (não proporcional ao salário) mantém o custo/card distinto por pessoa.
     const distributeByRole = (roles: string[], totals: { reels: number; criativo: number; story: number; artes: number }, directCounts: Map<string, { reels: number; criativo: number; story: number; artes: number }>) => {
       const roleUsers = users.filter(u => roles.includes(u.role));
-      const totalSalary = roleUsers.reduce((s, u) => s + (salaryByUser.get(u.id) || 0), 0);
       const share = new Map<string, { reels: number; criativo: number; story: number; artes: number }>();
       const claimed = { reels: 0, criativo: 0, story: 0, artes: 0 };
       directCounts.forEach((c, uid) => {
@@ -333,13 +333,13 @@ export default function CostByContentType() {
         story: Math.max(0, totals.story - claimed.story),
         artes: Math.max(0, totals.artes - claimed.artes),
       };
+      const n = Math.max(1, roleUsers.length);
       roleUsers.forEach(u => {
-        const w = totalSalary > 0 ? (salaryByUser.get(u.id) || 0) / totalSalary : 1 / Math.max(1, roleUsers.length);
         const cur = share.get(u.id) || { reels: 0, criativo: 0, story: 0, artes: 0 };
-        cur.reels += remaining.reels * w;
-        cur.criativo += remaining.criativo * w;
-        cur.story += remaining.story * w;
-        cur.artes += remaining.artes * w;
+        cur.reels += remaining.reels / n;
+        cur.criativo += remaining.criativo / n;
+        cur.story += remaining.story / n;
+        cur.artes += remaining.artes / n;
         share.set(u.id, cur);
       });
       return share;
@@ -595,7 +595,7 @@ export default function CostByContentType() {
           <Calculator size={18} className="text-emerald-600" /> Validação por Colaborador
         </h2>
         <p className="text-xs text-muted-foreground mb-3">
-          Total produzido pela função é rateado entre os colaboradores proporcional ao salário (cards sem <code>assigned_to</code> são distribuídos automaticamente). Se um colaborador tem cards com <code>assigned_to</code> preenchido, esses entram integralmente; o restante é rateado.
+          Total produzido pela função é rateado igualmente entre os colaboradores dela (cards com <code>assigned_to</code> entram integralmente; o restante é dividido em partes iguais). Assim o custo médio/card reflete o salário individual.
         </p>
         <Card>
           <CardContent className="p-0 overflow-x-auto">

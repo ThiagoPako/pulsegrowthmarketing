@@ -510,7 +510,7 @@ export default function CostByContentType() {
 
     // === ANÁLISE POR PACOTE ===
     const planAnalysis = plans
-      .filter(p => p.active !== false)
+      .filter(p => (p.status || 'ativo').toLowerCase() === 'ativo')
       .map(p => {
         const qReels = toNumber(p.reels_qty);
         const qCri = toNumber(p.creatives_qty);

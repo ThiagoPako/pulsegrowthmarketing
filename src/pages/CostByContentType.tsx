@@ -47,6 +47,18 @@ interface SocialDelivery {
   updated_at?: string | null;
   status: string;
 }
+interface SalaryExpense {
+  date: string;
+  amount: number | string | null;
+  description: string | null;
+  responsible: string | null;
+  category_id: string | null;
+  expense_type?: string | null;
+}
+interface ExpenseCategory {
+  id: string;
+  name: string | null;
+}
 
 const EDITOR_ROLES = ['editor', 'social_media'];
 const VIDEOMAKER_ROLES = ['videomaker'];
@@ -72,6 +84,56 @@ const normalizeText = (value?: string | null) => (value || '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
   .trim();
+
+const normalizePersonKey = (value?: string | null) => normalizeText(value).replace(/[^a-z0-9]/g, '');
+
+const cleanSalaryDescription = (value?: string | null) => (value || '').replace(/\s+-\s+pago\s*$/i, '').trim();
+
+const extractSalaryPersonName = (expense: SalaryExpense): string => {
+  const cleaned = cleanSalaryDescription(expense.description);
+  const match = cleaned.match(/^sal[aá]rio\s*-\s*(.+?)(?:\s*\([^)]+\))?$/i);
+  return (match?.[1] || expense.responsible || '').trim();
+};
+
+const isFixedSalaryExpense = (expense: SalaryExpense): boolean => {
+  const description = normalizeText(expense.description);
+  return !description.startsWith('bonus -') && !description.startsWith('bonificacao -');
+};
+
+const buildSalaryByUser = (expenses: SalaryExpense[], users: ReturnType<typeof useApp>['users'], start: string, end: string, months: number) => {
+  const aliases = users.flatMap(user => [
+    { userId: user.id, key: normalizePersonKey(user.displayName) },
+    { userId: user.id, key: normalizePersonKey(user.name) },
+    { userId: user.id, key: normalizePersonKey(user.email?.split('@')[0]) },
+  ]).filter(alias => alias.key.length >= 3);
+
+  const salaryByUser = new Map<string, number>();
+  let unmatchedTotal = 0;
+
+  expenses
+    .filter(isFixedSalaryExpense)
+    .forEach(expense => {
+      const amount = toNumber(expense.amount);
+      if (amount <= 0) return;
+
+      const candidateKeys = [
+        normalizePersonKey(expense.responsible),
+        normalizePersonKey(extractSalaryPersonName(expense)),
+      ].filter(Boolean);
+      const descriptionKey = normalizePersonKey(expense.description);
+      const exactMatch = aliases.find(alias => candidateKeys.includes(alias.key));
+      const fallbackMatch = exactMatch || aliases.find(alias => alias.key.length >= 4 && descriptionKey.includes(alias.key));
+
+      if (fallbackMatch) {
+        const amountInPeriod = inDateRange(expense.date, start, end) ? amount : amount * months;
+        salaryByUser.set(fallbackMatch.userId, (salaryByUser.get(fallbackMatch.userId) || 0) + amountInPeriod);
+      } else if (inDateRange(expense.date, start, end)) {
+        unmatchedTotal += amount;
+      }
+    });
+
+  return { salaryByUser, unmatchedTotal };
+};
 
 const normalizeContentType = (value?: string | null): 'reels' | 'criativo' | 'story' | 'arte' | 'outro' => {
   const type = normalizeText(value);
@@ -101,22 +163,36 @@ export default function CostByContentType() {
   const [editorTasks, setEditorTasks] = useState<EditorTask[]>([]);
   const [designTasks, setDesignTasks] = useState<DesignTask[]>([]);
   const [socialDeliveries, setSocialDeliveries] = useState<SocialDelivery[]>([]);
+  const [salaryExpenses, setSalaryExpenses] = useState<SalaryExpense[]>([]);
   const [selectedClient, setSelectedClient] = useState('all');
   const [periodType, setPeriodType] = useState<'current' | 'previous' | 'custom'>('current');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
 
   const fetchData = useCallback(async () => {
-    const [rRes, sRes, edRes, dRes] = await Promise.all([
+    const [rRes, sRes, edRes, dRes, catRes, expRes] = await Promise.all([
       supabase.from('delivery_records').select('client_id,date,reels_produced,creatives_produced,stories_produced,arts_produced,delivery_status'),
       supabase.from('social_media_deliveries').select('client_id,content_type,delivered_at,posted_at,created_at,updated_at,status'),
       supabase.from('content_tasks').select('client_id,content_type,kanban_column,approved_at,updated_at,created_at,assigned_to'),
       supabase.from('design_tasks').select('client_id,kanban_column,completed_at,updated_at,created_at,attachment_url,attachment_urls,editable_file_url,mockup_url'),
+      supabase.from('expense_categories').select('id,name'),
+      supabase.from('expenses').select('date,amount,description,responsible,category_id,expense_type'),
     ]);
     if (rRes.data) setRecords(rRes.data as DeliveryRecord[]);
     if (sRes.data) setSocialDeliveries(sRes.data as SocialDelivery[]);
     if (edRes.data) setEditorTasks(edRes.data as EditorTask[]);
     if (dRes.data) setDesignTasks(dRes.data as DesignTask[]);
+    if (catRes.data && expRes.data) {
+      const salaryCategoryIds = new Set(
+        (catRes.data as ExpenseCategory[])
+          .filter(category => normalizeText(category.name).includes('salario'))
+          .map(category => category.id)
+      );
+      setSalaryExpenses((expRes.data as SalaryExpense[]).filter(expense => (
+        salaryCategoryIds.has(expense.category_id || '')
+        || normalizeText(expense.description).startsWith('salario -')
+      )));
+    }
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -175,19 +251,20 @@ export default function CostByContentType() {
     const end = new Date(dateRange.end);
     const months = Math.max(1, differenceInCalendarMonths(end, start) + 1);
 
-    const monthlyEditorPool = users
-      .filter(u => EDITOR_ROLES.includes(u.role))
-      .reduce((a, u) => a + toNumber(u.monthlySalary), 0);
-    const monthlyVmPool = users
-      .filter(u => VIDEOMAKER_ROLES.includes(u.role))
-      .reduce((a, u) => a + toNumber(u.monthlySalary), 0);
-    const monthlyDesignerPool = users
-      .filter(u => DESIGNER_ROLES.includes(u.role))
-      .reduce((a, u) => a + toNumber(u.monthlySalary), 0);
+    const { salaryByUser, unmatchedTotal: unmatchedSalaryTotal } = buildSalaryByUser(salaryExpenses, users, dateRange.start, dateRange.end, months);
 
-    const editorPool = monthlyEditorPool * months;
-    const vmPool = monthlyVmPool * months;
-    const designerPool = monthlyDesignerPool * months;
+    const editorPool = users
+      .filter(u => EDITOR_ROLES.includes(u.role))
+      .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);
+    const vmPool = users
+      .filter(u => VIDEOMAKER_ROLES.includes(u.role))
+      .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);
+    const designerPool = users
+      .filter(u => DESIGNER_ROLES.includes(u.role))
+      .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);
+    const monthlyEditorPool = editorPool / months;
+    const monthlyVmPool = vmPool / months;
+    const monthlyDesignerPool = designerPool / months;
     const monthlyVideoPool = monthlyEditorPool + monthlyVmPool;
     const videoPool = editorPool + vmPool;
     const monthlyTotalSalaries = monthlyVideoPool + monthlyDesignerPool;
@@ -197,22 +274,35 @@ export default function CostByContentType() {
     const roleOf = new Map(users.map(u => [u.id, u.role]));
 
     // Split das tasks produzidas pelo tipo de quem editou (assigned_to)
+    const vmCountsByUser = new Map<string, { reels: number; criativo: number; story: number }>();
     let vmReels = 0, vmCri = 0, vmSto = 0;
     let edReels = 0, edCri = 0, edSto = 0;
     relevantTasks.forEach(t => {
       const type = normalizeContentType(t.content_type);
       const role = t.assigned_to ? roleOf.get(t.assigned_to) : undefined;
       const isVm = role && VIDEOMAKER_ROLES.includes(role);
-      if (type === 'reels') isVm ? vmReels++ : edReels++;
-      else if (type === 'criativo') isVm ? vmCri++ : edCri++;
-      else if (type === 'story') isVm ? vmSto++ : edSto++;
+      if (isVm && t.assigned_to) {
+        const current = vmCountsByUser.get(t.assigned_to) || { reels: 0, criativo: 0, story: 0 };
+        if (type === 'reels') { current.reels++; vmReels++; }
+        else if (type === 'criativo') { current.criativo++; vmCri++; }
+        else if (type === 'story') { current.story++; vmSto++; }
+        vmCountsByUser.set(t.assigned_to, current);
+      } else if (type === 'reels') edReels++;
+      else if (type === 'criativo') edCri++;
+      else if (type === 'story') edSto++;
     });
 
-    // Aloca pool do videomaker apenas nos cards editados por VMs
-    const vmW = vmReels * VIDEO_EFFORT.reels + vmCri * VIDEO_EFFORT.criativo + vmSto * VIDEO_EFFORT.story;
-    const salVmReels = vmW > 0 ? (vmPool * vmReels * VIDEO_EFFORT.reels) / vmW : 0;
-    const salVmCri = vmW > 0 ? (vmPool * vmCri * VIDEO_EFFORT.criativo) / vmW : 0;
-    const salVmSto = vmW > 0 ? (vmPool * vmSto * VIDEO_EFFORT.story) / vmW : 0;
+    // Aloca o salário financeiro de cada videomaker apenas nos cards que ele mesmo editou.
+    let salVmReels = 0, salVmCri = 0, salVmSto = 0, vmEditingPool = 0;
+    vmCountsByUser.forEach((counts, userId) => {
+      const userSalary = salaryByUser.get(userId) || 0;
+      const userWeight = counts.reels * VIDEO_EFFORT.reels + counts.criativo * VIDEO_EFFORT.criativo + counts.story * VIDEO_EFFORT.story;
+      if (userWeight <= 0) return;
+      vmEditingPool += userSalary;
+      salVmReels += (userSalary * counts.reels * VIDEO_EFFORT.reels) / userWeight;
+      salVmCri += (userSalary * counts.criativo * VIDEO_EFFORT.criativo) / userWeight;
+      salVmSto += (userSalary * counts.story * VIDEO_EFFORT.story) / userWeight;
+    });
 
     // Totais gerais (mantém compat com agenda/social se maior)
     const reels = Math.max(recReels, ctReels, sReels);
@@ -233,8 +323,9 @@ export default function CostByContentType() {
 
     return {
       totalSalaries, monthlyTotalSalaries, months,
-      videoPool, editorPool, vmPool, designerPool,
+      videoPool, editorPool, vmPool, vmEditingPool, designerPool,
       monthlyVideoPool, monthlyEditorPool, monthlyVmPool, monthlyDesignerPool,
+      unmatchedSalaryTotal,
       reels, criativos, stories, artes,
       cReels: reels > 0 ? salReels / reels : 0,
       cCri: criativos > 0 ? salCri / criativos : 0,
@@ -248,7 +339,7 @@ export default function CostByContentType() {
       cVmSto: vmSto > 0 ? salVmSto / vmSto : 0,
     };
 
-  }, [records, editorTasks, designTasks, socialDeliveries, users, selectedClient, dateRange]);
+  }, [records, editorTasks, designTasks, socialDeliveries, salaryExpenses, users, selectedClient, dateRange]);
 
   const fmt = (n: number) => Number.isFinite(n) && n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00';
   const formatCost = (cost: number, qty: number, pool: number) => {
@@ -258,10 +349,10 @@ export default function CostByContentType() {
   };
 
   const items = [
-    { icon: Film, label: 'Reels', qty: data.reels, cost: data.cReels, total: data.salReels, pool: data.videoPool, color: 'text-blue-600', border: 'hsl(217,91%,60%)' },
-    { icon: Megaphone, label: 'Criativos', qty: data.criativos, cost: data.cCri, total: data.salCri, pool: data.videoPool, color: 'text-purple-600', border: 'hsl(262,83%,58%)' },
+    { icon: Film, label: 'Reels', qty: data.reels, cost: data.cReels, total: data.salReels, pool: data.editorPool, color: 'text-blue-600', border: 'hsl(217,91%,60%)' },
+    { icon: Megaphone, label: 'Criativos', qty: data.criativos, cost: data.cCri, total: data.salCri, pool: data.editorPool, color: 'text-purple-600', border: 'hsl(262,83%,58%)' },
     { icon: Palette, label: 'Artes', qty: data.artes, cost: data.cArt, total: data.salArt, pool: data.designerPool, color: 'text-orange-600', border: 'hsl(24,95%,53%)' },
-    { icon: ImageIcon, label: 'Stories', qty: data.stories, cost: data.cSto, total: data.salSto, pool: data.videoPool, color: 'text-pink-600', border: 'hsl(330,81%,60%)' },
+    { icon: ImageIcon, label: 'Stories', qty: data.stories, cost: data.cSto, total: data.salSto, pool: data.editorPool, color: 'text-pink-600', border: 'hsl(330,81%,60%)' },
   ];
 
   return (
@@ -270,7 +361,7 @@ export default function CostByContentType() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Target size={24} className="text-primary" /> Custo por Tipo de Conteúdo
         </h1>
-        <p className="text-sm text-muted-foreground">Pool Vídeo (Videomaker + Editor + Social Media) alocado por esforço: Reels=1.0, Criativo=0.5, Story=0.2. Pool Designer 100% dividido pelas artes anexadas nos cards produzidos.</p>
+        <p className="text-sm text-muted-foreground">Usa salários lançados em Financeiro &gt; Despesas &gt; Salários e a função cadastrada de cada colaborador. Editor/Social e Videomaker são alocados por esforço: Reels=1.0, Criativo=0.5, Story=0.2.</p>
       </div>
 
       <Card>
@@ -311,7 +402,7 @@ export default function CostByContentType() {
             <DollarSign size={18} className="text-blue-600 mb-2" />
             <p className="text-xl font-bold">{fmt(data.editorPool)}</p>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Pool Editor+Social ({data.months}m)</p>
-            <p className="text-[10px] text-muted-foreground mt-1">Folha mensal: {fmt(data.monthlyEditorPool)} · VM: {fmt(data.monthlyVmPool)}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Média mensal: {fmt(data.monthlyEditorPool)} · VM no financeiro: {fmt(data.vmPool)}</p>
           </CardContent>
         </Card>
         <Card className="border-l-4" style={{ borderLeftColor: 'hsl(24,95%,53%)' }}>
@@ -343,7 +434,16 @@ export default function CostByContentType() {
         <Card className="border-amber-500/50 bg-amber-500/5">
           <CardContent className="p-4 text-sm">
             <p className="font-semibold text-amber-700 dark:text-amber-400">⚠ Nenhum salário cadastrado</p>
-            <p className="text-xs text-muted-foreground mt-1">Cadastre o salário mensal dos colaboradores em <b>Equipe</b> (campo "Salário Mensal") para os custos aparecerem aqui.</p>
+            <p className="text-xs text-muted-foreground mt-1">Lance os salários em <b>Financeiro → Despesas → Salários</b>, selecionando o colaborador, para os custos aparecerem aqui.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {data.unmatchedSalaryTotal > 0 && (
+        <Card className="border-amber-500/50 bg-amber-500/5">
+          <CardContent className="p-4 text-sm">
+            <p className="font-semibold text-amber-700 dark:text-amber-400">⚠ Salários sem colaborador reconhecido</p>
+            <p className="text-xs text-muted-foreground mt-1">{fmt(data.unmatchedSalaryTotal)} em salários do período não foram vinculados porque o responsável/descrição não bate com nenhum colaborador cadastrado.</p>
           </CardContent>
         </Card>
       )}
@@ -369,7 +469,7 @@ export default function CostByContentType() {
           <Film size={18} className="text-cyan-600" /> Edições feitas por Videomakers
         </h2>
         <p className="text-xs text-muted-foreground mb-3">
-          Pool Videomaker ({fmt(data.vmPool)} no período · folha mensal {fmt(data.monthlyVmPool)}) alocado apenas nos cards onde o responsável (assigned_to) é um videomaker.
+          Salário do financeiro de cada videomaker alocado apenas nos cards onde o responsável (assigned_to) é aquele videomaker. Pool usado nas edições: {fmt(data.vmEditingPool)} · total VM no período: {fmt(data.vmPool)}.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
@@ -383,7 +483,7 @@ export default function CostByContentType() {
                   <Film size={18} className={it.color} />
                   <span className="text-[10px] text-muted-foreground">{it.qty} editados por VM</span>
                 </div>
-                <p className="text-2xl font-bold">{formatCost(it.cost, it.qty, data.vmPool)}</p>
+                <p className="text-2xl font-bold">{formatCost(it.cost, it.qty, data.vmEditingPool)}</p>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Custo VM por {it.label}</p>
                 <p className="text-[10px] text-muted-foreground mt-1">Total alocado: {fmt(it.total)}</p>
               </CardContent>

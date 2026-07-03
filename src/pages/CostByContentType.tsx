@@ -491,9 +491,17 @@ export default function CostByContentType() {
     const vmPerSto = stories > 0 ? vmFullSto / stories : 0;
     const designerPerArte = artes > 0 ? designerPool / artes : 0;
 
-    const totalPerReels = editorPerReels + socialPerReels + vmPerReels;
-    const totalPerCri = editorPerCri + socialPerCri + vmPerCri;
-    const totalPerSto = editorPerSto + socialPerSto + vmPerSto;
+    // Copywriting rateado por esforço no total produzido
+    const copyReelsSal = wTotal > 0 ? (copyPool * wReels) / wTotal : 0;
+    const copyCriSal = wTotal > 0 ? (copyPool * wCri) / wTotal : 0;
+    const copyStoSal = wTotal > 0 ? (copyPool * wSto) / wTotal : 0;
+    const copyPerReels = reels > 0 ? copyReelsSal / reels : 0;
+    const copyPerCri = criativos > 0 ? copyCriSal / criativos : 0;
+    const copyPerSto = stories > 0 ? copyStoSal / stories : 0;
+
+    const totalPerReels = editorPerReels + socialPerReels + vmPerReels + copyPerReels;
+    const totalPerCri = editorPerCri + socialPerCri + vmPerCri + copyPerCri;
+    const totalPerSto = editorPerSto + socialPerSto + vmPerSto + copyPerSto;
     const totalPerArte = designerPerArte;
 
     // === ANÁLISE POR PACOTE ===

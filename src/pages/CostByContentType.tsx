@@ -635,6 +635,18 @@ export default function CostByContentType() {
               <Input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="w-36" />
             </div>
           )}
+          <div className="ml-auto space-y-1">
+            <Label className="text-xs uppercase text-muted-foreground">Sócios (Pró-labore)</Label>
+            <Button
+              variant={includeProLabore ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setIncludeProLabore(v => !v)}
+              className="gap-1.5"
+            >
+              <DollarSign size={14} />
+              {includeProLabore ? '✓ Incluído no total' : `Incluir ${fmt(data.prolaboreTotal)}`}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

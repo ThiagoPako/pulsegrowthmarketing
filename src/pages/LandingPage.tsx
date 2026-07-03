@@ -242,9 +242,6 @@ function Navbar() {
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
-              <Button variant="ghost" size="sm" onClick={() => goToTeamArea()} className="hidden sm:inline-flex text-xs sm:text-sm h-8 sm:h-9 gap-1.5">
-                <LogIn size={14} /> Área da Equipe
-              </Button>
               <Button variant="ghost" size="sm" onClick={() => navigate('/clube')} className="hidden sm:inline-flex text-xs sm:text-sm h-8 sm:h-9 gap-1.5">
                 <Gift size={14} /> Clube de Descontos
               </Button>
@@ -330,9 +327,6 @@ function Navbar() {
                 </Button>
                 <Button variant="outline" size="lg" onClick={() => { setOpen(false); navigate('/clube'); }} className="w-full py-6 gap-2">
                   <Gift size={18} /> Clube de Descontos
-                </Button>
-                <Button variant="outline" size="lg" onClick={() => { setOpen(false); goToTeamArea(); }} className="w-full py-6 gap-2">
-                  <LogIn size={18} /> Área da Equipe
                 </Button>
               </motion.div>
             </div>
@@ -442,11 +436,6 @@ function Hero() {
             <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
               <Button size="lg" variant="outline" onClick={() => document.getElementById('servicos')?.scrollIntoView({ behavior: 'smooth' })} className="gap-2 text-sm sm:text-base px-6 sm:px-8 py-5 sm:py-6 w-full sm:w-auto border-border/80 hover:border-primary/40 transition-colors">
                 <Play size={16} /> Ver serviços
-              </Button>
-            </motion.div>
-            <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-              <Button size="lg" variant="ghost" onClick={() => goToTeamArea()} className="gap-2 text-sm sm:text-base px-6 sm:px-8 py-5 sm:py-6 w-full sm:w-auto hover:bg-primary/10 hover:text-primary transition-colors">
-                <LogIn size={16} /> Área da Equipe
               </Button>
             </motion.div>
           </motion.div>
@@ -1382,6 +1371,7 @@ function Contato() {
 
 // ─── Footer ─────────────────────────────────────────────────
 function Footer() {
+  const goToTeamArea = useGoToTeamArea();
   return (
     <footer className="py-8 border-t border-border/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
@@ -1391,7 +1381,16 @@ function Footer() {
           </div>
           <span className="font-display font-semibold text-foreground">Pulse Growth Marketing</span>
         </div>
-        <p>© {new Date().getFullYear()} Todos os direitos reservados.</p>
+        <div className="flex items-center gap-4">
+          <p>© {new Date().getFullYear()} Todos os direitos reservados.</p>
+          <button
+            onClick={() => goToTeamArea()}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-primary transition-colors"
+            aria-label="Área da Equipe"
+          >
+            <LogIn size={11} /> Área da Equipe
+          </button>
+        </div>
       </div>
     </footer>
   );

@@ -293,19 +293,23 @@ export default function CostByContentType() {
     const { salaryByUser, unmatchedTotal: unmatchedSalaryTotal } = buildSalaryByUser(salaryExpenses, users, dateRange.start, dateRange.end, months);
 
     const editorPool = users
-      .filter(u => EDITOR_ROLES.includes(u.role))
+      .filter(u => u.role === 'editor')
       .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);
+    const socialPool = users
+      .filter(u => u.role === 'social_media')
+      .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);
+    const editorSocialPool = editorPool + socialPool;
     const vmPool = users
       .filter(u => VIDEOMAKER_ROLES.includes(u.role))
       .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);
     const designerPool = users
       .filter(u => DESIGNER_ROLES.includes(u.role))
       .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);
-    const monthlyEditorPool = editorPool / months;
+    const monthlyEditorPool = editorSocialPool / months;
     const monthlyVmPool = vmPool / months;
     const monthlyDesignerPool = designerPool / months;
     const monthlyVideoPool = monthlyEditorPool + monthlyVmPool;
-    const videoPool = editorPool + vmPool;
+    const videoPool = editorSocialPool + vmPool;
     const monthlyTotalSalaries = monthlyVideoPool + monthlyDesignerPool;
     const totalSalaries = videoPool + designerPool;
 
@@ -442,9 +446,9 @@ export default function CostByContentType() {
     const wCri = criativos * VIDEO_EFFORT.criativo;
     const wSto = stories * VIDEO_EFFORT.story;
     const wTotal = wReels + wCri + wSto;
-    const salReels = wTotal > 0 ? (editorPool * wReels) / wTotal : 0;
-    const salCri = wTotal > 0 ? (editorPool * wCri) / wTotal : 0;
-    const salSto = wTotal > 0 ? (editorPool * wSto) / wTotal : 0;
+    const salReels = wTotal > 0 ? (editorSocialPool * wReels) / wTotal : 0;
+    const salCri = wTotal > 0 ? (editorSocialPool * wCri) / wTotal : 0;
+    const salSto = wTotal > 0 ? (editorSocialPool * wSto) / wTotal : 0;
 
     // Pool designer: 100% para artes
     const salArt = designerPool;
@@ -461,17 +465,28 @@ export default function CostByContentType() {
     const vmFullCri = wTotal > 0 ? (vmPool * wCri) / wTotal : 0;
     const vmFullSto = wTotal > 0 ? (vmPool * wSto) / wTotal : 0;
 
-    const editorPerReels = reels > 0 ? salReels / reels : 0;
-    const editorPerCri = criativos > 0 ? salCri / criativos : 0;
-    const editorPerSto = stories > 0 ? salSto / stories : 0;
+    // Editor puro (só role 'editor') e Social Media puro, rateados por esforço
+    const editorOnlyReels = wTotal > 0 ? (editorPool * wReels) / wTotal : 0;
+    const editorOnlyCri = wTotal > 0 ? (editorPool * wCri) / wTotal : 0;
+    const editorOnlySto = wTotal > 0 ? (editorPool * wSto) / wTotal : 0;
+    const socialOnlyReels = wTotal > 0 ? (socialPool * wReels) / wTotal : 0;
+    const socialOnlyCri = wTotal > 0 ? (socialPool * wCri) / wTotal : 0;
+    const socialOnlySto = wTotal > 0 ? (socialPool * wSto) / wTotal : 0;
+
+    const editorPerReels = reels > 0 ? editorOnlyReels / reels : 0;
+    const editorPerCri = criativos > 0 ? editorOnlyCri / criativos : 0;
+    const editorPerSto = stories > 0 ? editorOnlySto / stories : 0;
+    const socialPerReels = reels > 0 ? socialOnlyReels / reels : 0;
+    const socialPerCri = criativos > 0 ? socialOnlyCri / criativos : 0;
+    const socialPerSto = stories > 0 ? socialOnlySto / stories : 0;
     const vmPerReels = reels > 0 ? vmFullReels / reels : 0;
     const vmPerCri = criativos > 0 ? vmFullCri / criativos : 0;
     const vmPerSto = stories > 0 ? vmFullSto / stories : 0;
     const designerPerArte = artes > 0 ? designerPool / artes : 0;
 
-    const totalPerReels = editorPerReels + vmPerReels;
-    const totalPerCri = editorPerCri + vmPerCri;
-    const totalPerSto = editorPerSto + vmPerSto;
+    const totalPerReels = editorPerReels + socialPerReels + vmPerReels;
+    const totalPerCri = editorPerCri + socialPerCri + vmPerCri;
+    const totalPerSto = editorPerSto + socialPerSto + vmPerSto;
     const totalPerArte = designerPerArte;
 
     // === ANÁLISE POR PACOTE ===
@@ -503,7 +518,7 @@ export default function CostByContentType() {
 
     return {
       totalSalaries, monthlyTotalSalaries, months,
-      videoPool, editorPool, vmPool, vmEditingPool, designerPool,
+      videoPool, editorPool, socialPool, editorSocialPool, vmPool, vmEditingPool, designerPool,
       monthlyVideoPool, monthlyEditorPool, monthlyVmPool, monthlyDesignerPool,
       unmatchedSalaryTotal,
       reels, criativos, stories, artes,
@@ -518,6 +533,7 @@ export default function CostByContentType() {
       cVmCri: vmCri > 0 ? salVmCri / vmCri : 0,
       cVmSto: vmSto > 0 ? salVmSto / vmSto : 0,
       editorPerReels, editorPerCri, editorPerSto,
+      socialPerReels, socialPerCri, socialPerSto,
       vmPerReels, vmPerCri, vmPerSto,
       designerPerArte,
       totalPerReels, totalPerCri, totalPerSto, totalPerArte,
@@ -586,7 +602,7 @@ export default function CostByContentType() {
         <Card className="border-l-4" style={{ borderLeftColor: 'hsl(217,91%,60%)' }}>
           <CardContent className="p-4">
             <DollarSign size={18} className="text-blue-600 mb-2" />
-            <p className="text-xl font-bold">{fmt(data.editorPool)}</p>
+            <p className="text-xl font-bold">{fmt(data.editorSocialPool)}</p>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Pool Editor+Social ({data.months} {data.months === 1 ? 'mês' : 'meses'})</p>
             <p className="text-[10px] text-muted-foreground mt-1">Média mensal: {fmt(data.monthlyEditorPool)} · VM no financeiro: {fmt(data.vmPool)}</p>
           </CardContent>
@@ -736,22 +752,24 @@ export default function CostByContentType() {
                 <tr>
                   <th className="text-left px-3 py-2">Conteúdo</th>
                   <th className="text-right px-3 py-2">Videomaker (captação)</th>
-                  <th className="text-right px-3 py-2">Editor / Social (edição)</th>
+                  <th className="text-right px-3 py-2">Editor (edição)</th>
+                  <th className="text-right px-3 py-2">Social Media</th>
                   <th className="text-right px-3 py-2">Designer</th>
                   <th className="text-right px-3 py-2 bg-primary/10">Custo total por unidade</th>
                 </tr>
               </thead>
               <tbody>
                 {[
-                  { label: '1 Reels', vm: data.vmPerReels, ed: data.editorPerReels, ds: 0, total: data.totalPerReels },
-                  { label: '1 Criativo', vm: data.vmPerCri, ed: data.editorPerCri, ds: 0, total: data.totalPerCri },
-                  { label: '1 Story', vm: data.vmPerSto, ed: data.editorPerSto, ds: 0, total: data.totalPerSto },
-                  { label: '1 Arte', vm: 0, ed: 0, ds: data.designerPerArte, total: data.totalPerArte },
+                  { label: '1 Reels', vm: data.vmPerReels, ed: data.editorPerReels, sc: data.socialPerReels, ds: 0, total: data.totalPerReels },
+                  { label: '1 Criativo', vm: data.vmPerCri, ed: data.editorPerCri, sc: data.socialPerCri, ds: 0, total: data.totalPerCri },
+                  { label: '1 Story', vm: data.vmPerSto, ed: data.editorPerSto, sc: data.socialPerSto, ds: 0, total: data.totalPerSto },
+                  { label: '1 Arte', vm: 0, ed: 0, sc: 0, ds: data.designerPerArte, total: data.totalPerArte },
                 ].map((r, i) => (
                   <tr key={i} className="border-t border-border/50">
                     <td className="px-3 py-2 font-medium">{r.label}</td>
                     <td className="px-3 py-2 text-right">{r.vm > 0 ? fmt(r.vm) : '—'}</td>
                     <td className="px-3 py-2 text-right">{r.ed > 0 ? fmt(r.ed) : '—'}</td>
+                    <td className="px-3 py-2 text-right">{r.sc > 0 ? fmt(r.sc) : '—'}</td>
                     <td className="px-3 py-2 text-right">{r.ds > 0 ? fmt(r.ds) : '—'}</td>
                     <td className="px-3 py-2 text-right font-bold bg-primary/5">{r.total > 0 ? fmt(r.total) : '—'}</td>
                   </tr>

@@ -363,6 +363,34 @@ export default function CostByContentType() {
           </Card>
         ))}
       </div>
+
+      <div>
+        <h2 className="text-lg font-semibold flex items-center gap-2 mt-6">
+          <Film size={18} className="text-cyan-600" /> Edições feitas por Videomakers
+        </h2>
+        <p className="text-xs text-muted-foreground mb-3">
+          Pool Videomaker ({fmt(data.vmPool)} no período · folha mensal {fmt(data.monthlyVmPool)}) alocado apenas nos cards onde o responsável (assigned_to) é um videomaker.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {[
+            { label: 'Reels', qty: data.vmReels, cost: data.cVmReels, total: data.salVmReels, border: 'hsl(190,90%,45%)', color: 'text-cyan-600' },
+            { label: 'Criativos', qty: data.vmCri, cost: data.cVmCri, total: data.salVmCri, border: 'hsl(280,70%,55%)', color: 'text-fuchsia-600' },
+            { label: 'Stories', qty: data.vmSto, cost: data.cVmSto, total: data.salVmSto, border: 'hsl(340,80%,60%)', color: 'text-rose-600' },
+          ].map((it, i) => (
+            <Card key={i} className="overflow-hidden border-l-4" style={{ borderLeftColor: it.border }}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <Film size={18} className={it.color} />
+                  <span className="text-[10px] text-muted-foreground">{it.qty} editados por VM</span>
+                </div>
+                <p className="text-2xl font-bold">{formatCost(it.cost, it.qty, data.vmPool)}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Custo VM por {it.label}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">Total alocado: {fmt(it.total)}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

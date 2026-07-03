@@ -293,19 +293,23 @@ export default function CostByContentType() {
     const { salaryByUser, unmatchedTotal: unmatchedSalaryTotal } = buildSalaryByUser(salaryExpenses, users, dateRange.start, dateRange.end, months);
 
     const editorPool = users
-      .filter(u => EDITOR_ROLES.includes(u.role))
+      .filter(u => u.role === 'editor')
       .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);
+    const socialPool = users
+      .filter(u => u.role === 'social_media')
+      .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);
+    const editorSocialPool = editorPool + socialPool;
     const vmPool = users
       .filter(u => VIDEOMAKER_ROLES.includes(u.role))
       .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);
     const designerPool = users
       .filter(u => DESIGNER_ROLES.includes(u.role))
       .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);
-    const monthlyEditorPool = editorPool / months;
+    const monthlyEditorPool = editorSocialPool / months;
     const monthlyVmPool = vmPool / months;
     const monthlyDesignerPool = designerPool / months;
     const monthlyVideoPool = monthlyEditorPool + monthlyVmPool;
-    const videoPool = editorPool + vmPool;
+    const videoPool = editorSocialPool + vmPool;
     const monthlyTotalSalaries = monthlyVideoPool + monthlyDesignerPool;
     const totalSalaries = videoPool + designerPool;
 

@@ -123,8 +123,8 @@ export default function Dashboard() {
   const normalizeDateKey = (value: string) => value?.slice(0, 10) || '';
   const [weekOffset, setWeekOffset] = useState(0);
   const [waStats, setWaStats] = useState({ total: 0, sent: 0, failed: 0 });
-  const [deliveryRecords, setDeliveryRecords] = useState<any[]>([]);
-  const [liveEditorTasks, setLiveEditorTasks] = useState<LiveEditorTask[]>([]);
+  const [rawDeliveryRecords, setDeliveryRecords] = useState<any[]>([]);
+  const [rawLiveEditorTasks, setLiveEditorTasks] = useState<LiveEditorTask[]>([]);
   const [endoMetrics, setEndoMetrics] = useState({ totalClients: 0, revenue: 0, costs: 0, profit: 0, margin: 0, topClients: [] as { name: string; profit: number }[] });
   const [contractAlerts, setContractAlerts] = useState<{ clientName: string; daysLeft: number; endDate: string }[]>([]);
   const [expandedWeekDay, setExpandedWeekDay] = useState<string | null>(null);

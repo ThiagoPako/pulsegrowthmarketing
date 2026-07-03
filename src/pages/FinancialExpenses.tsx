@@ -509,9 +509,9 @@ export default function FinancialExpenses() {
         onSave={handleSave}
       />
 
-      {/* Tabs: Despesas / Salários */}
+      {/* Tabs: Despesas / Salários / Pró-labore */}
       <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setFilters(buildEmptyFilters()); }} className="w-full">
-        <TabsList className="grid grid-cols-2 w-full max-w-md">
+        <TabsList className="grid grid-cols-3 w-full max-w-2xl">
           <TabsTrigger value="despesas" className="gap-1.5">
             <Wallet size={14} /> Despesas
             <Badge variant="secondary" className="ml-1 text-[10px]">{fmt(otherTotal)}</Badge>
@@ -519,6 +519,10 @@ export default function FinancialExpenses() {
           <TabsTrigger value="salarios" className="gap-1.5">
             <Users size={14} /> Salários
             <Badge variant="secondary" className="ml-1 text-[10px]">{fmt(salaryTotal)}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="prolabore" className="gap-1.5">
+            <Briefcase size={14} /> Pró-labore
+            <Badge variant="secondary" className="ml-1 text-[10px]">{fmt(prolaboreTotal)}</Badge>
           </TabsTrigger>
         </TabsList>
 

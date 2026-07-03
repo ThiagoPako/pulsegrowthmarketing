@@ -446,9 +446,9 @@ export default function CostByContentType() {
     const wCri = criativos * VIDEO_EFFORT.criativo;
     const wSto = stories * VIDEO_EFFORT.story;
     const wTotal = wReels + wCri + wSto;
-    const salReels = wTotal > 0 ? (editorPool * wReels) / wTotal : 0;
-    const salCri = wTotal > 0 ? (editorPool * wCri) / wTotal : 0;
-    const salSto = wTotal > 0 ? (editorPool * wSto) / wTotal : 0;
+    const salReels = wTotal > 0 ? (editorSocialPool * wReels) / wTotal : 0;
+    const salCri = wTotal > 0 ? (editorSocialPool * wCri) / wTotal : 0;
+    const salSto = wTotal > 0 ? (editorSocialPool * wSto) / wTotal : 0;
 
     // Pool designer: 100% para artes
     const salArt = designerPool;
@@ -465,17 +465,28 @@ export default function CostByContentType() {
     const vmFullCri = wTotal > 0 ? (vmPool * wCri) / wTotal : 0;
     const vmFullSto = wTotal > 0 ? (vmPool * wSto) / wTotal : 0;
 
-    const editorPerReels = reels > 0 ? salReels / reels : 0;
-    const editorPerCri = criativos > 0 ? salCri / criativos : 0;
-    const editorPerSto = stories > 0 ? salSto / stories : 0;
+    // Editor puro (só role 'editor') e Social Media puro, rateados por esforço
+    const editorOnlyReels = wTotal > 0 ? (editorPool * wReels) / wTotal : 0;
+    const editorOnlyCri = wTotal > 0 ? (editorPool * wCri) / wTotal : 0;
+    const editorOnlySto = wTotal > 0 ? (editorPool * wSto) / wTotal : 0;
+    const socialOnlyReels = wTotal > 0 ? (socialPool * wReels) / wTotal : 0;
+    const socialOnlyCri = wTotal > 0 ? (socialPool * wCri) / wTotal : 0;
+    const socialOnlySto = wTotal > 0 ? (socialPool * wSto) / wTotal : 0;
+
+    const editorPerReels = reels > 0 ? editorOnlyReels / reels : 0;
+    const editorPerCri = criativos > 0 ? editorOnlyCri / criativos : 0;
+    const editorPerSto = stories > 0 ? editorOnlySto / stories : 0;
+    const socialPerReels = reels > 0 ? socialOnlyReels / reels : 0;
+    const socialPerCri = criativos > 0 ? socialOnlyCri / criativos : 0;
+    const socialPerSto = stories > 0 ? socialOnlySto / stories : 0;
     const vmPerReels = reels > 0 ? vmFullReels / reels : 0;
     const vmPerCri = criativos > 0 ? vmFullCri / criativos : 0;
     const vmPerSto = stories > 0 ? vmFullSto / stories : 0;
     const designerPerArte = artes > 0 ? designerPool / artes : 0;
 
-    const totalPerReels = editorPerReels + vmPerReels;
-    const totalPerCri = editorPerCri + vmPerCri;
-    const totalPerSto = editorPerSto + vmPerSto;
+    const totalPerReels = editorPerReels + socialPerReels + vmPerReels;
+    const totalPerCri = editorPerCri + socialPerCri + vmPerCri;
+    const totalPerSto = editorPerSto + socialPerSto + vmPerSto;
     const totalPerArte = designerPerArte;
 
     // === ANÁLISE POR PACOTE ===

@@ -129,7 +129,7 @@ export default function Dashboard() {
   const [contractAlerts, setContractAlerts] = useState<{ clientName: string; daysLeft: number; endDate: string }[]>([]);
   const [expandedWeekDay, setExpandedWeekDay] = useState<string | null>(null);
   const [waitLogs, setWaitLogs] = useState<any[]>([]);
-  const [contentTasks, setContentTasks] = useState<any[]>([]);
+  const [rawContentTasks, setContentTasks] = useState<any[]>([]);
   const [aiSeasonalAlerts, setAiSeasonalAlerts] = useState<AISeasonalAlert[]>([]);
   const [seasonalLoading, setSeasonalLoading] = useState(false);
 

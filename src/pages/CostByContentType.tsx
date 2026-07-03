@@ -865,8 +865,8 @@ export default function CostByContentType() {
                 {data.planAnalysis.length === 0 && (
                   <tr><td colSpan={9} className="text-center text-muted-foreground py-6">Nenhum plano ativo cadastrado.</td></tr>
                 )}
-                {data.planAnalysis.map(p => (
-                  <tr key={p.id} className="border-t border-border/50">
+                {data.planAnalysis.map((p, i) => (
+                  <tr key={p.id} className={`border-t border-border/50 transition-colors ${i % 2 === 0 ? 'bg-muted/20' : ''} ${p.marginPct >= 50 ? 'border-l-4 border-l-emerald-500' : p.marginPct >= 20 ? 'border-l-4 border-l-amber-500' : 'border-l-4 border-l-red-500'} hover:bg-muted/40`}>
                     <td className="px-3 py-2 font-medium">{p.name}</td>
                     <td className="px-3 py-2 text-right">{p.qReels}</td>
                     <td className="px-3 py-2 text-right">{p.qCri}</td>

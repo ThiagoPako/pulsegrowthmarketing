@@ -300,14 +300,17 @@ export default function CostByContentType() {
 
     const { salaryByUser, unmatchedTotal: unmatchedSalaryTotal } = buildSalaryByUser(salaryExpenses, users, dateRange.start, dateRange.end, months);
 
-    // Também considera pró-labore como remuneração do colaborador (ex.: Victor recebe via Pró-labore, não salário fixo).
-    // Só entra no salaryByUser quando o toggle "Incluir Pró-labore" está ativo — assim o custo/card reflete o que a empresa realmente pagou.
+    // Pró-labore só vai para sócios (role = 'admin'). Não deve ser somado a colaboradores de produção
+    // mesmo que compartilhem o primeiro nome (ex.: Victor sócio ≠ Victor Videomaker).
     if (includeProLabore) {
-      const userAliases = users.flatMap(u => [
-        { userId: u.id, key: normalizePersonKey(u.displayName) },
-        { userId: u.id, key: normalizePersonKey(u.name) },
-        { userId: u.id, key: normalizePersonKey(u.email?.split('@')[0]) },
-      ]).filter(a => a.key.length >= 3);
+      const socioAliases = users
+        .filter(u => u.role === 'admin')
+        .flatMap(u => [
+          { userId: u.id, key: normalizePersonKey(u.displayName) },
+          { userId: u.id, key: normalizePersonKey(u.name) },
+          { userId: u.id, key: normalizePersonKey(u.email?.split('@')[0]) },
+        ])
+        .filter(a => a.key.length >= 3);
       prolaboreExpenses
         .filter(e => inDateRange(e.date, dateRange.start, dateRange.end))
         .forEach(e => {
@@ -315,7 +318,7 @@ export default function CostByContentType() {
           if (amount <= 0) return;
           const keys = [normalizePersonKey(e.responsible), normalizePersonKey(extractSalaryPersonName(e))].filter(Boolean);
           const descKey = normalizePersonKey(e.description);
-          const match = userAliases.find(a => keys.includes(a.key)) || userAliases.find(a => a.key.length >= 4 && descKey.includes(a.key));
+          const match = socioAliases.find(a => keys.includes(a.key)) || socioAliases.find(a => a.key.length >= 4 && descKey.includes(a.key));
           if (match) salaryByUser.set(match.userId, (salaryByUser.get(match.userId) || 0) + amount);
         });
     }

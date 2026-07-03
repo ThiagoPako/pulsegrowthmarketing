@@ -601,7 +601,7 @@ export default function CostByContentType() {
       prolaboreTotal,
       prolaborePerSocio,
     };
-  }, [records, editorTasks, designTasks, socialDeliveries, salaryExpenses, prolaboreExpenses, users, selectedClient, dateRange, plans]);
+  }, [records, editorTasks, designTasks, socialDeliveries, salaryExpenses, prolaboreExpenses, users, selectedClient, dateRange, plans, includeProLabore]);
 
   const fmt = (n: number) => Number.isFinite(n) && n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00';
   const formatCost = (cost: number, qty: number, pool: number) => {

@@ -438,7 +438,8 @@ export default function CostByContentType() {
           avgCost: cards > 0 && salary > 0 ? salary / cards : 0,
         };
       })
-      .filter(c => c.salary > 0 || c.cards > 0)
+      // Mostra todos os colaboradores dos times de produção, mesmo sem salário lançado
+      // ou sem cards no período (ex.: Victor Videomaker recebe via Pró-labore).
       .sort((a, b) => b.salary - a.salary);
 
     // Aloca o salário financeiro de cada videomaker apenas nos cards que ele mesmo editou.

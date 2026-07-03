@@ -191,7 +191,7 @@ interface PlanRow {
   stories_qty: number | string | null;
   arts_qty: number | string | null;
   recording_sessions?: number | string | null;
-  active?: boolean | null;
+  status?: string | null;
 }
 
 export default function CostByContentType() {

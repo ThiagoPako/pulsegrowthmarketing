@@ -167,10 +167,7 @@ export default function CostByContentType() {
       .filter(t => clientOk(t.client_id) && PRODUCED_DESIGN_COLUMNS.has(normalizeText(t.kanban_column)) && inDateRange(t.completed_at || t.updated_at || t.created_at, dateRange.start, dateRange.end))
       .reduce((a, t) => a + countDesignAttachments(t), 0);
 
-    // Usa a maior fonte de quantidade para evitar duplicidade entre agenda, kanban e social.
-    const reels = Math.max(recReels, ctReels, sReels);
-    const criativos = Math.max(recCri, ctCri, sCri);
-    const stories = Math.max(recSto, ctSto, sSto);
+    // Total geral de artes (calculado aqui; reels/criativos/stories abaixo)
     const artes = Math.max(recArts, dtArts);
 
     // === SALÁRIOS por pool (sem sobreposição) ===

@@ -102,24 +102,42 @@ const isFixedSalaryExpense = (expense: SalaryExpense): boolean => {
   return !description.startsWith('bonus -') && !description.startsWith('bonificacao -');
 };
 
+const ROLE_LABEL_TO_ROLE: Record<string, string> = {
+  administrador: 'admin', videomaker: 'videomaker', 'social media': 'social_media',
+  socialmedia: 'social_media', editor: 'editor', endomarketing: 'endomarketing',
+  parceiro: 'parceiro', fotografia: 'fotografo', fotografo: 'fotografo',
+  designer: 'designer', copywriter: 'copywriter',
+};
+
+// "Salário - Victor (Videomaker)" → 'videomaker'
+const extractSalaryRoleHint = (expense: SalaryExpense): string | null => {
+  const desc = expense.description || '';
+  const m = desc.match(/\(([^)]+)\)\s*$/);
+  if (!m) return null;
+  const key = normalizeText(m[1]);
+  return ROLE_LABEL_TO_ROLE[key] || ROLE_LABEL_TO_ROLE[key.replace(/\s+/g, '')] || null;
+};
+
 const buildSalaryByUser = (expenses: SalaryExpense[], users: ReturnType<typeof useApp>['users'], start: string, end: string, months: number) => {
-  const rawAliases = users.flatMap(user => [
-    { userId: user.id, key: normalizePersonKey(user.displayName) },
-    { userId: user.id, key: normalizePersonKey(user.name) },
-    { userId: user.id, key: normalizePersonKey(user.email?.split('@')[0]) },
+  type Alias = { userId: string; role: string; key: string };
+  const rawAliases: Alias[] = users.flatMap(user => [
+    { userId: user.id, role: user.role, key: normalizePersonKey(user.displayName) },
+    { userId: user.id, role: user.role, key: normalizePersonKey(user.name) },
+    { userId: user.id, role: user.role, key: normalizePersonKey(user.email?.split('@')[0]) },
   ]).filter(alias => alias.key.length >= 3);
-  // Remove aliases ambíguos (mesma chave usada por >1 usuário — ex.: "victor" bate em 3 pessoas)
+
   const keyOwners = new Map<string, Set<string>>();
   rawAliases.forEach(a => {
     if (!keyOwners.has(a.key)) keyOwners.set(a.key, new Set());
     keyOwners.get(a.key)!.add(a.userId);
   });
-  const aliases = rawAliases
+  // aliases únicos (só 1 dono) — casáveis sem contexto
+  const uniqueAliases = rawAliases
     .filter(a => (keyOwners.get(a.key)?.size || 0) === 1)
-    // Chaves mais longas primeiro (nome completo antes de primeiro nome) para casar melhor via includes.
     .sort((a, b) => b.key.length - a.key.length);
+  // aliases ambíguos ("victor") — só casam se houver dica de role (ex.: "(Videomaker)")
+  const ambiguousAliases = rawAliases.filter(a => (keyOwners.get(a.key)?.size || 0) > 1);
 
-  // Agrupa por usuário: soma paga dentro do período e valor mensal mais recente fora dele.
   const inPeriodByUser = new Map<string, number>();
   const latestOutByUser = new Map<string, { date: string; amount: number }>();
   let unmatchedTotal = 0;
@@ -135,19 +153,28 @@ const buildSalaryByUser = (expenses: SalaryExpense[], users: ReturnType<typeof u
         normalizePersonKey(extractSalaryPersonName(expense)),
       ].filter(Boolean);
       const descriptionKey = normalizePersonKey(expense.description);
-      const exactMatch = aliases.find(alias => candidateKeys.includes(alias.key));
-      const fallbackMatch = exactMatch || aliases.find(alias => alias.key.length >= 4 && descriptionKey.includes(alias.key));
+      const roleHint = extractSalaryRoleHint(expense);
+
+      let match: Alias | undefined =
+        uniqueAliases.find(a => candidateKeys.includes(a.key)) ||
+        uniqueAliases.find(a => a.key.length >= 4 && descriptionKey.includes(a.key));
+
+      // Desempate por role quando o nome sozinho é ambíguo (ex.: 3 Victors).
+      if (!match && roleHint) {
+        match = ambiguousAliases.find(a => a.role === roleHint && candidateKeys.includes(a.key))
+          || ambiguousAliases.find(a => a.role === roleHint && a.key.length >= 4 && descriptionKey.includes(a.key));
+      }
 
       const isIn = inDateRange(expense.date, start, end);
 
-      if (fallbackMatch) {
+      if (match) {
         if (isIn) {
-          inPeriodByUser.set(fallbackMatch.userId, (inPeriodByUser.get(fallbackMatch.userId) || 0) + amount);
+          inPeriodByUser.set(match.userId, (inPeriodByUser.get(match.userId) || 0) + amount);
         } else {
-          const prev = latestOutByUser.get(fallbackMatch.userId);
+          const prev = latestOutByUser.get(match.userId);
           const day = (expense.date || '').slice(0, 10);
           if (!prev || day > prev.date) {
-            latestOutByUser.set(fallbackMatch.userId, { date: day, amount });
+            latestOutByUser.set(match.userId, { date: day, amount });
           }
         }
       } else if (isIn) {

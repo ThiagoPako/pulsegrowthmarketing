@@ -595,7 +595,7 @@ export default function CostByContentType() {
           <Calculator size={18} className="text-emerald-600" /> Validação por Colaborador
         </h2>
         <p className="text-xs text-muted-foreground mb-3">
-          Total produzido pela função é rateado entre os colaboradores proporcional ao salário (cards sem <code>assigned_to</code> são distribuídos automaticamente). Se um colaborador tem cards com <code>assigned_to</code> preenchido, esses entram integralmente; o restante é rateado.
+          Total produzido pela função é rateado igualmente entre os colaboradores dela (cards com <code>assigned_to</code> entram integralmente; o restante é dividido em partes iguais). Assim o custo médio/card reflete o salário individual.
         </p>
         <Card>
           <CardContent className="p-0 overflow-x-auto">

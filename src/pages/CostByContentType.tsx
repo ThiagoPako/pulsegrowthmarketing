@@ -321,23 +321,30 @@ export default function CostByContentType() {
     // Pool designer: 100% para artes
     const salArt = designerPool;
 
+    // Custo líquido por conteúdo = soma do que empresa gastou (Editor+Social + Videomaker) naquele tipo
+    const netReels = salReels + salVmReels;
+    const netCri = salCri + salVmCri;
+    const netSto = salSto + salVmSto;
+    const netArt = salArt;
+
     return {
       totalSalaries, monthlyTotalSalaries, months,
       videoPool, editorPool, vmPool, vmEditingPool, designerPool,
       monthlyVideoPool, monthlyEditorPool, monthlyVmPool, monthlyDesignerPool,
       unmatchedSalaryTotal,
       reels, criativos, stories, artes,
-      cReels: reels > 0 ? salReels / reels : 0,
-      cCri: criativos > 0 ? salCri / criativos : 0,
-      cArt: artes > 0 ? salArt / artes : 0,
-      cSto: stories > 0 ? salSto / stories : 0,
-      salReels, salCri, salArt, salSto,
+      cReels: reels > 0 ? netReels / reels : 0,
+      cCri: criativos > 0 ? netCri / criativos : 0,
+      cArt: artes > 0 ? netArt / artes : 0,
+      cSto: stories > 0 ? netSto / stories : 0,
+      salReels: netReels, salCri: netCri, salArt: netArt, salSto: netSto,
       vmReels, vmCri, vmSto,
       salVmReels, salVmCri, salVmSto,
       cVmReels: vmReels > 0 ? salVmReels / vmReels : 0,
       cVmCri: vmCri > 0 ? salVmCri / vmCri : 0,
       cVmSto: vmSto > 0 ? salVmSto / vmSto : 0,
     };
+
 
   }, [records, editorTasks, designTasks, socialDeliveries, salaryExpenses, users, selectedClient, dateRange]);
 

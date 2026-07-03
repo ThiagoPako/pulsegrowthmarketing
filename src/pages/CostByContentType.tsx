@@ -595,7 +595,7 @@ export default function CostByContentType() {
           <Calculator size={18} className="text-emerald-600" /> Validação por Colaborador
         </h2>
         <p className="text-xs text-muted-foreground mb-3">
-          Compare o salário lançado no Financeiro com os cards realmente atribuídos (assigned_to) no período. Se um colaborador aparece sem cards, verifique se as tarefas estão atribuídas a ele; se aparece sem salário, cadastre em <b>Financeiro → Despesas → Salários</b>.
+          Total produzido pela função é rateado entre os colaboradores proporcional ao salário (cards sem <code>assigned_to</code> são distribuídos automaticamente). Se um colaborador tem cards com <code>assigned_to</code> preenchido, esses entram integralmente; o restante é rateado.
         </p>
         <Card>
           <CardContent className="p-0 overflow-x-auto">

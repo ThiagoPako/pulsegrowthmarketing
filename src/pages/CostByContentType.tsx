@@ -157,6 +157,18 @@ const countDesignAttachments = (task: DesignTask): number => {
   return urls.length + singleAttachment + mockup;
 };
 
+interface PlanRow {
+  id: string;
+  name: string | null;
+  price: number | string | null;
+  reels_qty: number | string | null;
+  creatives_qty: number | string | null;
+  stories_qty: number | string | null;
+  arts_qty: number | string | null;
+  recording_sessions?: number | string | null;
+  active?: boolean | null;
+}
+
 export default function CostByContentType() {
   const { clients, users } = useApp();
   const [records, setRecords] = useState<DeliveryRecord[]>([]);
@@ -164,24 +176,27 @@ export default function CostByContentType() {
   const [designTasks, setDesignTasks] = useState<DesignTask[]>([]);
   const [socialDeliveries, setSocialDeliveries] = useState<SocialDelivery[]>([]);
   const [salaryExpenses, setSalaryExpenses] = useState<SalaryExpense[]>([]);
+  const [plans, setPlans] = useState<PlanRow[]>([]);
   const [selectedClient, setSelectedClient] = useState('all');
   const [periodType, setPeriodType] = useState<'current' | 'previous' | 'custom'>('current');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
 
   const fetchData = useCallback(async () => {
-    const [rRes, sRes, edRes, dRes, catRes, expRes] = await Promise.all([
+    const [rRes, sRes, edRes, dRes, catRes, expRes, plRes] = await Promise.all([
       supabase.from('delivery_records').select('client_id,date,reels_produced,creatives_produced,stories_produced,arts_produced,delivery_status'),
       supabase.from('social_media_deliveries').select('client_id,content_type,delivered_at,posted_at,created_at,updated_at,status'),
       supabase.from('content_tasks').select('client_id,content_type,kanban_column,approved_at,updated_at,created_at,assigned_to'),
       supabase.from('design_tasks').select('client_id,kanban_column,completed_at,updated_at,created_at,attachment_url,attachment_urls,editable_file_url,mockup_url'),
       supabase.from('expense_categories').select('id,name'),
       supabase.from('expenses').select('date,amount,description,responsible,category_id,expense_type'),
+      supabase.from('plans').select('id,name,price,reels_qty,creatives_qty,stories_qty,arts_qty,recording_sessions,active'),
     ]);
     if (rRes.data) setRecords(rRes.data as DeliveryRecord[]);
     if (sRes.data) setSocialDeliveries(sRes.data as SocialDelivery[]);
     if (edRes.data) setEditorTasks(edRes.data as EditorTask[]);
     if (dRes.data) setDesignTasks(dRes.data as DesignTask[]);
+    if (plRes.data) setPlans(plRes.data as PlanRow[]);
     if (catRes.data && expRes.data) {
       const salaryCategoryIds = new Set(
         (catRes.data as ExpenseCategory[])

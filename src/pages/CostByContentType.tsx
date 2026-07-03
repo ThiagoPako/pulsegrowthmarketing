@@ -369,7 +369,7 @@ export default function CostByContentType() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Target size={24} className="text-primary" /> Custo por Tipo de Conteúdo
         </h1>
-        <p className="text-sm text-muted-foreground">Usa salários lançados em Financeiro &gt; Despesas &gt; Salários e a função cadastrada de cada colaborador. Editor/Social e Videomaker são alocados por esforço: Reels=1.0, Criativo=0.5, Story=0.2.</p>
+        <p className="text-sm text-muted-foreground">Custo líquido por conteúdo = soma dos salários (Editor/Social + Videomaker + Designer) alocados por esforço (Reels=1.0, Criativo=0.5, Story=0.2). Fonte: Financeiro &gt; Despesas &gt; Salários.</p>
       </div>
 
       <Card>

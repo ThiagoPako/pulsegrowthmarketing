@@ -190,6 +190,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   parceiro: 'Parceiro',
   fotografo: 'Fotografia',
   designer: 'Designer',
+  copywriter: 'Copywriter',
 };
 
 export const COLUMN_LABELS: Record<KanbanColumn, string> = {

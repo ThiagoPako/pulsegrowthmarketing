@@ -300,6 +300,26 @@ export default function CostByContentType() {
 
     const { salaryByUser, unmatchedTotal: unmatchedSalaryTotal } = buildSalaryByUser(salaryExpenses, users, dateRange.start, dateRange.end, months);
 
+    // Também considera pró-labore como remuneração do colaborador (ex.: Victor recebe via Pró-labore, não salário fixo).
+    // Só entra no salaryByUser quando o toggle "Incluir Pró-labore" está ativo — assim o custo/card reflete o que a empresa realmente pagou.
+    if (includeProLabore) {
+      const userAliases = users.flatMap(u => [
+        { userId: u.id, key: normalizePersonKey(u.displayName) },
+        { userId: u.id, key: normalizePersonKey(u.name) },
+        { userId: u.id, key: normalizePersonKey(u.email?.split('@')[0]) },
+      ]).filter(a => a.key.length >= 3);
+      prolaboreExpenses
+        .filter(e => inDateRange(e.date, dateRange.start, dateRange.end))
+        .forEach(e => {
+          const amount = toNumber(e.amount);
+          if (amount <= 0) return;
+          const keys = [normalizePersonKey(e.responsible), normalizePersonKey(extractSalaryPersonName(e))].filter(Boolean);
+          const descKey = normalizePersonKey(e.description);
+          const match = userAliases.find(a => keys.includes(a.key)) || userAliases.find(a => a.key.length >= 4 && descKey.includes(a.key));
+          if (match) salaryByUser.set(match.userId, (salaryByUser.get(match.userId) || 0) + amount);
+        });
+    }
+
     const editorPool = users
       .filter(u => EDITOR_ROLES.includes(u.role))
       .reduce((a, u) => a + (salaryByUser.get(u.id) || 0), 0);

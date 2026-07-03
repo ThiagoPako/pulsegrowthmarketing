@@ -1,4 +1,5 @@
 import { Rocket, Zap, Briefcase, Trophy, LucideIcon } from 'lucide-react';
+import type { CityCode } from '@/contexts/CityContext';
 
 export type Plan = {
   key: 'starter' | 'boost' | 'premium' | 'elite';
@@ -13,7 +14,8 @@ export type Plan = {
   ideal: string;
 };
 
-export const PLANS: Plan[] = [
+// ============ URUAÇU (planos originais da apresentação) ============
+const URUACU_PLANS: Plan[] = [
   {
     key: 'starter',
     name: 'Pulse Starter',
@@ -126,4 +128,112 @@ export const PLANS: Plan[] = [
   },
 ];
 
-export const getPlan = (key: string) => PLANS.find((p) => p.key === key);
+// ============ MINAÇU (mercado local — valores reduzidos) ============
+// TODO: ajustar features/preços conforme realidade comercial de Minaçu.
+const MINACU_PLANS: Plan[] = [
+  {
+    key: 'starter',
+    name: 'Pulse Starter',
+    icon: Rocket,
+    tagline: 'Comece com base profissional',
+    description: 'Ideal para empresas de Minaçu estruturando sua presença digital com segurança.',
+    ideal: 'Empresas locais iniciando no digital.',
+    features: [
+      'Linha editorial estratégica',
+      '2 artes para feed e stories',
+      '4 reels mensais',
+      'Gestão de tráfego pago Meta Ads',
+      'Edição profissional de vídeo',
+      'Portal do Cliente',
+      'Relatórios mensais',
+    ],
+    pricing: [
+      { label: '6 meses', monthly: 'R$ 1.680' },
+      { label: '12 meses', monthly: 'R$ 1.500', save: 'Economia de R$ 2.160' },
+    ],
+  },
+  {
+    key: 'boost',
+    name: 'Pulse Boost',
+    icon: Zap,
+    tagline: 'O plano que mais entrega resultado',
+    description: 'Equilíbrio entre volume de produção e investimento — pensado para o mercado de Minaçu.',
+    highlight: true,
+    badge: '⭐ Plano recomendado',
+    ideal: 'Empresas de Minaçu que querem acelerar crescimento com produção robusta.',
+    features: [
+      'Linha editorial com análise estratégica',
+      'Criação de campanhas sazonais',
+      '20 stories/mês',
+      '6 reels mensais',
+      '4 criativos em vídeo para anúncios',
+      '4 artes mensais',
+      'Social media dedicado',
+      'Google Ads + Meta Ads',
+      'Portal do Cliente + Relatórios mensais',
+    ],
+    pricing: [
+      { label: '6 meses', monthly: 'R$ 2.280' },
+      { label: '12 meses', monthly: 'R$ 2.000', save: 'Economia de R$ 3.360' },
+    ],
+  },
+  {
+    key: 'premium',
+    name: 'Pulse Premium',
+    icon: Briefcase,
+    tagline: 'Autoridade + foco em vendas',
+    description: 'Conteúdo, mídia paga e inteligência comercial em alto nível.',
+    ideal: 'Marcas estabelecidas em Minaçu.',
+    features: [
+      'Linha editorial estratégica',
+      'Roteiros profissionais',
+      '20 stories/mês',
+      '8 reels mensais',
+      '6 artes mensais',
+      'Social media dedicado',
+      'Google Ads + Meta Ads avançado',
+      'Campanhas comerciais e estratégias de vendas',
+      'CRM integrado',
+    ],
+    pricing: [
+      { label: '6 meses', monthly: 'R$ 3.280' },
+      { label: '12 meses', monthly: 'R$ 2.900', save: 'Economia de R$ 4.560' },
+    ],
+  },
+  {
+    key: 'elite',
+    name: 'Pulse Elite',
+    icon: Trophy,
+    tagline: 'Domine o mercado',
+    description: 'Operação digital completa para dominar Minaçu.',
+    badge: 'Top performance',
+    ideal: 'Empresas que querem dominância local total.',
+    features: [
+      'Tudo do Premium +',
+      '12 reels mensais',
+      '8 artes mensais',
+      'Google + Meta Ads avançado premium',
+      'CRM completo com análise de atendimento',
+      'Treinamento comercial recorrente',
+    ],
+    pricing: [
+      { label: '6 meses', monthly: 'R$ 4.500' },
+      { label: '12 meses', monthly: 'R$ 4.000', save: 'Economia de R$ 6.000' },
+    ],
+  },
+];
+
+export const PLANS_BY_CITY: Record<CityCode, Plan[]> = {
+  uruacu: URUACU_PLANS,
+  minacu: MINACU_PLANS,
+};
+
+// Backward-compat: PLANS default = Uruaçu (usado em imports antigos)
+export const PLANS: Plan[] = URUACU_PLANS;
+
+export const getPlansForCity = (city: CityCode): Plan[] => PLANS_BY_CITY[city] || URUACU_PLANS;
+
+export const getPlan = (key: string, city?: CityCode): Plan | undefined => {
+  const source = city ? getPlansForCity(city) : URUACU_PLANS;
+  return source.find((p) => p.key === key);
+};

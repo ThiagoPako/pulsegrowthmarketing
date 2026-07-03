@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { getPlan, PLANS } from '@/data/plans';
+import { useSearchParams } from 'react-router-dom';
 import { useCity } from '@/contexts/CityContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -82,8 +83,11 @@ export default function ApresentacaoPlano() {
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
   const { activeCity } = useCity();
+  const [searchParams] = useSearchParams();
+  const queryCity = searchParams.get('city');
+  const effectiveCity = (queryCity === 'minacu' || queryCity === 'uruacu') ? queryCity : activeCity;
 
-  const plan = plano ? getPlan(plano) : undefined;
+  const plan = plano ? getPlan(plano, effectiveCity) : undefined;
 
   useEffect(() => { setStage(0); }, [plano]);
 

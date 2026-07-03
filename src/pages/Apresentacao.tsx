@@ -1,28 +1,44 @@
 import { motion } from 'framer-motion';
-import { ArrowRight, Sparkles, Check, ExternalLink, X, Link2, MessageCircle, Tag } from 'lucide-react';
+import { ArrowRight, Sparkles, Check, ExternalLink, X, Link2, MessageCircle, Tag, MapPin } from 'lucide-react';
 const WHATSAPP_NUMBER = '5562985382981';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { PLANS } from '@/data/plans';
+import { getPlansForCity } from '@/data/plans';
+import { useCity, CITY_LABELS, type CityCode } from '@/contexts/CityContext';
 
 const LOGO_URL = '/pulse-logo.png';
 
 export default function Apresentacao() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isPublic = location.pathname.startsWith('/p/');
   const baseRoute = isPublic ? '/p/planos' : '/apresentacao';
 
+  const { activeCity, availableCities, setActiveCity } = useCity();
+  const queryCity = searchParams.get('city') as CityCode | null;
+  const presentationCity: CityCode =
+    (queryCity === 'minacu' || queryCity === 'uruacu') ? queryCity : activeCity;
+
+  const changeCity = (city: CityCode) => {
+    if (isPublic) {
+      setSearchParams({ city });
+    } else {
+      setActiveCity(city);
+    }
+  };
+
   const openPlan = (key: string) => {
-    window.open(`${baseRoute}/${key}`, '_blank', 'noopener,noreferrer');
+    const suffix = isPublic ? `?city=${presentationCity}` : '';
+    window.open(`${baseRoute}/${key}${suffix}`, '_blank', 'noopener,noreferrer');
   };
 
   const copyPublicLink = async (planKey?: string) => {
     const url = planKey
-      ? `${window.location.origin}/p/planos/${planKey}`
-      : `${window.location.origin}/p/planos`;
+      ? `${window.location.origin}/p/planos/${planKey}?city=${presentationCity}`
+      : `${window.location.origin}/p/planos?city=${presentationCity}`;
     try {
       await navigator.clipboard.writeText(url);
       toast.success('Link público copiado!', { description: url });
@@ -31,13 +47,12 @@ export default function Apresentacao() {
     }
   };
 
-  // Ordem: Boost primeiro (foco), depois os outros
-  const ordered = [
-    PLANS.find((p) => p.key === 'starter')!,
-    PLANS.find((p) => p.key === 'boost')!,
-    PLANS.find((p) => p.key === 'premium')!,
-    PLANS.find((p) => p.key === 'elite')!,
-  ];
+  const cityPlans = getPlansForCity(presentationCity);
+  // Ordem: starter, boost, premium, elite
+  const ordered = ['starter', 'boost', 'premium', 'elite']
+    .map((k) => cityPlans.find((p) => p.key === k))
+    .filter(Boolean) as ReturnType<typeof getPlansForCity>;
+
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
@@ -79,6 +94,26 @@ export default function Apresentacao() {
           <Badge className="mb-4 bg-primary/10 text-primary border-primary/20">
             <Sparkles className="h-3 w-3 mr-1" /> Apresentação Comercial
           </Badge>
+
+          {/* Seletor de cidade */}
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <MapPin className="h-4 w-4 text-primary" />
+            <span className="text-xs uppercase tracking-wider text-muted-foreground mr-1">Cidade:</span>
+            {(isPublic ? (['minacu','uruacu'] as CityCode[]) : availableCities).map((c) => (
+              <button
+                key={c}
+                onClick={() => changeCity(c)}
+                className={`px-3 py-1.5 rounded-full text-sm font-semibold border-2 transition-all ${
+                  presentationCity === c
+                    ? 'bg-primary text-primary-foreground border-primary shadow'
+                    : 'bg-background text-foreground border-border hover:border-primary/50'
+                }`}
+              >
+                {CITY_LABELS[c]}
+              </button>
+            ))}
+          </div>
+
           <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight mb-4 leading-tight" style={{ fontFamily: 'var(--font-display)' }}>
             Escolha o plano para <br />
             <span className="bg-gradient-to-r from-primary via-orange-500 to-primary bg-clip-text text-transparent">

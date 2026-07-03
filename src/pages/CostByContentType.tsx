@@ -431,6 +431,52 @@ export default function CostByContentType() {
     const netSto = salSto + salVmSto;
     const netArt = salArt;
 
+    // === CUSTO UNITÁRIO POR FUNÇÃO (para análise de pacotes) ===
+    // VM inteiro rateado por esforço no total produzido
+    const vmFullReels = wTotal > 0 ? (vmPool * wReels) / wTotal : 0;
+    const vmFullCri = wTotal > 0 ? (vmPool * wCri) / wTotal : 0;
+    const vmFullSto = wTotal > 0 ? (vmPool * wSto) / wTotal : 0;
+
+    const editorPerReels = reels > 0 ? salReels / reels : 0;
+    const editorPerCri = criativos > 0 ? salCri / criativos : 0;
+    const editorPerSto = stories > 0 ? salSto / stories : 0;
+    const vmPerReels = reels > 0 ? vmFullReels / reels : 0;
+    const vmPerCri = criativos > 0 ? vmFullCri / criativos : 0;
+    const vmPerSto = stories > 0 ? vmFullSto / stories : 0;
+    const designerPerArte = artes > 0 ? designerPool / artes : 0;
+
+    const totalPerReels = editorPerReels + vmPerReels;
+    const totalPerCri = editorPerCri + vmPerCri;
+    const totalPerSto = editorPerSto + vmPerSto;
+    const totalPerArte = designerPerArte;
+
+    // === ANÁLISE POR PACOTE ===
+    const planAnalysis = plans
+      .filter(p => p.active !== false)
+      .map(p => {
+        const qReels = toNumber(p.reels_qty);
+        const qCri = toNumber(p.creatives_qty);
+        const qSto = toNumber(p.stories_qty);
+        const qArt = toNumber(p.arts_qty);
+        const price = toNumber(p.price);
+        const costReels = qReels * totalPerReels;
+        const costCri = qCri * totalPerCri;
+        const costSto = qSto * totalPerSto;
+        const costArt = qArt * totalPerArte;
+        const cost = costReels + costCri + costSto + costArt;
+        const margin = price - cost;
+        const marginPct = price > 0 ? (margin / price) * 100 : 0;
+        return {
+          id: p.id,
+          name: p.name || 'Sem nome',
+          price,
+          qReels, qCri, qSto, qArt,
+          costReels, costCri, costSto, costArt,
+          cost, margin, marginPct,
+        };
+      })
+      .sort((a, b) => b.price - a.price);
+
     return {
       totalSalaries, monthlyTotalSalaries, months,
       videoPool, editorPool, vmPool, vmEditingPool, designerPool,
@@ -447,11 +493,14 @@ export default function CostByContentType() {
       cVmReels: vmReels > 0 ? salVmReels / vmReels : 0,
       cVmCri: vmCri > 0 ? salVmCri / vmCri : 0,
       cVmSto: vmSto > 0 ? salVmSto / vmSto : 0,
+      editorPerReels, editorPerCri, editorPerSto,
+      vmPerReels, vmPerCri, vmPerSto,
+      designerPerArte,
+      totalPerReels, totalPerCri, totalPerSto, totalPerArte,
       contributorBreakdown,
+      planAnalysis,
     };
-
-
-  }, [records, editorTasks, designTasks, socialDeliveries, salaryExpenses, users, selectedClient, dateRange]);
+  }, [records, editorTasks, designTasks, socialDeliveries, salaryExpenses, users, selectedClient, dateRange, plans]);
 
   const fmt = (n: number) => Number.isFinite(n) && n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00';
   const formatCost = (cost: number, qty: number, pool: number) => {

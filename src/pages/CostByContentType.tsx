@@ -618,35 +618,53 @@ export default function CostByContentType() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <Card className="border-l-4" style={{ borderLeftColor: 'hsl(142,71%,45%)' }}>
+          <CardContent className="p-4">
+            <DollarSign size={18} className="text-emerald-600 mb-2" />
+            <p className="text-xl font-bold">{fmt(data.editorPool)}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Time Editor ({data.months} {data.months === 1 ? 'mês' : 'meses'})</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Mensal: {fmt(data.monthlyEditorPool)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4" style={{ borderLeftColor: 'hsl(45,93%,47%)' }}>
+          <CardContent className="p-4">
+            <DollarSign size={18} className="text-amber-600 mb-2" />
+            <p className="text-xl font-bold">{fmt(data.socialPool)}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Time Social Media ({data.months} {data.months === 1 ? 'mês' : 'meses'})</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Mensal: {fmt(data.monthlySocialPool)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4" style={{ borderLeftColor: 'hsl(174,72%,40%)' }}>
+          <CardContent className="p-4">
+            <DollarSign size={18} className="text-teal-600 mb-2" />
+            <p className="text-xl font-bold">{fmt(data.copyPool)}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Time Copywriting ({data.months} {data.months === 1 ? 'mês' : 'meses'})</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Mensal: {fmt(data.monthlyCopyPool)}</p>
+          </CardContent>
+        </Card>
         <Card className="border-l-4" style={{ borderLeftColor: 'hsl(217,91%,60%)' }}>
           <CardContent className="p-4">
             <DollarSign size={18} className="text-blue-600 mb-2" />
-            <p className="text-xl font-bold">{fmt(data.editorSocialPool)}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Pool Editor+Social ({data.months} {data.months === 1 ? 'mês' : 'meses'})</p>
-            <p className="text-[10px] text-muted-foreground mt-1">Média mensal: {fmt(data.monthlyEditorPool)} · VM no financeiro: {fmt(data.vmPool)}</p>
+            <p className="text-xl font-bold">{fmt(data.vmPool)}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Time Videomaker ({data.months} {data.months === 1 ? 'mês' : 'meses'})</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Mensal: {fmt(data.monthlyVmPool)}</p>
           </CardContent>
         </Card>
         <Card className="border-l-4" style={{ borderLeftColor: 'hsl(24,95%,53%)' }}>
           <CardContent className="p-4">
             <DollarSign size={18} className="text-orange-600 mb-2" />
             <p className="text-xl font-bold">{fmt(data.designerPool)}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Pool Designer ({data.months} {data.months === 1 ? 'mês' : 'meses'})</p>
-            <p className="text-[10px] text-muted-foreground mt-1">Folha mensal: {fmt(data.monthlyDesignerPool)}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Time Designer ({data.months} {data.months === 1 ? 'mês' : 'meses'})</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Mensal: {fmt(data.monthlyDesignerPool)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <DollarSign size={18} className="text-muted-foreground mb-2" />
+            <Calculator size={18} className="text-muted-foreground mb-2" />
             <p className="text-xl font-bold">{fmt(data.totalSalaries)}</p>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Total no Período</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <Calculator size={18} className="text-amber-600 mb-2" />
-            <p className="text-xl font-bold">{data.reels + data.criativos + data.stories + data.artes}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Conteúdos Produzidos</p>
+            <p className="text-[10px] text-muted-foreground mt-1">{data.reels + data.criativos + data.stories + data.artes} conteúdos</p>
           </CardContent>
         </Card>
       </div>

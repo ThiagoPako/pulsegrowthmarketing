@@ -111,20 +111,25 @@ function OrganizingMaterialCard({ rec, vm, client, settings }: { rec: any; vm: a
 }
 
 export default function Dashboard() {
-  const { currentUser, recordings, clients, users, tasks, cancelRecording, updateRecording, getSuggestionsForCancellation, activeRecordings, settings } = useApp();
+  const { currentUser, recordings: allRecordings, clients: allClients, users, tasks: allTasks, cancelRecording, updateRecording, getSuggestionsForCancellation, activeRecordings, settings } = useApp();
+  // Excluir clientes cancelados de toda a Dashboard (deliveries, gravações, tarefas etc.)
+  const clients = useMemo(() => allClients.filter((c: any) => c.status !== 'cancelado'), [allClients]);
+  const activeClientIds = useMemo(() => new Set(clients.map(c => c.id)), [clients]);
+  const recordings = useMemo(() => allRecordings.filter((r: any) => !r.clientId || activeClientIds.has(r.clientId)), [allRecordings, activeClientIds]);
+  const tasks = useMemo(() => allTasks.filter((t: any) => !t.clientId || activeClientIds.has(t.clientId)), [allTasks, activeClientIds]);
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const today = format(new Date(), 'yyyy-MM-dd');
   const normalizeDateKey = (value: string) => value?.slice(0, 10) || '';
   const [weekOffset, setWeekOffset] = useState(0);
   const [waStats, setWaStats] = useState({ total: 0, sent: 0, failed: 0 });
-  const [deliveryRecords, setDeliveryRecords] = useState<any[]>([]);
-  const [liveEditorTasks, setLiveEditorTasks] = useState<LiveEditorTask[]>([]);
+  const [rawDeliveryRecords, setDeliveryRecords] = useState<any[]>([]);
+  const [rawLiveEditorTasks, setLiveEditorTasks] = useState<LiveEditorTask[]>([]);
   const [endoMetrics, setEndoMetrics] = useState({ totalClients: 0, revenue: 0, costs: 0, profit: 0, margin: 0, topClients: [] as { name: string; profit: number }[] });
   const [contractAlerts, setContractAlerts] = useState<{ clientName: string; daysLeft: number; endDate: string }[]>([]);
   const [expandedWeekDay, setExpandedWeekDay] = useState<string | null>(null);
   const [waitLogs, setWaitLogs] = useState<any[]>([]);
-  const [contentTasks, setContentTasks] = useState<any[]>([]);
+  const [rawContentTasks, setContentTasks] = useState<any[]>([]);
   const [aiSeasonalAlerts, setAiSeasonalAlerts] = useState<AISeasonalAlert[]>([]);
   const [seasonalLoading, setSeasonalLoading] = useState(false);
 
@@ -148,7 +153,13 @@ export default function Dashboard() {
     supabase.from('content_tasks').select('id, client_id, kanban_column, created_at, content_type').then(({ data }) => { if (data) setContentTasks(data); });
   }, []);
 
-  const [socialDeliveries, setSocialDeliveries] = useState<any[]>([]);
+  const [rawSocialDeliveries, setSocialDeliveries] = useState<any[]>([]);
+
+  // Filtragem central: nada de cliente cancelado deve aparecer na Dashboard
+  const deliveryRecords = useMemo(() => rawDeliveryRecords.filter(r => !r.client_id || activeClientIds.has(r.client_id)), [rawDeliveryRecords, activeClientIds]);
+  const socialDeliveries = useMemo(() => rawSocialDeliveries.filter(d => !d.client_id || activeClientIds.has(d.client_id)), [rawSocialDeliveries, activeClientIds]);
+  const contentTasks = useMemo(() => rawContentTasks.filter(t => !t.client_id || activeClientIds.has(t.client_id)), [rawContentTasks, activeClientIds]);
+  const liveEditorTasks = useMemo(() => rawLiveEditorTasks.filter(t => !t.client_id || activeClientIds.has(t.client_id)), [rawLiveEditorTasks, activeClientIds]);
   const [plansData, setPlansData] = useState<any[]>([]);
   const [clientPlans, setClientPlans] = useState<Record<string, string>>({});
   useEffect(() => {

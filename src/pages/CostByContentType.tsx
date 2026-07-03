@@ -674,12 +674,11 @@ export default function CostByContentType() {
                   <th className="text-right px-3 py-2">Stories</th>
                   <th className="text-right px-3 py-2">Artes</th>
                   <th className="text-right px-3 py-2">Total cards</th>
-                  <th className="text-right px-3 py-2">Custo médio/card</th>
                 </tr>
               </thead>
               <tbody>
                 {data.contributorBreakdown.length === 0 && (
-                  <tr><td colSpan={9} className="text-center text-muted-foreground py-6">Sem colaboradores com salário ou cards no período.</td></tr>
+                  <tr><td colSpan={8} className="text-center text-muted-foreground py-6">Sem colaboradores com salário ou cards no período.</td></tr>
                 )}
                 {data.contributorBreakdown.map(c => (
                   <tr key={c.id} className="border-t border-border/50">
@@ -691,7 +690,92 @@ export default function CostByContentType() {
                     <td className="px-3 py-2 text-right">{c.story.toFixed(1)}</td>
                     <td className="px-3 py-2 text-right">{c.artes.toFixed(1)}</td>
                     <td className="px-3 py-2 text-right font-semibold">{c.cards.toFixed(1)}</td>
-                    <td className="px-3 py-2 text-right">{c.cards > 0 && c.salary > 0 ? fmt(c.avgCost) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div>
+        <h2 className="text-lg font-semibold flex items-center gap-2 mt-6">
+          <DollarSign size={18} className="text-blue-600" /> Custo unitário por função
+        </h2>
+        <p className="text-xs text-muted-foreground mb-3">
+          Quanto a empresa paga por cada entrega, separado por função. Base: salário total do período dividido pelo total produzido, distribuído por esforço (Reels 1.0 · Criativo 0.5 · Story 0.2).
+        </p>
+        <Card>
+          <CardContent className="p-0 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="text-left px-3 py-2">Conteúdo</th>
+                  <th className="text-right px-3 py-2">Videomaker (captação)</th>
+                  <th className="text-right px-3 py-2">Editor / Social (edição)</th>
+                  <th className="text-right px-3 py-2">Designer</th>
+                  <th className="text-right px-3 py-2 bg-primary/10">Custo total por unidade</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { label: '1 Reels', vm: data.vmPerReels, ed: data.editorPerReels, ds: 0, total: data.totalPerReels },
+                  { label: '1 Criativo', vm: data.vmPerCri, ed: data.editorPerCri, ds: 0, total: data.totalPerCri },
+                  { label: '1 Story', vm: data.vmPerSto, ed: data.editorPerSto, ds: 0, total: data.totalPerSto },
+                  { label: '1 Arte', vm: 0, ed: 0, ds: data.designerPerArte, total: data.totalPerArte },
+                ].map((r, i) => (
+                  <tr key={i} className="border-t border-border/50">
+                    <td className="px-3 py-2 font-medium">{r.label}</td>
+                    <td className="px-3 py-2 text-right">{r.vm > 0 ? fmt(r.vm) : '—'}</td>
+                    <td className="px-3 py-2 text-right">{r.ed > 0 ? fmt(r.ed) : '—'}</td>
+                    <td className="px-3 py-2 text-right">{r.ds > 0 ? fmt(r.ds) : '—'}</td>
+                    <td className="px-3 py-2 text-right font-bold bg-primary/5">{r.total > 0 ? fmt(r.total) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div>
+        <h2 className="text-lg font-semibold flex items-center gap-2 mt-6">
+          <Calculator size={18} className="text-emerald-600" /> Análise por Pacote (custo × margem)
+        </h2>
+        <p className="text-xs text-muted-foreground mb-3">
+          Para cada plano ativo: custo estimado de produção (quantidades do plano × custo unitário total) versus preço de venda. Margem = preço − custo.
+        </p>
+        <Card>
+          <CardContent className="p-0 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="text-left px-3 py-2">Pacote</th>
+                  <th className="text-right px-3 py-2">Reels</th>
+                  <th className="text-right px-3 py-2">Criat.</th>
+                  <th className="text-right px-3 py-2">Stories</th>
+                  <th className="text-right px-3 py-2">Artes</th>
+                  <th className="text-right px-3 py-2">Preço</th>
+                  <th className="text-right px-3 py-2">Custo produção</th>
+                  <th className="text-right px-3 py-2">Margem R$</th>
+                  <th className="text-right px-3 py-2">Margem %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.planAnalysis.length === 0 && (
+                  <tr><td colSpan={9} className="text-center text-muted-foreground py-6">Nenhum plano ativo cadastrado.</td></tr>
+                )}
+                {data.planAnalysis.map(p => (
+                  <tr key={p.id} className="border-t border-border/50">
+                    <td className="px-3 py-2 font-medium">{p.name}</td>
+                    <td className="px-3 py-2 text-right">{p.qReels}</td>
+                    <td className="px-3 py-2 text-right">{p.qCri}</td>
+                    <td className="px-3 py-2 text-right">{p.qSto}</td>
+                    <td className="px-3 py-2 text-right">{p.qArt}</td>
+                    <td className="px-3 py-2 text-right">{fmt(p.price)}</td>
+                    <td className="px-3 py-2 text-right">{fmt(p.cost)}</td>
+                    <td className={`px-3 py-2 text-right font-semibold ${p.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmt(p.margin)}</td>
+                    <td className={`px-3 py-2 text-right font-bold ${p.marginPct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{p.marginPct.toFixed(1)}%</td>
                   </tr>
                 ))}
               </tbody>

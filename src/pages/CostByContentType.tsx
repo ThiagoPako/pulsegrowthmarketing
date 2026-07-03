@@ -178,39 +178,77 @@ export default function CostByContentType() {
     const end = new Date(dateRange.end);
     const months = Math.max(1, differenceInCalendarMonths(end, start) + 1);
 
-    const monthlyVideoPool = users
-      .filter(u => VIDEO_ROLES.includes(u.role))
+    const monthlyEditorPool = users
+      .filter(u => EDITOR_ROLES.includes(u.role))
+      .reduce((a, u) => a + toNumber(u.monthlySalary), 0);
+    const monthlyVmPool = users
+      .filter(u => VIDEOMAKER_ROLES.includes(u.role))
       .reduce((a, u) => a + toNumber(u.monthlySalary), 0);
     const monthlyDesignerPool = users
       .filter(u => DESIGNER_ROLES.includes(u.role))
       .reduce((a, u) => a + toNumber(u.monthlySalary), 0);
 
-    const videoPool = monthlyVideoPool * months;
+    const editorPool = monthlyEditorPool * months;
+    const vmPool = monthlyVmPool * months;
     const designerPool = monthlyDesignerPool * months;
+    const monthlyVideoPool = monthlyEditorPool + monthlyVmPool;
+    const videoPool = editorPool + vmPool;
     const monthlyTotalSalaries = monthlyVideoPool + monthlyDesignerPool;
     const totalSalaries = videoPool + designerPool;
 
-    // Pool vídeo: Reels=1.0, Criativo=0.5, Story=0.2
+    // Mapa userId -> role para classificar quem editou cada card
+    const roleOf = new Map(users.map(u => [u.id, u.role]));
+
+    // Split das tasks produzidas pelo tipo de quem editou (assigned_to)
+    let vmReels = 0, vmCri = 0, vmSto = 0;
+    let edReels = 0, edCri = 0, edSto = 0;
+    relevantTasks.forEach(t => {
+      const type = normalizeContentType(t.content_type);
+      const role = t.assigned_to ? roleOf.get(t.assigned_to) : undefined;
+      const isVm = role && VIDEOMAKER_ROLES.includes(role);
+      if (type === 'reels') isVm ? vmReels++ : edReels++;
+      else if (type === 'criativo') isVm ? vmCri++ : edCri++;
+      else if (type === 'story') isVm ? vmSto++ : edSto++;
+    });
+
+    // Aloca pool do videomaker apenas nos cards editados por VMs
+    const vmW = vmReels * VIDEO_EFFORT.reels + vmCri * VIDEO_EFFORT.criativo + vmSto * VIDEO_EFFORT.story;
+    const salVmReels = vmW > 0 ? (vmPool * vmReels * VIDEO_EFFORT.reels) / vmW : 0;
+    const salVmCri = vmW > 0 ? (vmPool * vmCri * VIDEO_EFFORT.criativo) / vmW : 0;
+    const salVmSto = vmW > 0 ? (vmPool * vmSto * VIDEO_EFFORT.story) / vmW : 0;
+
+    // Totais gerais (mantém compat com agenda/social se maior)
+    const reels = Math.max(recReels, ctReels, sReels);
+    const criativos = Math.max(recCri, ctCri, sCri);
+    const stories = Math.max(recSto, ctSto, sSto);
+
+    // Pool editor+social: distribuído pelo total geral (inclui o que não teve assigned_to)
     const wReels = reels * VIDEO_EFFORT.reels;
     const wCri = criativos * VIDEO_EFFORT.criativo;
     const wSto = stories * VIDEO_EFFORT.story;
     const wTotal = wReels + wCri + wSto;
-    const salReels = wTotal > 0 ? (videoPool * wReels) / wTotal : 0;
-    const salCri = wTotal > 0 ? (videoPool * wCri) / wTotal : 0;
-    const salSto = wTotal > 0 ? (videoPool * wSto) / wTotal : 0;
+    const salReels = wTotal > 0 ? (editorPool * wReels) / wTotal : 0;
+    const salCri = wTotal > 0 ? (editorPool * wCri) / wTotal : 0;
+    const salSto = wTotal > 0 ? (editorPool * wSto) / wTotal : 0;
 
     // Pool designer: 100% para artes
     const salArt = designerPool;
 
     return {
       totalSalaries, monthlyTotalSalaries, months,
-      videoPool, designerPool, monthlyVideoPool, monthlyDesignerPool,
+      videoPool, editorPool, vmPool, designerPool,
+      monthlyVideoPool, monthlyEditorPool, monthlyVmPool, monthlyDesignerPool,
       reels, criativos, stories, artes,
       cReels: reels > 0 ? salReels / reels : 0,
       cCri: criativos > 0 ? salCri / criativos : 0,
       cArt: artes > 0 ? salArt / artes : 0,
       cSto: stories > 0 ? salSto / stories : 0,
       salReels, salCri, salArt, salSto,
+      vmReels, vmCri, vmSto,
+      salVmReels, salVmCri, salVmSto,
+      cVmReels: vmReels > 0 ? salVmReels / vmReels : 0,
+      cVmCri: vmCri > 0 ? salVmCri / vmCri : 0,
+      cVmSto: vmSto > 0 ? salVmSto / vmSto : 0,
     };
 
   }, [records, editorTasks, designTasks, socialDeliveries, users, selectedClient, dateRange]);

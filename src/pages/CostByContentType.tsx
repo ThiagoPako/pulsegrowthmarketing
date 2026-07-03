@@ -817,12 +817,12 @@ export default function CostByContentType() {
               </thead>
               <tbody>
                 {[
-                  { label: '1 Reels', vm: data.vmPerReels, ed: data.editorPerReels, sc: data.socialPerReels, cp: data.copyPerReels, ds: 0, total: data.totalPerReels },
-                  { label: '1 Criativo', vm: data.vmPerCri, ed: data.editorPerCri, sc: data.socialPerCri, cp: data.copyPerCri, ds: 0, total: data.totalPerCri },
-                  { label: '1 Story', vm: data.vmPerSto, ed: data.editorPerSto, sc: data.socialPerSto, cp: data.copyPerSto, ds: 0, total: data.totalPerSto },
-                  { label: '1 Arte', vm: 0, ed: 0, sc: 0, cp: 0, ds: data.designerPerArte, total: data.totalPerArte },
+                  { label: '1 Reels', vm: data.vmPerReels, ed: data.editorPerReels, sc: data.socialPerReels, cp: data.copyPerReels, ds: 0, total: data.totalPerReels, color: 'bg-blue-500/5 hover:bg-blue-500/10 border-l-4 border-l-blue-500' },
+                  { label: '1 Criativo', vm: data.vmPerCri, ed: data.editorPerCri, sc: data.socialPerCri, cp: data.copyPerCri, ds: 0, total: data.totalPerCri, color: 'bg-orange-500/5 hover:bg-orange-500/10 border-l-4 border-l-orange-500' },
+                  { label: '1 Story', vm: data.vmPerSto, ed: data.editorPerSto, sc: data.socialPerSto, cp: data.copyPerSto, ds: 0, total: data.totalPerSto, color: 'bg-pink-500/5 hover:bg-pink-500/10 border-l-4 border-l-pink-500' },
+                  { label: '1 Arte', vm: 0, ed: 0, sc: 0, cp: 0, ds: data.designerPerArte, total: data.totalPerArte, color: 'bg-emerald-500/5 hover:bg-emerald-500/10 border-l-4 border-l-emerald-500' },
                 ].map((r, i) => (
-                  <tr key={i} className="border-t border-border/50">
+                  <tr key={i} className={`border-t border-border/50 transition-colors ${r.color}`}>
                     <td className="px-3 py-2 font-medium">{r.label}</td>
                     <td className="px-3 py-2 text-right">{r.vm > 0 ? fmt(r.vm) : '—'}</td>
                     <td className="px-3 py-2 text-right">{r.ed > 0 ? fmt(r.ed) : '—'}</td>

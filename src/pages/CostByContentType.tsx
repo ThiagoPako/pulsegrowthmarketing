@@ -275,22 +275,71 @@ export default function CostByContentType() {
 
     // Split das tasks produzidas pelo tipo de quem editou (assigned_to)
     const vmCountsByUser = new Map<string, { reels: number; criativo: number; story: number }>();
+    const edCountsByUser = new Map<string, { reels: number; criativo: number; story: number }>();
     let vmReels = 0, vmCri = 0, vmSto = 0;
     let edReels = 0, edCri = 0, edSto = 0;
     relevantTasks.forEach(t => {
       const type = normalizeContentType(t.content_type);
       const role = t.assigned_to ? roleOf.get(t.assigned_to) : undefined;
       const isVm = role && VIDEOMAKER_ROLES.includes(role);
+      const isEd = role && EDITOR_ROLES.includes(role);
       if (isVm && t.assigned_to) {
         const current = vmCountsByUser.get(t.assigned_to) || { reels: 0, criativo: 0, story: 0 };
         if (type === 'reels') { current.reels++; vmReels++; }
         else if (type === 'criativo') { current.criativo++; vmCri++; }
         else if (type === 'story') { current.story++; vmSto++; }
         vmCountsByUser.set(t.assigned_to, current);
-      } else if (type === 'reels') edReels++;
-      else if (type === 'criativo') edCri++;
-      else if (type === 'story') edSto++;
+      } else {
+        if (type === 'reels') edReels++;
+        else if (type === 'criativo') edCri++;
+        else if (type === 'story') edSto++;
+        if (isEd && t.assigned_to) {
+          const current = edCountsByUser.get(t.assigned_to) || { reels: 0, criativo: 0, story: 0 };
+          if (type === 'reels') current.reels++;
+          else if (type === 'criativo') current.criativo++;
+          else if (type === 'story') current.story++;
+          edCountsByUser.set(t.assigned_to, current);
+        }
+      }
     });
+
+    // Artes por designer (assigned_to via design_tasks) — para validação
+    const designCountsByUser = new Map<string, number>();
+    designTasks.forEach((t: any) => {
+      if (!clientOk(t.client_id)) return;
+      if (!PRODUCED_DESIGN_COLUMNS.has(normalizeText(t.kanban_column))) return;
+      if (!inDateRange(t.completed_at || t.updated_at || t.created_at, dateRange.start, dateRange.end)) return;
+      const uid = t.assigned_to;
+      if (!uid) return;
+      const role = roleOf.get(uid);
+      if (!role || !DESIGNER_ROLES.includes(role)) return;
+      designCountsByUser.set(uid, (designCountsByUser.get(uid) || 0) + countDesignAttachments(t));
+    });
+
+    // Breakdown por colaborador para validação vs lançamentos reais
+    const contributorBreakdown = users
+      .filter(u => [...EDITOR_ROLES, ...VIDEOMAKER_ROLES, ...DESIGNER_ROLES].includes(u.role))
+      .map(u => {
+        const ed = edCountsByUser.get(u.id) || { reels: 0, criativo: 0, story: 0 };
+        const vm = vmCountsByUser.get(u.id) || { reels: 0, criativo: 0, story: 0 };
+        const artes = designCountsByUser.get(u.id) || 0;
+        const cards = ed.reels + ed.criativo + ed.story + vm.reels + vm.criativo + vm.story + artes;
+        const salary = salaryByUser.get(u.id) || 0;
+        return {
+          id: u.id,
+          name: u.displayName || u.name || u.email,
+          role: u.role,
+          salary,
+          cards,
+          reels: ed.reels + vm.reels,
+          criativo: ed.criativo + vm.criativo,
+          story: ed.story + vm.story,
+          artes,
+          avgCost: cards > 0 && salary > 0 ? salary / cards : 0,
+        };
+      })
+      .filter(c => c.salary > 0 || c.cards > 0)
+      .sort((a, b) => b.salary - a.salary);
 
     // Aloca o salário financeiro de cada videomaker apenas nos cards que ele mesmo editou.
     let salVmReels = 0, salVmCri = 0, salVmSto = 0, vmEditingPool = 0;
@@ -343,6 +392,7 @@ export default function CostByContentType() {
       cVmReels: vmReels > 0 ? salVmReels / vmReels : 0,
       cVmCri: vmCri > 0 ? salVmCri / vmCri : 0,
       cVmSto: vmSto > 0 ? salVmSto / vmSto : 0,
+      contributorBreakdown,
     };
 
 
@@ -498,6 +548,52 @@ export default function CostByContentType() {
             </Card>
           ))}
         </div>
+      </div>
+
+      <div>
+        <h2 className="text-lg font-semibold flex items-center gap-2 mt-6">
+          <Calculator size={18} className="text-emerald-600" /> Validação por Colaborador
+        </h2>
+        <p className="text-xs text-muted-foreground mb-3">
+          Compare o salário lançado no Financeiro com os cards realmente atribuídos (assigned_to) no período. Se um colaborador aparece sem cards, verifique se as tarefas estão atribuídas a ele; se aparece sem salário, cadastre em <b>Financeiro → Despesas → Salários</b>.
+        </p>
+        <Card>
+          <CardContent className="p-0 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="text-left px-3 py-2">Colaborador</th>
+                  <th className="text-left px-3 py-2">Função</th>
+                  <th className="text-right px-3 py-2">Salário ({data.months}m)</th>
+                  <th className="text-right px-3 py-2">Reels</th>
+                  <th className="text-right px-3 py-2">Criativos</th>
+                  <th className="text-right px-3 py-2">Stories</th>
+                  <th className="text-right px-3 py-2">Artes</th>
+                  <th className="text-right px-3 py-2">Total cards</th>
+                  <th className="text-right px-3 py-2">Custo médio/card</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.contributorBreakdown.length === 0 && (
+                  <tr><td colSpan={9} className="text-center text-muted-foreground py-6">Sem colaboradores com salário ou cards no período.</td></tr>
+                )}
+                {data.contributorBreakdown.map(c => (
+                  <tr key={c.id} className="border-t border-border/50">
+                    <td className="px-3 py-2 font-medium">{c.name}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{c.role}</td>
+                    <td className="px-3 py-2 text-right">{fmt(c.salary)}</td>
+                    <td className="px-3 py-2 text-right">{c.reels}</td>
+                    <td className="px-3 py-2 text-right">{c.criativo}</td>
+                    <td className="px-3 py-2 text-right">{c.story}</td>
+                    <td className="px-3 py-2 text-right">{c.artes}</td>
+                    <td className="px-3 py-2 text-right font-semibold">{c.cards}</td>
+                    <td className="px-3 py-2 text-right">{c.cards > 0 && c.salary > 0 ? fmt(c.avgCost) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

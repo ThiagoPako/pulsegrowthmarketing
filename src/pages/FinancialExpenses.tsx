@@ -242,19 +242,25 @@ export default function FinancialExpenses() {
   const [bonusExpense, setBonusExpense] = useState<Expense | null>(null);
   const [bonusAmount, setBonusAmount] = useState('');
 
-  // Find salary category
+  // Find salary + pró-labore categories
   const salaryCategory = useMemo(() => categories.find(c => c.name.toLowerCase() === 'salários'), [categories]);
+  const prolaboreCategory = useMemo(
+    () => categories.find(c => /pr[oó][- ]?labore/i.test(c.name || '')),
+    [categories]
+  );
 
   const baseFiltered = useMemo(() => {
     const ym = selectedMonth;
     return expenses.filter(e => {
       const dateStr = normalizeDate(e.date);
       if (!dateStr.startsWith(ym)) return false;
-      // Separate salary vs other expenses
+      if (activeTab === 'prolabore') return prolaboreCategory && e.category_id === prolaboreCategory.id;
       if (activeTab === 'salarios') return salaryCategory && e.category_id === salaryCategory.id;
-      return !salaryCategory || e.category_id !== salaryCategory.id;
+      // Despesas: exclui salário E pró-labore
+      const excludedIds = new Set([salaryCategory?.id, prolaboreCategory?.id].filter(Boolean));
+      return !excludedIds.has(e.category_id || '');
     });
-  }, [expenses, selectedMonth, activeTab, salaryCategory]);
+  }, [expenses, selectedMonth, activeTab, salaryCategory, prolaboreCategory]);
 
   const filtered = useMemo(() => {
     return applyFinancialFilters(baseFiltered, filters, {

@@ -111,7 +111,12 @@ function OrganizingMaterialCard({ rec, vm, client, settings }: { rec: any; vm: a
 }
 
 export default function Dashboard() {
-  const { currentUser, recordings, clients, users, tasks, cancelRecording, updateRecording, getSuggestionsForCancellation, activeRecordings, settings } = useApp();
+  const { currentUser, recordings: allRecordings, clients: allClients, users, tasks: allTasks, cancelRecording, updateRecording, getSuggestionsForCancellation, activeRecordings, settings } = useApp();
+  // Excluir clientes cancelados de toda a Dashboard (deliveries, gravações, tarefas etc.)
+  const clients = useMemo(() => allClients.filter((c: any) => c.status !== 'cancelado'), [allClients]);
+  const activeClientIds = useMemo(() => new Set(clients.map(c => c.id)), [clients]);
+  const recordings = useMemo(() => allRecordings.filter((r: any) => !r.clientId || activeClientIds.has(r.clientId)), [allRecordings, activeClientIds]);
+  const tasks = useMemo(() => allTasks.filter((t: any) => !t.clientId || activeClientIds.has(t.clientId)), [allTasks, activeClientIds]);
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const today = format(new Date(), 'yyyy-MM-dd');

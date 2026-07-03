@@ -549,6 +549,52 @@ export default function CostByContentType() {
           ))}
         </div>
       </div>
+
+      <div>
+        <h2 className="text-lg font-semibold flex items-center gap-2 mt-6">
+          <Calculator size={18} className="text-emerald-600" /> Validação por Colaborador
+        </h2>
+        <p className="text-xs text-muted-foreground mb-3">
+          Compare o salário lançado no Financeiro com os cards realmente atribuídos (assigned_to) no período. Se um colaborador aparece sem cards, verifique se as tarefas estão atribuídas a ele; se aparece sem salário, cadastre em <b>Financeiro → Despesas → Salários</b>.
+        </p>
+        <Card>
+          <CardContent className="p-0 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="text-left px-3 py-2">Colaborador</th>
+                  <th className="text-left px-3 py-2">Função</th>
+                  <th className="text-right px-3 py-2">Salário ({data.months}m)</th>
+                  <th className="text-right px-3 py-2">Reels</th>
+                  <th className="text-right px-3 py-2">Criativos</th>
+                  <th className="text-right px-3 py-2">Stories</th>
+                  <th className="text-right px-3 py-2">Artes</th>
+                  <th className="text-right px-3 py-2">Total cards</th>
+                  <th className="text-right px-3 py-2">Custo médio/card</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.contributorBreakdown.length === 0 && (
+                  <tr><td colSpan={9} className="text-center text-muted-foreground py-6">Sem colaboradores com salário ou cards no período.</td></tr>
+                )}
+                {data.contributorBreakdown.map(c => (
+                  <tr key={c.id} className="border-t border-border/50">
+                    <td className="px-3 py-2 font-medium">{c.name}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{c.role}</td>
+                    <td className="px-3 py-2 text-right">{fmt(c.salary)}</td>
+                    <td className="px-3 py-2 text-right">{c.reels}</td>
+                    <td className="px-3 py-2 text-right">{c.criativo}</td>
+                    <td className="px-3 py-2 text-right">{c.story}</td>
+                    <td className="px-3 py-2 text-right">{c.artes}</td>
+                    <td className="px-3 py-2 text-right font-semibold">{c.cards}</td>
+                    <td className="px-3 py-2 text-right">{c.cards > 0 && c.salary > 0 ? fmt(c.avgCost) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

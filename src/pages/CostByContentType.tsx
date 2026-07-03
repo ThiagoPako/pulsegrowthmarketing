@@ -691,7 +691,7 @@ export default function CostByContentType() {
                 <tr>
                   <th className="text-left px-3 py-2">Colaborador</th>
                   <th className="text-left px-3 py-2">Função</th>
-                  <th className="text-right px-3 py-2">Salário ({data.months}m)</th>
+                  <th className="text-right px-3 py-2">Salário ({data.months} {data.months === 1 ? 'mês' : 'meses'})</th>
                   <th className="text-right px-3 py-2">Reels</th>
                   <th className="text-right px-3 py-2">Criativos</th>
                   <th className="text-right px-3 py-2">Stories</th>

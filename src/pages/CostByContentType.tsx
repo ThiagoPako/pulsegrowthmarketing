@@ -275,22 +275,71 @@ export default function CostByContentType() {
 
     // Split das tasks produzidas pelo tipo de quem editou (assigned_to)
     const vmCountsByUser = new Map<string, { reels: number; criativo: number; story: number }>();
+    const edCountsByUser = new Map<string, { reels: number; criativo: number; story: number }>();
     let vmReels = 0, vmCri = 0, vmSto = 0;
     let edReels = 0, edCri = 0, edSto = 0;
     relevantTasks.forEach(t => {
       const type = normalizeContentType(t.content_type);
       const role = t.assigned_to ? roleOf.get(t.assigned_to) : undefined;
       const isVm = role && VIDEOMAKER_ROLES.includes(role);
+      const isEd = role && EDITOR_ROLES.includes(role);
       if (isVm && t.assigned_to) {
         const current = vmCountsByUser.get(t.assigned_to) || { reels: 0, criativo: 0, story: 0 };
         if (type === 'reels') { current.reels++; vmReels++; }
         else if (type === 'criativo') { current.criativo++; vmCri++; }
         else if (type === 'story') { current.story++; vmSto++; }
         vmCountsByUser.set(t.assigned_to, current);
-      } else if (type === 'reels') edReels++;
-      else if (type === 'criativo') edCri++;
-      else if (type === 'story') edSto++;
+      } else {
+        if (type === 'reels') edReels++;
+        else if (type === 'criativo') edCri++;
+        else if (type === 'story') edSto++;
+        if (isEd && t.assigned_to) {
+          const current = edCountsByUser.get(t.assigned_to) || { reels: 0, criativo: 0, story: 0 };
+          if (type === 'reels') current.reels++;
+          else if (type === 'criativo') current.criativo++;
+          else if (type === 'story') current.story++;
+          edCountsByUser.set(t.assigned_to, current);
+        }
+      }
     });
+
+    // Artes por designer (assigned_to via design_tasks) — para validação
+    const designCountsByUser = new Map<string, number>();
+    designTasks.forEach((t: any) => {
+      if (!clientOk(t.client_id)) return;
+      if (!PRODUCED_DESIGN_COLUMNS.has(normalizeText(t.kanban_column))) return;
+      if (!inDateRange(t.completed_at || t.updated_at || t.created_at, dateRange.start, dateRange.end)) return;
+      const uid = t.assigned_to;
+      if (!uid) return;
+      const role = roleOf.get(uid);
+      if (!role || !DESIGNER_ROLES.includes(role)) return;
+      designCountsByUser.set(uid, (designCountsByUser.get(uid) || 0) + countDesignAttachments(t));
+    });
+
+    // Breakdown por colaborador para validação vs lançamentos reais
+    const contributorBreakdown = users
+      .filter(u => [...EDITOR_ROLES, ...VIDEOMAKER_ROLES, ...DESIGNER_ROLES].includes(u.role))
+      .map(u => {
+        const ed = edCountsByUser.get(u.id) || { reels: 0, criativo: 0, story: 0 };
+        const vm = vmCountsByUser.get(u.id) || { reels: 0, criativo: 0, story: 0 };
+        const artes = designCountsByUser.get(u.id) || 0;
+        const cards = ed.reels + ed.criativo + ed.story + vm.reels + vm.criativo + vm.story + artes;
+        const salary = salaryByUser.get(u.id) || 0;
+        return {
+          id: u.id,
+          name: u.displayName || u.name || u.email,
+          role: u.role,
+          salary,
+          cards,
+          reels: ed.reels + vm.reels,
+          criativo: ed.criativo + vm.criativo,
+          story: ed.story + vm.story,
+          artes,
+          avgCost: cards > 0 && salary > 0 ? salary / cards : 0,
+        };
+      })
+      .filter(c => c.salary > 0 || c.cards > 0)
+      .sort((a, b) => b.salary - a.salary);
 
     // Aloca o salário financeiro de cada videomaker apenas nos cards que ele mesmo editou.
     let salVmReels = 0, salVmCri = 0, salVmSto = 0, vmEditingPool = 0;

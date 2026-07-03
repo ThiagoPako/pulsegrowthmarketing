@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
-import { Plus, Pencil, Trash2, ArrowLeft, TrendingDown, Users, Wallet, CheckCircle, Undo2, Gift } from 'lucide-react';
+import { Plus, Pencil, Trash2, ArrowLeft, TrendingDown, Users, Wallet, CheckCircle, Undo2, Gift, Briefcase } from 'lucide-react';
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import FinancialFilters, { applyFinancialFilters, buildEmptyFilters, type FinancialFiltersValue } from '@/components/financial/FinancialFilters';
 import { useNavigate } from 'react-router-dom';
@@ -242,19 +242,25 @@ export default function FinancialExpenses() {
   const [bonusExpense, setBonusExpense] = useState<Expense | null>(null);
   const [bonusAmount, setBonusAmount] = useState('');
 
-  // Find salary category
+  // Find salary + pró-labore categories
   const salaryCategory = useMemo(() => categories.find(c => c.name.toLowerCase() === 'salários'), [categories]);
+  const prolaboreCategory = useMemo(
+    () => categories.find(c => /pr[oó][- ]?labore/i.test(c.name || '')),
+    [categories]
+  );
 
   const baseFiltered = useMemo(() => {
     const ym = selectedMonth;
     return expenses.filter(e => {
       const dateStr = normalizeDate(e.date);
       if (!dateStr.startsWith(ym)) return false;
-      // Separate salary vs other expenses
+      if (activeTab === 'prolabore') return prolaboreCategory && e.category_id === prolaboreCategory.id;
       if (activeTab === 'salarios') return salaryCategory && e.category_id === salaryCategory.id;
-      return !salaryCategory || e.category_id !== salaryCategory.id;
+      // Despesas: exclui salário E pró-labore
+      const excludedIds = new Set([salaryCategory?.id, prolaboreCategory?.id].filter(Boolean));
+      return !excludedIds.has(e.category_id || '');
     });
-  }, [expenses, selectedMonth, activeTab, salaryCategory]);
+  }, [expenses, selectedMonth, activeTab, salaryCategory, prolaboreCategory]);
 
   const filtered = useMemo(() => {
     return applyFinancialFilters(baseFiltered, filters, {
@@ -318,9 +324,32 @@ export default function FinancialExpenses() {
     allExpenses.filter(e => salaryCategory && e.category_id === salaryCategory.id).reduce((s, e) => s + Number(e.amount), 0)
   , [allExpenses, salaryCategory]);
 
-  const otherTotal = useMemo(() =>
-    allExpenses.filter(e => !salaryCategory || e.category_id !== salaryCategory.id).reduce((s, e) => s + Number(e.amount), 0)
-  , [allExpenses, salaryCategory]);
+  const prolaboreExpenses = useMemo(() =>
+    allExpenses.filter(e => prolaboreCategory && e.category_id === prolaboreCategory.id)
+  , [allExpenses, prolaboreCategory]);
+
+  const prolaboreTotal = useMemo(() =>
+    prolaboreExpenses.reduce((s, e) => s + Number(e.amount), 0)
+  , [prolaboreExpenses]);
+
+  // Agrupa pró-labore por sócio (responsible ou nome extraído da descrição)
+  const prolaborePerSocio = useMemo(() => {
+    const map = new Map<string, { total: number; count: number; entries: Expense[] }>();
+    prolaboreExpenses.forEach(e => {
+      const name = (e.responsible || e.description || 'Sem nome').trim();
+      const cur = map.get(name) || { total: 0, count: 0, entries: [] };
+      cur.total += Number(e.amount);
+      cur.count += 1;
+      cur.entries.push(e);
+      map.set(name, cur);
+    });
+    return Array.from(map.entries()).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.total - a.total);
+  }, [prolaboreExpenses]);
+
+  const otherTotal = useMemo(() => {
+    const excludedIds = new Set([salaryCategory?.id, prolaboreCategory?.id].filter(Boolean));
+    return allExpenses.filter(e => !excludedIds.has(e.category_id || '')).reduce((s, e) => s + Number(e.amount), 0);
+  }, [allExpenses, salaryCategory, prolaboreCategory]);
 
   const handleSave = async (form: any, editingId: string | null) => {
     let success: boolean;
@@ -480,9 +509,9 @@ export default function FinancialExpenses() {
         onSave={handleSave}
       />
 
-      {/* Tabs: Despesas / Salários */}
+      {/* Tabs: Despesas / Salários / Pró-labore */}
       <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setFilters(buildEmptyFilters()); }} className="w-full">
-        <TabsList className="grid grid-cols-2 w-full max-w-md">
+        <TabsList className="grid grid-cols-3 w-full max-w-2xl">
           <TabsTrigger value="despesas" className="gap-1.5">
             <Wallet size={14} /> Despesas
             <Badge variant="secondary" className="ml-1 text-[10px]">{fmt(otherTotal)}</Badge>
@@ -490,6 +519,10 @@ export default function FinancialExpenses() {
           <TabsTrigger value="salarios" className="gap-1.5">
             <Users size={14} /> Salários
             <Badge variant="secondary" className="ml-1 text-[10px]">{fmt(salaryTotal)}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="prolabore" className="gap-1.5">
+            <Briefcase size={14} /> Pró-labore
+            <Badge variant="secondary" className="ml-1 text-[10px]">{fmt(prolaboreTotal)}</Badge>
           </TabsTrigger>
         </TabsList>
 
@@ -665,6 +698,103 @@ export default function FinancialExpenses() {
               </CardContent>
             </Card>
           </motion.div>
+        </TabsContent>
+
+        {/* ── Pró-labore Tab ── */}
+        <TabsContent value="prolabore" className="space-y-4 mt-4">
+          {!prolaboreCategory && (
+            <Card className="border-amber-200/50">
+              <CardContent className="p-4 text-sm text-amber-700 dark:text-amber-400">
+                Categoria <strong>Pró-labore</strong> não existe. Clique em <strong>+ Categoria</strong> acima e crie uma com esse nome para começar.
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Total geral */}
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <Card className="border-violet-200/50 overflow-hidden">
+              <CardContent className="pt-3 pb-3 bg-gradient-to-br from-violet-500/10 to-purple-500/10">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center"><Briefcase size={16} className="text-violet-600" /></div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground font-medium">Total Pró-labore no mês</p>
+                    <p className="text-sm font-bold text-foreground">{fmt(prolaboreTotal)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-blue-200/50 overflow-hidden">
+              <CardContent className="pt-3 pb-3 bg-gradient-to-br from-blue-500/10 to-indigo-500/10">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center"><Users size={16} className="text-blue-600" /></div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground font-medium">Sócios ativos</p>
+                    <p className="text-sm font-bold text-foreground">{prolaborePerSocio.length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-emerald-200/50 overflow-hidden">
+              <CardContent className="pt-3 pb-3 bg-gradient-to-br from-emerald-500/10 to-green-500/10">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center"><Wallet size={16} className="text-emerald-600" /></div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground font-medium">Retiradas no mês</p>
+                    <p className="text-sm font-bold text-foreground">{prolaboreExpenses.length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Cards por sócio */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {prolaborePerSocio.map((s, idx) => (
+              <motion.div key={s.name} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }}>
+                <Card className="border-l-4 border-l-violet-500">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-9 h-9 rounded-full bg-violet-500/15 flex items-center justify-center text-sm font-bold text-violet-700">{s.name.charAt(0).toUpperCase()}</div>
+                        <div>
+                          <p className="font-semibold text-sm">{s.name}</p>
+                          <p className="text-[10px] text-muted-foreground">{s.count} retirada{s.count > 1 ? 's' : ''} no mês</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total mês</p>
+                        <p className="text-lg font-bold text-violet-700">{fmt(s.total)}</p>
+                      </div>
+                    </div>
+                    <div className="border-t pt-2 space-y-1 max-h-40 overflow-y-auto">
+                      {s.entries.sort((a, b) => normalizeDate(b.date).localeCompare(normalizeDate(a.date))).map(e => {
+                        const d = normalizeDate(e.date);
+                        const [y, m, day] = d.split('-');
+                        return (
+                          <div key={e.id} className="flex items-center justify-between text-xs py-1 hover:bg-muted/40 rounded px-2">
+                            <span className="text-muted-foreground">{day}/{m}/{y}</span>
+                            <span className="flex-1 mx-2 truncate">{e.description || '—'}</span>
+                            <span className="font-semibold">{fmt(Number(e.amount))}</span>
+                            <div className="flex gap-0.5 ml-2">
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEdit(e)}><Pencil size={11} /></Button>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDeleteExpense(e.id)}><Trash2 size={11} /></Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+            {prolaborePerSocio.length === 0 && (
+              <Card className="col-span-full">
+                <CardContent className="p-8 text-center text-muted-foreground text-sm">
+                  💼 Nenhuma retirada de pró-labore neste mês. Clique em <strong>+ Nova Despesa</strong>, selecione a categoria <strong>Pró-labore</strong> e informe o nome do sócio no campo Responsável.
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </TabsContent>
       </Tabs>
 

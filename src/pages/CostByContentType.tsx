@@ -201,11 +201,13 @@ export default function CostByContentType() {
   const [designTasks, setDesignTasks] = useState<DesignTask[]>([]);
   const [socialDeliveries, setSocialDeliveries] = useState<SocialDelivery[]>([]);
   const [salaryExpenses, setSalaryExpenses] = useState<SalaryExpense[]>([]);
+  const [prolaboreExpenses, setProlaboreExpenses] = useState<SalaryExpense[]>([]);
   const [plans, setPlans] = useState<PlanRow[]>([]);
   const [selectedClient, setSelectedClient] = useState('all');
   const [periodType, setPeriodType] = useState<'current' | 'previous' | 'custom'>('current');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+  const [includeProLabore, setIncludeProLabore] = useState(false);
 
   const fetchData = useCallback(async () => {
     const [rRes, sRes, edRes, dRes, catRes, expRes, plRes] = await Promise.all([
@@ -223,15 +225,19 @@ export default function CostByContentType() {
     if (dRes.data) setDesignTasks(dRes.data as DesignTask[]);
     if (plRes.data) setPlans(plRes.data as PlanRow[]);
     if (catRes.data && expRes.data) {
+      const cats = catRes.data as ExpenseCategory[];
       const salaryCategoryIds = new Set(
-        (catRes.data as ExpenseCategory[])
-          .filter(category => normalizeText(category.name).includes('salario'))
-          .map(category => category.id)
+        cats.filter(c => normalizeText(c.name).includes('salario')).map(c => c.id)
       );
-      setSalaryExpenses((expRes.data as SalaryExpense[]).filter(expense => (
-        salaryCategoryIds.has(expense.category_id || '')
-        || normalizeText(expense.description).startsWith('salario -')
+      const prolaboreCategoryIds = new Set(
+        cats.filter(c => /pr[oó][- ]?labore/i.test(c.name || '')).map(c => c.id)
+      );
+      const allExp = expRes.data as SalaryExpense[];
+      setSalaryExpenses(allExp.filter(e => (
+        salaryCategoryIds.has(e.category_id || '')
+        || normalizeText(e.description).startsWith('salario -')
       )));
+      setProlaboreExpenses(allExp.filter(e => prolaboreCategoryIds.has(e.category_id || '')));
     }
   }, []);
 
@@ -535,6 +541,18 @@ export default function CostByContentType() {
       })
       .sort((a, b) => b.price - a.price);
 
+    // === PRÓ-LABORE (sócios) — no período ===
+    const prolaboreInPeriod = prolaboreExpenses.filter(e => inDateRange(e.date, dateRange.start, dateRange.end));
+    const prolaboreTotal = prolaboreInPeriod.reduce((s, e) => s + toNumber(e.amount), 0);
+    const prolaborePerSocioMap = new Map<string, number>();
+    prolaboreInPeriod.forEach(e => {
+      const name = (e.responsible || e.description || 'Sem nome').trim();
+      prolaborePerSocioMap.set(name, (prolaborePerSocioMap.get(name) || 0) + toNumber(e.amount));
+    });
+    const prolaborePerSocio = Array.from(prolaborePerSocioMap.entries())
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total);
+
     return {
       totalSalaries, monthlyTotalSalaries, months,
       videoPool, editorPool, socialPool, copyPool, editorSocialPool, vmPool, vmEditingPool, designerPool,
@@ -559,8 +577,10 @@ export default function CostByContentType() {
       totalPerReels, totalPerCri, totalPerSto, totalPerArte,
       contributorBreakdown,
       planAnalysis,
+      prolaboreTotal,
+      prolaborePerSocio,
     };
-  }, [records, editorTasks, designTasks, socialDeliveries, salaryExpenses, users, selectedClient, dateRange, plans]);
+  }, [records, editorTasks, designTasks, socialDeliveries, salaryExpenses, prolaboreExpenses, users, selectedClient, dateRange, plans]);
 
   const fmt = (n: number) => Number.isFinite(n) && n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00';
   const formatCost = (cost: number, qty: number, pool: number) => {
@@ -615,6 +635,18 @@ export default function CostByContentType() {
               <Input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="w-36" />
             </div>
           )}
+          <div className="ml-auto space-y-1">
+            <Label className="text-xs uppercase text-muted-foreground">Sócios (Pró-labore)</Label>
+            <Button
+              variant={includeProLabore ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setIncludeProLabore(v => !v)}
+              className="gap-1.5"
+            >
+              <DollarSign size={14} />
+              {includeProLabore ? '✓ Incluído no total' : `Incluir ${fmt(data.prolaboreTotal)}`}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -662,13 +694,39 @@ export default function CostByContentType() {
         <Card>
           <CardContent className="p-4">
             <Calculator size={18} className="text-muted-foreground mb-2" />
-            <p className="text-xl font-bold">{fmt(data.totalSalaries)}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Total no Período</p>
+            <p className="text-xl font-bold">{fmt(data.totalSalaries + (includeProLabore ? data.prolaboreTotal : 0))}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+              Total no Período {includeProLabore && <span className="text-violet-600">(+ pró-labore)</span>}
+            </p>
             <p className="text-[10px] text-muted-foreground mt-1">{data.reels + data.criativos + data.stories + data.artes} conteúdos</p>
           </CardContent>
         </Card>
       </div>
 
+      {/* Detalhamento pró-labore por sócio */}
+      {data.prolaborePerSocio.length > 0 && (
+        <Card className={`border-l-4 ${includeProLabore ? 'border-l-violet-500 bg-violet-500/5' : 'border-l-muted'}`}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div>
+                <p className="text-sm font-semibold flex items-center gap-2">
+                  <DollarSign size={16} className="text-violet-600" /> Pró-labore dos sócios no período
+                </p>
+                <p className="text-xs text-muted-foreground">Fonte: Financeiro → Despesas → Pró-labore. {includeProLabore ? 'Somado ao Total no Período.' : 'Não está sendo somado — clique em "Incluir" acima.'}</p>
+              </div>
+              <p className="text-2xl font-bold text-violet-700">{fmt(data.prolaboreTotal)}</p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {data.prolaborePerSocio.map(s => (
+                <div key={s.name} className="flex items-center justify-between p-2 rounded bg-background border">
+                  <span className="text-xs font-medium truncate">{s.name}</span>
+                  <span className="text-sm font-bold">{fmt(s.total)}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {data.monthlyTotalSalaries === 0 && (
         <Card className="border-amber-500/50 bg-amber-500/5">

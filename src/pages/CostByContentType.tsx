@@ -586,7 +586,7 @@ export default function CostByContentType() {
           <CardContent className="p-4">
             <DollarSign size={18} className="text-blue-600 mb-2" />
             <p className="text-xl font-bold">{fmt(data.editorPool)}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Pool Editor+Social ({data.months}m)</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Pool Editor+Social ({data.months} {data.months === 1 ? 'mês' : 'meses'})</p>
             <p className="text-[10px] text-muted-foreground mt-1">Média mensal: {fmt(data.monthlyEditorPool)} · VM no financeiro: {fmt(data.vmPool)}</p>
           </CardContent>
         </Card>
@@ -594,7 +594,7 @@ export default function CostByContentType() {
           <CardContent className="p-4">
             <DollarSign size={18} className="text-orange-600 mb-2" />
             <p className="text-xl font-bold">{fmt(data.designerPool)}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Pool Designer ({data.months}m)</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Pool Designer ({data.months} {data.months === 1 ? 'mês' : 'meses'})</p>
             <p className="text-[10px] text-muted-foreground mt-1">Folha mensal: {fmt(data.monthlyDesignerPool)}</p>
           </CardContent>
         </Card>
@@ -691,7 +691,7 @@ export default function CostByContentType() {
                 <tr>
                   <th className="text-left px-3 py-2">Colaborador</th>
                   <th className="text-left px-3 py-2">Função</th>
-                  <th className="text-right px-3 py-2">Salário ({data.months}m)</th>
+                  <th className="text-right px-3 py-2">Salário ({data.months} {data.months === 1 ? 'mês' : 'meses'})</th>
                   <th className="text-right px-3 py-2">Reels</th>
                   <th className="text-right px-3 py-2">Criativos</th>
                   <th className="text-right px-3 py-2">Stories</th>

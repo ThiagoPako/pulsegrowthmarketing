@@ -60,7 +60,9 @@ interface ExpenseCategory {
   name: string | null;
 }
 
-const EDITOR_ROLES = ['editor', 'social_media'];
+const EDITOR_ROLES = ['editor'];
+const SOCIAL_ROLES = ['social_media'];
+const COPY_ROLES = ['copywriter'];
 const VIDEOMAKER_ROLES = ['videomaker'];
 const DESIGNER_ROLES = ['designer'];
 const VIDEO_EFFORT = { reels: 1, criativo: 0.5, story: 0.2 } as const;

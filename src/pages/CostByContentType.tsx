@@ -392,6 +392,7 @@ export default function CostByContentType() {
       cVmReels: vmReels > 0 ? salVmReels / vmReels : 0,
       cVmCri: vmCri > 0 ? salVmCri / vmCri : 0,
       cVmSto: vmSto > 0 ? salVmSto / vmSto : 0,
+      contributorBreakdown,
     };
 
 

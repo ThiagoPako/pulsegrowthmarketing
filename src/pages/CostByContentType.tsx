@@ -107,7 +107,9 @@ const buildSalaryByUser = (expenses: SalaryExpense[], users: ReturnType<typeof u
     { userId: user.id, key: normalizePersonKey(user.email?.split('@')[0]) },
   ]).filter(alias => alias.key.length >= 3);
 
-  const salaryByUser = new Map<string, number>();
+  // Agrupa por usuário: soma paga dentro do período e valor mensal mais recente fora dele.
+  const inPeriodByUser = new Map<string, number>();
+  const latestOutByUser = new Map<string, { date: string; amount: number }>();
   let unmatchedTotal = 0;
 
   expenses
@@ -124,13 +126,34 @@ const buildSalaryByUser = (expenses: SalaryExpense[], users: ReturnType<typeof u
       const exactMatch = aliases.find(alias => candidateKeys.includes(alias.key));
       const fallbackMatch = exactMatch || aliases.find(alias => alias.key.length >= 4 && descriptionKey.includes(alias.key));
 
+      const isIn = inDateRange(expense.date, start, end);
+
       if (fallbackMatch) {
-        const amountInPeriod = inDateRange(expense.date, start, end) ? amount : amount * months;
-        salaryByUser.set(fallbackMatch.userId, (salaryByUser.get(fallbackMatch.userId) || 0) + amountInPeriod);
-      } else if (inDateRange(expense.date, start, end)) {
+        if (isIn) {
+          inPeriodByUser.set(fallbackMatch.userId, (inPeriodByUser.get(fallbackMatch.userId) || 0) + amount);
+        } else {
+          const prev = latestOutByUser.get(fallbackMatch.userId);
+          const day = (expense.date || '').slice(0, 10);
+          if (!prev || day > prev.date) {
+            latestOutByUser.set(fallbackMatch.userId, { date: day, amount });
+          }
+        }
+      } else if (isIn) {
         unmatchedTotal += amount;
       }
     });
+
+  const salaryByUser = new Map<string, number>();
+  const userIds = new Set<string>([...inPeriodByUser.keys(), ...latestOutByUser.keys()]);
+  userIds.forEach(userId => {
+    const inSum = inPeriodByUser.get(userId) || 0;
+    if (inSum > 0) {
+      salaryByUser.set(userId, inSum);
+    } else {
+      const fallback = latestOutByUser.get(userId);
+      if (fallback) salaryByUser.set(userId, fallback.amount * months);
+    }
+  });
 
   return { salaryByUser, unmatchedTotal };
 };

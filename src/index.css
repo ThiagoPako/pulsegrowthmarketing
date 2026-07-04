@@ -216,3 +216,40 @@ html.font-scale-lg { font-size: 16px; }
 html.font-scale-xl { font-size: 18px; }
 html.font-scale-victor { font-size: 22px; }
 html.font-scale-victor1 { font-size: 26px; }
+
+/* ============================================================
+   Tint neon por categoria (baseado em --tint / --tint-rgb do Layout).
+   Aplica automaticamente a cor da categoria em breadcrumbs e
+   cabeçalhos de página, sem precisar tocar em cada tela.
+   ============================================================ */
+[data-tint] nav[aria-label="breadcrumb"] a:hover,
+[data-tint] nav[aria-label="breadcrumb"] [role="link"]:hover {
+  color: var(--tint);
+  text-shadow: 0 0 8px rgba(var(--tint-rgb), 0.45);
+}
+[data-tint] nav[aria-label="breadcrumb"] [aria-current="page"],
+[data-tint] nav[aria-label="breadcrumb"] .breadcrumb-current {
+  color: var(--tint);
+  text-shadow: 0 0 6px rgba(var(--tint-rgb), 0.35);
+}
+
+/* Cabeçalho de página opt-in: <div data-page-header> ou <header data-page-header> */
+[data-tint] [data-page-header] {
+  position: relative;
+  padding-left: 0.85rem;
+}
+[data-tint] [data-page-header]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.15rem;
+  bottom: 0.15rem;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--tint);
+  box-shadow: 0 0 10px 0 rgba(var(--tint-rgb), 0.7);
+}
+[data-tint] [data-page-header] h1,
+[data-tint] [data-page-header] h2 {
+  text-shadow: 0 0 14px rgba(var(--tint-rgb), 0.25);
+}

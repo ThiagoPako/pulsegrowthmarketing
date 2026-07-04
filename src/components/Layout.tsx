@@ -496,13 +496,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Desktop sidebar */}
       <aside
         className={`hidden md:flex flex-col bg-sidebar border-r border-sidebar-border shrink-0 transition-all duration-300 ease-in-out ${sidebarExpanded ? 'w-[210px]' : 'w-[60px]'}`}
-        onMouseEnter={() => setSidebarExpanded(true)}
-        onMouseLeave={() => setSidebarExpanded(false)}
+        onMouseEnter={() => !sidebarPinned && setSidebarHover(true)}
+        onMouseLeave={() => !sidebarPinned && setSidebarHover(false)}
       >
         <div className={`p-3 flex items-center border-b border-sidebar-border gap-2 ${sidebarExpanded ? 'px-4' : 'justify-center'}`}>
           <img src={pulseLogo} alt="Pulse" className="w-8 h-8 rounded-lg object-cover shrink-0" />
           {sidebarExpanded && (
-            <span className="font-display font-bold text-sm text-foreground whitespace-nowrap overflow-hidden">Pulse</span>
+            <>
+              <span className="font-display font-bold text-sm text-foreground whitespace-nowrap overflow-hidden flex-1">Pulse</span>
+              <button
+                type="button"
+                onClick={() => setSidebarPinned(v => !v)}
+                title={sidebarPinned ? 'Auto-esconder menu' : 'Fixar menu aberto'}
+                aria-label={sidebarPinned ? 'Auto-esconder menu' : 'Fixar menu aberto'}
+                className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
+              >
+                {sidebarPinned ? <Pin size={14} className="text-primary" /> : <PinOff size={14} />}
+              </button>
+            </>
           )}
         </div>
 

@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Target, Film, Megaphone, Image as ImageIcon, Palette, DollarSign, Calculator } from 'lucide-react';
+import { Target, Film, Megaphone, Image as ImageIcon, Palette, DollarSign, Calculator, Check } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths, differenceInCalendarMonths } from 'date-fns';
 
 interface DeliveryRecord {

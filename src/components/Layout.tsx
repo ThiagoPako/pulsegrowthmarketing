@@ -122,11 +122,10 @@ const navCategories: NavCategory[] = [
       { path: '/panfletagem', label: 'Panfletagem', icon: Car, roles: ['admin'] },
       { path: '/clube-descontos', label: 'Clube Descontos', icon: Gift, roles: ['admin', 'social_media'] },
       { path: '/painel-tv', label: 'Painel TV', icon: Monitor, roles: ['admin'] },
-      { path: '/apresentacao', label: 'Apresentação', icon: Sparkles, roles: ['admin'] },
-      { path: '/propostas', label: 'Propostas', icon: FileText, roles: ['admin'] },
       { path: '/landing-admin', label: 'Landing Page', icon: Rocket, roles: ['admin'] },
     ],
   },
+
   {
     label: 'Sistema',
     color: 'slate',

@@ -40,11 +40,11 @@ export const PATH_CATEGORY: Record<string, TintKey> = {
   '/edicao': 'violet', '/edicao/kanban': 'violet', '/videomakers': 'violet',
   // Produção Criativo (cyan)
   '/entregas-social': 'cyan', '/trafego': 'cyan', '/desempenho': 'cyan',
-  '/conteudos-portal': 'cyan', '/encurtador': 'cyan', '/clube-descontos': 'cyan',
+  '/conteudos-portal': 'cyan',
   // Designer (pink)
   '/designer': 'pink', '/landing-admin': 'pink',
   // Ferramentas (slate)
-  '/panfletagem': 'slate',
+  '/panfletagem': 'slate', '/encurtador': 'slate', '/clube-descontos': 'slate',
   // Gestão (amber)
   '/clientes': 'amber', '/relacionamento': 'amber', '/depoimentos': 'amber',
   '/onboarding-gestao': 'amber', '/equipe': 'amber', '/planos': 'amber', '/relatorios': 'amber',

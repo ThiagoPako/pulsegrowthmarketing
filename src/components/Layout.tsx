@@ -259,24 +259,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </span>
           )}
 
-          {featured && expanded && (
-            <div className="mx-2 mb-1.5 rounded-md p-[1.5px] bg-gradient-to-r from-rose-500 via-pink-500 to-fuchsia-500 shadow-[0_0_18px_-2px_rgba(236,72,153,0.75)] animate-[pulse_3s_ease-in-out_infinite]">
-              <span
-                className="text-[11px] uppercase tracking-[0.18em] font-extrabold px-2.5 py-1 rounded-[5px] flex items-center gap-1.5 whitespace-nowrap overflow-hidden bg-sidebar/95 backdrop-blur-sm"
-              >
-                <Sparkles size={12} className="text-rose-400" style={{ filter: 'drop-shadow(0 0 6px rgba(244,63,94,1))' }} />
-                <span
-                  className="bg-gradient-to-r from-rose-400 via-pink-400 to-fuchsia-400 bg-clip-text text-transparent"
-                  style={{ textShadow: '0 0 12px rgba(236,72,153,0.55)' }}
-                >
-                  {cat.label}
-                </span>
-                <span className="ml-auto text-[8px] font-black tracking-widest text-rose-300/90 px-1 rounded bg-rose-500/15 ring-1 ring-rose-400/40">
-                  DESTAQUE
-                </span>
-              </span>
-            </div>
-          )}
+          {/* Comercial (featured) — sem label textual, igual ao Administrativa/speed:
+              o próprio painel neon abaixo já comunica o destaque. */}
+
 
 
           {featured && (

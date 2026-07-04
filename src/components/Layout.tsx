@@ -114,6 +114,7 @@ const navCategories: NavCategory[] = [
       { path: '/equipe', label: 'Equipe', icon: Users, roles: ['admin', 'social_media'] },
       { path: '/planos', label: 'Planos', icon: Package, roles: ['admin', 'social_media'] },
       { path: '/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin', 'social_media'] },
+      { path: '/desempenho', label: 'Desempenho', icon: Target, roles: ['admin', 'social_media'] },
       { path: '/endomarketing/tarefas', label: 'Tarefas E.', icon: ClipboardList, roles: ['admin', 'endomarketing', 'parceiro'] },
     ],
   },

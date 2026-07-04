@@ -40,14 +40,16 @@ type NavCategory = {
 
 
 // Paleta por categoria (usada como accent do ícone / borda / label da categoria)
-const CATEGORY_TINT: Record<string, { icon: string; label: string; activeBg: string; activeText: string; hoverBg: string; dot: string }> = {
-  blue:    { icon: 'text-blue-500',    label: 'text-blue-500/80',    activeBg: 'bg-blue-500/15',    activeText: 'text-blue-600 dark:text-blue-300',    hoverBg: 'hover:bg-blue-500/10',    dot: 'bg-blue-500' },
-  emerald: { icon: 'text-emerald-500', label: 'text-emerald-500/80', activeBg: 'bg-emerald-500/15', activeText: 'text-emerald-600 dark:text-emerald-300', hoverBg: 'hover:bg-emerald-500/10', dot: 'bg-emerald-500' },
-  amber:   { icon: 'text-amber-500',   label: 'text-amber-500/80',   activeBg: 'bg-amber-500/15',   activeText: 'text-amber-600 dark:text-amber-300',   hoverBg: 'hover:bg-amber-500/10',   dot: 'bg-amber-500' },
-  pink:    { icon: 'text-pink-500',    label: 'text-pink-500/80',    activeBg: 'bg-pink-500/15',    activeText: 'text-pink-600 dark:text-pink-300',    hoverBg: 'hover:bg-pink-500/10',    dot: 'bg-pink-500' },
-  cyan:    { icon: 'text-cyan-500',    label: 'text-cyan-500/80',    activeBg: 'bg-cyan-500/15',    activeText: 'text-cyan-600 dark:text-cyan-300',    hoverBg: 'hover:bg-cyan-500/10',    dot: 'bg-cyan-500' },
-  rose:    { icon: 'text-rose-500',    label: 'text-rose-500/80',    activeBg: 'bg-rose-500/15',    activeText: 'text-rose-600 dark:text-rose-300',    hoverBg: 'hover:bg-rose-500/10',    dot: 'bg-rose-500' },
-  slate:   { icon: 'text-slate-400',   label: 'text-slate-400/80',   activeBg: 'bg-slate-500/15',   activeText: 'text-slate-700 dark:text-slate-200',  hoverBg: 'hover:bg-slate-500/10',   dot: 'bg-slate-400' },
+const CATEGORY_TINT: Record<string, { icon: string; label: string; activeBg: string; activeText: string; hoverBg: string; dot: string; ring: string; hoverRing: string; glow: string; hoverGlow: string; iconGlow: string; hoverIconGlow: string }> = {
+  blue:    { icon: 'text-blue-500',    label: 'text-blue-500/80',    activeBg: 'bg-blue-500/15',    activeText: 'text-blue-600 dark:text-blue-300',    hoverBg: 'hover:bg-blue-500/10',    dot: 'bg-blue-500',    ring: 'ring-1 ring-blue-500/30',    hoverRing: 'hover:ring-1 hover:ring-blue-500/30',    glow: 'shadow-[0_0_12px_-2px_rgba(59,130,246,0.55)]',   hoverGlow: 'hover:shadow-[0_0_12px_-2px_rgba(59,130,246,0.55)]',   iconGlow: 'drop-shadow-[0_0_5px_rgba(59,130,246,0.7)]',   hoverIconGlow: 'group-hover:drop-shadow-[0_0_5px_rgba(59,130,246,0.7)]' },
+  emerald: { icon: 'text-emerald-500', label: 'text-emerald-500/80', activeBg: 'bg-emerald-500/15', activeText: 'text-emerald-600 dark:text-emerald-300', hoverBg: 'hover:bg-emerald-500/10', dot: 'bg-emerald-500', ring: 'ring-1 ring-emerald-500/30', hoverRing: 'hover:ring-1 hover:ring-emerald-500/30', glow: 'shadow-[0_0_12px_-2px_rgba(16,185,129,0.55)]',  hoverGlow: 'hover:shadow-[0_0_12px_-2px_rgba(16,185,129,0.55)]',  iconGlow: 'drop-shadow-[0_0_5px_rgba(16,185,129,0.7)]',  hoverIconGlow: 'group-hover:drop-shadow-[0_0_5px_rgba(16,185,129,0.7)]' },
+  amber:   { icon: 'text-amber-500',   label: 'text-amber-500/80',   activeBg: 'bg-amber-500/15',   activeText: 'text-amber-600 dark:text-amber-300',   hoverBg: 'hover:bg-amber-500/10',   dot: 'bg-amber-500',   ring: 'ring-1 ring-amber-500/30',   hoverRing: 'hover:ring-1 hover:ring-amber-500/30',   glow: 'shadow-[0_0_12px_-2px_rgba(245,158,11,0.55)]',  hoverGlow: 'hover:shadow-[0_0_12px_-2px_rgba(245,158,11,0.55)]',  iconGlow: 'drop-shadow-[0_0_5px_rgba(245,158,11,0.7)]',  hoverIconGlow: 'group-hover:drop-shadow-[0_0_5px_rgba(245,158,11,0.7)]' },
+  pink:    { icon: 'text-pink-500',    label: 'text-pink-500/80',    activeBg: 'bg-pink-500/15',    activeText: 'text-pink-600 dark:text-pink-300',    hoverBg: 'hover:bg-pink-500/10',    dot: 'bg-pink-500',    ring: 'ring-1 ring-pink-500/30',    hoverRing: 'hover:ring-1 hover:ring-pink-500/30',    glow: 'shadow-[0_0_12px_-2px_rgba(236,72,153,0.55)]',  hoverGlow: 'hover:shadow-[0_0_12px_-2px_rgba(236,72,153,0.55)]',  iconGlow: 'drop-shadow-[0_0_5px_rgba(236,72,153,0.7)]',  hoverIconGlow: 'group-hover:drop-shadow-[0_0_5px_rgba(236,72,153,0.7)]' },
+  cyan:    { icon: 'text-cyan-500',    label: 'text-cyan-500/80',    activeBg: 'bg-cyan-500/15',    activeText: 'text-cyan-600 dark:text-cyan-300',    hoverBg: 'hover:bg-cyan-500/10',    dot: 'bg-cyan-500',    ring: 'ring-1 ring-cyan-500/30',    hoverRing: 'hover:ring-1 hover:ring-cyan-500/30',    glow: 'shadow-[0_0_12px_-2px_rgba(6,182,212,0.55)]',   hoverGlow: 'hover:shadow-[0_0_12px_-2px_rgba(6,182,212,0.55)]',   iconGlow: 'drop-shadow-[0_0_5px_rgba(6,182,212,0.7)]',   hoverIconGlow: 'group-hover:drop-shadow-[0_0_5px_rgba(6,182,212,0.7)]' },
+  rose:    { icon: 'text-rose-500',    label: 'text-rose-500/80',    activeBg: 'bg-rose-500/15',    activeText: 'text-rose-600 dark:text-rose-300',    hoverBg: 'hover:bg-rose-500/10',    dot: 'bg-rose-500',    ring: 'ring-1 ring-rose-500/30',    hoverRing: 'hover:ring-1 hover:ring-rose-500/30',    glow: 'shadow-[0_0_12px_-2px_rgba(244,63,94,0.55)]',   hoverGlow: 'hover:shadow-[0_0_12px_-2px_rgba(244,63,94,0.55)]',   iconGlow: 'drop-shadow-[0_0_5px_rgba(244,63,94,0.7)]',   hoverIconGlow: 'group-hover:drop-shadow-[0_0_5px_rgba(244,63,94,0.7)]' },
+  slate:   { icon: 'text-slate-300',   label: 'text-slate-300/80',   activeBg: 'bg-slate-500/20',   activeText: 'text-slate-100',                        hoverBg: 'hover:bg-slate-500/10',   dot: 'bg-slate-300',   ring: 'ring-1 ring-slate-400/30',   hoverRing: 'hover:ring-1 hover:ring-slate-400/30',   glow: 'shadow-[0_0_12px_-2px_rgba(148,163,184,0.55)]', hoverGlow: 'hover:shadow-[0_0_12px_-2px_rgba(148,163,184,0.55)]', iconGlow: 'drop-shadow-[0_0_5px_rgba(148,163,184,0.7)]', hoverIconGlow: 'group-hover:drop-shadow-[0_0_5px_rgba(148,163,184,0.7)]' },
+
+
 
 
 };
@@ -265,7 +267,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </span>
           )}
           {featured && (
-            <div className="relative mx-1 my-1 rounded-xl p-[1.5px] bg-gradient-to-r from-rose-500 via-pink-500 to-fuchsia-500 shadow-[0_0_18px_-4px_rgba(244,63,94,0.6)]">
+            <div className="relative mx-1 my-1 rounded-xl p-[1.5px] bg-gradient-to-r from-rose-500 via-pink-500 to-fuchsia-500 shadow-[0_0_18px_-4px_rgba(244,63,94,0.6)] animate-[pulse_3s_ease-in-out_infinite]">
+
               <div className="rounded-[10px] bg-sidebar/90 backdrop-blur-sm p-1 space-y-0.5">
                 {cat.items.map(item => {
                   const active = location.pathname === item.path;
@@ -308,7 +311,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           )}
 
           {speed && (
-            <div className={`relative mx-1 my-1 rounded-xl p-[1.5px] bg-gradient-to-r from-red-600 via-orange-500 to-yellow-400 shadow-[0_0_18px_-4px_rgba(249,115,22,0.65)] ${expanded ? '' : ''}`}>
+            <div className={`relative mx-1 my-1 rounded-xl p-[1.5px] bg-gradient-to-r from-red-600 via-orange-500 to-yellow-400 shadow-[0_0_18px_-4px_rgba(249,115,22,0.65)] animate-[pulse_2.5s_ease-in-out_infinite]`}>
               <div className="rounded-[10px] bg-sidebar/90 backdrop-blur-sm p-1 space-y-0.5">
                 {cat.items.map(item => {
                   const active = location.pathname === item.path;
@@ -364,19 +367,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 } ${
                   isHighlight
                     ? active
-                      ? 'bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white shadow-md shadow-violet-500/30 ring-1 ring-violet-400/40'
-                      : 'bg-gradient-to-r from-violet-500/10 to-fuchsia-500/10 text-violet-700 dark:text-violet-300 ring-1 ring-violet-500/25 hover:from-violet-500/20 hover:to-fuchsia-500/20 hover:shadow-sm'
+                      ? 'bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white shadow-md shadow-violet-500/40 ring-1 ring-violet-400/60'
+                      : 'bg-gradient-to-r from-violet-500/10 to-fuchsia-500/10 text-violet-700 dark:text-violet-300 ring-1 ring-violet-500/25 hover:from-violet-500/20 hover:to-fuchsia-500/20 hover:shadow-[0_0_14px_-2px_rgba(139,92,246,0.6)]'
                     : active
-                      ? `${tint.activeBg} ${tint.activeText} shadow-sm`
-                      : `text-sidebar-foreground ${tint.hoverBg}`
+                      ? `${tint.activeBg} ${tint.activeText} ${tint.ring} ${tint.glow}`
+                      : `text-sidebar-foreground ${tint.hoverBg} ${tint.hoverRing} ${tint.hoverGlow}`
                 }`}
                 title={!expanded ? item.label : undefined}
               >
                 <item.icon
                   size={18}
-                  strokeWidth={active || isHighlight ? 2.2 : 1.5}
-                  className={`shrink-0 transition-transform duration-200 group-hover:scale-110 ${isHighlight ? '' : active ? '' : tint.icon}`}
+                  strokeWidth={active || isHighlight ? 2.2 : 1.6}
+                  className={`shrink-0 transition-all duration-200 group-hover:scale-110 ${isHighlight ? '' : `${tint.icon} ${active ? tint.iconGlow : tint.hoverIconGlow}`}`}
                 />
+
+
                 {expanded ? (
                   <span className={`text-[13px] whitespace-nowrap overflow-hidden ${isHighlight ? 'font-semibold' : 'font-medium'}`}>{item.label}</span>
                 ) : (

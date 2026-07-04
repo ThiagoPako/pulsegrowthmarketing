@@ -36,7 +36,7 @@ interface DesignTask {
   updated_at?: string | null;
   created_at?: string | null;
   attachment_url?: string | null;
-  attachment_urls?: string[] | null;
+  attachment_urls?: string[] | string | null;
   editable_file_url?: string | null;
   mockup_url?: string | null;
   assigned_to?: string | null;
@@ -223,11 +223,28 @@ const inDateRange = (value: string | null | undefined, start: string, end: strin
   return day >= start && day <= end;
 };
 
-const countDesignAttachments = (task: DesignTask): number => {
-  const urls = Array.isArray(task.attachment_urls) ? task.attachment_urls.filter(Boolean) : [];
-  const singleAttachment = task.attachment_url && !urls.includes(task.attachment_url) ? 1 : 0;
-  const mockup = task.mockup_url ? 1 : 0;
-  return urls.length + singleAttachment + mockup;
+const getDesignAttachmentUrls = (task: DesignTask): string[] => {
+  const rawUrls = Array.isArray(task.attachment_urls)
+    ? task.attachment_urls
+    : typeof task.attachment_urls === 'string'
+      ? (() => {
+          try {
+            const parsed = JSON.parse(task.attachment_urls || '[]');
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return task.attachment_urls ? [task.attachment_urls] : [];
+          }
+        })()
+      : [];
+
+  return Array.from(new Set([
+    ...rawUrls,
+    task.attachment_url,
+  ].filter((url): url is string => Boolean(url && url.trim()))));
+};
+
+const countDesignArts = (task: DesignTask): number => {
+  return getDesignAttachmentUrls(task).length;
 };
 
 interface PlanRow {
@@ -335,10 +352,11 @@ export default function CostByContentType() {
     const sCri = socials.filter(d => normalizeContentType(d.content_type) === 'criativo').length;
     const sSto = socials.filter(d => normalizeContentType(d.content_type) === 'story').length;
 
-    // Conta artes anexadas em cada card produzido (attachment_urls + attachment/mockup contam separadamente).
+    // Conta artes reais anexadas em cada card produzido. CAR continua sendo a tarefa/card;
+    // Artes vem exclusivamente dos arquivos/links anexados no card, sem contar mockup.
     const dtArts = designTasks
       .filter(t => clientOk(t.client_id) && PRODUCED_DESIGN_COLUMNS.has(normalizeText(t.kanban_column)) && inDateRange(t.completed_at || t.updated_at || t.created_at, dateRange.start, dateRange.end))
-      .reduce((a, t) => a + countDesignAttachments(t), 0);
+      .reduce((a, t) => a + countDesignArts(t), 0);
 
     // Total geral de artes (calculado aqui; reels/criativos/stories abaixo)
     const artes = Math.max(recArts, dtArts);
@@ -483,11 +501,11 @@ export default function CostByContentType() {
       copyProductionByUser.set(uid, current);
     });
 
-    // Artes por designer: o total real de artes entregues é `artes` (soma de todos os
-    // artes entregues, priorizando delivery_records.arts_produced). Rateamos esse total
-    // entre os designers proporcionalmente ao nº de cards produzidos por cada um
-    // (fallback: divisão igualitária entre designers ativos no período).
+    // Designer: CAR = quantidade de tarefas/cards produzidos.
+    // Artes = quantidade real de artes anexadas dentro desses cards.
+    // As duas fontes ficam separadas para não repetir 82/82 quando um card possui várias artes.
     const designerCardsByUser = new Map<string, number>();
+    const designCountsByUser = new Map<string, number>();
     designTasks.forEach(t => {
       if (!clientOk(t.client_id)) return;
       if (!PRODUCED_DESIGN_COLUMNS.has(normalizeText(t.kanban_column))) return;
@@ -497,20 +515,8 @@ export default function CostByContentType() {
       const role = roleOf.get(uid);
       if (!role || !DESIGNER_ROLES.includes(role)) return;
       designerCardsByUser.set(uid, (designerCardsByUser.get(uid) || 0) + 1);
+      designCountsByUser.set(uid, (designCountsByUser.get(uid) || 0) + countDesignArts(t));
     });
-    const designCountsByUser = new Map<string, number>();
-    const totalDesignerCards = Array.from(designerCardsByUser.values()).reduce((a, n) => a + n, 0);
-    if (totalDesignerCards > 0) {
-      designerCardsByUser.forEach((cards, uid) => {
-        designCountsByUser.set(uid, (cards / totalDesignerCards) * artes);
-      });
-    } else {
-      const activeDesigners = users.filter(u => DESIGNER_ROLES.includes(u.role));
-      if (activeDesigners.length > 0 && artes > 0) {
-        const share = artes / activeDesigners.length;
-        activeDesigners.forEach(u => designCountsByUser.set(u.id, share));
-      }
-    }
 
     const editorDirect = new Map<string, { reels: number; criativo: number; story: number; artes: number }>();
     edCountsByUser.forEach((c, uid) => editorDirect.set(uid, { ...c, artes: 0 }));

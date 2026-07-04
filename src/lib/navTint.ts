@@ -33,7 +33,7 @@ export const CATEGORY_TINT: Record<TintKey, {
 // Categoria por rota — fonte única de verdade para cor de qualquer módulo.
 export const PATH_CATEGORY: Record<string, TintKey> = {
   // Principal (blue)
-  '/dashboard': 'blue', '/conteudo': 'blue', '/roteiros': 'blue',
+  '/dashboard': 'blue', '/conteudo': 'blue', '/roteiros': 'cyan',
   // Gestão de Tarefas (emerald) — controles e agenda
   '/controle-gravacoes': 'emerald', '/controle-edicao': 'emerald', '/agenda': 'emerald',
   // Produção (violet)

@@ -485,7 +485,7 @@ export default function CostByContentType() {
 
     // Artes por designer (assigned_to via design_tasks) — para validação
     const designCountsByUser = new Map<string, number>();
-    designTasks.forEach((t: any) => {
+    designTasks.forEach(t => {
       if (!clientOk(t.client_id)) return;
       if (!PRODUCED_DESIGN_COLUMNS.has(normalizeText(t.kanban_column))) return;
       if (!inDateRange(t.completed_at || t.updated_at || t.created_at, dateRange.start, dateRange.end)) return;

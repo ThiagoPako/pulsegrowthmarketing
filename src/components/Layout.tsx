@@ -153,6 +153,16 @@ const navCategories: NavCategory[] = [
   },
 
   {
+    label: 'Ferramentas',
+    color: 'slate',
+    items: [
+      { path: '/panfletagem', label: 'Panfletagem', icon: Car, roles: ['admin'] },
+      { path: '/encurtador', label: 'Encurtador', icon: Type, roles: ['admin', 'social_media'] },
+      { path: '/clube-descontos', label: 'Clube Descontos', icon: Gift, roles: ['admin', 'social_media'] },
+    ],
+  },
+
+  {
     label: 'Sistema',
     color: 'slate',
     items: [

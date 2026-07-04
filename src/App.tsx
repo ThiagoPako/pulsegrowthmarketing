@@ -170,6 +170,7 @@ function AppRoutes() {
         <Route path="/conteudo" element={<ProtectedRoute><ContentKanban /></ProtectedRoute>} />
         <Route path="/edicao" element={<ProtectedRoute><EditorDashboard /></ProtectedRoute>} />
         <Route path="/edicao/kanban" element={<ProtectedRoute><EditorKanban /></ProtectedRoute>} />
+        <Route path="/videomakers" element={<ProtectedRoute><VideomakerDashboard /></ProtectedRoute>} />
         <Route path="/designer" element={<ProtectedRoute><DesignerKanban /></ProtectedRoute>} />
         <Route path="/designer/relatorios" element={<ProtectedRoute><DesignerReports /></ProtectedRoute>} />
         <Route path="/onboarding-gestao" element={<ProtectedRoute><OnboardingManagement /></ProtectedRoute>} />

@@ -56,6 +56,16 @@ const navCategories: NavCategory[] = [
   },
 
   {
+    label: 'Tráfego',
+    color: 'cyan',
+    highlight: true,
+    items: [
+      { path: '/trafego', label: 'Tráfego', icon: TrendingUp, roles: ['admin', 'social_media'] },
+    ],
+  },
+
+
+  {
     label: 'Gestão de Tarefas',
     color: 'emerald',
     items: [

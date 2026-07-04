@@ -352,14 +352,17 @@ export default function CostByContentType() {
     const sCri = socials.filter(d => normalizeContentType(d.content_type) === 'criativo').length;
     const sSto = socials.filter(d => normalizeContentType(d.content_type) === 'story').length;
 
-    // Conta artes reais anexadas em cada card produzido. CAR continua sendo a tarefa/card;
-    // Artes vem exclusivamente dos arquivos/links anexados no card, sem contar mockup.
+    // Conta artes reais anexadas em cada card produzido pelo time de designer.
+    // CAR = tarefa/card; Artes = arquivos/links anexados no card (sem mockup).
     const dtArts = designTasks
       .filter(t => clientOk(t.client_id) && PRODUCED_DESIGN_COLUMNS.has(normalizeText(t.kanban_column)) && inDateRange(t.completed_at || t.updated_at || t.created_at, dateRange.start, dateRange.end))
       .reduce((a, t) => a + countDesignArts(t), 0);
 
-    // Total geral de artes (calculado aqui; reels/criativos/stories abaixo)
-    const artes = Math.max(recArts, dtArts);
+    // Total de Artes = exclusivamente produção do time de designer (anexos nos cards).
+    // Não misturar com recArts (delivery_records dos videomakers) — times distintos,
+    // senão o custo unitário do designer fica distorcido quando VM registra "artes".
+    const artes = dtArts;
+
 
     // === SALÁRIOS por pool (sem sobreposição) ===
     const parseLocal = (s: string) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1); };

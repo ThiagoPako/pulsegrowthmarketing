@@ -39,7 +39,7 @@ export const PATH_CATEGORY: Record<string, TintKey> = {
   // Produção (violet)
   '/edicao': 'violet', '/edicao/kanban': 'violet', '/videomakers': 'violet',
   // Produção Criativo (cyan)
-  '/entregas-social': 'cyan', '/trafego': 'cyan', '/desempenho': 'cyan',
+  '/entregas-social': 'cyan', '/trafego': 'cyan',
   '/conteudos-portal': 'cyan',
   // Designer (pink)
   '/designer': 'pink', '/landing-admin': 'pink',

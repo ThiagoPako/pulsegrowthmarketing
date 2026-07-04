@@ -60,6 +60,8 @@ const navCategories: NavCategory[] = [
   },
   {
     label: 'Produção',
+    color: 'emerald',
+
     items: [
       { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media'] },
       { path: '/trafego', label: 'Tráfego', icon: TrendingUp, roles: ['admin', 'social_media'] },

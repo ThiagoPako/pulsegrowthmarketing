@@ -103,6 +103,8 @@ const navCategories: NavCategory[] = [
   },
   {
     label: 'Sistema',
+    color: 'slate',
+
     items: [
       { path: '/financeiro', label: 'Financeiro', icon: DollarSign, roles: ['admin'] },
       { path: '/custo-conteudo', label: 'Pente Fino', icon: Target, roles: ['admin'], highlight: true },

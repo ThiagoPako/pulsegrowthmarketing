@@ -36,6 +36,7 @@ type NavCategory = {
   color: TintKey;
   speedometer?: boolean;
   featured?: boolean;
+  highlight?: boolean;
   items: { path: string; label: string; icon: LucideIcon; roles: string[]; highlight?: boolean }[];
 };
 
@@ -53,6 +54,16 @@ const navCategories: NavCategory[] = [
       { path: '/roteiros', label: 'Roteiros', icon: FileText, roles: ['admin', 'social_media', 'videomaker'] },
     ],
   },
+
+  {
+    label: 'Tráfego',
+    color: 'cyan',
+    highlight: true,
+    items: [
+      { path: '/trafego', label: 'Tráfego', icon: TrendingUp, roles: ['admin', 'social_media'] },
+    ],
+  },
+
 
   {
     label: 'Gestão de Tarefas',
@@ -79,7 +90,6 @@ const navCategories: NavCategory[] = [
     color: 'cyan',
     items: [
       { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media'] },
-      { path: '/trafego', label: 'Tráfego', icon: TrendingUp, roles: ['admin', 'social_media'] },
       { path: '/desempenho', label: 'Desempenho', icon: Target, roles: ['admin', 'social_media'] },
       { path: '/conteudos-portal', label: 'Portal', icon: MonitorPlay, roles: ['admin', 'social_media', 'editor'] },
     ],
@@ -252,12 +262,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         const tint = CATEGORY_TINT[cat.color] || CATEGORY_TINT.slate;
         const speed = cat.speedometer;
         const featured = cat.featured;
+        const highlight = cat.highlight;
         return (
         <div key={cat.label} className="w-full">
           {catIdx > 0 && (
             <div className="my-1.5 mx-2 h-px bg-sidebar-border" />
           )}
-          {expanded && !speed && !featured && (
+          {expanded && !speed && !featured && !highlight && (
             <span
               className="text-[11px] uppercase tracking-wider font-bold mx-2 mb-1.5 px-2.5 py-1 rounded-md flex items-center gap-1.5 whitespace-nowrap overflow-hidden text-white"
               style={{
@@ -361,7 +372,43 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           )}
-          {!speed && !featured && (
+          {highlight && (
+            <div className="relative mx-1 my-1 rounded-xl p-[1.5px] bg-gradient-to-r from-cyan-400 via-sky-500 to-blue-600 shadow-[0_0_18px_-4px_rgba(14,165,233,0.7)] animate-[pulse_3s_ease-in-out_infinite]">
+              <div className="rounded-[10px] bg-sidebar/90 backdrop-blur-sm p-1 space-y-0.5">
+                {cat.items.map(item => {
+                  const active = location.pathname === item.path;
+                  return (
+                    <button
+                      key={item.path}
+                      onClick={() => (onNav || navigate)(item.path)}
+                      className={`w-full group flex items-center rounded-lg transition-all duration-200 ${
+                        expanded ? 'gap-2.5 px-2.5 py-2' : 'flex-col gap-1 px-1 py-2'
+                      } ${
+                        active
+                          ? 'bg-gradient-to-r from-cyan-400 via-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/40'
+                          : 'text-foreground hover:bg-gradient-to-r hover:from-cyan-400/15 hover:via-sky-500/15 hover:to-blue-600/15'
+                      }`}
+                      title={!expanded ? item.label : undefined}
+                    >
+                      <item.icon
+                        size={expanded ? 18 : 20}
+                        strokeWidth={2.2}
+                        className={`shrink-0 transition-transform duration-200 group-hover:scale-110 ${
+                          active ? 'text-white drop-shadow-[0_0_6px_rgba(56,189,248,0.9)]' : 'text-sky-400 drop-shadow-[0_0_4px_rgba(14,165,233,0.6)]'
+                        }`}
+                      />
+                      {expanded ? (
+                        <span className={`text-[13px] whitespace-nowrap font-bold tracking-wide ${active ? 'text-white' : 'text-foreground'}`}>{item.label}</span>
+                      ) : (
+                        <span className={`text-[9px] font-bold leading-none uppercase tracking-wider ${active ? 'text-white' : 'text-foreground/80'}`}>{item.label}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {!speed && !featured && !highlight && (
             <div className={`mx-1 my-1 rounded-xl p-1 space-y-0.5 transition-all duration-300 ${tint.panel}`}>
               {cat.items.map(item => {
                 const active = location.pathname === item.path;

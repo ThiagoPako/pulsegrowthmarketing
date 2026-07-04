@@ -33,28 +33,30 @@ export const CATEGORY_TINT: Record<TintKey, {
 // Categoria por rota — fonte única de verdade para cor de qualquer módulo.
 export const PATH_CATEGORY: Record<string, TintKey> = {
   // Principal (blue)
-  '/dashboard': 'blue', '/conteudo': 'blue', '/agenda': 'blue',
-  '/controle-gravacoes': 'blue', '/controle-edicao': 'blue', '/roteiros': 'blue',
-  // Produção (emerald)
-  '/entregas-social': 'emerald', '/trafego': 'emerald', '/edicao': 'emerald',
-  '/edicao/kanban': 'emerald', '/designer': 'emerald', '/conteudos-portal': 'emerald', '/desempenho': 'emerald',
-  // Gestão (amber)
+  '/dashboard': 'blue', '/conteudo': 'blue', '/agenda': 'blue', '/roteiros': 'blue',
+  // Social Media (cyan)
+  '/entregas-social': 'cyan', '/trafego': 'cyan', '/desempenho': 'cyan',
+  '/conteudos-portal': 'cyan', '/encurtador': 'cyan', '/clube-descontos': 'cyan',
+  // Editor (violet)
+  '/controle-gravacoes': 'violet', '/controle-edicao': 'violet',
+  '/edicao': 'violet', '/edicao/kanban': 'violet',
+  // Designer (pink)
+  '/designer': 'pink', '/panfletagem': 'pink', '/painel-tv': 'pink', '/landing-admin': 'pink',
+  // Gestão de Tarefas (amber)
   '/clientes': 'amber', '/relacionamento': 'amber', '/depoimentos': 'amber',
   '/onboarding-gestao': 'amber', '/equipe': 'amber', '/planos': 'amber', '/relatorios': 'amber',
-  // Comercial (rose) — inclui Metas
+  '/endomarketing/tarefas': 'amber',
+  // Comercial (rose)
   '/crm': 'rose', '/propostas': 'rose', '/apresentacao': 'rose', '/metas': 'rose',
-  // Marketing (pink)
-  '/endomarketing': 'pink', '/endomarketing/contratos': 'pink', '/endomarketing/tarefas': 'pink',
-  '/endomarketing/relatorios': 'pink', '/endomarketing/calendario': 'pink',
-  // Ferramentas (cyan)
-  '/encurtador': 'cyan', '/panfletagem': 'cyan', '/clube-descontos': 'cyan',
-  '/painel-tv': 'cyan', '/landing-admin': 'cyan',
-  // Administrativa (emerald — destaque especial no Layout via speedometer)
+  // Endomarketing (emerald)
+  '/endomarketing': 'emerald', '/endomarketing/contratos': 'emerald',
+  '/endomarketing/relatorios': 'emerald', '/endomarketing/calendario': 'emerald',
+  // Administrativa (emerald — destaque especial via speedometer)
   '/financeiro': 'emerald', '/custo-conteudo': 'emerald',
-  // Sistema (violet)
-  '/financeiro/chat': 'violet', '/financeiro/apis': 'violet', '/whatsapp': 'violet',
-  '/automacoes': 'violet', '/treinamento': 'violet', '/treinamento-gestao': 'violet',
-  '/portal-videos': 'violet', '/configuracoes': 'violet',
+  // Sistema (slate)
+  '/financeiro/chat': 'slate', '/financeiro/apis': 'slate', '/whatsapp': 'slate',
+  '/automacoes': 'slate', '/treinamento': 'slate', '/treinamento-gestao': 'slate',
+  '/portal-videos': 'slate', '/configuracoes': 'slate',
 };
 
 export const getTintForPath = (path: string): TintKey => {

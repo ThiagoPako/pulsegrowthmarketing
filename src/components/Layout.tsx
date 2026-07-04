@@ -12,9 +12,10 @@ import UserAvatar from '@/components/UserAvatar';
 import ProfileDialog from '@/components/ProfileDialog';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
-  LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Bot, Plug, Car, Menu, X, Video, Handshake, Star, Rocket, Type, Gift, Monitor, UserMinus, BookOpen, Sun, Moon
+  LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Bot, Plug, Car, Menu, X, Video, Handshake, Star, Rocket, Type, Gift, Monitor, UserMinus, BookOpen, Sun, Moon, Gauge, Flame
   , Sparkles,
 } from 'lucide-react';
+
 import { useTheme } from '@/hooks/useTheme';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
@@ -31,8 +32,10 @@ import CitySwitcher from '@/components/CitySwitcher';
 type NavCategory = {
   label: string;
   color: string; // tailwind color name (blue, emerald, amber, pink, violet, ...)
+  speedometer?: boolean;
   items: { path: string; label: string; icon: any; roles: string[]; highlight?: boolean }[];
 };
+
 
 // Paleta por categoria (usada como accent do ícone / borda / label da categoria)
 const CATEGORY_TINT: Record<string, { icon: string; label: string; activeBg: string; activeText: string; hoverBg: string; dot: string }> = {
@@ -129,11 +132,13 @@ const navCategories: NavCategory[] = [
   {
     label: 'Administrativa',
     color: 'emerald',
+    speedometer: true,
     items: [
-      { path: '/financeiro', label: 'Financeiro', icon: DollarSign, roles: ['admin'] },
-      { path: '/custo-conteudo', label: 'Pente Fino', icon: Target, roles: ['admin'], highlight: true },
+      { path: '/financeiro', label: 'Financeiro', icon: Gauge, roles: ['admin'] },
+      { path: '/custo-conteudo', label: 'Pente Fino', icon: Flame, roles: ['admin'] },
     ],
   },
+
   {
     label: 'Sistema',
     color: 'slate',
@@ -233,18 +238,58 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     <nav className="flex-1 flex flex-col gap-0.5 py-2 px-1.5 overflow-y-auto">
       {filteredCategories.map((cat, catIdx) => {
         const tint = CATEGORY_TINT[cat.color] || CATEGORY_TINT.slate;
+        const speed = cat.speedometer;
         return (
         <div key={cat.label} className="w-full">
           {catIdx > 0 && (
             <div className="my-1.5 mx-2 h-px bg-sidebar-border" />
           )}
-          {expanded && (
+          {expanded && !speed && (
             <span className={`text-[11px] uppercase tracking-wider font-semibold px-3 mb-1 flex items-center gap-1.5 whitespace-nowrap overflow-hidden ${tint.label}`}>
               <span className={`inline-block w-1.5 h-1.5 rounded-full ${tint.dot}`} />
               {cat.label}
             </span>
           )}
-          {cat.items.map(item => {
+          {speed && (
+            <div className={`relative mx-1 my-1 rounded-xl p-[1.5px] bg-gradient-to-r from-red-600 via-orange-500 to-yellow-400 shadow-[0_0_18px_-4px_rgba(249,115,22,0.65)] ${expanded ? '' : ''}`}>
+              <div className="rounded-[10px] bg-sidebar/90 backdrop-blur-sm p-1 space-y-0.5">
+                {cat.items.map(item => {
+                  const active = location.pathname === item.path;
+                  return (
+                    <button
+                      key={item.path}
+                      onClick={() => (onNav || navigate)(item.path)}
+                      className={`w-full group flex items-center rounded-lg transition-all duration-200 ${
+                        expanded ? 'gap-2.5 px-2.5 py-2' : 'flex-col gap-1 px-1 py-2'
+                      } ${
+                        active
+                          ? 'bg-gradient-to-r from-red-600 via-orange-500 to-yellow-400 text-white shadow-md shadow-orange-500/40'
+                          : 'text-orange-100 hover:bg-gradient-to-r hover:from-red-600/20 hover:via-orange-500/20 hover:to-yellow-400/20'
+                      }`}
+                      title={!expanded ? item.label : undefined}
+                    >
+                      <item.icon
+                        size={expanded ? 18 : 20}
+                        strokeWidth={2.2}
+                        className={`shrink-0 transition-transform duration-200 group-hover:scale-110 group-hover:rotate-6 ${
+                          active ? 'text-white drop-shadow-[0_0_6px_rgba(255,180,60,0.9)]' : 'text-orange-400 drop-shadow-[0_0_4px_rgba(249,115,22,0.6)]'
+                        }`}
+                      />
+                      {expanded ? (
+                        <span className={`text-[13px] whitespace-nowrap font-bold tracking-wide ${active ? 'text-white' : 'text-foreground'}`}>{item.label}</span>
+                      ) : (
+                        <span className={`text-[9px] font-bold leading-none uppercase tracking-wider ${active ? 'text-white' : 'text-foreground/80'}`}>{item.label}</span>
+                      )}
+                      {active && expanded && (
+                        <Flame size={14} className="ml-auto text-yellow-200 animate-pulse" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {!speed && cat.items.map(item => {
             const active = location.pathname === item.path;
             const isHighlight = item.highlight;
             return (
@@ -290,6 +335,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
         );
       })}
+
 
     </nav>
   );

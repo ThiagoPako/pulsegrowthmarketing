@@ -104,30 +104,36 @@ const navCategories: NavCategory[] = [
     ],
   },
   {
+    label: 'Ferramentas p/ Cliente',
+    color: 'cyan',
+    items: [
+      { path: '/encurtador', label: 'Encurtador', icon: Type, roles: ['admin', 'social_media'] },
+      { path: '/panfletagem', label: 'Panfletagem', icon: Car, roles: ['admin'] },
+      { path: '/clube-descontos', label: 'Clube Descontos', icon: Gift, roles: ['admin', 'social_media'] },
+      { path: '/painel-tv', label: 'Painel TV', icon: Monitor, roles: ['admin'] },
+      { path: '/apresentacao', label: 'Apresentação', icon: Sparkles, roles: ['admin'] },
+      { path: '/propostas', label: 'Propostas', icon: FileText, roles: ['admin'] },
+      { path: '/landing-admin', label: 'Landing Page', icon: Rocket, roles: ['admin'] },
+    ],
+  },
+  {
     label: 'Sistema',
     color: 'slate',
-
     items: [
       { path: '/financeiro', label: 'Financeiro', icon: DollarSign, roles: ['admin'] },
       { path: '/custo-conteudo', label: 'Pente Fino', icon: Target, roles: ['admin'], highlight: true },
       { path: '/financeiro/chat', label: 'Chat IA', icon: Bot, roles: ['admin'] },
       { path: '/financeiro/apis', label: 'APIs', icon: Plug, roles: ['admin'] },
       { path: '/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin', 'social_media'] },
-
       { path: '/whatsapp', label: 'WhatsApp', icon: MessageSquare, roles: ['admin', 'social_media'] },
       { path: '/automacoes', label: 'Automações', icon: Bot, roles: ['admin', 'social_media'] },
-      { path: '/panfletagem', label: 'Panfletagem', icon: Car, roles: ['admin'] },
-      { path: '/clube-descontos', label: 'Clube Descontos', icon: Gift, roles: ['admin', 'social_media'] },
-      { path: '/painel-tv', label: 'Painel TV', icon: Monitor, roles: ['admin'] },
       { path: '/treinamento', label: 'Treinamento', icon: BookOpen, roles: ['admin', 'videomaker', 'social_media', 'editor', 'designer', 'fotografo', 'endomarketing'] },
       { path: '/treinamento-gestao', label: 'Gestão Trein.', icon: Settings, roles: ['admin'] },
       { path: '/portal-videos', label: 'Vídeos Portal', icon: Video, roles: ['admin'] },
-      { path: '/landing-admin', label: 'Landing Page', icon: Rocket, roles: ['admin'] },
-      { path: '/propostas', label: 'Propostas', icon: FileText, roles: ['admin'] },
-      { path: '/apresentacao', label: 'Apresentação', icon: Sparkles, roles: ['admin'] },
       { path: '/configuracoes', label: 'Config', icon: Settings, roles: ['admin', 'social_media'] },
     ],
   },
+
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {

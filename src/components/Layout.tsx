@@ -30,8 +30,9 @@ import CitySwitcher from '@/components/CitySwitcher';
 
 type NavCategory = {
   label: string;
-  items: { path: string; label: string; icon: any; roles: string[] }[];
+  items: { path: string; label: string; icon: any; roles: string[]; highlight?: boolean }[];
 };
+
 
 const navCategories: NavCategory[] = [
   {

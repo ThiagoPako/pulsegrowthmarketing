@@ -36,6 +36,7 @@ type NavCategory = {
   color: TintKey;
   speedometer?: boolean;
   featured?: boolean;
+  highlight?: boolean;
   items: { path: string; label: string; icon: LucideIcon; roles: string[]; highlight?: boolean }[];
 };
 

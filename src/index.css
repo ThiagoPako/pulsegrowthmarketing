@@ -233,23 +233,35 @@ html.font-scale-victor1 { font-size: 26px; }
   text-shadow: 0 0 6px rgba(var(--tint-rgb), 0.35);
 }
 
-/* Cabeçalho de página opt-in: <div data-page-header> ou <header data-page-header> */
-[data-tint] [data-page-header] {
+/* Cabeçalho de página — opt-in explícito via [data-page-header] OU
+   fallback automático: primeiro <h1> dentro do shell tintado.
+   Assim TODAS as páginas herdam a tint da categoria sem precisar
+   marcar arquivo por arquivo. */
+[data-tint] [data-page-header],
+[data-tint] h1:not([data-no-tint]) {
   position: relative;
   padding-left: 0.85rem;
+  text-shadow: 0 0 14px rgba(var(--tint-rgb), 0.28);
+  transition: color 0.25s ease, text-shadow 0.25s ease;
 }
-[data-tint] [data-page-header]::before {
+[data-tint] [data-page-header]::before,
+[data-tint] h1:not([data-no-tint])::before {
   content: "";
   position: absolute;
   left: 0;
-  top: 0.15rem;
-  bottom: 0.15rem;
+  top: 0.18rem;
+  bottom: 0.18rem;
   width: 3px;
   border-radius: 999px;
   background: var(--tint);
   box-shadow: 0 0 10px 0 rgba(var(--tint-rgb), 0.7);
 }
+/* Quando o autor marca explicitamente com data-page-header,
+   damos um destaque extra no h1/h2 filhos. */
 [data-tint] [data-page-header] h1,
 [data-tint] [data-page-header] h2 {
-  text-shadow: 0 0 14px rgba(var(--tint-rgb), 0.25);
+  text-shadow: 0 0 16px rgba(var(--tint-rgb), 0.35);
 }
+/* Escape hatch: <h1 data-no-tint> desliga o efeito onde não faz sentido
+   (ex.: telas de login/erro fora do shell principal). */
+

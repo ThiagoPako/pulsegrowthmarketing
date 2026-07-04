@@ -352,14 +352,17 @@ export default function CostByContentType() {
     const sCri = socials.filter(d => normalizeContentType(d.content_type) === 'criativo').length;
     const sSto = socials.filter(d => normalizeContentType(d.content_type) === 'story').length;
 
-    // Conta artes reais anexadas em cada card produzido. CAR continua sendo a tarefa/card;
-    // Artes vem exclusivamente dos arquivos/links anexados no card, sem contar mockup.
+    // Conta artes reais anexadas em cada card produzido pelo time de designer.
+    // CAR = tarefa/card; Artes = arquivos/links anexados no card (sem mockup).
     const dtArts = designTasks
       .filter(t => clientOk(t.client_id) && PRODUCED_DESIGN_COLUMNS.has(normalizeText(t.kanban_column)) && inDateRange(t.completed_at || t.updated_at || t.created_at, dateRange.start, dateRange.end))
       .reduce((a, t) => a + countDesignArts(t), 0);
 
-    // Total geral de artes (calculado aqui; reels/criativos/stories abaixo)
-    const artes = Math.max(recArts, dtArts);
+    // Total de Artes = exclusivamente produção do time de designer (anexos nos cards).
+    // Não misturar com recArts (delivery_records dos videomakers) — times distintos,
+    // senão o custo unitário do designer fica distorcido quando VM registra "artes".
+    const artes = dtArts;
+
 
     // === SALÁRIOS por pool (sem sobreposição) ===
     const parseLocal = (s: string) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1); };
@@ -428,10 +431,12 @@ export default function CostByContentType() {
     const roleOf = new Map(users.map(u => [u.id, u.role]));
 
     // Split das tasks produzidas pelo tipo de quem editou (edited_by/assigned_to)
+    // Split das tasks produzidas pelo tipo de quem editou (edited_by/assigned_to).
+    // Só interessa a fatia do videomaker (para ratear salário dele nos cards que ele mesmo editou)
+    // e a fatia individual do editor (para o breakdown por colaborador).
     const vmCountsByUser = new Map<string, { reels: number; criativo: number; story: number }>();
     const edCountsByUser = new Map<string, { reels: number; criativo: number; story: number }>();
     let vmReels = 0, vmCri = 0, vmSto = 0;
-    let edReels = 0, edCri = 0, edSto = 0;
     relevantTasks.forEach(t => {
       const type = normalizeContentType(t.content_type);
       const workerId = t.edited_by || t.assigned_to;
@@ -444,19 +449,15 @@ export default function CostByContentType() {
         else if (type === 'criativo') { current.criativo++; vmCri++; }
         else if (type === 'story') { current.story++; vmSto++; }
         vmCountsByUser.set(workerId, current);
-      } else {
-        if (type === 'reels') edReels++;
-        else if (type === 'criativo') edCri++;
-        else if (type === 'story') edSto++;
-        if (isEd && workerId) {
-          const current = edCountsByUser.get(workerId) || { reels: 0, criativo: 0, story: 0 };
-          if (type === 'reels') current.reels++;
-          else if (type === 'criativo') current.criativo++;
-          else if (type === 'story') current.story++;
-          edCountsByUser.set(workerId, current);
-        }
+      } else if (isEd && workerId) {
+        const current = edCountsByUser.get(workerId) || { reels: 0, criativo: 0, story: 0 };
+        if (type === 'reels') current.reels++;
+        else if (type === 'criativo') current.criativo++;
+        else if (type === 'story') current.story++;
+        edCountsByUser.set(workerId, current);
       }
     });
+
 
     // Produção individual dos videomakers vem das gravações realizadas.
     const vmProductionByUser = new Map<string, { reels: number; criativo: number; story: number; artes: number }>();
@@ -540,8 +541,9 @@ export default function CostByContentType() {
           : VIDEOMAKER_ROLES.includes(u.role) ? vmShare
           : designerShare;
         const s = src.get(u.id) || { reels: 0, criativo: 0, story: 0, artes: 0 };
-        // Designer: "cards" (CAR) = nº de tarefas/cards produzidos (fonte: design_tasks).
-        // "Artes" = soma total de artes entregues (rateada em s.artes). Fontes distintas.
+        // Designer: "cards" (CAR) = nº de tarefas/cards (fonte: design_tasks).
+        // "Artes" = nº real de artes anexadas nesses cards. Fontes distintas — nunca iguais
+        // salvo se todo card tiver exatamente 1 anexo.
         const cards = DESIGNER_ROLES.includes(u.role)
           ? (designerCardsByUser.get(u.id) || 0)
           : s.reels + s.criativo + s.story + s.artes;

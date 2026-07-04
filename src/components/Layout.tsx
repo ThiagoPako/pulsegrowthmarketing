@@ -104,7 +104,7 @@ const navCategories: NavCategory[] = [
     ],
   },
   {
-    label: 'Ferramentas p/ Cliente',
+    label: 'Ferramentas',
     color: 'cyan',
     items: [
       { path: '/encurtador', label: 'Encurtador', icon: Type, roles: ['admin', 'social_media'] },

@@ -552,10 +552,33 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <QuickShortcutsBar />
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6">
-          {children}
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 relative">
+          {/* Accent tint bar por categoria — consistência com sidebar/quick shortcuts */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 h-[3px] transition-colors"
+            style={{
+              background: `linear-gradient(90deg, transparent, rgba(${CATEGORY_RGB[getTintForPath(location.pathname)]}, 0.85), transparent)`,
+              boxShadow: `0 0 18px 0 rgba(${CATEGORY_RGB[getTintForPath(location.pathname)]}, 0.55)`,
+            }}
+          />
+          {/* Breadcrumb tint hook: qualquer <nav aria-label="breadcrumb"> ou [data-page-header]
+              dentro do main herda a cor da categoria via CSS custom property abaixo. */}
+          <div
+            className="min-h-full"
+            style={{
+              // Disponibilizamos a cor da categoria como variáveis CSS pra páginas
+              // usarem em breadcrumbs/cabeçalhos sem precisar importar nada.
+              ['--tint-rgb' as any]: CATEGORY_RGB[getTintForPath(location.pathname)],
+              ['--tint' as any]: `rgb(${CATEGORY_RGB[getTintForPath(location.pathname)]})`,
+            }}
+            data-tint={getTintForPath(location.pathname)}
+          >
+            {children}
+          </div>
         </main>
       </div>
+
 
       {/* Production Assistant Mascot */}
       <ProductionAssistant />

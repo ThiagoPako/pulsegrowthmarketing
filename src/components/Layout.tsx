@@ -311,7 +311,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           )}
 
           {speed && (
-            <div className={`relative mx-1 my-1 rounded-xl p-[1.5px] bg-gradient-to-r from-red-600 via-orange-500 to-yellow-400 shadow-[0_0_18px_-4px_rgba(249,115,22,0.65)] ${expanded ? '' : ''}`}>
+            <div className={`relative mx-1 my-1 rounded-xl p-[1.5px] bg-gradient-to-r from-red-600 via-orange-500 to-yellow-400 shadow-[0_0_18px_-4px_rgba(249,115,22,0.65)] animate-[pulse_2.5s_ease-in-out_infinite]`}>
               <div className="rounded-[10px] bg-sidebar/90 backdrop-blur-sm p-1 space-y-0.5">
                 {cat.items.map(item => {
                   const active = location.pathname === item.path;

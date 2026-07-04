@@ -87,7 +87,7 @@ const navCategories: NavCategory[] = [
     label: 'Sistema',
     items: [
       { path: '/financeiro', label: 'Financeiro', icon: DollarSign, roles: ['admin'] },
-      { path: '/custo-conteudo', label: 'Custo p/ Conteúdo', icon: Target, roles: ['admin'], highlight: true },
+      { path: '/custo-conteudo', label: 'Pente Fino', icon: Target, roles: ['admin'], highlight: true },
       { path: '/financeiro/chat', label: 'Chat IA', icon: Bot, roles: ['admin'] },
       { path: '/financeiro/apis', label: 'APIs', icon: Plug, roles: ['admin'] },
       { path: '/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin', 'social_media'] },

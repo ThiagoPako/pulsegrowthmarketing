@@ -11,6 +11,7 @@ import { format, startOfMonth, endOfMonth, subMonths, differenceInCalendarMonths
 
 interface DeliveryRecord {
   client_id: string | null;
+  videomaker_id?: string | null;
   date: string;
   reels_produced: number | string | null;
   creatives_produced: number | string | null;
@@ -26,6 +27,7 @@ interface EditorTask {
   updated_at: string | null;
   created_at?: string | null;
   assigned_to?: string | null;
+  edited_by?: string | null;
 }
 interface DesignTask {
   client_id: string | null;
@@ -37,6 +39,7 @@ interface DesignTask {
   attachment_urls?: string[] | null;
   editable_file_url?: string | null;
   mockup_url?: string | null;
+  assigned_to?: string | null;
 }
 interface SocialDelivery {
   client_id: string | null;
@@ -46,6 +49,14 @@ interface SocialDelivery {
   created_at?: string | null;
   updated_at?: string | null;
   status: string;
+  created_by?: string | null;
+}
+interface ScriptRecord {
+  client_id: string | null;
+  content_format: string | null;
+  created_by: string | null;
+  created_at: string | null;
+  updated_at?: string | null;
 }
 interface SalaryExpense {
   date: string;
@@ -237,6 +248,7 @@ export default function CostByContentType() {
   const [editorTasks, setEditorTasks] = useState<EditorTask[]>([]);
   const [designTasks, setDesignTasks] = useState<DesignTask[]>([]);
   const [socialDeliveries, setSocialDeliveries] = useState<SocialDelivery[]>([]);
+  const [scripts, setScripts] = useState<ScriptRecord[]>([]);
   const [salaryExpenses, setSalaryExpenses] = useState<SalaryExpense[]>([]);
   const [prolaboreExpenses, setProlaboreExpenses] = useState<SalaryExpense[]>([]);
   const [plans, setPlans] = useState<PlanRow[]>([]);
@@ -247,11 +259,12 @@ export default function CostByContentType() {
   const [includeProLabore, setIncludeProLabore] = useState(false);
 
   const fetchData = useCallback(async () => {
-    const [rRes, sRes, edRes, dRes, catRes, expRes, plRes] = await Promise.all([
-      supabase.from('delivery_records').select('client_id,date,reels_produced,creatives_produced,stories_produced,arts_produced,delivery_status'),
-      supabase.from('social_media_deliveries').select('client_id,content_type,delivered_at,posted_at,created_at,updated_at,status'),
-      supabase.from('content_tasks').select('client_id,content_type,kanban_column,approved_at,updated_at,created_at,assigned_to'),
-      supabase.from('design_tasks').select('client_id,kanban_column,completed_at,updated_at,created_at,attachment_url,attachment_urls,editable_file_url,mockup_url'),
+    const [rRes, sRes, edRes, dRes, scRes, catRes, expRes, plRes] = await Promise.all([
+      supabase.from('delivery_records').select('client_id,videomaker_id,date,reels_produced,creatives_produced,stories_produced,arts_produced,delivery_status'),
+      supabase.from('social_media_deliveries').select('client_id,content_type,delivered_at,posted_at,created_at,updated_at,status,created_by'),
+      supabase.from('content_tasks').select('client_id,content_type,kanban_column,approved_at,updated_at,created_at,assigned_to,edited_by'),
+      supabase.from('design_tasks').select('client_id,kanban_column,completed_at,updated_at,created_at,attachment_url,attachment_urls,editable_file_url,mockup_url,assigned_to'),
+      supabase.from('scripts').select('client_id,content_format,created_by,created_at,updated_at'),
       supabase.from('expense_categories').select('id,name'),
       supabase.from('expenses').select('date,amount,description,responsible,category_id,expense_type'),
       supabase.from('plans').select('id,name,price,reels_qty,creatives_qty,stories_qty,arts_qty,recording_sessions,status'),
@@ -260,6 +273,7 @@ export default function CostByContentType() {
     if (sRes.data) setSocialDeliveries(sRes.data as SocialDelivery[]);
     if (edRes.data) setEditorTasks(edRes.data as EditorTask[]);
     if (dRes.data) setDesignTasks(dRes.data as DesignTask[]);
+    if (scRes.data) setScripts(scRes.data as ScriptRecord[]);
     if (plRes.data) setPlans(plRes.data as PlanRow[]);
     if (catRes.data && expRes.data) {
       const cats = catRes.data as ExpenseCategory[];
@@ -395,34 +409,78 @@ export default function CostByContentType() {
     // Mapa userId -> role para classificar quem editou cada card
     const roleOf = new Map(users.map(u => [u.id, u.role]));
 
-    // Split das tasks produzidas pelo tipo de quem editou (assigned_to)
+    // Split das tasks produzidas pelo tipo de quem editou (edited_by/assigned_to)
     const vmCountsByUser = new Map<string, { reels: number; criativo: number; story: number }>();
     const edCountsByUser = new Map<string, { reels: number; criativo: number; story: number }>();
     let vmReels = 0, vmCri = 0, vmSto = 0;
     let edReels = 0, edCri = 0, edSto = 0;
     relevantTasks.forEach(t => {
       const type = normalizeContentType(t.content_type);
-      const role = t.assigned_to ? roleOf.get(t.assigned_to) : undefined;
+      const workerId = t.edited_by || t.assigned_to;
+      const role = workerId ? roleOf.get(workerId) : undefined;
       const isVm = role && VIDEOMAKER_ROLES.includes(role);
       const isEd = role && EDITOR_ROLES.includes(role);
-      if (isVm && t.assigned_to) {
-        const current = vmCountsByUser.get(t.assigned_to) || { reels: 0, criativo: 0, story: 0 };
+      if (isVm && workerId) {
+        const current = vmCountsByUser.get(workerId) || { reels: 0, criativo: 0, story: 0 };
         if (type === 'reels') { current.reels++; vmReels++; }
         else if (type === 'criativo') { current.criativo++; vmCri++; }
         else if (type === 'story') { current.story++; vmSto++; }
-        vmCountsByUser.set(t.assigned_to, current);
+        vmCountsByUser.set(workerId, current);
       } else {
         if (type === 'reels') edReels++;
         else if (type === 'criativo') edCri++;
         else if (type === 'story') edSto++;
-        if (isEd && t.assigned_to) {
-          const current = edCountsByUser.get(t.assigned_to) || { reels: 0, criativo: 0, story: 0 };
+        if (isEd && workerId) {
+          const current = edCountsByUser.get(workerId) || { reels: 0, criativo: 0, story: 0 };
           if (type === 'reels') current.reels++;
           else if (type === 'criativo') current.criativo++;
           else if (type === 'story') current.story++;
-          edCountsByUser.set(t.assigned_to, current);
+          edCountsByUser.set(workerId, current);
         }
       }
+    });
+
+    // Produção individual dos videomakers vem das gravações realizadas.
+    const vmProductionByUser = new Map<string, { reels: number; criativo: number; story: number; artes: number }>();
+    realizadas.forEach(record => {
+      const uid = record.videomaker_id;
+      if (!uid || !VIDEOMAKER_ROLES.includes(roleOf.get(uid) || '')) return;
+      const current = vmProductionByUser.get(uid) || { reels: 0, criativo: 0, story: 0, artes: 0 };
+      current.reels += toNumber(record.reels_produced);
+      current.criativo += toNumber(record.creatives_produced);
+      current.story += toNumber(record.stories_produced);
+      current.artes += toNumber(record.arts_produced);
+      vmProductionByUser.set(uid, current);
+    });
+
+    // Produção individual do social vem das entregas/publicações criadas por cada social media.
+    const socialProductionByUser = new Map<string, { reels: number; criativo: number; story: number; artes: number }>();
+    socials.forEach(delivery => {
+      const uid = delivery.created_by;
+      if (!uid || !SOCIAL_ROLES.includes(roleOf.get(uid) || '')) return;
+      const current = socialProductionByUser.get(uid) || { reels: 0, criativo: 0, story: 0, artes: 0 };
+      const type = normalizeContentType(delivery.content_type);
+      if (type === 'reels') current.reels++;
+      else if (type === 'criativo') current.criativo++;
+      else if (type === 'story') current.story++;
+      else if (type === 'arte') current.artes++;
+      socialProductionByUser.set(uid, current);
+    });
+
+    // Produção individual do copywriter vem dos roteiros criados no período.
+    const copyProductionByUser = new Map<string, { reels: number; criativo: number; story: number; artes: number }>();
+    scripts.forEach(script => {
+      const uid = script.created_by;
+      const referenceDate = script.created_at || script.updated_at;
+      if (!uid || !COPY_ROLES.includes(roleOf.get(uid) || '')) return;
+      if (!clientOk(script.client_id) || !inDateRange(referenceDate, dateRange.start, dateRange.end)) return;
+      const current = copyProductionByUser.get(uid) || { reels: 0, criativo: 0, story: 0, artes: 0 };
+      const type = normalizeContentType(script.content_format);
+      if (type === 'reels') current.reels++;
+      else if (type === 'criativo') current.criativo++;
+      else if (type === 'story') current.story++;
+      else if (type === 'arte') current.artes++;
+      copyProductionByUser.set(uid, current);
     });
 
     // Artes por designer (assigned_to via design_tasks) — para validação
@@ -438,56 +496,17 @@ export default function CostByContentType() {
       designCountsByUser.set(uid, (designCountsByUser.get(uid) || 0) + countDesignAttachments(t));
     });
 
-    // Breakdown por colaborador — quando o card não tem assigned_to (comum),
-    // rateamos o total real da função igualmente entre os colaboradores dela.
-    // Rateio igualitário (não proporcional ao salário) mantém o custo/card distinto por pessoa.
-    const distributeByRole = (roles: string[], totals: { reels: number; criativo: number; story: number; artes: number }, directCounts: Map<string, { reels: number; criativo: number; story: number; artes: number }>) => {
-      const roleUsers = users.filter(u => roles.includes(u.role));
-      const share = new Map<string, { reels: number; criativo: number; story: number; artes: number }>();
-      const claimed = { reels: 0, criativo: 0, story: 0, artes: 0 };
-      directCounts.forEach((c, uid) => {
-        share.set(uid, { ...c });
-        claimed.reels += c.reels; claimed.criativo += c.criativo; claimed.story += c.story; claimed.artes += c.artes;
-      });
-      const remaining = {
-        reels: Math.max(0, totals.reels - claimed.reels),
-        criativo: Math.max(0, totals.criativo - claimed.criativo),
-        story: Math.max(0, totals.story - claimed.story),
-        artes: Math.max(0, totals.artes - claimed.artes),
-      };
-      const n = Math.max(1, roleUsers.length);
-      roleUsers.forEach(u => {
-        const cur = share.get(u.id) || { reels: 0, criativo: 0, story: 0, artes: 0 };
-        cur.reels += remaining.reels / n;
-        cur.criativo += remaining.criativo / n;
-        cur.story += remaining.story / n;
-        cur.artes += remaining.artes / n;
-        share.set(u.id, cur);
-      });
-      return share;
-    };
-
     const editorDirect = new Map<string, { reels: number; criativo: number; story: number; artes: number }>();
     edCountsByUser.forEach((c, uid) => editorDirect.set(uid, { ...c, artes: 0 }));
-    const vmDirect = new Map<string, { reels: number; criativo: number; story: number; artes: number }>();
-    vmCountsByUser.forEach((c, uid) => vmDirect.set(uid, { ...c, artes: 0 }));
     const designerDirect = new Map<string, { reels: number; criativo: number; story: number; artes: number }>();
     designCountsByUser.forEach((n, uid) => designerDirect.set(uid, { reels: 0, criativo: 0, story: 0, artes: n }));
 
-    const editorShare = distributeByRole(EDITOR_ROLES, { reels: edReels, criativo: edCri, story: edSto, artes: 0 }, editorDirect);
-    const socialShare = distributeByRole(SOCIAL_ROLES, { reels: edReels, criativo: edCri, story: edSto, artes: 0 }, new Map());
-    const copyShare = distributeByRole(COPY_ROLES, { reels: edReels + vmReels, criativo: edCri + vmCri, story: edSto + vmSto, artes: 0 }, new Map());
-    // Videomaker produz nas GRAVAÇÕES (delivery_records), não nos content_tasks.
-    // Usamos o total real gravado no período (recReels/recCri/recSto) como produção da função;
-    // vmDirect (cards com assigned_to videomaker) entra integralmente, o restante é rateado.
-    const vmTotals = {
-      reels: Math.max(recReels, vmReels),
-      criativo: Math.max(recCri, vmCri),
-      story: Math.max(recSto, vmSto),
-      artes: 0,
-    };
-    const vmShare = distributeByRole(VIDEOMAKER_ROLES, vmTotals, vmDirect);
-    const designerShare = distributeByRole(DESIGNER_ROLES, { reels: 0, criativo: 0, story: 0, artes: dtArts }, designerDirect);
+    // Validação por colaborador deve ser individual: sem ratear sobra por função.
+    const editorShare = editorDirect;
+    const socialShare = socialProductionByUser;
+    const copyShare = copyProductionByUser;
+    const vmShare = vmProductionByUser;
+    const designerShare = designerDirect;
 
     const contributorBreakdown = users
       .filter(u => [...EDITOR_ROLES, ...SOCIAL_ROLES, ...COPY_ROLES, ...VIDEOMAKER_ROLES, ...DESIGNER_ROLES].includes(u.role))
@@ -656,7 +675,7 @@ export default function CostByContentType() {
       prolaboreTotal,
       prolaborePerSocio,
     };
-  }, [records, editorTasks, designTasks, socialDeliveries, salaryExpenses, prolaboreExpenses, users, selectedClient, dateRange, plans, includeProLabore]);
+  }, [records, editorTasks, designTasks, socialDeliveries, scripts, salaryExpenses, prolaboreExpenses, users, selectedClient, dateRange, plans, includeProLabore]);
 
   const fmt = (n: number) => Number.isFinite(n) && n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00';
   const formatCost = (cost: number, qty: number, pool: number) => {
@@ -871,7 +890,7 @@ export default function CostByContentType() {
           <Calculator size={18} className="text-emerald-600" /> Validação por Colaborador
         </h2>
         <p className="text-xs text-muted-foreground mb-3">
-          Total produzido pela função é rateado igualmente entre os colaboradores dela (cards com <code>assigned_to</code> entram integralmente; o restante é dividido em partes iguais). Assim o custo médio/card reflete o salário individual.
+          Produção individual real por colaborador: gravações por videomaker, edições por editor, publicações por social media, roteiros por copywriter e artes por designer. Não há rateio entre pessoas.
         </p>
         <Card>
           <CardContent className="p-0 overflow-x-auto">

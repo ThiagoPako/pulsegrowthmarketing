@@ -57,4 +57,28 @@ export const PATH_CATEGORY: Record<string, TintKey> = {
   '/portal-videos': 'violet', '/configuracoes': 'violet',
 };
 
-export const getTintForPath = (path: string): TintKey => PATH_CATEGORY[path] ?? 'slate';
+export const getTintForPath = (path: string): TintKey => {
+  if (PATH_CATEGORY[path]) return PATH_CATEGORY[path];
+  // Longest-prefix match para rotas aninhadas (ex.: /crm/123 → 'rose').
+  let best: { key: TintKey; len: number } | null = null;
+  for (const [prefix, key] of Object.entries(PATH_CATEGORY)) {
+    if (path === prefix || path.startsWith(prefix + '/')) {
+      if (!best || prefix.length > best.len) best = { key, len: prefix.length };
+    }
+  }
+  return best?.key ?? 'slate';
+};
+
+// Cores CSS puras por categoria — úteis para gradients/inline styles em cabeçalhos/breadcrumbs.
+export const CATEGORY_RGB: Record<TintKey, string> = {
+  blue: '59,130,246',
+  emerald: '16,185,129',
+  amber: '245,158,11',
+  pink: '236,72,153',
+  cyan: '6,182,212',
+  rose: '244,63,94',
+  violet: '139,92,246',
+  slate: '148,163,184',
+};
+
+export const getCategoryRgb = (path: string): string => CATEGORY_RGB[getTintForPath(path)];

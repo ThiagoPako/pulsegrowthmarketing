@@ -198,6 +198,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           )}
           {cat.items.map(item => {
             const active = location.pathname === item.path;
+            const isHighlight = item.highlight;
             return (
               <button
                 key={item.path}
@@ -208,20 +209,32 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     (onNav || navigate)(item.path);
                   }
                 }}
-                className={`w-full group flex items-center gap-2.5 rounded-xl transition-all duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-sm ${
+                className={`w-full group flex items-center gap-2.5 rounded-xl transition-all duration-200 ${
                   expanded ? 'px-3 py-2' : 'flex-col px-2 py-2'
-                } ${active ? 'bg-sidebar-accent text-primary shadow-sm' : 'text-sidebar-foreground'}`}
+                } ${
+                  isHighlight
+                    ? active
+                      ? 'bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white shadow-md shadow-violet-500/30 ring-1 ring-violet-400/40'
+                      : 'bg-gradient-to-r from-violet-500/10 to-fuchsia-500/10 text-violet-700 dark:text-violet-300 ring-1 ring-violet-500/25 hover:from-violet-500/20 hover:to-fuchsia-500/20 hover:shadow-sm'
+                    : active
+                      ? 'bg-sidebar-accent text-primary shadow-sm'
+                      : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-sm'
+                }`}
                 title={!expanded ? item.label : undefined}
               >
-                <item.icon size={18} strokeWidth={active ? 2.2 : 1.5} className="shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                <item.icon size={18} strokeWidth={active || isHighlight ? 2.2 : 1.5} className="shrink-0 transition-transform duration-200 group-hover:scale-110" />
                 {expanded ? (
-                  <span className="text-[13px] font-medium whitespace-nowrap overflow-hidden">{item.label}</span>
+                  <span className={`text-[13px] whitespace-nowrap overflow-hidden ${isHighlight ? 'font-semibold' : 'font-medium'}`}>{item.label}</span>
                 ) : (
                   <span className="text-[10px] font-medium leading-none">{item.label}</span>
+                )}
+                {isHighlight && expanded && (
+                  <span className={`ml-auto text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${active ? 'bg-white/25 text-white' : 'bg-violet-500/20 text-violet-700 dark:text-violet-300'}`}>Novo</span>
                 )}
               </button>
             );
           })}
+
         </div>
       ))}
     </nav>

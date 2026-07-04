@@ -425,20 +425,30 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                           {item.path === '/trafego' && (
                             <div className="flex items-center gap-1.5 pl-[26px]">
                               <span
-                                className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-bold tracking-wide ${active ? 'bg-white text-[#0866FF]' : 'bg-[#0866FF] text-white'}`}
+                                title="Meta Ads"
+                                className={`inline-flex items-center justify-center h-5 w-5 rounded-full ${active ? 'bg-white' : 'bg-white ring-1 ring-border/60'}`}
                               >
-                                Meta Ads
+                                <svg viewBox="0 0 36 36" className="h-3.5 w-3.5" aria-label="Meta">
+                                  <defs>
+                                    <linearGradient id="metaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                      <stop offset="0%" stopColor="#0064E1" />
+                                      <stop offset="50%" stopColor="#0082FB" />
+                                      <stop offset="100%" stopColor="#00C6FF" />
+                                    </linearGradient>
+                                  </defs>
+                                  <path fill="url(#metaGrad)" d="M6.5 22.5c0 2.6 1.3 4.3 3.4 4.3 2.2 0 3.7-1.4 6.6-6.3l2.3-3.9c.4-.7.8-1.3 1.2-1.9-1.3-2-2.2-2.9-3.6-2.9-2.5 0-5 2.9-7.8 8.1-1.4 2.5-2.1 4.6-2.1 6.6zm14.9-8.3c1.7 2.6 3.2 5.3 4.3 7.5 1 1.9 1.7 2.7 2.8 2.7 1.4 0 2.3-1.2 2.3-2.7 0-3.4-2.6-9.6-6-13.6-1.9-2.2-3.5-3.1-5.5-3.1-2.1 0-3.8 1-5.7 3.1 1.3.9 2.6 2.2 3.9 3.9.8 1 1.6 2 2.4 3.2z"/>
+                                  <path fill="url(#metaGrad)" d="M15.9 8.9c-2 0-3.7 1-5.5 3.1C7.7 15.4 5.5 20.5 5.5 24.5c0 2.6 1.3 4.3 3.4 4.3l.5-.1c-1.4-.5-2.2-1.9-2.2-4 0-2 .7-4.1 2.1-6.6 2.8-5.2 5.3-8.1 7.8-8.1.7 0 1.3.2 1.9.5-.9-.9-1.9-1.6-3.1-1.6z"/>
+                                </svg>
                               </span>
                               <span
-                                className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold tracking-wide ${active ? 'bg-white' : 'bg-background ring-1 ring-border/60'}`}
+                                title="Google Ads"
+                                className={`inline-flex items-center justify-center h-5 w-5 rounded-full ${active ? 'bg-white' : 'bg-white ring-1 ring-border/60'}`}
                               >
-                                <span className="text-[#4285F4]">G</span>
-                                <span className="text-[#EA4335]">o</span>
-                                <span className="text-[#FBBC04]">o</span>
-                                <span className="text-[#4285F4]">g</span>
-                                <span className="text-[#34A853]">l</span>
-                                <span className="text-[#EA4335]">e</span>
-                                <span className={`ml-1 ${active ? 'text-foreground' : 'text-foreground'}`}>Ads</span>
+                                <svg viewBox="0 0 192 192" className="h-3.5 w-3.5" aria-label="Google Ads">
+                                  <path fill="#FBBC04" d="M63.7 15.4L7.6 112.4c-8.2 14.2-3.3 32.4 10.9 40.6 14.2 8.2 32.4 3.3 40.6-10.9l56.1-97.1c8.2-14.2 3.3-32.4-10.9-40.6-14.2-8.2-32.4-3.3-40.6 10.9z"/>
+                                  <path fill="#4285F4" d="M128.3 15.4l56.1 97.1c8.2 14.2 3.3 32.4-10.9 40.6-14.2 8.2-32.4 3.3-40.6-10.9L76.8 45.1c-8.2-14.2-3.3-32.4 10.9-40.6 14.2-8.2 32.4-3.3 40.6 10.9z"/>
+                                  <circle fill="#34A853" cx="30.8" cy="141.7" r="29.7"/>
+                                </svg>
                               </span>
                             </div>
                           )}

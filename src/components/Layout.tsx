@@ -13,7 +13,7 @@ import ProfileDialog from '@/components/ProfileDialog';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
   LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Bot, Plug, Car, Menu, X, Video, Handshake, Star, Rocket, Type, Gift, Monitor, UserMinus, BookOpen, Sun, Moon, Gauge, Flame
-  , Sparkles,
+  , Sparkles, type LucideIcon,
 } from 'lucide-react';
 
 import { useTheme } from '@/hooks/useTheme';
@@ -28,14 +28,15 @@ import WelcomeRocket from '@/components/WelcomeRocket';
 import VirtualOffice from '@/components/VirtualOffice';
 import QuickShortcutsBar from '@/components/QuickShortcutsBar';
 import CitySwitcher from '@/components/CitySwitcher';
-import { CATEGORY_TINT } from '@/lib/navTint';
+import { CATEGORY_TINT, type TintKey } from '@/lib/navTint';
+import type { Profile } from '@/hooks/useAuth';
 
 type NavCategory = {
   label: string;
-  color: string; // tailwind color name (blue, emerald, amber, pink, violet, ...)
+  color: TintKey;
   speedometer?: boolean;
   featured?: boolean;
-  items: { path: string; label: string; icon: any; roles: string[]; highlight?: boolean }[];
+  items: { path: string; label: string; icon: LucideIcon; roles: string[]; highlight?: boolean }[];
 };
 
 
@@ -136,7 +137,7 @@ const navCategories: NavCategory[] = [
 
   {
     label: 'Sistema',
-    color: 'slate',
+    color: 'violet',
     items: [
       { path: '/financeiro/chat', label: 'Chat IA', icon: Bot, roles: ['admin'] },
       { path: '/financeiro/apis', label: 'APIs', icon: Plug, roles: ['admin'] },
@@ -196,7 +197,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     setFontScale(newScale);
     localStorage.setItem('pulse_font_scale', newScale);
     // Persist to database
-    updateProfile({ font_scale: newScale } as any);
+    updateProfile({ font_scale: newScale } satisfies Partial<Profile>);
   };
 
   const filteredCategories = navCategories
@@ -336,50 +337,45 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           )}
-          {!speed && !featured && cat.items.map(item => {
-            const active = location.pathname === item.path;
-            const isHighlight = item.highlight;
-            return (
-              <button
-                key={item.path}
-                onClick={() => {
-                  if (item.path === '/apresentacao') {
-                    window.open(item.path, '_blank', 'noopener,noreferrer');
-                  } else {
-                    (onNav || navigate)(item.path);
-                  }
-                }}
-                className={`w-full group flex items-center gap-2.5 rounded-xl transition-all duration-200 ${
-                  expanded ? 'px-3 py-2' : 'flex-col px-2 py-2'
-                } ${
-                  isHighlight
-                    ? active
-                      ? 'bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white shadow-md shadow-violet-500/40 ring-1 ring-violet-400/60'
-                      : 'bg-gradient-to-r from-violet-500/10 to-fuchsia-500/10 text-violet-700 dark:text-violet-300 ring-1 ring-violet-500/25 hover:from-violet-500/20 hover:to-fuchsia-500/20 hover:shadow-[0_0_14px_-2px_rgba(139,92,246,0.6)]'
-                    : active
-                      ? `${tint.activeBg} ${tint.activeText} ${tint.ring} ${tint.glow}`
-                      : `text-sidebar-foreground ${tint.hoverBg} ${tint.hoverRing} ${tint.hoverGlow}`
-                }`}
-                title={!expanded ? item.label : undefined}
-              >
-                <item.icon
-                  size={18}
-                  strokeWidth={active || isHighlight ? 2.2 : 1.6}
-                  className={`shrink-0 transition-all duration-200 group-hover:scale-110 ${isHighlight ? '' : `${tint.icon} ${active ? tint.iconGlow : tint.hoverIconGlow}`}`}
-                />
+          {!speed && !featured && (
+            <div className={`mx-1 my-1 rounded-xl p-1 space-y-0.5 transition-all duration-300 ${tint.panel}`}>
+              {cat.items.map(item => {
+                const active = location.pathname === item.path;
+                return (
+                  <button
+                    key={item.path}
+                    onClick={() => {
+                      if (item.path === '/apresentacao') {
+                        window.open(item.path, '_blank', 'noopener,noreferrer');
+                      } else {
+                        (onNav || navigate)(item.path);
+                      }
+                    }}
+                    className={`w-full group flex items-center gap-2.5 rounded-lg transition-all duration-200 ${
+                      expanded ? 'px-2.5 py-2' : 'flex-col px-1 py-2'
+                    } ${
+                      active
+                        ? `${tint.activeBg} ${tint.activeText} ${tint.ring} ${tint.glow}`
+                        : `text-sidebar-foreground ${tint.hoverBg} ${tint.hoverRing} ${tint.hoverGlow}`
+                    }`}
+                    title={!expanded ? item.label : undefined}
+                  >
+                    <item.icon
+                      size={18}
+                      strokeWidth={active ? 2.2 : 1.8}
+                      className={`shrink-0 transition-all duration-200 group-hover:scale-110 ${tint.icon} ${active ? tint.iconGlow : tint.hoverIconGlow}`}
+                    />
 
-
-                {expanded ? (
-                  <span className={`text-[13px] whitespace-nowrap overflow-hidden ${isHighlight ? 'font-semibold' : 'font-medium'}`}>{item.label}</span>
-                ) : (
-                  <span className="text-[10px] font-medium leading-none">{item.label}</span>
-                )}
-                {isHighlight && expanded && (
-                  <span className={`ml-auto text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${active ? 'bg-white/25 text-white' : 'bg-violet-500/20 text-violet-700 dark:text-violet-300'}`}>Novo</span>
-                )}
-              </button>
-            );
-          })}
+                    {expanded ? (
+                      <span className="text-[13px] whitespace-nowrap overflow-hidden font-semibold">{item.label}</span>
+                    ) : (
+                      <span className="text-[10px] font-medium leading-none">{item.label}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
         </div>
         );

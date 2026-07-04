@@ -28,6 +28,7 @@ import WelcomeRocket from '@/components/WelcomeRocket';
 import VirtualOffice from '@/components/VirtualOffice';
 import QuickShortcutsBar from '@/components/QuickShortcutsBar';
 import CitySwitcher from '@/components/CitySwitcher';
+import { CATEGORY_TINT } from '@/lib/navTint';
 
 type NavCategory = {
   label: string;
@@ -38,9 +39,6 @@ type NavCategory = {
 };
 
 
-
-// Paleta compartilhada (Layout + QuickShortcutsBar) — src/lib/navTint.ts
-import { CATEGORY_TINT } from '@/lib/navTint';
 
 
 const navCategories: NavCategory[] = [

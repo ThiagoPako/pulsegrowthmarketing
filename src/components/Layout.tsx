@@ -132,11 +132,13 @@ const navCategories: NavCategory[] = [
   {
     label: 'Administrativa',
     color: 'emerald',
+    speedometer: true,
     items: [
-      { path: '/financeiro', label: 'Financeiro', icon: DollarSign, roles: ['admin'] },
-      { path: '/custo-conteudo', label: 'Pente Fino', icon: Target, roles: ['admin'], highlight: true },
+      { path: '/financeiro', label: 'Financeiro', icon: Gauge, roles: ['admin'] },
+      { path: '/custo-conteudo', label: 'Pente Fino', icon: Flame, roles: ['admin'] },
     ],
   },
+
   {
     label: 'Sistema',
     color: 'slate',

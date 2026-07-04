@@ -33,16 +33,19 @@ export const CATEGORY_TINT: Record<TintKey, {
 // Categoria por rota — fonte única de verdade para cor de qualquer módulo.
 export const PATH_CATEGORY: Record<string, TintKey> = {
   // Principal (blue)
-  '/dashboard': 'blue', '/conteudo': 'blue', '/agenda': 'blue', '/roteiros': 'blue',
-  // Social Media (cyan)
+  '/dashboard': 'blue', '/conteudo': 'blue', '/roteiros': 'blue',
+  // Gestão de Tarefas (emerald) — controles e agenda
+  '/controle-gravacoes': 'emerald', '/controle-edicao': 'emerald', '/agenda': 'emerald',
+  // Produção (violet)
+  '/edicao': 'violet', '/edicao/kanban': 'violet', '/videomakers': 'violet',
+  // Produção Criativo (cyan)
   '/entregas-social': 'cyan', '/trafego': 'cyan', '/desempenho': 'cyan',
   '/conteudos-portal': 'cyan', '/encurtador': 'cyan', '/clube-descontos': 'cyan',
-  // Editor (violet)
-  '/controle-gravacoes': 'violet', '/controle-edicao': 'violet',
-  '/edicao': 'violet', '/edicao/kanban': 'violet',
   // Designer (pink)
-  '/designer': 'pink', '/panfletagem': 'pink', '/painel-tv': 'pink', '/landing-admin': 'pink',
-  // Gestão de Tarefas (amber)
+  '/designer': 'pink', '/landing-admin': 'pink',
+  // Ferramentas (slate)
+  '/panfletagem': 'slate',
+  // Gestão (amber)
   '/clientes': 'amber', '/relacionamento': 'amber', '/depoimentos': 'amber',
   '/onboarding-gestao': 'amber', '/equipe': 'amber', '/planos': 'amber', '/relatorios': 'amber',
   '/endomarketing/tarefas': 'amber',
@@ -55,7 +58,8 @@ export const PATH_CATEGORY: Record<string, TintKey> = {
   '/financeiro': 'emerald', '/custo-conteudo': 'emerald',
   // Sistema (slate)
   '/financeiro/chat': 'slate', '/financeiro/apis': 'slate', '/whatsapp': 'slate',
-  '/automacoes': 'slate', '/treinamento': 'slate', '/treinamento-gestao': 'slate',
+  '/automacoes': 'slate', '/painel-tv': 'slate',
+  '/treinamento': 'slate', '/treinamento-gestao': 'slate',
   '/portal-videos': 'slate', '/configuracoes': 'slate',
 };
 

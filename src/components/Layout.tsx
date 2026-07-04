@@ -423,28 +423,29 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                             <span className={`text-[13px] font-bold tracking-wide truncate flex-1 min-w-0 ${active ? 'text-white' : 'text-foreground'}`}>{item.label}</span>
                           </div>
                           {item.path === '/trafego' && (
-                            <div className="flex items-center gap-1.5 pl-[26px]">
+                            <div className="flex items-center justify-start gap-2 pl-[26px]">
                               <span
                                 title="Meta Ads"
-                                className={`inline-flex items-center justify-center h-5 w-5 rounded-full ${active ? 'bg-white' : 'bg-white ring-1 ring-border/60'}`}
+                                aria-label="Meta Ads"
+                                className={`inline-flex items-center justify-center h-5 w-5 rounded-full shrink-0 ${active ? 'bg-white' : 'bg-white ring-1 ring-border/60'}`}
                               >
-                                <svg viewBox="0 0 36 36" className="h-3.5 w-3.5" aria-label="Meta">
+                                <svg viewBox="0 0 40 40" className="h-3 w-3 block" xmlns="http://www.w3.org/2000/svg">
                                   <defs>
-                                    <linearGradient id="metaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <linearGradient id="metaGrad" x1="0%" y1="100%" x2="100%" y2="0%">
                                       <stop offset="0%" stopColor="#0064E1" />
                                       <stop offset="50%" stopColor="#0082FB" />
                                       <stop offset="100%" stopColor="#00C6FF" />
                                     </linearGradient>
                                   </defs>
-                                  <path fill="url(#metaGrad)" d="M6.5 22.5c0 2.6 1.3 4.3 3.4 4.3 2.2 0 3.7-1.4 6.6-6.3l2.3-3.9c.4-.7.8-1.3 1.2-1.9-1.3-2-2.2-2.9-3.6-2.9-2.5 0-5 2.9-7.8 8.1-1.4 2.5-2.1 4.6-2.1 6.6zm14.9-8.3c1.7 2.6 3.2 5.3 4.3 7.5 1 1.9 1.7 2.7 2.8 2.7 1.4 0 2.3-1.2 2.3-2.7 0-3.4-2.6-9.6-6-13.6-1.9-2.2-3.5-3.1-5.5-3.1-2.1 0-3.8 1-5.7 3.1 1.3.9 2.6 2.2 3.9 3.9.8 1 1.6 2 2.4 3.2z"/>
-                                  <path fill="url(#metaGrad)" d="M15.9 8.9c-2 0-3.7 1-5.5 3.1C7.7 15.4 5.5 20.5 5.5 24.5c0 2.6 1.3 4.3 3.4 4.3l.5-.1c-1.4-.5-2.2-1.9-2.2-4 0-2 .7-4.1 2.1-6.6 2.8-5.2 5.3-8.1 7.8-8.1.7 0 1.3.2 1.9.5-.9-.9-1.9-1.6-3.1-1.6z"/>
+                                  <path fill="url(#metaGrad)" d="M20 6c-3.6 0-6.4 2.4-9 6.4C8.3 16.6 6 21.7 6 25.4c0 3.5 1.8 5.6 4.6 5.6 2.4 0 4.1-1.1 6.8-5.3l2.8-4.4c.3-.5.6-1 .9-1.4-.3-.5-.6-.9-.9-1.3-2.7-3.9-4.3-5-6.5-5-1.3 0-2.5.5-3.5 1.4 1.9-2.3 4.2-4 6.8-4 3 0 5.3 1.6 7.8 5.2 2.5 3.6 4.9 8.3 4.9 12.1 0 3.5-1.8 5.7-4.6 5.7-2.2 0-3.3-1-5.4-4.3l-2.1-3.4c1.4-2.2 2.4-3.6 3-4.4l.2-.3c1.2 2 1.9 3 3 4.7 1.1 1.7 1.7 2.2 2.5 2.2 1 0 1.5-.8 1.5-2 0-2.4-1.9-6.1-3.9-9-2-2.9-3.7-4-5.6-4-1.7 0-3.1 1-4.9 3.6l-.2.3c-.6.8-1.5 2.2-2.9 4.5l-2 3.2c-2 3.3-3.1 4.3-5.3 4.3z"/>
                                 </svg>
                               </span>
                               <span
                                 title="Google Ads"
-                                className={`inline-flex items-center justify-center h-5 w-5 rounded-full ${active ? 'bg-white' : 'bg-white ring-1 ring-border/60'}`}
+                                aria-label="Google Ads"
+                                className={`inline-flex items-center justify-center h-5 w-5 rounded-full shrink-0 ${active ? 'bg-white' : 'bg-white ring-1 ring-border/60'}`}
                               >
-                                <svg viewBox="0 0 192 192" className="h-3.5 w-3.5" aria-label="Google Ads">
+                                <svg viewBox="0 0 192 192" className="h-3 w-3 block" xmlns="http://www.w3.org/2000/svg">
                                   <path fill="#FBBC04" d="M63.7 15.4L7.6 112.4c-8.2 14.2-3.3 32.4 10.9 40.6 14.2 8.2 32.4 3.3 40.6-10.9l56.1-97.1c8.2-14.2 3.3-32.4-10.9-40.6-14.2-8.2-32.4-3.3-40.6 10.9z"/>
                                   <path fill="#4285F4" d="M128.3 15.4l56.1 97.1c8.2 14.2 3.3 32.4-10.9 40.6-14.2 8.2-32.4 3.3-40.6-10.9L76.8 45.1c-8.2-14.2-3.3-32.4 10.9-40.6 14.2-8.2 32.4-3.3 40.6 10.9z"/>
                                   <circle fill="#34A853" cx="30.8" cy="141.7" r="29.7"/>

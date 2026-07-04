@@ -50,13 +50,32 @@ const navCategories: NavCategory[] = [
     items: [
       { path: '/dashboard', label: 'Início', icon: LayoutDashboard, roles: ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'designer', 'fotografo'] },
       { path: '/conteudo', label: 'Conteúdo', icon: Kanban, roles: ['admin', 'social_media', 'videomaker', 'editor'] },
-      { path: '/agenda', label: 'Agenda', icon: Calendar, roles: ['admin', 'videomaker', 'social_media'] },
       { path: '/roteiros', label: 'Roteiros', icon: FileText, roles: ['admin', 'social_media', 'videomaker'] },
     ],
   },
 
   {
-    label: 'Social Media',
+    label: 'Gestão de Tarefas',
+    color: 'emerald',
+    items: [
+      { path: '/controle-gravacoes', label: 'Controle Grav.', icon: Video, roles: ['admin'] },
+      { path: '/controle-edicao', label: 'Controle Edição', icon: Scissors, roles: ['admin'] },
+      { path: '/agenda', label: 'Agenda', icon: Calendar, roles: ['admin', 'videomaker', 'social_media'] },
+    ],
+  },
+
+  {
+    label: 'Produção',
+    color: 'violet',
+    items: [
+      { path: '/edicao', label: 'Edição', icon: Scissors, roles: ['admin', 'editor', 'social_media', 'videomaker'] },
+      { path: '/edicao/kanban', label: 'Kanban Edição', icon: Kanban, roles: ['admin', 'editor', 'social_media', 'videomaker'] },
+      { path: '/videomakers', label: 'Videomakers', icon: Video, roles: ['admin', 'videomaker', 'social_media'] },
+    ],
+  },
+
+  {
+    label: 'Produção Criativo',
     color: 'cyan',
     items: [
       { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media'] },
@@ -69,29 +88,24 @@ const navCategories: NavCategory[] = [
   },
 
   {
-    label: 'Editor',
-    color: 'violet',
-    items: [
-      { path: '/controle-gravacoes', label: 'Controle Grav.', icon: Video, roles: ['admin'] },
-      { path: '/controle-edicao', label: 'Controle Edição', icon: Scissors, roles: ['admin'] },
-      { path: '/edicao', label: 'Edição', icon: Scissors, roles: ['admin', 'editor', 'social_media', 'videomaker'] },
-      { path: '/edicao/kanban', label: 'Kanban Edição', icon: Kanban, roles: ['admin', 'editor', 'social_media', 'videomaker'] },
-    ],
-  },
-
-  {
     label: 'Designer',
     color: 'pink',
     items: [
       { path: '/designer', label: 'Designer', icon: Palette, roles: ['admin', 'social_media', 'fotografo', 'designer'] },
-      { path: '/panfletagem', label: 'Panfletagem', icon: Car, roles: ['admin'] },
-      { path: '/painel-tv', label: 'Painel TV', icon: Monitor, roles: ['admin'] },
       { path: '/landing-admin', label: 'Landing Page', icon: Rocket, roles: ['admin'] },
     ],
   },
 
   {
-    label: 'Gestão de Tarefas',
+    label: 'Ferramentas',
+    color: 'slate',
+    items: [
+      { path: '/panfletagem', label: 'Panfletagem', icon: Car, roles: ['admin'] },
+    ],
+  },
+
+  {
+    label: 'Gestão',
     color: 'amber',
     items: [
       { path: '/clientes', label: 'Clientes', icon: Building2, roles: ['admin', 'social_media'] },
@@ -146,6 +160,7 @@ const navCategories: NavCategory[] = [
       { path: '/financeiro/apis', label: 'APIs', icon: Plug, roles: ['admin'] },
       { path: '/whatsapp', label: 'WhatsApp', icon: MessageSquare, roles: ['admin', 'social_media'] },
       { path: '/automacoes', label: 'Automações', icon: Bot, roles: ['admin', 'social_media'] },
+      { path: '/painel-tv', label: 'Painel TV', icon: Monitor, roles: ['admin'] },
       { path: '/treinamento', label: 'Treinamento', icon: BookOpen, roles: ['admin', 'videomaker', 'social_media', 'editor', 'designer', 'fotografo', 'endomarketing'] },
       { path: '/treinamento-gestao', label: 'Gestão Trein.', icon: Settings, roles: ['admin'] },
       { path: '/portal-videos', label: 'Vídeos Portal', icon: Video, roles: ['admin'] },

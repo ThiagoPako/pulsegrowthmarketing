@@ -105,16 +105,6 @@ const navCategories: NavCategory[] = [
   },
 
   {
-    label: 'Ferramentas',
-    color: 'slate',
-    items: [
-      { path: '/panfletagem', label: 'Panfletagem', icon: Car, roles: ['admin'] },
-      { path: '/encurtador', label: 'Encurtador', icon: Type, roles: ['admin', 'social_media'] },
-      { path: '/clube-descontos', label: 'Clube Descontos', icon: Gift, roles: ['admin', 'social_media'] },
-    ],
-  },
-
-  {
     label: 'Gestão',
     color: 'amber',
     items: [
@@ -159,6 +149,16 @@ const navCategories: NavCategory[] = [
     items: [
       { path: '/financeiro', label: 'Financeiro', icon: Gauge, roles: ['admin'] },
       { path: '/custo-conteudo', label: 'Pente Fino', icon: Flame, roles: ['admin'] },
+    ],
+  },
+
+  {
+    label: 'Ferramentas',
+    color: 'slate',
+    items: [
+      { path: '/panfletagem', label: 'Panfletagem', icon: Car, roles: ['admin'] },
+      { path: '/encurtador', label: 'Encurtador', icon: Type, roles: ['admin', 'social_media'] },
+      { path: '/clube-descontos', label: 'Clube Descontos', icon: Gift, roles: ['admin', 'social_media'] },
     ],
   },
 

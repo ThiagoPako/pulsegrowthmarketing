@@ -260,11 +260,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           )}
 
           {featured && expanded && (
-            <span className="text-[11px] uppercase tracking-[0.15em] font-bold px-3 mb-1 flex items-center gap-1.5 whitespace-nowrap overflow-hidden bg-gradient-to-r from-rose-500 via-pink-500 to-fuchsia-500 bg-clip-text text-transparent">
-              <Sparkles size={11} className="text-rose-500" />
-              {cat.label}
+            <span
+              className="text-[11px] uppercase tracking-[0.15em] font-bold mx-2 mb-1.5 px-2.5 py-1 rounded-md flex items-center gap-1.5 whitespace-nowrap overflow-hidden"
+              style={{
+                background: 'linear-gradient(90deg, rgba(244,63,94,0.22), rgba(236,72,153,0.18), rgba(217,70,239,0.12))',
+                boxShadow: 'inset 0 0 0 1px rgba(236,72,153,0.5), 0 0 14px -3px rgba(236,72,153,0.7)',
+              }}
+            >
+              <Sparkles size={11} className="text-rose-400" style={{ filter: 'drop-shadow(0 0 6px rgba(244,63,94,0.9))' }} />
+              <span
+                className="bg-gradient-to-r from-rose-400 via-pink-400 to-fuchsia-400 bg-clip-text text-transparent"
+                style={{ textShadow: '0 0 10px rgba(236,72,153,0.4)' }}
+              >
+                {cat.label}
+              </span>
             </span>
           )}
+
           {featured && (
             <div className="relative mx-1 my-1 rounded-xl p-[1.5px] bg-gradient-to-r from-rose-500 via-pink-500 to-fuchsia-500 shadow-[0_0_18px_-4px_rgba(244,63,94,0.6)] animate-[pulse_3s_ease-in-out_infinite]">
 

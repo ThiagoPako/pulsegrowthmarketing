@@ -424,19 +424,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                           </div>
                           {item.path === '/trafego' && (
                             <div className="flex items-center gap-1.5 pl-[26px]">
-                              <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${active ? 'bg-white/20 text-white' : 'bg-background/60 text-foreground ring-1 ring-border/60'}`}>
-                                <svg viewBox="0 0 287.56 191" className="h-3 w-3 block" preserveAspectRatio="xMidYMid meet" aria-label="Meta">
-                                  <path fill="#0081fb" d="M31.06,126c0,11,2.41,19.41,5.56,24.51A19,19,0,0,0,53.19,160c8.1,0,15.51-2,29.79-21.76,11.44-15.83,24.92-38,34-52l15.36-23.6c10.67-16.39,23-34.61,37.18-47C181.07,5.6,193.54,0,206.09,0c21.07,0,41.14,12.21,56.5,35.11,16.81,25.08,25,56.67,25,89.27,0,19.38-3.82,33.62-10.32,44.87C271,180.13,258.72,191,238.13,191V160c17.63,0,22-16.2,22-34.74,0-26.42-6.16-55.74-19.73-76.69-9.63-14.86-22.11-23.94-35.84-23.94-14.85,0-26.8,11.2-40.23,31.17-7.14,10.61-14.47,23.54-22.7,38.13l-9.06,16C114.14,140.29,109.5,146.68,100.32,159c-16.09,21.44-29.83,29.53-47.13,29.53-21.27,0-34.72-9.21-43-23.09C3.34,154.15,0,139.55,0,122.87Z"/>
-                                </svg>
+                              <span
+                                className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-bold tracking-wide ${active ? 'bg-white text-[#0866FF]' : 'bg-[#0866FF] text-white'}`}
+                              >
                                 Meta Ads
                               </span>
-                              <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${active ? 'bg-white/20 text-white' : 'bg-background/60 text-foreground ring-1 ring-border/60'}`}>
-                                <svg viewBox="0 0 192 192" className="h-3 w-3 block" preserveAspectRatio="xMidYMid meet" aria-label="Google Ads">
-                                  <path fill="#FBBC04" d="M63.98 37.03A24 24 0 0 1 96 45.39L23.99 170.12a24 24 0 0 1-42-23.98L54 21.41Z"/>
-                                  <path fill="#4285F4" d="M104.02 37.03A24 24 0 0 0 72 45.39l72 124.73a24 24 0 0 0 42-23.98L114 21.41Z"/>
-                                  <circle fill="#34A853" cx="48" cy="156" r="24"/>
-                                </svg>
-                                Google Ads
+                              <span
+                                className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold tracking-wide ${active ? 'bg-white' : 'bg-background ring-1 ring-border/60'}`}
+                              >
+                                <span className="text-[#4285F4]">G</span>
+                                <span className="text-[#EA4335]">o</span>
+                                <span className="text-[#FBBC04]">o</span>
+                                <span className="text-[#4285F4]">g</span>
+                                <span className="text-[#34A853]">l</span>
+                                <span className="text-[#EA4335]">e</span>
+                                <span className={`ml-1 ${active ? 'text-foreground' : 'text-foreground'}`}>Ads</span>
                               </span>
                             </div>
                           )}

@@ -28,7 +28,7 @@ import WelcomeRocket from '@/components/WelcomeRocket';
 import VirtualOffice from '@/components/VirtualOffice';
 import QuickShortcutsBar from '@/components/QuickShortcutsBar';
 import CitySwitcher from '@/components/CitySwitcher';
-import { CATEGORY_TINT, type TintKey } from '@/lib/navTint';
+import { CATEGORY_TINT, CATEGORY_RGB, getTintForPath, type TintKey } from '@/lib/navTint';
 import type { Profile } from '@/hooks/useAuth';
 
 type NavCategory = {

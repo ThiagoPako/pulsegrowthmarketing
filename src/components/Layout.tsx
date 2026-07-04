@@ -80,7 +80,6 @@ const navCategories: NavCategory[] = [
     color: 'cyan',
     items: [
       { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media'] },
-      { path: '/trafego', label: 'Tráfego', icon: TrendingUp, roles: ['admin', 'social_media'] },
       { path: '/desempenho', label: 'Desempenho', icon: Target, roles: ['admin', 'social_media'] },
       { path: '/conteudos-portal', label: 'Portal', icon: MonitorPlay, roles: ['admin', 'social_media', 'editor'] },
     ],

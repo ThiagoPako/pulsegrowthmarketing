@@ -36,7 +36,7 @@ interface DesignTask {
   updated_at?: string | null;
   created_at?: string | null;
   attachment_url?: string | null;
-  attachment_urls?: string[] | null;
+  attachment_urls?: string[] | string | null;
   editable_file_url?: string | null;
   mockup_url?: string | null;
   assigned_to?: string | null;
@@ -223,11 +223,28 @@ const inDateRange = (value: string | null | undefined, start: string, end: strin
   return day >= start && day <= end;
 };
 
-const countDesignAttachments = (task: DesignTask): number => {
-  const urls = Array.isArray(task.attachment_urls) ? task.attachment_urls.filter(Boolean) : [];
-  const singleAttachment = task.attachment_url && !urls.includes(task.attachment_url) ? 1 : 0;
-  const mockup = task.mockup_url ? 1 : 0;
-  return urls.length + singleAttachment + mockup;
+const getDesignAttachmentUrls = (task: DesignTask): string[] => {
+  const rawUrls = Array.isArray(task.attachment_urls)
+    ? task.attachment_urls
+    : typeof task.attachment_urls === 'string'
+      ? (() => {
+          try {
+            const parsed = JSON.parse(task.attachment_urls || '[]');
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return task.attachment_urls ? [task.attachment_urls] : [];
+          }
+        })()
+      : [];
+
+  return Array.from(new Set([
+    ...rawUrls,
+    task.attachment_url,
+  ].filter((url): url is string => Boolean(url && url.trim()))));
+};
+
+const countDesignArts = (task: DesignTask): number => {
+  return getDesignAttachmentUrls(task).length;
 };
 
 interface PlanRow {

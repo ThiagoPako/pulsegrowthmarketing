@@ -483,8 +483,11 @@ export default function CostByContentType() {
       copyProductionByUser.set(uid, current);
     });
 
-    // Artes por designer (assigned_to via design_tasks) — para validação
-    const designCountsByUser = new Map<string, number>();
+    // Artes por designer: o total real de artes entregues é `artes` (soma de todos os
+    // artes entregues, priorizando delivery_records.arts_produced). Rateamos esse total
+    // entre os designers proporcionalmente ao nº de cards produzidos por cada um
+    // (fallback: divisão igualitária entre designers ativos no período).
+    const designerCardsByUser = new Map<string, number>();
     designTasks.forEach(t => {
       if (!clientOk(t.client_id)) return;
       if (!PRODUCED_DESIGN_COLUMNS.has(normalizeText(t.kanban_column))) return;
@@ -493,13 +496,27 @@ export default function CostByContentType() {
       if (!uid) return;
       const role = roleOf.get(uid);
       if (!role || !DESIGNER_ROLES.includes(role)) return;
-      designCountsByUser.set(uid, (designCountsByUser.get(uid) || 0) + countDesignAttachments(t));
+      designerCardsByUser.set(uid, (designerCardsByUser.get(uid) || 0) + 1);
     });
+    const designCountsByUser = new Map<string, number>();
+    const totalDesignerCards = Array.from(designerCardsByUser.values()).reduce((a, n) => a + n, 0);
+    if (totalDesignerCards > 0) {
+      designerCardsByUser.forEach((cards, uid) => {
+        designCountsByUser.set(uid, (cards / totalDesignerCards) * artes);
+      });
+    } else {
+      const activeDesigners = users.filter(u => DESIGNER_ROLES.includes(u.role));
+      if (activeDesigners.length > 0 && artes > 0) {
+        const share = artes / activeDesigners.length;
+        activeDesigners.forEach(u => designCountsByUser.set(u.id, share));
+      }
+    }
 
     const editorDirect = new Map<string, { reels: number; criativo: number; story: number; artes: number }>();
     edCountsByUser.forEach((c, uid) => editorDirect.set(uid, { ...c, artes: 0 }));
     const designerDirect = new Map<string, { reels: number; criativo: number; story: number; artes: number }>();
     designCountsByUser.forEach((n, uid) => designerDirect.set(uid, { reels: 0, criativo: 0, story: 0, artes: n }));
+
 
     // Validação por colaborador deve ser individual: sem ratear sobra por função.
     const editorShare = editorDirect;

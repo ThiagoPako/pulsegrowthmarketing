@@ -90,6 +90,8 @@ const LinkShortener = lazy(() => import("@/pages/LinkShortener"));
 const ShortLinkRedirect = lazy(() => import("@/pages/ShortLinkRedirect"));
 const Training = lazy(() => import("@/pages/Training"));
 const TrainingRegister = lazy(() => import("@/pages/TrainingRegister"));
+const Campaigns = lazy(() => import("@/pages/Campaigns"));
+const CampaignDetail = lazy(() => import("@/pages/CampaignDetail"));
 const OptimizationFormatsGuide = lazy(() => import("@/pages/OptimizationFormatsGuide"));
 
 
@@ -226,6 +228,8 @@ function AppRoutes() {
         <Route path="/evento/:token" element={<EventRegistration />} />
         <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
         <Route path="/encurtador" element={<ProtectedRoute><LinkShortener /></ProtectedRoute>} />
+        <Route path="/campanhas" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
+        <Route path="/campanhas/:id" element={<ProtectedRoute><CampaignDetail /></ProtectedRoute>} />
         <Route path="/r/:slug" element={<ShortLinkRedirect />} />
 
         <Route path="/tv" element={<Suspense fallback={<PageLoader />}><TvDashboard /></Suspense>} />

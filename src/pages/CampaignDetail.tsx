@@ -74,9 +74,9 @@ export default function CampaignDetail() {
         <Button variant="ghost" size="icon" onClick={() => navigate('/campanhas')}><ArrowLeft className="h-4 w-4" /></Button>
         <Megaphone className="h-6 w-6 text-primary" />
         <div className="flex-1">
-          <h1 className="text-2xl font-bold">{campaign.name}</h1>
+          <h1 className="text-2xl font-bold">{campaign.companyName}</h1>
           <p className="text-sm text-muted-foreground">
-            {client?.name} · {CAMPAIGN_TYPE_LABELS[campaign.type]} · {formatBrDate(campaign.start_date)} → {formatBrDate(campaign.end_date)}
+            {client?.companyName} · {CAMPAIGN_TYPE_LABELS[campaign.type]} · {formatBrDate(campaign.start_date)} → {formatBrDate(campaign.end_date)}
           </p>
         </div>
         <Badge>{campaign.status}</Badge>
@@ -190,7 +190,7 @@ function SlotDialog({ slot, campaign, onClose, onSaved }: {
           }).eq('id', scriptId);
         } else {
           const { data: created, error } = await supabase.from('scripts').insert({
-            title: scriptTitle || title || `${campaign.name} - ${slot.title}`,
+            title: scriptTitle || title || `${campaign.companyName} - ${slot.title}`,
             content: scriptContent,
             client_id: campaign.client_id,
             campaign_slot_id: slot.id,

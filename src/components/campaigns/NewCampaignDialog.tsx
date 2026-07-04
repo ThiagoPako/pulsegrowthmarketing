@@ -35,7 +35,7 @@ export default function NewCampaignDialog({ open, onOpenChange, onCreated }: Pro
   const [saving, setSaving] = useState(false);
 
   const clientOptions = useMemo(
-    () => [...clients].sort((a, b) => a.name.localeCompare(b.name)),
+    () => [...clients].sort((a, b) => a.companyName.localeCompare(b.companyName)),
     [clients]
   );
 
@@ -144,7 +144,7 @@ export default function NewCampaignDialog({ open, onOpenChange, onCreated }: Pro
                 <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
                 <SelectContent>
                   {clientOptions.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -206,7 +206,7 @@ export default function NewCampaignDialog({ open, onOpenChange, onCreated }: Pro
         {step === 4 && (
           <div className="space-y-3 text-sm">
             <div className="p-3 rounded border bg-muted/40">
-              <div><b>Cliente:</b> {clients.find(c => c.id === clientId)?.name}</div>
+              <div><b>Cliente:</b> {clients.find(c => c.id === clientId)?.companyName}</div>
               <div><b>Nome:</b> {name}</div>
               <div><b>Tipo:</b> {CAMPAIGN_TYPE_LABELS[type]}</div>
               <div><b>Período:</b> {startDate} até {endDate}</div>

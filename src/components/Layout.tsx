@@ -262,12 +262,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         const tint = CATEGORY_TINT[cat.color] || CATEGORY_TINT.slate;
         const speed = cat.speedometer;
         const featured = cat.featured;
+        const highlight = cat.highlight;
         return (
         <div key={cat.label} className="w-full">
           {catIdx > 0 && (
             <div className="my-1.5 mx-2 h-px bg-sidebar-border" />
           )}
-          {expanded && !speed && !featured && (
+          {expanded && !speed && !featured && !highlight && (
             <span
               className="text-[11px] uppercase tracking-wider font-bold mx-2 mb-1.5 px-2.5 py-1 rounded-md flex items-center gap-1.5 whitespace-nowrap overflow-hidden text-white"
               style={{

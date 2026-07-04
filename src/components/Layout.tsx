@@ -206,13 +206,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // Shared nav content renderer
   const renderNavItems = (expanded: boolean, onNav?: (path: string) => void) => (
     <nav className="flex-1 flex flex-col gap-0.5 py-2 px-1.5 overflow-y-auto">
-      {filteredCategories.map((cat, catIdx) => (
+      {filteredCategories.map((cat, catIdx) => {
+        const tint = CATEGORY_TINT[cat.color] || CATEGORY_TINT.slate;
+        return (
         <div key={cat.label} className="w-full">
           {catIdx > 0 && (
             <div className="my-1.5 mx-2 h-px bg-sidebar-border" />
           )}
           {expanded && (
-            <span className="text-[11px] uppercase tracking-wider text-muted-foreground/60 font-semibold px-3 mb-1 block whitespace-nowrap overflow-hidden">
+            <span className={`text-[11px] uppercase tracking-wider font-semibold px-3 mb-1 flex items-center gap-1.5 whitespace-nowrap overflow-hidden ${tint.label}`}>
+              <span className={`inline-block w-1.5 h-1.5 rounded-full ${tint.dot}`} />
               {cat.label}
             </span>
           )}
@@ -237,12 +240,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       ? 'bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white shadow-md shadow-violet-500/30 ring-1 ring-violet-400/40'
                       : 'bg-gradient-to-r from-violet-500/10 to-fuchsia-500/10 text-violet-700 dark:text-violet-300 ring-1 ring-violet-500/25 hover:from-violet-500/20 hover:to-fuchsia-500/20 hover:shadow-sm'
                     : active
-                      ? 'bg-sidebar-accent text-primary shadow-sm'
-                      : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-sm'
+                      ? `${tint.activeBg} ${tint.activeText} shadow-sm`
+                      : `text-sidebar-foreground ${tint.hoverBg}`
                 }`}
                 title={!expanded ? item.label : undefined}
               >
-                <item.icon size={18} strokeWidth={active || isHighlight ? 2.2 : 1.5} className="shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                <item.icon
+                  size={18}
+                  strokeWidth={active || isHighlight ? 2.2 : 1.5}
+                  className={`shrink-0 transition-transform duration-200 group-hover:scale-110 ${isHighlight ? '' : active ? '' : tint.icon}`}
+                />
                 {expanded ? (
                   <span className={`text-[13px] whitespace-nowrap overflow-hidden ${isHighlight ? 'font-semibold' : 'font-medium'}`}>{item.label}</span>
                 ) : (
@@ -256,7 +263,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
 
         </div>
-      ))}
+        );
+      })}
+
     </nav>
   );
 

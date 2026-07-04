@@ -74,6 +74,8 @@ const navCategories: NavCategory[] = [
   },
   {
     label: 'Gestão',
+    color: 'amber',
+
     items: [
       { path: '/clientes', label: 'Clientes', icon: Building2, roles: ['admin', 'social_media'] },
       { path: '/relacionamento', label: 'Relacionamento', icon: Handshake, roles: ['admin', 'social_media'] },

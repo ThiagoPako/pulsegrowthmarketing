@@ -164,6 +164,8 @@ function AppRoutes() {
         <Route path="/relatorios/geral" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
         <Route path="/desempenho" element={<ProtectedRoute><InternalReports /></ProtectedRoute>} />
         <Route path="/relatorios/custo-conteudo" element={<ProtectedRoute><CostByContentType /></ProtectedRoute>} />
+        <Route path="/custo-conteudo" element={<ProtectedRoute><CostByContentType /></ProtectedRoute>} />
+
         <Route path="/entregas-social" element={<ProtectedRoute><SocialMediaDeliveries /></ProtectedRoute>} />
         <Route path="/conteudo" element={<ProtectedRoute><ContentKanban /></ProtectedRoute>} />
         <Route path="/edicao" element={<ProtectedRoute><EditorDashboard /></ProtectedRoute>} />

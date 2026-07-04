@@ -243,11 +243,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <div className="my-1.5 mx-2 h-px bg-sidebar-border" />
           )}
           {expanded && !speed && !featured && (
-            <span className={`text-[11px] uppercase tracking-wider font-semibold px-3 mb-1 flex items-center gap-1.5 whitespace-nowrap overflow-hidden ${tint.label}`}>
-              <span className={`inline-block w-1.5 h-1.5 rounded-full ${tint.dot}`} />
+            <span
+              className={`text-[11px] uppercase tracking-wider font-bold mx-2 mb-1.5 px-2.5 py-1 rounded-md flex items-center gap-1.5 whitespace-nowrap overflow-hidden ${tint.label}`}
+              style={{
+                background: `linear-gradient(90deg, rgba(${CATEGORY_RGB[cat.color]},0.18), rgba(${CATEGORY_RGB[cat.color]},0.04))`,
+                boxShadow: `inset 0 0 0 1px rgba(${CATEGORY_RGB[cat.color]},0.35), 0 0 12px -4px rgba(${CATEGORY_RGB[cat.color]},0.55)`,
+                textShadow: `0 0 8px rgba(${CATEGORY_RGB[cat.color]},0.55)`,
+              }}
+            >
+              <span
+                className={`inline-block w-1.5 h-1.5 rounded-full ${tint.dot}`}
+                style={{ boxShadow: `0 0 8px rgba(${CATEGORY_RGB[cat.color]},0.9)` }}
+              />
               {cat.label}
             </span>
           )}
+
           {featured && expanded && (
             <span className="text-[11px] uppercase tracking-[0.15em] font-bold px-3 mb-1 flex items-center gap-1.5 whitespace-nowrap overflow-hidden bg-gradient-to-r from-rose-500 via-pink-500 to-fuchsia-500 bg-clip-text text-transparent">
               <Sparkles size={11} className="text-rose-500" />

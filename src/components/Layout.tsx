@@ -127,11 +127,17 @@ const navCategories: NavCategory[] = [
   },
 
   {
-    label: 'Sistema',
-    color: 'slate',
+    label: 'Administrativa',
+    color: 'emerald',
     items: [
       { path: '/financeiro', label: 'Financeiro', icon: DollarSign, roles: ['admin'] },
       { path: '/custo-conteudo', label: 'Pente Fino', icon: Target, roles: ['admin'], highlight: true },
+    ],
+  },
+  {
+    label: 'Sistema',
+    color: 'slate',
+    items: [
       { path: '/financeiro/chat', label: 'Chat IA', icon: Bot, roles: ['admin'] },
       { path: '/financeiro/apis', label: 'APIs', icon: Plug, roles: ['admin'] },
       { path: '/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin', 'social_media'] },
@@ -143,6 +149,7 @@ const navCategories: NavCategory[] = [
       { path: '/configuracoes', label: 'Config', icon: Settings, roles: ['admin', 'social_media'] },
     ],
   },
+
 
 ];
 

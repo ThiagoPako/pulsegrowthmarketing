@@ -243,17 +243,67 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {filteredCategories.map((cat, catIdx) => {
         const tint = CATEGORY_TINT[cat.color] || CATEGORY_TINT.slate;
         const speed = cat.speedometer;
+        const featured = cat.featured;
         return (
         <div key={cat.label} className="w-full">
           {catIdx > 0 && (
             <div className="my-1.5 mx-2 h-px bg-sidebar-border" />
           )}
-          {expanded && !speed && (
+          {expanded && !speed && !featured && (
             <span className={`text-[11px] uppercase tracking-wider font-semibold px-3 mb-1 flex items-center gap-1.5 whitespace-nowrap overflow-hidden ${tint.label}`}>
               <span className={`inline-block w-1.5 h-1.5 rounded-full ${tint.dot}`} />
               {cat.label}
             </span>
           )}
+          {featured && expanded && (
+            <span className="text-[11px] uppercase tracking-[0.15em] font-bold px-3 mb-1 flex items-center gap-1.5 whitespace-nowrap overflow-hidden bg-gradient-to-r from-rose-500 via-pink-500 to-fuchsia-500 bg-clip-text text-transparent">
+              <Sparkles size={11} className="text-rose-500" />
+              {cat.label}
+            </span>
+          )}
+          {featured && (
+            <div className="relative mx-1 my-1 rounded-xl p-[1.5px] bg-gradient-to-r from-rose-500 via-pink-500 to-fuchsia-500 shadow-[0_0_18px_-4px_rgba(244,63,94,0.6)]">
+              <div className="rounded-[10px] bg-sidebar/90 backdrop-blur-sm p-1 space-y-0.5">
+                {cat.items.map(item => {
+                  const active = location.pathname === item.path;
+                  return (
+                    <button
+                      key={item.path}
+                      onClick={() => {
+                        if (item.path === '/apresentacao') {
+                          window.open(item.path, '_blank', 'noopener,noreferrer');
+                        } else {
+                          (onNav || navigate)(item.path);
+                        }
+                      }}
+                      className={`w-full group flex items-center rounded-lg transition-all duration-200 ${
+                        expanded ? 'gap-2.5 px-2.5 py-2' : 'flex-col gap-1 px-1 py-2'
+                      } ${
+                        active
+                          ? 'bg-gradient-to-r from-rose-500 via-pink-500 to-fuchsia-500 text-white shadow-md shadow-pink-500/40'
+                          : 'text-foreground hover:bg-gradient-to-r hover:from-rose-500/15 hover:via-pink-500/15 hover:to-fuchsia-500/15'
+                      }`}
+                      title={!expanded ? item.label : undefined}
+                    >
+                      <item.icon
+                        size={expanded ? 18 : 20}
+                        strokeWidth={2.2}
+                        className={`shrink-0 transition-transform duration-200 group-hover:scale-110 ${
+                          active ? 'text-white drop-shadow-[0_0_6px_rgba(244,114,182,0.9)]' : 'text-rose-500 drop-shadow-[0_0_4px_rgba(244,63,94,0.5)]'
+                        }`}
+                      />
+                      {expanded ? (
+                        <span className={`text-[13px] whitespace-nowrap font-bold tracking-wide ${active ? 'text-white' : 'text-foreground'}`}>{item.label}</span>
+                      ) : (
+                        <span className={`text-[9px] font-bold leading-none uppercase tracking-wider ${active ? 'text-white' : 'text-foreground/80'}`}>{item.label}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {speed && (
             <div className={`relative mx-1 my-1 rounded-xl p-[1.5px] bg-gradient-to-r from-red-600 via-orange-500 to-yellow-400 shadow-[0_0_18px_-4px_rgba(249,115,22,0.65)] ${expanded ? '' : ''}`}>
               <div className="rounded-[10px] bg-sidebar/90 backdrop-blur-sm p-1 space-y-0.5">

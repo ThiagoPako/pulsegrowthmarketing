@@ -75,7 +75,7 @@ const navCategories: NavCategory[] = [
   },
 
   {
-    label: 'Produção Criativo',
+    label: 'Produção Criativa',
     color: 'cyan',
     items: [
       { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media'] },

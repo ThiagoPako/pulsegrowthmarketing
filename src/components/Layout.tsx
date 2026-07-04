@@ -369,16 +369,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       ? 'bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white shadow-md shadow-violet-500/40 ring-1 ring-violet-400/60'
                       : 'bg-gradient-to-r from-violet-500/10 to-fuchsia-500/10 text-violet-700 dark:text-violet-300 ring-1 ring-violet-500/25 hover:from-violet-500/20 hover:to-fuchsia-500/20 hover:shadow-[0_0_14px_-2px_rgba(139,92,246,0.6)]'
                     : active
-                      ? `${tint.activeBg} ${tint.activeText} ring-1 ${tint.ring} ${tint.glow}`
-                      : `text-sidebar-foreground ${tint.hoverBg} hover:ring-1 hover:${tint.ring} hover:${tint.glow}`
+                      ? `${tint.activeBg} ${tint.activeText} ${tint.ring} ${tint.glow}`
+                      : `text-sidebar-foreground ${tint.hoverBg} ${tint.hoverRing} ${tint.hoverGlow}`
                 }`}
                 title={!expanded ? item.label : undefined}
               >
                 <item.icon
                   size={18}
                   strokeWidth={active || isHighlight ? 2.2 : 1.6}
-                  className={`shrink-0 transition-all duration-200 group-hover:scale-110 ${isHighlight ? '' : `${tint.icon} ${active ? tint.iconGlow : `group-hover:${tint.iconGlow}`}`}`}
+                  className={`shrink-0 transition-all duration-200 group-hover:scale-110 ${isHighlight ? '' : `${tint.icon} ${active ? tint.iconGlow : tint.hoverIconGlow}`}`}
                 />
+
 
                 {expanded ? (
                   <span className={`text-[13px] whitespace-nowrap overflow-hidden ${isHighlight ? 'font-semibold' : 'font-medium'}`}>{item.label}</span>

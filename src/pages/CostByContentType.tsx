@@ -541,8 +541,9 @@ export default function CostByContentType() {
           : VIDEOMAKER_ROLES.includes(u.role) ? vmShare
           : designerShare;
         const s = src.get(u.id) || { reels: 0, criativo: 0, story: 0, artes: 0 };
-        // Designer: "cards" (CAR) = nº de tarefas/cards produzidos (fonte: design_tasks).
-        // "Artes" = soma total de artes entregues (rateada em s.artes). Fontes distintas.
+        // Designer: "cards" (CAR) = nº de tarefas/cards (fonte: design_tasks).
+        // "Artes" = nº real de artes anexadas nesses cards. Fontes distintas — nunca iguais
+        // salvo se todo card tiver exatamente 1 anexo.
         const cards = DESIGNER_ROLES.includes(u.role)
           ? (designerCardsByUser.get(u.id) || 0)
           : s.reels + s.criativo + s.story + s.artes;

@@ -98,7 +98,9 @@ const navCategories: NavCategory[] = [
   {
     label: 'Comercial',
     color: 'rose',
+    featured: true,
     items: [
+
       { path: '/crm', label: 'CRM', icon: Kanban, roles: ['admin', 'social_media'] },
       { path: '/propostas', label: 'Propostas', icon: FileText, roles: ['admin'] },
       { path: '/apresentacao', label: 'Apresentação', icon: Sparkles, roles: ['admin'] },

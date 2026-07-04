@@ -39,20 +39,9 @@ type NavCategory = {
 
 
 
-// Paleta por categoria (usada como accent do ícone / borda / label da categoria)
-const CATEGORY_TINT: Record<string, { icon: string; label: string; activeBg: string; activeText: string; hoverBg: string; dot: string; ring: string; hoverRing: string; glow: string; hoverGlow: string; iconGlow: string; hoverIconGlow: string }> = {
-  blue:    { icon: 'text-blue-500',    label: 'text-blue-500/80',    activeBg: 'bg-blue-500/15',    activeText: 'text-blue-600 dark:text-blue-300',    hoverBg: 'hover:bg-blue-500/10',    dot: 'bg-blue-500',    ring: 'ring-1 ring-blue-500/30',    hoverRing: 'hover:ring-1 hover:ring-blue-500/30',    glow: 'shadow-[0_0_12px_-2px_rgba(59,130,246,0.55)]',   hoverGlow: 'hover:shadow-[0_0_12px_-2px_rgba(59,130,246,0.55)]',   iconGlow: 'drop-shadow-[0_0_5px_rgba(59,130,246,0.7)]',   hoverIconGlow: 'group-hover:drop-shadow-[0_0_5px_rgba(59,130,246,0.7)]' },
-  emerald: { icon: 'text-emerald-500', label: 'text-emerald-500/80', activeBg: 'bg-emerald-500/15', activeText: 'text-emerald-600 dark:text-emerald-300', hoverBg: 'hover:bg-emerald-500/10', dot: 'bg-emerald-500', ring: 'ring-1 ring-emerald-500/30', hoverRing: 'hover:ring-1 hover:ring-emerald-500/30', glow: 'shadow-[0_0_12px_-2px_rgba(16,185,129,0.55)]',  hoverGlow: 'hover:shadow-[0_0_12px_-2px_rgba(16,185,129,0.55)]',  iconGlow: 'drop-shadow-[0_0_5px_rgba(16,185,129,0.7)]',  hoverIconGlow: 'group-hover:drop-shadow-[0_0_5px_rgba(16,185,129,0.7)]' },
-  amber:   { icon: 'text-amber-500',   label: 'text-amber-500/80',   activeBg: 'bg-amber-500/15',   activeText: 'text-amber-600 dark:text-amber-300',   hoverBg: 'hover:bg-amber-500/10',   dot: 'bg-amber-500',   ring: 'ring-1 ring-amber-500/30',   hoverRing: 'hover:ring-1 hover:ring-amber-500/30',   glow: 'shadow-[0_0_12px_-2px_rgba(245,158,11,0.55)]',  hoverGlow: 'hover:shadow-[0_0_12px_-2px_rgba(245,158,11,0.55)]',  iconGlow: 'drop-shadow-[0_0_5px_rgba(245,158,11,0.7)]',  hoverIconGlow: 'group-hover:drop-shadow-[0_0_5px_rgba(245,158,11,0.7)]' },
-  pink:    { icon: 'text-pink-500',    label: 'text-pink-500/80',    activeBg: 'bg-pink-500/15',    activeText: 'text-pink-600 dark:text-pink-300',    hoverBg: 'hover:bg-pink-500/10',    dot: 'bg-pink-500',    ring: 'ring-1 ring-pink-500/30',    hoverRing: 'hover:ring-1 hover:ring-pink-500/30',    glow: 'shadow-[0_0_12px_-2px_rgba(236,72,153,0.55)]',  hoverGlow: 'hover:shadow-[0_0_12px_-2px_rgba(236,72,153,0.55)]',  iconGlow: 'drop-shadow-[0_0_5px_rgba(236,72,153,0.7)]',  hoverIconGlow: 'group-hover:drop-shadow-[0_0_5px_rgba(236,72,153,0.7)]' },
-  cyan:    { icon: 'text-cyan-500',    label: 'text-cyan-500/80',    activeBg: 'bg-cyan-500/15',    activeText: 'text-cyan-600 dark:text-cyan-300',    hoverBg: 'hover:bg-cyan-500/10',    dot: 'bg-cyan-500',    ring: 'ring-1 ring-cyan-500/30',    hoverRing: 'hover:ring-1 hover:ring-cyan-500/30',    glow: 'shadow-[0_0_12px_-2px_rgba(6,182,212,0.55)]',   hoverGlow: 'hover:shadow-[0_0_12px_-2px_rgba(6,182,212,0.55)]',   iconGlow: 'drop-shadow-[0_0_5px_rgba(6,182,212,0.7)]',   hoverIconGlow: 'group-hover:drop-shadow-[0_0_5px_rgba(6,182,212,0.7)]' },
-  rose:    { icon: 'text-rose-500',    label: 'text-rose-500/80',    activeBg: 'bg-rose-500/15',    activeText: 'text-rose-600 dark:text-rose-300',    hoverBg: 'hover:bg-rose-500/10',    dot: 'bg-rose-500',    ring: 'ring-1 ring-rose-500/30',    hoverRing: 'hover:ring-1 hover:ring-rose-500/30',    glow: 'shadow-[0_0_12px_-2px_rgba(244,63,94,0.55)]',   hoverGlow: 'hover:shadow-[0_0_12px_-2px_rgba(244,63,94,0.55)]',   iconGlow: 'drop-shadow-[0_0_5px_rgba(244,63,94,0.7)]',   hoverIconGlow: 'group-hover:drop-shadow-[0_0_5px_rgba(244,63,94,0.7)]' },
-  slate:   { icon: 'text-slate-300',   label: 'text-slate-300/80',   activeBg: 'bg-slate-500/20',   activeText: 'text-slate-100',                        hoverBg: 'hover:bg-slate-500/10',   dot: 'bg-slate-300',   ring: 'ring-1 ring-slate-400/30',   hoverRing: 'hover:ring-1 hover:ring-slate-400/30',   glow: 'shadow-[0_0_12px_-2px_rgba(148,163,184,0.55)]', hoverGlow: 'hover:shadow-[0_0_12px_-2px_rgba(148,163,184,0.55)]', iconGlow: 'drop-shadow-[0_0_5px_rgba(148,163,184,0.7)]', hoverIconGlow: 'group-hover:drop-shadow-[0_0_5px_rgba(148,163,184,0.7)]' },
+// Paleta compartilhada (Layout + QuickShortcutsBar) — src/lib/navTint.ts
+import { CATEGORY_TINT } from '@/lib/navTint';
 
-
-
-
-};
 
 const navCategories: NavCategory[] = [
 

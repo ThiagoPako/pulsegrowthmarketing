@@ -40,9 +40,9 @@ export const PATH_CATEGORY: Record<string, TintKey> = {
   '/edicao/kanban': 'emerald', '/designer': 'emerald', '/conteudos-portal': 'emerald', '/desempenho': 'emerald',
   // Gestão (amber)
   '/clientes': 'amber', '/relacionamento': 'amber', '/depoimentos': 'amber',
-  '/onboarding-gestao': 'amber', '/equipe': 'amber', '/planos': 'amber', '/metas': 'amber', '/relatorios': 'amber',
-  // Comercial (rose)
-  '/crm': 'rose', '/propostas': 'rose', '/apresentacao': 'rose',
+  '/onboarding-gestao': 'amber', '/equipe': 'amber', '/planos': 'amber', '/relatorios': 'amber',
+  // Comercial (rose) — inclui Metas
+  '/crm': 'rose', '/propostas': 'rose', '/apresentacao': 'rose', '/metas': 'rose',
   // Marketing (pink)
   '/endomarketing': 'pink', '/endomarketing/contratos': 'pink', '/endomarketing/tarefas': 'pink',
   '/endomarketing/relatorios': 'pink', '/endomarketing/calendario': 'pink',

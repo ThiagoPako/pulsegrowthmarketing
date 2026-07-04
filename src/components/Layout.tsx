@@ -267,7 +267,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </span>
           )}
           {featured && (
-            <div className="relative mx-1 my-1 rounded-xl p-[1.5px] bg-gradient-to-r from-rose-500 via-pink-500 to-fuchsia-500 shadow-[0_0_18px_-4px_rgba(244,63,94,0.6)]">
+            <div className="relative mx-1 my-1 rounded-xl p-[1.5px] bg-gradient-to-r from-rose-500 via-pink-500 to-fuchsia-500 shadow-[0_0_18px_-4px_rgba(244,63,94,0.6)] animate-[pulse_3s_ease-in-out_infinite]">
+
               <div className="rounded-[10px] bg-sidebar/90 backdrop-blur-sm p-1 space-y-0.5">
                 {cat.items.map(item => {
                   const active = location.pathname === item.path;

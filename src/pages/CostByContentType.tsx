@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Target, Film, Megaphone, Image as ImageIcon, Palette, DollarSign, Calculator } from 'lucide-react';
+import { Target, Film, Megaphone, Image as ImageIcon, Palette, DollarSign, Calculator, Check } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths, differenceInCalendarMonths } from 'date-fns';
 
 interface DeliveryRecord {
@@ -758,17 +758,34 @@ export default function CostByContentType() {
               <Input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="w-36" />
             </div>
           )}
-          <div className="ml-auto space-y-1">
-            <Label className="text-xs uppercase text-muted-foreground">Sócios (Pró-labore)</Label>
-            <Button
-              variant={includeProLabore ? 'default' : 'outline'}
-              size="sm"
+          <div className="ml-auto space-y-1.5">
+            <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-violet-500" />
+              Sócios (Pró-labore)
+            </Label>
+            <button
+              type="button"
               onClick={() => setIncludeProLabore(v => !v)}
-              className="gap-1.5"
+              className={`group relative inline-flex items-center gap-2.5 px-4 h-10 rounded-lg text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98] ${
+                includeProLabore
+                  ? 'bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-500 hover:to-violet-400 shadow-violet-500/25'
+                  : 'bg-background border border-violet-500/30 text-violet-700 dark:text-violet-300 hover:border-violet-500 hover:bg-violet-500/5'
+              }`}
             >
-              <DollarSign size={14} />
-              {includeProLabore ? '✓ Incluído no total' : `Incluir ${fmt(data.prolaboreTotal)}`}
-            </Button>
+              <span className={`flex items-center justify-center w-6 h-6 rounded-md transition-colors ${
+                includeProLabore ? 'bg-white/20' : 'bg-violet-500/10'
+              }`}>
+                {includeProLabore ? <Check size={14} /> : <DollarSign size={14} />}
+              </span>
+              <span className="flex flex-col items-start leading-tight">
+                <span className="text-[10px] uppercase tracking-wide opacity-80">
+                  {includeProLabore ? 'Incluído no total' : 'Incluir pró-labore'}
+                </span>
+                <span className="text-sm font-bold tabular-nums">
+                  {fmt(data.prolaboreTotal)}
+                </span>
+              </span>
+            </button>
           </div>
         </CardContent>
       </Card>

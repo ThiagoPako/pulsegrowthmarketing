@@ -75,7 +75,7 @@ const navCategories: NavCategory[] = [
   },
 
   {
-    label: 'Produção Criativo',
+    label: 'Produção Criativa',
     color: 'cyan',
     items: [
       { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media'] },
@@ -259,11 +259,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           )}
           {expanded && !speed && !featured && (
             <span
-              className={`text-[11px] uppercase tracking-wider font-bold mx-2 mb-1.5 px-2.5 py-1 rounded-md flex items-center gap-1.5 whitespace-nowrap overflow-hidden ${tint.label}`}
+              className="text-[11px] uppercase tracking-wider font-bold mx-2 mb-1.5 px-2.5 py-1 rounded-md flex items-center gap-1.5 whitespace-nowrap overflow-hidden text-white"
               style={{
                 background: `linear-gradient(90deg, rgba(${CATEGORY_RGB[cat.color]},0.18), rgba(${CATEGORY_RGB[cat.color]},0.04))`,
                 boxShadow: `inset 0 0 0 1px rgba(${CATEGORY_RGB[cat.color]},0.35), 0 0 12px -4px rgba(${CATEGORY_RGB[cat.color]},0.55)`,
-                textShadow: `0 0 8px rgba(${CATEGORY_RGB[cat.color]},0.55)`,
               }}
             >
               <span

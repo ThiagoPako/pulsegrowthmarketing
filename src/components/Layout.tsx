@@ -432,7 +432,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Main area */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Top bar */}
-        <header className="h-14 bg-card border-b border-border flex items-center px-3 sm:px-4 lg:px-6 gap-2 sm:gap-4 shrink-0">
+        <header
+          className="h-14 bg-card border-b flex items-center px-3 sm:px-4 lg:px-6 gap-2 sm:gap-4 shrink-0 transition-colors"
+          style={{
+            borderBottomColor: `rgba(${CATEGORY_RGB[getTintForPath(location.pathname)]}, 0.35)`,
+            boxShadow: `0 1px 0 0 rgba(${CATEGORY_RGB[getTintForPath(location.pathname)]}, 0.15), 0 8px 24px -18px rgba(${CATEGORY_RGB[getTintForPath(location.pathname)]}, 0.55)`,
+          }}
+        >
           {/* Mobile hamburger */}
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild>

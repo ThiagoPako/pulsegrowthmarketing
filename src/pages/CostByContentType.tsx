@@ -534,7 +534,11 @@ export default function CostByContentType() {
           : VIDEOMAKER_ROLES.includes(u.role) ? vmShare
           : designerShare;
         const s = src.get(u.id) || { reels: 0, criativo: 0, story: 0, artes: 0 };
-        const cards = s.reels + s.criativo + s.story + s.artes;
+        // Designer: "cards" (CAR) = nº de tarefas/cards produzidos (fonte: design_tasks).
+        // "Artes" = soma total de artes entregues (rateada em s.artes). Fontes distintas.
+        const cards = DESIGNER_ROLES.includes(u.role)
+          ? (designerCardsByUser.get(u.id) || 0)
+          : s.reels + s.criativo + s.story + s.artes;
         const salary = salaryByUser.get(u.id) || 0;
         return {
           id: u.id,
@@ -552,6 +556,7 @@ export default function CostByContentType() {
       // Mostra todos os colaboradores dos times de produção, mesmo sem salário lançado
       // ou sem cards no período (ex.: Victor Videomaker recebe via Pró-labore).
       .sort((a, b) => b.salary - a.salary);
+
 
     // Aloca o salário financeiro de cada videomaker apenas nos cards que ele mesmo editou.
     let salVmReels = 0, salVmCri = 0, salVmSto = 0, vmEditingPool = 0;

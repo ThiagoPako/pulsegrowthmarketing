@@ -186,7 +186,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  const [sidebarPinned, setSidebarPinned] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('pulse:sidebarPinned') === '1';
+  });
+  const [sidebarHover, setSidebarHover] = useState(false);
+  const sidebarExpanded = sidebarPinned || sidebarHover;
+  const setSidebarExpanded = setSidebarHover; // legacy no-op alias (não usado após refactor)
+  useEffect(() => {
+    localStorage.setItem('pulse:sidebarPinned', sidebarPinned ? '1' : '0');
+  }, [sidebarPinned]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { hasModuleAccess } = useMyPermissions();
   const isMobile = useIsMobile();

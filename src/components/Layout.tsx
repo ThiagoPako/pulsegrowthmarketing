@@ -90,9 +90,17 @@ const navCategories: NavCategory[] = [
     color: 'cyan',
     items: [
       { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media'] },
-      { path: '/conteudos-portal', label: 'Portal', icon: MonitorPlay, roles: ['admin', 'social_media', 'editor'] },
       { path: '/designer', label: 'Designer', icon: Palette, roles: ['admin', 'social_media', 'fotografo', 'designer'] },
       { path: '/landing-admin', label: 'Landing Page', icon: Rocket, roles: ['admin'] },
+    ],
+  },
+
+  {
+    label: 'Portal',
+    color: 'violet',
+    highlight: true,
+    items: [
+      { path: '/conteudos-portal', label: 'Portal', icon: MonitorPlay, roles: ['admin', 'social_media', 'editor'] },
     ],
   },
 

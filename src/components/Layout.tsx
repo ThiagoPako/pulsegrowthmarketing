@@ -40,7 +40,9 @@ const CATEGORY_TINT: Record<string, { icon: string; label: string; activeBg: str
   emerald: { icon: 'text-emerald-500', label: 'text-emerald-500/80', activeBg: 'bg-emerald-500/15', activeText: 'text-emerald-600 dark:text-emerald-300', hoverBg: 'hover:bg-emerald-500/10', dot: 'bg-emerald-500' },
   amber:   { icon: 'text-amber-500',   label: 'text-amber-500/80',   activeBg: 'bg-amber-500/15',   activeText: 'text-amber-600 dark:text-amber-300',   hoverBg: 'hover:bg-amber-500/10',   dot: 'bg-amber-500' },
   pink:    { icon: 'text-pink-500',    label: 'text-pink-500/80',    activeBg: 'bg-pink-500/15',    activeText: 'text-pink-600 dark:text-pink-300',    hoverBg: 'hover:bg-pink-500/10',    dot: 'bg-pink-500' },
+  cyan:    { icon: 'text-cyan-500',    label: 'text-cyan-500/80',    activeBg: 'bg-cyan-500/15',    activeText: 'text-cyan-600 dark:text-cyan-300',    hoverBg: 'hover:bg-cyan-500/10',    dot: 'bg-cyan-500' },
   slate:   { icon: 'text-slate-400',   label: 'text-slate-400/80',   activeBg: 'bg-slate-500/15',   activeText: 'text-slate-700 dark:text-slate-200',  hoverBg: 'hover:bg-slate-500/10',   dot: 'bg-slate-400' },
+
 };
 
 const navCategories: NavCategory[] = [

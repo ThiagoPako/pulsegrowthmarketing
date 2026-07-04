@@ -477,7 +477,16 @@ export default function CostByContentType() {
     const editorShare = distributeByRole(EDITOR_ROLES, { reels: edReels, criativo: edCri, story: edSto, artes: 0 }, editorDirect);
     const socialShare = distributeByRole(SOCIAL_ROLES, { reels: edReels, criativo: edCri, story: edSto, artes: 0 }, new Map());
     const copyShare = distributeByRole(COPY_ROLES, { reels: edReels + vmReels, criativo: edCri + vmCri, story: edSto + vmSto, artes: 0 }, new Map());
-    const vmShare = distributeByRole(VIDEOMAKER_ROLES, { reels: vmReels, criativo: vmCri, story: vmSto, artes: 0 }, vmDirect);
+    // Videomaker produz nas GRAVAÇÕES (delivery_records), não nos content_tasks.
+    // Usamos o total real gravado no período (recReels/recCri/recSto) como produção da função;
+    // vmDirect (cards com assigned_to videomaker) entra integralmente, o restante é rateado.
+    const vmTotals = {
+      reels: Math.max(recReels, vmReels),
+      criativo: Math.max(recCri, vmCri),
+      story: Math.max(recSto, vmSto),
+      artes: 0,
+    };
+    const vmShare = distributeByRole(VIDEOMAKER_ROLES, vmTotals, vmDirect);
     const designerShare = distributeByRole(DESIGNER_ROLES, { reels: 0, criativo: 0, story: 0, artes: dtArts }, designerDirect);
 
     const contributorBreakdown = users

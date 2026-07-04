@@ -343,7 +343,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           )}
-          {!speed && cat.items.map(item => {
+          {!speed && !featured && cat.items.map(item => {
             const active = location.pathname === item.path;
             const isHighlight = item.highlight;
             return (

@@ -13,7 +13,7 @@ import ProfileDialog from '@/components/ProfileDialog';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
   LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Bot, Plug, Car, Menu, X, Video, Handshake, Star, Rocket, Type, Gift, Monitor, UserMinus, BookOpen, Sun, Moon, Gauge, Flame
-  , Sparkles,
+  , Sparkles, type LucideIcon,
 } from 'lucide-react';
 
 import { useTheme } from '@/hooks/useTheme';
@@ -29,13 +29,14 @@ import VirtualOffice from '@/components/VirtualOffice';
 import QuickShortcutsBar from '@/components/QuickShortcutsBar';
 import CitySwitcher from '@/components/CitySwitcher';
 import { CATEGORY_TINT, type TintKey } from '@/lib/navTint';
+import type { Profile } from '@/hooks/useAuth';
 
 type NavCategory = {
   label: string;
   color: TintKey;
   speedometer?: boolean;
   featured?: boolean;
-  items: { path: string; label: string; icon: any; roles: string[]; highlight?: boolean }[];
+  items: { path: string; label: string; icon: LucideIcon; roles: string[]; highlight?: boolean }[];
 };
 
 
@@ -196,7 +197,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     setFontScale(newScale);
     localStorage.setItem('pulse_font_scale', newScale);
     // Persist to database
-    updateProfile({ font_scale: newScale } as any);
+    updateProfile({ font_scale: newScale } satisfies Partial<Profile>);
   };
 
   const filteredCategories = navCategories

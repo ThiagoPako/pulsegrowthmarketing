@@ -33,8 +33,10 @@ type NavCategory = {
   label: string;
   color: string; // tailwind color name (blue, emerald, amber, pink, violet, ...)
   speedometer?: boolean;
+  featured?: boolean;
   items: { path: string; label: string; icon: any; roles: string[]; highlight?: boolean }[];
 };
+
 
 
 // Paleta por categoria (usada como accent do ícone / borda / label da categoria)

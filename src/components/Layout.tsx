@@ -91,6 +91,8 @@ const navCategories: NavCategory[] = [
 
   {
     label: 'Marketing',
+    color: 'pink',
+
     items: [
       { path: '/endomarketing', label: 'Endomkt', icon: Megaphone, roles: ['admin', 'endomarketing', 'social_media', 'parceiro'] },
       { path: '/endomarketing/contratos', label: 'Contratos E.', icon: Package, roles: ['admin', 'endomarketing', 'parceiro'] },

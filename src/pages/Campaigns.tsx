@@ -99,7 +99,7 @@ export default function Campaigns() {
                 <h3 className="font-semibold">{c.name}</h3>
                 <Badge variant={c.status === 'ativa' ? 'default' : 'secondary'}>{c.status}</Badge>
               </div>
-              <p className="text-sm text-muted-foreground">{clientById[c.client_id]?.name || '—'}</p>
+              <p className="text-sm text-muted-foreground">{clientById[c.client_id]?.companyName || '—'}</p>
               <p className="text-xs text-muted-foreground mt-1">{CAMPAIGN_TYPE_LABELS[c.type]}</p>
               <div className="mt-3 text-xs text-muted-foreground flex justify-between">
                 <span>{formatBrDate(c.start_date)} → {formatBrDate(c.end_date)}</span>

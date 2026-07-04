@@ -431,10 +431,12 @@ export default function CostByContentType() {
     const roleOf = new Map(users.map(u => [u.id, u.role]));
 
     // Split das tasks produzidas pelo tipo de quem editou (edited_by/assigned_to)
+    // Split das tasks produzidas pelo tipo de quem editou (edited_by/assigned_to).
+    // Só interessa a fatia do videomaker (para ratear salário dele nos cards que ele mesmo editou)
+    // e a fatia individual do editor (para o breakdown por colaborador).
     const vmCountsByUser = new Map<string, { reels: number; criativo: number; story: number }>();
     const edCountsByUser = new Map<string, { reels: number; criativo: number; story: number }>();
     let vmReels = 0, vmCri = 0, vmSto = 0;
-    let edReels = 0, edCri = 0, edSto = 0;
     relevantTasks.forEach(t => {
       const type = normalizeContentType(t.content_type);
       const workerId = t.edited_by || t.assigned_to;
@@ -447,19 +449,15 @@ export default function CostByContentType() {
         else if (type === 'criativo') { current.criativo++; vmCri++; }
         else if (type === 'story') { current.story++; vmSto++; }
         vmCountsByUser.set(workerId, current);
-      } else {
-        if (type === 'reels') edReels++;
-        else if (type === 'criativo') edCri++;
-        else if (type === 'story') edSto++;
-        if (isEd && workerId) {
-          const current = edCountsByUser.get(workerId) || { reels: 0, criativo: 0, story: 0 };
-          if (type === 'reels') current.reels++;
-          else if (type === 'criativo') current.criativo++;
-          else if (type === 'story') current.story++;
-          edCountsByUser.set(workerId, current);
-        }
+      } else if (isEd && workerId) {
+        const current = edCountsByUser.get(workerId) || { reels: 0, criativo: 0, story: 0 };
+        if (type === 'reels') current.reels++;
+        else if (type === 'criativo') current.criativo++;
+        else if (type === 'story') current.story++;
+        edCountsByUser.set(workerId, current);
       }
     });
+
 
     // Produção individual dos videomakers vem das gravações realizadas.
     const vmProductionByUser = new Map<string, { reels: number; criativo: number; story: number; artes: number }>();

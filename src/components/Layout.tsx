@@ -30,13 +30,25 @@ import CitySwitcher from '@/components/CitySwitcher';
 
 type NavCategory = {
   label: string;
+  color: string; // tailwind color name (blue, emerald, amber, pink, violet, ...)
   items: { path: string; label: string; icon: any; roles: string[]; highlight?: boolean }[];
 };
 
+// Paleta por categoria (usada como accent do ícone / borda / label da categoria)
+const CATEGORY_TINT: Record<string, { icon: string; label: string; activeBg: string; activeText: string; hoverBg: string; dot: string }> = {
+  blue:    { icon: 'text-blue-500',    label: 'text-blue-500/80',    activeBg: 'bg-blue-500/15',    activeText: 'text-blue-600 dark:text-blue-300',    hoverBg: 'hover:bg-blue-500/10',    dot: 'bg-blue-500' },
+  emerald: { icon: 'text-emerald-500', label: 'text-emerald-500/80', activeBg: 'bg-emerald-500/15', activeText: 'text-emerald-600 dark:text-emerald-300', hoverBg: 'hover:bg-emerald-500/10', dot: 'bg-emerald-500' },
+  amber:   { icon: 'text-amber-500',   label: 'text-amber-500/80',   activeBg: 'bg-amber-500/15',   activeText: 'text-amber-600 dark:text-amber-300',   hoverBg: 'hover:bg-amber-500/10',   dot: 'bg-amber-500' },
+  pink:    { icon: 'text-pink-500',    label: 'text-pink-500/80',    activeBg: 'bg-pink-500/15',    activeText: 'text-pink-600 dark:text-pink-300',    hoverBg: 'hover:bg-pink-500/10',    dot: 'bg-pink-500' },
+  slate:   { icon: 'text-slate-400',   label: 'text-slate-400/80',   activeBg: 'bg-slate-500/15',   activeText: 'text-slate-700 dark:text-slate-200',  hoverBg: 'hover:bg-slate-500/10',   dot: 'bg-slate-400' },
+};
 
 const navCategories: NavCategory[] = [
+
   {
     label: 'Principal',
+    color: 'blue',
+
     items: [
       { path: '/dashboard', label: 'Início', icon: LayoutDashboard, roles: ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'designer', 'fotografo'] },
       { path: '/conteudo', label: 'Conteúdo', icon: Kanban, roles: ['admin', 'social_media', 'videomaker', 'editor'] },
@@ -48,6 +60,8 @@ const navCategories: NavCategory[] = [
   },
   {
     label: 'Produção',
+    color: 'emerald',
+
     items: [
       { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media'] },
       { path: '/trafego', label: 'Tráfego', icon: TrendingUp, roles: ['admin', 'social_media'] },
@@ -60,6 +74,8 @@ const navCategories: NavCategory[] = [
   },
   {
     label: 'Gestão',
+    color: 'amber',
+
     items: [
       { path: '/clientes', label: 'Clientes', icon: Building2, roles: ['admin', 'social_media'] },
       { path: '/relacionamento', label: 'Relacionamento', icon: Handshake, roles: ['admin', 'social_media'] },
@@ -75,6 +91,8 @@ const navCategories: NavCategory[] = [
 
   {
     label: 'Marketing',
+    color: 'pink',
+
     items: [
       { path: '/endomarketing', label: 'Endomkt', icon: Megaphone, roles: ['admin', 'endomarketing', 'social_media', 'parceiro'] },
       { path: '/endomarketing/contratos', label: 'Contratos E.', icon: Package, roles: ['admin', 'endomarketing', 'parceiro'] },
@@ -85,6 +103,8 @@ const navCategories: NavCategory[] = [
   },
   {
     label: 'Sistema',
+    color: 'slate',
+
     items: [
       { path: '/financeiro', label: 'Financeiro', icon: DollarSign, roles: ['admin'] },
       { path: '/custo-conteudo', label: 'Pente Fino', icon: Target, roles: ['admin'], highlight: true },
@@ -186,13 +206,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // Shared nav content renderer
   const renderNavItems = (expanded: boolean, onNav?: (path: string) => void) => (
     <nav className="flex-1 flex flex-col gap-0.5 py-2 px-1.5 overflow-y-auto">
-      {filteredCategories.map((cat, catIdx) => (
+      {filteredCategories.map((cat, catIdx) => {
+        const tint = CATEGORY_TINT[cat.color] || CATEGORY_TINT.slate;
+        return (
         <div key={cat.label} className="w-full">
           {catIdx > 0 && (
             <div className="my-1.5 mx-2 h-px bg-sidebar-border" />
           )}
           {expanded && (
-            <span className="text-[11px] uppercase tracking-wider text-muted-foreground/60 font-semibold px-3 mb-1 block whitespace-nowrap overflow-hidden">
+            <span className={`text-[11px] uppercase tracking-wider font-semibold px-3 mb-1 flex items-center gap-1.5 whitespace-nowrap overflow-hidden ${tint.label}`}>
+              <span className={`inline-block w-1.5 h-1.5 rounded-full ${tint.dot}`} />
               {cat.label}
             </span>
           )}
@@ -217,12 +240,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       ? 'bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white shadow-md shadow-violet-500/30 ring-1 ring-violet-400/40'
                       : 'bg-gradient-to-r from-violet-500/10 to-fuchsia-500/10 text-violet-700 dark:text-violet-300 ring-1 ring-violet-500/25 hover:from-violet-500/20 hover:to-fuchsia-500/20 hover:shadow-sm'
                     : active
-                      ? 'bg-sidebar-accent text-primary shadow-sm'
-                      : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-sm'
+                      ? `${tint.activeBg} ${tint.activeText} shadow-sm`
+                      : `text-sidebar-foreground ${tint.hoverBg}`
                 }`}
                 title={!expanded ? item.label : undefined}
               >
-                <item.icon size={18} strokeWidth={active || isHighlight ? 2.2 : 1.5} className="shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                <item.icon
+                  size={18}
+                  strokeWidth={active || isHighlight ? 2.2 : 1.5}
+                  className={`shrink-0 transition-transform duration-200 group-hover:scale-110 ${isHighlight ? '' : active ? '' : tint.icon}`}
+                />
                 {expanded ? (
                   <span className={`text-[13px] whitespace-nowrap overflow-hidden ${isHighlight ? 'font-semibold' : 'font-medium'}`}>{item.label}</span>
                 ) : (
@@ -236,7 +263,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
 
         </div>
-      ))}
+        );
+      })}
+
     </nav>
   );
 

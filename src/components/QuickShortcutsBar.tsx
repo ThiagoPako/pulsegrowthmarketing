@@ -2,6 +2,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { useMyPermissions } from '@/hooks/useUserPermissions';
 import { cn } from '@/lib/utils';
+import { CATEGORY_TINT, getTintForPath } from '@/lib/navTint';
 import {
   LayoutDashboard, Kanban, Calendar, Palette, Scissors, Share2,
   Building2, DollarSign, MessageSquare, BarChart3, FileText, Megaphone,
@@ -43,18 +44,23 @@ export default function QuickShortcutsBar() {
       <div className="flex items-center gap-1 px-3 sm:px-4 lg:px-6 py-1.5 min-w-max">
         {items.map(item => {
           const active = location.pathname === item.path;
+          const tint = CATEGORY_TINT[getTintForPath(item.path)];
           return (
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
               className={cn(
-                'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all whitespace-nowrap',
-                active
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                'group flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all whitespace-nowrap',
+                active ? tint.chipActive : cn('text-muted-foreground', tint.chipHover)
               )}
             >
-              <item.icon size={12} />
+              <item.icon
+                size={12}
+                className={cn(
+                  'transition-all',
+                  active ? tint.iconGlow : cn(tint.icon, tint.hoverIconGlow)
+                )}
+              />
               {item.label}
             </button>
           );

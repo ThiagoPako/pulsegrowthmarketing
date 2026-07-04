@@ -32,8 +32,10 @@ import CitySwitcher from '@/components/CitySwitcher';
 type NavCategory = {
   label: string;
   color: string; // tailwind color name (blue, emerald, amber, pink, violet, ...)
+  speedometer?: boolean;
   items: { path: string; label: string; icon: any; roles: string[]; highlight?: boolean }[];
 };
+
 
 // Paleta por categoria (usada como accent do ícone / borda / label da categoria)
 const CATEGORY_TINT: Record<string, { icon: string; label: string; activeBg: string; activeText: string; hoverBg: string; dot: string }> = {

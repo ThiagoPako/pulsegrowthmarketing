@@ -82,8 +82,6 @@ const navCategories: NavCategory[] = [
       { path: '/trafego', label: 'Tráfego', icon: TrendingUp, roles: ['admin', 'social_media'] },
       { path: '/desempenho', label: 'Desempenho', icon: Target, roles: ['admin', 'social_media'] },
       { path: '/conteudos-portal', label: 'Portal', icon: MonitorPlay, roles: ['admin', 'social_media', 'editor'] },
-      { path: '/encurtador', label: 'Encurtador', icon: Type, roles: ['admin', 'social_media'] },
-      { path: '/clube-descontos', label: 'Clube Descontos', icon: Gift, roles: ['admin', 'social_media'] },
     ],
   },
 
@@ -101,6 +99,8 @@ const navCategories: NavCategory[] = [
     color: 'slate',
     items: [
       { path: '/panfletagem', label: 'Panfletagem', icon: Car, roles: ['admin'] },
+      { path: '/encurtador', label: 'Encurtador', icon: Type, roles: ['admin', 'social_media'] },
+      { path: '/clube-descontos', label: 'Clube Descontos', icon: Gift, roles: ['admin', 'social_media'] },
     ],
   },
 

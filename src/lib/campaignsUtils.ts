@@ -1,4 +1,4 @@
-export type CampaignType = 'institucional' | 'promocional' | 'sazonal' | 'lancamento' | 'responsabilidade_social' | 'evento';
+export type CampaignType = 'institucional' | 'promocional' | 'sazonal' | 'lancamento' | 'responsabilidade_social' | 'evento' | 'agro';
 export type SlotKind = 'editorial' | 'video' | 'creative';
 export type SlotStatus = 'pendente' | 'roteiro_pronto' | 'gravado' | 'editado' | 'postado';
 export type CampaignStatus = 'rascunho' | 'ativa' | 'concluida' | 'arquivada';
@@ -10,6 +10,7 @@ export const CAMPAIGN_TYPE_LABELS: Record<CampaignType, string> = {
   lancamento: 'Lançamento de Produto',
   responsabilidade_social: 'Responsabilidade Social',
   evento: 'Evento (captura de leads)',
+  agro: 'Agro (calendário do agronegócio)',
 };
 
 export const CAMPAIGN_TYPE_DESCRIPTIONS: Record<CampaignType, string> = {
@@ -19,6 +20,7 @@ export const CAMPAIGN_TYPE_DESCRIPTIONS: Record<CampaignType, string> = {
   lancamento: 'Gera expectativa e demanda antes da abertura.',
   responsabilidade_social: 'Conecta a marca a uma causa real.',
   evento: 'Corrida, palestra, competição ou workshop para captar WhatsApp e e-mail e alimentar o funil.',
+  agro: 'Encaixa a marca na janela atual do agro (plantio, safra, entressafra, feiras) para vender no momento certo do produtor.',
 };
 
 export const SLOT_STATUS_LABELS: Record<SlotStatus, string> = {

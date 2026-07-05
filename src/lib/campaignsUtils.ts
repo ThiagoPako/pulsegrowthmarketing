@@ -1,4 +1,4 @@
-export type CampaignType = 'institucional' | 'promocional' | 'sazonal' | 'lancamento' | 'responsabilidade_social';
+export type CampaignType = 'institucional' | 'promocional' | 'sazonal' | 'lancamento' | 'responsabilidade_social' | 'evento';
 export type SlotKind = 'editorial' | 'video' | 'creative';
 export type SlotStatus = 'pendente' | 'roteiro_pronto' | 'gravado' | 'editado' | 'postado';
 export type CampaignStatus = 'rascunho' | 'ativa' | 'concluida' | 'arquivada';
@@ -9,6 +9,16 @@ export const CAMPAIGN_TYPE_LABELS: Record<CampaignType, string> = {
   sazonal: 'Sazonal',
   lancamento: 'Lançamento de Produto',
   responsabilidade_social: 'Responsabilidade Social',
+  evento: 'Evento (captura de leads)',
+};
+
+export const CAMPAIGN_TYPE_DESCRIPTIONS: Record<CampaignType, string> = {
+  institucional: 'Fortalece marca e autoridade, vende no médio prazo.',
+  promocional: 'Oferta com urgência — venda de curto prazo.',
+  sazonal: 'Aproveita datas comemorativas ou momentos do ano.',
+  lancamento: 'Gera expectativa e demanda antes da abertura.',
+  responsabilidade_social: 'Conecta a marca a uma causa real.',
+  evento: 'Corrida, palestra, competição ou workshop para captar WhatsApp e e-mail e alimentar o funil.',
 };
 
 export const SLOT_STATUS_LABELS: Record<SlotStatus, string> = {

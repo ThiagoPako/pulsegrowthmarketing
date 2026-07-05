@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS public.campaigns (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   client_id UUID NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('institucional','promocional','sazonal','lancamento','responsabilidade_social')),
+  type TEXT NOT NULL CHECK (type IN ('institucional','promocional','sazonal','lancamento','responsabilidade_social','evento')),
   objective TEXT,
   start_date DATE NOT NULL,
   end_date DATE NOT NULL,

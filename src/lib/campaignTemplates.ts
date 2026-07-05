@@ -33,6 +33,7 @@ export const RECOMMENDED_QUANTITIES: Record<CampaignType, { videos: number; crea
   lancamento: { videos: 8, creatives: 4 },
   responsabilidade_social: { videos: 4, creatives: 2 },
   evento: { videos: 7, creatives: 4 },
+  agro: { videos: 6, creatives: 3 },
 };
 
 /**
@@ -87,6 +88,14 @@ const VIDEO_TEMPLATES: Record<CampaignType, SlotTemplate[]> = {
     { kind: 'video', title: 'Cobertura ao vivo — dia do evento', phase: 'fundo', weight: 0.9, notes: 'Postar durante o evento; usar para gerar FOMO em quem não foi.' },
     { kind: 'video', title: 'Pós-evento — oferta para a base de leads capturada', phase: 'pos', weight: 1.0, notes: 'Follow-up de vendas para os leads coletados.' },
   ],
+  agro: [
+    { kind: 'video', title: 'Leitura de mercado — momento atual do agro (safra/plantio/entressafra)', phase: 'topo', weight: 0.0, notes: 'Abre a campanha ancorando na janela real do produtor: cotação, clima, ciclo da cultura.' },
+    { kind: 'video', title: 'Dor do produtor nesta janela (praga, custo, prazo, logística)', phase: 'topo', weight: 0.18 },
+    { kind: 'video', title: 'Solução aplicada — como o produto/serviço resolve nesta safra', phase: 'meio', weight: 0.4 },
+    { kind: 'video', title: 'Depoimento de produtor da região (prova social no talhão)', phase: 'meio', weight: 0.6, notes: 'Gravar no campo/fazenda com o próprio produtor. Nada de estúdio.' },
+    { kind: 'video', title: 'Condição comercial da janela (financiamento, barter, safra)', phase: 'fundo', weight: 0.8, notes: 'Foco em prazo de pagamento casado com colheita, troca-troca ou desconto por antecipação.' },
+    { kind: 'video', title: 'Última chamada antes do fim da janela agrícola', phase: 'fundo', weight: 0.98 },
+  ],
 };
 
 /**
@@ -125,6 +134,11 @@ const CREATIVE_TEMPLATES: Record<CampaignType, SlotTemplate[]> = {
     { kind: 'creative', title: 'Últimas vagas — link de inscrição', phase: 'fundo', weight: 0.7 },
     { kind: 'creative', title: 'Pós-evento — obrigado + oferta', phase: 'pos', weight: 1.0 },
   ],
+  agro: [
+    { kind: 'creative', title: 'Card — janela agrícola atual (o momento é agora)', phase: 'topo', weight: 0.08 },
+    { kind: 'creative', title: 'Card comparativo — resultado no talhão / ROI por hectare', phase: 'meio', weight: 0.5 },
+    { kind: 'creative', title: 'Card oferta comercial da safra (financiamento/barter)', phase: 'fundo', weight: 0.9 },
+  ],
 };
 
 /**
@@ -154,6 +168,10 @@ export const EDITORIAL_BRIEFINGS: Record<CampaignType, { title: string; notes: s
   evento: {
     title: 'Editorial — Campanha de Evento (captura de leads)',
     notes: 'Objetivo comercial: capturar WhatsApp/e-mail para alimentar o funil e vender no pós-evento.\nDefina: data do evento, formulário de inscrição, meta de leads, oferta pós-evento e roteiro de follow-up.',
+  },
+  agro: {
+    title: 'Editorial — Campanha Agro (janela sazonal)',
+    notes: 'Objetivo comercial: vender no timing da janela agrícola atual do produtor.\n\nDefina antes de gravar:\n• Janela atual (plantio soja/milho, safra café, colheita algodão, entressafra, feira do setor).\n• Cultura(s) foco e região (MT, GO, MG, MS, BA, PR, RS).\n• Dor do momento (praga, clima, cotação, crédito, mão de obra, logística).\n• Condição comercial casada com a janela (barter, troca-troca, prazo safra, financiamento).\n• Prova social local — nome do produtor + fazenda + resultado por hectare.\n• Feiras próximas (Agrishow, Expointer, Show Rural, Bahia Farm Show, Coopavel, Tecnoshow).\n• CTA: WhatsApp do consultor técnico da região.',
   },
 };
 

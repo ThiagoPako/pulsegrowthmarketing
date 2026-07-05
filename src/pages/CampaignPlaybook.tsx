@@ -155,6 +155,18 @@ const CAMPAIGN_TYPES = [
     kpi: 'Compartilhamentos, alcance orgânico, cobertura de mídia local, sentimento nos comentários.',
     example: 'Campanha do agasalho: cada compra vira 1 cobertor doado + mostrar entrega real na comunidade.',
   },
+  {
+    icon: Sprout,
+    label: 'Agro',
+    tagline: 'Encaixa na janela do agro — vende no timing do produtor',
+    color: '#84cc16',
+    objective: 'Falar com o produtor rural exatamente no momento certo do ciclo (plantio, safra, entressafra, feira) para converter no timing em que ele decide comprar insumo, máquina, serviço ou financiamento.',
+    whenToUse: 'Revendas de insumos, concessionárias de máquinas, cooperativas, veterinárias, ATER, seguradoras rurais, corretoras de commodities e qualquer marca que vende pro produtor.',
+    triggers: ['Janela agrícola', 'Cotação da saca', 'Prova social no talhão', 'Barter / prazo safra', 'Clima e praga'],
+    kpi: 'Cotações abertas, visitas técnicas agendadas, contratos de barter fechados, presença qualificada na feira do setor.',
+    example: 'Pré-plantio soja MT: leitura de mercado + dor com percevejo + solução aplicada + depoimento no talhão + condição com pagamento pós-colheita.',
+    highlightAgro: true,
+  },
 ];
 
 export default function CampaignPlaybook() {

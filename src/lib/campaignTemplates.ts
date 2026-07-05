@@ -88,6 +88,14 @@ const VIDEO_TEMPLATES: Record<CampaignType, SlotTemplate[]> = {
     { kind: 'video', title: 'Cobertura ao vivo — dia do evento', phase: 'fundo', weight: 0.9, notes: 'Postar durante o evento; usar para gerar FOMO em quem não foi.' },
     { kind: 'video', title: 'Pós-evento — oferta para a base de leads capturada', phase: 'pos', weight: 1.0, notes: 'Follow-up de vendas para os leads coletados.' },
   ],
+  agro: [
+    { kind: 'video', title: 'Leitura de mercado — momento atual do agro (safra/plantio/entressafra)', phase: 'topo', weight: 0.0, notes: 'Abre a campanha ancorando na janela real do produtor: cotação, clima, ciclo da cultura.' },
+    { kind: 'video', title: 'Dor do produtor nesta janela (praga, custo, prazo, logística)', phase: 'topo', weight: 0.18 },
+    { kind: 'video', title: 'Solução aplicada — como o produto/serviço resolve nesta safra', phase: 'meio', weight: 0.4 },
+    { kind: 'video', title: 'Depoimento de produtor da região (prova social no talhão)', phase: 'meio', weight: 0.6, notes: 'Gravar no campo/fazenda com o próprio produtor. Nada de estúdio.' },
+    { kind: 'video', title: 'Condição comercial da janela (financiamento, barter, safra)', phase: 'fundo', weight: 0.8, notes: 'Foco em prazo de pagamento casado com colheita, troca-troca ou desconto por antecipação.' },
+    { kind: 'video', title: 'Última chamada antes do fim da janela agrícola', phase: 'fundo', weight: 0.98 },
+  ],
 };
 
 /**

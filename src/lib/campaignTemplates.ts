@@ -169,6 +169,10 @@ export const EDITORIAL_BRIEFINGS: Record<CampaignType, { title: string; notes: s
     title: 'Editorial — Campanha de Evento (captura de leads)',
     notes: 'Objetivo comercial: capturar WhatsApp/e-mail para alimentar o funil e vender no pós-evento.\nDefina: data do evento, formulário de inscrição, meta de leads, oferta pós-evento e roteiro de follow-up.',
   },
+  agro: {
+    title: 'Editorial — Campanha Agro (janela sazonal)',
+    notes: 'Objetivo comercial: vender no timing da janela agrícola atual do produtor.\n\nDefina antes de gravar:\n• Janela atual (plantio soja/milho, safra café, colheita algodão, entressafra, feira do setor).\n• Cultura(s) foco e região (MT, GO, MG, MS, BA, PR, RS).\n• Dor do momento (praga, clima, cotação, crédito, mão de obra, logística).\n• Condição comercial casada com a janela (barter, troca-troca, prazo safra, financiamento).\n• Prova social local — nome do produtor + fazenda + resultado por hectare.\n• Feiras próximas (Agrishow, Expointer, Show Rural, Bahia Farm Show, Coopavel, Tecnoshow).\n• CTA: WhatsApp do consultor técnico da região.',
+  },
 };
 
 /**

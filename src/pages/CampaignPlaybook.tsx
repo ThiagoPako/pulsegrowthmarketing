@@ -6,6 +6,10 @@ import {
   Calendar, Zap, Trophy, Flame, Rocket, Eye, Heart, MousePointerClick, DollarSign,
   Film, Image as ImageIcon, PenTool, Clock, ChevronRight, Wand2, PartyPopper, UserPlus, Sprout,
 } from 'lucide-react';
+import { useApp } from '@/contexts/AppContext';
+import { NICHE_OPTIONS } from '@/lib/seasonalDates';
+import { getNicheSuggestion } from '@/lib/nicheCampaignSuggestions';
+import { CAMPAIGN_TYPE_LABELS, CampaignType } from '@/lib/campaignsUtils';
 
 // ─────────────────────────────────────────────────────────────
 //  PLAYBOOK DE CAMPANHAS — INFOGRÁFICO ESTRATÉGICO

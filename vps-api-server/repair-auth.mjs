@@ -9,6 +9,7 @@ const { Pool } = pg;
 const ADMIN_EMAIL = 'admin@pulse.com';
 const ADMIN_PASSWORD = 'Pulse@2026!';
 const TEMP_PASSWORD = 'Pulse@2026!';
+const RESET_ALL_USER_PASSWORDS = process.env.RESET_ALL_USER_PASSWORDS === 'true';
 const VALID_ROLES = new Set([
   'admin',
   'videomaker',
@@ -192,19 +193,30 @@ async function repairProfiles(client) {
       [profile.id, email],
     );
     const existingAuth = existingAuthRows[0];
-    const chosenHash = isPresentHash(existingAuth?.password_hash)
+    const chosenHash = RESET_ALL_USER_PASSWORDS
+      ? tempHash
+      : isPresentHash(existingAuth?.password_hash)
       ? existingAuth.password_hash.trim()
       : isPresentHash(profile.password_hash)
         ? profile.password_hash.trim()
         : tempHash;
 
-    if (chosenHash === tempHash && !isPresentHash(existingAuth?.password_hash) && !isPresentHash(profile.password_hash)) {
+    if (RESET_ALL_USER_PASSWORDS || (chosenHash === tempHash && !isPresentHash(existingAuth?.password_hash) && !isPresentHash(profile.password_hash))) {
       createdWithTemp += 1;
     } else {
       preserved += 1;
     }
 
     await upsertAuthUser(client, profile.id, email, chosenHash);
+
+    if (hasProfileHash) {
+      await client.query(
+        `UPDATE profiles
+            SET password_hash = $1${await columnExists(client, 'profiles', 'updated_at') ? ', updated_at = now()' : ''}
+          WHERE id = $2`,
+        [chosenHash, profile.id],
+      );
+    }
 
     const role = normalizeRole(profile.role);
     const roleInsert = await client.query(
@@ -258,6 +270,7 @@ async function main() {
       adminEmail: ADMIN_EMAIL,
       adminPassword: ADMIN_PASSWORD,
       temporaryPasswordForUsersWithoutHash: TEMP_PASSWORD,
+      resetAllUserPasswords: RESET_ALL_USER_PASSWORDS,
       ...result,
     }, null, 2));
   } finally {

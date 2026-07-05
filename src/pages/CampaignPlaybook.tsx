@@ -402,3 +402,233 @@ function ArsenalRow({ icon: Icon, label, value, color }: { icon: any; label: str
     </div>
   );
 }
+
+// ── Gerador de Campanha ──
+type PhaseAllocation = {
+  name: string;
+  weight: number;      // peso relativo (soma = 1)
+  focus: string;
+  goal: string;
+  color: string;
+};
+
+const PHASE_TEMPLATES: Record<1 | 2 | 3, PhaseAllocation[]> = {
+  1: [
+    { name: 'Semana 1 · Aquecimento', weight: 0.20, focus: 'Dor + identificação', goal: 'Fazer o público se reconhecer no problema', color: '#fb923c' },
+    { name: 'Semana 2 · Autoridade',  weight: 0.25, focus: 'Prova social + método', goal: 'Mostrar que sabemos entregar o resultado', color: '#f97316' },
+    { name: 'Semana 3 · Oferta',      weight: 0.30, focus: 'Revelação + benefícios', goal: 'Apresentar a solução comercial', color: '#ea580c' },
+    { name: 'Semana 4 · Fechamento',  weight: 0.25, focus: 'Urgência + escassez', goal: 'Converter com CTA agressivo', color: '#c2410c' },
+  ],
+  2: [
+    { name: 'Fase 1 · Descoberta (Sem 1-2)', weight: 0.20, focus: 'Cenário e problema', goal: 'Educar o público sobre o contexto', color: '#a78bfa' },
+    { name: 'Fase 2 · Educação (Sem 3-4)',   weight: 0.25, focus: 'Método + diferencial', goal: 'Posicionar como autoridade', color: '#8b5cf6' },
+    { name: 'Fase 3 · Prova (Sem 5-6)',      weight: 0.25, focus: 'Cases + depoimentos', goal: 'Quebrar objeções com resultados reais', color: '#7c3aed' },
+    { name: 'Fase 4 · Conversão (Sem 7-8)',  weight: 0.30, focus: 'Oferta + bônus + urgência', goal: 'Fechar vendas', color: '#6d28d9' },
+  ],
+  3: [
+    { name: 'Mês 1 · Posicionamento', weight: 0.28, focus: 'Narrativa + promessa central', goal: 'Construir percepção de marca', color: '#10b981' },
+    { name: 'Mês 2 · Ativação',       weight: 0.32, focus: 'Engajamento + comunidade', goal: 'Gerar demanda e autoridade', color: '#059669' },
+    { name: 'Mês 3 · Explosão',       weight: 0.40, focus: 'Lançamento + oferta principal', goal: 'Colher vendas com máxima intensidade', color: '#047857' },
+  ],
+};
+
+function distributeAmount(total: number, weights: number[]): number[] {
+  if (total <= 0) return weights.map(() => 0);
+  const raw = weights.map(w => total * w);
+  const floors = raw.map(Math.floor);
+  let remainder = total - floors.reduce((a, b) => a + b, 0);
+  // distribui sobra para as fases com maior parte fracionária
+  const order = raw
+    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+    .sort((a, b) => b.frac - a.frac);
+  const result = [...floors];
+  for (let k = 0; k < remainder; k++) result[order[k % order.length].i]++;
+  return result;
+}
+
+function CampaignGenerator() {
+  const [planName, setPlanName] = useState<string>('Premium');
+  const [months, setMonths] = useState<1 | 2 | 3>(2);
+
+  const plan = PLANS.find(p => p.name === planName)!;
+
+  const result = useMemo(() => {
+    const phases = PHASE_TEMPLATES[months];
+    const weights = phases.map(p => p.weight);
+
+    // Multiplica pelo número de meses (Boost/Premium/Elite recebem conteúdos mensais)
+    const totalReels     = plan.reels * months;
+    const totalCreatives = plan.creatives * months;
+    const totalArts      = plan.arts * months;
+    const totalStories   = plan.stories * months;
+
+    return {
+      totals: { reels: totalReels, creatives: totalCreatives, arts: totalArts, stories: totalStories },
+      perPhase: phases.map((ph, idx) => ({
+        ...ph,
+        reels: distributeAmount(totalReels, weights)[idx],
+        creatives: distributeAmount(totalCreatives, weights)[idx],
+        arts: distributeAmount(totalArts, weights)[idx],
+        stories: distributeAmount(totalStories, weights)[idx],
+      })),
+    };
+  }, [plan, months]);
+
+  const totalPieces = result.totals.reels + result.totals.creatives + result.totals.arts + result.totals.stories;
+
+  return (
+    <div className="mt-10 space-y-6">
+      {/* Form */}
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 md:p-8">
+        <div className="flex items-center gap-2 mb-6">
+          <Wand2 size={16} className="text-orange-400" />
+          <span className="text-[10px] font-black uppercase tracking-[0.25em] text-orange-400">Configuração</span>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Pacote */}
+          <div>
+            <label className="text-xs font-bold text-white/70 uppercase tracking-wider mb-3 block">Pacote do cliente</label>
+            <div className="grid grid-cols-2 gap-2">
+              {PLANS.map(p => (
+                <button
+                  key={p.name}
+                  onClick={() => setPlanName(p.name)}
+                  className={`relative p-3 rounded-xl border transition-all text-left ${
+                    planName === p.name
+                      ? 'border-orange-500/60 bg-orange-500/10'
+                      : 'border-white/5 bg-white/[0.02] hover:border-white/20'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-black italic uppercase">{p.name}</span>
+                    <div className="w-2 h-2 rounded-full" style={{ background: p.accent }} />
+                  </div>
+                  <div className="text-[10px] text-white/40">
+                    {p.reels}R · {p.creatives}C · {p.arts}A · {p.stories}S <span className="opacity-60">/mês</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Duração */}
+          <div>
+            <label className="text-xs font-bold text-white/70 uppercase tracking-wider mb-3 block">Duração da campanha</label>
+            <div className="grid grid-cols-3 gap-2">
+              {[1, 2, 3].map(m => (
+                <button
+                  key={m}
+                  onClick={() => setMonths(m as 1 | 2 | 3)}
+                  className={`p-4 rounded-xl border transition-all ${
+                    months === m
+                      ? 'border-orange-500/60 bg-orange-500/10 text-white'
+                      : 'border-white/5 bg-white/[0.02] text-white/60 hover:border-white/20 hover:text-white'
+                  }`}
+                >
+                  <div className="text-2xl font-black italic">{m}</div>
+                  <div className="text-[10px] uppercase tracking-widest">{m === 1 ? 'mês' : 'meses'}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Resultado */}
+      <motion.div
+        key={`${planName}-${months}`}
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/[0.06] via-transparent to-transparent p-6 md:p-8"
+      >
+        <div className="flex flex-wrap items-end justify-between gap-4 mb-6 pb-6 border-b border-white/5">
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-orange-400 mb-1">Estrutura gerada</div>
+            <h3 className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter">
+              {plan.name} <span className="text-white/40">·</span> {months} {months === 1 ? 'mês' : 'meses'}
+            </h3>
+          </div>
+          <div className="text-right">
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-white/40">Total de peças</div>
+            <div className="text-3xl font-black text-orange-400">{totalPieces}</div>
+          </div>
+        </div>
+
+        {/* Totais */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <TotalCard icon={Film}      label="Reels"     value={result.totals.reels}     color="#e879f9" />
+          <TotalCard icon={ImageIcon} label="Criativos" value={result.totals.creatives} color="#fb923c" />
+          <TotalCard icon={PenTool}   label="Artes"     value={result.totals.arts}      color="#38bdf8" />
+          <TotalCard icon={Sparkles}  label="Stories"   value={result.totals.stories}   color="#a78bfa" />
+        </div>
+
+        {/* Fases */}
+        <div className="space-y-3">
+          {result.perPhase.map((ph, i) => {
+            const phaseTotal = ph.reels + ph.creatives + ph.arts + ph.stories;
+            return (
+              <motion.div
+                key={ph.name}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.06 }}
+                className="p-4 rounded-xl bg-black/30 border border-white/5"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                  <div className="flex-1 min-w-[220px]">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: ph.color }} />
+                      <div className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: ph.color }}>{ph.name}</div>
+                    </div>
+                    <div className="text-sm font-bold text-white">{ph.focus}</div>
+                    <div className="text-[11px] text-white/50 mt-0.5">{ph.goal}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] uppercase tracking-widest text-white/40">Peças</div>
+                    <div className="text-xl font-black text-white">{phaseTotal}</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2 pt-3 border-t border-white/5">
+                  <PhaseCell icon={Film}      label="Reels"     value={ph.reels}     color="#e879f9" />
+                  <PhaseCell icon={ImageIcon} label="Criativos" value={ph.creatives} color="#fb923c" />
+                  <PhaseCell icon={PenTool}   label="Artes"     value={ph.arts}      color="#38bdf8" />
+                  <PhaseCell icon={Sparkles}  label="Stories"   value={ph.stories}   color="#a78bfa" />
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        <div className="mt-6 p-4 rounded-xl bg-orange-500/5 border border-orange-500/10 text-xs text-white/70 leading-relaxed">
+          <strong className="text-orange-300">Dica de execução:</strong> respeite a distribuição por fase — a última
+          concentra mais peças de conversão porque é onde o público está pronto pra comprar. Grave sempre 7 dias antes da postagem.
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function TotalCard({ icon: Icon, label, value, color }: { icon: any; label: string; value: number; color: string }) {
+  return (
+    <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5">
+      <div className="flex items-center gap-2 mb-2">
+        <Icon size={13} style={{ color }} />
+        <span className="text-[10px] uppercase tracking-widest text-white/40">{label}</span>
+      </div>
+      <div className="text-2xl font-black" style={{ color }}>{value}</div>
+    </div>
+  );
+}
+
+function PhaseCell({ icon: Icon, label, value, color }: { icon: any; label: string; value: number; color: string }) {
+  const dim = value === 0;
+  return (
+    <div className={`flex items-center gap-2 ${dim ? 'opacity-30' : ''}`}>
+      <Icon size={11} style={{ color }} />
+      <span className="text-[10px] text-white/50">{label}</span>
+      <span className="ml-auto text-sm font-bold text-white">{value}</span>
+    </div>
+  );
+}

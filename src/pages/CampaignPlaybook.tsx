@@ -790,3 +790,285 @@ function TypeRow({ icon: Icon, label, value, color }: { icon: any; label: string
     </div>
   );
 }
+
+// ─── Modelos de campanha de Evento ───────────────────────────
+type EventTemplate = {
+  id: 'competicao' | 'palestra' | 'corrida';
+  name: string;
+  tagline: string;
+  color: string;
+  accent: string;
+  icon: any;
+  leadGoal: { small: number; medium: number; big: number };
+  ctaPrimary: string;
+  ctaSecondary: string;
+  captureFields: string[];
+  phases: {
+    label: string;
+    daysFromEvent: string;
+    reels: number;
+    stories: number;
+    creatives: number;
+    arts: number;
+    focus: string;
+  }[];
+};
+
+const EVENT_TEMPLATES: EventTemplate[] = [
+  {
+    id: 'competicao',
+    name: 'Competição / Desafio',
+    tagline: 'Ranking, prêmio, engajamento em massa',
+    color: 'from-fuchsia-500 to-purple-700',
+    accent: '#e879f9',
+    icon: Trophy,
+    leadGoal: { small: 150, medium: 400, big: 1000 },
+    ctaPrimary: 'Quero participar do desafio',
+    ctaSecondary: 'Baixar regulamento',
+    captureFields: ['Nome completo', 'WhatsApp', 'E-mail', 'Cidade', 'Categoria escolhida'],
+    phases: [
+      { label: 'Anúncio da competição',   daysFromEvent: '-21d', reels: 2, stories: 4, creatives: 1, arts: 1, focus: 'Revelar prêmio + regra em 15s' },
+      { label: 'Chamada + inscrição',     daysFromEvent: '-14d', reels: 2, stories: 6, creatives: 2, arts: 1, focus: 'Depoimento de edições anteriores / prova social' },
+      { label: 'Últimas vagas',           daysFromEvent: '-7d',  reels: 1, stories: 8, creatives: 1, arts: 1, focus: 'Escassez + contagem regressiva diária' },
+      { label: 'Dia da competição',       daysFromEvent: 'D',    reels: 1, stories: 10, creatives: 0, arts: 1, focus: 'Cobertura ao vivo + torcida nos Stories' },
+      { label: 'Vencedor + oferta 48h',   daysFromEvent: '+2d',  reels: 2, stories: 4, creatives: 2, arts: 1, focus: 'Anúncio do ganhador + oferta exclusiva pra base capturada' },
+    ],
+  },
+  {
+    id: 'palestra',
+    name: 'Palestra / Workshop',
+    tagline: 'Conteúdo gratuito, leads super qualificados',
+    color: 'from-sky-500 to-blue-700',
+    accent: '#38bdf8',
+    icon: Users,
+    leadGoal: { small: 80, medium: 250, big: 600 },
+    ctaPrimary: 'Garantir minha vaga gratuita',
+    ctaSecondary: 'Receber material complementar',
+    captureFields: ['Nome', 'WhatsApp', 'E-mail', 'Segmento de atuação', 'Principal desafio hoje'],
+    phases: [
+      { label: 'Teaser do tema',            daysFromEvent: '-14d', reels: 2, stories: 4, creatives: 1, arts: 1, focus: 'Dor + promessa de transformação clara' },
+      { label: 'Autoridade do palestrante', daysFromEvent: '-10d', reels: 1, stories: 4, creatives: 1, arts: 1, focus: 'Currículo, cases, prova social' },
+      { label: 'Chamada + inscrição',       daysFromEvent: '-7d',  reels: 2, stories: 6, creatives: 2, arts: 1, focus: 'CTA direto pro formulário + benefícios' },
+      { label: 'Último dia pra se inscrever', daysFromEvent: '-1d', reels: 1, stories: 6, creatives: 1, arts: 1, focus: 'FOMO + confirmar quem já inscreveu' },
+      { label: 'Dia da palestra',           daysFromEvent: 'D',    reels: 1, stories: 8, creatives: 0, arts: 1, focus: 'Bastidor + trechos + call pro presencial/link' },
+      { label: 'Follow-up + oferta',        daysFromEvent: '+3d',  reels: 1, stories: 4, creatives: 2, arts: 1, focus: 'Material + oferta comercial pra base capturada' },
+    ],
+  },
+  {
+    id: 'corrida',
+    name: 'Corrida / Presencial',
+    tagline: 'Vivência de marca + captura massiva',
+    color: 'from-emerald-500 to-teal-700',
+    accent: '#10b981',
+    icon: PartyPopper,
+    leadGoal: { small: 200, medium: 600, big: 1500 },
+    ctaPrimary: 'Fazer minha inscrição',
+    ctaSecondary: 'Ver percurso e kit',
+    captureFields: ['Nome', 'WhatsApp', 'E-mail', 'Tamanho da camiseta', 'Categoria (5k/10k)', 'Contato de emergência'],
+    phases: [
+      { label: 'Save the date',        daysFromEvent: '-45d', reels: 1, stories: 3, creatives: 1, arts: 1, focus: 'Data + local + kit atleta em destaque' },
+      { label: 'Abertura de inscrições', daysFromEvent: '-30d', reels: 2, stories: 6, creatives: 2, arts: 1, focus: 'Preços por lote + benefícios do kit' },
+      { label: 'Prova social + treino',  daysFromEvent: '-14d', reels: 2, stories: 8, creatives: 1, arts: 1, focus: 'Atletas amadores treinando, dicas' },
+      { label: 'Últimos lotes',          daysFromEvent: '-7d',  reels: 1, stories: 8, creatives: 2, arts: 1, focus: 'Escassez + contagem regressiva' },
+      { label: 'Retirada do kit',        daysFromEvent: '-2d',  reels: 1, stories: 6, creatives: 0, arts: 1, focus: 'Endereço, horários, animação pré-evento' },
+      { label: 'Dia da corrida',         daysFromEvent: 'D',    reels: 2, stories: 12, creatives: 0, arts: 1, focus: 'Cobertura completa, largada, chegada, emoção' },
+      { label: 'Pós-corrida + oferta',   daysFromEvent: '+3d',  reels: 2, stories: 4, creatives: 2, arts: 1, focus: 'Álbum + próxima edição + oferta comercial' },
+    ],
+  },
+];
+
+function EventTemplates() {
+  const [active, setActive] = useState<EventTemplate['id']>('competicao');
+  const tpl = EVENT_TEMPLATES.find(t => t.id === active)!;
+
+  const totalReels = tpl.phases.reduce((a, p) => a + p.reels, 0);
+  const totalStories = tpl.phases.reduce((a, p) => a + p.stories, 0);
+  const totalCreatives = tpl.phases.reduce((a, p) => a + p.creatives, 0);
+  const totalArts = tpl.phases.reduce((a, p) => a + p.arts, 0);
+
+  return (
+    <div className="mt-10 space-y-6">
+      {/* Selector */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {EVENT_TEMPLATES.map(t => {
+          const isActive = active === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setActive(t.id)}
+              className={`relative overflow-hidden text-left p-5 rounded-2xl border transition-all ${
+                isActive
+                  ? 'border-white/30 bg-white/[0.06]'
+                  : 'border-white/5 bg-white/[0.02] hover:border-white/15'
+              }`}
+            >
+              {isActive && (
+                <div className={`absolute inset-0 opacity-[0.08] bg-gradient-to-br ${t.color}`} />
+              )}
+              <div className="relative flex items-start gap-3">
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${t.accent}22` }}>
+                  <t.icon size={20} style={{ color: t.accent }} />
+                </div>
+                <div>
+                  <div className="font-black text-sm">{t.name}</div>
+                  <div className="text-[11px] text-white/50 mt-0.5">{t.tagline}</div>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Detalhe */}
+      <motion.div
+        key={tpl.id}
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={`relative overflow-hidden rounded-3xl border border-white/5 p-6 md:p-8`}
+      >
+        <div className={`absolute inset-0 opacity-[0.05] bg-gradient-to-br ${tpl.color}`} />
+
+        <div className="relative">
+          {/* Metas + CTAs */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+            <div className="p-5 rounded-2xl bg-black/30 border border-white/5">
+              <div className="flex items-center gap-2 mb-3">
+                <Target size={14} style={{ color: tpl.accent }} />
+                <span className="text-[10px] font-black uppercase tracking-[0.25em] text-white/40">Meta de leads</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                {[
+                  { label: 'Cliente P', val: tpl.leadGoal.small },
+                  { label: 'Cliente M', val: tpl.leadGoal.medium },
+                  { label: 'Cliente G', val: tpl.leadGoal.big },
+                ].map(g => (
+                  <div key={g.label} className="p-2 rounded-lg bg-white/[0.03]">
+                    <div className="text-[9px] uppercase text-white/40 tracking-wider">{g.label}</div>
+                    <div className="text-lg font-black" style={{ color: tpl.accent }}>{g.val}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="text-[10px] text-white/40 mt-3 leading-relaxed">
+                Meta mínima de inscrições no formulário de captura. Base para calcular custo por lead e ROI pós-evento.
+              </div>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-black/30 border border-white/5">
+              <div className="flex items-center gap-2 mb-3">
+                <MousePointerClick size={14} style={{ color: tpl.accent }} />
+                <span className="text-[10px] font-black uppercase tracking-[0.25em] text-white/40">CTAs padrão</span>
+              </div>
+              <div className="space-y-2">
+                <div className="p-2.5 rounded-lg text-xs font-bold" style={{ background: `${tpl.accent}18`, color: tpl.accent }}>
+                  → {tpl.ctaPrimary}
+                </div>
+                <div className="p-2.5 rounded-lg text-xs text-white/70 bg-white/[0.03] border border-white/5">
+                  → {tpl.ctaSecondary}
+                </div>
+              </div>
+              <div className="text-[10px] text-white/40 mt-3 leading-relaxed">
+                CTA principal em todos os Reels e Stories. Secundário nos Criativos pra micro-conversão.
+              </div>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-black/30 border border-white/5">
+              <div className="flex items-center gap-2 mb-3">
+                <UserPlus size={14} style={{ color: tpl.accent }} />
+                <span className="text-[10px] font-black uppercase tracking-[0.25em] text-white/40">Formulário de captura</span>
+              </div>
+              <ul className="space-y-1.5">
+                {tpl.captureFields.map(f => (
+                  <li key={f} className="flex items-center gap-2 text-xs text-white/70">
+                    <span className="w-1 h-1 rounded-full" style={{ background: tpl.accent }} />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* Totais */}
+          <div className="grid grid-cols-4 gap-2 mb-6">
+            <TotalCard icon={Film}      label="Reels"     value={totalReels}     color="#e879f9" />
+            <TotalCard icon={Sparkles}  label="Stories"   value={totalStories}   color="#a78bfa" />
+            <TotalCard icon={ImageIcon} label="Criativos" value={totalCreatives} color="#fb923c" />
+            <TotalCard icon={PenTool}   label="Artes"     value={totalArts}      color="#38bdf8" />
+          </div>
+
+          {/* Timeline */}
+          <div className="flex items-center gap-2 mb-4">
+            <Calendar size={14} style={{ color: tpl.accent }} />
+            <span className="text-[10px] font-black uppercase tracking-[0.25em] text-white/40">Distribuição por data do evento</span>
+          </div>
+
+          <div className="relative">
+            {/* Linha horizontal do tempo */}
+            <div className="absolute top-6 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent hidden md:block" />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {tpl.phases.map((ph, i) => {
+                const isEventDay = ph.daysFromEvent === 'D';
+                const isPost = ph.daysFromEvent.startsWith('+');
+                return (
+                  <motion.div
+                    key={ph.label}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    className={`relative p-4 rounded-xl border ${
+                      isEventDay
+                        ? 'bg-amber-500/[0.08] border-amber-500/30'
+                        : isPost
+                        ? 'bg-emerald-500/[0.05] border-emerald-500/20'
+                        : 'bg-white/[0.03] border-white/5'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div>
+                        <div className="text-[9px] font-black uppercase tracking-[0.2em] text-white/40 mb-0.5">Fase {i + 1}</div>
+                        <div className="text-xs font-bold text-white leading-tight">{ph.label}</div>
+                      </div>
+                      <span
+                        className="text-[10px] font-black px-2 py-0.5 rounded-md flex-shrink-0"
+                        style={{
+                          background: isEventDay ? '#f59e0b30' : isPost ? '#10b98130' : `${tpl.accent}22`,
+                          color: isEventDay ? '#fbbf24' : isPost ? '#34d399' : tpl.accent,
+                        }}
+                      >
+                        {ph.daysFromEvent}
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-white/50 leading-snug mb-3">{ph.focus}</p>
+
+                    <div className="grid grid-cols-4 gap-1 pt-3 border-t border-white/5 text-center">
+                      <MiniStat label="R" value={ph.reels}     color="#e879f9" />
+                      <MiniStat label="S" value={ph.stories}   color="#a78bfa" />
+                      <MiniStat label="C" value={ph.creatives} color="#fb923c" />
+                      <MiniStat label="A" value={ph.arts}      color="#38bdf8" />
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-6 p-4 rounded-xl bg-white/[0.03] border border-white/5 text-xs text-white/70 leading-relaxed">
+            <strong style={{ color: tpl.accent }}>Regra de ouro:</strong> a fase pós-evento (+2d/+3d) é a mais importante financeiramente —
+            é onde a base capturada compra. Nunca deixe a campanha morrer no dia do evento.
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function MiniStat({ label, value, color }: { label: string; value: number; color: string }) {
+  const dim = value === 0;
+  return (
+    <div className={`${dim ? 'opacity-25' : ''}`}>
+      <div className="text-[9px] uppercase text-white/40">{label}</div>
+      <div className="text-sm font-black" style={{ color }}>{value}</div>
+    </div>
+  );
+}

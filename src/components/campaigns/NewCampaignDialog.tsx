@@ -175,6 +175,18 @@ export default function NewCampaignDialog({ open, onOpenChange, onCreated }: Pro
                 <Input type="number" min={0} value={creativesQty} onChange={(e) => setCreativesQty(Math.max(0, +e.target.value || 0))} />
               </div>
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                const rec = RECOMMENDED_QUANTITIES[type];
+                setVideosQty(rec.videos);
+                setCreativesQty(rec.creatives);
+              }}
+              className="w-full flex items-center justify-center gap-2 text-xs px-3 py-2 rounded-md border border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 transition"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Usar quantidade recomendada para {CAMPAIGN_TYPE_LABELS[type]} ({RECOMMENDED_QUANTITIES[type].videos} vídeos · {RECOMMENDED_QUANTITIES[type].creatives} criativos)
+            </button>
             <div>
               <Label>Objetivo / observações</Label>
               <Textarea value={objective} onChange={(e) => setObjective(e.target.value)} rows={3} />
@@ -188,18 +200,34 @@ export default function NewCampaignDialog({ open, onOpenChange, onCreated }: Pro
               <div><b>Cliente:</b> {clients.find(c => c.id === clientId)?.companyName}</div>
               <div><b>Nome:</b> {name}</div>
               <div><b>Tipo:</b> {CAMPAIGN_TYPE_LABELS[type]}</div>
-              <div><b>Período:</b> {startDate} até {endDate}</div>
+              <div><b>Período:</b> {formatBrDate(startDate)} até {formatBrDate(endDate)}</div>
               <div><b>Vídeos:</b> {videosQty} · <b>Criativos:</b> {creativesQty}</div>
             </div>
             <div>
-              <div className="font-medium mb-1">Datas sugeridas de postagem dos vídeos:</div>
-              <div className="flex flex-wrap gap-1">
-                {previewDates.map((d, i) => (
-                  <span key={i} className="text-xs px-2 py-1 rounded bg-primary/10 border border-primary/30">
-                    Vídeo {i + 1}: {d}
-                  </span>
-                ))}
-                {previewDates.length === 0 && <span className="text-muted-foreground">Sem vídeos.</span>}
+              <div className="font-medium mb-2 flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                Tarefas que serão criadas automaticamente ({previewSlots.length})
+              </div>
+              <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
+                {previewSlots.map((s, i) => {
+                  const Icon = s.kind === 'editorial' ? BookOpen : s.kind === 'video' ? FileText : Palette;
+                  const color =
+                    s.kind === 'editorial' ? 'text-primary border-primary/40 bg-primary/5' :
+                    s.kind === 'video' ? 'text-sky-500 border-sky-500/40 bg-sky-500/5' :
+                    'text-fuchsia-500 border-fuchsia-500/40 bg-fuchsia-500/5';
+                  return (
+                    <div key={i} className={`flex items-start gap-2 text-xs p-2 rounded border ${color}`}>
+                      <Icon className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-foreground truncate">{s.title}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {s.kind.toUpperCase()} · postar em {formatBrDate(s.post_date)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {previewSlots.length === 0 && <span className="text-muted-foreground">Preencha o período para gerar as tarefas.</span>}
               </div>
             </div>
           </div>

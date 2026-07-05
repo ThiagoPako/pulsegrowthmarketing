@@ -230,26 +230,104 @@ export default function CampaignPlaybook() {
 
         {/* ─── TIPOS DE CAMPANHA ─── */}
         <section>
-          <SectionTitle number="02" title="Cinco tipos de campanha" subtitle="Cada uma com uma alavanca comercial diferente" />
+          <SectionTitle number="02" title="Seis tipos de campanha" subtitle="Cada uma tem uma alavanca comercial e um jeito próprio de virar venda" />
 
-          <div className="mt-10 grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-4">
             {CAMPAIGN_TYPES.map((t, i) => (
               <motion.div
                 key={t.label}
-                initial={{ opacity: 0, scale: 0.95 }}
-                whileInView={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.06 }}
-                className="p-5 rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.05] transition-all"
+                transition={{ delay: i * 0.05 }}
+                className={`relative p-6 rounded-2xl border transition-all ${
+                  t.highlight
+                    ? 'bg-gradient-to-br from-amber-500/[0.08] to-transparent border-amber-500/30 hover:border-amber-500/50'
+                    : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.05]'
+                }`}
               >
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: `${t.color}20` }}>
-                  <t.icon size={18} style={{ color: t.color }} />
+                {t.highlight && (
+                  <span className="absolute top-4 right-4 text-[9px] font-black uppercase tracking-[0.25em] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    Novo · captura leads
+                  </span>
+                )}
+
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${t.color}20` }}>
+                    <t.icon size={22} style={{ color: t.color }} />
+                  </div>
+                  <div className="pt-0.5">
+                    <h3 className="text-lg font-black">{t.label}</h3>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: t.color }}>{t.tagline}</p>
+                  </div>
                 </div>
-                <h3 className="text-sm font-bold mb-1">{t.label}</h3>
-                <p className="text-[11px] text-white/40 leading-snug">{t.desc}</p>
+
+                <p className="text-xs text-white/70 leading-relaxed mb-4">{t.objective}</p>
+
+                <div className="space-y-3 pt-4 border-t border-white/5">
+                  <TypeRow icon={Target}       label="Quando usar"   value={t.whenToUse} color={t.color} />
+                  <TypeRow icon={TrendingUp}   label="Como medir"    value={t.kpi}       color={t.color} />
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <Zap size={11} style={{ color: t.color }} />
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Gatilhos</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {t.triggers.map(tr => (
+                        <span key={tr} className="text-[10px] px-2 py-0.5 rounded-md bg-white/5 text-white/60 border border-white/5">{tr}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-3 p-3 rounded-lg bg-black/30 border border-white/5">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Sparkles size={10} style={{ color: t.color }} />
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: t.color }}>Exemplo prático</span>
+                    </div>
+                    <p className="text-[11px] text-white/70 leading-relaxed italic">{t.example}</p>
+                  </div>
+                </div>
               </motion.div>
             ))}
           </div>
+
+          {/* Callout específico do tipo Evento */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="mt-6 rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/[0.06] via-transparent to-transparent p-6"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <UserPlus size={16} className="text-amber-400" />
+              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-amber-400">Foco especial · Campanha de Evento</span>
+            </div>
+            <p className="text-sm text-white/70 leading-relaxed mb-5">
+              Evento não é fim, é <strong className="text-white">isca de captura</strong>. O que importa é o volume e a qualidade dos leads
+              (WhatsApp, e-mail, nome, cidade) que entram no funil. A venda vem no aquecimento pré-evento, no dia e principalmente nas
+              48h seguintes, quando a base está quente.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {[
+                { icon: Trophy,       title: 'Competição', desc: 'Sorteios, desafios, ranking — leva o público a se inscrever pra participar.' },
+                { icon: Users,        title: 'Palestra / Workshop', desc: 'Conteúdo gratuito com inscrição obrigatória — leads muito qualificados.' },
+                { icon: PartyPopper,  title: 'Corrida / Presencial', desc: 'Vivência de marca com formulário de inscrição como porta de entrada.' },
+              ].map(f => (
+                <div key={f.title} className="p-4 rounded-xl bg-black/30 border border-white/5">
+                  <f.icon size={16} className="text-amber-400 mb-2" />
+                  <div className="text-sm font-bold mb-1">{f.title}</div>
+                  <p className="text-[11px] text-white/50 leading-relaxed">{f.desc}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-4 gap-2 text-center">
+              {['Divulgação + inscrição', 'Confirmação por WhatsApp', 'Aquecimento + dia do evento', 'Oferta 48h pós-evento'].map((step, i) => (
+                <div key={step} className="p-3 rounded-lg bg-white/[0.03] border border-white/5">
+                  <div className="text-2xl font-black italic text-amber-400/60">{i + 1}</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70 mt-1">{step}</div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
         </section>
 
         {/* ─── PACOTES COMO MATÉRIA-PRIMA ─── */}

@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft, Target, TrendingUp, Megaphone, Sparkles, Users, ShoppingBag,
   Calendar, Zap, Trophy, Flame, Rocket, Eye, Heart, MousePointerClick, DollarSign,
-  Film, Image as ImageIcon, PenTool, Clock, ChevronRight, Wand2,
+  Film, Image as ImageIcon, PenTool, Clock, ChevronRight, Wand2, PartyPopper, UserPlus,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────
@@ -88,11 +88,73 @@ const STRUCTURES = [
 ];
 
 const CAMPAIGN_TYPES = [
-  { icon: Trophy,     label: 'Institucional',       desc: 'Marca, propósito, valores',              color: '#fb923c' },
-  { icon: Flame,      label: 'Promocional',         desc: 'Oferta, desconto, condição especial',    color: '#ef4444' },
-  { icon: Calendar,   label: 'Sazonal',             desc: 'Datas comemorativas, gatilho de época',  color: '#a78bfa' },
-  { icon: Rocket,     label: 'Lançamento',          desc: 'Produto/serviço novo',                    color: '#38bdf8' },
-  { icon: Heart,      label: 'Resp. Social',        desc: 'Causas, comunidade, ESG',                color: '#10b981' },
+  {
+    icon: Trophy,
+    label: 'Institucional',
+    tagline: 'Constrói marca — vende no médio prazo',
+    color: '#fb923c',
+    objective: 'Fortalecer autoridade, posicionamento e percepção de valor da marca para que a venda futura aconteça com menos objeção de preço.',
+    whenToUse: 'Cliente novo no mercado, reposicionamento, marcas com pouca lembrança ou que competem só por preço.',
+    triggers: ['Autoridade', 'Prova social', 'Propósito', 'Bastidor humano'],
+    kpi: 'Alcance, seguidores qualificados, menções diretas no WhatsApp ("vi vocês no Instagram").',
+    example: 'Série "Quem somos" com fundador contando a história + cases de clientes reais + bastidor da entrega.',
+  },
+  {
+    icon: Flame,
+    label: 'Promocional',
+    tagline: 'Empurra oferta — vende no curtíssimo prazo',
+    color: '#ef4444',
+    objective: 'Acelerar decisão de compra com desconto, condição ou brinde por tempo limitado. É a campanha mais direta pra caixa.',
+    whenToUse: 'Estoque parado, meta do mês atrasada, janelas comerciais (Black Friday, aniversário da loja), giro rápido.',
+    triggers: ['Escassez', 'Urgência', 'Preço âncora', 'Bônus'],
+    kpi: 'Cupons resgatados, vendas atribuídas, mensagens no WhatsApp com o código da promo.',
+    example: '"Só até domingo: 30% off + frete grátis" com contagem regressiva em Stories diários.',
+  },
+  {
+    icon: Calendar,
+    label: 'Sazonal',
+    tagline: 'Aproveita data — vende com contexto',
+    color: '#a78bfa',
+    objective: 'Encaixar a oferta em um momento emocional/comercial que o público já está vivendo (Dia das Mães, Natal, volta às aulas).',
+    whenToUse: 'Datas comemorativas relevantes ao nicho, mudanças de estação, calendário do setor.',
+    triggers: ['Emoção', 'Presente ideal', 'Kit temático', 'Ritual da data'],
+    kpi: 'Vendas da coleção sazonal, ticket médio, buscas pelo produto-tema.',
+    example: 'Dia das Mães: "3 presentes que sua mãe realmente vai usar" + kit especial + entrega até o sábado.',
+  },
+  {
+    icon: Rocket,
+    label: 'Lançamento',
+    tagline: 'Estréia produto — vende com expectativa',
+    color: '#38bdf8',
+    objective: 'Gerar demanda reprimida antes da abertura das vendas, transformando curiosidade em fila de espera.',
+    whenToUse: 'Produto/serviço novo, coleção inédita, expansão para nova cidade, abertura de turma.',
+    triggers: ['Teaser', 'Antecipação', 'Lista VIP', 'Bônus de fundador'],
+    kpi: 'Cadastros na lista de espera, mensagens "quero saber quando abrir", conversão no dia do lançamento.',
+    example: 'Contagem de 15 dias: teaser → apresentação → benefícios → objeções → oferta de abertura.',
+  },
+  {
+    icon: PartyPopper,
+    label: 'Evento',
+    tagline: 'Movimenta público — captura leads pro funil',
+    color: '#f59e0b',
+    objective: 'Usar o evento (corrida, palestra, competição, workshop, live, feira) como isca para preencher o funil com WhatsApp e e-mail de leads qualificados que depois viram venda.',
+    whenToUse: 'Cliente com autoridade local, marca que quer sair do digital pro presencial (ou vice-versa), captação massiva de contatos.',
+    triggers: ['Curiosidade', 'Pertencimento', 'Prêmio/certificado', 'FOMO de não participar'],
+    kpi: 'Nº de inscrições no formulário, WhatsApp/e-mails capturados, comparecimento no dia, vendas pós-evento pra base capturada.',
+    example: 'Corrida da marca: landing page com formulário → confirmação por WhatsApp → aquecimento pré-evento → cobertura → oferta especial 48h depois só pra quem se inscreveu.',
+    highlight: true,
+  },
+  {
+    icon: Heart,
+    label: 'Resp. Social',
+    tagline: 'Gera afeto — vende com identificação',
+    color: '#10b981',
+    objective: 'Conectar a marca a uma causa real do território para gerar simpatia, mídia espontânea e diferenciação frente ao concorrente.',
+    whenToUse: 'Marca já consolidada, período pós-crise, aniversário da empresa, alinhamento com valores do público.',
+    triggers: ['Propósito', 'Impacto local', 'Comunidade', 'Transparência'],
+    kpi: 'Compartilhamentos, alcance orgânico, cobertura de mídia local, sentimento nos comentários.',
+    example: 'Campanha do agasalho: cada compra vira 1 cobertor doado + mostrar entrega real na comunidade.',
+  },
 ];
 
 export default function CampaignPlaybook() {
@@ -168,26 +230,104 @@ export default function CampaignPlaybook() {
 
         {/* ─── TIPOS DE CAMPANHA ─── */}
         <section>
-          <SectionTitle number="02" title="Cinco tipos de campanha" subtitle="Cada uma com uma alavanca comercial diferente" />
+          <SectionTitle number="02" title="Seis tipos de campanha" subtitle="Cada uma tem uma alavanca comercial e um jeito próprio de virar venda" />
 
-          <div className="mt-10 grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-4">
             {CAMPAIGN_TYPES.map((t, i) => (
               <motion.div
                 key={t.label}
-                initial={{ opacity: 0, scale: 0.95 }}
-                whileInView={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.06 }}
-                className="p-5 rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.05] transition-all"
+                transition={{ delay: i * 0.05 }}
+                className={`relative p-6 rounded-2xl border transition-all ${
+                  t.highlight
+                    ? 'bg-gradient-to-br from-amber-500/[0.08] to-transparent border-amber-500/30 hover:border-amber-500/50'
+                    : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.05]'
+                }`}
               >
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: `${t.color}20` }}>
-                  <t.icon size={18} style={{ color: t.color }} />
+                {t.highlight && (
+                  <span className="absolute top-4 right-4 text-[9px] font-black uppercase tracking-[0.25em] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    Novo · captura leads
+                  </span>
+                )}
+
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${t.color}20` }}>
+                    <t.icon size={22} style={{ color: t.color }} />
+                  </div>
+                  <div className="pt-0.5">
+                    <h3 className="text-lg font-black">{t.label}</h3>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: t.color }}>{t.tagline}</p>
+                  </div>
                 </div>
-                <h3 className="text-sm font-bold mb-1">{t.label}</h3>
-                <p className="text-[11px] text-white/40 leading-snug">{t.desc}</p>
+
+                <p className="text-xs text-white/70 leading-relaxed mb-4">{t.objective}</p>
+
+                <div className="space-y-3 pt-4 border-t border-white/5">
+                  <TypeRow icon={Target}       label="Quando usar"   value={t.whenToUse} color={t.color} />
+                  <TypeRow icon={TrendingUp}   label="Como medir"    value={t.kpi}       color={t.color} />
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <Zap size={11} style={{ color: t.color }} />
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Gatilhos</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {t.triggers.map(tr => (
+                        <span key={tr} className="text-[10px] px-2 py-0.5 rounded-md bg-white/5 text-white/60 border border-white/5">{tr}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-3 p-3 rounded-lg bg-black/30 border border-white/5">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Sparkles size={10} style={{ color: t.color }} />
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: t.color }}>Exemplo prático</span>
+                    </div>
+                    <p className="text-[11px] text-white/70 leading-relaxed italic">{t.example}</p>
+                  </div>
+                </div>
               </motion.div>
             ))}
           </div>
+
+          {/* Callout específico do tipo Evento */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="mt-6 rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/[0.06] via-transparent to-transparent p-6"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <UserPlus size={16} className="text-amber-400" />
+              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-amber-400">Foco especial · Campanha de Evento</span>
+            </div>
+            <p className="text-sm text-white/70 leading-relaxed mb-5">
+              Evento não é fim, é <strong className="text-white">isca de captura</strong>. O que importa é o volume e a qualidade dos leads
+              (WhatsApp, e-mail, nome, cidade) que entram no funil. A venda vem no aquecimento pré-evento, no dia e principalmente nas
+              48h seguintes, quando a base está quente.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {[
+                { icon: Trophy,       title: 'Competição', desc: 'Sorteios, desafios, ranking — leva o público a se inscrever pra participar.' },
+                { icon: Users,        title: 'Palestra / Workshop', desc: 'Conteúdo gratuito com inscrição obrigatória — leads muito qualificados.' },
+                { icon: PartyPopper,  title: 'Corrida / Presencial', desc: 'Vivência de marca com formulário de inscrição como porta de entrada.' },
+              ].map(f => (
+                <div key={f.title} className="p-4 rounded-xl bg-black/30 border border-white/5">
+                  <f.icon size={16} className="text-amber-400 mb-2" />
+                  <div className="text-sm font-bold mb-1">{f.title}</div>
+                  <p className="text-[11px] text-white/50 leading-relaxed">{f.desc}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-4 gap-2 text-center">
+              {['Divulgação + inscrição', 'Confirmação por WhatsApp', 'Aquecimento + dia do evento', 'Oferta 48h pós-evento'].map((step, i) => (
+                <div key={step} className="p-3 rounded-lg bg-white/[0.03] border border-white/5">
+                  <div className="text-2xl font-black italic text-amber-400/60">{i + 1}</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70 mt-1">{step}</div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
         </section>
 
         {/* ─── PACOTES COMO MATÉRIA-PRIMA ─── */}
@@ -629,6 +769,18 @@ function PhaseCell({ icon: Icon, label, value, color }: { icon: any; label: stri
       <Icon size={11} style={{ color }} />
       <span className="text-[10px] text-white/50">{label}</span>
       <span className="ml-auto text-sm font-bold text-white">{value}</span>
+    </div>
+  );
+}
+
+function TypeRow({ icon: Icon, label, value, color }: { icon: any; label: string; value: string; color: string }) {
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 mb-1">
+        <Icon size={11} style={{ color }} />
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">{label}</span>
+      </div>
+      <p className="text-[11px] text-white/70 leading-relaxed">{value}</p>
     </div>
   );
 }

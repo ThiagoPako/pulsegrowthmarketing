@@ -169,7 +169,15 @@ export default function NewCampaignDialog({ open, onOpenChange, onCreated }: Pro
                     type === t ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted'
                   }`}
                 >
-                  <div className="font-medium">{CAMPAIGN_TYPE_LABELS[t]}</div>
+                  <div className="font-medium flex items-center gap-2">
+                    {CAMPAIGN_TYPE_LABELS[t]}
+                    {t === 'evento' && (
+                      <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 border border-amber-500/30">
+                        Novo
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">{CAMPAIGN_TYPE_DESCRIPTIONS[t]}</div>
                 </button>
               ))}
             </div>

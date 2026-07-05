@@ -41,9 +41,9 @@ export default function NewCampaignDialog({ open, onOpenChange, onCreated }: Pro
     [clients]
   );
 
-  const previewDates = useMemo(
-    () => (startDate && endDate ? distributeDates(startDate, endDate, videosQty) : []),
-    [startDate, endDate, videosQty]
+  const previewSlots = useMemo(
+    () => (startDate && endDate ? buildCampaignSlots({ type, startDate, endDate, videosQty, creativesQty }) : []),
+    [type, startDate, endDate, videosQty, creativesQty]
   );
 
   const reset = () => {

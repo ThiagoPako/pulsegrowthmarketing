@@ -9,7 +9,7 @@ import { supabase } from '@/lib/vpsDb';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { CAMPAIGN_TYPE_LABELS, CampaignType, distributeDates } from '@/lib/campaignsUtils';
+import { CAMPAIGN_TYPE_LABELS, CAMPAIGN_TYPE_DESCRIPTIONS, CampaignType, distributeDates } from '@/lib/campaignsUtils';
 import { useNavigate } from 'react-router-dom';
 
 interface Props {

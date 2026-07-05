@@ -1,9 +1,10 @@
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, Target, TrendingUp, Megaphone, Sparkles, Users, ShoppingBag,
   Calendar, Zap, Trophy, Flame, Rocket, Eye, Heart, MousePointerClick, DollarSign,
-  Film, Image as ImageIcon, PenTool, Clock, ChevronRight,
+  Film, Image as ImageIcon, PenTool, Clock, ChevronRight, Wand2,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────

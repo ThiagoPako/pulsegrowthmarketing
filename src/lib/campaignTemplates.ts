@@ -33,6 +33,7 @@ export const RECOMMENDED_QUANTITIES: Record<CampaignType, { videos: number; crea
   lancamento: { videos: 8, creatives: 4 },
   responsabilidade_social: { videos: 4, creatives: 2 },
   evento: { videos: 7, creatives: 4 },
+  agro: { videos: 6, creatives: 3 },
 };
 
 /**

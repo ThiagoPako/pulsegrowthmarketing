@@ -119,15 +119,7 @@ async function ensureAdminProfile(client, passwordHash) {
     await client.query('UPDATE profiles SET role = $1 WHERE id = $2', ['admin', userId]);
   }
 
-  await client.query(
-    `INSERT INTO auth_users (id, email, password_hash)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (email) DO UPDATE
-       SET id = EXCLUDED.id,
-           password_hash = EXCLUDED.password_hash,
-           updated_at = now()`,
-    [userId, normalizedEmail, passwordHash],
-  );
+  await upsertAuthUser(client, userId, normalizedEmail, passwordHash);
 
   await client.query(
     `INSERT INTO user_roles (user_id, role)
@@ -139,18 +131,51 @@ async function ensureAdminProfile(client, passwordHash) {
   return userId;
 }
 
+async function upsertAuthUser(client, userId, email, passwordHash) {
+  const normalizedEmail = normalizeEmail(email);
+
+  await client.query(
+    `DELETE FROM auth_users
+      WHERE lower(email) = lower($1)
+        AND id <> $2`,
+    [normalizedEmail, userId],
+  );
+
+  const updated = await client.query(
+    `UPDATE auth_users
+        SET email = $2,
+            password_hash = $3,
+            updated_at = now()
+      WHERE id = $1`,
+    [userId, normalizedEmail, passwordHash],
+  );
+
+  if (updated.rowCount > 0) return;
+
+  await client.query(
+    `INSERT INTO auth_users (id, email, password_hash)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (email) DO UPDATE
+       SET password_hash = EXCLUDED.password_hash,
+           updated_at = now()`,
+    [userId, normalizedEmail, passwordHash],
+  );
+}
+
 async function repairProfiles(client) {
   if (!(await tableExists(client, 'profiles'))) {
     throw new Error('Tabela profiles não existe. O banco correto não foi selecionado.');
   }
 
+  const hasCreatedAt = await columnExists(client, 'profiles', 'created_at');
   const hasProfileHash = await columnExists(client, 'profiles', 'password_hash');
   const passwordHashSelect = hasProfileHash ? 'password_hash' : 'NULL::text AS password_hash';
+  const orderBy = hasCreatedAt ? 'ORDER BY created_at NULLS LAST, name NULLS LAST' : 'ORDER BY name NULLS LAST';
   const { rows: profiles } = await client.query(
     `SELECT id, name, email, role::text AS role, ${passwordHashSelect}
        FROM profiles
       WHERE email IS NOT NULL AND trim(email) <> ''
-      ORDER BY created_at NULLS LAST, name NULLS LAST`,
+      ${orderBy}`,
   );
 
   const tempHash = await bcrypt.hash(TEMP_PASSWORD, 12);
@@ -179,15 +204,7 @@ async function repairProfiles(client) {
       preserved += 1;
     }
 
-    await client.query(
-      `INSERT INTO auth_users (id, email, password_hash)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (email) DO UPDATE
-         SET id = EXCLUDED.id,
-             password_hash = EXCLUDED.password_hash,
-             updated_at = now()`,
-      [profile.id, email, chosenHash],
-    );
+    await upsertAuthUser(client, profile.id, email, chosenHash);
 
     const role = normalizeRole(profile.role);
     const roleInsert = await client.query(

@@ -318,9 +318,15 @@ export default function CampaignPlaybook() {
           </div>
         </section>
 
+        {/* ─── GERADOR AUTOMÁTICO ─── */}
+        <section>
+          <SectionTitle number="05" title="Gerador de campanha" subtitle="Escolha pacote e duração e receba a estrutura pronta" />
+          <CampaignGenerator />
+        </section>
+
         {/* ─── REGRAS DE OURO ─── */}
         <section>
-          <SectionTitle number="05" title="Regras de ouro" subtitle="Inegociáveis em toda campanha Pulse" />
+          <SectionTitle number="06" title="Regras de ouro" subtitle="Inegociáveis em toda campanha Pulse" />
 
           <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-4">
             {[

@@ -462,9 +462,15 @@ export default function CampaignPlaybook() {
           <EventTemplates />
         </section>
 
+        {/* ─── SUGESTÕES POR NICHO (baseado nos clientes ativos) ─── */}
+        <section>
+          <SectionTitle number="07" title="Sugestões por nicho" subtitle="Que tipo de campanha funciona melhor pra cada nicho ativo na Pulse" />
+          <NicheSuggestionsGrid />
+        </section>
+
         {/* ─── REGRAS DE OURO ─── */}
         <section>
-          <SectionTitle number="07" title="Regras de ouro" subtitle="Inegociáveis em toda campanha Pulse" />
+          <SectionTitle number="08" title="Regras de ouro" subtitle="Inegociáveis em toda campanha Pulse" />
 
           <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-4">
             {[

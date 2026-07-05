@@ -6,6 +6,10 @@ import {
   Calendar, Zap, Trophy, Flame, Rocket, Eye, Heart, MousePointerClick, DollarSign,
   Film, Image as ImageIcon, PenTool, Clock, ChevronRight, Wand2, PartyPopper, UserPlus, Sprout,
 } from 'lucide-react';
+import { useApp } from '@/contexts/AppContext';
+import { NICHE_OPTIONS } from '@/lib/seasonalDates';
+import { getNicheSuggestion } from '@/lib/nicheCampaignSuggestions';
+import { CAMPAIGN_TYPE_LABELS, CampaignType } from '@/lib/campaignsUtils';
 
 // ─────────────────────────────────────────────────────────────
 //  PLAYBOOK DE CAMPANHAS — INFOGRÁFICO ESTRATÉGICO
@@ -458,9 +462,15 @@ export default function CampaignPlaybook() {
           <EventTemplates />
         </section>
 
+        {/* ─── SUGESTÕES POR NICHO (baseado nos clientes ativos) ─── */}
+        <section>
+          <SectionTitle number="07" title="Sugestões por nicho" subtitle="Que tipo de campanha funciona melhor pra cada nicho ativo na Pulse" />
+          <NicheSuggestionsGrid />
+        </section>
+
         {/* ─── REGRAS DE OURO ─── */}
         <section>
-          <SectionTitle number="07" title="Regras de ouro" subtitle="Inegociáveis em toda campanha Pulse" />
+          <SectionTitle number="08" title="Regras de ouro" subtitle="Inegociáveis em toda campanha Pulse" />
 
           <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
@@ -1133,5 +1143,161 @@ function CampaignTypeCard({ t, i }: { t: typeof CAMPAIGN_TYPES[number]; i: numbe
         </div>
       </div>
     </motion.div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+//  SUGESTÕES DE CAMPANHA POR NICHO ATIVO
+// ─────────────────────────────────────────────────────────────
+
+const NICHE_LABEL_MAP: Record<string, string> = Object.fromEntries(
+  NICHE_OPTIONS.map((n) => [n.value, n.label])
+);
+
+const TYPE_ACCENT: Record<CampaignType, string> = {
+  institucional: '#38bdf8',
+  promocional: '#ef4444',
+  sazonal: '#a78bfa',
+  lancamento: '#38bdf8',
+  responsabilidade_social: '#10b981',
+  evento: '#f59e0b',
+  agro: '#84cc16',
+};
+
+function NicheSuggestionsGrid() {
+  const { clients } = useApp();
+
+  const activeNiches = useMemo(() => {
+    const counts = new Map<string, number>();
+    (clients || []).forEach((c: any) => {
+      const n = (c.niche || '').trim();
+      if (!n) return;
+      counts.set(n, (counts.get(n) || 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .map(([niche, count]) => ({ niche, count, label: NICHE_LABEL_MAP[niche] || niche }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [clients]);
+
+  const [selected, setSelected] = useState<string | null>(null);
+  const activeNiche = selected ?? activeNiches[0]?.niche ?? null;
+  const suggestion = activeNiche ? getNicheSuggestion(activeNiche) : null;
+  const activeLabel = activeNiche ? (NICHE_LABEL_MAP[activeNiche] || activeNiche) : '';
+
+  if (activeNiches.length === 0) {
+    return (
+      <div className="mt-10 p-8 rounded-2xl border border-white/5 bg-white/[0.02] text-center text-white/50 text-sm">
+        Nenhum cliente com nicho definido ainda. Cadastre o nicho nos clientes para ver sugestões personalizadas aqui.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-10 space-y-6">
+      {/* Chips com nichos ativos */}
+      <div className="flex flex-wrap gap-2">
+        {activeNiches.map((n) => {
+          const active = n.niche === activeNiche;
+          const meta = getNicheSuggestion(n.niche);
+          const Icon = meta.icon;
+          return (
+            <button
+              key={n.niche}
+              type="button"
+              onClick={() => setSelected(n.niche)}
+              className={`group flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full border transition-all ${
+                active
+                  ? 'bg-white/[0.08] border-white/25'
+                  : 'bg-white/[0.02] border-white/5 hover:border-white/15 hover:bg-white/[0.04]'
+              }`}
+              style={active ? { boxShadow: `0 0 20px ${meta.accent}33`, borderColor: `${meta.accent}66` } : undefined}
+            >
+              <div
+                className="w-6 h-6 rounded-full flex items-center justify-center"
+                style={{ background: `${meta.accent}22`, color: meta.accent }}
+              >
+                <Icon size={12} />
+              </div>
+              <span className={`text-xs font-semibold ${active ? 'text-white' : 'text-white/70 group-hover:text-white'}`}>
+                {n.label}
+              </span>
+              <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-black/30 text-white/50">
+                {n.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Card do nicho selecionado */}
+      {suggestion && activeNiche && (
+        <motion.div
+          key={activeNiche}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]"
+        >
+          <div
+            className="absolute inset-0 opacity-40"
+            style={{ background: `radial-gradient(circle at top left, ${suggestion.accent}22 0%, transparent 60%)` }}
+          />
+          <div className="relative p-6 md:p-8">
+            {/* Header */}
+            <div className="flex items-start gap-4 mb-6">
+              <div
+                className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
+                style={{ background: `${suggestion.accent}22`, color: suggestion.accent }}
+              >
+                <suggestion.icon size={26} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[10px] font-black uppercase tracking-[0.25em]" style={{ color: suggestion.accent }}>
+                  Nicho
+                </div>
+                <h3 className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter leading-none">
+                  {activeLabel}
+                </h3>
+                <p className="text-sm text-white/60 mt-2 leading-relaxed">{suggestion.headline}</p>
+              </div>
+            </div>
+
+            {/* Campanhas recomendadas */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {suggestion.campaigns.map((c, i) => {
+                const accent = TYPE_ACCENT[c.type];
+                return (
+                  <motion.div
+                    key={`${c.type}-${i}`}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.05 * i }}
+                    className="p-4 rounded-xl border border-white/5 bg-black/30 hover:border-white/15 transition"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span
+                        className="text-[9px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-md border"
+                        style={{ color: accent, borderColor: `${accent}55`, background: `${accent}12` }}
+                      >
+                        {CAMPAIGN_TYPE_LABELS[c.type]}
+                      </span>
+                      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30">
+                        Sugestão {String(i + 1).padStart(2, '0')}
+                      </span>
+                    </div>
+                    <div className="text-sm font-semibold mb-2 leading-snug">{c.angle}</div>
+                    <p className="text-[12px] text-white/60 leading-relaxed italic">{c.example}</p>
+                  </motion.div>
+                );
+              })}
+            </div>
+
+            <div className="mt-6 flex items-center gap-2 text-[11px] text-white/40">
+              <Sparkles size={12} />
+              <span>Sugestões baseadas em performance histórica. Sempre validar com o briefing e a persona real do cliente.</span>
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </div>
   );
 }

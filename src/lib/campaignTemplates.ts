@@ -134,6 +134,11 @@ const CREATIVE_TEMPLATES: Record<CampaignType, SlotTemplate[]> = {
     { kind: 'creative', title: 'Últimas vagas — link de inscrição', phase: 'fundo', weight: 0.7 },
     { kind: 'creative', title: 'Pós-evento — obrigado + oferta', phase: 'pos', weight: 1.0 },
   ],
+  agro: [
+    { kind: 'creative', title: 'Card — janela agrícola atual (o momento é agora)', phase: 'topo', weight: 0.08 },
+    { kind: 'creative', title: 'Card comparativo — resultado no talhão / ROI por hectare', phase: 'meio', weight: 0.5 },
+    { kind: 'creative', title: 'Card oferta comercial da safra (financiamento/barter)', phase: 'fundo', weight: 0.9 },
+  ],
 };
 
 /**

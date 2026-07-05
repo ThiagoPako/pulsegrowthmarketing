@@ -772,3 +772,15 @@ function PhaseCell({ icon: Icon, label, value, color }: { icon: any; label: stri
     </div>
   );
 }
+
+function TypeRow({ icon: Icon, label, value, color }: { icon: any; label: string; value: string; color: string }) {
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 mb-1">
+        <Icon size={11} style={{ color }} />
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">{label}</span>
+      </div>
+      <p className="text-[11px] text-white/70 leading-relaxed">{value}</p>
+    </div>
+  );
+}

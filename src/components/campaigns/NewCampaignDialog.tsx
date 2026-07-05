@@ -80,39 +80,8 @@ export default function NewCampaignDialog({ open, onOpenChange, onCreated }: Pro
 
       if (error || !campaign) throw error || new Error('Falha ao criar campanha');
 
-      const videoDates = distributeDates(startDate, endDate, videosQty);
-      const creativeDates = distributeDates(startDate, endDate, creativesQty);
-
-      const slots: any[] = [
-        {
-          campaign_id: campaign.id,
-          position: 0,
-          kind: 'editorial',
-          title: 'Editorial da Campanha',
-          post_date: startDate,
-          status: 'pendente',
-        },
-      ];
-      videoDates.forEach((d, i) =>
-        slots.push({
-          campaign_id: campaign.id,
-          position: 1 + i,
-          kind: 'video',
-          title: `Vídeo ${i + 1}`,
-          post_date: d,
-          status: 'pendente',
-        })
-      );
-      creativeDates.forEach((d, i) =>
-        slots.push({
-          campaign_id: campaign.id,
-          position: 1 + videoDates.length + i,
-          kind: 'creative',
-          title: `Criativo ${i + 1}`,
-          post_date: d,
-          status: 'pendente',
-        })
-      );
+      const generated = buildCampaignSlots({ type, startDate, endDate, videosQty, creativesQty });
+      const slots = generated.map((s) => ({ ...s, campaign_id: campaign.id }));
 
       if (slots.length > 0) {
         const { error: sErr } = await supabase.from('campaign_slots').insert(slots);

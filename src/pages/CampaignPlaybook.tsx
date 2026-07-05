@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft, Target, TrendingUp, Megaphone, Sparkles, Users, ShoppingBag,
   Calendar, Zap, Trophy, Flame, Rocket, Eye, Heart, MousePointerClick, DollarSign,
-  Film, Image as ImageIcon, PenTool, Clock, ChevronRight, Wand2,
+  Film, Image as ImageIcon, PenTool, Clock, ChevronRight, Wand2, PartyPopper, UserPlus,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────

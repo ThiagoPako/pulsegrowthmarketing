@@ -230,64 +230,40 @@ export default function CampaignPlaybook() {
 
         {/* ─── TIPOS DE CAMPANHA ─── */}
         <section>
-          <SectionTitle number="02" title="Seis tipos de campanha" subtitle="Cada uma tem uma alavanca comercial e um jeito próprio de virar venda" />
+          <SectionTitle number="02" title="Tipos de campanha" subtitle="Divididos em duas categorias com objetivos comerciais distintos" />
 
-          <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {CAMPAIGN_TYPES.map((t, i) => (
-              <motion.div
-                key={t.label}
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.05 }}
-                className={`relative p-6 rounded-2xl border transition-all ${
-                  t.highlight
-                    ? 'bg-gradient-to-br from-amber-500/[0.08] to-transparent border-amber-500/30 hover:border-amber-500/50'
-                    : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.05]'
-                }`}
-              >
-                {t.highlight && (
-                  <span className="absolute top-4 right-4 text-[9px] font-black uppercase tracking-[0.25em] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                    Novo · captura leads
-                  </span>
-                )}
+          {/* CATEGORIA 1 — Campanhas normais (venda direta) */}
+          <div className="mt-10">
+            <CategoryHeader
+              badge="Categoria 01"
+              title="Campanhas de venda direta"
+              subtitle="Focam em movimentar caixa no curto ou médio prazo. Métrica principal: vendas."
+              color="#fb923c"
+              icon={ShoppingBag}
+              count={CAMPAIGN_TYPES.filter(t => !t.highlight).length}
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {CAMPAIGN_TYPES.filter(t => !t.highlight).map((t, i) => (
+                <CampaignTypeCard key={t.label} t={t} i={i} />
+              ))}
+            </div>
+          </div>
 
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${t.color}20` }}>
-                    <t.icon size={22} style={{ color: t.color }} />
-                  </div>
-                  <div className="pt-0.5">
-                    <h3 className="text-lg font-black">{t.label}</h3>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: t.color }}>{t.tagline}</p>
-                  </div>
-                </div>
-
-                <p className="text-xs text-white/70 leading-relaxed mb-4">{t.objective}</p>
-
-                <div className="space-y-3 pt-4 border-t border-white/5">
-                  <TypeRow icon={Target}       label="Quando usar"   value={t.whenToUse} color={t.color} />
-                  <TypeRow icon={TrendingUp}   label="Como medir"    value={t.kpi}       color={t.color} />
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      <Zap size={11} style={{ color: t.color }} />
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Gatilhos</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {t.triggers.map(tr => (
-                        <span key={tr} className="text-[10px] px-2 py-0.5 rounded-md bg-white/5 text-white/60 border border-white/5">{tr}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="mt-3 p-3 rounded-lg bg-black/30 border border-white/5">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Sparkles size={10} style={{ color: t.color }} />
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: t.color }}>Exemplo prático</span>
-                    </div>
-                    <p className="text-[11px] text-white/70 leading-relaxed italic">{t.example}</p>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
+          {/* CATEGORIA 2 — Campanhas de captura (evento) */}
+          <div className="mt-10">
+            <CategoryHeader
+              badge="Categoria 02"
+              title="Campanhas de captura de leads"
+              subtitle="Usam um evento como isca. Métrica principal: leads no funil (WhatsApp + e-mail) e conversão pós-evento."
+              color="#f59e0b"
+              icon={UserPlus}
+              count={CAMPAIGN_TYPES.filter(t => t.highlight).length}
+            />
+            <div className="grid grid-cols-1 gap-4">
+              {CAMPAIGN_TYPES.filter(t => t.highlight).map((t, i) => (
+                <CampaignTypeCard key={t.label} t={t} i={i} />
+              ))}
+            </div>
           </div>
 
           {/* Callout específico do tipo Evento */}
@@ -1070,5 +1046,80 @@ function MiniStat({ label, value, color }: { label: string; value: number; color
       <div className="text-[9px] uppercase text-white/40">{label}</div>
       <div className="text-sm font-black" style={{ color }}>{value}</div>
     </div>
+  );
+}
+
+function CategoryHeader({ badge, title, subtitle, color, icon: Icon, count }: { badge: string; title: string; subtitle: string; color: string; icon: any; count: number }) {
+  return (
+    <div className="flex items-start gap-4 mb-5 pb-4 border-b border-white/5">
+      <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${color}20` }}>
+        <Icon size={20} style={{ color }} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-[9px] font-black uppercase tracking-[0.3em]" style={{ color }}>{badge}</span>
+          <span className="text-[10px] text-white/40">· {count} {count === 1 ? 'tipo' : 'tipos'}</span>
+        </div>
+        <h3 className="text-lg md:text-xl font-black italic uppercase tracking-tighter">{title}</h3>
+        <p className="text-xs text-white/50 mt-1">{subtitle}</p>
+      </div>
+    </div>
+  );
+}
+
+function CampaignTypeCard({ t, i }: { t: typeof CAMPAIGN_TYPES[number]; i: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ delay: i * 0.05 }}
+      className={`relative p-6 rounded-2xl border transition-all ${
+        t.highlight
+          ? 'bg-gradient-to-br from-amber-500/[0.08] to-transparent border-amber-500/30 hover:border-amber-500/50'
+          : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.05]'
+      }`}
+    >
+      {t.highlight && (
+        <span className="absolute top-4 right-4 text-[9px] font-black uppercase tracking-[0.25em] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+          Captura leads
+        </span>
+      )}
+
+      <div className="flex items-start gap-4 mb-4">
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${t.color}20` }}>
+          <t.icon size={22} style={{ color: t.color }} />
+        </div>
+        <div className="pt-0.5">
+          <h3 className="text-lg font-black">{t.label}</h3>
+          <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: t.color }}>{t.tagline}</p>
+        </div>
+      </div>
+
+      <p className="text-xs text-white/70 leading-relaxed mb-4">{t.objective}</p>
+
+      <div className="space-y-3 pt-4 border-t border-white/5">
+        <TypeRow icon={Target}     label="Quando usar" value={t.whenToUse} color={t.color} />
+        <TypeRow icon={TrendingUp} label="Como medir"  value={t.kpi}       color={t.color} />
+        <div>
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Zap size={11} style={{ color: t.color }} />
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Gatilhos</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {t.triggers.map(tr => (
+              <span key={tr} className="text-[10px] px-2 py-0.5 rounded-md bg-white/5 text-white/60 border border-white/5">{tr}</span>
+            ))}
+          </div>
+        </div>
+        <div className="mt-3 p-3 rounded-lg bg-black/30 border border-white/5">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Sparkles size={10} style={{ color: t.color }} />
+            <span className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: t.color }}>Exemplo prático</span>
+          </div>
+          <p className="text-[11px] text-white/70 leading-relaxed italic">{t.example}</p>
+        </div>
+      </div>
+    </motion.div>
   );
 }

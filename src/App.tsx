@@ -93,6 +93,7 @@ const TrainingRegister = lazy(() => import("@/pages/TrainingRegister"));
 const Campaigns = lazy(() => import("@/pages/Campaigns"));
 const CampaignDetail = lazy(() => import("@/pages/CampaignDetail"));
 const OptimizationFormatsGuide = lazy(() => import("@/pages/OptimizationFormatsGuide"));
+const CampaignPlaybook = lazy(() => import("@/pages/CampaignPlaybook"));
 
 
 const queryClient = new QueryClient({
@@ -224,6 +225,7 @@ function AppRoutes() {
         <Route path="/treinamento-gestao" element={<ProtectedRoute><TrainingManager /></ProtectedRoute>} />
         <Route path="/treinamento" element={<ProtectedRoute noLayout><Training /></ProtectedRoute>} />
         <Route path="/treinamento/otimizacao-conteudo" element={<ProtectedRoute><OptimizationFormatsGuide /></ProtectedRoute>} />
+        <Route path="/treinamento/campanhas-playbook" element={<ProtectedRoute><CampaignPlaybook /></ProtectedRoute>} />
         <Route path="/treinamento-registro" element={<TrainingRegister />} />
         <Route path="/evento/:token" element={<EventRegistration />} />
         <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />

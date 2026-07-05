@@ -4,7 +4,7 @@ import { supabase } from '@/lib/vpsDb';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Play, CheckCircle2, Circle, Clock, ChevronRight, ChevronLeft, Info, X, Video, FileText, Plus, Trash2, FolderPlus, Loader2, FileVideo, Upload } from 'lucide-react';
+import { Play, CheckCircle2, Circle, Clock, ChevronRight, ChevronLeft, Info, X, Video, FileText, Plus, Trash2, FolderPlus, Loader2, FileVideo, Upload, Megaphone } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
@@ -416,12 +416,15 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
               <Badge className="bg-red-600 text-white border-none px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.25em] rounded-sm">Em Destaque</Badge>
               <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black tracking-tighter uppercase italic leading-[0.95]">{tracks[0]?.title || "Treinamento Pulse"}</h1>
               <p className="text-xs sm:text-sm lg:text-base text-gray-300/90 line-clamp-2 max-w-xl">{tracks[0]?.description}</p>
-              <div className="flex gap-2 sm:gap-3 pt-1 sm:pt-2">
+              <div className="flex flex-wrap gap-2 sm:gap-3 pt-1 sm:pt-2">
                 <Button size="lg" className="bg-white text-black hover:bg-gray-200 px-4 sm:px-7 font-black uppercase italic tracking-widest text-[11px] sm:text-xs h-9 sm:h-11" onClick={() => tracks[0] && setSelectedTrack(tracks[0])}>
                   <Play className="mr-1.5 sm:mr-2 fill-current" size={16} /> Assistir
                 </Button>
                 <Button size="lg" variant="ghost" className="bg-white/10 backdrop-blur hover:bg-white/20 text-white px-4 sm:px-7 font-black uppercase italic tracking-widest text-[11px] sm:text-xs h-9 sm:h-11" onClick={() => { const el = document.getElementById('trilhas-catalogo'); el?.scrollIntoView({ behavior: 'smooth' }); }}>
                   <Info className="mr-1.5 sm:mr-2" size={14} /> Explorar
+                </Button>
+                <Button asChild size="lg" variant="ghost" className="bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 hover:text-white px-4 sm:px-7 font-black uppercase italic tracking-widest text-[11px] sm:text-xs h-9 sm:h-11">
+                  <a href="/treinamento/campanhas-playbook"><Megaphone className="mr-1.5 sm:mr-2" size={14} /> Playbook Campanhas</a>
                 </Button>
               </div>
             </div>

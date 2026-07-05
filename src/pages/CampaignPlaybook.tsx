@@ -464,9 +464,15 @@ export default function CampaignPlaybook() {
           <CampaignGenerator />
         </section>
 
+        {/* ─── MODELOS DE EVENTO ─── */}
+        <section>
+          <SectionTitle number="06" title="Modelos prontos · Evento" subtitle="Três estruturas testadas com meta de leads, CTA e distribuição por data do evento" />
+          <EventTemplates />
+        </section>
+
         {/* ─── REGRAS DE OURO ─── */}
         <section>
-          <SectionTitle number="06" title="Regras de ouro" subtitle="Inegociáveis em toda campanha Pulse" />
+          <SectionTitle number="07" title="Regras de ouro" subtitle="Inegociáveis em toda campanha Pulse" />
 
           <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-4">
             {[

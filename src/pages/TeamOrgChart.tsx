@@ -322,10 +322,16 @@ export default function TeamOrgChart() {
                   </div>
                   <div>
                     <h4 className="font-black italic uppercase tracking-tight">{r.name}</h4>
+                    {r.person && (
+                      <p className="text-[11px] font-bold text-white/80">
+                        👤 {r.person}
+                      </p>
+                    )}
                     <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">
                       Reporta a: <span style={{ color: r.color }}>{r.reportsTo}</span>
                     </p>
                   </div>
+
                 </div>
                 <ul className="space-y-1.5">
                   {r.responsibilities.map((rs) => (

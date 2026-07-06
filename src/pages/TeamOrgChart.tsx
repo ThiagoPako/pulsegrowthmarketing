@@ -271,12 +271,25 @@ export default function TeamOrgChart() {
           </motion.div>
         </section>
 
+        {/* CONECTOR VISUAL */}
+        <div className="flex flex-col items-center -my-2">
+          <div className="w-0.5 h-8 bg-gradient-to-b from-blue-500/60 to-orange-500/40" />
+          <div className="rounded-full border border-blue-500/40 bg-blue-950/40 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.25em] text-blue-300 backdrop-blur">
+            ↓ Todos reportam ao Gestor de Projetos ↓
+          </div>
+          <div className="w-0.5 h-8 bg-gradient-to-b from-blue-500/40 to-transparent" />
+        </div>
+
         {/* EQUIPE */}
         <section className="space-y-6">
           <div className="flex items-center gap-3">
             <Briefcase className="text-orange-400" size={22} />
             <h3 className="text-xl sm:text-2xl font-black italic uppercase tracking-tight">Time de Execução</h3>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+              → reporta ao Gestor de Projetos
+            </span>
           </div>
+
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {TEAM_ROLES.map((r, i) => (
               <motion.div

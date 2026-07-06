@@ -224,6 +224,7 @@ function scriptToRow(s: Script) {
     created_by: s.createdBy || null,
     direct_to_editing: s.directToEditing || false,
     recording_id: s.recordingId || null,
+    campaign_slot_id: s.campaignSlotId || null,
   };
 }
 

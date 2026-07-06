@@ -380,6 +380,7 @@ export default function Scripts() {
       scheduledDate: form.scheduledDate || undefined,
       directToEditing: form.directToEditing,
       recordingId: form.isAvulso ? form.recordingId : undefined,
+      campaignSlotId: form.campaignSlotId || undefined,
     };
     if (editing) {
       updateScript({ ...editing, ...scriptData, updatedAt: now });
@@ -392,6 +393,17 @@ export default function Scripts() {
       await addScript(scriptObj);
       if (captionToSave) {
         await supabase.from('scripts').update({ caption: captionToSave } as any).eq('id', scriptId);
+      }
+      // Link back to campaign slot if this script came from a campaign
+      if (form.campaignSlotId) {
+        try {
+          await supabase.from('campaign_slots').update({
+            script_id: scriptId,
+            status: 'roteiro_pronto',
+          } as any).eq('id', form.campaignSlotId);
+        } catch (e) {
+          console.error('Erro ao vincular roteiro à campanha:', e);
+        }
       }
       
       // Determine kanban column and assignment based on directToEditing

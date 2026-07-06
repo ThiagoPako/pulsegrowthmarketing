@@ -43,15 +43,17 @@ const PROJECT_MANAGER = {
   color: 'from-blue-500 to-indigo-700',
   accent: '#60a5fa',
   desc:
-    'O maestro da operação. Distribui tarefas, cobra prazos, agenda com clientes e garante que nenhuma engrenagem pare.',
+    'O escudo dos sócios. Absorve e resolve todos os problemas operacionais para que Thiago e Victor foquem 100% em girar o ponteiro da empresa (estratégia, tráfego, comercial e crescimento).',
   duties: [
-    'Distribui roteiros e briefings para toda a equipe',
-    'Cobra prazos e destrava tarefas paradas',
-    'Agenda gravações e reuniões com clientes',
-    'Organiza a agenda geral e o fluxo de trabalho',
-    'Ponto de contato principal quando algo trava',
+    'Resolve problemas operacionais antes que virem crise',
+    'Distribui roteiros, briefings e tarefas para toda a equipe',
+    'Cobra prazos e destrava qualquer tarefa parada',
+    'Agenda gravações, reuniões e liga para clientes',
+    'Filtra o que precisa (ou não) chegar aos sócios',
+    'Mantém a máquina rodando sem depender dos fundadores',
   ],
 };
+
 
 const TEAM_ROLES = [
   {

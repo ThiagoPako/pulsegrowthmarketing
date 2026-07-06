@@ -211,6 +211,9 @@ const SCENARIOS = [
 ];
 
 const GOLDEN_RULES = [
+  { icon: Sparkles, text: 'Antecipação > correção: Gestor de Projetos age ANTES do problema virar crise.' },
+  { icon: Users, text: 'Reuniões pontuais com clientes: Gestor de Projetos + Social Media presentes quando necessário.' },
+
   { icon: Phone, text: 'Problema operacional? Vai para o Gestor de Projetos — não escale direto aos sócios.' },
   { icon: Crown, text: 'Sócios focam em girar o ponteiro: estratégia, tráfego, comercial e crescimento.' },
   { icon: Calendar, text: 'Toda gravação, entrega e reunião passa pela agenda do Gestor de Projetos.' },

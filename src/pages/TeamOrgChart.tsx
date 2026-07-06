@@ -104,7 +104,7 @@ const TEAM_ROLES = [
     reportsTo: 'Gestor de Projetos',
   },
   {
-    icon: Camera, name: 'Fotógrafo', color: '#facc15',
+    icon: Camera, name: 'Fotógrafo', color: '#facc15', roleKeys: ['fotografo'],
     responsibilities: [
       'Realizar sessões fotográficas dos clientes agendadas na agenda',
       'Tratar e entregar banco de imagens em até 48h após a sessão',

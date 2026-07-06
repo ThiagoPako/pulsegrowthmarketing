@@ -23,6 +23,7 @@ interface Script {
   client_edited: boolean;
   client_edited_at: string | null;
   recorded: boolean;
+  campaign_slot_id?: string | null;
 }
 
 interface Author {

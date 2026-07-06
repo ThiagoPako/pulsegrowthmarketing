@@ -110,11 +110,11 @@ export default function Campaigns() {
           {filtered.map(c => (
             <Card
               key={c.id}
-              className="p-4 cursor-pointer hover:border-primary transition"
+              className="p-4 cursor-pointer hover:border-primary transition group relative"
               onClick={() => navigate(`/campanhas/${c.id}`)}
             >
               <div className="flex items-start justify-between gap-2 mb-2">
-                <h3 className="font-semibold">{c.name}</h3>
+                <h3 className="font-semibold pr-6">{c.name}</h3>
                 <Badge variant={c.status === 'ativa' ? 'default' : 'secondary'}>{c.status}</Badge>
               </div>
               <p className="text-sm text-muted-foreground">{clientById[c.client_id]?.companyName || '—'}</p>
@@ -123,6 +123,36 @@ export default function Campaigns() {
                 <span>{formatBrDate(c.start_date)} → {formatBrDate(c.end_date)}</span>
                 <span>{c.videos_qty}🎬 · {c.creatives_qty}🎨</span>
               </div>
+
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    title="Apagar campanha"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Apagar campanha?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Isso remove permanentemente <b>{c.name}</b> e todos os seus slots. Roteiros vinculados serão desassociados, mas não apagados.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => handleDelete(c.id, c.name)}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Apagar
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </Card>
           ))}
         </div>

@@ -1,0 +1,393 @@
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import {
+  ArrowLeft, Crown, Briefcase, ClipboardList, PenTool, Palette, Video, Scissors,
+  Camera, Share2, Heart, DollarSign, Megaphone, HelpCircle, ArrowRight, Users,
+  Target, Code, TrendingUp, Handshake, BarChart3, Sparkles, Phone, Calendar,
+} from 'lucide-react';
+
+// ─────────────────────────────────────────────────────────────
+//  ORGANOGRAMA / INFOGRÁFICO DE RESPONSABILIDADES
+//  Quem faz o quê e a quem procurar em cada situação
+// ─────────────────────────────────────────────────────────────
+
+const FOUNDERS = [
+  {
+    name: 'Thiago',
+    role: 'Sócio-Fundador',
+    color: 'from-orange-500 to-red-600',
+    accent: '#fb923c',
+    hats: [
+      { icon: Target, label: 'Gestor de Tráfego' },
+      { icon: TrendingUp, label: 'Estrategista de Marketing' },
+      { icon: Handshake, label: 'Estrategista Comercial' },
+      { icon: Palette, label: 'Web Designer' },
+      { icon: Code, label: 'Programador' },
+    ],
+  },
+  {
+    name: 'Victor Gabriel',
+    role: 'Sócio-Fundador',
+    color: 'from-emerald-500 to-teal-700',
+    accent: '#34d399',
+    hats: [
+      { icon: DollarSign, label: 'Gestor Financeiro' },
+      { icon: Handshake, label: 'Comercial' },
+      { icon: BarChart3, label: 'Analista de Marketing' },
+    ],
+  },
+];
+
+const PROJECT_MANAGER = {
+  title: 'Gestor de Projetos',
+  color: 'from-blue-500 to-indigo-700',
+  accent: '#60a5fa',
+  desc:
+    'O maestro da operação. Distribui tarefas, cobra prazos, agenda com clientes e garante que nenhuma engrenagem pare.',
+  duties: [
+    'Distribui roteiros e briefings para toda a equipe',
+    'Cobra prazos e destrava tarefas paradas',
+    'Agenda gravações e reuniões com clientes',
+    'Organiza a agenda geral e o fluxo de trabalho',
+    'Ponto de contato principal quando algo trava',
+  ],
+};
+
+const TEAM_ROLES = [
+  {
+    icon: PenTool, name: 'Copywriter', color: '#a78bfa',
+    responsibilities: ['Cria roteiros de vídeos e campanhas', 'Escreve copies de artes e criativos', 'Desenvolve estratégia de conteúdo escrito'],
+    reportsTo: 'Gestor de Projetos',
+  },
+  {
+    icon: Video, name: 'Videomaker', color: '#fb923c',
+    responsibilities: ['Grava vídeos com base no roteiro', 'Executa agendamentos de gravação', 'Captura conteúdo em campo'],
+    reportsTo: 'Gestor de Projetos',
+  },
+  {
+    icon: Scissors, name: 'Editor', color: '#f472b6',
+    responsibilities: ['Edita vídeos brutos entregues pelo videomaker', 'Aplica identidade visual do cliente', 'Entrega vídeo final aprovado'],
+    reportsTo: 'Gestor de Projetos',
+  },
+  {
+    icon: Palette, name: 'Designer', color: '#38bdf8',
+    responsibilities: ['Cria artes, criativos e stories', 'Segue briefing enviado pelo Gestor de Projetos', 'Mantém padrão visual dos clientes'],
+    reportsTo: 'Gestor de Projetos',
+  },
+  {
+    icon: Camera, name: 'Fotógrafo', color: '#facc15',
+    responsibilities: ['Realiza sessões fotográficas', 'Entrega banco de imagens tratadas', 'Apoia campanhas com fotos autorais'],
+    reportsTo: 'Gestor de Projetos',
+  },
+  {
+    icon: Share2, name: 'Social Media', color: '#22d3ee',
+    responsibilities: ['Publica conteúdo nas redes dos clientes', 'Interage e monitora comentários', 'Reporta desempenho de postagens'],
+    reportsTo: 'Gestor de Projetos',
+  },
+  {
+    icon: Heart, name: 'Endomarketing', color: '#f43f5e',
+    responsibilities: ['Cuida da comunicação interna', 'Ativa parceiros e agendamentos endo', 'Fortalece cultura da equipe'],
+    reportsTo: 'Victor Gabriel',
+  },
+];
+
+// Cenários "Quem eu procuro quando…"
+const SCENARIOS = [
+  {
+    icon: Video, color: '#fb923c',
+    situation: 'Videomaker sem roteiro para gravar',
+    who: 'Gestor de Projetos',
+    action: 'É ele quem distribui os roteiros. Chame no chat ou WhatsApp imediatamente.',
+  },
+  {
+    icon: Scissors, color: '#f472b6',
+    situation: 'Editor sem material bruto para editar',
+    who: 'Gestor de Projetos',
+    action: 'Ele localiza o videomaker e destrava a entrega do bruto.',
+  },
+  {
+    icon: Palette, color: '#38bdf8',
+    situation: 'Designer sem briefing / pauta',
+    who: 'Gestor de Projetos → Copywriter',
+    action: 'Gestor solicita o briefing ao copy e repassa ao designer.',
+  },
+  {
+    icon: PenTool, color: '#a78bfa',
+    situation: 'Copywriter sem direção estratégica',
+    who: 'Thiago',
+    action: 'Estrategista de Marketing e Comercial define o rumo.',
+  },
+  {
+    icon: Calendar, color: '#60a5fa',
+    situation: 'Cliente pedindo remarcar gravação',
+    who: 'Gestor de Projetos',
+    action: 'Ele reorganiza agenda e comunica todos os envolvidos.',
+  },
+  {
+    icon: Target, color: '#fb7185',
+    situation: 'Dúvida sobre campanha de tráfego pago',
+    who: 'Thiago',
+    action: 'Gestor de Tráfego e responsável por criativos e verba.',
+  },
+  {
+    icon: DollarSign, color: '#34d399',
+    situation: 'Dúvidas financeiras, pagamentos, notas',
+    who: 'Victor Gabriel',
+    action: 'Gestor Financeiro da empresa.',
+  },
+  {
+    icon: Handshake, color: '#facc15',
+    situation: 'Novo lead / proposta comercial',
+    who: 'Thiago ou Victor Gabriel',
+    action: 'Ambos atuam no comercial; Thiago fecha a estratégia, Victor operacionaliza.',
+  },
+  {
+    icon: Code, color: '#22d3ee',
+    situation: 'Problema no site ou sistema Pulse',
+    who: 'Thiago',
+    action: 'Programador e web designer da empresa.',
+  },
+  {
+    icon: Heart, color: '#f43f5e',
+    situation: 'Ação de endomarketing / evento interno',
+    who: 'Victor Gabriel',
+    action: 'Supervisiona o time de endomarketing.',
+  },
+];
+
+const GOLDEN_RULES = [
+  { icon: Phone, text: 'Nenhum profissional pode ficar parado. Se travou, avise o Gestor de Projetos AGORA.' },
+  { icon: Calendar, text: 'Toda gravação, entrega e reunião passa pela agenda do Gestor de Projetos.' },
+  { icon: Users, text: 'O fluxo padrão é: Copy escreve → Gestor distribui → Equipe executa → Social publica.' },
+  { icon: Sparkles, text: 'Dúvida de "com quem falar?" — sempre comece pelo Gestor de Projetos.' },
+];
+
+export default function TeamOrgChart() {
+  const navigate = useNavigate();
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-[#0a0a0a] via-[#0f0f14] to-[#0a0a0a] text-white">
+      {/* Header */}
+      <div className="sticky top-0 z-40 backdrop-blur-xl bg-black/60 border-b border-white/5">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 py-4 flex items-center justify-between">
+          <button
+            onClick={() => navigate('/treinamento')}
+            className="flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors"
+          >
+            <ArrowLeft size={16} /> Voltar ao Treinamento
+          </button>
+          <div className="text-right">
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-orange-400">Pulse Academy</p>
+            <h1 className="text-sm sm:text-base font-black italic uppercase tracking-tight">Organograma da Equipe</h1>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-8 py-10 sm:py-16 space-y-16">
+        {/* HERO */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+          className="text-center space-y-4"
+        >
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30">
+            <Users size={14} className="text-orange-400" />
+            <span className="text-[10px] font-black uppercase tracking-[0.25em] text-orange-300">Infográfico Oficial</span>
+          </div>
+          <h2 className="text-3xl sm:text-5xl font-black italic uppercase tracking-tighter leading-[0.95]">
+            Quem faz <span className="text-orange-500">o quê</span><br />na Pulse?
+          </h2>
+          <p className="text-sm sm:text-base text-white/60 max-w-2xl mx-auto">
+            Descubra rapidamente <b className="text-white">com quem falar</b> em cada situação para nenhum
+            profissional ficar parado e nenhuma entrega atrasar.
+          </p>
+        </motion.div>
+
+        {/* FUNDADORES */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <Crown className="text-yellow-400" size={22} />
+            <h3 className="text-xl sm:text-2xl font-black italic uppercase tracking-tight">Fundadores & Direção</h3>
+          </div>
+          <div className="grid md:grid-cols-2 gap-6">
+            {FOUNDERS.map((f, i) => (
+              <motion.div
+                key={f.name}
+                initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.03] to-transparent p-6"
+              >
+                <div className={`absolute -top-16 -right-16 w-48 h-48 rounded-full bg-gradient-to-br ${f.color} opacity-20 blur-2xl`} />
+                <div className="relative">
+                  <div className="flex items-center gap-4 mb-5">
+                    <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${f.color} flex items-center justify-center shadow-lg`}>
+                      <Crown className="text-white" size={28} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.25em]" style={{ color: f.accent }}>{f.role}</p>
+                      <h4 className="text-2xl font-black italic uppercase tracking-tight">{f.name}</h4>
+                    </div>
+                  </div>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-white/40 mb-3">Chapéus que usa</p>
+                  <div className="grid grid-cols-1 gap-2">
+                    {f.hats.map((h) => (
+                      <div key={h.label} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5 border border-white/5">
+                        <h.icon size={16} style={{ color: f.accent }} />
+                        <span className="text-sm font-medium text-white/90">{h.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* GESTOR DE PROJETOS - HUB CENTRAL */}
+        <section>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }}
+            className="relative overflow-hidden rounded-3xl border-2 border-blue-500/40 bg-gradient-to-br from-blue-950/40 via-indigo-950/30 to-transparent p-8 sm:p-10"
+          >
+            <div className="absolute -top-20 -left-20 w-64 h-64 rounded-full bg-blue-500/20 blur-3xl animate-pulse" />
+            <div className="absolute -bottom-20 -right-20 w-64 h-64 rounded-full bg-indigo-500/20 blur-3xl animate-pulse" />
+            <div className="relative grid md:grid-cols-[auto_1fr] gap-6 sm:gap-8 items-start">
+              <div className={`w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-gradient-to-br ${PROJECT_MANAGER.color} flex items-center justify-center shadow-2xl shadow-blue-500/30 shrink-0`}>
+                <ClipboardList className="text-white" size={44} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-300 mb-1">Hub Central da Operação</p>
+                <h3 className="text-2xl sm:text-3xl font-black italic uppercase tracking-tighter mb-3">{PROJECT_MANAGER.title}</h3>
+                <p className="text-sm sm:text-base text-white/70 mb-5">{PROJECT_MANAGER.desc}</p>
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {PROJECT_MANAGER.duties.map((d) => (
+                    <div key={d} className="flex items-start gap-2 text-sm text-white/80">
+                      <ArrowRight size={14} className="text-blue-400 mt-1 shrink-0" />
+                      <span>{d}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </section>
+
+        {/* EQUIPE */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <Briefcase className="text-orange-400" size={22} />
+            <h3 className="text-xl sm:text-2xl font-black italic uppercase tracking-tight">Time de Execução</h3>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {TEAM_ROLES.map((r, i) => (
+              <motion.div
+                key={r.name}
+                initial={{ opacity: 0, y: 15 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+                transition={{ delay: i * 0.05 }}
+                className="group rounded-2xl border border-white/10 bg-white/[0.02] p-5 hover:border-white/20 hover:bg-white/[0.04] transition-all"
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div
+                    className="w-11 h-11 rounded-xl flex items-center justify-center"
+                    style={{ background: `${r.color}22`, border: `1px solid ${r.color}44` }}
+                  >
+                    <r.icon size={20} style={{ color: r.color }} />
+                  </div>
+                  <div>
+                    <h4 className="font-black italic uppercase tracking-tight">{r.name}</h4>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+                      Reporta a: <span style={{ color: r.color }}>{r.reportsTo}</span>
+                    </p>
+                  </div>
+                </div>
+                <ul className="space-y-1.5">
+                  {r.responsibilities.map((rs) => (
+                    <li key={rs} className="text-xs text-white/70 flex gap-2">
+                      <span style={{ color: r.color }}>•</span>{rs}
+                    </li>
+                  ))}
+                </ul>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* CENÁRIOS - COM QUEM FALAR */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <HelpCircle className="text-fuchsia-400" size={22} />
+            <h3 className="text-xl sm:text-2xl font-black italic uppercase tracking-tight">
+              Com quem falar quando…
+            </h3>
+          </div>
+          <div className="grid md:grid-cols-2 gap-3">
+            {SCENARIOS.map((s, i) => (
+              <motion.div
+                key={s.situation}
+                initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
+                transition={{ delay: i * 0.04 }}
+                className="rounded-xl border border-white/10 bg-white/[0.02] p-4 hover:border-white/20 transition-all"
+              >
+                <div className="flex items-start gap-4">
+                  <div
+                    className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                    style={{ background: `${s.color}22`, border: `1px solid ${s.color}44` }}
+                  >
+                    <s.icon size={18} style={{ color: s.color }} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-0.5">Situação</p>
+                    <p className="text-sm font-bold text-white mb-2">{s.situation}</p>
+                    <div className="flex items-center gap-2 mb-1">
+                      <ArrowRight size={12} style={{ color: s.color }} />
+                      <p className="text-xs font-black uppercase tracking-wider" style={{ color: s.color }}>
+                        Fale com: {s.who}
+                      </p>
+                    </div>
+                    <p className="text-xs text-white/60 pl-4">{s.action}</p>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* REGRAS DE OURO */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <Sparkles className="text-yellow-400" size={22} />
+            <h3 className="text-xl sm:text-2xl font-black italic uppercase tracking-tight">Regras de Ouro</h3>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {GOLDEN_RULES.map((g, i) => (
+              <motion.div
+                key={g.text}
+                initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+                transition={{ delay: i * 0.08 }}
+                className="flex items-start gap-3 rounded-xl border border-yellow-500/20 bg-gradient-to-br from-yellow-500/[0.06] to-transparent p-4"
+              >
+                <div className="w-9 h-9 rounded-lg bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center shrink-0">
+                  <g.icon size={16} className="text-yellow-400" />
+                </div>
+                <p className="text-sm text-white/90 leading-relaxed">{g.text}</p>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* CTA final */}
+        <motion.div
+          initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
+          className="text-center py-8 border-t border-white/5"
+        >
+          <Megaphone className="mx-auto text-orange-500 mb-3" size={32} />
+          <p className="text-lg font-black italic uppercase tracking-tight mb-1">
+            Comunicação clara = Entrega no prazo
+          </p>
+          <p className="text-sm text-white/50">
+            Salve este infográfico e consulte sempre que tiver dúvida sobre com quem falar.
+          </p>
+        </motion.div>
+      </div>
+    </div>
+  );
+}

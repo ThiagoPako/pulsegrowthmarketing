@@ -57,7 +57,7 @@ const PROJECT_MANAGER = {
 
 const TEAM_ROLES = [
   {
-    icon: PenTool, name: 'Copywriter', color: '#a78bfa',
+    icon: PenTool, name: 'Copywriter', color: '#a78bfa', person: 'Naraely',
     responsibilities: ['Cria roteiros de vídeos e campanhas', 'Escreve copies de artes e criativos', 'Desenvolve estratégia de conteúdo escrito'],
     reportsTo: 'Gestor de Projetos',
   },
@@ -87,9 +87,10 @@ const TEAM_ROLES = [
     reportsTo: 'Gestor de Projetos',
   },
   {
-    icon: Heart, name: 'Endomarketing', color: '#f43f5e',
+    icon: Heart, name: 'Endomarketing', color: '#f43f5e', person: 'Naraely',
     responsibilities: ['Cuida da comunicação interna', 'Ativa parceiros e agendamentos endo', 'Fortalece cultura da equipe'],
-    reportsTo: 'Naraely',
+    reportsTo: 'Gestor de Projetos',
+
   },
 
 ];
@@ -321,10 +322,16 @@ export default function TeamOrgChart() {
                   </div>
                   <div>
                     <h4 className="font-black italic uppercase tracking-tight">{r.name}</h4>
+                    {r.person && (
+                      <p className="text-[11px] font-bold text-white/80">
+                        👤 {r.person}
+                      </p>
+                    )}
                     <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">
                       Reporta a: <span style={{ color: r.color }}>{r.reportsTo}</span>
                     </p>
                   </div>
+
                 </div>
                 <ul className="space-y-1.5">
                   {r.responsibilities.map((rs) => (

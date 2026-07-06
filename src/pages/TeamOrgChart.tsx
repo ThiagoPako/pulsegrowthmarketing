@@ -87,9 +87,10 @@ const TEAM_ROLES = [
     reportsTo: 'Gestor de Projetos',
   },
   {
-    icon: Heart, name: 'Endomarketing', color: '#f43f5e',
+    icon: Heart, name: 'Endomarketing', color: '#f43f5e', person: 'Naraely',
     responsibilities: ['Cuida da comunicação interna', 'Ativa parceiros e agendamentos endo', 'Fortalece cultura da equipe'],
-    reportsTo: 'Naraely',
+    reportsTo: 'Gestor de Projetos',
+
   },
 
 ];

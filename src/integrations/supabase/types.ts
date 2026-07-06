@@ -3601,6 +3601,80 @@ export type Database = {
           },
         ]
       }
+      regulation_clicks: {
+        Row: {
+          clicked_at: string
+          id: string
+          referrer: string | null
+          regulation_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          clicked_at?: string
+          id?: string
+          referrer?: string | null
+          regulation_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          clicked_at?: string
+          id?: string
+          referrer?: string | null
+          regulation_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "regulation_clicks_regulation_id_fkey"
+            columns: ["regulation_id"]
+            isOneToOne: false
+            referencedRelation: "regulations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      regulations: {
+        Row: {
+          active: boolean
+          city: string
+          client_name: string
+          content: string | null
+          created_at: string
+          created_by: string | null
+          external_url: string | null
+          id: string
+          slug: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          city?: string
+          client_name: string
+          content?: string | null
+          created_at?: string
+          created_by?: string | null
+          external_url?: string | null
+          id?: string
+          slug: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          city?: string
+          client_name?: string
+          content?: string | null
+          created_at?: string
+          created_by?: string | null
+          external_url?: string | null
+          id?: string
+          slug?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       revenues: {
         Row: {
           amount: number

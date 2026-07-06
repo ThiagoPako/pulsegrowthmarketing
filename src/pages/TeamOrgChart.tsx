@@ -114,7 +114,7 @@ const TEAM_ROLES = [
     reportsTo: 'Gestor de Projetos',
   },
   {
-    icon: Share2, name: 'Social Media', color: '#22d3ee', person: 'Rayssa',
+    icon: Share2, name: 'Social Media', color: '#22d3ee', roleKeys: ['social_media'],
     responsibilities: [
       'Publicar TODO o conteúdo aprovado nas redes dos clientes no horário certo',
       'Agendar posts na semana e manter o calendário editorial atualizado',

@@ -347,12 +347,12 @@ export default function CampaignDetail() {
 function SlotDialog({ slot, campaign, onClose, onSaved }: {
   slot: Slot; campaign: Campaign; onClose: () => void; onSaved: () => void;
 }) {
+  const navigate = useNavigate();
   const [title, setTitle] = useState(slot.title || '');
   const [postDate, setPostDate] = useState(slot.post_date || '');
   const [status, setStatus] = useState<SlotStatus>(slot.status);
   const [notes, setNotes] = useState(slot.notes || '');
-  const [scriptContent, setScriptContent] = useState('');
-  const [scriptTitle, setScriptTitle] = useState('');
+  const [linkedScript, setLinkedScript] = useState<{ id: string; title: string } | null>(null);
   const [loadingScript, setLoadingScript] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -360,8 +360,8 @@ function SlotDialog({ slot, campaign, onClose, onSaved }: {
     (async () => {
       if (slot.kind !== 'video' || !slot.script_id) return;
       setLoadingScript(true);
-      const { data } = await supabase.from('scripts').select('*').eq('id', slot.script_id).single();
-      if (data) { setScriptContent(data.content || ''); setScriptTitle(data.title || ''); }
+      const { data } = await supabase.from('scripts').select('id,title').eq('id', slot.script_id).single();
+      if (data) setLinkedScript({ id: (data as any).id, title: (data as any).title });
       setLoadingScript(false);
     })();
   }, [slot]);
@@ -369,35 +369,10 @@ function SlotDialog({ slot, campaign, onClose, onSaved }: {
   const handleSave = async () => {
     setSaving(true);
     try {
-      let scriptId = slot.script_id;
-
-      if (slot.kind === 'video' && (scriptContent.trim() || scriptTitle.trim())) {
-        if (scriptId) {
-          await supabase.from('scripts').update({
-            title: scriptTitle || title,
-            content: scriptContent,
-          }).eq('id', scriptId);
-        } else {
-          const { data: created, error } = await supabase.from('scripts').insert({
-            title: scriptTitle || title || `${campaign.name} - ${slot.title}`,
-            content: scriptContent,
-            client_id: campaign.client_id,
-            campaign_slot_id: slot.id,
-            status: 'rascunho',
-          }).select().single();
-          if (error) throw error;
-          scriptId = created.id;
-        }
-      }
-
-      const newStatus: SlotStatus =
-        slot.kind === 'video' && scriptContent.trim() && status === 'pendente' ? 'roteiro_pronto' : status;
-
       const { error: uErr } = await supabase.from('campaign_slots').update({
-        title, post_date: postDate || null, status: newStatus, notes, script_id: scriptId,
+        title, post_date: postDate || null, status, notes,
       }).eq('id', slot.id);
       if (uErr) throw uErr;
-
       toast.success('Slot atualizado');
       onSaved();
     } catch (e: any) {
@@ -405,6 +380,21 @@ function SlotDialog({ slot, campaign, onClose, onSaved }: {
     } finally {
       setSaving(false);
     }
+  };
+
+  const goToScriptsModule = (openId?: string) => {
+    const params = new URLSearchParams();
+    if (openId) {
+      params.set('openScript', openId);
+    } else {
+      params.set('campaignSlotId', slot.id);
+      params.set('clientId', campaign.client_id);
+      params.set('campaignName', campaign.name);
+      if (title) params.set('title', title);
+      // creative slots default to "criativo" format
+      params.set('contentFormat', slot.kind === 'creative' ? 'criativo' : 'reels');
+    }
+    navigate(`/roteiros?${params.toString()}`);
   };
 
   return (
@@ -443,20 +433,43 @@ function SlotDialog({ slot, campaign, onClose, onSaved }: {
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
           </div>
 
-          {slot.kind === 'video' && (
+          {(slot.kind === 'video' || slot.kind === 'creative') && (
             <div className="space-y-2 border-t pt-3">
-              <Label className="text-base font-semibold">Roteiro do vídeo</Label>
-              {loadingScript ? <p className="text-sm text-muted-foreground">Carregando...</p> : (
-                <>
-                  <Input placeholder="Título do roteiro" value={scriptTitle} onChange={(e) => setScriptTitle(e.target.value)} />
-                  <Textarea
-                    placeholder="Escreva o roteiro do vídeo aqui..."
-                    value={scriptContent}
-                    onChange={(e) => setScriptContent(e.target.value)}
-                    rows={10}
-                  />
-                  <p className="text-xs text-muted-foreground">Vinculado à campanha. Também aparece em /roteiros.</p>
-                </>
+              <Label className="text-base font-semibold flex items-center gap-2">
+                <Megaphone className="h-4 w-4 text-primary" />
+                Roteiro da campanha
+              </Label>
+
+              {loadingScript ? (
+                <p className="text-sm text-muted-foreground">Carregando roteiro vinculado...</p>
+              ) : linkedScript ? (
+                <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-primary">Roteiro vinculado</p>
+                      <p className="text-sm font-medium truncate">{linkedScript.title}</p>
+                    </div>
+                    <Button size="sm" onClick={() => goToScriptsModule(linkedScript.id)}>
+                      Ver roteiro
+                    </Button>
+                  </div>
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => goToScriptsModule()}>
+                    Criar outro roteiro para este slot
+                  </Button>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-primary/40 bg-primary/[0.03] p-4 text-center space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Nenhum roteiro criado ainda para este slot.
+                  </p>
+                  <Button onClick={() => goToScriptsModule()} className="gap-1.5">
+                    <BookOpen className="h-4 w-4" />
+                    Criar roteiro no módulo Roteiros
+                  </Button>
+                  <p className="text-[11px] text-muted-foreground">
+                    O cliente e a tag de campanha já ficarão pré-configurados.
+                  </p>
+                </div>
               )}
             </div>
           )}

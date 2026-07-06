@@ -373,6 +373,7 @@ export default function Team() {
     fotografo: 'bg-pink-100 text-pink-700',
     designer: 'bg-orange-100 text-orange-700',
     copywriter: 'bg-teal-100 text-teal-700',
+    gestor_projetos: 'bg-blue-100 text-blue-700',
   };
 
   const partnerUserIds = partners.map(p => p.user_id);

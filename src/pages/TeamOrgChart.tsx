@@ -125,7 +125,7 @@ const TEAM_ROLES = [
     reportsTo: 'Gestor de Projetos',
   },
   {
-    icon: Heart, name: 'Endomarketing', color: '#f43f5e', person: 'Naraely',
+    icon: Heart, name: 'Endomarketing', color: '#f43f5e', roleKeys: ['endomarketing', 'parceiro'],
     responsibilities: [
       'Planejar e executar ações internas (aniversários, celebrações, cultura)',
       'Ativar parceiros e cuidar dos agendamentos endo',

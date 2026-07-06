@@ -125,7 +125,9 @@ const TEAM_ROLES = [
       'Publica TODO conteúdo aprovado nas redes dos clientes no horário certo e mantém o calendário editorial atualizado',
       'Monitora comentários/DMs e repassa ao cliente (NÃO responde em nome do cliente)',
       'Monitora métricas semanais e reporta desempenho ao Gestor de Projetos',
+      'Participa (junto com o Gestor de Projetos) de reuniões pontuais com clientes quando necessário',
       'Registra cada entrega no módulo Entregas Social',
+
     ],
 
     reportsTo: 'Gestor de Projetos',

@@ -93,7 +93,7 @@ const TEAM_ROLES = [
     reportsTo: 'Gestor de Projetos',
   },
   {
-    icon: Palette, name: 'Designer', color: '#38bdf8',
+    icon: Palette, name: 'Designer', color: '#38bdf8', roleKeys: ['designer'],
     responsibilities: [
       'Produzir artes de feed, stories, criativos de tráfego e mídia física',
       'Seguir briefing e identidade visual enviados pelo Gestor de Projetos',

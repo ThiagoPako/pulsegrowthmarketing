@@ -58,42 +58,82 @@ const PROJECT_MANAGER = {
 const TEAM_ROLES = [
   {
     icon: PenTool, name: 'Copywriter', color: '#a78bfa', person: 'Naraely',
-    responsibilities: ['Cria roteiros de vídeos e campanhas', 'Escreve copies de artes e criativos', 'Desenvolve estratégia de conteúdo escrito'],
+    responsibilities: [
+      'Escrever roteiros de reels, vídeos institucionais e campanhas',
+      'Criar copies persuasivas para artes, criativos e stories',
+      'Definir tom de voz e narrativa de cada cliente',
+      'Entregar roteiros dentro do prazo cadastrado pelo Gestor de Projetos',
+      'Alimentar o módulo Roteiros com todo material aprovado',
+    ],
     reportsTo: 'Gestor de Projetos',
   },
   {
     icon: Video, name: 'Videomaker', color: '#fb923c',
-    responsibilities: ['Grava vídeos com base no roteiro', 'Executa agendamentos de gravação', 'Captura conteúdo em campo'],
+    responsibilities: [
+      'Gravar TODOS os vídeos agendados seguindo o roteiro do Copy',
+      'Chegar 10 min antes no local da gravação, com equipamento carregado',
+      'Enviar brutos organizados por cliente para o Editor no mesmo dia',
+      'Registrar tempo de espera e imprevistos no Controle de Gravações',
+      'Capturar stories, bastidores e conteúdo extra sempre que possível',
+    ],
     reportsTo: 'Gestor de Projetos',
   },
   {
     icon: Scissors, name: 'Editor', color: '#f472b6',
-    responsibilities: ['Edita vídeos brutos entregues pelo videomaker', 'Aplica identidade visual do cliente', 'Entrega vídeo final aprovado'],
+    responsibilities: [
+      'Editar reels, VSLs e vídeos institucionais respeitando o SLA',
+      'Aplicar identidade visual e template de cada cliente',
+      'Rever com o Copy antes de enviar para aprovação do cliente',
+      'Manter o Kanban de edição atualizado (edição → revisão → envio)',
+      'Alterar rapidamente quando o cliente pedir ajuste',
+    ],
     reportsTo: 'Gestor de Projetos',
   },
   {
     icon: Palette, name: 'Designer', color: '#38bdf8',
-    responsibilities: ['Cria artes, criativos e stories', 'Segue briefing enviado pelo Gestor de Projetos', 'Mantém padrão visual dos clientes'],
+    responsibilities: [
+      'Produzir artes de feed, stories, criativos de tráfego e mídia física',
+      'Seguir briefing e identidade visual enviados pelo Gestor de Projetos',
+      'Entregar cada card do Kanban dentro do prazo definido',
+      'Registrar tempo trabalhado e versões no card',
+      'Alimentar o banco de artes do cliente após aprovação',
+    ],
     reportsTo: 'Gestor de Projetos',
   },
   {
     icon: Camera, name: 'Fotógrafo', color: '#facc15',
-    responsibilities: ['Realiza sessões fotográficas', 'Entrega banco de imagens tratadas', 'Apoia campanhas com fotos autorais'],
+    responsibilities: [
+      'Realizar sessões fotográficas dos clientes agendadas na agenda',
+      'Tratar e entregar banco de imagens em até 48h após a sessão',
+      'Organizar acervo por cliente na pasta oficial',
+      'Apoiar campanhas com fotos autorais quando solicitado',
+    ],
     reportsTo: 'Gestor de Projetos',
   },
   {
-    icon: Share2, name: 'Social Media', color: '#22d3ee',
-    responsibilities: ['Publica conteúdo nas redes dos clientes', 'Interage e monitora comentários', 'Reporta desempenho de postagens'],
+    icon: Share2, name: 'Social Media', color: '#22d3ee', person: 'Rayssa',
+    responsibilities: [
+      'Publicar TODO o conteúdo aprovado nas redes dos clientes no horário certo',
+      'Agendar posts na semana e manter o calendário editorial atualizado',
+      'Responder comentários e DMs conforme diretriz de cada cliente',
+      'Monitorar métricas semanais e reportar desempenho ao Gestor',
+      'Registrar cada entrega no módulo Entregas Social',
+    ],
     reportsTo: 'Gestor de Projetos',
   },
   {
     icon: Heart, name: 'Endomarketing', color: '#f43f5e', person: 'Naraely',
-    responsibilities: ['Cuida da comunicação interna', 'Ativa parceiros e agendamentos endo', 'Fortalece cultura da equipe'],
+    responsibilities: [
+      'Planejar e executar ações internas (aniversários, celebrações, cultura)',
+      'Ativar parceiros e cuidar dos agendamentos endo',
+      'Apresentar QUALQUER evento interno previamente para aprovação financeira (Victor Gabriel) antes de contratar',
+      'Divulgar comunicados internos e mural de recados',
+      'Fortalecer o clima e o senso de equipe da Pulse',
+    ],
     reportsTo: 'Gestor de Projetos',
-
   },
-
 ];
+
 
 // Cenários "Quem eu procuro quando…"
 const SCENARIOS = [

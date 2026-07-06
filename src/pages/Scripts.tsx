@@ -220,6 +220,42 @@ export default function Scripts() {
     campaignName: '' as string,
   });
 
+  // ── Deep-link from Campanhas: preset form and auto-open ──
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const openScriptId = searchParams.get('openScript');
+    if (openScriptId) {
+      const found = scripts.find(s => s.id === openScriptId);
+      if (found) {
+        handleOpen(found);
+        // Clear params so it doesn't re-trigger
+        setSearchParams({}, { replace: true });
+      }
+      return;
+    }
+    const campaignSlotId = searchParams.get('campaignSlotId');
+    if (campaignSlotId) {
+      const clientId = searchParams.get('clientId') || '';
+      const campaignName = searchParams.get('campaignName') || '';
+      const title = searchParams.get('title') || '';
+      const contentFormat = (searchParams.get('contentFormat') as ScriptContentFormat) || 'reels';
+      setEditing(null);
+      setForm({
+        clientId, title, videoType: 'vendas', contentFormat,
+        content: '', caption: '', priority: 'normal',
+        isEndomarketing: false, endoClientId: '', scheduledDate: '',
+        directToEditing: false, isAvulso: false, recordingId: '',
+        prospectName: '', materialLink: '',
+        campaignSlotId, campaignName,
+      });
+      setOpen(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, scripts]);
+
+
+
   // Avulso recordings (type=avulso, with prospect_name)
   const avulsoRecordings = useMemo(() => {
     return recordings.filter(r => r.type === 'avulso' && r.prospectName);

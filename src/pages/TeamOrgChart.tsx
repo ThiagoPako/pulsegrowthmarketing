@@ -116,23 +116,6 @@ const TEAM_ROLES = [
     reportsTo: 'Gestor de Projetos',
   },
   {
-    icon: Share2, name: 'Social Media', color: '#22d3ee', roleKeys: ['social_media'],
-    responsibilities: [
-      'Ponte de transparência entre agência e cliente: envia vídeos e artes para aprovação nos grupos de WhatsApp',
-      'Cuida do relacionamento diário com os clientes nos grupos, mantendo tom cordial e profissional',
-      'REVISA cada vídeo antes de enviar: checa legendas, cortes, áudio e identidade visual',
-      'Solicita alterações ao Editor/Designer sempre que algo estiver fora do padrão de qualidade da Pulse',
-      'Publica TODO conteúdo aprovado nas redes dos clientes no horário certo e mantém o calendário editorial atualizado',
-      'Monitora comentários/DMs e repassa ao cliente (NÃO responde em nome do cliente)',
-      'Monitora métricas semanais e reporta desempenho ao Gestor de Projetos',
-      'Participa (junto com o Gestor de Projetos) de reuniões pontuais com clientes quando necessário',
-      'Registra cada entrega no módulo Entregas Social',
-
-    ],
-
-    reportsTo: 'Gestor de Projetos',
-  },
-  {
     icon: Heart, name: 'Endomarketing', color: '#f43f5e', roleKeys: ['endomarketing', 'parceiro'],
     responsibilities: [
       'Planejar e executar ações internas (aniversários, celebrações, cultura)',
@@ -143,6 +126,27 @@ const TEAM_ROLES = [
     ],
     reportsTo: 'Gestor de Projetos',
   },
+];
+
+const SOCIAL_MEDIA_HUB = {
+  title: 'Social Media',
+  color: 'from-cyan-500 to-sky-700',
+  accent: '#22d3ee',
+  roleKeys: ['social_media'],
+  desc:
+    'A ponte de transparência entre a agência e o cliente. Cuida do relacionamento nos grupos de WhatsApp, envia vídeos para aprovação, revisa qualidade e garante que nada saia fora do padrão Pulse.',
+  duties: [
+    'Ponte de transparência entre agência e cliente nos grupos de WhatsApp',
+    'Envia vídeos e artes para aprovação e conduz o relacionamento diário',
+    'REVISA cada vídeo antes de enviar: legendas, cortes, áudio e identidade visual',
+    'Solicita alterações ao Editor/Designer sempre que algo fugir do padrão de qualidade',
+    'Publica TODO conteúdo aprovado no horário certo e mantém o calendário editorial',
+    'Monitora comentários/DMs e repassa ao cliente (NÃO responde em nome do cliente)',
+    'Participa (com o Gestor de Projetos) de reuniões pontuais com clientes',
+    'Monitora métricas semanais e registra cada entrega no módulo Entregas Social',
+  ],
+};
+
 ];
 
 

@@ -213,8 +213,25 @@ const GOLDEN_RULES = [
 
 
 
+type ProfileLite = { id: string; name: string | null; role: string | null; avatar_url?: string | null };
+
 export default function TeamOrgChart() {
   const navigate = useNavigate();
+  const [profiles, setProfiles] = useState<ProfileLite[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, name, role, avatar_url')
+        .order('name');
+      setProfiles((data as ProfileLite[]) || []);
+    })();
+  }, []);
+
+  const peopleByRole = (keys: string[]) =>
+    profiles.filter(p => p.role && keys.includes(p.role));
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0a] via-[#0f0f14] to-[#0a0a0a] text-white">

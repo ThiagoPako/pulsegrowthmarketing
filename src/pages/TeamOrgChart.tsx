@@ -116,12 +116,16 @@ const TEAM_ROLES = [
   {
     icon: Share2, name: 'Social Media', color: '#22d3ee', roleKeys: ['social_media'],
     responsibilities: [
-      'Publicar TODO o conteúdo aprovado nas redes dos clientes no horário certo',
-      'Agendar posts na semana e manter o calendário editorial atualizado',
-      'Monitorar comentários/DMs e repassar assuntos relevantes ao cliente (NÃO responde em nome do cliente)',
-      'Monitorar métricas semanais e reportar desempenho ao Gestor',
-      'Registrar cada entrega no módulo Entregas Social',
+      'Ponte de transparência entre agência e cliente: envia vídeos e artes para aprovação nos grupos de WhatsApp',
+      'Cuida do relacionamento diário com os clientes nos grupos, mantendo tom cordial e profissional',
+      'REVISA cada vídeo antes de enviar: checa legendas, cortes, áudio e identidade visual',
+      'Solicita alterações ao Editor/Designer sempre que algo estiver fora do padrão de qualidade da Pulse',
+      'Publica TODO conteúdo aprovado nas redes dos clientes no horário certo e mantém o calendário editorial atualizado',
+      'Monitora comentários/DMs e repassa ao cliente (NÃO responde em nome do cliente)',
+      'Monitora métricas semanais e reporta desempenho ao Gestor de Projetos',
+      'Registra cada entrega no módulo Entregas Social',
     ],
+
     reportsTo: 'Gestor de Projetos',
   },
   {

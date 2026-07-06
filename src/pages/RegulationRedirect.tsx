@@ -1,8 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
 const pulseLogo = { url: "/pulse-logo.png" };
+
+const CUSTOM_TEMPLATES: Record<string, React.LazyExoticComponent<React.ComponentType<any>>> = {
+  "super-brasil-desafio-10s": lazy(() => import("@/pages/regulations/SuperBrasilDesafio10s")),
+};
 
 type Regulation = {
   id: string;
@@ -15,8 +19,9 @@ type Regulation = {
 
 export default function RegulationRedirect() {
   const { slug } = useParams<{ slug: string }>();
-  const [status, setStatus] = useState<"loading" | "notfound" | "content">("loading");
+  const [status, setStatus] = useState<"loading" | "notfound" | "content" | "custom">("loading");
   const [reg, setReg] = useState<Regulation | null>(null);
+  const [CustomTpl, setCustomTpl] = useState<React.LazyExoticComponent<React.ComponentType<any>> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,15 +51,33 @@ export default function RegulationRedirect() {
           window.location.replace(data.external_url as string);
         }, 1400);
       } else {
+        const tpl = slug ? CUSTOM_TEMPLATES[slug] : undefined;
         setTimeout(() => {
           setReg(data as Regulation);
-          setStatus("content");
+          if (tpl) {
+            setCustomTpl(() => tpl);
+            setStatus("custom");
+          } else {
+            setStatus("content");
+          }
         }, 1400);
       }
     }
     go();
     return () => { cancelled = true; };
   }, [slug]);
+
+  if (status === "custom" && CustomTpl) {
+    return (
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center bg-black">
+          <img src={pulseLogo.url} alt="Pulse" className="w-40 animate-pulse" />
+        </div>
+      }>
+        <CustomTpl />
+      </Suspense>
+    );
+  }
 
   if (status === "content" && reg) {
     return (

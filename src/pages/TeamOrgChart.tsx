@@ -147,7 +147,7 @@ const SOCIAL_MEDIA_HUB = {
   ],
 };
 
-];
+
 
 
 // Cenários "Quem eu procuro quando…"

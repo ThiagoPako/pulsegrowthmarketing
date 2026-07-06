@@ -161,6 +161,7 @@ const navCategories: NavCategory[] = [
       { path: '/panfletagem', label: 'Panfletagem', icon: Car, roles: ['admin'] },
       { path: '/encurtador', label: 'Encurtador', icon: Type, roles: ['admin', 'social_media'] },
       { path: '/clube-descontos', label: 'Clube Descontos', icon: Gift, roles: ['admin', 'social_media'] },
+      { path: '/regulamentos', label: 'Regulamentos', icon: FileText, roles: ['admin', 'social_media'] },
     ],
   },
 

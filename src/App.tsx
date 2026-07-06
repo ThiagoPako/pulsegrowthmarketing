@@ -88,6 +88,8 @@ const TrainingManager = lazy(() => import("@/pages/TrainingManager"));
 const CRM = lazy(() => import("@/pages/CRM"));
 const LinkShortener = lazy(() => import("@/pages/LinkShortener"));
 const ShortLinkRedirect = lazy(() => import("@/pages/ShortLinkRedirect"));
+const Regulations = lazy(() => import("@/pages/Regulations"));
+const RegulationRedirect = lazy(() => import("@/pages/RegulationRedirect"));
 const Training = lazy(() => import("@/pages/Training"));
 const TrainingRegister = lazy(() => import("@/pages/TrainingRegister"));
 const Campaigns = lazy(() => import("@/pages/Campaigns"));
@@ -235,6 +237,8 @@ function AppRoutes() {
         <Route path="/campanhas" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
         <Route path="/campanhas/:id" element={<ProtectedRoute><CampaignDetail /></ProtectedRoute>} />
         <Route path="/r/:slug" element={<ShortLinkRedirect />} />
+        <Route path="/regulamentos" element={<ProtectedRoute><Regulations /></ProtectedRoute>} />
+        <Route path="/regulamento/:slug" element={<RegulationRedirect />} />
 
         <Route path="/tv" element={<Suspense fallback={<PageLoader />}><TvDashboard /></Suspense>} />
         <Route path="*" element={<NotFound />} />

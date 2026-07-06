@@ -153,9 +153,10 @@ const SCENARIOS = [
   {
     icon: Heart, color: '#f43f5e',
     situation: 'Ação de endomarketing / evento interno',
-    who: 'Victor Gabriel',
-    action: 'Supervisiona o time de endomarketing.',
+    who: 'Naraely',
+    action: 'Responsável direta pelo endomarketing e ativações internas.',
   },
+
 ];
 
 const GOLDEN_RULES = [

@@ -118,7 +118,7 @@ const TEAM_ROLES = [
     responsibilities: [
       'Publicar TODO o conteúdo aprovado nas redes dos clientes no horário certo',
       'Agendar posts na semana e manter o calendário editorial atualizado',
-      'Responder comentários e DMs conforme diretriz de cada cliente',
+      'Monitorar comentários/DMs e repassar assuntos relevantes ao cliente (NÃO responde em nome do cliente)',
       'Monitorar métricas semanais e reportar desempenho ao Gestor',
       'Registrar cada entrega no módulo Entregas Social',
     ],

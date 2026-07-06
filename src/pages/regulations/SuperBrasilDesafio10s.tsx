@@ -83,11 +83,11 @@ function PrizeTier({
 
 function StepCard({ n, title, text, icon: Icon }: { n: number; title: string; text: string; icon: any }) {
   return (
-    <motion.div variants={fadeUp} className="relative bg-white rounded-2xl p-6 shadow-lg border border-red-100">
-      <div className="absolute -top-4 -left-4 w-12 h-12 rounded-full bg-red-600 text-white font-black text-xl flex items-center justify-center shadow-lg">
+    <motion.div variants={fadeUp} className="relative bg-white rounded-2xl p-6 shadow-lg border border-green-100">
+      <div className="absolute -top-4 -left-4 w-12 h-12 rounded-full bg-yellow-400 text-green-900 font-black text-xl flex items-center justify-center shadow-lg">
         {n}
       </div>
-      <Icon className="w-8 h-8 text-red-600 mb-3 mt-2" strokeWidth={1.8} />
+      <Icon className="w-8 h-8 text-green-700 mb-3 mt-2" strokeWidth={1.8} />
       <h3 className="font-bold text-lg text-neutral-900 mb-1">{title}</h3>
       <p className="text-sm text-neutral-600 leading-relaxed">{text}</p>
     </motion.div>
@@ -117,7 +117,7 @@ function Section({ id, title, subtitle, children, dark }: any) {
 function RuleRow({ icon: Icon, ok, text }: { icon: any; ok: boolean; text: string }) {
   return (
     <motion.div variants={fadeUp} className="flex items-start gap-3 p-4 rounded-xl bg-white border border-neutral-200">
-      <div className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${ok ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-600"}`}>
+      <div className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${ok ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
         <Icon className="w-5 h-5" />
       </div>
       <p className="text-sm text-neutral-700 leading-relaxed pt-1">{text}</p>
@@ -129,7 +129,7 @@ export default function SuperBrasilDesafio10s() {
   return (
     <div className="min-h-screen bg-white">
       {/* HERO */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-red-700 via-red-600 to-red-800 text-white">
+      <section className="relative overflow-hidden bg-gradient-to-br from-green-800 via-green-700 to-green-900 text-white">
         <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle at 20% 20%, #fbbf24 0, transparent 40%), radial-gradient(circle at 80% 80%, #fef3c7 0, transparent 40%)" }} />
         <div className="relative max-w-5xl mx-auto px-6 py-20 md:py-28 text-center">
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-4 py-1.5 mb-6">
@@ -191,8 +191,8 @@ export default function SuperBrasilDesafio10s() {
         <div className="relative mb-12 pt-8">
           <div className="relative h-3 bg-neutral-800 rounded-full overflow-hidden">
             <div className="absolute inset-y-0 left-[45%] right-[45%] bg-yellow-400" />
-            <div className="absolute inset-y-0 left-[35%] right-[35%] bg-emerald-500/40 mix-blend-screen" />
-            <div className="absolute inset-y-0 left-[25%] right-[25%] bg-sky-500/30 mix-blend-screen" />
+            <div className="absolute inset-y-0 left-[35%] right-[35%] bg-green-500/40 mix-blend-screen" />
+            <div className="absolute inset-y-0 left-[25%] right-[25%] bg-blue-600/30 mix-blend-screen" />
           </div>
           <div className="grid grid-cols-5 text-[10px] md:text-xs font-mono text-white/60 mt-2">
             <span>9,90</span>
@@ -210,7 +210,7 @@ export default function SuperBrasilDesafio10s() {
             range="10,00s"
             reward="100% em vale-compras"
             detail="Valor total da compra em vale-compras (até R$ 1.000). Somente na 1ª tentativa. 1 por edição."
-            color="from-yellow-500 to-amber-600"
+            color="from-yellow-400 to-amber-500"
             delay={0}
             emphasis
           />
@@ -220,7 +220,7 @@ export default function SuperBrasilDesafio10s() {
             range="9,96 → 10,05s"
             reward="20% de cashback"
             detail="Vale-compras equivalente a 20% do valor da compra. Válido em qualquer uma das 3 tentativas."
-            color="from-emerald-600 to-teal-700"
+            color="from-green-600 to-green-800"
             delay={0.1}
           />
           <PrizeTier
@@ -229,7 +229,7 @@ export default function SuperBrasilDesafio10s() {
             range="9,90–9,95s ou 10,06–10,10s"
             reward="10% em vale-compras"
             detail="Vale-compras de 10% do valor da compra. Válido em qualquer uma das 3 tentativas."
-            color="from-sky-600 to-indigo-700"
+            color="from-blue-700 to-blue-900"
             delay={0.2}
           />
         </div>
@@ -290,14 +290,14 @@ export default function SuperBrasilDesafio10s() {
       <Section title="Boas práticas & Uso de imagem">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <motion.div variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }} className="rounded-2xl border border-neutral-200 p-6 bg-neutral-50">
-            <Camera className="w-8 h-8 text-red-600 mb-3" />
+            <Camera className="w-8 h-8 text-green-700 mb-3" />
             <h3 className="font-bold text-lg mb-1">Uso de Imagem</h3>
             <p className="text-sm text-neutral-600 leading-relaxed">
               Ao participar, o cliente autoriza o uso de imagem, voz e nome em materiais promocionais do Super Brasil, sem ônus.
             </p>
           </motion.div>
           <motion.div variants={fadeUp} initial="hidden" whileInView="show" viewport={{ once: true }} className="rounded-2xl border border-neutral-200 p-6 bg-neutral-50">
-            <Wallet className="w-8 h-8 text-red-600 mb-3" />
+            <Wallet className="w-8 h-8 text-green-700 mb-3" />
             <h3 className="font-bold text-lg mb-1">Vales-compras</h3>
             <p className="text-sm text-neutral-600 leading-relaxed">
               Pessoais, intransferíveis, não convertidos em dinheiro. Validade informada no momento da entrega.

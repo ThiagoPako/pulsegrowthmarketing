@@ -6,12 +6,20 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { ArrowLeft, Megaphone, AlertTriangle, FileText, Palette, BookOpen, Calendar } from 'lucide-react';
+import {
+  ArrowLeft, Megaphone, AlertTriangle, PlayCircle, Palette, BookOpen,
+  Calendar, Trash2, CheckCircle2,
+} from 'lucide-react';
 import {
   CAMPAIGN_TYPE_LABELS, SLOT_STATUS_LABELS, SlotKind, SlotStatus, CampaignType,
   formatBrDate, recordingDeadline, isSlotDelayed,
@@ -29,7 +37,22 @@ interface Slot {
   script_id: string | null; notes: string | null;
 }
 
-const KIND_ICON = { editorial: BookOpen, video: FileText, creative: Palette } as const;
+// ─── Identidade visual por tipo de slot ─────────────────────────────
+type KindStyle = {
+  label: string;
+  Icon: typeof PlayCircle;
+  /** cor base HSL — completo/ativo */
+  color: string;         // ex.: '199 89% 48%' (cyan)
+  glow: string;          // rgba glow para shadow
+};
+
+const KIND_STYLE: Record<SlotKind, KindStyle> = {
+  editorial: { label: 'Editorial', Icon: BookOpen,   color: '199 89% 48%',  glow: 'rgba(14,165,233,0.35)' },
+  video:     { label: 'Reel',      Icon: PlayCircle, color: '16 82% 51%',   glow: 'rgba(241,89,42,0.45)'  },
+  creative:  { label: 'Arte',      Icon: Palette,    color: '243 75% 59%',  glow: 'rgba(99,102,241,0.45)' },
+};
+
+const isDone = (s: SlotStatus) => s === 'postado';
 
 export default function CampaignDetail() {
   const { id } = useParams();
@@ -39,6 +62,7 @@ export default function CampaignDetail() {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingSlot, setEditingSlot] = useState<Slot | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     if (!id) return;
@@ -55,8 +79,11 @@ export default function CampaignDetail() {
   useEffect(() => { load(); }, [id]);
 
   const client = campaign ? clients.find(c => c.id === campaign.client_id) : null;
-  const completed = slots.filter(s => s.status === 'postado').length;
+  const completed = slots.filter(s => isDone(s.status)).length;
   const progress = slots.length ? Math.round((completed / slots.length) * 100) : 0;
+
+  // índice do próximo slot ainda não concluído (destaque pulsante)
+  const nextIdx = slots.findIndex(s => !isDone(s.status));
 
   const nextRecordings = useMemo(
     () => slots.filter(s => s.kind === 'video' && s.status !== 'postado')
@@ -64,6 +91,21 @@ export default function CampaignDetail() {
       .slice(0, 5),
     [slots]
   );
+
+  const handleDelete = async () => {
+    if (!campaign) return;
+    setDeleting(true);
+    try {
+      await supabase.from('campaign_slots').delete().eq('campaign_id', campaign.id);
+      const { error } = await supabase.from('campaigns').delete().eq('id', campaign.id);
+      if (error) throw error;
+      toast.success('Campanha apagada');
+      navigate('/campanhas');
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao apagar campanha');
+      setDeleting(false);
+    }
+  };
 
   if (loading) return <div className="p-6">Carregando...</div>;
   if (!campaign) return <div className="p-6">Campanha não encontrada.</div>;
@@ -80,6 +122,32 @@ export default function CampaignDetail() {
           </p>
         </div>
         <Badge>{campaign.status}</Badge>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" title="Apagar campanha">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Apagar campanha?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Isso remove permanentemente a campanha <b>{campaign.name}</b> e todos os seus {slots.length} slots.
+                Roteiros vinculados serão desassociados, mas <b>não</b> serão apagados.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDelete}
+                disabled={deleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleting ? 'Apagando...' : 'Apagar campanha'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       <Card className="p-4">
@@ -109,36 +177,156 @@ export default function CampaignDetail() {
         </Card>
       )}
 
+      {/* ─── LINHA DO TEMPO (Sequential Flow Timeline) ─── */}
       <div>
-        <h2 className="text-lg font-semibold mb-3">Linha do tempo</h2>
-        <div className="flex gap-3 overflow-x-auto pb-4">
-          {slots.map(slot => {
-            const Icon = KIND_ICON[slot.kind];
-            const delayed = slot.kind === 'video' && isSlotDelayed(slot.post_date, slot.status);
-            return (
-              <button
-                key={slot.id}
-                onClick={() => setEditingSlot(slot)}
-                className={`shrink-0 w-56 p-4 rounded-lg border-2 text-left transition hover:shadow-md ${
-                  delayed ? 'border-destructive bg-destructive/5' :
-                  slot.kind === 'editorial' ? 'border-primary bg-primary/5' :
-                  'border-border bg-card'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <Icon className="h-4 w-4" />
-                  {delayed && <AlertTriangle className="h-4 w-4 text-destructive" />}
+        <div className="flex items-end justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-semibold">Linha do tempo</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Slots conectados na ordem de execução — cada etapa se acende quando concluída
+            </p>
+          </div>
+          <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
+            {(Object.keys(KIND_STYLE) as SlotKind[]).map(k => (
+              <div key={k} className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full" style={{ background: `hsl(${KIND_STYLE[k].color})` }} />
+                {KIND_STYLE[k].label}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto pb-8 -mx-2 px-2">
+          <div className="relative flex items-center min-w-max">
+            {/* trilha base */}
+            <div className="absolute top-1/2 left-0 right-0 h-1 -translate-y-1/2 rounded-full bg-muted/60" />
+            {/* trilha preenchida (progresso) */}
+            <div
+              className="absolute top-1/2 left-0 h-1 -translate-y-1/2 rounded-full bg-primary transition-all duration-700"
+              style={{
+                width: slots.length ? `${(completed / slots.length) * 100}%` : '0%',
+                boxShadow: '0 0 15px rgba(241,89,42,0.5)',
+              }}
+            />
+
+            {slots.map((slot, i) => {
+              const style = KIND_STYLE[slot.kind];
+              const done = isDone(slot.status);
+              const isNext = i === nextIdx;
+              const delayed = slot.kind === 'video' && isSlotDelayed(slot.post_date, slot.status);
+              const Icon = style.Icon;
+              const accent = `hsl(${style.color})`;
+
+              return (
+                <div key={slot.id} className="relative flex flex-col items-center px-4 shrink-0">
+                  {/* nó da timeline */}
+                  <div
+                    className={`relative z-10 flex items-center justify-center rounded-full transition-all
+                      ${isNext ? 'w-12 h-12 mb-4' : done ? 'w-10 h-10 mb-6' : 'w-8 h-8 mb-8'}
+                    `}
+                    style={
+                      done
+                        ? { background: accent, boxShadow: `0 0 20px ${style.glow}` }
+                        : isNext
+                          ? { background: accent, boxShadow: `0 0 30px ${style.glow}` }
+                          : { background: 'hsl(var(--muted))', border: '2px solid hsl(var(--border))' }
+                    }
+                  >
+                    {done ? (
+                      <CheckCircle2 className="h-5 w-5 text-white" strokeWidth={2.5} />
+                    ) : isNext ? (
+                      <>
+                        <span
+                          className="absolute inset-0 rounded-full animate-ping"
+                          style={{ background: accent, opacity: 0.5 }}
+                        />
+                        <Icon className="h-5 w-5 text-white relative" strokeWidth={2.5} />
+                      </>
+                    ) : (
+                      <div className="w-2 h-2 rounded-full bg-muted-foreground/40" />
+                    )}
+                  </div>
+
+                  {/* card */}
+                  <button
+                    onClick={() => setEditingSlot(slot)}
+                    className={`group relative text-left rounded-2xl p-5 backdrop-blur-md transition-all overflow-hidden
+                      ${isNext ? 'w-72 scale-[1.02]' : 'w-64'}
+                      ${!done && !isNext ? 'opacity-50 hover:opacity-100' : ''}
+                      hover:-translate-y-1
+                    `}
+                    style={{
+                      background: isNext
+                        ? 'hsl(var(--card))'
+                        : done
+                          ? 'hsl(var(--card) / 0.9)'
+                          : 'hsl(var(--card) / 0.5)',
+                      border: `${isNext ? 2 : 1}px solid ${
+                        delayed ? 'hsl(var(--destructive))' :
+                        (done || isNext) ? accent + (isNext ? '' : '66') : 'hsl(var(--border))'
+                      }`,
+                      boxShadow: isNext ? `0 20px 40px -12px ${style.glow}` : undefined,
+                    }}
+                  >
+                    {/* watermark do ícone do tipo */}
+                    <Icon
+                      className="absolute -top-2 -right-2 h-24 w-24 pointer-events-none"
+                      style={{ color: accent, opacity: done || isNext ? 0.08 : 0.04 }}
+                      strokeWidth={1}
+                    />
+
+                    <div className="relative flex items-center justify-between mb-3">
+                      <span
+                        className="text-[10px] font-bold tracking-widest uppercase"
+                        style={{ color: done || isNext ? accent : 'hsl(var(--muted-foreground))', fontFamily: 'Space Grotesk, sans-serif' }}
+                      >
+                        {style.label}
+                      </span>
+                      {delayed ? (
+                        <AlertTriangle className="h-4 w-4 text-destructive" />
+                      ) : isNext ? (
+                        <span className="relative flex h-2 w-2">
+                          <span className="absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping" style={{ background: accent }} />
+                          <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: accent }} />
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div
+                      className="relative text-3xl font-bold mb-2 leading-none"
+                      style={{ fontFamily: 'Space Grotesk, sans-serif', color: done || isNext ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))' }}
+                    >
+                      {formatBrDate(slot.post_date)}
+                    </div>
+
+                    <p className="relative text-sm leading-snug mb-4 line-clamp-3 min-h-[3.5rem] text-foreground/80">
+                      {slot.title || '—'}
+                    </p>
+
+                    <div className="relative flex items-center justify-between pt-3 border-t border-border/50">
+                      <span
+                        className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider"
+                        style={
+                          done
+                            ? { background: accent, color: 'white' }
+                            : isNext
+                              ? { background: `${accent}22`, color: accent, border: `1px solid ${accent}66` }
+                              : { background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))' }
+                        }
+                      >
+                        {SLOT_STATUS_LABELS[slot.status]}
+                      </span>
+                      {slot.kind === 'video' && (
+                        <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">
+                          Grav. {formatBrDate(recordingDeadline(slot.post_date))}
+                        </span>
+                      )}
+                    </div>
+                  </button>
                 </div>
-                <div className="text-xs uppercase text-muted-foreground">{slot.kind}</div>
-                <div className="font-semibold text-sm mb-2">{slot.title}</div>
-                <div className="text-lg font-bold text-primary">{formatBrDate(slot.post_date)}</div>
-                <div className="text-[11px] text-muted-foreground mt-1">
-                  gravar até {formatBrDate(recordingDeadline(slot.post_date))}
-                </div>
-                <Badge variant="secondary" className="mt-2 text-[10px]">{SLOT_STATUS_LABELS[slot.status]}</Badge>
-              </button>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -153,6 +341,7 @@ export default function CampaignDetail() {
     </div>
   );
 }
+
 
 // ---------- Slot editor ----------
 function SlotDialog({ slot, campaign, onClose, onSaved }: {

@@ -4,7 +4,7 @@ import { supabase } from '@/lib/vpsDb';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Play, CheckCircle2, Circle, Clock, ChevronRight, ChevronLeft, Info, X, Video, FileText, Plus, Trash2, FolderPlus, Loader2, FileVideo, Upload, Megaphone } from 'lucide-react';
+import { Play, CheckCircle2, Circle, Clock, ChevronRight, ChevronLeft, Info, X, Video, FileText, Plus, Trash2, FolderPlus, Loader2, FileVideo, Upload, Megaphone, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
@@ -425,6 +425,9 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                 </Button>
                 <Button asChild size="lg" variant="ghost" className="bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 hover:text-white px-4 sm:px-7 font-black uppercase italic tracking-widest text-[11px] sm:text-xs h-9 sm:h-11">
                   <a href="/treinamento/campanhas-playbook"><Megaphone className="mr-1.5 sm:mr-2" size={14} /> Playbook Campanhas</a>
+                </Button>
+                <Button asChild size="lg" variant="ghost" className="relative overflow-hidden bg-gradient-to-r from-blue-500/30 via-indigo-500/30 to-fuchsia-500/30 hover:from-blue-500/50 hover:via-indigo-500/50 hover:to-fuchsia-500/50 text-white px-4 sm:px-7 font-black uppercase italic tracking-widest text-[11px] sm:text-xs h-9 sm:h-11 border border-white/10">
+                  <a href="/treinamento/organograma"><Users className="mr-1.5 sm:mr-2" size={14} /> Organograma da Equipe</a>
                 </Button>
               </div>
             </div>

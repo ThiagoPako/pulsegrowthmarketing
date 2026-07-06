@@ -46,14 +46,16 @@ const PROJECT_MANAGER = {
   color: 'from-blue-500 to-indigo-700',
   accent: '#60a5fa',
   desc:
-    'O escudo dos sócios. Absorve e resolve todos os problemas operacionais para que Thiago e Victor foquem 100% em girar o ponteiro da empresa (estratégia, tráfego, comercial e crescimento).',
+    'O escudo dos sócios que trabalha na ANTECIPAÇÃO: identifica riscos e resolve problemas ANTES que virem crise, deixando Thiago e Victor 100% focados em girar o ponteiro da empresa (estratégia, tráfego, comercial e crescimento).',
   duties: [
-    'Resolve problemas operacionais antes que virem crise',
+    'ANTECIPA problemas — mapeia riscos e resolve antes que virem crise',
     'Distribui roteiros, briefings e tarefas para toda a equipe',
     'Cobra prazos e destrava qualquer tarefa parada',
-    'Agenda gravações, reuniões e liga para clientes',
+    'Agenda gravações, ligações e reuniões com clientes',
+    'Participa (junto com o Social Media) de reuniões pontuais com clientes quando necessário',
     'Filtra o que precisa (ou não) chegar aos sócios',
     'Mantém a máquina rodando sem depender dos fundadores',
+
   ],
 };
 

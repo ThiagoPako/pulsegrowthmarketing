@@ -19,29 +19,35 @@ import { supabase } from '@/integrations/supabase/client';
 const FOUNDERS = [
   {
     name: 'Thiago',
-    role: 'Sócio-Fundador',
+    role: 'Sócio-Fundador · Gestor Pulse Uruaçu',
     color: 'from-orange-500 to-red-600',
     accent: '#fb923c',
     hats: [
+      { icon: MapPin, label: 'Gestor Responsável — Pulse Uruaçu' },
       { icon: Target, label: 'Gestor de Tráfego' },
       { icon: TrendingUp, label: 'Estrategista de Marketing' },
       { icon: Handshake, label: 'Estrategista Comercial' },
+      { icon: Rocket, label: 'Closer (fechamento de vendas)' },
       { icon: Palette, label: 'Web Designer' },
       { icon: Code, label: 'Programador' },
     ],
   },
   {
     name: 'Victor Gabriel',
-    role: 'Sócio-Fundador',
+    role: 'Sócio-Fundador · Gestor Pulse Minaçu',
     color: 'from-emerald-500 to-teal-700',
     accent: '#34d399',
     hats: [
+      { icon: MapPin, label: 'Gestor Responsável — Pulse Minaçu' },
       { icon: DollarSign, label: 'Gestor Financeiro' },
+      { icon: Rocket, label: 'Closer (fechamento de vendas)' },
       { icon: Handshake, label: 'Comercial' },
       { icon: BarChart3, label: 'Analista de Marketing' },
+      { icon: Users, label: 'Gestão de Pessoas e Operação Minaçu' },
     ],
   },
 ];
+
 
 const PROJECT_MANAGER = {
   title: 'Gestor de Projetos',

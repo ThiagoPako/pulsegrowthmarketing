@@ -126,10 +126,10 @@ const navCategories: NavCategory[] = [
     color: 'rose',
     featured: true,
     items: [
-      { path: '/crm', label: 'CRM', icon: Kanban, roles: ['admin', 'social_media'] },
+      { path: '/crm', label: 'CRM', icon: Kanban, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/propostas', label: 'Propostas', icon: FileText, roles: ['admin'] },
       { path: '/apresentacao', label: 'Apresentação', icon: Sparkles, roles: ['admin'] },
-      { path: '/metas', label: 'Metas', icon: Target, roles: ['admin', 'social_media'] },
+      { path: '/metas', label: 'Metas', icon: Target, roles: ['admin', 'social_media', 'gestor_projetos'] },
     ],
   },
 

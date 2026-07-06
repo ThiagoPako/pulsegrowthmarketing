@@ -60,7 +60,7 @@ const PROJECT_MANAGER = {
 
 const TEAM_ROLES = [
   {
-    icon: PenTool, name: 'Copywriter', color: '#a78bfa', person: 'Naraely',
+    icon: PenTool, name: 'Copywriter', color: '#a78bfa', roleKeys: ['copywriter'],
     responsibilities: [
       'Escrever roteiros de reels, vídeos institucionais e campanhas',
       'Criar copies persuasivas para artes, criativos e stories',

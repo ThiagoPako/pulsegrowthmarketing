@@ -216,6 +216,8 @@ export default function Scripts() {
     recordingId: '' as string,
     prospectName: '' as string,
     materialLink: '' as string,
+    campaignSlotId: '' as string,
+    campaignName: '' as string,
   });
 
   // Avulso recordings (type=avulso, with prospect_name)

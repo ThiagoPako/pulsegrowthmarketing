@@ -116,23 +116,6 @@ const TEAM_ROLES = [
     reportsTo: 'Gestor de Projetos',
   },
   {
-    icon: Share2, name: 'Social Media', color: '#22d3ee', roleKeys: ['social_media'],
-    responsibilities: [
-      'Ponte de transparência entre agência e cliente: envia vídeos e artes para aprovação nos grupos de WhatsApp',
-      'Cuida do relacionamento diário com os clientes nos grupos, mantendo tom cordial e profissional',
-      'REVISA cada vídeo antes de enviar: checa legendas, cortes, áudio e identidade visual',
-      'Solicita alterações ao Editor/Designer sempre que algo estiver fora do padrão de qualidade da Pulse',
-      'Publica TODO conteúdo aprovado nas redes dos clientes no horário certo e mantém o calendário editorial atualizado',
-      'Monitora comentários/DMs e repassa ao cliente (NÃO responde em nome do cliente)',
-      'Monitora métricas semanais e reporta desempenho ao Gestor de Projetos',
-      'Participa (junto com o Gestor de Projetos) de reuniões pontuais com clientes quando necessário',
-      'Registra cada entrega no módulo Entregas Social',
-
-    ],
-
-    reportsTo: 'Gestor de Projetos',
-  },
-  {
     icon: Heart, name: 'Endomarketing', color: '#f43f5e', roleKeys: ['endomarketing', 'parceiro'],
     responsibilities: [
       'Planejar e executar ações internas (aniversários, celebrações, cultura)',
@@ -144,6 +127,27 @@ const TEAM_ROLES = [
     reportsTo: 'Gestor de Projetos',
   },
 ];
+
+const SOCIAL_MEDIA_HUB = {
+  title: 'Social Media',
+  color: 'from-cyan-500 to-sky-700',
+  accent: '#22d3ee',
+  roleKeys: ['social_media'],
+  desc:
+    'A ponte de transparência entre a agência e o cliente. Cuida do relacionamento nos grupos de WhatsApp, envia vídeos para aprovação, revisa qualidade e garante que nada saia fora do padrão Pulse.',
+  duties: [
+    'Ponte de transparência entre agência e cliente nos grupos de WhatsApp',
+    'Envia vídeos e artes para aprovação e conduz o relacionamento diário',
+    'REVISA cada vídeo antes de enviar: legendas, cortes, áudio e identidade visual',
+    'Solicita alterações ao Editor/Designer sempre que algo fugir do padrão de qualidade',
+    'Publica TODO conteúdo aprovado no horário certo e mantém o calendário editorial',
+    'Monitora comentários/DMs e repassa ao cliente (NÃO responde em nome do cliente)',
+    'Participa (com o Gestor de Projetos) de reuniões pontuais com clientes',
+    'Monitora métricas semanais e registra cada entrega no módulo Entregas Social',
+  ],
+};
+
+
 
 
 // Cenários "Quem eu procuro quando…"
@@ -357,6 +361,57 @@ export default function TeamOrgChart() {
             </div>
           </motion.div>
         </section>
+
+        {/* SOCIAL MEDIA - HUB DE RELACIONAMENTO */}
+        <section>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }}
+            className="relative overflow-hidden rounded-3xl border-2 border-cyan-500/40 bg-gradient-to-br from-cyan-950/40 via-sky-950/30 to-transparent p-8 sm:p-10"
+          >
+            <div className="absolute -top-20 -left-20 w-64 h-64 rounded-full bg-cyan-500/20 blur-3xl animate-pulse" />
+            <div className="absolute -bottom-20 -right-20 w-64 h-64 rounded-full bg-sky-500/20 blur-3xl animate-pulse" />
+            <div className="relative grid md:grid-cols-[auto_1fr] gap-6 sm:gap-8 items-start">
+              <div className={`w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-gradient-to-br ${SOCIAL_MEDIA_HUB.color} flex items-center justify-center shadow-2xl shadow-cyan-500/30 shrink-0`}>
+                <Share2 className="text-white" size={44} />
+              </div>
+              <div className="flex-1">
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-cyan-300 mb-1">Hub de Relacionamento com o Cliente</p>
+                <h3 className="text-2xl sm:text-3xl font-black italic uppercase tracking-tighter mb-3">{SOCIAL_MEDIA_HUB.title}</h3>
+                <p className="text-sm sm:text-base text-white/70 mb-4">{SOCIAL_MEDIA_HUB.desc}</p>
+
+                {(() => {
+                  const members = peopleByRole(SOCIAL_MEDIA_HUB.roleKeys);
+                  if (members.length === 0) return null;
+                  return (
+                    <div className="flex flex-wrap gap-1.5 mb-5">
+                      {members.map(m => (
+                        <span
+                          key={m.id}
+                          className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold bg-cyan-500/15 text-cyan-200 border border-cyan-500/40"
+                        >
+                          👤 {m.name || 'Sem nome'}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
+
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {SOCIAL_MEDIA_HUB.duties.map((d) => (
+                    <div key={d} className="flex items-start gap-2 text-sm text-white/80">
+                      <ArrowRight size={14} className="text-cyan-400 mt-1 shrink-0" />
+                      <span>{d}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-4 text-[11px] font-bold uppercase tracking-widest text-white/40">
+                  Reporta a: <span className="text-cyan-300">Gestor de Projetos</span>
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        </section>
+
 
         {/* CONECTOR VISUAL */}
         <div className="flex flex-col items-center -my-2">

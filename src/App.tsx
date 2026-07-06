@@ -227,6 +227,7 @@ function AppRoutes() {
         <Route path="/treinamento" element={<ProtectedRoute noLayout><Training /></ProtectedRoute>} />
         <Route path="/treinamento/otimizacao-conteudo" element={<ProtectedRoute><OptimizationFormatsGuide /></ProtectedRoute>} />
         <Route path="/treinamento/campanhas-playbook" element={<ProtectedRoute><CampaignPlaybook /></ProtectedRoute>} />
+        <Route path="/treinamento/organograma" element={<ProtectedRoute><TeamOrgChart /></ProtectedRoute>} />
         <Route path="/treinamento-registro" element={<TrainingRegister />} />
         <Route path="/evento/:token" element={<EventRegistration />} />
         <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />

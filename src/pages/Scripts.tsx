@@ -1272,8 +1272,27 @@ export default function Scripts() {
       {/* Create/Edit Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editing ? 'Editar Roteiro' : form.isAvulso ? '📹 Novo Roteiro Avulso' : 'Novo Roteiro'}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center gap-2">
+            {editing ? 'Editar Roteiro' : form.isAvulso ? '📹 Novo Roteiro Avulso' : 'Novo Roteiro'}
+            {form.campaignSlotId && (
+              <Badge className="bg-primary/15 text-primary border-primary/30 gap-1">
+                🎯 Campanha{form.campaignName ? `: ${form.campaignName}` : ''}
+              </Badge>
+            )}
+          </DialogTitle></DialogHeader>
           <div className="space-y-4">
+            {form.campaignSlotId && (
+              <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-3 flex items-center gap-2 text-sm">
+                <span className="text-lg">🎯</span>
+                <div className="flex-1">
+                  <p className="font-semibold text-primary">Roteiro de campanha</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Ao salvar, este roteiro será automaticamente vinculado ao slot da campanha
+                    {form.campaignName ? <> <strong>{form.campaignName}</strong></> : ''}.
+                  </p>
+                </div>
+              </div>
+            )}
             {form.isAvulso ? (
               /* Avulso mode: select recording instead of client */
               <div className="p-4 rounded-xl border-2 border-sky-500/30 bg-sky-500/5 space-y-3">

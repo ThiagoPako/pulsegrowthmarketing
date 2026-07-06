@@ -94,6 +94,7 @@ const Campaigns = lazy(() => import("@/pages/Campaigns"));
 const CampaignDetail = lazy(() => import("@/pages/CampaignDetail"));
 const OptimizationFormatsGuide = lazy(() => import("@/pages/OptimizationFormatsGuide"));
 const CampaignPlaybook = lazy(() => import("@/pages/CampaignPlaybook"));
+const TeamOrgChart = lazy(() => import("@/pages/TeamOrgChart"));
 
 
 const queryClient = new QueryClient({

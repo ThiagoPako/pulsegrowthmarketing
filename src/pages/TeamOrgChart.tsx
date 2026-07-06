@@ -5,6 +5,8 @@ import {
   ArrowLeft, Crown, Briefcase, ClipboardList, PenTool, Palette, Video, Scissors,
   Camera, Share2, Heart, DollarSign, Megaphone, HelpCircle, ArrowRight, Users,
   Target, Code, TrendingUp, Handshake, BarChart3, Sparkles, Phone, Calendar,
+  MapPin, Rocket,
+
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 

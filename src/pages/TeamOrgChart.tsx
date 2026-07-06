@@ -151,7 +151,9 @@ const SOCIAL_MEDIA_HUB = {
     'Publica TODO conteúdo aprovado no horário certo e mantém o calendário editorial',
     'Monitora comentários/DMs e repassa ao cliente (NÃO responde em nome do cliente)',
     'Participa (com o Gestor de Projetos) de reuniões pontuais com clientes',
+    'Auxilia o Copywriter com ideias de pauta, ganchos e insights vindos do dia a dia com o cliente',
     'Monitora métricas semanais e registra cada entrega no módulo Entregas Social',
+
   ],
 };
 

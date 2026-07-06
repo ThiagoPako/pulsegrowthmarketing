@@ -191,6 +191,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   fotografo: 'Fotografia',
   designer: 'Designer',
   copywriter: 'Copywriter',
+  gestor_projetos: 'Gestor de Projetos',
 };
 
 export const COLUMN_LABELS: Record<KanbanColumn, string> = {

@@ -43,15 +43,17 @@ const PROJECT_MANAGER = {
   color: 'from-blue-500 to-indigo-700',
   accent: '#60a5fa',
   desc:
-    'O maestro da operação. Distribui tarefas, cobra prazos, agenda com clientes e garante que nenhuma engrenagem pare.',
+    'O escudo dos sócios. Absorve e resolve todos os problemas operacionais para que Thiago e Victor foquem 100% em girar o ponteiro da empresa (estratégia, tráfego, comercial e crescimento).',
   duties: [
-    'Distribui roteiros e briefings para toda a equipe',
-    'Cobra prazos e destrava tarefas paradas',
-    'Agenda gravações e reuniões com clientes',
-    'Organiza a agenda geral e o fluxo de trabalho',
-    'Ponto de contato principal quando algo trava',
+    'Resolve problemas operacionais antes que virem crise',
+    'Distribui roteiros, briefings e tarefas para toda a equipe',
+    'Cobra prazos e destrava qualquer tarefa parada',
+    'Agenda gravações, reuniões e liga para clientes',
+    'Filtra o que precisa (ou não) chegar aos sócios',
+    'Mantém a máquina rodando sem depender dos fundadores',
   ],
 };
+
 
 const TEAM_ROLES = [
   {
@@ -156,11 +158,13 @@ const SCENARIOS = [
 ];
 
 const GOLDEN_RULES = [
-  { icon: Phone, text: 'Nenhum profissional pode ficar parado. Se travou, avise o Gestor de Projetos AGORA.' },
+  { icon: Phone, text: 'Problema operacional? Vai para o Gestor de Projetos — não escale direto aos sócios.' },
+  { icon: Crown, text: 'Sócios focam em girar o ponteiro: estratégia, tráfego, comercial e crescimento.' },
   { icon: Calendar, text: 'Toda gravação, entrega e reunião passa pela agenda do Gestor de Projetos.' },
-  { icon: Users, text: 'O fluxo padrão é: Copy escreve → Gestor distribui → Equipe executa → Social publica.' },
+  { icon: Users, text: 'Fluxo padrão: Copy escreve → Gestor distribui → Equipe executa → Social publica.' },
   { icon: Sparkles, text: 'Dúvida de "com quem falar?" — sempre comece pelo Gestor de Projetos.' },
 ];
+
 
 export default function TeamOrgChart() {
   const navigate = useNavigate();
@@ -204,10 +208,18 @@ export default function TeamOrgChart() {
 
         {/* FUNDADORES */}
         <section className="space-y-6">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Crown className="text-yellow-400" size={22} />
             <h3 className="text-xl sm:text-2xl font-black italic uppercase tracking-tight">Fundadores & Direção</h3>
+            <span className="text-[10px] font-black uppercase tracking-[0.25em] text-yellow-300/80 bg-yellow-500/10 border border-yellow-500/30 rounded-full px-3 py-1">
+              Giram o ponteiro da empresa
+            </span>
           </div>
+          <p className="text-sm text-white/60 -mt-2 max-w-3xl">
+            Sócios não apagam incêndio operacional — isso é papel do Gestor de Projetos. Eles focam em
+            <b className="text-white"> estratégia, tráfego, comercial e crescimento</b>, funções que multiplicam receita e escalam a Pulse.
+          </p>
+
           <div className="grid md:grid-cols-2 gap-6">
             {FOUNDERS.map((f, i) => (
               <motion.div

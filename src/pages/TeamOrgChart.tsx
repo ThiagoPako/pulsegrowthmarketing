@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -5,6 +6,8 @@ import {
   Camera, Share2, Heart, DollarSign, Megaphone, HelpCircle, ArrowRight, Users,
   Target, Code, TrendingUp, Handshake, BarChart3, Sparkles, Phone, Calendar,
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+
 
 // ─────────────────────────────────────────────────────────────
 //  ORGANOGRAMA / INFOGRÁFICO DE RESPONSABILIDADES
@@ -57,7 +60,7 @@ const PROJECT_MANAGER = {
 
 const TEAM_ROLES = [
   {
-    icon: PenTool, name: 'Copywriter', color: '#a78bfa', person: 'Naraely',
+    icon: PenTool, name: 'Copywriter', color: '#a78bfa', roleKeys: ['copywriter'],
     responsibilities: [
       'Escrever roteiros de reels, vídeos institucionais e campanhas',
       'Criar copies persuasivas para artes, criativos e stories',
@@ -68,7 +71,7 @@ const TEAM_ROLES = [
     reportsTo: 'Gestor de Projetos',
   },
   {
-    icon: Video, name: 'Videomaker', color: '#fb923c',
+    icon: Video, name: 'Videomaker', color: '#fb923c', roleKeys: ['videomaker'],
     responsibilities: [
       'Gravar TODOS os vídeos agendados seguindo o roteiro do Copy',
       'Chegar 10 min antes no local da gravação, com equipamento carregado',
@@ -79,7 +82,7 @@ const TEAM_ROLES = [
     reportsTo: 'Gestor de Projetos',
   },
   {
-    icon: Scissors, name: 'Editor', color: '#f472b6',
+    icon: Scissors, name: 'Editor', color: '#f472b6', roleKeys: ['editor'],
     responsibilities: [
       'Editar reels, VSLs e vídeos institucionais respeitando o SLA',
       'Aplicar identidade visual e template de cada cliente',
@@ -90,7 +93,7 @@ const TEAM_ROLES = [
     reportsTo: 'Gestor de Projetos',
   },
   {
-    icon: Palette, name: 'Designer', color: '#38bdf8',
+    icon: Palette, name: 'Designer', color: '#38bdf8', roleKeys: ['designer'],
     responsibilities: [
       'Produzir artes de feed, stories, criativos de tráfego e mídia física',
       'Seguir briefing e identidade visual enviados pelo Gestor de Projetos',
@@ -101,7 +104,7 @@ const TEAM_ROLES = [
     reportsTo: 'Gestor de Projetos',
   },
   {
-    icon: Camera, name: 'Fotógrafo', color: '#facc15',
+    icon: Camera, name: 'Fotógrafo', color: '#facc15', roleKeys: ['fotografo'],
     responsibilities: [
       'Realizar sessões fotográficas dos clientes agendadas na agenda',
       'Tratar e entregar banco de imagens em até 48h após a sessão',
@@ -111,7 +114,7 @@ const TEAM_ROLES = [
     reportsTo: 'Gestor de Projetos',
   },
   {
-    icon: Share2, name: 'Social Media', color: '#22d3ee', person: 'Rayssa',
+    icon: Share2, name: 'Social Media', color: '#22d3ee', roleKeys: ['social_media'],
     responsibilities: [
       'Publicar TODO o conteúdo aprovado nas redes dos clientes no horário certo',
       'Agendar posts na semana e manter o calendário editorial atualizado',
@@ -122,7 +125,7 @@ const TEAM_ROLES = [
     reportsTo: 'Gestor de Projetos',
   },
   {
-    icon: Heart, name: 'Endomarketing', color: '#f43f5e', person: 'Naraely',
+    icon: Heart, name: 'Endomarketing', color: '#f43f5e', roleKeys: ['endomarketing', 'parceiro'],
     responsibilities: [
       'Planejar e executar ações internas (aniversários, celebrações, cultura)',
       'Ativar parceiros e cuidar dos agendamentos endo',
@@ -210,8 +213,25 @@ const GOLDEN_RULES = [
 
 
 
+type ProfileLite = { id: string; name: string | null; role: string | null; avatar_url?: string | null };
+
 export default function TeamOrgChart() {
   const navigate = useNavigate();
+  const [profiles, setProfiles] = useState<ProfileLite[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, name, role, avatar_url')
+        .order('name');
+      setProfiles((data as ProfileLite[]) || []);
+    })();
+  }, []);
+
+  const peopleByRole = (keys: string[]) =>
+    profiles.filter(p => p.role && keys.includes(p.role));
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0a] via-[#0f0f14] to-[#0a0a0a] text-white">
@@ -361,19 +381,39 @@ export default function TeamOrgChart() {
                   >
                     <r.icon size={20} style={{ color: r.color }} />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <h4 className="font-black italic uppercase tracking-tight">{r.name}</h4>
-                    {r.person && (
-                      <p className="text-[11px] font-bold text-white/80">
-                        👤 {r.person}
-                      </p>
-                    )}
                     <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">
                       Reporta a: <span style={{ color: r.color }}>{r.reportsTo}</span>
                     </p>
                   </div>
-
                 </div>
+
+                {/* Colaboradores atribuídos a esta função (dinâmico) */}
+                {(() => {
+                  const members = peopleByRole(r.roleKeys);
+                  if (members.length === 0) {
+                    return (
+                      <p className="text-[11px] italic text-white/40 mb-3">
+                        Nenhum colaborador cadastrado nesta função ainda.
+                      </p>
+                    );
+                  }
+                  return (
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {members.map(m => (
+                        <span
+                          key={m.id}
+                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold"
+                          style={{ background: `${r.color}1f`, color: r.color, border: `1px solid ${r.color}55` }}
+                        >
+                          👤 {m.name || 'Sem nome'}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
+
                 <ul className="space-y-1.5">
                   {r.responsibilities.map((rs) => (
                     <li key={rs} className="text-xs text-white/70 flex gap-2">
@@ -381,6 +421,7 @@ export default function TeamOrgChart() {
                     </li>
                   ))}
                 </ul>
+
               </motion.div>
             ))}
           </div>

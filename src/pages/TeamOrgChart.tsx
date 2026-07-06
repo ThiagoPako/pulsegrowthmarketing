@@ -158,11 +158,13 @@ const SCENARIOS = [
 ];
 
 const GOLDEN_RULES = [
-  { icon: Phone, text: 'Nenhum profissional pode ficar parado. Se travou, avise o Gestor de Projetos AGORA.' },
+  { icon: Phone, text: 'Problema operacional? Vai para o Gestor de Projetos — não escale direto aos sócios.' },
+  { icon: Crown, text: 'Sócios focam em girar o ponteiro: estratégia, tráfego, comercial e crescimento.' },
   { icon: Calendar, text: 'Toda gravação, entrega e reunião passa pela agenda do Gestor de Projetos.' },
-  { icon: Users, text: 'O fluxo padrão é: Copy escreve → Gestor distribui → Equipe executa → Social publica.' },
+  { icon: Users, text: 'Fluxo padrão: Copy escreve → Gestor distribui → Equipe executa → Social publica.' },
   { icon: Sparkles, text: 'Dúvida de "com quem falar?" — sempre comece pelo Gestor de Projetos.' },
 ];
+
 
 export default function TeamOrgChart() {
   const navigate = useNavigate();

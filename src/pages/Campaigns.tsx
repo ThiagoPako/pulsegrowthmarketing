@@ -6,11 +6,17 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Megaphone, Search } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Plus, Megaphone, Search, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import NewCampaignDialog from '@/components/campaigns/NewCampaignDialog';
 import { CAMPAIGN_TYPE_LABELS, CampaignStatus, formatBrDate } from '@/lib/campaignsUtils';
 import { toast } from 'sonner';
+
 
 interface Campaign {
   id: string;

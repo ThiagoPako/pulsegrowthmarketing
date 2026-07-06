@@ -46,14 +46,16 @@ const PROJECT_MANAGER = {
   color: 'from-blue-500 to-indigo-700',
   accent: '#60a5fa',
   desc:
-    'O escudo dos sócios. Absorve e resolve todos os problemas operacionais para que Thiago e Victor foquem 100% em girar o ponteiro da empresa (estratégia, tráfego, comercial e crescimento).',
+    'O escudo dos sócios que trabalha na ANTECIPAÇÃO: identifica riscos e resolve problemas ANTES que virem crise, deixando Thiago e Victor 100% focados em girar o ponteiro da empresa (estratégia, tráfego, comercial e crescimento).',
   duties: [
-    'Resolve problemas operacionais antes que virem crise',
+    'ANTECIPA problemas — mapeia riscos e resolve antes que virem crise',
     'Distribui roteiros, briefings e tarefas para toda a equipe',
     'Cobra prazos e destrava qualquer tarefa parada',
-    'Agenda gravações, reuniões e liga para clientes',
+    'Agenda gravações, ligações e reuniões com clientes',
+    'Participa (junto com o Social Media) de reuniões pontuais com clientes quando necessário',
     'Filtra o que precisa (ou não) chegar aos sócios',
     'Mantém a máquina rodando sem depender dos fundadores',
+
   ],
 };
 
@@ -123,7 +125,9 @@ const TEAM_ROLES = [
       'Publica TODO conteúdo aprovado nas redes dos clientes no horário certo e mantém o calendário editorial atualizado',
       'Monitora comentários/DMs e repassa ao cliente (NÃO responde em nome do cliente)',
       'Monitora métricas semanais e reporta desempenho ao Gestor de Projetos',
+      'Participa (junto com o Gestor de Projetos) de reuniões pontuais com clientes quando necessário',
       'Registra cada entrega no módulo Entregas Social',
+
     ],
 
     reportsTo: 'Gestor de Projetos',
@@ -207,6 +211,9 @@ const SCENARIOS = [
 ];
 
 const GOLDEN_RULES = [
+  { icon: Sparkles, text: 'Antecipação > correção: Gestor de Projetos age ANTES do problema virar crise.' },
+  { icon: Users, text: 'Reuniões pontuais com clientes: Gestor de Projetos + Social Media presentes quando necessário.' },
+
   { icon: Phone, text: 'Problema operacional? Vai para o Gestor de Projetos — não escale direto aos sócios.' },
   { icon: Crown, text: 'Sócios focam em girar o ponteiro: estratégia, tráfego, comercial e crescimento.' },
   { icon: Calendar, text: 'Toda gravação, entrega e reunião passa pela agenda do Gestor de Projetos.' },

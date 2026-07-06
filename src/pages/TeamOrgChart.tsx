@@ -194,19 +194,20 @@ const SCENARIOS = [
   {
     icon: Heart, color: '#f43f5e',
     situation: 'Ação de endomarketing / evento interno',
-    who: 'Naraely',
-    action: 'Responsável direta pelo endomarketing e ativações internas.',
+    who: 'Naraely → aprovação de Victor Gabriel',
+    action: 'Naraely planeja e apresenta previamente para aprovação financeira ANTES de contratar ou executar.',
   },
-
 ];
 
 const GOLDEN_RULES = [
   { icon: Phone, text: 'Problema operacional? Vai para o Gestor de Projetos — não escale direto aos sócios.' },
   { icon: Crown, text: 'Sócios focam em girar o ponteiro: estratégia, tráfego, comercial e crescimento.' },
   { icon: Calendar, text: 'Toda gravação, entrega e reunião passa pela agenda do Gestor de Projetos.' },
+  { icon: DollarSign, text: 'Eventos internos e ações de endomarketing só acontecem APÓS aprovação financeira do Victor Gabriel.' },
   { icon: Users, text: 'Fluxo padrão: Copy escreve → Gestor distribui → Equipe executa → Social publica.' },
   { icon: Sparkles, text: 'Dúvida de "com quem falar?" — sempre comece pelo Gestor de Projetos.' },
 ];
+
 
 
 export default function TeamOrgChart() {

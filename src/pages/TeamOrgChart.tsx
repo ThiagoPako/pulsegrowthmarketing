@@ -82,7 +82,7 @@ const TEAM_ROLES = [
     reportsTo: 'Gestor de Projetos',
   },
   {
-    icon: Scissors, name: 'Editor', color: '#f472b6',
+    icon: Scissors, name: 'Editor', color: '#f472b6', roleKeys: ['editor'],
     responsibilities: [
       'Editar reels, VSLs e vídeos institucionais respeitando o SLA',
       'Aplicar identidade visual e template de cada cliente',

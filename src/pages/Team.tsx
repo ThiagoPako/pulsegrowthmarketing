@@ -27,7 +27,7 @@ import { CITY_LABELS, type CityCode } from '@/contexts/CityContext';
 const ALL_CITIES: CityCode[] = ['minacu', 'uruacu'];
 const VPS_API_BASE = 'https://agenciapulse.tech/api';
 
-const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'fotografo', 'designer'];
+const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'fotografo', 'designer', 'copywriter', 'gestor_projetos'];
 
 const PARTNER_FUNCTIONS = [
   { value: 'fotografo', label: 'Fotografia' },

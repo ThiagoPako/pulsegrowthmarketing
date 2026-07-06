@@ -54,6 +54,11 @@ export function useDesignTasks() {
   const queryClient = useQueryClient();
   const { activeCity, isLoading: cityLoading } = useCity();
 
+  // Only fetch tasks from the last 90 days to keep the kanban snappy.
+  // Older 'aprovado' cards stay in reports; the kanban shows recent work.
+  const RECENT_WINDOW_DAYS = 90;
+  const recentSince = new Date(Date.now() - RECENT_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
   const tasksQuery = useQuery({
     queryKey: ['design-tasks', activeCity],
     queryFn: async () => {
@@ -61,15 +66,19 @@ export function useDesignTasks() {
         const { data, error } = await supabase
           .from('design_tasks')
           .select('*, clients(company_name, color, logo_url, whatsapp, responsible_person), profiles!design_tasks_assigned_to_fkey(name, display_name, avatar_url)')
-          .order('created_at', { ascending: false });
-        
+          .gte('created_at', recentSince)
+          .order('created_at', { ascending: false })
+          .limit(500);
+
         if (error) {
           console.warn('Error fetching design tasks with relations, retrying simple query:', error);
 
           const fallback = await supabase
             .from('design_tasks')
             .select('*')
-            .order('created_at', { ascending: false });
+            .gte('created_at', recentSince)
+            .order('created_at', { ascending: false })
+            .limit(500);
 
           if (fallback.error) {
             console.error('Error fetching design tasks:', fallback.error);
@@ -85,10 +94,11 @@ export function useDesignTasks() {
       }
     },
     enabled: !cityLoading,
-    refetchInterval: 8000,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: false,
   });
+
 
   const historyQuery = (taskId: string) => useQuery({
     queryKey: ['design-task-history', activeCity, taskId],

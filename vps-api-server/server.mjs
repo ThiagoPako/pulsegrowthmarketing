@@ -4473,6 +4473,7 @@ const ALLOWED_TABLES = [
   'training_presentations','training_slides',
   'training_tracks','training_modules','training_lessons','user_training_progress',
   'user_permissions','login_logs',
+  'campaigns',
 ];
 
 // ═══════════════════════════════════════════════════════════════

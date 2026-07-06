@@ -202,6 +202,7 @@ function rowToScript(r: any): Script {
     recordingId: r.recording_id || undefined,
     clientEdited: r.client_edited || false,
     clientEditedAt: r.client_edited_at || undefined,
+    campaignSlotId: r.campaign_slot_id || undefined,
   };
 }
 

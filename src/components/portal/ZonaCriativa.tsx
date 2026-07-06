@@ -23,6 +23,7 @@ interface Script {
   client_edited: boolean;
   client_edited_at: string | null;
   recorded: boolean;
+  campaign_slot_id?: string | null;
 }
 
 interface Author {
@@ -449,6 +450,7 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                 const isUrgent = script.client_priority === 'urgent';
                 const isPriority = script.client_priority === 'priority';
                 const isRecorded = script.recorded;
+                const isCampaign = !!script.campaign_slot_id;
 
                 return (
                   <motion.div
@@ -465,10 +467,11 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                     }}
                     className="relative group"
                   >
-                    {/* Glow effect for priority/recorded cards */}
+                    {/* Glow effect for priority/recorded/campaign cards */}
                     {isRecorded && <GlowBorder color="rgba(34,197,94,0.2)" intensity="low" />}
                     {!isRecorded && isUrgent && <GlowBorder color="rgba(239,68,68,0.25)" intensity="high" />}
                     {!isRecorded && isPriority && <GlowBorder color="rgba(245,158,11,0.2)" intensity="low" />}
+                    {!isRecorded && !isUrgent && !isPriority && isCampaign && <GlowBorder color="rgba(241,89,42,0.25)" intensity="low" />}
 
                     <div className={`relative rounded-2xl overflow-hidden border transition-all duration-300 bg-white/[0.02] ${
                       isRecorded
@@ -477,8 +480,15 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
                         ? 'border-red-500/30 hover:border-red-500/50'
                         : isPriority
                         ? 'border-amber-500/25 hover:border-amber-500/40'
+                        : isCampaign
+                        ? 'border-orange-500/40 hover:border-orange-500/60 shadow-[0_0_24px_rgba(241,89,42,0.12)]'
                         : 'border-white/[0.06] hover:border-white/[0.12]'
                     }`}>
+                      {isCampaign && (
+                        <div className="absolute top-0 inset-x-0 z-20 h-7 bg-gradient-to-r from-orange-500 via-orange-400 to-orange-500 flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-widest uppercase text-white shadow-lg">
+                          🎯 Roteiro de Campanha
+                        </div>
+                      )}
                       <button onClick={() => setSelectedScript(script)} className="w-full text-left">
                         {/* Cover */}
                         <div className={`relative h-32 sm:h-36 bg-gradient-to-br ${cover.gradient} overflow-hidden`} style={{ backgroundImage: cover.pattern }}>

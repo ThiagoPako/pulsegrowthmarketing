@@ -202,6 +202,7 @@ function rowToScript(r: any): Script {
     recordingId: r.recording_id || undefined,
     clientEdited: r.client_edited || false,
     clientEditedAt: r.client_edited_at || undefined,
+    campaignSlotId: r.campaign_slot_id || undefined,
   };
 }
 
@@ -223,6 +224,7 @@ function scriptToRow(s: Script) {
     created_by: s.createdBy || null,
     direct_to_editing: s.directToEditing || false,
     recording_id: s.recordingId || null,
+    campaign_slot_id: s.campaignSlotId || null,
   };
 }
 

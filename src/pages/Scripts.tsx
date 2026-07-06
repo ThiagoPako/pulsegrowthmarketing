@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Textarea } from '@/components/ui/textarea';
 import { NICHE_OPTIONS } from '@/lib/seasonalDates';
 import { highlightQuotes, highlightQuotesForPdf, cleanHtml } from '@/lib/highlightQuotes';
@@ -215,7 +216,45 @@ export default function Scripts() {
     recordingId: '' as string,
     prospectName: '' as string,
     materialLink: '' as string,
+    campaignSlotId: '' as string,
+    campaignName: '' as string,
   });
+
+  // ── Deep-link from Campanhas: preset form and auto-open ──
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const openScriptId = searchParams.get('openScript');
+    if (openScriptId) {
+      const found = scripts.find(s => s.id === openScriptId);
+      if (found) {
+        handleOpen(found);
+        // Clear params so it doesn't re-trigger
+        setSearchParams({}, { replace: true });
+      }
+      return;
+    }
+    const campaignSlotId = searchParams.get('campaignSlotId');
+    if (campaignSlotId) {
+      const clientId = searchParams.get('clientId') || '';
+      const campaignName = searchParams.get('campaignName') || '';
+      const title = searchParams.get('title') || '';
+      const contentFormat = (searchParams.get('contentFormat') as ScriptContentFormat) || 'reels';
+      setEditing(null);
+      setForm({
+        clientId, title, videoType: 'vendas', contentFormat,
+        content: '', caption: '', priority: 'normal',
+        isEndomarketing: false, endoClientId: '', scheduledDate: '',
+        directToEditing: false, isAvulso: false, recordingId: '',
+        prospectName: '', materialLink: '',
+        campaignSlotId, campaignName,
+      });
+      setOpen(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, scripts]);
+
+
 
   // Avulso recordings (type=avulso, with prospect_name)
   const avulsoRecordings = useMemo(() => {
@@ -264,11 +303,13 @@ export default function Scripts() {
           recordingId: script.recordingId || '',
           prospectName: script.recordingId ? (recordings.find(r => r.id === script.recordingId)?.prospectName || '') : '',
           materialLink: '',
+          campaignSlotId: script.campaignSlotId || '',
+          campaignName: '',
         });
       });
     } else {
       setEditing(null);
-      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: isEditorRole ? true : false, isAvulso: false, recordingId: '', prospectName: '', materialLink: '' });
+      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: isEditorRole ? true : false, isAvulso: false, recordingId: '', prospectName: '', materialLink: '', campaignSlotId: '', campaignName: '' });
     }
     setOpen(true);
   };
@@ -339,6 +380,7 @@ export default function Scripts() {
       scheduledDate: form.scheduledDate || undefined,
       directToEditing: form.directToEditing,
       recordingId: form.isAvulso ? form.recordingId : undefined,
+      campaignSlotId: form.campaignSlotId || undefined,
     };
     if (editing) {
       updateScript({ ...editing, ...scriptData, updatedAt: now });
@@ -351,6 +393,17 @@ export default function Scripts() {
       await addScript(scriptObj);
       if (captionToSave) {
         await supabase.from('scripts').update({ caption: captionToSave } as any).eq('id', scriptId);
+      }
+      // Link back to campaign slot if this script came from a campaign
+      if (form.campaignSlotId) {
+        try {
+          await supabase.from('campaign_slots').update({
+            script_id: scriptId,
+            status: 'roteiro_pronto',
+          } as any).eq('id', form.campaignSlotId);
+        } catch (e) {
+          console.error('Erro ao vincular roteiro à campanha:', e);
+        }
       }
       
       // Determine kanban column and assignment based on directToEditing
@@ -1047,7 +1100,7 @@ export default function Scripts() {
               <Button onClick={() => handleOpen()}><Plus size={16} className="mr-2" /> Novo Roteiro</Button>
               <Button variant="outline" className="gap-1.5 border-sky-500/40 text-sky-600 hover:bg-sky-500/10" onClick={() => {
                 setEditing(null);
-                setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: false, isAvulso: true, recordingId: '', prospectName: '', materialLink: '' });
+                setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: false, isAvulso: true, recordingId: '', prospectName: '', materialLink: '', campaignSlotId: '', campaignName: '' });
                 setOpen(true);
               }}>
                 <Video size={16} /> Roteiro Avulso
@@ -1163,6 +1216,11 @@ export default function Scripts() {
                       🎬 Direto p/ Edição
                     </Badge>
                   )}
+                  {script.campaignSlotId && (
+                    <Badge className="text-[9px] bg-primary/20 text-primary border-primary/40">
+                      🎯 Campanha
+                    </Badge>
+                  )}
                   {(script.recordingId || !script.clientId) && (
                     <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-sky-500/30">
                       📹 Avulso
@@ -1219,8 +1277,27 @@ export default function Scripts() {
       {/* Create/Edit Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editing ? 'Editar Roteiro' : form.isAvulso ? '📹 Novo Roteiro Avulso' : 'Novo Roteiro'}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center gap-2">
+            {editing ? 'Editar Roteiro' : form.isAvulso ? '📹 Novo Roteiro Avulso' : 'Novo Roteiro'}
+            {form.campaignSlotId && (
+              <Badge className="bg-primary/15 text-primary border-primary/30 gap-1">
+                🎯 Campanha{form.campaignName ? `: ${form.campaignName}` : ''}
+              </Badge>
+            )}
+          </DialogTitle></DialogHeader>
           <div className="space-y-4">
+            {form.campaignSlotId && (
+              <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-3 flex items-center gap-2 text-sm">
+                <span className="text-lg">🎯</span>
+                <div className="flex-1">
+                  <p className="font-semibold text-primary">Roteiro de campanha</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Ao salvar, este roteiro será automaticamente vinculado ao slot da campanha
+                    {form.campaignName ? <> <strong>{form.campaignName}</strong></> : ''}.
+                  </p>
+                </div>
+              </div>
+            )}
             {form.isAvulso ? (
               /* Avulso mode: select recording instead of client */
               <div className="p-4 rounded-xl border-2 border-sky-500/30 bg-sky-500/5 space-y-3">

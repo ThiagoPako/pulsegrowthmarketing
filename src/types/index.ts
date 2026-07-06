@@ -256,6 +256,7 @@ export interface Script {
   eventRecordingId?: string; // linked event recording
   clientEdited?: boolean; // edited by client in portal
   clientEditedAt?: string; // ISO date of client edit
+  campaignSlotId?: string; // linked campaign slot
 }
 
 export interface ActiveRecording {

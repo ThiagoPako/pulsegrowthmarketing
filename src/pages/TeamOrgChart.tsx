@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -5,6 +6,8 @@ import {
   Camera, Share2, Heart, DollarSign, Megaphone, HelpCircle, ArrowRight, Users,
   Target, Code, TrendingUp, Handshake, BarChart3, Sparkles, Phone, Calendar,
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+
 
 // ─────────────────────────────────────────────────────────────
 //  ORGANOGRAMA / INFOGRÁFICO DE RESPONSABILIDADES

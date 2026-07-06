@@ -49,6 +49,18 @@ export default function Campaigns() {
 
   useEffect(() => { load(); }, []);
 
+  const handleDelete = async (campaignId: string, name: string) => {
+    try {
+      await supabase.from('campaign_slots').delete().eq('campaign_id', campaignId);
+      const { error } = await supabase.from('campaigns').delete().eq('id', campaignId);
+      if (error) throw error;
+      toast.success(`Campanha "${name}" apagada`);
+      setCampaigns(prev => prev.filter(c => c.id !== campaignId));
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao apagar campanha');
+    }
+  };
+
   const clientById = useMemo(() => Object.fromEntries(clients.map(c => [c.id, c])), [clients]);
 
   const filtered = campaigns.filter(c => {

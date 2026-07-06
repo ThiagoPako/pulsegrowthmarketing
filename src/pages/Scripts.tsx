@@ -1216,6 +1216,11 @@ export default function Scripts() {
                       🎬 Direto p/ Edição
                     </Badge>
                   )}
+                  {script.campaignSlotId && (
+                    <Badge className="text-[9px] bg-primary/20 text-primary border-primary/40">
+                      🎯 Campanha
+                    </Badge>
+                  )}
                   {(script.recordingId || !script.clientId) && (
                     <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-sky-500/30">
                       📹 Avulso

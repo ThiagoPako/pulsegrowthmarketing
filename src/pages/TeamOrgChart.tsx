@@ -89,8 +89,9 @@ const TEAM_ROLES = [
   {
     icon: Heart, name: 'Endomarketing', color: '#f43f5e',
     responsibilities: ['Cuida da comunicação interna', 'Ativa parceiros e agendamentos endo', 'Fortalece cultura da equipe'],
-    reportsTo: 'Victor Gabriel',
+    reportsTo: 'Naraely',
   },
+
 ];
 
 // Cenários "Quem eu procuro quando…"
@@ -152,9 +153,10 @@ const SCENARIOS = [
   {
     icon: Heart, color: '#f43f5e',
     situation: 'Ação de endomarketing / evento interno',
-    who: 'Victor Gabriel',
-    action: 'Supervisiona o time de endomarketing.',
+    who: 'Naraely',
+    action: 'Responsável direta pelo endomarketing e ativações internas.',
   },
+
 ];
 
 const GOLDEN_RULES = [

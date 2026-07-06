@@ -208,10 +208,18 @@ export default function TeamOrgChart() {
 
         {/* FUNDADORES */}
         <section className="space-y-6">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Crown className="text-yellow-400" size={22} />
             <h3 className="text-xl sm:text-2xl font-black italic uppercase tracking-tight">Fundadores & Direção</h3>
+            <span className="text-[10px] font-black uppercase tracking-[0.25em] text-yellow-300/80 bg-yellow-500/10 border border-yellow-500/30 rounded-full px-3 py-1">
+              Giram o ponteiro da empresa
+            </span>
           </div>
+          <p className="text-sm text-white/60 -mt-2 max-w-3xl">
+            Sócios não apagam incêndio operacional — isso é papel do Gestor de Projetos. Eles focam em
+            <b className="text-white"> estratégia, tráfego, comercial e crescimento</b>, funções que multiplicam receita e escalam a Pulse.
+          </p>
+
           <div className="grid md:grid-cols-2 gap-6">
             {FOUNDERS.map((f, i) => (
               <motion.div

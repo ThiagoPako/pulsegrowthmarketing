@@ -381,19 +381,39 @@ export default function TeamOrgChart() {
                   >
                     <r.icon size={20} style={{ color: r.color }} />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <h4 className="font-black italic uppercase tracking-tight">{r.name}</h4>
-                    {r.person && (
-                      <p className="text-[11px] font-bold text-white/80">
-                        👤 {r.person}
-                      </p>
-                    )}
                     <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">
                       Reporta a: <span style={{ color: r.color }}>{r.reportsTo}</span>
                     </p>
                   </div>
-
                 </div>
+
+                {/* Colaboradores atribuídos a esta função (dinâmico) */}
+                {(() => {
+                  const members = peopleByRole(r.roleKeys);
+                  if (members.length === 0) {
+                    return (
+                      <p className="text-[11px] italic text-white/40 mb-3">
+                        Nenhum colaborador cadastrado nesta função ainda.
+                      </p>
+                    );
+                  }
+                  return (
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {members.map(m => (
+                        <span
+                          key={m.id}
+                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold"
+                          style={{ background: `${r.color}1f`, color: r.color, border: `1px solid ${r.color}55` }}
+                        >
+                          👤 {m.name || 'Sem nome'}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
+
                 <ul className="space-y-1.5">
                   {r.responsibilities.map((rs) => (
                     <li key={rs} className="text-xs text-white/70 flex gap-2">
@@ -401,6 +421,7 @@ export default function TeamOrgChart() {
                     </li>
                   ))}
                 </ul>
+
               </motion.div>
             ))}
           </div>

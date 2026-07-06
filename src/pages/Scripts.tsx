@@ -267,11 +267,13 @@ export default function Scripts() {
           recordingId: script.recordingId || '',
           prospectName: script.recordingId ? (recordings.find(r => r.id === script.recordingId)?.prospectName || '') : '',
           materialLink: '',
+          campaignSlotId: script.campaignSlotId || '',
+          campaignName: '',
         });
       });
     } else {
       setEditing(null);
-      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: isEditorRole ? true : false, isAvulso: false, recordingId: '', prospectName: '', materialLink: '' });
+      setForm({ clientId: '', title: '', videoType: 'vendas', contentFormat: 'reels', content: '', caption: '', priority: 'normal', isEndomarketing: false, endoClientId: '', scheduledDate: '', directToEditing: isEditorRole ? true : false, isAvulso: false, recordingId: '', prospectName: '', materialLink: '', campaignSlotId: '', campaignName: '' });
     }
     setOpen(true);
   };

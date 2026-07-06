@@ -71,7 +71,7 @@ const TEAM_ROLES = [
     reportsTo: 'Gestor de Projetos',
   },
   {
-    icon: Video, name: 'Videomaker', color: '#fb923c',
+    icon: Video, name: 'Videomaker', color: '#fb923c', roleKeys: ['videomaker'],
     responsibilities: [
       'Gravar TODOS os vídeos agendados seguindo o roteiro do Copy',
       'Chegar 10 min antes no local da gravação, com equipamento carregado',

@@ -93,24 +93,26 @@ export default function Apresentacao() {
             <Sparkles className="h-3 w-3 mr-1" /> Apresentação Comercial
           </Badge>
 
-          {/* Seletor de cidade */}
-          <div className="flex items-center justify-center gap-2 mb-6">
-            <MapPin className="h-4 w-4 text-primary" />
-            <span className="text-xs uppercase tracking-wider text-muted-foreground mr-1">Cidade:</span>
-            {(['minacu','uruacu'] as CityCode[]).map((c) => (
-              <button
-                key={c}
-                onClick={() => changeCity(c)}
-                className={`px-3 py-1.5 rounded-full text-sm font-semibold border-2 transition-all ${
-                  presentationCity === c
-                    ? 'bg-primary text-primary-foreground border-primary shadow'
-                    : 'bg-background text-foreground border-border hover:border-primary/50'
-                }`}
-              >
-                {CITY_LABELS[c]}
-              </button>
-            ))}
-          </div>
+          {/* Seletor de cidade — oculto em link público (cliente vê só a cidade dele) */}
+          {!isPublic && (
+            <div className="flex items-center justify-center gap-2 mb-6">
+              <MapPin className="h-4 w-4 text-primary" />
+              <span className="text-xs uppercase tracking-wider text-muted-foreground mr-1">Cidade:</span>
+              {(['minacu','uruacu'] as CityCode[]).map((c) => (
+                <button
+                  key={c}
+                  onClick={() => changeCity(c)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-semibold border-2 transition-all ${
+                    presentationCity === c
+                      ? 'bg-primary text-primary-foreground border-primary shadow'
+                      : 'bg-background text-foreground border-border hover:border-primary/50'
+                  }`}
+                >
+                  {CITY_LABELS[c]}
+                </button>
+              ))}
+            </div>
+          )}
 
           <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight mb-4 leading-tight" style={{ fontFamily: 'var(--font-display)' }}>
             Escolha o plano para <br />

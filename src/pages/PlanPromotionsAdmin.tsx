@@ -103,6 +103,7 @@ const PRESETS: PresetDef[] = [
       starts_at: null,
       ends_at: null,
       max_redemptions: null,
+      exclusive: false,
     },
   },
 ];
@@ -119,6 +120,7 @@ const empty: Omit<Promo, 'id' | 'redemptions_count'> = {
   starts_at: null,
   ends_at: null,
   max_redemptions: null,
+  exclusive: false,
 };
 
 export default function PlanPromotionsAdmin() {

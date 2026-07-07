@@ -182,7 +182,6 @@ const MINACU_PLANS: Plan[] = [
     pricing: [
       { label: '6 meses', monthly: 'R$ 2.280' },
       { label: '12 meses', monthly: 'R$ 2.000', save: 'Economia de R$ 3.360' },
-    deliverables: 36, // 6 reels + 20 stories + 4 criativos + 4 artes + 2 posts arte
     deliverables: 34, // 6 reels + 20 stories + 4 criativos + 4 artes
   },
   {

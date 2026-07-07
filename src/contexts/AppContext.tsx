@@ -96,7 +96,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const { activeCity, isLoading: cityLoading } = useCity();
   const data = useSupabaseData();
 
-  const currentUser = profile ? profileToUser(profile) : null;
+  const [myRoles, setMyRoles] = useState<UserRole[]>([]);
+  const baseCurrentUser = profile ? profileToUser(profile) : null;
+  const currentUser = baseCurrentUser
+    ? { ...baseCurrentUser, roles: Array.from(new Set([baseCurrentUser.role, ...myRoles])) }
+    : null;
+
+  useEffect(() => {
+    if (!profile?.id) { setMyRoles([]); return; }
+    (async () => {
+      const { data } = await supabase.from('user_roles').select('role').eq('user_id', profile.id);
+      if (data) setMyRoles((data as Array<{ role: UserRole }>).map(r => r.role));
+    })();
+  }, [profile?.id]);
 
   // Heartbeat for virtual office presence
   usePresenceHeartbeat(user?.id ?? profile?.id);

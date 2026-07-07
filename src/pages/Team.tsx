@@ -327,18 +327,18 @@ export default function Team() {
   const handleChangeRole = async (member: TeamMember, newRole: UserRole) => {
     if (member.id === currentUser?.id) { toast.error('Você não pode alterar sua própria função'); return; }
     try {
-      // Update profiles table
       const { error: profileErr } = await supabase
         .from('profiles')
         .update({ role: newRole } as any)
         .eq('id', member.id);
       if (profileErr) throw profileErr;
 
-      // Update user_roles table
+      // Substitui todas as funções na tabela user_roles: apaga e reinsere primária + adicionais
+      await supabase.from('user_roles').delete().eq('user_id', member.id);
+      const rolesToInsert = Array.from(new Set<UserRole>([newRole, ...(member.extraRoles || [])]));
       const { error: roleErr } = await supabase
         .from('user_roles')
-        .update({ role: newRole } as any)
-        .eq('user_id', member.id);
+        .insert(rolesToInsert.map(r => ({ user_id: member.id, role: r })) as any);
       if (roleErr) throw roleErr;
 
       toast.success(`Função de ${member.displayName || member.name} alterada para ${ROLE_LABELS[newRole]}`);
@@ -347,6 +347,29 @@ export default function Team() {
       toast.error(err.message || 'Erro ao alterar função');
     }
   };
+
+  const handleToggleExtraRole = async (member: TeamMember, role: UserRole, checked: boolean) => {
+    if (role === member.role) { toast.error('Essa já é a função principal'); return; }
+    try {
+      if (checked) {
+        const { error } = await supabase.from('user_roles').insert({ user_id: member.id, role } as any);
+        if (error && !String(error.message || '').includes('duplicate')) throw error;
+      } else {
+        const { error } = await supabase.from('user_roles').delete().eq('user_id', member.id).eq('role', role);
+        if (error) throw error;
+      }
+      setMembers(prev => prev.map(m => {
+        if (m.id !== member.id) return m;
+        const extras = new Set(m.extraRoles || []);
+        if (checked) extras.add(role); else extras.delete(role);
+        return { ...m, extraRoles: Array.from(extras) };
+      }));
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao atualizar funções');
+    }
+  };
+
+
 
   const handleSavePartner = async () => {
     if (!partnerCreateForm.name || !partnerCreateForm.email || !partnerCreateForm.password) { toast.error('Preencha todos os campos'); return; }

@@ -12,6 +12,8 @@ export type Plan = {
   features: string[];
   pricing: { label: string; monthly: string; save?: string }[];
   ideal: string;
+  /** Total de entregáveis mensais de produção (reels + artes + stories + criativos + posts). */
+  deliverables: number;
 };
 
 // ============ URUAÇU (planos originais da apresentação) ============
@@ -40,6 +42,7 @@ const URUACU_PLANS: Plan[] = [
       { label: '6 meses', monthly: 'R$ 2.680' },
       { label: '12 meses', monthly: 'R$ 2.400', save: 'Economia de R$ 3.360' },
     ],
+    deliverables: 8, // 4 reels + 2 artes + 2 criativos
   },
   {
     key: 'boost',
@@ -72,6 +75,7 @@ const URUACU_PLANS: Plan[] = [
       { label: '6 meses', monthly: 'R$ 3.280' },
       { label: '12 meses', monthly: 'R$ 2.900', save: 'Economia de R$ 4.560' },
     ],
+    deliverables: 36, // 6 reels + 20 stories + 4 criativos + 4 artes + 2 posts arte
   },
   {
     key: 'premium',
@@ -102,6 +106,8 @@ const URUACU_PLANS: Plan[] = [
       { label: '6 meses', monthly: 'R$ 4.680' },
       { label: '12 meses', monthly: 'R$ 4.200', save: 'Economia de R$ 5.760' },
     ],
+    deliverables: 34, // 8 reels + 20 stories + 6 artes
+    deliverables: 34, // 8 reels + 20 stories + 6 artes
   },
   {
     key: 'elite',
@@ -125,6 +131,8 @@ const URUACU_PLANS: Plan[] = [
       { label: '6 meses', monthly: 'R$ 6.500' },
       { label: '12 meses', monthly: 'R$ 5.850', save: 'Economia de R$ 7.800' },
     ],
+    deliverables: 40, // 12 reels + 8 artes + 20 stories
+    deliverables: 40, // 12 reels + 8 artes + 20 stories
   },
 ];
 
@@ -151,6 +159,8 @@ const MINACU_PLANS: Plan[] = [
       { label: '6 meses', monthly: 'R$ 1.680' },
       { label: '12 meses', monthly: 'R$ 1.500', save: 'Economia de R$ 2.160' },
     ],
+    deliverables: 8, // 4 reels + 2 artes + 2 criativos
+    deliverables: 6,  // 4 reels + 2 artes
   },
   {
     key: 'boost',
@@ -176,6 +186,8 @@ const MINACU_PLANS: Plan[] = [
       { label: '6 meses', monthly: 'R$ 2.280' },
       { label: '12 meses', monthly: 'R$ 2.000', save: 'Economia de R$ 3.360' },
     ],
+    deliverables: 36, // 6 reels + 20 stories + 4 criativos + 4 artes + 2 posts arte
+    deliverables: 34, // 6 reels + 20 stories + 4 criativos + 4 artes
   },
   {
     key: 'premium',
@@ -199,6 +211,8 @@ const MINACU_PLANS: Plan[] = [
       { label: '6 meses', monthly: 'R$ 3.280' },
       { label: '12 meses', monthly: 'R$ 2.900', save: 'Economia de R$ 4.560' },
     ],
+    deliverables: 34, // 8 reels + 20 stories + 6 artes
+    deliverables: 34, // 8 reels + 20 stories + 6 artes
   },
   {
     key: 'elite',
@@ -220,6 +234,8 @@ const MINACU_PLANS: Plan[] = [
       { label: '6 meses', monthly: 'R$ 4.500' },
       { label: '12 meses', monthly: 'R$ 4.000', save: 'Economia de R$ 6.000' },
     ],
+    deliverables: 40, // 12 reels + 8 artes + 20 stories
+    deliverables: 40, // 12 reels + 8 artes + 20 stories
   },
 ];
 

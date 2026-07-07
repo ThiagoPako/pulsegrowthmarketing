@@ -27,7 +27,10 @@ export default function Apresentacao() {
   };
 
   const openPlan = (key: string) => {
-    window.open(`${baseRoute}/${key}?city=${presentationCity}`, '_blank', 'noopener,noreferrer');
+    const promo = searchParams.get('promo');
+    const qs = new URLSearchParams({ city: presentationCity });
+    if (promo) qs.set('promo', promo);
+    window.open(`${baseRoute}/${key}?${qs.toString()}`, '_blank', 'noopener,noreferrer');
   };
 
   const copyPublicLink = async (planKey?: string) => {

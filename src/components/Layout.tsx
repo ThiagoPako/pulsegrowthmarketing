@@ -243,12 +243,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       items: cat.items.filter(item => {
         if (!currentUser) return false;
         
-        // Check role first
-        const hasRole = item.roles.includes(currentUser.role);
+        // Check role(s) — considera função principal + adicionais
+        const userRoles = currentUser.roles && currentUser.roles.length ? currentUser.roles : [currentUser.role];
+        const hasRole = item.roles.some(r => userRoles.includes(r as any));
         if (!hasRole) return false;
 
         // Admin has full access to everything in their roles
-        if (currentUser.role === 'admin') return true;
+        if (userRoles.includes('admin' as any)) return true;
 
         // For others, check custom module permissions
         return hasModuleAccess(item.path);

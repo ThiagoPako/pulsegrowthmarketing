@@ -285,6 +285,17 @@ export default function PlanPromotionsAdmin() {
     setItems(prev => prev.map(it => it.id === p.id ? { ...it, redemptions_count: safe } : it));
   }
 
+  async function copyExclusiveLink(p: Promo) {
+    const city = p.city || 'uruacu';
+    const url = `${window.location.origin}/p/planos?city=${city}&promo=${p.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link exclusivo copiado!', { description: url });
+    } catch {
+      toast.error('Copie manualmente: ' + url);
+    }
+  }
+
 
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-6">

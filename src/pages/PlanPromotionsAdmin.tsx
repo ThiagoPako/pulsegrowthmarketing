@@ -516,9 +516,11 @@ export default function PlanPromotionsAdmin() {
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <span className="font-semibold text-sm">{p.title}</span>
-                  {p.active
-                    ? <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-500/20">Ativa</Badge>
-                    : <Badge variant="outline">Inativa</Badge>}
+                  {p.exclusive
+                    ? <Badge className="bg-primary/15 text-primary border-primary/30"><Lock className="h-3 w-3 mr-1" /> Exclusiva de link</Badge>
+                    : p.active
+                      ? <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-500/20">Ativa</Badge>
+                      : <Badge variant="outline">Inativa</Badge>}
                   <Badge variant="outline" className="text-[10px]">{p.city ?? 'Todas cidades'}</Badge>
                   <Badge variant="outline" className="text-[10px]">{p.plan_key ? PLANS.find(x => x.key === p.plan_key)?.name : 'Todos planos'}</Badge>
                 </div>

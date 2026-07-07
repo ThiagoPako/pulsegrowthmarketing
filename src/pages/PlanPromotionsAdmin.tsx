@@ -466,9 +466,18 @@ export default function PlanPromotionsAdmin() {
               onChange={e => setForm({ ...form, description: e.target.value })}
               placeholder="Ex: Feche o anual e ganhe 30% off nos primeiros 6 meses." />
           </div>
-          <div className="flex items-center gap-3">
-            <Switch checked={form.active} onCheckedChange={v => setForm({ ...form, active: v })} />
-            <span className="text-sm">Ativa</span>
+          <div className="flex flex-col gap-3 rounded-xl border border-border p-3">
+            <div className="flex items-center gap-3">
+              <Switch checked={form.active} onCheckedChange={v => setForm({ ...form, active: v })} />
+              <span className="text-sm">Ativa</span>
+            </div>
+            <div className="flex items-start gap-3">
+              <Switch checked={form.exclusive} onCheckedChange={v => setForm({ ...form, exclusive: v })} />
+              <div>
+                <span className="text-sm flex items-center gap-1.5"><Lock className="h-3.5 w-3.5 text-primary" /> Exclusiva de link</span>
+                <p className="text-xs text-muted-foreground">Só aplica quando o cliente abrir o link específico com o ID desta promoção. Não interfere nas demais.</p>
+              </div>
+            </div>
           </div>
           <div className="flex gap-2 pt-2">
             <Button onClick={save} disabled={saving} className="gap-2">

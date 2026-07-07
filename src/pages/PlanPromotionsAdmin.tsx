@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Trash2, Save, Tag, ArrowLeft, Rocket, Zap, Check, Flame, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Save, Tag, ArrowLeft, Rocket, Zap, Check, Flame, Sparkles, Link2, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PLANS } from '@/data/plans';
 import { motion } from 'framer-motion';
@@ -24,6 +24,7 @@ type Promo = {
   discount_percent: number;
   duration_months: number;
   active: boolean;
+  exclusive: boolean;
   starts_at: string | null;
   ends_at: string | null;
   max_redemptions: number | null;

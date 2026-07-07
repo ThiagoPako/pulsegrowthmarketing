@@ -24,12 +24,10 @@ export default function Apresentacao() {
 
   const changeCity = (city: CityCode) => {
     setSearchParams({ city });
-    if (!isPublic) setActiveCity(city);
   };
 
   const openPlan = (key: string) => {
-    const suffix = isPublic ? `?city=${presentationCity}` : '';
-    window.open(`${baseRoute}/${key}${suffix}`, '_blank', 'noopener,noreferrer');
+    window.open(`${baseRoute}/${key}?city=${presentationCity}`, '_blank', 'noopener,noreferrer');
   };
 
   const copyPublicLink = async (planKey?: string) => {

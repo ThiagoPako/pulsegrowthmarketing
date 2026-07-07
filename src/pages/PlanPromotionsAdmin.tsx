@@ -61,6 +61,7 @@ const PRESETS: PresetDef[] = [
       starts_at: null,
       ends_at: null,
       max_redemptions: null,
+      exclusive: false,
     },
   },
   {

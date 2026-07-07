@@ -175,7 +175,7 @@ export default function Apresentacao() {
 
                   <div className={`flex items-center gap-2 text-sm font-semibold ${isBoost ? 'text-primary-foreground' : 'text-primary'}`}>
                     <Check className="h-4 w-4" />
-                    {plan.features.length} entregas mensais
+                    {plan.deliverables} entregas mensais
                     <ArrowRight className="h-4 w-4 ml-auto group-hover:translate-x-1 transition-transform" />
                   </div>
                 </motion.button>

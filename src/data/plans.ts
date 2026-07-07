@@ -12,6 +12,8 @@ export type Plan = {
   features: string[];
   pricing: { label: string; monthly: string; save?: string }[];
   ideal: string;
+  /** Total de entregáveis mensais de produção (reels + artes + stories + criativos + posts). */
+  deliverables: number;
 };
 
 // ============ URUAÇU (planos originais da apresentação) ============

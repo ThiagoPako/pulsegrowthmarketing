@@ -174,7 +174,7 @@ const navCategories: NavCategory[] = [
       { path: '/whatsapp', label: 'WhatsApp', icon: MessageSquare, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/automacoes', label: 'Automações', icon: Bot, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/painel-tv', label: 'Painel TV', icon: Monitor, roles: ['admin'] },
-      { path: '/treinamento', label: 'Treinamento', icon: BookOpen, roles: ['admin', 'videomaker', 'social_media', 'editor', 'designer', 'fotografo', 'endomarketing'] },
+      { path: '/treinamento', label: 'Treinamento', icon: BookOpen, roles: ['admin', 'videomaker', 'social_media', 'editor', 'designer', 'fotografo', 'endomarketing', 'parceiro', 'copywriter', 'gestor_projetos'] },
       { path: '/treinamento-gestao', label: 'Gestão Trein.', icon: Settings, roles: ['admin'] },
       { path: '/portal-videos', label: 'Vídeos Portal', icon: Video, roles: ['admin'] },
       { path: '/configuracoes', label: 'Config', icon: Settings, roles: ['admin', 'social_media'] },
@@ -243,12 +243,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       items: cat.items.filter(item => {
         if (!currentUser) return false;
         
-        // Check role first
-        const hasRole = item.roles.includes(currentUser.role);
+        // Check role(s) — considera função principal + adicionais
+        const userRoles = currentUser.roles && currentUser.roles.length ? currentUser.roles : [currentUser.role];
+        const hasRole = item.roles.some(r => userRoles.includes(r as any));
         if (!hasRole) return false;
 
         // Admin has full access to everything in their roles
-        if (currentUser.role === 'admin') return true;
+        if (userRoles.includes('admin' as any)) return true;
 
         // For others, check custom module permissions
         return hasModuleAccess(item.path);

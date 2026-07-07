@@ -15,9 +15,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, KeyRound, Users, Handshake, Trash2, Shield, Lock, Cake, CalendarDays, BarChart3, DollarSign, MapPin } from 'lucide-react';
+import { Plus, KeyRound, Users, Handshake, Trash2, Shield, Lock, Cake, CalendarDays, BarChart3, DollarSign, MapPin, ShieldPlus } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import { useUserPermissions, AVAILABLE_MODULES } from '@/hooks/useUserPermissions';
 import BirthdayCountdown from '@/components/BirthdayCountdown';
@@ -42,6 +43,7 @@ interface TeamMember {
   name: string;
   email: string;
   role: UserRole;
+  extraRoles?: UserRole[];
   avatarUrl?: string;
   displayName?: string;
   jobTitle?: string;
@@ -92,20 +94,33 @@ export default function Team() {
   const [statsTarget, setStatsTarget] = useState<TeamMember | null>(null);
 
   const fetchMembers = async () => {
-    const { data } = await supabase.from('profiles').select('*');
+    const [{ data }, rolesRes] = await Promise.all([
+      supabase.from('profiles').select('*'),
+      supabase.from('user_roles').select('user_id, role'),
+    ]);
+    const rolesByUser = new Map<string, UserRole[]>();
+    ((rolesRes.data || []) as Array<{ user_id: string; role: UserRole }>).forEach(r => {
+      const list = rolesByUser.get(r.user_id) || [];
+      list.push(r.role);
+      rolesByUser.set(r.user_id, list);
+    });
     if (data) {
-      setMembers(data.map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        email: p.email,
-        role: p.role as UserRole,
-        avatarUrl: p.avatar_url,
-        displayName: p.display_name,
-        jobTitle: p.job_title,
-        bio: p.bio,
-        birthday: p.birthday,
-        monthlySalary: p.monthly_salary || 0,
-      })));
+      setMembers(data.map((p: any) => {
+        const all = rolesByUser.get(p.id) || [];
+        return {
+          id: p.id,
+          name: p.name,
+          email: p.email,
+          role: p.role as UserRole,
+          extraRoles: all.filter(r => r !== p.role),
+          avatarUrl: p.avatar_url,
+          displayName: p.display_name,
+          jobTitle: p.job_title,
+          bio: p.bio,
+          birthday: p.birthday,
+          monthlySalary: p.monthly_salary || 0,
+        };
+      }));
     }
     setLoading(false);
   };
@@ -312,18 +327,18 @@ export default function Team() {
   const handleChangeRole = async (member: TeamMember, newRole: UserRole) => {
     if (member.id === currentUser?.id) { toast.error('Você não pode alterar sua própria função'); return; }
     try {
-      // Update profiles table
       const { error: profileErr } = await supabase
         .from('profiles')
         .update({ role: newRole } as any)
         .eq('id', member.id);
       if (profileErr) throw profileErr;
 
-      // Update user_roles table
+      // Substitui todas as funções na tabela user_roles: apaga e reinsere primária + adicionais
+      await supabase.from('user_roles').delete().eq('user_id', member.id);
+      const rolesToInsert = Array.from(new Set<UserRole>([newRole, ...(member.extraRoles || [])]));
       const { error: roleErr } = await supabase
         .from('user_roles')
-        .update({ role: newRole } as any)
-        .eq('user_id', member.id);
+        .insert(rolesToInsert.map(r => ({ user_id: member.id, role: r })) as any);
       if (roleErr) throw roleErr;
 
       toast.success(`Função de ${member.displayName || member.name} alterada para ${ROLE_LABELS[newRole]}`);
@@ -332,6 +347,29 @@ export default function Team() {
       toast.error(err.message || 'Erro ao alterar função');
     }
   };
+
+  const handleToggleExtraRole = async (member: TeamMember, role: UserRole, checked: boolean) => {
+    if (role === member.role) { toast.error('Essa já é a função principal'); return; }
+    try {
+      if (checked) {
+        const { error } = await supabase.from('user_roles').insert({ user_id: member.id, role } as any);
+        if (error && !String(error.message || '').includes('duplicate')) throw error;
+      } else {
+        const { error } = await supabase.from('user_roles').delete().eq('user_id', member.id).eq('role', role);
+        if (error) throw error;
+      }
+      setMembers(prev => prev.map(m => {
+        if (m.id !== member.id) return m;
+        const extras = new Set(m.extraRoles || []);
+        if (checked) extras.add(role); else extras.delete(role);
+        return { ...m, extraRoles: Array.from(extras) };
+      }));
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao atualizar funções');
+    }
+  };
+
+
 
   const handleSavePartner = async () => {
     if (!partnerCreateForm.name || !partnerCreateForm.email || !partnerCreateForm.password) { toast.error('Preencha todos os campos'); return; }
@@ -649,6 +687,38 @@ export default function Team() {
                     </Select>
                   ) : (
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${roleColors[u.role]}`}>{ROLE_LABELS[u.role]}</span>
+                  )}
+                  {currentUser?.role === 'admin' && u.id !== currentUser?.id && (
+                    <Popover>
+                      <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          title="Funções adicionais"
+                          className="h-7 px-2 rounded-md bg-secondary/50 hover:bg-secondary text-[10px] flex items-center gap-1 border border-transparent hover:border-primary/30 transition-all"
+                        >
+                          <ShieldPlus size={12} />
+                          <span>+{u.extraRoles?.length || 0}</span>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-64 p-3" onClick={(e) => e.stopPropagation()}>
+                        <p className="text-xs font-medium mb-2">Funções adicionais</p>
+                        <p className="text-[10px] text-muted-foreground mb-3">Além da função principal, o colaborador terá acesso aos módulos das funções abaixo.</p>
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {ROLES.filter(r => r !== u.role).map(r => {
+                            const checked = u.extraRoles?.includes(r) || false;
+                            return (
+                              <label key={r} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-accent/50 rounded px-1.5 py-1">
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(v) => handleToggleExtraRole(u, r, !!v)}
+                                />
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${roleColors[r]}`}>{ROLE_LABELS[r]}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   )}
                   {currentUser?.role === 'admin' && (
                     <>

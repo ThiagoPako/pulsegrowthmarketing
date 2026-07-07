@@ -6,6 +6,7 @@ export interface User {
   email: string;
   password: string;
   role: UserRole;
+  roles?: UserRole[]; // Todas as funções (primary + adicionais)
   avatarUrl?: string; // base64 data URL
   displayName?: string;
   jobTitle?: string;

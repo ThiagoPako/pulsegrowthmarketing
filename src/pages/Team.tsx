@@ -43,6 +43,7 @@ interface TeamMember {
   name: string;
   email: string;
   role: UserRole;
+  extraRoles?: UserRole[];
   avatarUrl?: string;
   displayName?: string;
   jobTitle?: string;

@@ -236,8 +236,8 @@ export default function ApresentacaoPlano() {
     </>
   );
 
-  // ============== MOBILE: scroll vertical natural, sem etapas ==============
-  if (isMobile) {
+  // ============== MOBILE ou LINK PÚBLICO: scroll vertical natural, sem etapas ==============
+  if (isMobile || isPublic) {
     const mobileStages = [
       <StageIntro key="s0" />,
       <StagePlan key="s1" plan={plan} Icon={Icon} />,

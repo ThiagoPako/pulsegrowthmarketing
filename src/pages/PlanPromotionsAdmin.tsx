@@ -531,17 +531,34 @@ export default function PlanPromotionsAdmin() {
                 <div className="mt-2 flex items-center gap-2">
                   <Label className="text-xs text-muted-foreground">Clientes fechados:</Label>
                   <Input
+                    key={p.id + '-' + p.redemptions_count}
                     type="number"
                     min={0}
                     max={p.max_redemptions ?? undefined}
                     defaultValue={p.redemptions_count}
-                    className="h-8 w-24"
+                    className="h-8 w-20"
                     onBlur={e => {
                       const v = Number(e.target.value);
                       if (v !== p.redemptions_count) updateRedemptions(p, v);
                     }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                    }}
                   />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-8"
+                    onClick={e => {
+                      const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
+                      const v = Number(input?.value ?? p.redemptions_count);
+                      updateRedemptions(p, v);
+                    }}
+                  >
+                    Salvar
+                  </Button>
                 </div>
+
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" onClick={() => copyExclusiveLink(p)} className="gap-1">

@@ -94,20 +94,33 @@ export default function Team() {
   const [statsTarget, setStatsTarget] = useState<TeamMember | null>(null);
 
   const fetchMembers = async () => {
-    const { data } = await supabase.from('profiles').select('*');
+    const [{ data }, rolesRes] = await Promise.all([
+      supabase.from('profiles').select('*'),
+      supabase.from('user_roles').select('user_id, role'),
+    ]);
+    const rolesByUser = new Map<string, UserRole[]>();
+    ((rolesRes.data || []) as Array<{ user_id: string; role: UserRole }>).forEach(r => {
+      const list = rolesByUser.get(r.user_id) || [];
+      list.push(r.role);
+      rolesByUser.set(r.user_id, list);
+    });
     if (data) {
-      setMembers(data.map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        email: p.email,
-        role: p.role as UserRole,
-        avatarUrl: p.avatar_url,
-        displayName: p.display_name,
-        jobTitle: p.job_title,
-        bio: p.bio,
-        birthday: p.birthday,
-        monthlySalary: p.monthly_salary || 0,
-      })));
+      setMembers(data.map((p: any) => {
+        const all = rolesByUser.get(p.id) || [];
+        return {
+          id: p.id,
+          name: p.name,
+          email: p.email,
+          role: p.role as UserRole,
+          extraRoles: all.filter(r => r !== p.role),
+          avatarUrl: p.avatar_url,
+          displayName: p.display_name,
+          jobTitle: p.job_title,
+          bio: p.bio,
+          birthday: p.birthday,
+          monthlySalary: p.monthly_salary || 0,
+        };
+      }));
     }
     setLoading(false);
   };

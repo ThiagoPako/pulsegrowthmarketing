@@ -688,6 +688,38 @@ export default function Team() {
                   ) : (
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${roleColors[u.role]}`}>{ROLE_LABELS[u.role]}</span>
                   )}
+                  {currentUser?.role === 'admin' && u.id !== currentUser?.id && (
+                    <Popover>
+                      <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          title="Funções adicionais"
+                          className="h-7 px-2 rounded-md bg-secondary/50 hover:bg-secondary text-[10px] flex items-center gap-1 border border-transparent hover:border-primary/30 transition-all"
+                        >
+                          <ShieldPlus size={12} />
+                          <span>+{u.extraRoles?.length || 0}</span>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-64 p-3" onClick={(e) => e.stopPropagation()}>
+                        <p className="text-xs font-medium mb-2">Funções adicionais</p>
+                        <p className="text-[10px] text-muted-foreground mb-3">Além da função principal, o colaborador terá acesso aos módulos das funções abaixo.</p>
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {ROLES.filter(r => r !== u.role).map(r => {
+                            const checked = u.extraRoles?.includes(r) || false;
+                            return (
+                              <label key={r} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-accent/50 rounded px-1.5 py-1">
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(v) => handleToggleExtraRole(u, r, !!v)}
+                                />
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${roleColors[r]}`}>{ROLE_LABELS[r]}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
                   {currentUser?.role === 'admin' && (
                     <>
                       {/* Salary input */}

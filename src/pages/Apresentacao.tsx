@@ -23,11 +23,8 @@ export default function Apresentacao() {
     (queryCity === 'minacu' || queryCity === 'uruacu') ? queryCity : activeCity;
 
   const changeCity = (city: CityCode) => {
-    if (isPublic) {
-      setSearchParams({ city });
-    } else {
-      setActiveCity(city);
-    }
+    setSearchParams({ city });
+    if (!isPublic) setActiveCity(city);
   };
 
   const openPlan = (key: string) => {

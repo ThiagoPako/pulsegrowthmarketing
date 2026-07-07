@@ -42,6 +42,7 @@ const URUACU_PLANS: Plan[] = [
       { label: '6 meses', monthly: 'R$ 2.680' },
       { label: '12 meses', monthly: 'R$ 2.400', save: 'Economia de R$ 3.360' },
     ],
+    deliverables: 8, // 4 reels + 2 artes + 2 criativos
   },
   {
     key: 'boost',

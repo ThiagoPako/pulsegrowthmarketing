@@ -543,7 +543,10 @@ export default function PlanPromotionsAdmin() {
                   />
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => copyExclusiveLink(p)} className="gap-1">
+                  <Link2 size={14} /> Link do cliente
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => toggleActive(p)}>
                   {p.active ? 'Desativar' : 'Ativar'}
                 </Button>

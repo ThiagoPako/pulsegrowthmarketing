@@ -85,6 +85,7 @@ export default function ApresentacaoPlano() {
   const { activeCity } = useCity();
   const [searchParams] = useSearchParams();
   const queryCity = searchParams.get('city');
+  const promoIdParam = searchParams.get('promo');
   const effectiveCity = (queryCity === 'minacu' || queryCity === 'uruacu') ? queryCity : activeCity;
 
   const plan = plano ? getPlan(plano, effectiveCity) : undefined;
@@ -96,10 +97,36 @@ export default function ApresentacaoPlano() {
     (async () => {
       try {
         const today = new Date().toISOString().slice(0, 10);
+
+        // Modo link exclusivo: carrega a promo pelo id, ignorando active/city/plan
+        if (promoIdParam) {
+          const { data: exact } = await supabase
+            .from('plan_promotions' as any)
+            .select('*')
+            .eq('id', promoIdParam)
+            .maybeSingle();
+          const p: any = exact;
+          if (p) {
+            const valid =
+              (!p.starts_at || p.starts_at <= today) &&
+              (!p.ends_at || p.ends_at >= today) &&
+              (p.max_redemptions == null || (p.redemptions_count ?? 0) < p.max_redemptions) &&
+              (!p.plan_key || p.plan_key === plan.key);
+            if (valid) {
+              const isSem = p.applies_to === 'semestral' || p.applies_to === 'ambos';
+              const isAnual = p.applies_to === 'anual' || p.applies_to === 'ambos';
+              setPromo(isAnual ? p : p);
+              setSemPromo(isSem ? p : null);
+              return;
+            }
+          }
+        }
+
         const { data } = await supabase
           .from('plan_promotions' as any)
           .select('*')
           .eq('active', true)
+          .eq('exclusive', false)
           .or(`plan_key.is.null,plan_key.eq.${plan.key}`)
           .or(`city.is.null,city.eq.${activeCity}`)
           .order('discount_percent', { ascending: false });
@@ -120,7 +147,8 @@ export default function ApresentacaoPlano() {
         setSemPromo(sem && sem !== main ? sem : (mainAny && (mainAny.applies_to === 'semestral' || mainAny.applies_to === 'ambos') ? mainAny : null));
       } catch (err) { console.warn('promo error', err); }
     })();
-  }, [plan, activeCity]);
+  }, [plan, activeCity, promoIdParam]);
+
 
   // Realtime: atualiza vagas automaticamente quando redemptions_count mudar
   useEffect(() => {

@@ -5045,6 +5045,8 @@ export type Database = {
         | "parceiro"
         | "fotografo"
         | "designer"
+        | "copywriter"
+        | "gestor_projetos"
       cost_allocation_rule: "approved" | "recorded" | "posted"
       crm_lead_status:
         | "lead"
@@ -5190,6 +5192,8 @@ export const Constants = {
         "parceiro",
         "fotografo",
         "designer",
+        "copywriter",
+        "gestor_projetos",
       ],
       cost_allocation_rule: ["approved", "recorded", "posted"],
       crm_lead_status: [

@@ -23,16 +23,11 @@ export default function Apresentacao() {
     (queryCity === 'minacu' || queryCity === 'uruacu') ? queryCity : activeCity;
 
   const changeCity = (city: CityCode) => {
-    if (isPublic) {
-      setSearchParams({ city });
-    } else {
-      setActiveCity(city);
-    }
+    setSearchParams({ city });
   };
 
   const openPlan = (key: string) => {
-    const suffix = isPublic ? `?city=${presentationCity}` : '';
-    window.open(`${baseRoute}/${key}${suffix}`, '_blank', 'noopener,noreferrer');
+    window.open(`${baseRoute}/${key}?city=${presentationCity}`, '_blank', 'noopener,noreferrer');
   };
 
   const copyPublicLink = async (planKey?: string) => {
@@ -99,7 +94,7 @@ export default function Apresentacao() {
           <div className="flex items-center justify-center gap-2 mb-6">
             <MapPin className="h-4 w-4 text-primary" />
             <span className="text-xs uppercase tracking-wider text-muted-foreground mr-1">Cidade:</span>
-            {(isPublic ? (['minacu','uruacu'] as CityCode[]) : availableCities).map((c) => (
+            {(['minacu','uruacu'] as CityCode[]).map((c) => (
               <button
                 key={c}
                 onClick={() => changeCity(c)}

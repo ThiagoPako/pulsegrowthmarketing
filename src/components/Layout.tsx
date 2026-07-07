@@ -174,7 +174,7 @@ const navCategories: NavCategory[] = [
       { path: '/whatsapp', label: 'WhatsApp', icon: MessageSquare, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/automacoes', label: 'Automações', icon: Bot, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/painel-tv', label: 'Painel TV', icon: Monitor, roles: ['admin'] },
-      { path: '/treinamento', label: 'Treinamento', icon: BookOpen, roles: ['admin', 'videomaker', 'social_media', 'editor', 'designer', 'fotografo', 'endomarketing'] },
+      { path: '/treinamento', label: 'Treinamento', icon: BookOpen, roles: ['admin', 'videomaker', 'social_media', 'editor', 'designer', 'fotografo', 'endomarketing', 'parceiro', 'copywriter', 'gestor_projetos'] },
       { path: '/treinamento-gestao', label: 'Gestão Trein.', icon: Settings, roles: ['admin'] },
       { path: '/portal-videos', label: 'Vídeos Portal', icon: Video, roles: ['admin'] },
       { path: '/configuracoes', label: 'Config', icon: Settings, roles: ['admin', 'social_media'] },

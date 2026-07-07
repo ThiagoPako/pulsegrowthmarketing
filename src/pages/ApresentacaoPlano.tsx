@@ -107,15 +107,15 @@ export default function ApresentacaoPlano() {
             .maybeSingle();
           const p: any = exact;
           if (p) {
+            // Em link exclusivo NÃO invalidamos pelo max_redemptions
+            // (esse número é usado só para exibir "vagas restantes").
             const valid =
               (!p.starts_at || p.starts_at <= today) &&
               (!p.ends_at || p.ends_at >= today) &&
-              (p.max_redemptions == null || (p.redemptions_count ?? 0) < p.max_redemptions) &&
               (!p.plan_key || p.plan_key === plan.key);
             if (valid) {
               const isSem = p.applies_to === 'semestral' || p.applies_to === 'ambos';
-              const isAnual = p.applies_to === 'anual' || p.applies_to === 'ambos';
-              setPromo(isAnual ? p : p);
+              setPromo(p);
               setSemPromo(isSem ? p : null);
               return;
             }
@@ -248,14 +248,21 @@ export default function ApresentacaoPlano() {
       pricing && <StageComparison key="s6" plan={plan} pricing={pricing} promo={promo} />,
     ].filter(Boolean);
 
+    const sectionLabels = ['Início', 'Plano', 'Entregas', 'Investimento', 'Promoção', 'Com desconto', 'Comparativo'];
+
+    const scrollToSection = (idx: number) => {
+      const el = document.getElementById(`pulse-section-${idx}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
     return (
-      <div className="min-h-screen w-full bg-background text-foreground relative">
+      <div className="min-h-screen w-full bg-background text-foreground relative scroll-smooth">
         <div className="absolute inset-0 -z-10 pointer-events-none">
           <div className="absolute top-0 -left-32 w-[400px] h-[400px] rounded-full bg-primary/15 blur-3xl" />
           <div className="absolute bottom-0 -right-32 w-[400px] h-[400px] rounded-full bg-primary/20 blur-3xl" />
         </div>
 
-        {/* TOP BAR mobile */}
+        {/* TOP BAR */}
         <div className="sticky top-0 z-50 flex items-center justify-between gap-2 px-3 py-2 bg-background/90 backdrop-blur border-b border-border">
           <div className="flex items-center gap-2">
             <img src={LOGO_URL} alt="Pulse" className="h-7" />
@@ -264,19 +271,43 @@ export default function ApresentacaoPlano() {
             </Badge>
           </div>
           <div className="flex items-center gap-1.5">
-            <Button variant="outline" size="sm" onClick={copyPublicLink} className="h-8 px-2" aria-label="Copiar link">
-              <Link2 className="h-4 w-4" />
-            </Button>
+            {!isPublic && (
+              <Button variant="outline" size="sm" onClick={copyPublicLink} className="h-8 px-2" aria-label="Copiar link">
+                <Link2 className="h-4 w-4" />
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => window.close()} className="h-8 px-2" aria-label="Fechar">
               <X className="h-4 w-4" />
             </Button>
           </div>
         </div>
 
+        {/* Dots laterais de seção (desktop apenas, para link público) */}
+        <div className="hidden lg:flex fixed right-4 top-1/2 -translate-y-1/2 z-40 flex-col gap-2">
+          {mobileStages.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => scrollToSection(i)}
+              title={sectionLabels[i]}
+              className="group flex items-center gap-2"
+              aria-label={sectionLabels[i]}
+            >
+              <span className="hidden group-hover:inline text-xs bg-background/90 backdrop-blur px-2 py-0.5 rounded border border-border">
+                {sectionLabels[i]}
+              </span>
+              <span className="h-2.5 w-2.5 rounded-full bg-border hover:bg-primary transition-all" />
+            </button>
+          ))}
+        </div>
+
         {/* Todas as etapas empilhadas para scroll natural */}
-        <div className="flex flex-col">
+        <div className="flex flex-col scroll-smooth">
           {mobileStages.map((el, i) => (
-            <section key={i} className="w-full px-3 py-10 border-b border-border/50 last:border-b-0">
+            <section
+              key={i}
+              id={`pulse-section-${i}`}
+              className="w-full px-3 py-10 md:py-16 border-b border-border/50 last:border-b-0 scroll-mt-16"
+            >
               {el}
             </section>
           ))}
@@ -289,6 +320,13 @@ export default function ApresentacaoPlano() {
               <ArrowLeft className="h-4 w-4" /> Anterior
             </button>
           ) : <span />}
+          <button
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="h-10 px-3 rounded-full border border-border bg-background text-sm hidden sm:flex items-center gap-1"
+            aria-label="Voltar ao topo"
+          >
+            <ChevronUp className="h-4 w-4" /> Topo
+          </button>
           {nextKey ? (
             <button onClick={goNextPlan} className="h-10 px-3 rounded-full bg-primary text-primary-foreground flex items-center gap-1 text-sm font-semibold">
               Próximo plano <ArrowRight className="h-4 w-4" />

@@ -237,7 +237,9 @@ export default function ApresentacaoPlano() {
   );
 
   // ============== MOBILE ou LINK PÚBLICO: scroll vertical natural, sem etapas ==============
-  if (isMobile || isPublic) {
+  // Layout de scroll único: mobile, links públicos e sempre que houver promo (individual/exclusiva)
+  const useScrollLayout = isMobile || isPublic || !!promoIdParam;
+  if (useScrollLayout) {
     const mobileStages = [
       <StageIntro key="s0" />,
       <StagePlan key="s1" plan={plan} Icon={Icon} />,
@@ -248,11 +250,18 @@ export default function ApresentacaoPlano() {
       pricing && <StageComparison key="s6" plan={plan} pricing={pricing} promo={promo} />,
     ].filter(Boolean);
 
-    const sectionLabels = ['Início', 'Plano', 'Entregas', 'Investimento', 'Promoção', 'Com desconto', 'Comparativo'];
+    // Cards laterais de planos (mesma cidade)
+    const sidebarPlans = getPlansForCity(effectiveCity as any);
+    const orderedSidebar = PRESENTATION_ORDER
+      .map((k) => sidebarPlans.find((p) => p.key === k))
+      .filter(Boolean) as typeof sidebarPlans;
 
-    const scrollToSection = (idx: number) => {
-      const el = document.getElementById(`pulse-section-${idx}`);
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const goToPlan = (key: string) => {
+      const qs = new URLSearchParams();
+      if (queryCity) qs.set('city', queryCity);
+      if (promoIdParam) qs.set('promo', promoIdParam);
+      const query = qs.toString();
+      navigate(`${baseRoute}/${key}${query ? `?${query}` : ''}`);
     };
 
     return (
@@ -282,39 +291,87 @@ export default function ApresentacaoPlano() {
           </div>
         </div>
 
-        {/* Dots laterais de seção (desktop apenas, para link público) */}
-        <div className="hidden lg:flex fixed right-4 top-1/2 -translate-y-1/2 z-40 flex-col gap-2">
-          {mobileStages.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => scrollToSection(i)}
-              title={sectionLabels[i]}
-              className="group flex items-center gap-2"
-              aria-label={sectionLabels[i]}
-            >
-              <span className="hidden group-hover:inline text-xs bg-background/90 backdrop-blur px-2 py-0.5 rounded border border-border">
-                {sectionLabels[i]}
-              </span>
-              <span className="h-2.5 w-2.5 rounded-full bg-border hover:bg-primary transition-all" />
-            </button>
-          ))}
+        {/* Container com sidebar direita para desktop */}
+        <div className="flex w-full">
+          {/* Conteúdo principal — scroll único da página */}
+          <div className="flex-1 min-w-0 flex flex-col">
+            {mobileStages.map((el, i) => (
+              <section
+                key={i}
+                id={`pulse-section-${i}`}
+                className="w-full px-3 md:px-8 py-10 md:py-16 border-b border-border/50 last:border-b-0 scroll-mt-16"
+              >
+                <div className="max-w-5xl mx-auto">{el}</div>
+              </section>
+            ))}
+          </div>
+
+          {/* SIDEBAR DIREITA — cards dos planos (desktop) */}
+          <aside className="hidden lg:block w-72 xl:w-80 shrink-0 border-l border-border bg-card/40 backdrop-blur">
+            <div className="sticky top-14 p-4 max-h-[calc(100vh-3.5rem)] overflow-y-auto">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-3 px-1">
+                Outros planos
+              </p>
+              <div className="flex flex-col gap-3">
+                {orderedSidebar.map((p) => {
+                  const PIcon = p.icon;
+                  const isCurrent = p.key === plan.key;
+                  const isBoost = p.key === 'boost';
+                  const fromPrice = p.pricing[p.pricing.length - 1].monthly;
+                  return (
+                    <button
+                      key={p.key}
+                      onClick={() => goToPlan(p.key)}
+                      disabled={isCurrent}
+                      className={`group text-left rounded-2xl p-4 border-2 transition-all ${
+                        isCurrent
+                          ? 'border-primary bg-primary/10 shadow-md cursor-default'
+                          : isBoost
+                            ? 'border-primary/40 bg-gradient-to-br from-primary/10 to-orange-500/5 hover:border-primary hover:-translate-y-0.5 hover:shadow-lg'
+                            : 'border-border bg-background hover:border-primary/50 hover:-translate-y-0.5 hover:shadow-lg'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${isCurrent || isBoost ? 'bg-primary/20' : 'bg-muted'}`}>
+                          <PIcon className={`h-4 w-4 ${isCurrent || isBoost ? 'text-primary' : 'text-foreground/70'}`} />
+                        </div>
+                        {isCurrent && (
+                          <Badge className="bg-primary text-primary-foreground text-[10px] px-1.5 py-0">Atual</Badge>
+                        )}
+                        {!isCurrent && p.badge && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">{p.badge}</Badge>
+                        )}
+                      </div>
+                      <h4 className="text-base font-bold leading-tight" style={{ fontFamily: 'var(--font-display)' }}>
+                        {p.name}
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground mb-2 line-clamp-1">{p.tagline}</p>
+                      <div className="flex items-baseline justify-between pt-2 border-t border-border/60">
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-[10px] text-muted-foreground">a partir</span>
+                          <span className="text-sm font-bold">{fromPrice}</span>
+                        </div>
+                        {!isCurrent && (
+                          <ArrowRight className="h-3.5 w-3.5 text-primary opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                className="mt-4 w-full h-9 rounded-lg border border-border bg-background text-xs flex items-center justify-center gap-1 hover:border-primary/50 transition-colors"
+              >
+                <ChevronUp className="h-3.5 w-3.5" /> Voltar ao topo
+              </button>
+            </div>
+          </aside>
         </div>
 
-        {/* Todas as etapas empilhadas para scroll natural */}
-        <div className="flex flex-col scroll-smooth">
-          {mobileStages.map((el, i) => (
-            <section
-              key={i}
-              id={`pulse-section-${i}`}
-              className="w-full px-3 py-10 md:py-16 border-b border-border/50 last:border-b-0 scroll-mt-16"
-            >
-              {el}
-            </section>
-          ))}
-        </div>
-
-        {/* Nav planos fixa no rodapé */}
-        <div className="sticky bottom-0 z-50 flex items-center justify-between gap-2 px-3 py-2 bg-background/90 backdrop-blur border-t border-border">
+        {/* Nav planos fixa no rodapé (mobile / tablet) */}
+        <div className="lg:hidden sticky bottom-0 z-50 flex items-center justify-between gap-2 px-3 py-2 bg-background/90 backdrop-blur border-t border-border">
           {prevKey ? (
             <button onClick={goPrevPlan} className="h-10 px-3 rounded-full border border-border bg-background flex items-center gap-1 text-sm">
               <ArrowLeft className="h-4 w-4" /> Anterior

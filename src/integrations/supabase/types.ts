@@ -3124,6 +3124,7 @@ export type Database = {
           discount_percent: number
           duration_months: number
           ends_at: string | null
+          exclusive: boolean
           id: string
           max_redemptions: number | null
           plan_key: string | null
@@ -3141,6 +3142,7 @@ export type Database = {
           discount_percent?: number
           duration_months?: number
           ends_at?: string | null
+          exclusive?: boolean
           id?: string
           max_redemptions?: number | null
           plan_key?: string | null
@@ -3158,6 +3160,7 @@ export type Database = {
           discount_percent?: number
           duration_months?: number
           ends_at?: string | null
+          exclusive?: boolean
           id?: string
           max_redemptions?: number | null
           plan_key?: string | null

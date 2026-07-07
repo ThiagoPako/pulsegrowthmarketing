@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Trash2, Save, Tag, ArrowLeft, Rocket, Zap, Check, Flame, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Save, Tag, ArrowLeft, Rocket, Zap, Check, Flame, Sparkles, Link2, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PLANS } from '@/data/plans';
 import { motion } from 'framer-motion';
@@ -24,6 +24,7 @@ type Promo = {
   discount_percent: number;
   duration_months: number;
   active: boolean;
+  exclusive: boolean;
   starts_at: string | null;
   ends_at: string | null;
   max_redemptions: number | null;
@@ -60,6 +61,7 @@ const PRESETS: PresetDef[] = [
       starts_at: null,
       ends_at: null,
       max_redemptions: null,
+      exclusive: false,
     },
   },
   {
@@ -80,6 +82,7 @@ const PRESETS: PresetDef[] = [
       starts_at: null,
       ends_at: null,
       max_redemptions: 10,
+      exclusive: false,
     },
   },
   {
@@ -100,6 +103,7 @@ const PRESETS: PresetDef[] = [
       starts_at: null,
       ends_at: null,
       max_redemptions: null,
+      exclusive: false,
     },
   },
 ];
@@ -116,6 +120,7 @@ const empty: Omit<Promo, 'id' | 'redemptions_count'> = {
   starts_at: null,
   ends_at: null,
   max_redemptions: null,
+  exclusive: false,
 };
 
 export default function PlanPromotionsAdmin() {
@@ -278,6 +283,17 @@ export default function PlanPromotionsAdmin() {
     if (error) { toast.error(error.message); return; }
     toast.success('Clientes fechados atualizado');
     setItems(prev => prev.map(it => it.id === p.id ? { ...it, redemptions_count: safe } : it));
+  }
+
+  async function copyExclusiveLink(p: Promo) {
+    const city = p.city || 'uruacu';
+    const url = `${window.location.origin}/p/planos?city=${city}&promo=${p.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link exclusivo copiado!', { description: url });
+    } catch {
+      toast.error('Copie manualmente: ' + url);
+    }
   }
 
 
@@ -461,9 +477,18 @@ export default function PlanPromotionsAdmin() {
               onChange={e => setForm({ ...form, description: e.target.value })}
               placeholder="Ex: Feche o anual e ganhe 30% off nos primeiros 6 meses." />
           </div>
-          <div className="flex items-center gap-3">
-            <Switch checked={form.active} onCheckedChange={v => setForm({ ...form, active: v })} />
-            <span className="text-sm">Ativa</span>
+          <div className="flex flex-col gap-3 rounded-xl border border-border p-3">
+            <div className="flex items-center gap-3">
+              <Switch checked={form.active} onCheckedChange={v => setForm({ ...form, active: v })} />
+              <span className="text-sm">Ativa</span>
+            </div>
+            <div className="flex items-start gap-3">
+              <Switch checked={form.exclusive} onCheckedChange={v => setForm({ ...form, exclusive: v })} />
+              <div>
+                <span className="text-sm flex items-center gap-1.5"><Lock className="h-3.5 w-3.5 text-primary" /> Exclusiva de link</span>
+                <p className="text-xs text-muted-foreground">Só aplica quando o cliente abrir o link específico com o ID desta promoção. Não interfere nas demais.</p>
+              </div>
+            </div>
           </div>
           <div className="flex gap-2 pt-2">
             <Button onClick={save} disabled={saving} className="gap-2">
@@ -491,9 +516,11 @@ export default function PlanPromotionsAdmin() {
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <span className="font-semibold text-sm">{p.title}</span>
-                  {p.active
-                    ? <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-500/20">Ativa</Badge>
-                    : <Badge variant="outline">Inativa</Badge>}
+                  {p.exclusive
+                    ? <Badge className="bg-primary/15 text-primary border-primary/30"><Lock className="h-3 w-3 mr-1" /> Exclusiva de link</Badge>
+                    : p.active
+                      ? <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-500/20">Ativa</Badge>
+                      : <Badge variant="outline">Inativa</Badge>}
                   <Badge variant="outline" className="text-[10px]">{p.city ?? 'Todas cidades'}</Badge>
                   <Badge variant="outline" className="text-[10px]">{p.plan_key ? PLANS.find(x => x.key === p.plan_key)?.name : 'Todos planos'}</Badge>
                 </div>
@@ -516,7 +543,10 @@ export default function PlanPromotionsAdmin() {
                   />
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => copyExclusiveLink(p)} className="gap-1">
+                  <Link2 size={14} /> Link do cliente
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => toggleActive(p)}>
                   {p.active ? 'Desativar' : 'Ativar'}
                 </Button>

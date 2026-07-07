@@ -107,7 +107,6 @@ const URUACU_PLANS: Plan[] = [
       { label: '12 meses', monthly: 'R$ 4.200', save: 'Economia de R$ 5.760' },
     ],
     deliverables: 34, // 8 reels + 20 stories + 6 artes
-    deliverables: 34, // 8 reels + 20 stories + 6 artes
   },
   {
     key: 'elite',
@@ -131,7 +130,6 @@ const URUACU_PLANS: Plan[] = [
       { label: '6 meses', monthly: 'R$ 6.500' },
       { label: '12 meses', monthly: 'R$ 5.850', save: 'Economia de R$ 7.800' },
     ],
-    deliverables: 40, // 12 reels + 8 artes + 20 stories
     deliverables: 40, // 12 reels + 8 artes + 20 stories
   },
 ];
@@ -212,7 +210,6 @@ const MINACU_PLANS: Plan[] = [
       { label: '12 meses', monthly: 'R$ 2.900', save: 'Economia de R$ 4.560' },
     ],
     deliverables: 34, // 8 reels + 20 stories + 6 artes
-    deliverables: 34, // 8 reels + 20 stories + 6 artes
   },
   {
     key: 'elite',
@@ -234,7 +231,6 @@ const MINACU_PLANS: Plan[] = [
       { label: '6 meses', monthly: 'R$ 4.500' },
       { label: '12 meses', monthly: 'R$ 4.000', save: 'Economia de R$ 6.000' },
     ],
-    deliverables: 40, // 12 reels + 8 artes + 20 stories
     deliverables: 40, // 12 reels + 8 artes + 20 stories
   },
 ];

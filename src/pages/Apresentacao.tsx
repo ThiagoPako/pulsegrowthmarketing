@@ -99,7 +99,7 @@ export default function Apresentacao() {
           <div className="flex items-center justify-center gap-2 mb-6">
             <MapPin className="h-4 w-4 text-primary" />
             <span className="text-xs uppercase tracking-wider text-muted-foreground mr-1">Cidade:</span>
-            {(isPublic ? (['minacu','uruacu'] as CityCode[]) : availableCities).map((c) => (
+            {(['minacu','uruacu'] as CityCode[]).map((c) => (
               <button
                 key={c}
                 onClick={() => changeCity(c)}

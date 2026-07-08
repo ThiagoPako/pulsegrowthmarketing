@@ -385,8 +385,13 @@ export default function RecordingControl() {
                         <button
                           type="button"
                           onClick={() => {
-                            setNewForm({ mode: 'client', clientId: '', prospectName: '', type: 'extra' });
-                            setNewDialog({ open: true, vmId: vm.id, time, date: displayDates[0] });
+                            setWizard({
+                              open: true, step: 'mode', vmId: vm.id, time, date: displayDates[0],
+                              mode: null, clientId: '', prospectName: '', type: 'extra',
+                              scriptId: null, creatingScript: false,
+                              newScriptTitle: '', newScriptContent: '',
+                              newScriptVideoType: 'vendas', newScriptFormat: 'reels',
+                            });
                           }}
                           className="h-full w-full rounded-lg border-2 border-dashed border-transparent hover:border-primary/30 hover:bg-primary/5 flex items-center justify-center transition-colors group"
                         >

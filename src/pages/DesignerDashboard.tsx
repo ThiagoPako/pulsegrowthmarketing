@@ -114,6 +114,8 @@ export default function DesignerDashboard() {
     const now = new Date();
     const ws = new Date(now); ws.setDate(now.getDate() - now.getDay()); ws.setHours(0,0,0,0);
     const completedThisWeek = completed.filter(t => new Date(t.completed_at || t.updated_at) >= ws);
+    const dayStart = new Date(now); dayStart.setHours(0,0,0,0);
+    const completedToday = completed.filter(t => new Date(t.completed_at || t.updated_at) >= dayStart);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const completedThisMonth = completed.filter(t => new Date(t.completed_at || t.updated_at) >= monthStart);
     const totalTime = completedWithTime.reduce((s, t) => s + t.time_spent_seconds, 0);

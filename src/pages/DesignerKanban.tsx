@@ -944,11 +944,33 @@ interface TaskCardProps {
   canDelete: boolean;
   onQuickStart?: () => void;
   onReturnToQueue?: () => void;
+  onPause?: () => void;
+  onResume?: () => void;
   onDragStart: (e: DragEvent<HTMLDivElement>) => void;
   onDragEnd: () => void;
 }
 
-function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDetail, onDelete, canDelete, onQuickStart, onReturnToQueue, onDragStart, onDragEnd }: TaskCardProps) {
+function LiveTimer({ startedAt, baseSeconds, running }: { startedAt: string | null; baseSeconds: number; running: boolean }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!running || !startedAt) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [running, startedAt]);
+  const extra = running && startedAt ? Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000)) : 0;
+  const total = (baseSeconds || 0) + extra;
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return (
+    <span className="font-mono tabular-nums text-[10px] font-bold">
+      {h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`}
+    </span>
+  );
+}
+
+function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDetail, onDelete, canDelete, onQuickStart, onReturnToQueue, onPause, onResume, onDragStart, onDragEnd }: TaskCardProps) {
   const priorityCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.media;
   
   const COMPLETED_COLS = ['em_analise', 'enviar_cliente', 'aprovado'];

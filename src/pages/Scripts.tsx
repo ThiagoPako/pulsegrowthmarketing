@@ -1116,11 +1116,6 @@ export default function Scripts() {
                 <Eye size={14} className={previewingBatch ? 'animate-pulse' : ''} />
                 {previewingBatch ? 'Gerando...' : `Prévia A4 (${selectedIds.size})`}
               </Button>
-              <Button size="sm" onClick={() => handleDownloadSelectedPdf()} disabled={selectedIds.size === 0 || downloadingBatch}
-                className="gap-1.5 bg-gradient-to-r from-primary to-primary/80">
-                <Download size={14} className={downloadingBatch ? 'animate-spin' : ''} />
-                {downloadingBatch ? 'Gerando...' : `Baixar ${selectedIds.size} selecionado(s)`}
-              </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}>
                 <X size={16} />
               </Button>
@@ -1291,9 +1286,6 @@ export default function Scripts() {
                 </Button>
                 <Button variant="ghost" size="icon" className="h-7 w-7" title="Editar" onClick={() => handleOpen(script)}>
                   <Pencil size={14} />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7" title="Baixar PDF" onClick={() => handleDownloadPdf(script)}>
-                  <Download size={14} />
                 </Button>
                 <Button variant="ghost" size="icon" className="h-7 w-7" title={script.recorded ? 'Desmarcar gravado' : 'Marcar como gravado'}
                   onClick={() => toggleRecorded(script)}>
@@ -1628,9 +1620,6 @@ export default function Scripts() {
                 <Button variant="outline" className="flex-1" onClick={() => handlePreviewPdf(viewing)}>
                   <Eye size={16} className="mr-2" /> Prévia A4
                 </Button>
-                <Button variant="outline" className="flex-1" onClick={() => handleDownloadPdf(viewing)}>
-                  <Download size={16} className="mr-2" /> Baixar PDF
-                </Button>
                 <Button variant="outline" className="flex-1" onClick={() => toggleRecorded(viewing)}>
                   <Check size={16} className="mr-2" /> {viewing.recorded ? 'Desmarcar Gravado' : 'Marcar como Gravado'}
                 </Button>
@@ -1652,21 +1641,6 @@ export default function Scripts() {
                     ? `Pré-visualização A4 · ${previewBatch.length} roteiros`
                     : 'Pré-visualização do Roteiro (A4)'}
                 </DialogTitle>
-                <Button
-                  onClick={() => {
-                    if (previewBatch && previewBatch.length > 0) {
-                      handleDownloadSelectedPdf(previewBatch);
-                    } else if (viewing) {
-                      handleDownloadPdf(viewing);
-                    }
-                  }}
-                  size="sm"
-                  className="gap-2"
-                  disabled={downloadingBatch}
-                >
-                  <Download size={16} className={downloadingBatch ? 'animate-spin' : ''} />
-                  {downloadingBatch ? 'Gerando...' : 'Baixar PDF'}
-                </Button>
               </div>
               
               <div className="flex flex-wrap items-center gap-6 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-border">

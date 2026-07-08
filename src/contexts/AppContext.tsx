@@ -249,8 +249,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [data.settings]);
 
 
-  const addRecording = useCallback(async (recording: Recording): Promise<boolean> => {
-    if (hasConflict(recording.videomakerId, recording.date, recording.startTime, undefined, recording.type, recording.clientId).hasConflict) return false;
+  const addRecording = useCallback(async (recording: Recording, options?: { skipClientDayCheck?: boolean }): Promise<boolean> => {
+    if (hasConflict(recording.videomakerId, recording.date, recording.startTime, undefined, recording.type, recording.clientId, options).hasConflict) return false;
     const ok = await data.addRecording(recording);
     if (!ok) {
       console.error('addRecording: VPS insert failed for recording', recording);

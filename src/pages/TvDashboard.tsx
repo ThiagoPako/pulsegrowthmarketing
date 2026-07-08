@@ -605,6 +605,82 @@ function RotatingScheduleCard({ items, isLive, height }: { items: ScheduleItem[]
   );
 }
 
+/* ─── Compact ordered schedule row ──────────────────────── */
+function ScheduleRow({ item, isLive }: { item: ScheduleItem; isLive: boolean }) {
+  const isDone = item.status === 'concluida';
+  const isCancelled = item.status === 'cancelada';
+  const isRescheduled = item.status === 'remarcada' || item.status === 'remarcado';
+
+  let statusLabel = 'Aguardando';
+  let statusColor = 'rgba(255,255,255,0.5)';
+  let statusBg = 'rgba(255,255,255,0.06)';
+  if (isLive) { statusLabel = 'Gravando'; statusColor = PULSE_ORANGE; statusBg = `${PULSE_ORANGE}22`; }
+  else if (isDone) { statusLabel = 'Concluída'; statusColor = '#22c55e'; statusBg = 'rgba(34,197,94,0.15)'; }
+  else if (isCancelled) { statusLabel = 'Cancelada'; statusColor = '#ef4444'; statusBg = 'rgba(239,68,68,0.15)'; }
+  else if (isRescheduled) { statusLabel = 'Remarcada'; statusColor = '#f59e0b'; statusBg = 'rgba(245,158,11,0.15)'; }
+
+  const borderColor = isLive ? `${PULSE_ORANGE}55` : isCancelled ? 'rgba(239,68,68,0.2)' : isDone ? 'rgba(34,197,94,0.2)' : isRescheduled ? 'rgba(245,158,11,0.25)' : 'rgba(255,255,255,0.06)';
+
+  return (
+    <div
+      className="relative flex items-center gap-2 rounded-lg px-2 py-1.5 border"
+      style={{
+        borderColor,
+        background: isLive ? `linear-gradient(90deg, ${PULSE_ORANGE}10, transparent)` : PULSE_CARD,
+        opacity: isCancelled ? 0.5 : 1,
+      }}
+    >
+      {/* Time */}
+      <div className="flex flex-col items-center justify-center min-w-[46px]">
+        <span className="text-sm font-mono font-bold tabular-nums text-white/90">{item.startTime}</span>
+        {item.endTime && (
+          <span className="text-[9px] font-mono text-white/25 tabular-nums">{item.endTime}</span>
+        )}
+      </div>
+
+      {/* Client logo */}
+      <div className="flex-shrink-0 w-7 h-7 rounded-md overflow-hidden border flex items-center justify-center"
+        style={{
+          borderColor: item.clientColor ? `hsl(${item.clientColor} / 0.3)` : 'rgba(255,255,255,0.08)',
+          backgroundColor: item.clientColor ? `hsl(${item.clientColor} / 0.1)` : 'rgba(255,255,255,0.03)',
+        }}>
+        {item.clientLogo ? (
+          <img src={item.clientLogo} alt="" className="w-full h-full object-contain p-0.5" />
+        ) : (
+          <span className="text-[8px] font-bold text-white/40">{getInitials(item.clientName)}</span>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <p className="text-[12px] font-semibold text-white truncate leading-tight">{item.clientName}</p>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          {item.type === 'event' && (
+            <span className="text-[8px] font-bold uppercase px-1 py-px rounded" style={{ backgroundColor: `${PULSE_ORANGE}15`, color: PULSE_ORANGE }}>Evento</span>
+          )}
+          {item.recordingType === 'extra' && <span className="text-[8px] font-bold uppercase px-1 py-px rounded bg-violet-500/10 text-violet-300">Extra</span>}
+          {item.recordingType === 'backup' && <span className="text-[8px] font-bold uppercase px-1 py-px rounded bg-amber-500/10 text-amber-300">Backup</span>}
+          {item.videomakerName && (
+            <span className="text-[10px] text-white/40 truncate">
+              <Camera className="w-2.5 h-2.5 inline mr-0.5 -mt-0.5 text-blue-400/60" />
+              {item.videomakerName.split(' ')[0]}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Status badge */}
+      <div className="flex items-center gap-1 rounded-full px-2 py-0.5 flex-shrink-0" style={{ backgroundColor: statusBg }}>
+        {isLive && (
+          <motion.div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: statusColor }}
+            animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.4, repeat: Infinity }} />
+        )}
+        <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: statusColor }}>{statusLabel}</span>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Editing Pipeline Card ─────────────────────────────── */
 function EditingCard({ task }: { task: EditingTask }) {
   const col = COLUMN_CONFIG[task.column] || COLUMN_CONFIG.edicao;

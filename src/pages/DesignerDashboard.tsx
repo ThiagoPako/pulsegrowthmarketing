@@ -1278,3 +1278,86 @@ function LowPriorityCard({ task, index, onOpenDetail, onResume, hasActive }: Low
   );
 }
 
+// ═══════════════════════════════════════════════════════════
+// DailyGoalBar — meta diária com foguetinho subindo
+// ═══════════════════════════════════════════════════════════
+interface DailyGoalBarProps {
+  completed: number;
+  goal: number;
+  onGoalChange: (n: number) => void;
+  editing: boolean;
+  setEditing: (v: boolean) => void;
+}
+
+function DailyGoalBar({ completed, goal, onGoalChange, editing, setEditing }: DailyGoalBarProps) {
+  const pct = goal > 0 ? Math.min(100, Math.round((completed / goal) * 100)) : 0;
+  const hit = completed >= goal && goal > 0;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-2xl border-2 border-pink-200/40 dark:border-pink-800/25 bg-gradient-to-r from-pink-500/8 via-fuchsia-500/8 to-violet-500/8 p-4"
+    >
+      <div className="flex items-center gap-3 mb-2">
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-pink-500 to-fuchsia-500 flex items-center justify-center shrink-0">
+          <Target size={16} className="text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-display font-bold">
+              Hoje: {completed}/{editing ? '' : goal}
+              {editing && (
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  defaultValue={goal}
+                  autoFocus
+                  onBlur={(e) => { onGoalChange(Math.max(1, Number(e.target.value) || 1)); setEditing(false); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); } }}
+                  className="w-14 px-2 py-0 text-sm rounded border border-violet-300 bg-background"
+                />
+              )}
+              {' '}artes {hit ? '🎉' : '🎨'}
+            </span>
+            {!editing && (
+              <button
+                onClick={() => setEditing(true)}
+                className="text-[10px] text-muted-foreground hover:text-violet-600 underline"
+              >
+                editar meta
+              </button>
+            )}
+            {hit && (
+              <Badge className="bg-emerald-500 text-white text-[10px] rounded-full animate-pulse">Meta batida! 💜</Badge>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            {hit ? 'Você mandou muito bem hoje! Cada arte extra é bônus 💖' : `Faltam ${Math.max(0, goal - completed)} artes pra bater a meta`}
+          </p>
+        </div>
+      </div>
+      {/* Barra com foguetinho */}
+      <div className="relative h-3 rounded-full bg-white/50 dark:bg-white/5 overflow-hidden border border-pink-200/40">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${pct}%` }}
+          transition={{ type: 'spring', stiffness: 100, damping: 20 }}
+          className={`h-full ${hit
+            ? 'bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500'
+            : 'bg-gradient-to-r from-pink-400 via-fuchsia-500 to-violet-500'}`}
+        />
+        <motion.div
+          animate={{ left: `${pct}%` }}
+          transition={{ type: 'spring', stiffness: 100, damping: 20 }}
+          className="absolute -top-1 -translate-x-1/2 text-sm"
+          style={{ filter: 'drop-shadow(0 0 4px rgba(236,72,153,0.6))' }}
+        >
+          🚀
+        </motion.div>
+      </div>
+    </motion.div>
+  );
+}
+
+

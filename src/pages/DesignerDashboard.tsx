@@ -69,6 +69,8 @@ export default function DesignerDashboard() {
   const { tasksQuery, updateTask, addHistory } = useDesignTasks();
   const { user } = useAuth();
   const { currentUser } = useApp();
+  const queryClient = useQueryClient();
+  const { activeCity } = useCity();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');

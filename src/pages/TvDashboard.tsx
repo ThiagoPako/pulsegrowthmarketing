@@ -1884,64 +1884,51 @@ export default function TvDashboard() {
             })()}
 
 
-            {/* Week Scheduled Posts (reels) */}
+            {/* Editors — ao vivo (vídeos em edição por editor) */}
             {visibility.show_posts && (() => {
-              const groups: Record<string, ScheduledPost[]> = {};
-              [...weekPosts]
-                .sort((a, b) => (a.scheduledDate || '').localeCompare(b.scheduledDate || '') || (a.scheduledTime || '99:99').localeCompare(b.scheduledTime || '99:99'))
-                .forEach(p => {
-                  const k = p.scheduledDate || 'sem-data';
-                  (groups[k] = groups[k] || []).push(p);
-                });
-              const todayIso = new Date().toISOString().slice(0, 10);
-              const tomorrowIso = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-              const weekdayLabels = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-              const orderedKeys = Object.keys(groups).sort();
+              // Agrupa tarefas por pessoa responsável (editor em 'edicao'/'alteracao', revisor em 'revisao')
+              const groups = new Map<string, { name: string; avatar?: string | null; tasks: EditingTask[] }>();
+              editingPipeline.forEach(t => {
+                const isReview = t.column === 'revisao';
+                const name = (isReview ? t.reviewerName : t.editorName) || null;
+                const avatar = (isReview ? t.reviewerAvatar : t.editorAvatar) || null;
+                if (!name) return;
+                const key = name.toLowerCase();
+                const existing = groups.get(key);
+                if (existing) existing.tasks.push(t);
+                else groups.set(key, { name, avatar, tasks: [t] });
+              });
+              const editorGroups = Array.from(groups.values()).sort((a, b) => {
+                const aLive = a.tasks.some(t => t.column === 'edicao' && !t.isPaused);
+                const bLive = b.tasks.some(t => t.column === 'edicao' && !t.isPaused);
+                if (aLive !== bLive) return aLive ? -1 : 1;
+                return b.tasks.length - a.tasks.length;
+              });
+              const totalLive = editorGroups.filter(g => g.tasks.some(t => t.column === 'edicao' && !t.isPaused)).length;
 
               return (
                 <div>
-                  <SectionHeader icon={Send} iconColor="#3b82f6" title="Reels da Semana" badge={`${weekPosts.length} agendados`} />
-                  {orderedKeys.length > 0 ? (
-                    <div className="space-y-2.5">
-                      {orderedKeys.map(dateKey => {
-                        const posts = groups[dateKey];
-                        const [y, m, d] = dateKey.split('-').map(Number);
-                        const dateObj = new Date(y, (m || 1) - 1, d || 1);
-                        const isToday = dateKey === todayIso;
-                        const isTomorrow = dateKey === tomorrowIso;
-                        const label = isToday
-                          ? 'Hoje'
-                          : isTomorrow
-                          ? 'Amanhã'
-                          : weekdayLabels[dateObj.getDay()];
-                        const shortDate = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
-                        return (
-                          <div key={dateKey}>
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full"
-                                style={{
-                                  background: isToday ? `${PULSE_ORANGE}18` : 'rgba(255,255,255,0.05)',
-                                  border: isToday ? `1px solid ${PULSE_ORANGE}55` : '1px solid rgba(255,255,255,0.06)',
-                                }}>
-                                <span className="text-[9px] font-black uppercase tracking-wider" style={{ color: isToday ? PULSE_ORANGE : 'rgba(255,255,255,0.7)' }}>
-                                  {label}
-                                </span>
-                                <span className="text-[9px] font-mono tabular-nums text-white/40">{shortDate}</span>
-                              </div>
-                              <span className="text-[9px] text-white/25 font-semibold">{posts.length} {posts.length === 1 ? 'post' : 'posts'}</span>
-                              <div className="flex-1 h-px bg-white/5" />
-                            </div>
-                            <div className="space-y-1.5">
-                              {posts.map(post => <PostCard key={post.id} post={post} />)}
-                            </div>
-                          </div>
-                        );
-                      })}
+                  <SectionHeader
+                    icon={Scissors}
+                    iconColor="#8b5cf6"
+                    title="Editores — ao vivo"
+                    badge={totalLive > 0 ? `● ${totalLive} editando` : `${editorGroups.length} editores`}
+                  />
+                  {editorGroups.length > 0 ? (
+                    <div className="space-y-2">
+                      {editorGroups.map(g => (
+                        <EditorLiveCard
+                          key={g.name}
+                          editorName={g.name}
+                          editorAvatar={g.avatar}
+                          tasks={g.tasks}
+                        />
+                      ))}
                     </div>
                   ) : (
                     <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                      <Send className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
-                      <p className="text-[10px] text-white/20">Nenhum reel agendado para os próximos 7 dias</p>
+                      <Scissors className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                      <p className="text-[10px] text-white/20">Nenhum vídeo em edição no momento</p>
                     </div>
                   )}
                 </div>

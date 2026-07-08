@@ -186,20 +186,59 @@ export default function DesignerDashboard() {
     };
   }, [myTasks, filterClient, filterPriority, searchQuery]);
 
-  // Live timer for spotlight active task
+  // Live timer for spotlight active task (HH:MM:SS, respects pause)
+  const activeTask = groupedQueue.active;
   useEffect(() => {
-    const startedAt = groupedQueue.active?.started_at;
-    if (!startedAt) { setActiveElapsed(''); return; }
-    const update = () => {
-      const s = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
+    if (!activeTask) { setActiveElapsed(''); return; }
+    const base = activeTask.time_spent_seconds || 0;
+    const running = activeTask.timer_running && activeTask.timer_started_at;
+    const startMs = running ? new Date(activeTask.timer_started_at as string).getTime() : 0;
+    const fmt = (s: number) => {
+      s = Math.max(0, Math.floor(s));
       const h = Math.floor(s / 3600);
       const m = Math.floor((s % 3600) / 60);
-      setActiveElapsed(h > 0 ? `${h}h ${m}min` : `${m}min`);
+      const sec = s % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    };
+    const update = () => {
+      const extra = running ? (Date.now() - startMs) / 1000 : 0;
+      setActiveElapsed(fmt(base + extra));
     };
     update();
-    const id = setInterval(update, 30000);
+    if (!running) return;
+    const id = setInterval(update, 1000);
     return () => clearInterval(id);
-  }, [groupedQueue.active?.started_at]);
+  }, [activeTask?.id, activeTask?.timer_running, activeTask?.timer_started_at, activeTask?.time_spent_seconds]);
+
+  const handleTogglePause = async () => {
+    if (!activeTask) return;
+    try {
+      if (activeTask.timer_running) {
+        const runSecs = activeTask.timer_started_at
+          ? Math.max(0, Math.floor((Date.now() - new Date(activeTask.timer_started_at).getTime()) / 1000))
+          : 0;
+        await updateTask.mutateAsync({
+          id: activeTask.id,
+          timer_running: false,
+          timer_started_at: null,
+          time_spent_seconds: (activeTask.time_spent_seconds || 0) + runSecs,
+        } as any);
+        await addHistory.mutateAsync({ task_id: activeTask.id, action: 'Cronômetro pausado', user_id: user?.id });
+        toast.success('Tarefa pausada 💜');
+      } else {
+        await updateTask.mutateAsync({
+          id: activeTask.id,
+          timer_running: true,
+          timer_started_at: new Date().toISOString(),
+        } as any);
+        await addHistory.mutateAsync({ task_id: activeTask.id, action: 'Cronômetro retomado', user_id: user?.id });
+        toast.success('Cronômetro retomado ▶');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao alternar cronômetro');
+    }
+  };
+
 
   const activeClients = useMemo(() => {
     const map = new Map<string, string>();

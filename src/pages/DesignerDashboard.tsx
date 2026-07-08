@@ -412,6 +412,73 @@ export default function DesignerDashboard() {
   };
 
 
+  // ═══ Próxima tarefa sugerida (quando não há ativa) ═══
+  const nextSuggested = useMemo(() => {
+    if (activeTask) return null;
+    const priorityRank: Record<string, number> = { urgente: 0, alta: 1, media: 2, baixa: 3 };
+    const candidates = [...groupedQueue.revisao, ...groupedQueue.fila];
+    if (candidates.length === 0) return null;
+    return [...candidates].sort((a, b) => {
+      const pa = priorityRank[a.priority] ?? 9;
+      const pb = priorityRank[b.priority] ?? 9;
+      if (pa !== pb) return pa - pb;
+      return getDesignDeadlineStatus(a).hoursLeft - getDesignDeadlineStatus(b).hoursLeft;
+    })[0];
+  }, [activeTask, groupedQueue.revisao, groupedQueue.fila]);
+
+  const handleAcceptSuggestion = async () => {
+    if (!nextSuggested) return;
+    const now = new Date().toISOString();
+    try {
+      await updateTask.mutateAsync({
+        id: nextSuggested.id,
+        kanban_column: 'executando',
+        started_at: nextSuggested.started_at || now,
+        assigned_to: nextSuggested.assigned_to || user?.id,
+        timer_running: true,
+        timer_started_at: now,
+      } as any);
+      await addHistory.mutateAsync({
+        task_id: nextSuggested.id,
+        action: 'Aceita via sugestão inteligente',
+        user_id: user?.id,
+      });
+      toast.success('Bora criar! 🎨✨');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao iniciar tarefa');
+    }
+  };
+
+  // ═══ Atalhos de teclado ═══
+  useEffect(() => {
+    const isTyping = (el: EventTarget | null) => {
+      const t = el as HTMLElement | null;
+      if (!t) return false;
+      const tag = t.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || t.isContentEditable;
+    };
+    const handler = (e: KeyboardEvent) => {
+      if (isTyping(e.target)) return;
+      if (e.key === 'Escape' && zenMode) { setZenMode(false); e.preventDefault(); return; }
+      if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && activeTask) {
+        setZenMode(v => !v); e.preventDefault(); return;
+      }
+      if (e.code === 'Space' && activeTask) { handleTogglePause(); e.preventDefault(); return; }
+      if ((e.key === 'c' || e.key === 'C') && activeTask && !e.metaKey && !e.ctrlKey) {
+        setCopyDialogTask(activeTask); e.preventDefault(); return;
+      }
+      if ((e.key === 'n' || e.key === 'N') && nextSuggested && !activeTask && !e.metaKey && !e.ctrlKey) {
+        handleAcceptSuggestion(); e.preventDefault(); return;
+      }
+      if ((e.key === 'e' || e.key === 'E') && activeTask && !e.metaKey && !e.ctrlKey) {
+        setSelectedTaskId(activeTask.id); e.preventDefault(); return;
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTask?.id, nextSuggested?.id, zenMode]);
+
 
 
   const activeClients = useMemo(() => {

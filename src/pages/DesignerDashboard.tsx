@@ -145,31 +145,60 @@ export default function DesignerDashboard() {
     };
   }, [myTasks, tasks, user?.id, todayStr]);
 
-  const queueTasks = useMemo(() => {
-    const activeCols = queueView === 'all'
-      ? ['nova_tarefa', 'executando', 'ajustes', 'em_analise', 'enviar_cliente']
-      : [queueView];
-    return myTasks
-      .filter(t => activeCols.includes(t.kanban_column))
-      .filter(t => {
-        if (filterClient !== 'all' && t.client_id !== filterClient) return false;
-        if (filterPriority !== 'all' && t.priority !== filterPriority) return false;
-        if (searchQuery) {
-          const q = searchQuery.toLowerCase();
-          if (!t.title.toLowerCase().includes(q) && !(t.clients?.company_name || '').toLowerCase().includes(q)) return false;
-        }
-        return true;
-      })
-      .sort((a, b) => {
-        if (a.kanban_column === 'ajustes' && b.kanban_column !== 'ajustes') return -1;
-        if (b.kanban_column === 'ajustes' && a.kanban_column !== 'ajustes') return 1;
-        const priorityOrder: Record<string, number> = { urgente: 0, alta: 1, media: 2, baixa: 3 };
-        const pa = priorityOrder[a.priority] ?? 9;
-        const pb = priorityOrder[b.priority] ?? 9;
-        if (pa !== pb) return pa - pb;
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      });
-  }, [myTasks, queueView, filterClient, filterPriority, searchQuery]);
+  const matchesFilters = (t: DesignTask) => {
+    if (filterClient !== 'all' && t.client_id !== filterClient) return false;
+    if (filterPriority !== 'all' && t.priority !== filterPriority) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (!t.title.toLowerCase().includes(q) && !(t.clients?.company_name || '').toLowerCase().includes(q)) return false;
+    }
+    return true;
+  };
+
+  const sortByPriority = (a: DesignTask, b: DesignTask) => {
+    const priorityOrder: Record<string, number> = { urgente: 0, alta: 1, media: 2, baixa: 3 };
+    const pa = priorityOrder[a.priority] ?? 9;
+    const pb = priorityOrder[b.priority] ?? 9;
+    if (pa !== pb) return pa - pb;
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  };
+
+  const groupedQueue = useMemo(() => {
+    const filtered = myTasks.filter(matchesFilters);
+    // Active: only one card in 'executando' (per single-active-task rule). Pick most recently started.
+    const executing = filtered
+      .filter(t => t.kanban_column === 'executando')
+      .sort((a, b) => new Date(b.started_at || b.updated_at).getTime() - new Date(a.started_at || a.updated_at).getTime());
+    const active = executing[0] || null;
+    const otherExecuting = executing.slice(1); // shouldn't happen, but safety
+    return {
+      active,
+      revisao: filtered
+        .filter(t => t.kanban_column === 'ajustes' || t.kanban_column === 'em_analise')
+        .sort(sortByPriority),
+      fila: filtered.filter(t => t.kanban_column === 'nova_tarefa').sort(sortByPriority),
+      filaBaixa: [
+        ...otherExecuting,
+        ...filtered.filter(t => t.kanban_column === 'fila_baixa_prioridade'),
+      ].sort(sortByPriority),
+      cliente: filtered.filter(t => t.kanban_column === 'enviar_cliente').sort(sortByPriority),
+    };
+  }, [myTasks, filterClient, filterPriority, searchQuery]);
+
+  // Live timer for spotlight active task
+  useEffect(() => {
+    const startedAt = groupedQueue.active?.started_at;
+    if (!startedAt) { setActiveElapsed(''); return; }
+    const update = () => {
+      const s = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      setActiveElapsed(h > 0 ? `${h}h ${m}min` : `${m}min`);
+    };
+    update();
+    const id = setInterval(update, 30000);
+    return () => clearInterval(id);
+  }, [groupedQueue.active?.started_at]);
 
   const activeClients = useMemo(() => {
     const map = new Map<string, string>();

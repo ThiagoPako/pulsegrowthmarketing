@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCity } from '@/contexts/CityContext';
 import BonusCongratsBanner from '@/components/BonusCongratsBanner';
 import { DESIGNER_SCORE } from '@/lib/scoringSystem';
 import { useDesignTasks, DESIGN_COLUMNS, DesignTask } from '@/hooks/useDesignTasks';

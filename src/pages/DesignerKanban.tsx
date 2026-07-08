@@ -280,7 +280,41 @@ export default function DesignerKanban() {
       extraFields.timer_running = false;
     }
 
-    try {
+    // Pausa as tarefas conflitantes (movendo pra fila_baixa_prioridade), acumulando o tempo
+    // e opcionalmente registrando o motivo (justificativa da designer).
+    const pauseConflicting = async (conflicting: DesignTask[], newTitle: string, reason: string) => {
+      for (const other of conflicting) {
+        const runSecs = other.timer_running && other.timer_started_at
+          ? Math.max(0, Math.floor((Date.now() - new Date(other.timer_started_at).getTime()) / 1000))
+          : 0;
+        const nowIso = new Date().toISOString();
+        const reasonLine = reason
+          ? `⏸ ${new Date().toLocaleString('pt-BR')} — Pausada para priorizar "${newTitle}": ${reason}`
+          : `⏸ ${new Date().toLocaleString('pt-BR')} — Pausada para priorizar "${newTitle}"`;
+        await updateTask.mutateAsync({
+          id: other.id,
+          kanban_column: 'fila_baixa_prioridade',
+          timer_running: false,
+          timer_started_at: null,
+          time_spent_seconds: (other.time_spent_seconds || 0) + runSecs,
+          observations: `${other.observations ? other.observations + '\n\n' : ''}${reasonLine}`,
+          updated_at: nowIso,
+        } as any);
+        await addHistory.mutateAsync({
+          task_id: other.id,
+          action: 'Pausada por prioridade',
+          details: reason
+            ? `Movida para Fila Baixa Prioridade porque "${newTitle}" entrou em execução.\nMotivo: ${reason}`
+            : `Movida para Fila Baixa Prioridade porque "${newTitle}" entrou em execução`,
+          user_id: user?.id,
+        });
+      }
+      if (conflicting.length > 0) {
+        toast.info(`${conflicting.length} tarefa(s) movida(s) para Fila Baixa Prioridade`);
+      }
+    };
+
+    const performStart = async (reason: string) => {
       if (renormalizeUpdates.length > 0) {
         await Promise.all(
           renormalizeUpdates
@@ -288,40 +322,34 @@ export default function DesignerKanban() {
             .map(u => supabase.from('design_tasks').update({ position: u.position }).eq('id', u.id))
         );
       }
-
-      // Regra: 1 tarefa ativa por vez. Ao mover para "executando",
-      // mover as outras da mesma designer que estejam em "executando" para "fila_baixa_prioridade".
-      if (targetColumn === 'executando') {
-        const designerId = task.assigned_to || user?.id;
-        if (designerId) {
-          const conflicting = tasks.filter(t =>
-            t.id !== taskId &&
-            t.kanban_column === 'executando' &&
-            t.assigned_to === designerId
-          );
-          for (const other of conflicting) {
-            await updateTask.mutateAsync({
-              id: other.id,
-              kanban_column: 'fila_baixa_prioridade',
-              timer_running: false,
-              timer_started_at: null,
-            } as any);
-            await addHistory.mutateAsync({
-              task_id: other.id,
-              action: 'Pausada por prioridade',
-              details: `Movida para Fila Baixa Prioridade porque "${task.title}" entrou em execução`,
-              user_id: user?.id,
-            });
-          }
-          if (conflicting.length > 0) {
-            toast.info(`${conflicting.length} tarefa(s) movida(s) para Fila Baixa Prioridade`);
-          }
-        }
-      }
-
+      const designerId = task.assigned_to || user?.id;
+      const conflicting = designerId
+        ? tasks.filter(t => t.id !== taskId && t.kanban_column === 'executando' && t.assigned_to === designerId)
+        : [];
+      if (conflicting.length > 0) await pauseConflicting(conflicting, task.title, reason);
       await updateTask.mutateAsync({ id: taskId, kanban_column: targetColumn, ...extraFields } as any);
       await addHistory.mutateAsync({ task_id: taskId, action: `Movido para ${targetLabel}`, user_id: user?.id });
       toast.success(`Tarefa movida para "${targetLabel}"`);
+    };
+
+    try {
+      // Se iniciar execução e já houver outra ativa → pedir justificativa antes
+      if (targetColumn === 'executando') {
+        const designerId = task.assigned_to || user?.id;
+        const conflicting = designerId
+          ? tasks.filter(t => t.id !== taskId && t.kanban_column === 'executando' && t.assigned_to === designerId)
+          : [];
+        if (conflicting.length > 0) {
+          setPauseReasonText('');
+          setPausePrompt({
+            taskToStart: task,
+            conflicting,
+            onConfirm: async (reason) => { await performStart(reason); },
+          });
+          return;
+        }
+      }
+      await performStart('');
     } catch (err: any) {
       toast.error(err.message || 'Erro ao mover tarefa');
     }
@@ -333,60 +361,117 @@ export default function DesignerKanban() {
     setDragOverTaskId(null);
   }, []);
 
+  const pauseConflictingTasksExt = async (conflicting: DesignTask[], newTitle: string, reason: string) => {
+    for (const other of conflicting) {
+      const runSecs = other.timer_running && other.timer_started_at
+        ? Math.max(0, Math.floor((Date.now() - new Date(other.timer_started_at).getTime()) / 1000))
+        : 0;
+      const reasonLine = reason
+        ? `⏸ ${new Date().toLocaleString('pt-BR')} — Pausada para priorizar "${newTitle}": ${reason}`
+        : `⏸ ${new Date().toLocaleString('pt-BR')} — Pausada para priorizar "${newTitle}"`;
+      await updateTask.mutateAsync({
+        id: other.id,
+        kanban_column: 'fila_baixa_prioridade',
+        timer_running: false,
+        timer_started_at: null,
+        time_spent_seconds: (other.time_spent_seconds || 0) + runSecs,
+        observations: `${other.observations ? other.observations + '\n\n' : ''}${reasonLine}`,
+      } as any);
+      await addHistory.mutateAsync({
+        task_id: other.id,
+        action: 'Pausada por prioridade',
+        details: reason
+          ? `Movida para Fila Baixa Prioridade porque "${newTitle}" entrou em execução.\nMotivo: ${reason}`
+          : `Movida para Fila Baixa Prioridade porque "${newTitle}" entrou em execução`,
+        user_id: user?.id,
+      });
+    }
+    if (conflicting.length > 0) toast.info(`${conflicting.length} tarefa(s) pausada(s) na Fila Baixa Prioridade`);
+  };
+
   const handleQuickStart = async (task: DesignTask) => {
-    try {
-      const now = new Date().toISOString();
-      const designerId = user?.id || task.assigned_to;
+    const now = new Date().toISOString();
+    const designerId = user?.id || task.assigned_to;
+    const conflicting = designerId
+      ? tasks.filter(t => t.id !== task.id && t.kanban_column === 'executando' && t.assigned_to === designerId)
+      : [];
 
-      // Regra: 1 tarefa ativa por vez. Pausa qualquer outra em execução da mesma designer.
-      if (designerId) {
-        const conflicting = tasks.filter(t =>
-          t.id !== task.id &&
-          t.kanban_column === 'executando' &&
-          t.assigned_to === designerId
-        );
-        for (const other of conflicting) {
-          await updateTask.mutateAsync({
-            id: other.id,
-            kanban_column: 'fila_baixa_prioridade',
-            timer_running: false,
-            timer_started_at: null,
-          } as any);
-          await addHistory.mutateAsync({
-            task_id: other.id,
-            action: 'Pausada por prioridade',
-            details: `Movida para Fila Baixa Prioridade porque "${task.title}" entrou em execução`,
-            user_id: user?.id,
-          });
-        }
-        if (conflicting.length > 0) {
-          toast.info(`${conflicting.length} tarefa(s) pausada(s) na Fila Baixa Prioridade`);
-        }
+    const doStart = async () => {
+      try {
+        await updateTask.mutateAsync({
+          id: task.id,
+          kanban_column: 'executando',
+          started_at: task.started_at || now,
+          assigned_to: user?.id || task.assigned_to,
+          timer_running: true,
+          timer_started_at: now,
+        } as any);
+        await addHistory.mutateAsync({ task_id: task.id, action: 'Iniciou execução', user_id: user?.id });
+        toast.success('Tarefa iniciada! 🎨');
+      } catch (err: any) {
+        toast.error(err.message || 'Erro ao iniciar');
       }
+    };
 
+    if (conflicting.length > 0) {
+      setPauseReasonText('');
+      setPausePrompt({
+        taskToStart: task,
+        conflicting,
+        onConfirm: async (reason) => {
+          await pauseConflictingTasksExt(conflicting, task.title, reason);
+          await doStart();
+        },
+      });
+      return;
+    }
+    await doStart();
+  };
+
+  const handlePauseTask = async (task: DesignTask) => {
+    try {
+      const runSecs = task.timer_running && task.timer_started_at
+        ? Math.max(0, Math.floor((Date.now() - new Date(task.timer_started_at).getTime()) / 1000))
+        : 0;
       await updateTask.mutateAsync({
         id: task.id,
-        kanban_column: 'executando',
-        started_at: task.started_at || now,
-        assigned_to: user?.id || task.assigned_to,
-        timer_running: true,
-        timer_started_at: now,
+        timer_running: false,
+        timer_started_at: null,
+        time_spent_seconds: (task.time_spent_seconds || 0) + runSecs,
       } as any);
-      await addHistory.mutateAsync({ task_id: task.id, action: 'Iniciou execução', user_id: user?.id });
-      toast.success('Tarefa iniciada! 🎨');
+      await addHistory.mutateAsync({ task_id: task.id, action: 'Cronômetro pausado', user_id: user?.id });
+      toast.success('Tarefa pausada. Retome quando voltar 💜');
     } catch (err: any) {
-      toast.error(err.message || 'Erro ao iniciar');
+      toast.error(err.message || 'Erro ao pausar');
+    }
+  };
+
+  const handleResumeTask = async (task: DesignTask) => {
+    try {
+      await updateTask.mutateAsync({
+        id: task.id,
+        timer_running: true,
+        timer_started_at: new Date().toISOString(),
+      } as any);
+      await addHistory.mutateAsync({ task_id: task.id, action: 'Cronômetro retomado', user_id: user?.id });
+      toast.success('Cronômetro retomado ▶');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao retomar');
     }
   };
 
   const handleReturnToQueue = async (task: DesignTask) => {
     if (!window.confirm(`Devolver "${task.title}" para Nova Tarefa? O cronômetro será pausado.`)) return;
     try {
+      const runSecs = task.timer_running && task.timer_started_at
+        ? Math.max(0, Math.floor((Date.now() - new Date(task.timer_started_at).getTime()) / 1000))
+        : 0;
       await updateTask.mutateAsync({
         id: task.id,
         kanban_column: 'nova_tarefa',
         timer_running: false,
         timer_started_at: null,
+        time_spent_seconds: (task.time_spent_seconds || 0) + runSecs,
       } as any);
       await addHistory.mutateAsync({
         task_id: task.id,

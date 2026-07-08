@@ -51,6 +51,28 @@ export interface DesignTask {
   profiles?: { name: string; display_name: string | null; avatar_url: string | null } | null;
 }
 
+// Persistência local pra primeira renderização instantânea entre reloads/navegações.
+// Guarda por cidade e limita ao que é útil pro kanban/painel.
+const LS_KEY = (city: string) => `pulse:design-tasks:${city || 'default'}`;
+const LS_MAX_AGE_MS = 10 * 60 * 1000; // 10 min — usado só como cache-warm inicial
+
+function readLocalTasks(city: string): DesignTask[] | undefined {
+  try {
+    const raw = localStorage.getItem(LS_KEY(city));
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw) as { at: number; data: DesignTask[] };
+    if (!parsed?.data || !Array.isArray(parsed.data)) return undefined;
+    if (Date.now() - (parsed.at || 0) > LS_MAX_AGE_MS) return undefined;
+    return parsed.data;
+  } catch { return undefined; }
+}
+
+function writeLocalTasks(city: string, data: DesignTask[]) {
+  try {
+    localStorage.setItem(LS_KEY(city), JSON.stringify({ at: Date.now(), data }));
+  } catch { /* quota exceeded — ignore */ }
+}
+
 export function useDesignTasks() {
   const queryClient = useQueryClient();
   const { activeCity, isLoading: cityLoading } = useCity();
@@ -86,19 +108,35 @@ export function useDesignTasks() {
             throw fallback.error;
           }
 
-          return (fallback.data || []) as unknown as DesignTask[];
+          const list = (fallback.data || []) as unknown as DesignTask[];
+          writeLocalTasks(activeCity, list);
+          return list;
         }
-        return (data || []) as unknown as DesignTask[];
+        const list = (data || []) as unknown as DesignTask[];
+        writeLocalTasks(activeCity, list);
+        return list;
       } catch (err) {
         console.error('Exception in tasksQuery:', err);
         throw err;
       }
     },
     enabled: !cityLoading,
-    staleTime: 15_000,
+    // Cache local pra 1ª pintura instantânea; refetch acontece em background.
+    initialData: () => (activeCity ? readLocalTasks(activeCity) : undefined),
+    initialDataUpdatedAt: () => {
+      try {
+        const raw = localStorage.getItem(LS_KEY(activeCity || 'default'));
+        return raw ? JSON.parse(raw).at : 0;
+      } catch { return 0; }
+    },
+    placeholderData: (prev) => prev, // mantém cards antigos durante troca de cidade
+    staleTime: 30_000,
     refetchInterval: 30_000,
     refetchOnWindowFocus: false,
+    refetchOnMount: 'always', // sempre valida em background, mas UI já pintou
   });
+
+
 
 
   const historyQuery = (taskId: string) => useQuery({

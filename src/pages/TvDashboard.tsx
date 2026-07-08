@@ -1554,127 +1554,15 @@ export default function TvDashboard() {
               <div className="relative">
                 <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${schedule.length} gravações`} />
                 {schedule.length > 0 ? (
-                  <div className="relative" style={{ height: `${TIMELINE_HEIGHT}px` }}>
-                    {/* Linha do Tempo (Clock Marker) — pixel-aligned to the timeline */}
-                    <div className="absolute inset-0 pointer-events-none z-[100] hidden sm:block">
-                      <TimeMarker />
-                    </div>
-
-                    {(() => {
-                      const items: React.ReactNode[] = [];
-                      const addedBuffers = new Set<string>();
-
-                      // Initial Prep block: 08:00 - 08:30
-                      const initialPrepStartPx = (8 * 60 - OPERATIONAL_START) * MINUTE_HEIGHT;
-                      const initialPrepHeightPx = 30 * MINUTE_HEIGHT;
-                      items.push(
-                        <div key="prep-08-break" className="absolute left-0 right-0 pr-1" style={{ top: `${initialPrepStartPx}px`, height: `${initialPrepHeightPx}px` }}>
-                          <BufferCard startTime="08:00" type="prep" height={initialPrepHeightPx} />
-                        </div>
-                      );
-                      addedBuffers.add("08:00");
-
-                      // Lunch block: fixed 12:00 - 14:00
-                      const lunchStartPx = (12 * 60 - OPERATIONAL_START) * MINUTE_HEIGHT;
-                      const lunchHeightPx = 120 * MINUTE_HEIGHT;
-                      items.push(
-                        <div key="lunch-break" className="absolute left-0 right-0" style={{ top: `${lunchStartPx}px`, height: `${lunchHeightPx}px` }}>
-                          <LunchCard startTime="12:00 - 14:00" height={lunchHeightPx} />
-                        </div>
-                      );
-
-                      // Fixed 14:00 - 14:30 Prep block
-                      const prep14StartPx = (14 * 60 - OPERATIONAL_START) * MINUTE_HEIGHT;
-                      const prep14HeightPx = 30 * MINUTE_HEIGHT;
-                      items.push(
-                        <div key="prep-14-break" className="absolute left-0 right-0 pr-1" style={{ top: `${prep14StartPx}px`, height: `${prep14HeightPx}px` }}>
-                          <BufferCard startTime="14:00" type="prep" height={prep14HeightPx} />
-                        </div>
-                      );
-                      addedBuffers.add("14:00");
-
-                      // Fixed 16:00 - 16:30 Prep block
-                      const prep16StartPx = (16 * 60 - OPERATIONAL_START) * MINUTE_HEIGHT;
-                      const prep16HeightPx = 30 * MINUTE_HEIGHT;
-                      items.push(
-                        <div key="prep-16-break" className="absolute left-0 right-0 pr-1" style={{ top: `${prep16StartPx}px`, height: `${prep16HeightPx}px` }}>
-                          <BufferCard startTime="16:00" type="prep" height={prep16HeightPx} />
-                        </div>
-                      );
-                      addedBuffers.add("16:00");
-
-                      const timelineSchedule = schedule.filter(item => {
-                        const [h, m] = item.startTime.split(':').map(Number);
-                        const t = h * 60 + m;
-                        return t >= OPERATIONAL_START && t < OPERATIONAL_END && !(t >= 12 * 60 && t < 14 * 60);
-                      });
-
-                      // Group by startTime to handle simultaneous recordings (different videomakers)
-                      const groupedSchedule = timelineSchedule.reduce((acc, item) => {
-                        const key = item.startTime;
-                        if (!acc[key]) acc[key] = [];
-                        acc[key].push(item);
-                        return acc;
-                      }, {} as Record<string, ScheduleItem[]>);
-
-                      Object.entries(groupedSchedule).forEach(([startTime, itemsGroup]) => {
-                        const [h, m] = startTime.split(':').map(Number);
-                        const startMin = h * 60 + m;
-
-                        // Use duration of first item in group
-                        let duration = 90;
-                        const firstItem = itemsGroup[0];
-                        if (firstItem.endTime) {
-                          const [eh, em] = firstItem.endTime.split(':').map(Number);
-                          const endMin = eh * 60 + em;
-                          if (endMin > startMin) duration = endMin - startMin;
-                        }
-
-                        const topPx = (startMin - OPERATIONAL_START) * MINUTE_HEIGHT;
-                        const heightPx = duration * MINUTE_HEIGHT;
-
-                        if (itemsGroup.length > 1) {
-                          items.push(
-                            <div key={`group-${startTime}`} className="absolute left-0 right-0 pr-1" style={{ top: `${topPx}px`, height: `${heightPx}px` }}>
-                              <RotatingScheduleCard 
-                                items={itemsGroup} 
-                                isLive={(id) => activeRecordingIds.includes(id) || itemsGroup.some(it => it.id === id && it.status === 'recording')} 
-                                height={heightPx} 
-                              />
-                            </div>
-                          );
-                        } else {
-                          items.push(
-                            <div key={firstItem.id} className="absolute left-0 right-0 pr-1" style={{ top: `${topPx}px`, height: `${heightPx}px` }}>
-                              <ScheduleCard item={firstItem} isLive={activeRecordingIds.includes(firstItem.id) || firstItem.status === 'recording'} height={heightPx} />
-                            </div>
-                          );
-                        }
-
-                        // Pulse buffer right after this recording (if at least one in group is not cancelled)
-                        const hasActiveInGroup = itemsGroup.some(it => it.status !== 'cancelada');
-                        if (hasActiveInGroup) {
-                          const bufferStart = startMin + duration;
-                          const bufferEnd = bufferStart + 30;
-                          const bufferTime = `${String(Math.floor(bufferStart / 60)).padStart(2, '0')}:${String(bufferStart % 60).padStart(2, '0')}`;
-                          const overlapsLunch = bufferStart < 14 * 60 && bufferEnd > 12 * 60;
-                          if (!overlapsLunch && bufferEnd <= OPERATIONAL_END && !addedBuffers.has(bufferTime)) {
-                            addedBuffers.add(bufferTime);
-                            const isPrep = bufferTime === '14:00' || bufferTime === '16:00';
-                            const bTop = (bufferStart - OPERATIONAL_START) * MINUTE_HEIGHT;
-                            const bH = 30 * MINUTE_HEIGHT;
-                            items.push(
-                              <div key={`buffer-${bufferTime}`} className="absolute left-0 right-0 pr-1" style={{ top: `${bTop}px`, height: `${bH}px` }}>
-                                <BufferCard startTime={bufferTime} type={isPrep ? 'prep' : 'pulse'} height={bH} />
-                              </div>
-                            );
-                          }
-                        }
-                      });
-
-
-                      return items;
-                    })()}
+                  <div className="space-y-1.5">
+                    {[...schedule]
+                      .sort((a, b) => a.startTime.localeCompare(b.startTime))
+                      .map(item => {
+                        const isLive = activeRecordingIds.includes(item.id) || item.status === 'recording';
+                        return (
+                          <ScheduleRow key={item.id} item={item} isLive={isLive} />
+                        );
+                      })}
                   </div>
                 ) : (
                   <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>

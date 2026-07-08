@@ -1739,10 +1739,10 @@ export default function TvDashboard() {
                       {sorted.map((item, idx) => {
                         const isLive = activeRecordingIds.includes(item.id) || item.status === 'recording';
                         return (
-                          <React.Fragment key={item.id}>
+                          <Fragment key={item.id}>
                             {idx === nowDividerIdx && !isLive && <NowDivider time={nowLabel} />}
                             <ScheduleRow item={item} isLive={isLive} nowMinutes={nowMin} recordingDurationMin={90} />
-                          </React.Fragment>
+                          </Fragment>
                         );
                       })}
                     </div>

@@ -161,6 +161,21 @@ function getDesignSlaHours(createdAt?: string | null) {
   return (deadlineMs - Date.now()) / 3600 / 1000;
 }
 
+function getIdleHours(updatedAt?: string | null) {
+  if (!updatedAt) return null;
+  const u = new Date(updatedAt).getTime();
+  if (!Number.isFinite(u)) return null;
+  return (Date.now() - u) / 3600 / 1000;
+}
+
+function formatIdle(hours: number) {
+  if (hours < 1) return `${Math.max(1, Math.floor(hours * 60))}min`;
+  if (hours < 24) return `${Math.floor(hours)}h`;
+  const d = Math.floor(hours / 24);
+  const r = Math.floor(hours - d * 24);
+  return r > 0 ? `${d}d ${r}h` : `${d}d`;
+}
+
 /* ─── Utils ─────────────────────────────────────────────── */
 function getInitials(name: string) {
   return name.split(' ').map(n => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();

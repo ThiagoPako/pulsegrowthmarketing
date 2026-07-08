@@ -701,6 +701,11 @@ export default function DesignerDashboard() {
                     </div>
                   </div>
 
+                  {/* Copy inline — sempre visível quando existe */}
+                  {t.copy_text && t.copy_text.trim() && (
+                    <InlineCopyBlock text={t.copy_text} />
+                  )}
+
                   {/* Action buttons */}
                   <div className="flex flex-wrap items-center gap-2">
                     <Button

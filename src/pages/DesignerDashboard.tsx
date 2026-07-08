@@ -391,12 +391,8 @@ export default function DesignerDashboard() {
                       </h2>
                       <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1"><Palette size={12} /> {FORMAT_LABELS[t.format_type] || t.format_type}</span>
-                        {activeElapsed && (
-                          <span className="flex items-center gap-1 font-mono font-semibold text-violet-600 dark:text-violet-400">
-                            <Timer size={12} /> {activeElapsed} em execução
-                          </span>
-                        )}
                       </div>
+
                     </div>
                   </div>
 

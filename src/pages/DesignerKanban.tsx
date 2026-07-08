@@ -1119,6 +1119,23 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
         </Button>
       )}
 
+      {/* Pause / Resume enquanto está em execução */}
+      {(onPause || onResume) && (
+        <Button
+          size="sm"
+          className={`w-full h-8 text-xs gap-1.5 rounded-lg ${
+            onPause
+              ? 'bg-amber-500 hover:bg-amber-600 text-white'
+              : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+          }`}
+          onClick={(e) => { e.stopPropagation(); (onPause || onResume)?.(); }}
+          title={onPause ? 'Pausar cronômetro' : 'Retomar cronômetro'}
+        >
+          {onPause ? <><Pause size={12} fill="currentColor" /> Pausar</> : <><Play size={12} fill="currentColor" /> Retomar</>}
+        </Button>
+      )}
+
+
       {/* Return to queue button for executando */}
       {onReturnToQueue && (
         <Button

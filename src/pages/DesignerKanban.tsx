@@ -209,6 +209,13 @@ export default function DesignerKanban() {
     if (targetColumn === 'executando') {
       if (!task.started_at) extraFields.started_at = new Date().toISOString();
       if (!task.assigned_to && user?.id) extraFields.assigned_to = user.id;
+      extraFields.timer_running = true;
+      extraFields.timer_started_at = new Date().toISOString();
+    }
+
+    if (targetColumn === 'fila_baixa_prioridade') {
+      extraFields.timer_running = false;
+      extraFields.timer_started_at = null;
     }
 
     if (targetColumn === 'em_analise') {
@@ -218,11 +225,14 @@ export default function DesignerKanban() {
         return;
       }
       extraFields.due_date = null;
+      extraFields.timer_running = false;
+      extraFields.timer_started_at = null;
     }
 
     if (targetColumn === 'aprovado') {
       extraFields.completed_at = new Date().toISOString();
       extraFields.client_approved_at = new Date().toISOString();
+      extraFields.timer_running = false;
       if (task.format_type === 'logomarca' && task.client_id) {
         const fileUrl = task.attachment_url || (task as any).mockup_url;
         if (fileUrl) {
@@ -234,6 +244,7 @@ export default function DesignerKanban() {
 
     if (targetColumn === 'enviar_cliente') {
       if (!task.sent_to_client_at) extraFields.sent_to_client_at = new Date().toISOString();
+      extraFields.timer_running = false;
     }
 
     try {
@@ -244,6 +255,37 @@ export default function DesignerKanban() {
             .map(u => supabase.from('design_tasks').update({ position: u.position }).eq('id', u.id))
         );
       }
+
+      // Regra: 1 tarefa ativa por vez. Ao mover para "executando",
+      // mover as outras da mesma designer que estejam em "executando" para "fila_baixa_prioridade".
+      if (targetColumn === 'executando') {
+        const designerId = task.assigned_to || user?.id;
+        if (designerId) {
+          const conflicting = tasks.filter(t =>
+            t.id !== taskId &&
+            t.kanban_column === 'executando' &&
+            t.assigned_to === designerId
+          );
+          for (const other of conflicting) {
+            await updateTask.mutateAsync({
+              id: other.id,
+              kanban_column: 'fila_baixa_prioridade',
+              timer_running: false,
+              timer_started_at: null,
+            } as any);
+            await addHistory.mutateAsync({
+              task_id: other.id,
+              action: 'Pausada por prioridade',
+              details: `Movida para Fila Baixa Prioridade porque "${task.title}" entrou em execução`,
+              user_id: user?.id,
+            });
+          }
+          if (conflicting.length > 0) {
+            toast.info(`${conflicting.length} tarefa(s) movida(s) para Fila Baixa Prioridade`);
+          }
+        }
+      }
+
       await updateTask.mutateAsync({ id: taskId, kanban_column: targetColumn, ...extraFields } as any);
       await addHistory.mutateAsync({ task_id: taskId, action: `Movido para ${targetLabel}`, user_id: user?.id });
       toast.success(`Tarefa movida para "${targetLabel}"`);

@@ -831,6 +831,19 @@ export default function DesignerDashboard() {
         })()}
       </AnimatePresence>
 
+      {/* ═══ PRÓXIMA SUGERIDA — quando não há tarefa ativa ═══ */}
+      <AnimatePresence>
+        {!activeTask && nextSuggested && (
+          <NextSuggestedCard
+            task={nextSuggested}
+            onAccept={handleAcceptSuggestion}
+            onOpen={() => setSelectedTaskId(nextSuggested.id)}
+          />
+        )}
+      </AnimatePresence>
+
+
+
       {/* ═══ Filtros globais ═══ */}
       <motion.div {...fadeUp} transition={{ delay: 0.15 }} className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[180px] max-w-xs">

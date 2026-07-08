@@ -116,6 +116,18 @@ export default function RecordingControl() {
     return map;
   }, [filteredRecordings, videomakers]);
 
+  // Week grid: { [date]: { [time]: Recording[] } }
+  const recordingsByDayAndSlot = useMemo(() => {
+    const map: Record<string, Record<string, Recording[]>> = {};
+    displayDates.forEach(d => { map[d] = {}; });
+    filteredRecordings.forEach(r => {
+      if (!map[r.date]) map[r.date] = {};
+      if (!map[r.date][r.startTime]) map[r.date][r.startTime] = [];
+      map[r.date][r.startTime].push(r);
+    });
+    return map;
+  }, [filteredRecordings, displayDates]);
+
   // Navigation
   const goToday = () => setSelectedDate(new Date());
   const goPrev = () => setSelectedDate(d => viewMode === 'day' ? subDays(d, 1) : subDays(d, 7));

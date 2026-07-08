@@ -1,18 +1,22 @@
 import { useState, useMemo, useRef } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/vpsDb';
-import type { Recording } from '@/types';
+import type { Recording, RecordingType } from '@/types';
 import { format, addDays, subDays, startOfWeek, endOfWeek, isToday, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronLeft, ChevronRight, Calendar, Users, GripVertical,
   Clock, Video, AlertTriangle, ArrowLeftRight, Check, Loader2, CalendarDays,
-  Coffee, HelpCircle, Rocket
+  Coffee, HelpCircle, Rocket, Plus, Trash2, X
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
@@ -38,13 +42,23 @@ const LUNCH_SLOTS = ['12:30', '13:30'];
 
 
 export default function RecordingControl() {
-  const { recordings, clients, users, updateRecording, settings, refetchData } = useApp();
+  const { recordings, clients, users, updateRecording, addRecording, deleteRecording, hasConflict, settings, refetchData } = useApp();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'day' | 'week'>('day');
   const [draggedRecording, setDraggedRecording] = useState<Recording | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<{ vmId: string; time: string } | null>(null);
   const [dragOverVideomaker, setDragOverVideomaker] = useState<string | null>(null);
   const [reassigning, setReassigning] = useState(false);
+
+  // New-recording dialog
+  const [newDialog, setNewDialog] = useState<{ open: boolean; vmId: string; time: string; date: string }>({ open: false, vmId: '', time: '', date: '' });
+  const [newForm, setNewForm] = useState<{ mode: 'client' | 'avulso'; clientId: string; prospectName: string; type: RecordingType }>({ mode: 'client', clientId: '', prospectName: '', type: 'extra' });
+  const [saving, setSaving] = useState(false);
+
+  const activeClients = useMemo(() =>
+    clients.filter(c => c.status !== 'cancelado').sort((a, b) => a.companyName.localeCompare(b.companyName)),
+    [clients]
+  );
 
   // Get all videomakers
   const videomakers = useMemo(() =>
@@ -322,6 +336,13 @@ export default function RecordingControl() {
                           client={getClient(recording.clientId)}
                           isDragging={draggedRecording?.id === recording.id}
                           onDragStart={handleDragStart}
+                          onDelete={async () => {
+                            const label = getClient(recording.clientId)?.companyName || recording.prospectName || 'esta gravação';
+                            if (!window.confirm(`Apagar permanentemente "${label}" às ${recording.startTime}?`)) return;
+                            const ok = await deleteRecording(recording.id);
+                            if (ok) { toast.success('Gravação apagada'); setTimeout(() => refetchData(), 300); }
+                            else toast.error('Erro ao apagar');
+                          }}
                         />
                       ) : isLunch ? (
                         <div className="h-full flex items-center justify-center bg-amber-500/5">
@@ -339,14 +360,26 @@ export default function RecordingControl() {
                           </motion.div>
                         </div>
                       ) : (
-                        <div className="h-full w-full rounded-lg border-2 border-dashed border-transparent hover:border-muted-foreground/10 flex items-center justify-center transition-colors group">
-                           {draggedRecording && !isRestricted && (
-                             <div className="opacity-0 group-hover:opacity-100 flex flex-col items-center gap-1">
-                               <ArrowLeftRight size={14} className="text-primary/40" />
-                               <span className="text-[10px] text-primary/40 font-medium">Soltar aqui</span>
-                             </div>
-                           )}
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewForm({ mode: 'client', clientId: '', prospectName: '', type: 'extra' });
+                            setNewDialog({ open: true, vmId: vm.id, time, date: displayDates[0] });
+                          }}
+                          className="h-full w-full rounded-lg border-2 border-dashed border-transparent hover:border-primary/30 hover:bg-primary/5 flex items-center justify-center transition-colors group"
+                        >
+                          {draggedRecording ? (
+                            <div className="opacity-0 group-hover:opacity-100 flex flex-col items-center gap-1">
+                              <ArrowLeftRight size={14} className="text-primary/40" />
+                              <span className="text-[10px] text-primary/40 font-medium">Soltar aqui</span>
+                            </div>
+                          ) : (
+                            <div className="opacity-0 group-hover:opacity-100 flex flex-col items-center gap-1">
+                              <Plus size={16} className="text-primary/50" />
+                              <span className="text-[10px] text-primary/50 font-medium">Agendar</span>
+                            </div>
+                          )}
+                        </button>
                       )}
                     </div>
                   );
@@ -374,6 +407,13 @@ export default function RecordingControl() {
                 client={getClient(rec.clientId)}
                 isDragging={draggedRecording?.id === rec.id}
                 onDragStart={handleDragStart}
+                onDelete={async () => {
+                  const label = getClient(rec.clientId)?.companyName || rec.prospectName || 'esta gravação';
+                  if (!window.confirm(`Apagar permanentemente "${label}" às ${rec.startTime}?`)) return;
+                  const ok = await deleteRecording(rec.id);
+                  if (ok) { toast.success('Gravação apagada'); setTimeout(() => refetchData(), 300); }
+                  else toast.error('Erro ao apagar');
+                }}
               />
             ))}
           </div>
@@ -393,18 +433,125 @@ export default function RecordingControl() {
           <GripVertical size={10} /> Arraste entre os slots para remarcar automaticamente
         </span>
       </div>
+
+      {/* New recording dialog */}
+      <Dialog open={newDialog.open} onOpenChange={(open) => setNewDialog(prev => ({ ...prev, open }))}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Agendar Gravação</DialogTitle>
+            <DialogDescription>
+              {(() => {
+                const vm = users.find(u => u.id === newDialog.vmId);
+                const dateLbl = newDialog.date ? format(new Date(newDialog.date + 'T12:00:00'), "dd/MM (EEE)", { locale: ptBR }) : '';
+                return `${vm?.displayName || vm?.name || 'Videomaker'} • ${dateLbl} • ${newDialog.time}`;
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setNewForm(f => ({ ...f, mode: 'client' }))}
+                className={`p-3 rounded-lg border-2 text-sm font-semibold transition-all ${newForm.mode === 'client' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-muted-foreground/30'}`}
+              >
+                Cliente
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewForm(f => ({ ...f, mode: 'avulso', type: 'avulso' }))}
+                className={`p-3 rounded-lg border-2 text-sm font-semibold transition-all ${newForm.mode === 'avulso' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-muted-foreground/30'}`}
+              >
+                Avulso / Prospect
+              </button>
+            </div>
+
+            {newForm.mode === 'client' ? (
+              <div className="space-y-1.5">
+                <Label>Cliente</Label>
+                <Select value={newForm.clientId} onValueChange={(v) => setNewForm(f => ({ ...f, clientId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
+                  <SelectContent>
+                    {activeClients.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label>Nome do prospect / avulso</Label>
+                <Input
+                  value={newForm.prospectName}
+                  onChange={(e) => setNewForm(f => ({ ...f, prospectName: e.target.value }))}
+                  placeholder="Ex.: Padaria do João"
+                  autoFocus
+                />
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label>Tipo</Label>
+              <Select value={newForm.type} onValueChange={(v) => setNewForm(f => ({ ...f, type: v as RecordingType }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {newForm.mode === 'client' && <SelectItem value="fixa">Fixa</SelectItem>}
+                  <SelectItem value="extra">Extra</SelectItem>
+                  {newForm.mode === 'client' && <SelectItem value="secundaria">Secundária</SelectItem>}
+                  {newForm.mode === 'client' && <SelectItem value="backup">Backup</SelectItem>}
+                  {newForm.mode === 'avulso' && <SelectItem value="avulso">Avulso</SelectItem>}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewDialog(prev => ({ ...prev, open: false }))} disabled={saving}>Cancelar</Button>
+            <Button
+              onClick={async () => {
+                if (newForm.mode === 'client' && !newForm.clientId) { toast.error('Selecione um cliente'); return; }
+                if (newForm.mode === 'avulso' && !newForm.prospectName.trim()) { toast.error('Informe o nome do prospect'); return; }
+                const conflict = hasConflict(newDialog.vmId, newDialog.date, newDialog.time, undefined, newForm.type, newForm.mode === 'avulso' ? undefined : newForm.clientId);
+                if (conflict.hasConflict) { toast.error(conflict.message || 'Conflito de horário'); return; }
+                setSaving(true);
+                const rec: Recording = {
+                  id: crypto.randomUUID(),
+                  clientId: newForm.mode === 'avulso' ? '' : newForm.clientId,
+                  videomakerId: newDialog.vmId,
+                  date: newDialog.date,
+                  startTime: newDialog.time,
+                  type: newForm.type,
+                  status: 'agendada',
+                  ...(newForm.mode === 'avulso' ? { prospectName: newForm.prospectName.trim() } : {}),
+                };
+                const ok = await addRecording(rec);
+                setSaving(false);
+                if (!ok) { toast.error('Erro ao agendar'); return; }
+                toast.success('Gravação agendada');
+                setNewDialog({ open: false, vmId: '', time: '', date: '' });
+                setTimeout(() => refetchData(), 300);
+              }}
+              disabled={saving}
+            >
+              {saving ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Check size={14} className="mr-1.5" />}
+              Agendar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
 /* ── Recording Card ── */
 function RecordingCard({
-  recording, client, isDragging, onDragStart,
+  recording, client, isDragging, onDragStart, onDelete,
 }: {
   recording: Recording;
   client?: { id: string; companyName: string; color: string; logoUrl?: string; responsiblePerson: string };
   isDragging: boolean;
   onDragStart: (e: React.DragEvent, r: Recording) => void;
+  onDelete?: () => void;
 }) {
   const status = STATUS_COLORS[recording.status] || STATUS_COLORS.agendada;
   const isCompleted = recording.status === 'concluida';
@@ -425,8 +572,21 @@ function RecordingCard({
             : 'border-border bg-background hover:border-primary/40 hover:shadow-xl hover:-translate-y-0.5'
       }`}
     >
+      {/* Delete button */}
+      {onDelete && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          onMouseDown={(e) => e.stopPropagation()}
+          draggable={false}
+          className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-red-500/15 text-red-400 z-10"
+          title="Apagar gravação"
+        >
+          <Trash2 size={12} />
+        </button>
+      )}
       {/* Drag handle */}
-      {!isCompleted && (
+      {!isCompleted && !onDelete && (
         <div className="absolute right-1.5 top-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <GripVertical size={12} className="text-muted-foreground" />
         </div>

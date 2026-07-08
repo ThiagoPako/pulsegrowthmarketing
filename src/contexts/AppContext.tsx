@@ -31,7 +31,7 @@ interface AppContextType {
   addClient: (client: Client) => Promise<boolean>;
   updateClient: (client: Client) => Promise<void>;
   deleteClient: (id: string) => Promise<boolean>;
-  addRecording: (recording: Recording) => Promise<boolean>;
+  addRecording: (recording: Recording, options?: { skipClientDayCheck?: boolean }) => Promise<boolean>;
   updateRecording: (recording: Recording) => void;
   cancelRecording: (id: string) => void;
   deleteRecording: (id: string) => Promise<boolean>;

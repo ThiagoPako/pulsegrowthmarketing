@@ -141,12 +141,24 @@ const COLUMN_CONFIG: Record<string, { label: string; color: string; icon: any }>
 };
 
 const DESIGN_COLUMN_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
-  executando: { label: 'Criando', color: 'hsl(330 85% 62%)', icon: Palette },
+  nova_tarefa: { label: 'Na Fila', color: 'hsl(217 91% 60%)', icon: Sparkles },
+  executando: { label: 'AO VIVO', color: 'hsl(330 85% 62%)', icon: Palette },
+  fila_baixa_prioridade: { label: 'Pausada', color: 'hsl(240 5% 55%)', icon: Pause },
   em_analise: { label: 'Em análise', color: 'hsl(32 95% 58%)', icon: Eye },
   ajustes: { label: 'Ajustes', color: 'hsl(356 84% 62%)', icon: Sparkles },
   em_andamento: { label: 'Criando', color: 'hsl(330 85% 62%)', icon: Palette },
   revisao_interna: { label: 'Em análise', color: 'hsl(32 95% 58%)', icon: Eye },
 };
+
+const DESIGN_SLA_HOURS_TV = 72;
+
+function getDesignSlaHours(createdAt?: string | null) {
+  if (!createdAt) return null;
+  const created = new Date(createdAt).getTime();
+  if (!Number.isFinite(created)) return null;
+  const deadlineMs = created + DESIGN_SLA_HOURS_TV * 3600 * 1000;
+  return (deadlineMs - Date.now()) / 3600 / 1000;
+}
 
 /* ─── Utils ─────────────────────────────────────────────── */
 function getInitials(name: string) {

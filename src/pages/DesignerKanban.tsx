@@ -303,6 +303,34 @@ export default function DesignerKanban() {
   const handleQuickStart = async (task: DesignTask) => {
     try {
       const now = new Date().toISOString();
+      const designerId = user?.id || task.assigned_to;
+
+      // Regra: 1 tarefa ativa por vez. Pausa qualquer outra em execução da mesma designer.
+      if (designerId) {
+        const conflicting = tasks.filter(t =>
+          t.id !== task.id &&
+          t.kanban_column === 'executando' &&
+          t.assigned_to === designerId
+        );
+        for (const other of conflicting) {
+          await updateTask.mutateAsync({
+            id: other.id,
+            kanban_column: 'fila_baixa_prioridade',
+            timer_running: false,
+            timer_started_at: null,
+          } as any);
+          await addHistory.mutateAsync({
+            task_id: other.id,
+            action: 'Pausada por prioridade',
+            details: `Movida para Fila Baixa Prioridade porque "${task.title}" entrou em execução`,
+            user_id: user?.id,
+          });
+        }
+        if (conflicting.length > 0) {
+          toast.info(`${conflicting.length} tarefa(s) pausada(s) na Fila Baixa Prioridade`);
+        }
+      }
+
       await updateTask.mutateAsync({
         id: task.id,
         kanban_column: 'executando',

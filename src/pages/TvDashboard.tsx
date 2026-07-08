@@ -1524,23 +1524,64 @@ export default function TvDashboard() {
             {visibility.show_pipeline && (
               <>
                 <div>
-                  <SectionHeader icon={Palette} iconColor="hsl(330 85% 62%)" title="Designer" badge={designPipeline.length > 0 ? `${designPipeline.length} artes` : `${designerMembers.length} designers`} />
-                  {designPipeline.length > 0 ? (
-                    <div className="space-y-2">
-                      <AnimatePresence>
-                        {designPipeline.map(task => <DesignActivityCard key={task.id} task={task} />)}
-                      </AnimatePresence>
-                    </div>
-                  ) : designerMembers.length > 0 ? (
-                    <div className="space-y-2">
-                      {designerMembers.map(member => <MemberCard key={member.id} member={member} />)}
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                      <Palette className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
-                      <p className="text-[10px] text-white/20">Nenhuma designer em atividade agora</p>
-                    </div>
-                  )}
+                  {(() => {
+                    const liveTask = designPipeline.find(t => t.isLive) || designPipeline.find(t => t.column === 'executando');
+                    const paused = designPipeline.filter(t => t.column === 'fila_baixa_prioridade');
+                    const queue = designPipeline.filter(t => t.column === 'nova_tarefa');
+                    const overdue = designPipeline.filter(t => {
+                      if (['em_analise'].includes(t.column)) return false;
+                      const h = getDesignSlaHours(t.createdAt);
+                      return h !== null && h < 0;
+                    });
+                    const critical = designPipeline.filter(t => {
+                      if (['em_analise'].includes(t.column)) return false;
+                      const h = getDesignSlaHours(t.createdAt);
+                      return h !== null && h >= 0 && h < 12;
+                    });
+
+                    return (
+                      <>
+                        <SectionHeader
+                          icon={Palette}
+                          iconColor="hsl(330 85% 62%)"
+                          title="Designer — ao vivo"
+                          badge={liveTask ? '● AO VIVO' : (designerMembers.length > 0 ? `${designerMembers.length} designers` : 'ociosa')}
+                        />
+
+                        {/* HERO — tarefa em execução ao vivo */}
+                        {liveTask ? (
+                          <LiveDesignHero task={liveTask} />
+                        ) : designerMembers.length > 0 ? (
+                          <div className="rounded-xl border border-dashed border-white/8 p-4 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                            <Palette className="w-7 h-7 mx-auto mb-2 text-white/20" />
+                            <p className="text-[11px] text-white/45 font-semibold">Nenhuma tarefa em execução agora</p>
+                            <p className="text-[9px] text-white/25 mt-0.5">Designer disponível — aguardando iniciar demanda</p>
+                          </div>
+                        ) : (
+                          <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                            <Palette className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                            <p className="text-[10px] text-white/20">Sem designer cadastrada</p>
+                          </div>
+                        )}
+
+                        {/* Status geral */}
+                        <div className="grid grid-cols-4 gap-1.5 mt-2">
+                          <DesignStat label="Fila" value={queue.length} color="hsl(217 91% 60%)" icon={Sparkles} />
+                          <DesignStat label="Pausadas" value={paused.length} color="hsl(240 5% 65%)" icon={Pause} />
+                          <DesignStat label="Crítica <12h" value={critical.length} color="hsl(32 95% 58%)" icon={Clock} />
+                          <DesignStat label="Atrasada" value={overdue.length} color="hsl(0 84% 60%)" icon={AlertTriangle} pulse={overdue.length > 0} />
+                        </div>
+
+                        {/* Lista de pausadas + atrasadas */}
+                        {(paused.length > 0 || overdue.length > 0) && (
+                          <div className="mt-2 space-y-1.5">
+                            {overdue.slice(0, 3).map(t => <DesignMiniRow key={`o-${t.id}`} task={t} status="overdue" />)}
+                            {paused.slice(0, 3).map(t => <DesignMiniRow key={`p-${t.id}`} task={t} status="paused" />)}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div>

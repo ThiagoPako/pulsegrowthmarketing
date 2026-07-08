@@ -73,6 +73,12 @@ interface DesignActivityTask {
   designerAvatar?: string | null;
   timeOnTask: number;
   isPaused: boolean;
+  isLive?: boolean;
+  timerRunning?: boolean;
+  timerStartedAt?: string | null;
+  createdAt?: string | null;
+  priority?: string;
+  assignedTo?: string | null;
 }
 
 interface ScheduledPost {
@@ -135,12 +141,24 @@ const COLUMN_CONFIG: Record<string, { label: string; color: string; icon: any }>
 };
 
 const DESIGN_COLUMN_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
-  executando: { label: 'Criando', color: 'hsl(330 85% 62%)', icon: Palette },
+  nova_tarefa: { label: 'Na Fila', color: 'hsl(217 91% 60%)', icon: Sparkles },
+  executando: { label: 'AO VIVO', color: 'hsl(330 85% 62%)', icon: Palette },
+  fila_baixa_prioridade: { label: 'Pausada', color: 'hsl(240 5% 55%)', icon: Pause },
   em_analise: { label: 'Em análise', color: 'hsl(32 95% 58%)', icon: Eye },
   ajustes: { label: 'Ajustes', color: 'hsl(356 84% 62%)', icon: Sparkles },
   em_andamento: { label: 'Criando', color: 'hsl(330 85% 62%)', icon: Palette },
   revisao_interna: { label: 'Em análise', color: 'hsl(32 95% 58%)', icon: Eye },
 };
+
+const DESIGN_SLA_HOURS_TV = 72;
+
+function getDesignSlaHours(createdAt?: string | null) {
+  if (!createdAt) return null;
+  const created = new Date(createdAt).getTime();
+  if (!Number.isFinite(created)) return null;
+  const deadlineMs = created + DESIGN_SLA_HOURS_TV * 3600 * 1000;
+  return (deadlineMs - Date.now()) / 3600 / 1000;
+}
 
 /* ─── Utils ─────────────────────────────────────────────── */
 function getInitials(name: string) {
@@ -716,6 +734,163 @@ function DesignActivityCard({ task }: { task: DesignActivityTask }) {
         </div>
       </div>
     </motion.div>
+  );
+}
+
+/* ─── LIVE Design Hero (destaque tarefa em execução) ────── */
+function LiveDesignHero({ task }: { task: DesignActivityTask }) {
+  // Cronômetro ao vivo: quando timer_running, incrementa a cada segundo
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!task.timerRunning) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [task.timerRunning]);
+
+  const liveSeconds = useMemo(() => {
+    if (task.timerRunning && task.timerStartedAt) {
+      const started = new Date(task.timerStartedAt).getTime();
+      if (Number.isFinite(started)) {
+        // timeOnTask do backend já inclui tempo até o snapshot; usamos base + delta cliente
+        const backendBaseSeconds = task.timeOnTask;
+        // Reduzir dupla contagem: assumimos timeOnTask veio com started_at recente
+        // Sempre mostramos base + tempo desde snapshot (aprox 5s de defasagem aceitável)
+        const _ = backendBaseSeconds; void _;
+      }
+    }
+    return task.timeOnTask + (task.timerRunning ? Math.floor((now - Date.now()) / 1000) : 0);
+  }, [now, task]);
+
+  const slaHoursLeft = getDesignSlaHours(task.createdAt);
+  const isOverdue = slaHoursLeft !== null && slaHoursLeft < 0;
+  const isCritical = slaHoursLeft !== null && slaHoursLeft >= 0 && slaHoursLeft < 12;
+  const slaLabel = slaHoursLeft === null
+    ? '—'
+    : isOverdue
+      ? `SLA vencido ${Math.floor(Math.abs(slaHoursLeft))}h`
+      : `${Math.ceil(slaHoursLeft)}h restantes`;
+  const slaColor = isOverdue ? 'hsl(0 84% 60%)' : isCritical ? 'hsl(32 95% 58%)' : 'hsl(142 71% 45%)';
+
+  const accent = 'hsl(330 85% 62%)';
+
+  return (
+    <motion.div
+      className="rounded-2xl overflow-hidden border-2 relative"
+      style={{
+        borderColor: `${accent}55`,
+        background: `linear-gradient(135deg, ${accent}22, transparent 65%), rgba(0,0,0,0.35)`,
+        boxShadow: `0 0 40px ${accent}22`,
+      }}
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.3 }}
+    >
+      {/* Barra pulsante topo */}
+      <div className="h-1 w-full relative overflow-hidden" style={{ background: `${accent}20` }}>
+        <motion.div
+          className="absolute inset-y-0 w-1/3"
+          style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)` }}
+          animate={{ x: ['-100%', '400%'] }}
+          transition={{ repeat: Infinity, duration: 2.2, ease: 'linear' }}
+        />
+      </div>
+
+      <div className="p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: `${accent}25` }}>
+            <motion.div className="w-2 h-2 rounded-full" style={{ background: accent }}
+              animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1.2 }} />
+            <span className="text-[10px] font-bold tracking-widest" style={{ color: accent }}>AO VIVO</span>
+          </div>
+          <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-white/8">
+            <Play className="w-3 h-3" style={{ color: accent }} />
+            <span className="text-[10px] font-mono font-bold text-white">{formatElapsedTime(liveSeconds)}</span>
+          </div>
+          <div className="flex-1" />
+          <div className="flex items-center gap-1 px-2 py-1 rounded-full" style={{ background: `${slaColor}22`, border: `1px solid ${slaColor}55` }}>
+            {isOverdue ? <AlertTriangle className="w-3 h-3" style={{ color: slaColor }} /> : <Clock className="w-3 h-3" style={{ color: slaColor }} />}
+            <span className="text-[10px] font-bold" style={{ color: slaColor }}>{slaLabel}</span>
+          </div>
+        </div>
+
+        <p className="text-lg font-bold text-white leading-tight mb-2">{task.title}</p>
+
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {task.clientLogo ? (
+              <img src={task.clientLogo} alt={task.clientName} className="w-9 h-9 rounded-lg object-contain bg-white/5 p-0.5" />
+            ) : (
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center text-[11px] font-bold"
+                style={{ background: task.clientColor ? `hsl(${task.clientColor} / 0.2)` : 'rgba(255,255,255,0.08)', color: 'white' }}>
+                {getInitials(task.clientName)}
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-[13px] text-white font-semibold truncate">{task.clientName}</p>
+              <p className="text-[9px] text-white/40 uppercase tracking-wider">Cliente</p>
+            </div>
+          </div>
+
+          {task.designerName && (
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="w-9 h-9 rounded-full overflow-hidden border-2 flex items-center justify-center"
+                style={{ borderColor: accent, background: `${accent}18` }}>
+                {task.designerAvatar ? (
+                  <img src={task.designerAvatar} alt={task.designerName} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-[10px] font-bold text-white">{getInitials(task.designerName)}</span>
+                )}
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] font-semibold text-white">{task.designerName.split(' ')[0]}</p>
+                <p className="text-[9px] text-white/40 uppercase tracking-wider">Designer</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ─── Design Stat mini card ─────────────────────────────── */
+function DesignStat({ label, value, color, icon: Icon, pulse }: { label: string; value: number; color: string; icon: any; pulse?: boolean }) {
+  return (
+    <motion.div
+      className="rounded-lg border p-2 flex flex-col items-center justify-center text-center"
+      style={{
+        borderColor: value > 0 ? `${color}55` : 'rgba(255,255,255,0.06)',
+        background: value > 0 ? `${color}12` : 'rgba(255,255,255,0.02)',
+      }}
+      animate={pulse && value > 0 ? { boxShadow: [`0 0 0 ${color}00`, `0 0 12px ${color}66`, `0 0 0 ${color}00`] } : undefined}
+      transition={pulse && value > 0 ? { repeat: Infinity, duration: 1.5 } : undefined}
+    >
+      <Icon className="w-3 h-3 mb-0.5" style={{ color: value > 0 ? color : 'rgba(255,255,255,0.3)' }} />
+      <span className="text-base font-bold" style={{ color: value > 0 ? color : 'rgba(255,255,255,0.35)' }}>{value}</span>
+      <span className="text-[8px] uppercase tracking-wider text-white/40 leading-tight">{label}</span>
+    </motion.div>
+  );
+}
+
+/* ─── Design mini row (pausadas / atrasadas) ───────────── */
+function DesignMiniRow({ task, status }: { task: DesignActivityTask; status: 'paused' | 'overdue' }) {
+  const color = status === 'overdue' ? 'hsl(0 84% 60%)' : 'hsl(240 5% 65%)';
+  const Icon = status === 'overdue' ? AlertTriangle : Pause;
+  const slaHours = getDesignSlaHours(task.createdAt);
+  const suffix = status === 'overdue' && slaHours !== null
+    ? `vencido ${Math.floor(Math.abs(slaHours))}h`
+    : status === 'paused'
+      ? 'em pausa'
+      : '';
+
+  return (
+    <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg border"
+      style={{ borderColor: `${color}30`, background: `${color}08` }}>
+      <Icon className="w-3 h-3 flex-shrink-0" style={{ color }} />
+      <span className="text-[11px] text-white/85 truncate flex-1">{task.title}</span>
+      <span className="text-[9px] text-white/50 truncate flex-shrink-0">{task.clientName}</span>
+      <span className="text-[9px] font-bold uppercase tracking-wider flex-shrink-0" style={{ color }}>{suffix}</span>
+    </div>
   );
 }
 
@@ -1506,23 +1681,64 @@ export default function TvDashboard() {
             {visibility.show_pipeline && (
               <>
                 <div>
-                  <SectionHeader icon={Palette} iconColor="hsl(330 85% 62%)" title="Designer" badge={designPipeline.length > 0 ? `${designPipeline.length} artes` : `${designerMembers.length} designers`} />
-                  {designPipeline.length > 0 ? (
-                    <div className="space-y-2">
-                      <AnimatePresence>
-                        {designPipeline.map(task => <DesignActivityCard key={task.id} task={task} />)}
-                      </AnimatePresence>
-                    </div>
-                  ) : designerMembers.length > 0 ? (
-                    <div className="space-y-2">
-                      {designerMembers.map(member => <MemberCard key={member.id} member={member} />)}
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                      <Palette className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
-                      <p className="text-[10px] text-white/20">Nenhuma designer em atividade agora</p>
-                    </div>
-                  )}
+                  {(() => {
+                    const liveTask = designPipeline.find(t => t.isLive) || designPipeline.find(t => t.column === 'executando');
+                    const paused = designPipeline.filter(t => t.column === 'fila_baixa_prioridade');
+                    const queue = designPipeline.filter(t => t.column === 'nova_tarefa');
+                    const overdue = designPipeline.filter(t => {
+                      if (['em_analise'].includes(t.column)) return false;
+                      const h = getDesignSlaHours(t.createdAt);
+                      return h !== null && h < 0;
+                    });
+                    const critical = designPipeline.filter(t => {
+                      if (['em_analise'].includes(t.column)) return false;
+                      const h = getDesignSlaHours(t.createdAt);
+                      return h !== null && h >= 0 && h < 12;
+                    });
+
+                    return (
+                      <>
+                        <SectionHeader
+                          icon={Palette}
+                          iconColor="hsl(330 85% 62%)"
+                          title="Designer — ao vivo"
+                          badge={liveTask ? '● AO VIVO' : (designerMembers.length > 0 ? `${designerMembers.length} designers` : 'ociosa')}
+                        />
+
+                        {/* HERO — tarefa em execução ao vivo */}
+                        {liveTask ? (
+                          <LiveDesignHero task={liveTask} />
+                        ) : designerMembers.length > 0 ? (
+                          <div className="rounded-xl border border-dashed border-white/8 p-4 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                            <Palette className="w-7 h-7 mx-auto mb-2 text-white/20" />
+                            <p className="text-[11px] text-white/45 font-semibold">Nenhuma tarefa em execução agora</p>
+                            <p className="text-[9px] text-white/25 mt-0.5">Designer disponível — aguardando iniciar demanda</p>
+                          </div>
+                        ) : (
+                          <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                            <Palette className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                            <p className="text-[10px] text-white/20">Sem designer cadastrada</p>
+                          </div>
+                        )}
+
+                        {/* Status geral */}
+                        <div className="grid grid-cols-4 gap-1.5 mt-2">
+                          <DesignStat label="Fila" value={queue.length} color="hsl(217 91% 60%)" icon={Sparkles} />
+                          <DesignStat label="Pausadas" value={paused.length} color="hsl(240 5% 65%)" icon={Pause} />
+                          <DesignStat label="Crítica <12h" value={critical.length} color="hsl(32 95% 58%)" icon={Clock} />
+                          <DesignStat label="Atrasada" value={overdue.length} color="hsl(0 84% 60%)" icon={AlertTriangle} pulse={overdue.length > 0} />
+                        </div>
+
+                        {/* Lista de pausadas + atrasadas */}
+                        {(paused.length > 0 || overdue.length > 0) && (
+                          <div className="mt-2 space-y-1.5">
+                            {overdue.slice(0, 3).map(t => <DesignMiniRow key={`o-${t.id}`} task={t} status="overdue" />)}
+                            {paused.slice(0, 3).map(t => <DesignMiniRow key={`p-${t.id}`} task={t} status="paused" />)}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div>

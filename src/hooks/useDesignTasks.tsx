@@ -3,11 +3,12 @@ import { supabase } from '@/lib/vpsDb';
 import { useCity } from '@/contexts/CityContext';
 import { toast } from 'sonner';
 
-export type DesignTaskColumn = 'nova_tarefa' | 'executando' | 'em_analise' | 'enviar_cliente' | 'aprovado' | 'ajustes';
+export type DesignTaskColumn = 'nova_tarefa' | 'executando' | 'fila_baixa_prioridade' | 'em_analise' | 'enviar_cliente' | 'aprovado' | 'ajustes';
 
 export const DESIGN_COLUMNS: { key: DesignTaskColumn; label: string; color: string }[] = [
   { key: 'nova_tarefa', label: 'Nova Tarefa', color: '217 91% 60%' },
   { key: 'executando', label: 'Executando', color: '45 93% 47%' },
+  { key: 'fila_baixa_prioridade', label: 'Fila Baixa Prioridade', color: '240 5% 55%' },
   { key: 'em_analise', label: 'Em Análise', color: '262 83% 58%' },
   { key: 'enviar_cliente', label: 'Enviar para Cliente', color: '187 85% 43%' },
   { key: 'aprovado', label: 'Aprovado', color: '142 71% 45%' },

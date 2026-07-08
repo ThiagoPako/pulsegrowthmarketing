@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2, Play, Image as ImageIcon, Upload, Download, FileDown, Calendar, Undo2, Flame } from 'lucide-react';
+import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2, Play, Image as ImageIcon, Upload, Download, FileDown, Calendar, Undo2, Flame, Pause, AlertTriangle } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DesignTaskCreateDialog from '@/components/designer/DesignTaskCreateDialog';
 import DesignTaskDetailSheet from '@/components/designer/DesignTaskDetailSheet';
@@ -30,9 +30,22 @@ const FORMAT_LABELS: Record<string, string> = {
   midia_fisica: 'Mídia Física',
 };
 
+// SLA em horas para toda demanda de design
+export const DESIGN_SLA_HOURS = 72;
+
+export function getDesignSlaStatus(task: { created_at?: string }) {
+  if (!task.created_at) return null;
+  const created = new Date(task.created_at).getTime();
+  const deadline = created + DESIGN_SLA_HOURS * 3600 * 1000;
+  const remainingMs = deadline - Date.now();
+  const hours = remainingMs / 3600 / 1000;
+  return { remainingMs, hours, isOverdue: hours < 0, isCritical: hours >= 0 && hours < 12 };
+}
+
 const COLUMN_CONFIG: Record<string, { icon: React.ReactNode; gradient: string }> = {
   nova_tarefa: { icon: <Sparkles size={15} />, gradient: 'from-blue-500/20 to-blue-600/10 dark:from-blue-500/30 dark:to-blue-600/10' },
   executando: { icon: <Zap size={15} />, gradient: 'from-amber-500/20 to-yellow-500/10 dark:from-amber-500/30 dark:to-yellow-500/10' },
+  fila_baixa_prioridade: { icon: <Pause size={15} />, gradient: 'from-slate-500/20 to-zinc-500/10 dark:from-slate-500/30 dark:to-zinc-500/10' },
   em_analise: { icon: <Eye size={15} />, gradient: 'from-purple-500/20 to-violet-500/10 dark:from-purple-500/30 dark:to-violet-500/10' },
   enviar_cliente: { icon: <Send size={15} />, gradient: 'from-cyan-500/20 to-teal-500/10 dark:from-cyan-500/30 dark:to-teal-500/10' },
   aprovado: { icon: <CheckCircle2 size={15} />, gradient: 'from-emerald-500/20 to-green-500/10 dark:from-emerald-500/30 dark:to-green-500/10' },
@@ -196,6 +209,13 @@ export default function DesignerKanban() {
     if (targetColumn === 'executando') {
       if (!task.started_at) extraFields.started_at = new Date().toISOString();
       if (!task.assigned_to && user?.id) extraFields.assigned_to = user.id;
+      extraFields.timer_running = true;
+      extraFields.timer_started_at = new Date().toISOString();
+    }
+
+    if (targetColumn === 'fila_baixa_prioridade') {
+      extraFields.timer_running = false;
+      extraFields.timer_started_at = null;
     }
 
     if (targetColumn === 'em_analise') {
@@ -205,11 +225,14 @@ export default function DesignerKanban() {
         return;
       }
       extraFields.due_date = null;
+      extraFields.timer_running = false;
+      extraFields.timer_started_at = null;
     }
 
     if (targetColumn === 'aprovado') {
       extraFields.completed_at = new Date().toISOString();
       extraFields.client_approved_at = new Date().toISOString();
+      extraFields.timer_running = false;
       if (task.format_type === 'logomarca' && task.client_id) {
         const fileUrl = task.attachment_url || (task as any).mockup_url;
         if (fileUrl) {
@@ -221,6 +244,7 @@ export default function DesignerKanban() {
 
     if (targetColumn === 'enviar_cliente') {
       if (!task.sent_to_client_at) extraFields.sent_to_client_at = new Date().toISOString();
+      extraFields.timer_running = false;
     }
 
     try {
@@ -231,6 +255,37 @@ export default function DesignerKanban() {
             .map(u => supabase.from('design_tasks').update({ position: u.position }).eq('id', u.id))
         );
       }
+
+      // Regra: 1 tarefa ativa por vez. Ao mover para "executando",
+      // mover as outras da mesma designer que estejam em "executando" para "fila_baixa_prioridade".
+      if (targetColumn === 'executando') {
+        const designerId = task.assigned_to || user?.id;
+        if (designerId) {
+          const conflicting = tasks.filter(t =>
+            t.id !== taskId &&
+            t.kanban_column === 'executando' &&
+            t.assigned_to === designerId
+          );
+          for (const other of conflicting) {
+            await updateTask.mutateAsync({
+              id: other.id,
+              kanban_column: 'fila_baixa_prioridade',
+              timer_running: false,
+              timer_started_at: null,
+            } as any);
+            await addHistory.mutateAsync({
+              task_id: other.id,
+              action: 'Pausada por prioridade',
+              details: `Movida para Fila Baixa Prioridade porque "${task.title}" entrou em execução`,
+              user_id: user?.id,
+            });
+          }
+          if (conflicting.length > 0) {
+            toast.info(`${conflicting.length} tarefa(s) movida(s) para Fila Baixa Prioridade`);
+          }
+        }
+      }
+
       await updateTask.mutateAsync({ id: taskId, kanban_column: targetColumn, ...extraFields } as any);
       await addHistory.mutateAsync({ task_id: taskId, action: `Movido para ${targetLabel}`, user_id: user?.id });
       toast.success(`Tarefa movida para "${targetLabel}"`);
@@ -248,6 +303,34 @@ export default function DesignerKanban() {
   const handleQuickStart = async (task: DesignTask) => {
     try {
       const now = new Date().toISOString();
+      const designerId = user?.id || task.assigned_to;
+
+      // Regra: 1 tarefa ativa por vez. Pausa qualquer outra em execução da mesma designer.
+      if (designerId) {
+        const conflicting = tasks.filter(t =>
+          t.id !== task.id &&
+          t.kanban_column === 'executando' &&
+          t.assigned_to === designerId
+        );
+        for (const other of conflicting) {
+          await updateTask.mutateAsync({
+            id: other.id,
+            kanban_column: 'fila_baixa_prioridade',
+            timer_running: false,
+            timer_started_at: null,
+          } as any);
+          await addHistory.mutateAsync({
+            task_id: other.id,
+            action: 'Pausada por prioridade',
+            details: `Movida para Fila Baixa Prioridade porque "${task.title}" entrou em execução`,
+            user_id: user?.id,
+          });
+        }
+        if (conflicting.length > 0) {
+          toast.info(`${conflicting.length} tarefa(s) pausada(s) na Fila Baixa Prioridade`);
+        }
+      }
+
       await updateTask.mutateAsync({
         id: task.id,
         kanban_column: 'executando',
@@ -429,7 +512,7 @@ export default function DesignerKanban() {
                               }
                             }}
                             canDelete={canDelete}
-                            onQuickStart={col.key === 'nova_tarefa' ? () => handleQuickStart(task) : undefined}
+                            onQuickStart={(col.key === 'nova_tarefa' || col.key === 'fila_baixa_prioridade') ? () => handleQuickStart(task) : undefined}
                             onReturnToQueue={col.key === 'executando' ? () => handleReturnToQueue(task) : undefined}
                             onDragStart={e => handleDragStart(e, task)}
                             onDragEnd={handleDragEnd}
@@ -823,6 +906,36 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
         {task.timer_running && (
           <Badge variant="secondary" className="text-[10px] gap-0.5 animate-pulse"><Clock size={10} /> Em andamento</Badge>
         )}
+        {task.kanban_column === 'fila_baixa_prioridade' && (
+          <Badge className="text-[10px] gap-0.5 bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+            <Pause size={10} /> Pausada
+          </Badge>
+        )}
+        {(() => {
+          if (COMPLETED_COLS.includes(task.kanban_column)) return null;
+          const sla = getDesignSlaStatus(task);
+          if (!sla) return null;
+          if (sla.isOverdue) {
+            const hoursOver = Math.floor(Math.abs(sla.hours));
+            return (
+              <Badge className="text-[10px] gap-0.5 bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 animate-pulse">
+                <AlertTriangle size={10} /> SLA vencido {hoursOver}h
+              </Badge>
+            );
+          }
+          if (sla.isCritical) {
+            return (
+              <Badge className="text-[10px] gap-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                <Clock size={10} /> {Math.ceil(sla.hours)}h restantes
+              </Badge>
+            );
+          }
+          return (
+            <Badge variant="outline" className="text-[10px] gap-0.5 text-muted-foreground">
+              <Clock size={10} /> {Math.ceil(sla.hours)}h SLA
+            </Badge>
+          );
+        })()}
         {task.attachment_url && (
           <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
             <CheckCircle2 size={9} className="mr-0.5" /> Arte ✓
@@ -830,14 +943,14 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
         )}
       </div>
 
-      {/* Quick Start button for nova_tarefa */}
+      {/* Quick Start button for nova_tarefa e fila_baixa_prioridade */}
       {onQuickStart && (
         <Button
           size="sm"
           className="w-full h-8 text-xs gap-1.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white rounded-lg"
           onClick={(e) => { e.stopPropagation(); onQuickStart(); }}
         >
-          <Play size={12} fill="currentColor" /> Iniciar Tarefa
+          <Play size={12} fill="currentColor" /> {task.kanban_column === 'fila_baixa_prioridade' ? 'Retomar Tarefa' : 'Iniciar Tarefa'}
         </Button>
       )}
 

@@ -1,15 +1,17 @@
 import { useState, useMemo, useRef } from 'react';
 import { useApp } from '@/contexts/AppContext';
+import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
-import type { Recording, RecordingType } from '@/types';
+import type { Recording, RecordingType, Script, ScriptVideoType, ScriptContentFormat } from '@/types';
 import { format, addDays, subDays, startOfWeek, endOfWeek, isToday, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronLeft, ChevronRight, Calendar, Users, GripVertical,
   Clock, Video, AlertTriangle, ArrowLeftRight, Check, Loader2, CalendarDays,
-  Coffee, HelpCircle, Rocket, Plus, Trash2, X
+  Coffee, HelpCircle, Rocket, Plus, Trash2, X, FileText, Sparkles, User as UserIcon, ArrowRight, ArrowLeft, Pin
 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';

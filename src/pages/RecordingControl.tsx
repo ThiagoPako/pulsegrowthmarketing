@@ -51,6 +51,7 @@ export default function RecordingControl() {
   const [draggedRecording, setDraggedRecording] = useState<Recording | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<{ vmId: string; time: string } | null>(null);
   const [dragOverVideomaker, setDragOverVideomaker] = useState<string | null>(null);
+  const [dragOverWeekCell, setDragOverWeekCell] = useState<{ date: string; time: string } | null>(null);
   const [reassigning, setReassigning] = useState(false);
 
   // Multi-step wizard state

@@ -904,9 +904,17 @@ export default function Scripts() {
     setPreviewOpen(true);
   }, [buildPdfPages, pdfConfig, isAutoCorrecting]);
 
-  // Re-generate preview when config changes
+  // Re-generate preview when config changes (single OR batch)
   useEffect(() => {
-    if (previewOpen && viewing) {
+    if (!previewOpen) return;
+    if (previewBatch && previewBatch.length > 0) {
+      (async () => {
+        const { pages, cleanup } = await buildPdfPages(previewBatch, pdfConfig);
+        const clonedPages = pages.map(p => p.cloneNode(true) as HTMLDivElement);
+        setPreviewPages(clonedPages);
+        cleanup();
+      })();
+    } else if (viewing) {
       handlePreviewPdf(viewing);
     }
   }, [pdfConfig, previewOpen]);

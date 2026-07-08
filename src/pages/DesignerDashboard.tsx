@@ -1365,4 +1365,67 @@ function DailyGoalBar({ completed, goal, onGoalChange, editing, setEditing }: Da
   );
 }
 
+// ═══════════════════════════════════════════════════════════
+// InlineCopyBlock — copy visível direto no spotlight, com destaque de #hashtags/@mentions e botão copiar
+// ═══════════════════════════════════════════════════════════
+function InlineCopyBlock({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const short = text.length > 240 && !expanded;
+  const displayText = short ? text.slice(0, 240) + '…' : text;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      toast.success('Copy copiada! 💜');
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error('Não foi possível copiar');
+    }
+  };
+
+  // Destaca #hashtags, @mentions e links
+  const parts = displayText.split(/(\s+)/).map((chunk, i) => {
+    if (/^#\w+/.test(chunk)) return <span key={i} className="text-violet-600 dark:text-violet-400 font-semibold">{chunk}</span>;
+    if (/^@\w+/.test(chunk)) return <span key={i} className="text-pink-600 dark:text-pink-400 font-semibold">{chunk}</span>;
+    if (/^https?:\/\//.test(chunk)) return <a key={i} href={chunk} target="_blank" rel="noopener noreferrer" className="text-emerald-600 underline break-all">{chunk}</a>;
+    return <span key={i}>{chunk}</span>;
+  });
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mt-3 mb-4 rounded-2xl border border-violet-300/40 bg-white/60 dark:bg-white/5 backdrop-blur-sm p-3"
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-violet-600 dark:text-violet-400">
+          <FileText size={11} /> Copy
+        </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={handleCopy}
+          className="h-7 gap-1.5 text-[11px] rounded-lg text-violet-600 hover:bg-violet-100/50 dark:hover:bg-violet-950/40"
+        >
+          {copied ? <><Check size={11} /> Copiado</> : <><CopyIcon size={11} /> Copiar</>}
+        </Button>
+      </div>
+      <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-foreground/90">
+        {parts}
+      </p>
+      {text.length > 240 && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="mt-2 text-[11px] text-violet-600 hover:text-violet-700 font-semibold"
+        >
+          {expanded ? '↑ Recolher' : '↓ Ver copy completa'}
+        </button>
+      )}
+    </motion.div>
+  );
+}
+
+
 

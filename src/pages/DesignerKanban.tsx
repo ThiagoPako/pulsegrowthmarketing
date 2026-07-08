@@ -943,14 +943,14 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
         )}
       </div>
 
-      {/* Quick Start button for nova_tarefa */}
+      {/* Quick Start button for nova_tarefa e fila_baixa_prioridade */}
       {onQuickStart && (
         <Button
           size="sm"
           className="w-full h-8 text-xs gap-1.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white rounded-lg"
           onClick={(e) => { e.stopPropagation(); onQuickStart(); }}
         >
-          <Play size={12} fill="currentColor" /> Iniciar Tarefa
+          <Play size={12} fill="currentColor" /> {task.kanban_column === 'fila_baixa_prioridade' ? 'Retomar Tarefa' : 'Iniciar Tarefa'}
         </Button>
       )}
 

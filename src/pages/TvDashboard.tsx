@@ -1534,9 +1534,10 @@ export default function TvDashboard() {
   }, []);
 
   const fetchPlaylist = useCallback(async () => {
+    const DEFAULT_RADIO = 'https://www.youtube.com/watch?v=sNd2wRqdgvg&list=RDsNd2wRqdgvg&start_radio=1';
     // Always load from localStorage first for instant playback
     const saved = localStorage.getItem('pulse_radio_url');
-    if (saved) setPlaylistUrl(saved);
+    setPlaylistUrl(saved || DEFAULT_RADIO);
     try {
       const res = await fetch(`${VPS}/data/tv_settings?key=eq.youtube_playlist_url`);
       if (res.ok) {
@@ -1544,6 +1545,8 @@ export default function TvDashboard() {
         if (rows.length > 0 && rows[0].value) {
           setPlaylistUrl(rows[0].value);
           localStorage.setItem('pulse_radio_url', rows[0].value);
+        } else {
+          localStorage.setItem('pulse_radio_url', DEFAULT_RADIO);
         }
       }
     } catch {}

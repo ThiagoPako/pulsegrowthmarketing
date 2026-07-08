@@ -44,7 +44,8 @@ const LUNCH_SLOTS = ['12:30', '13:30'];
 
 
 export default function RecordingControl() {
-  const { recordings, clients, users, updateRecording, addRecording, deleteRecording, hasConflict, settings, refetchData } = useApp();
+  const { recordings, clients, users, scripts, addScript, updateScript, updateRecording, addRecording, deleteRecording, hasConflict, settings, refetchData } = useApp();
+  const { user: authUser } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'day' | 'week'>('day');
   const [draggedRecording, setDraggedRecording] = useState<Recording | null>(null);
@@ -52,10 +53,29 @@ export default function RecordingControl() {
   const [dragOverVideomaker, setDragOverVideomaker] = useState<string | null>(null);
   const [reassigning, setReassigning] = useState(false);
 
-  // New-recording dialog
-  const [newDialog, setNewDialog] = useState<{ open: boolean; vmId: string; time: string; date: string }>({ open: false, vmId: '', time: '', date: '' });
-  const [newForm, setNewForm] = useState<{ mode: 'client' | 'avulso'; clientId: string; prospectName: string; type: RecordingType }>({ mode: 'client', clientId: '', prospectName: '', type: 'extra' });
+  // Multi-step wizard state
+  type WizardStep = 'mode' | 'client' | 'script' | 'confirm';
+  const [wizard, setWizard] = useState<{
+    open: boolean; step: WizardStep; vmId: string; time: string; date: string;
+    mode: 'client' | 'avulso' | null;
+    clientId: string;
+    prospectName: string;
+    type: RecordingType;
+    scriptId: string | null;
+    creatingScript: boolean;
+    newScriptTitle: string;
+    newScriptContent: string;
+    newScriptVideoType: ScriptVideoType;
+    newScriptFormat: ScriptContentFormat;
+  }>({
+    open: false, step: 'mode', vmId: '', time: '', date: '',
+    mode: null, clientId: '', prospectName: '', type: 'extra',
+    scriptId: null, creatingScript: false,
+    newScriptTitle: '', newScriptContent: '',
+    newScriptVideoType: 'vendas', newScriptFormat: 'reels',
+  });
   const [saving, setSaving] = useState(false);
+  const [creatingScriptSaving, setCreatingScriptSaving] = useState(false);
 
   const activeClients = useMemo(() =>
     clients.filter(c => c.status !== 'cancelado').sort((a, b) => a.companyName.localeCompare(b.companyName)),

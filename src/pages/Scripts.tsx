@@ -1620,9 +1620,6 @@ export default function Scripts() {
                 <Button variant="outline" className="flex-1" onClick={() => handlePreviewPdf(viewing)}>
                   <Eye size={16} className="mr-2" /> Prévia A4
                 </Button>
-                <Button variant="outline" className="flex-1" onClick={() => handleDownloadPdf(viewing)}>
-                  <Download size={16} className="mr-2" /> Baixar PDF
-                </Button>
                 <Button variant="outline" className="flex-1" onClick={() => toggleRecorded(viewing)}>
                   <Check size={16} className="mr-2" /> {viewing.recorded ? 'Desmarcar Gravado' : 'Marcar como Gravado'}
                 </Button>

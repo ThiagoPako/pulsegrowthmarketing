@@ -90,6 +90,7 @@ interface ScheduledPost {
   platform?: string;
   status: string;
   scheduledTime?: string;
+  scheduledDate?: string;
   clientName: string;
   clientLogo?: string | null;
   clientColor?: string | null;

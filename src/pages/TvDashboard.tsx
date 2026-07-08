@@ -1700,49 +1700,128 @@ export default function TvDashboard() {
           {/* CENTER COLUMN: Schedule + Posts */}
           <div className="col-span-5 space-y-2.5 overflow-y-auto scrollbar-hide px-1">
             {/* Schedule */}
-            {visibility.show_schedule && (
-              <div className="relative">
-                <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${schedule.length} gravações`} />
-                {schedule.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {[...schedule]
-                      .sort((a, b) => a.startTime.localeCompare(b.startTime))
-                      .map(item => {
+            {visibility.show_schedule && (() => {
+              const sorted = [...schedule].sort((a, b) => a.startTime.localeCompare(b.startTime));
+              const nowMin = clock.getHours() * 60 + clock.getMinutes();
+              const nowLabel = `${String(clock.getHours()).padStart(2, '0')}:${String(clock.getMinutes()).padStart(2, '0')}`;
+              const done = sorted.filter(s => s.status === 'concluida').length;
+              const live = sorted.filter(s => activeRecordingIds.includes(s.id) || s.status === 'recording').length;
+              const upcoming = sorted.filter(s => {
+                if (s.status === 'concluida' || s.status === 'cancelada') return false;
+                const [h, m] = (s.startTime || '00:00').split(':').map(Number);
+                return (h * 60 + m) >= nowMin;
+              }).length;
+              // find first upcoming index for NowDivider
+              let nowDividerIdx = -1;
+              for (let i = 0; i < sorted.length; i++) {
+                const [h, m] = (sorted[i].startTime || '00:00').split(':').map(Number);
+                if (h * 60 + m >= nowMin && sorted[i].status !== 'cancelada' && sorted[i].status !== 'concluida') {
+                  nowDividerIdx = i;
+                  break;
+                }
+              }
+              return (
+                <div className="relative">
+                  <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${sorted.length} agendadas`} />
+                  {sorted.length > 0 && (
+                    <div className="flex items-center gap-2 mb-2 text-[9px] uppercase font-bold tracking-wider">
+                      {live > 0 && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded" style={{ backgroundColor: `${PULSE_ORANGE}18`, color: PULSE_ORANGE }}>
+                          <span className="w-1 h-1 rounded-full bg-current animate-pulse" /> {live} ao vivo
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/12 text-emerald-300">✓ {done} feitas</span>
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/5 text-white/50">↻ {upcoming} restantes</span>
+                    </div>
+                  )}
+                  {sorted.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {sorted.map((item, idx) => {
                         const isLive = activeRecordingIds.includes(item.id) || item.status === 'recording';
                         return (
-                          <ScheduleRow key={item.id} item={item} isLive={isLive} />
+                          <React.Fragment key={item.id}>
+                            {idx === nowDividerIdx && !isLive && <NowDivider time={nowLabel} />}
+                            <ScheduleRow item={item} isLive={isLive} nowMinutes={nowMin} recordingDurationMin={90} />
+                          </React.Fragment>
                         );
                       })}
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                    <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
-                    <p className="text-[10px] text-white/20">Nenhuma gravação hoje</p>
-                  </div>
-                )}
-              </div>
-            )}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                      <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                      <p className="text-[10px] text-white/20">Nenhuma gravação hoje</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
 
-            {/* Scheduled Posts */}
-            {visibility.show_posts && (
-              <div>
-                <SectionHeader icon={Send} iconColor="#3b82f6" title="Posts do Dia" badge={`${todayPosts.length} posts`} />
-                {todayPosts.length > 0 ? (
-                  <div className="space-y-2">
-                    <AnimatePresence>
-                      {todayPosts.map(post => <PostCard key={post.id} post={post} />)}
-                    </AnimatePresence>
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                    <Send className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
-                    <p className="text-[10px] text-white/20">Nenhum post agendado hoje</p>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Week Scheduled Posts (reels) */}
+            {visibility.show_posts && (() => {
+              const groups: Record<string, ScheduledPost[]> = {};
+              [...weekPosts]
+                .sort((a, b) => (a.scheduledDate || '').localeCompare(b.scheduledDate || '') || (a.scheduledTime || '99:99').localeCompare(b.scheduledTime || '99:99'))
+                .forEach(p => {
+                  const k = p.scheduledDate || 'sem-data';
+                  (groups[k] = groups[k] || []).push(p);
+                });
+              const todayIso = new Date().toISOString().slice(0, 10);
+              const tomorrowIso = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+              const weekdayLabels = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+              const orderedKeys = Object.keys(groups).sort();
+
+              return (
+                <div>
+                  <SectionHeader icon={Send} iconColor="#3b82f6" title="Reels da Semana" badge={`${weekPosts.length} agendados`} />
+                  {orderedKeys.length > 0 ? (
+                    <div className="space-y-2.5">
+                      {orderedKeys.map(dateKey => {
+                        const posts = groups[dateKey];
+                        const [y, m, d] = dateKey.split('-').map(Number);
+                        const dateObj = new Date(y, (m || 1) - 1, d || 1);
+                        const isToday = dateKey === todayIso;
+                        const isTomorrow = dateKey === tomorrowIso;
+                        const label = isToday
+                          ? 'Hoje'
+                          : isTomorrow
+                          ? 'Amanhã'
+                          : weekdayLabels[dateObj.getDay()];
+                        const shortDate = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
+                        return (
+                          <div key={dateKey}>
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full"
+                                style={{
+                                  background: isToday ? `${PULSE_ORANGE}18` : 'rgba(255,255,255,0.05)',
+                                  border: isToday ? `1px solid ${PULSE_ORANGE}55` : '1px solid rgba(255,255,255,0.06)',
+                                }}>
+                                <span className="text-[9px] font-black uppercase tracking-wider" style={{ color: isToday ? PULSE_ORANGE : 'rgba(255,255,255,0.7)' }}>
+                                  {label}
+                                </span>
+                                <span className="text-[9px] font-mono tabular-nums text-white/40">{shortDate}</span>
+                              </div>
+                              <span className="text-[9px] text-white/25 font-semibold">{posts.length} {posts.length === 1 ? 'post' : 'posts'}</span>
+                              <div className="flex-1 h-px bg-white/5" />
+                            </div>
+                            <div className="space-y-1.5">
+                              {posts.map(post => <PostCard key={post.id} post={post} />)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                      <Send className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                      <p className="text-[10px] text-white/20">Nenhum reel agendado para os próximos 7 dias</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
+
 
           {/* RIGHT COLUMN: Designer + Editing */}
           <div className="col-span-4 space-y-2.5 overflow-y-auto scrollbar-hide pl-1">

@@ -906,6 +906,36 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
         {task.timer_running && (
           <Badge variant="secondary" className="text-[10px] gap-0.5 animate-pulse"><Clock size={10} /> Em andamento</Badge>
         )}
+        {task.kanban_column === 'fila_baixa_prioridade' && (
+          <Badge className="text-[10px] gap-0.5 bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+            <Pause size={10} /> Pausada
+          </Badge>
+        )}
+        {(() => {
+          if (COMPLETED_COLS.includes(task.kanban_column)) return null;
+          const sla = getDesignSlaStatus(task);
+          if (!sla) return null;
+          if (sla.isOverdue) {
+            const hoursOver = Math.floor(Math.abs(sla.hours));
+            return (
+              <Badge className="text-[10px] gap-0.5 bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 animate-pulse">
+                <AlertTriangle size={10} /> SLA vencido {hoursOver}h
+              </Badge>
+            );
+          }
+          if (sla.isCritical) {
+            return (
+              <Badge className="text-[10px] gap-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                <Clock size={10} /> {Math.ceil(sla.hours)}h restantes
+              </Badge>
+            );
+          }
+          return (
+            <Badge variant="outline" className="text-[10px] gap-0.5 text-muted-foreground">
+              <Clock size={10} /> {Math.ceil(sla.hours)}h SLA
+            </Badge>
+          );
+        })()}
         {task.attachment_url && (
           <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
             <CheckCircle2 size={9} className="mr-0.5" /> Arte ✓

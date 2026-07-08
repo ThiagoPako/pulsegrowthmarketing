@@ -959,6 +959,22 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
             </Badge>
           );
         })()}
+        {(() => {
+          if (COMPLETED_COLS.includes(task.kanban_column)) return null;
+          // Não sinaliza "parada" enquanto o cronômetro está rodando (designer trabalhando)
+          if (task.timer_running) return null;
+          const idle = getIdleStatus(task);
+          if (!idle || !idle.isStuck) return null;
+          const label = formatIdleLabel(idle.hoursIdle);
+          const cls = idle.isSevere
+            ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 animate-pulse'
+            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200';
+          return (
+            <Badge className={`text-[10px] gap-0.5 ${cls}`} title={`Sem atualização desde ${new Date(task.updated_at).toLocaleString('pt-BR')}`}>
+              <Pause size={10} /> Parada há {label}
+            </Badge>
+          );
+        })()}
         {task.attachment_url && (
           <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
             <CheckCircle2 size={9} className="mr-0.5" /> Arte ✓

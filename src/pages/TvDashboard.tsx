@@ -893,6 +893,8 @@ function DesignMiniRow({ task, status }: { task: DesignActivityTask; status: 'pa
   const color = status === 'overdue' ? 'hsl(0 84% 60%)' : 'hsl(240 5% 65%)';
   const Icon = status === 'overdue' ? AlertTriangle : Pause;
   const slaHours = getDesignSlaHours(task.createdAt);
+  const idle = getIdleHours(task.updatedAt);
+  const idleSevere = idle !== null && idle >= 12;
   const suffix = status === 'overdue' && slaHours !== null
     ? `vencido ${Math.floor(Math.abs(slaHours))}h`
     : status === 'paused'
@@ -905,6 +907,18 @@ function DesignMiniRow({ task, status }: { task: DesignActivityTask; status: 'pa
       <Icon className="w-3 h-3 flex-shrink-0" style={{ color }} />
       <span className="text-[11px] text-white/85 truncate flex-1">{task.title}</span>
       <span className="text-[9px] text-white/50 truncate flex-shrink-0">{task.clientName}</span>
+      {idle !== null && idle >= 4 && (
+        <span
+          className={`text-[9px] font-bold uppercase tracking-wider flex-shrink-0 px-1.5 py-0.5 rounded ${idleSevere ? 'animate-pulse' : ''}`}
+          style={{
+            color: idleSevere ? 'hsl(24 95% 60%)' : 'hsl(48 95% 60%)',
+            background: idleSevere ? 'hsl(24 95% 60% / 0.15)' : 'hsl(48 95% 60% / 0.12)',
+          }}
+          title={`Sem atualização há ${formatIdle(idle)}`}
+        >
+          ⏸ {formatIdle(idle)}
+        </span>
+      )}
       <span className="text-[9px] font-bold uppercase tracking-wider flex-shrink-0" style={{ color }}>{suffix}</span>
     </div>
   );

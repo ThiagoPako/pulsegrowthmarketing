@@ -64,7 +64,7 @@ const fadeUp = {
 };
 
 export default function DesignerDashboard() {
-  const { tasksQuery } = useDesignTasks();
+  const { tasksQuery, updateTask, addHistory } = useDesignTasks();
   const { user } = useAuth();
   const { currentUser } = useApp();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);

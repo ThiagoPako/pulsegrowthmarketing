@@ -224,6 +224,21 @@ export default function RecordingControl() {
       setDraggedRecording(null);
       return;
     }
+    // Conflict check with the same videomaker on target date/time (skip client-day rule to allow multi/day)
+    const conflict = hasConflict(
+      draggedRecording.videomakerId,
+      targetDate,
+      targetTime,
+      draggedRecording.id,
+      draggedRecording.type,
+      draggedRecording.clientId,
+      { skipClientDayCheck: true }
+    );
+    if (conflict.hasConflict) {
+      toast.error(conflict.message || 'Conflito de horário no destino');
+      setDraggedRecording(null);
+      return;
+    }
     setReassigning(true);
     const client = clients.find(c => c.id === draggedRecording.clientId);
     try {

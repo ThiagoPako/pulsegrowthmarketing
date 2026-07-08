@@ -6717,6 +6717,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
         assignedTo: t?.assigned_to || null,
         priority: t?.priority || 'media',
         createdAt: t?.created_at || null,
+        updatedAt: t?.updated_at || null,
         timerRunning: !!t?.timer_running,
         timerStartedAt: t?.timer_started_at || null,
         timeOnTask: Math.max(0, timeOnTask),

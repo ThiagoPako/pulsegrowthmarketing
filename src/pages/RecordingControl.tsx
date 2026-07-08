@@ -520,19 +520,33 @@ export default function RecordingControl() {
                   {displayDates.map(d => {
                     const cellRecs = recordingsByDayAndSlot[d]?.[time] || [];
                     const isOver = dragOverWeekCell?.date === d && dragOverWeekCell?.time === time;
+                    const wouldConflict = !!(draggedRecording && isOver && !isRestricted && !(draggedRecording.date === d && draggedRecording.startTime === time) &&
+                      hasConflict(
+                        draggedRecording.videomakerId,
+                        d,
+                        time,
+                        draggedRecording.id,
+                        draggedRecording.type,
+                        draggedRecording.clientId,
+                        { skipClientDayCheck: true }
+                      ).hasConflict);
                     return (
                       <div
                         key={`${d}-${time}`}
                         onDragOver={e => {
                           if (isRestricted) return;
                           e.preventDefault();
-                          e.dataTransfer.dropEffect = 'move';
+                          e.dataTransfer.dropEffect = wouldConflict ? 'none' : 'move';
                           setDragOverWeekCell({ date: d, time });
                         }}
                         onDragLeave={() => setDragOverWeekCell(null)}
                         onDrop={e => !isRestricted && handleDropOnDayCell(e, d, time)}
                         className={`flex-1 min-w-[160px] border-r last:border-r-0 relative p-1.5 transition-colors ${
-                          isOver ? 'bg-primary/10 ring-2 ring-primary/30 ring-inset z-10' : ''
+                          isOver
+                            ? wouldConflict
+                              ? 'bg-red-500/10 ring-2 ring-red-500/40 ring-inset z-10'
+                              : 'bg-primary/10 ring-2 ring-primary/30 ring-inset z-10'
+                            : ''
                         } ${isRestricted ? 'bg-muted/5' : 'bg-background/40 hover:bg-muted/5'}`}
                       >
                         {isLunch ? (

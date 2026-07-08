@@ -737,7 +737,18 @@ export default function DesignerDashboard() {
                   <div className="max-h-[380px] overflow-y-auto pr-1 space-y-2" style={{ scrollbarWidth: 'thin' }}>
                     <AnimatePresence mode="popLayout">
                       {s.items.map((task, i) => (
-                        <DesignerTaskCard key={task.id} task={task} index={i} onOpenDetail={setSelectedTaskId} />
+                        s.key === 'baixa' ? (
+                          <LowPriorityCard
+                            key={task.id}
+                            task={task}
+                            index={i}
+                            onOpenDetail={setSelectedTaskId}
+                            onResume={() => handleResumeFromLowPriority(task)}
+                            hasActive={!!activeTask && activeTask.id !== task.id}
+                          />
+                        ) : (
+                          <DesignerTaskCard key={task.id} task={task} index={i} onOpenDetail={setSelectedTaskId} />
+                        )
                       ))}
                     </AnimatePresence>
                   </div>

@@ -536,16 +536,79 @@ export default function DesignerDashboard() {
             {format(today, "EEEE, d 'de' MMMM", { locale: ptBR })}
           </p>
         </div>
-        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-          <Button
-            onClick={() => setCreateOpen(true)}
-            size="sm"
-            className="gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white shadow-lg shadow-violet-300/40 dark:shadow-violet-900/30 font-semibold"
-          >
-            <Plus size={14} /> Nova Demanda ✨
-          </Button>
-        </motion.div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {activeTask && (
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button
+                onClick={() => setZenMode(true)}
+                size="sm"
+                variant="outline"
+                className="gap-2 rounded-xl border-violet-300/60 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40 font-semibold"
+                title="Modo Foco (F) — só sua tarefa ativa em tela cheia"
+              >
+                <Maximize2 size={14} /> Modo Foco
+              </Button>
+            </motion.div>
+          )}
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              onClick={() => setCreateOpen(true)}
+              size="sm"
+              className="gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white shadow-lg shadow-violet-300/40 dark:shadow-violet-900/30 font-semibold"
+            >
+              <Plus size={14} /> Nova Demanda ✨
+            </Button>
+          </motion.div>
+        </div>
       </motion.div>
+
+      {/* ═══ META DIÁRIA — foguetinho sobe conforme conclui ═══ */}
+      <DailyGoalBar
+        completed={stats.completedToday}
+        goal={dailyGoal}
+        onGoalChange={setDailyGoal}
+        editing={editingGoal}
+        setEditing={setEditingGoal}
+      />
+
+      {/* ═══ TOUR de boas-vindas (1ª vez) ═══ */}
+      <AnimatePresence>
+        {showTour && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="rounded-2xl border-2 border-violet-300/60 bg-gradient-to-r from-violet-500/10 via-fuchsia-500/10 to-pink-500/10 p-4 flex items-start gap-3"
+          >
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shrink-0">
+              <Sparkles size={18} className="text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-display font-bold text-violet-700 dark:text-violet-300">Dicas rápidas pra ganhar tempo 💜</p>
+              <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                {[
+                  { k: 'Espaço', d: 'pausar/retomar timer' },
+                  { k: 'C', d: 'ver copy' },
+                  { k: 'N', d: 'próxima tarefa' },
+                  { k: 'E', d: 'enviar p/ análise' },
+                  { k: 'F', d: 'modo foco' },
+                  { k: 'Esc', d: 'sair do foco' },
+                ].map(s => (
+                  <span key={s.k} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/70 dark:bg-white/5 border border-violet-200/50">
+                    <kbd className="px-1.5 py-0.5 rounded bg-violet-600 text-white text-[9px] font-bold">{s.k}</kbd>
+                    <span className="text-muted-foreground">{s.d}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+            <Button size="icon" variant="ghost" onClick={dismissTour} className="w-7 h-7 rounded-lg shrink-0">
+              <X size={14} />
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+
 
       {/* ═══ STATS ═══ */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">

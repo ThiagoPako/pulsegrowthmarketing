@@ -459,8 +459,157 @@ export default function RecordingControl() {
 
         </div>
       </div>
+      )}
 
-      {/* Unassigned / Others (Recordings not in standard slots) */}
+      {viewMode === 'week' && (
+        <div className="relative overflow-x-auto pb-6 border rounded-2xl bg-muted/5">
+          <div className="min-w-[1100px]">
+            {/* Header Row: Days */}
+            <div className="flex border-b sticky top-0 bg-background z-30">
+              <div className="w-20 shrink-0 border-r bg-muted/20 flex items-center justify-center">
+                <Clock size={16} className="text-muted-foreground/50" />
+              </div>
+              {displayDates.map(d => {
+                const dObj = new Date(d + 'T12:00:00');
+                const isTodayCol = isSameDay(dObj, new Date());
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => { setSelectedDate(dObj); setViewMode('day'); }}
+                    className={`flex-1 min-w-[160px] p-3 border-r last:border-r-0 text-left transition-colors ${
+                      isTodayCol ? 'bg-primary/5' : 'bg-background hover:bg-muted/30'
+                    }`}
+                    title="Abrir este dia em modo Dia"
+                  >
+                    <p className={`text-[10px] font-bold uppercase tracking-wider ${isTodayCol ? 'text-primary' : 'text-muted-foreground'}`}>
+                      {format(dObj, 'EEE', { locale: ptBR })}
+                    </p>
+                    <p className="text-lg font-bold leading-tight">{format(dObj, 'dd/MM')}</p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Slot rows × Days */}
+            {allSlots.map(time => {
+              const isPulse = PULSE_SLOTS.includes(time);
+              const isLunch = LUNCH_SLOTS.includes(time);
+              const isRestricted = isPulse || isLunch;
+              return (
+                <div key={time} className={`flex border-b last:border-b-0 ${isRestricted ? 'h-10 bg-muted/5' : 'min-h-[110px]'}`}>
+                  <div className={`w-20 shrink-0 border-r flex flex-col items-center justify-center ${isRestricted ? 'bg-muted/10' : 'bg-background'}`}>
+                    <span className={`text-xs font-mono font-bold ${isRestricted ? 'text-muted-foreground/40' : 'text-foreground'}`}>{time}</span>
+                    {isLunch ? <Coffee size={12} className="text-amber-500/20 mt-1" /> : isPulse ? <Rocket size={12} className="text-orange-500/30 mt-1" /> : null}
+                  </div>
+                  {displayDates.map(d => {
+                    const cellRecs = recordingsByDayAndSlot[d]?.[time] || [];
+                    const isOver = dragOverWeekCell?.date === d && dragOverWeekCell?.time === time;
+                    return (
+                      <div
+                        key={`${d}-${time}`}
+                        onDragOver={e => {
+                          if (isRestricted) return;
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          setDragOverWeekCell({ date: d, time });
+                        }}
+                        onDragLeave={() => setDragOverWeekCell(null)}
+                        onDrop={e => !isRestricted && handleDropOnDayCell(e, d, time)}
+                        className={`flex-1 min-w-[160px] border-r last:border-r-0 relative p-1.5 transition-colors ${
+                          isOver ? 'bg-primary/10 ring-2 ring-primary/30 ring-inset z-10' : ''
+                        } ${isRestricted ? 'bg-muted/5' : 'bg-background/40 hover:bg-muted/5'}`}
+                      >
+                        {isLunch ? (
+                          <div className="h-full flex items-center justify-center">
+                            <span className="text-[9px] font-bold text-amber-500/20 uppercase tracking-[0.2em] font-mono">Almoço</span>
+                          </div>
+                        ) : isPulse ? (
+                          <div className="h-full flex items-center justify-center">
+                            <span className="text-[9px] font-bold text-orange-500/30 uppercase tracking-[0.2em] font-mono">PULSE</span>
+                          </div>
+                        ) : cellRecs.length > 0 ? (
+                          <div className="flex flex-col gap-1">
+                            {cellRecs.map(rec => {
+                              const client = getClient(rec.clientId);
+                              const vm = users.find(u => u.id === rec.videomakerId);
+                              const status = STATUS_COLORS[rec.status] || STATUS_COLORS.agendada;
+                              return (
+                                <div
+                                  key={rec.id}
+                                  draggable={rec.status !== 'concluida'}
+                                  onDragStart={e => handleDragStart(e, rec)}
+                                  className={`group relative p-1.5 rounded-lg border text-[10px] cursor-grab active:cursor-grabbing hover:border-primary/40 hover:shadow-md transition-all ${
+                                    draggedRecording?.id === rec.id ? 'opacity-50' : ''
+                                  } bg-background`}
+                                >
+                                  <div className="flex items-center gap-1.5">
+                                    {client && (
+                                      <ClientLogo client={{ companyName: client.companyName, color: client.color, logoUrl: client.logoUrl }} size="sm" />
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-bold truncate leading-tight">
+                                        {rec.prospectName || client?.companyName || 'Cliente'}
+                                      </p>
+                                      <p className="text-muted-foreground truncate opacity-70">
+                                        {vm?.displayName || vm?.name || 'Sem VM'}
+                                      </p>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        const label = client?.companyName || rec.prospectName || 'esta gravação';
+                                        if (!window.confirm(`Apagar "${label}" às ${rec.startTime}?`)) return;
+                                        const ok = await deleteRecording(rec.id);
+                                        if (ok) { toast.success('Gravação apagada'); setTimeout(() => refetchData(), 300); }
+                                        else toast.error('Erro ao apagar');
+                                      }}
+                                      onMouseDown={e => e.stopPropagation()}
+                                      draggable={false}
+                                      className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-red-500/15 text-red-400"
+                                      title="Apagar"
+                                    >
+                                      <Trash2 size={10} />
+                                    </button>
+                                  </div>
+                                  <div className="flex items-center justify-between mt-1">
+                                    <Badge variant="outline" className="text-[8px] h-3.5 px-1 leading-none">{TYPE_LABELS[rec.type] || rec.type}</Badge>
+                                    <span className={`text-[7px] px-1 py-0.5 rounded font-bold uppercase ${status.bg} ${status.text}`}>{status.label}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => { setSelectedDate(new Date(d + 'T12:00:00')); setViewMode('day'); }}
+                            className="h-full w-full min-h-[80px] rounded-lg border-2 border-dashed border-transparent hover:border-primary/30 hover:bg-primary/5 flex items-center justify-center transition-colors group"
+                            title="Abrir dia para agendar"
+                          >
+                            {draggedRecording ? (
+                              <div className="opacity-0 group-hover:opacity-100 flex flex-col items-center gap-0.5">
+                                <ArrowLeftRight size={12} className="text-primary/40" />
+                                <span className="text-[9px] text-primary/40 font-medium">Soltar</span>
+                              </div>
+                            ) : (
+                              <div className="opacity-0 group-hover:opacity-100 flex flex-col items-center gap-0.5">
+                                <Plus size={14} className="text-primary/50" />
+                                <span className="text-[9px] text-primary/50 font-medium">Abrir dia</span>
+                              </div>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {viewMode === 'day' && Object.keys(recordingsByVmAndSlot['__unassigned__'] || {}).length > 0 && (
         <div className="mt-8">
           <div className="flex items-center gap-2 mb-4">

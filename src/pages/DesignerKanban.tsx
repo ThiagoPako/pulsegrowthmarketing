@@ -1045,8 +1045,15 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
             <Calendar size={10} /> {formattedDueDate}
           </Badge>
         )}
-        {task.timer_running && (
-          <Badge variant="secondary" className="text-[10px] gap-0.5 animate-pulse"><Clock size={10} /> Em andamento</Badge>
+        {(task.kanban_column === 'executando' || (task.time_spent_seconds || 0) > 0) && (
+          <Badge
+            variant="secondary"
+            className={`text-[10px] gap-1 ${task.timer_running ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 animate-pulse' : ''}`}
+            title={task.timer_running ? 'Cronômetro rodando' : 'Cronômetro pausado'}
+          >
+            <Timer size={10} />
+            <LiveTimer startedAt={task.timer_started_at} baseSeconds={task.time_spent_seconds || 0} running={!!task.timer_running} />
+          </Badge>
         )}
         {task.kanban_column === 'fila_baixa_prioridade' && (
           <Badge className="text-[10px] gap-0.5 bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200">

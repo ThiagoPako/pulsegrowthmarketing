@@ -1396,6 +1396,7 @@ export default function TvDashboard() {
       setDesignPipeline(data.designPipeline || []);
       setActiveRecordingIds(data.activeRecordingIds || []);
       setTodayPosts((data.todayPosts || []).filter((p: ScheduledPost) => (p.contentType || '').toLowerCase() === 'reels'));
+      setWeekPosts((data.weekPosts || []).filter((p: ScheduledPost) => (p.contentType || '').toLowerCase() === 'reels'));
       if (Array.isArray(data.seasonalSlides) && data.seasonalSlides.length > 0) {
         setSeasonalSlides(data.seasonalSlides);
       }

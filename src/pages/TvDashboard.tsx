@@ -737,6 +737,163 @@ function DesignActivityCard({ task }: { task: DesignActivityTask }) {
   );
 }
 
+/* ─── LIVE Design Hero (destaque tarefa em execução) ────── */
+function LiveDesignHero({ task }: { task: DesignActivityTask }) {
+  // Cronômetro ao vivo: quando timer_running, incrementa a cada segundo
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!task.timerRunning) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [task.timerRunning]);
+
+  const liveSeconds = useMemo(() => {
+    if (task.timerRunning && task.timerStartedAt) {
+      const started = new Date(task.timerStartedAt).getTime();
+      if (Number.isFinite(started)) {
+        // timeOnTask do backend já inclui tempo até o snapshot; usamos base + delta cliente
+        const backendBaseSeconds = task.timeOnTask;
+        // Reduzir dupla contagem: assumimos timeOnTask veio com started_at recente
+        // Sempre mostramos base + tempo desde snapshot (aprox 5s de defasagem aceitável)
+        const _ = backendBaseSeconds; void _;
+      }
+    }
+    return task.timeOnTask + (task.timerRunning ? Math.floor((now - Date.now()) / 1000) : 0);
+  }, [now, task]);
+
+  const slaHoursLeft = getDesignSlaHours(task.createdAt);
+  const isOverdue = slaHoursLeft !== null && slaHoursLeft < 0;
+  const isCritical = slaHoursLeft !== null && slaHoursLeft >= 0 && slaHoursLeft < 12;
+  const slaLabel = slaHoursLeft === null
+    ? '—'
+    : isOverdue
+      ? `SLA vencido ${Math.floor(Math.abs(slaHoursLeft))}h`
+      : `${Math.ceil(slaHoursLeft)}h restantes`;
+  const slaColor = isOverdue ? 'hsl(0 84% 60%)' : isCritical ? 'hsl(32 95% 58%)' : 'hsl(142 71% 45%)';
+
+  const accent = 'hsl(330 85% 62%)';
+
+  return (
+    <motion.div
+      className="rounded-2xl overflow-hidden border-2 relative"
+      style={{
+        borderColor: `${accent}55`,
+        background: `linear-gradient(135deg, ${accent}22, transparent 65%), rgba(0,0,0,0.35)`,
+        boxShadow: `0 0 40px ${accent}22`,
+      }}
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.3 }}
+    >
+      {/* Barra pulsante topo */}
+      <div className="h-1 w-full relative overflow-hidden" style={{ background: `${accent}20` }}>
+        <motion.div
+          className="absolute inset-y-0 w-1/3"
+          style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)` }}
+          animate={{ x: ['-100%', '400%'] }}
+          transition={{ repeat: Infinity, duration: 2.2, ease: 'linear' }}
+        />
+      </div>
+
+      <div className="p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: `${accent}25` }}>
+            <motion.div className="w-2 h-2 rounded-full" style={{ background: accent }}
+              animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1.2 }} />
+            <span className="text-[10px] font-bold tracking-widest" style={{ color: accent }}>AO VIVO</span>
+          </div>
+          <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-white/8">
+            <Play className="w-3 h-3" style={{ color: accent }} />
+            <span className="text-[10px] font-mono font-bold text-white">{formatElapsedTime(liveSeconds)}</span>
+          </div>
+          <div className="flex-1" />
+          <div className="flex items-center gap-1 px-2 py-1 rounded-full" style={{ background: `${slaColor}22`, border: `1px solid ${slaColor}55` }}>
+            {isOverdue ? <AlertTriangle className="w-3 h-3" style={{ color: slaColor }} /> : <Clock className="w-3 h-3" style={{ color: slaColor }} />}
+            <span className="text-[10px] font-bold" style={{ color: slaColor }}>{slaLabel}</span>
+          </div>
+        </div>
+
+        <p className="text-lg font-bold text-white leading-tight mb-2">{task.title}</p>
+
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {task.clientLogo ? (
+              <img src={task.clientLogo} alt={task.clientName} className="w-9 h-9 rounded-lg object-contain bg-white/5 p-0.5" />
+            ) : (
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center text-[11px] font-bold"
+                style={{ background: task.clientColor ? `hsl(${task.clientColor} / 0.2)` : 'rgba(255,255,255,0.08)', color: 'white' }}>
+                {getInitials(task.clientName)}
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-[13px] text-white font-semibold truncate">{task.clientName}</p>
+              <p className="text-[9px] text-white/40 uppercase tracking-wider">Cliente</p>
+            </div>
+          </div>
+
+          {task.designerName && (
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="w-9 h-9 rounded-full overflow-hidden border-2 flex items-center justify-center"
+                style={{ borderColor: accent, background: `${accent}18` }}>
+                {task.designerAvatar ? (
+                  <img src={task.designerAvatar} alt={task.designerName} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-[10px] font-bold text-white">{getInitials(task.designerName)}</span>
+                )}
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] font-semibold text-white">{task.designerName.split(' ')[0]}</p>
+                <p className="text-[9px] text-white/40 uppercase tracking-wider">Designer</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ─── Design Stat mini card ─────────────────────────────── */
+function DesignStat({ label, value, color, icon: Icon, pulse }: { label: string; value: number; color: string; icon: any; pulse?: boolean }) {
+  return (
+    <motion.div
+      className="rounded-lg border p-2 flex flex-col items-center justify-center text-center"
+      style={{
+        borderColor: value > 0 ? `${color}55` : 'rgba(255,255,255,0.06)',
+        background: value > 0 ? `${color}12` : 'rgba(255,255,255,0.02)',
+      }}
+      animate={pulse && value > 0 ? { boxShadow: [`0 0 0 ${color}00`, `0 0 12px ${color}66`, `0 0 0 ${color}00`] } : undefined}
+      transition={pulse && value > 0 ? { repeat: Infinity, duration: 1.5 } : undefined}
+    >
+      <Icon className="w-3 h-3 mb-0.5" style={{ color: value > 0 ? color : 'rgba(255,255,255,0.3)' }} />
+      <span className="text-base font-bold" style={{ color: value > 0 ? color : 'rgba(255,255,255,0.35)' }}>{value}</span>
+      <span className="text-[8px] uppercase tracking-wider text-white/40 leading-tight">{label}</span>
+    </motion.div>
+  );
+}
+
+/* ─── Design mini row (pausadas / atrasadas) ───────────── */
+function DesignMiniRow({ task, status }: { task: DesignActivityTask; status: 'paused' | 'overdue' }) {
+  const color = status === 'overdue' ? 'hsl(0 84% 60%)' : 'hsl(240 5% 65%)';
+  const Icon = status === 'overdue' ? AlertTriangle : Pause;
+  const slaHours = getDesignSlaHours(task.createdAt);
+  const suffix = status === 'overdue' && slaHours !== null
+    ? `vencido ${Math.floor(Math.abs(slaHours))}h`
+    : status === 'paused'
+      ? 'em pausa'
+      : '';
+
+  return (
+    <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg border"
+      style={{ borderColor: `${color}30`, background: `${color}08` }}>
+      <Icon className="w-3 h-3 flex-shrink-0" style={{ color }} />
+      <span className="text-[11px] text-white/85 truncate flex-1">{task.title}</span>
+      <span className="text-[9px] text-white/50 truncate flex-shrink-0">{task.clientName}</span>
+      <span className="text-[9px] font-bold uppercase tracking-wider flex-shrink-0" style={{ color }}>{suffix}</span>
+    </div>
+  );
+}
+
 /* ─── Scheduled Post Card ───────────────────────────────── */
 function PostCard({ post }: { post: ScheduledPost }) {
   const statusConfig: Record<string, { color: string; label: string }> = {

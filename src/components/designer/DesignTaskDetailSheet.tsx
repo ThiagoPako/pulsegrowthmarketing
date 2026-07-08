@@ -1370,42 +1370,81 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                         <Textarea value={observations} onChange={e => setObservations(e.target.value)} rows={3} className="text-xs mt-1" />
                       </div>
                     </div>
-                  ) : (task.attachment_url || ((task as any).attachment_urls?.length > 0)) ? (
+                   ) : (task.attachment_url || ((task as any).attachment_urls?.length > 0)) ? (
                     <div className="space-y-2">
                       {/* Show all arts gallery */}
                       {((task as any).attachment_urls?.length > 0) ? (
                         <div className="grid grid-cols-2 gap-2">
                           {(task as any).attachment_urls.map((url: string, idx: number) => {
                             const isImg = /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(url);
-                            return isImg ? (
-                              <button key={idx} onClick={() => setPreviewImage(url)} className="relative group rounded-lg overflow-hidden border border-border hover:ring-2 hover:ring-primary/50 transition-all">
-                                <img src={url} alt={`Arte ${idx + 1}`} className="w-full h-24 object-cover bg-muted/30" />
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                                  <ZoomIn size={16} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </div>
-                                <span className="absolute bottom-1 left-1 text-[9px] bg-black/60 text-white px-1.5 py-0.5 rounded">{idx + 1}</span>
-                              </button>
-                            ) : (
-                              <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-xs text-primary">
-                                <Eye size={14} /> Arte {idx + 1}
-                              </a>
+                            return (
+                              <div key={idx} className="relative group rounded-lg overflow-hidden border border-border hover:ring-2 hover:ring-primary/50 transition-all">
+                                {isImg ? (
+                                  <button type="button" onClick={() => setPreviewImage(url)} className="w-full block">
+                                    <img src={url} alt={`Arte ${idx + 1}`} className="w-full h-24 object-cover bg-muted/30" />
+                                  </button>
+                                ) : (
+                                  <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 hover:bg-muted/30 transition-colors text-xs text-primary">
+                                    <Eye size={14} /> Arte {idx + 1}
+                                  </a>
+                                )}
+                                <span className="absolute bottom-1 left-1 text-[9px] bg-black/60 text-white px-1.5 py-0.5 rounded pointer-events-none">{idx + 1}</span>
+                                {isDesigner && (
+                                  <label
+                                    className="absolute inset-0 bg-black/0 group-hover:bg-black/50 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer"
+                                    title="Substituir esta arte"
+                                  >
+                                    <input
+                                      type="file"
+                                      accept="image/*,.pdf,.ai,.psd,.svg,.eps"
+                                      className="hidden"
+                                      onChange={e => {
+                                        const f = e.target.files?.[0];
+                                        if (f) handleReplaceArt(idx, f);
+                                        e.currentTarget.value = '';
+                                      }}
+                                    />
+                                    <RotateCcw size={16} className="text-white" />
+                                    <span className="text-[10px] font-semibold text-white">Substituir</span>
+                                  </label>
+                                )}
+                              </div>
                             );
                           })}
                         </div>
                       ) : task.attachment_url && (
-                        /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(task.attachment_url) ? (
-                          <button onClick={() => setPreviewImage(task.attachment_url!)} className="relative group rounded-lg overflow-hidden border border-border w-full hover:ring-2 hover:ring-primary/50 transition-all">
-                            <img src={task.attachment_url} alt="Arte" className="w-full max-h-48 object-contain bg-muted/30" />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                              <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                          </button>
-                        ) : (
-                          <a href={task.attachment_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-sm text-primary">
-                            <Eye size={14} /> Ver arte anexada
-                          </a>
-                        )
+                        <div className="relative group rounded-lg overflow-hidden border border-border w-full hover:ring-2 hover:ring-primary/50 transition-all">
+                          {/\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(task.attachment_url) ? (
+                            <button type="button" onClick={() => setPreviewImage(task.attachment_url!)} className="w-full block">
+                              <img src={task.attachment_url} alt="Arte" className="w-full max-h-48 object-contain bg-muted/30" />
+                            </button>
+                          ) : (
+                            <a href={task.attachment_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 hover:bg-muted/30 transition-colors text-sm text-primary">
+                              <Eye size={14} /> Ver arte anexada
+                            </a>
+                          )}
+                          {isDesigner && (
+                            <label
+                              className="absolute inset-0 bg-black/0 group-hover:bg-black/50 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-1 cursor-pointer"
+                              title="Substituir arte"
+                            >
+                              <input
+                                type="file"
+                                accept="image/*,.pdf,.ai,.psd,.svg,.eps"
+                                className="hidden"
+                                onChange={e => {
+                                  const f = e.target.files?.[0];
+                                  if (f) handleReplaceArt(-1, f);
+                                  e.currentTarget.value = '';
+                                }}
+                              />
+                              <RotateCcw size={18} className="text-white" />
+                              <span className="text-[11px] font-semibold text-white">Substituir arte</span>
+                            </label>
+                          )}
+                        </div>
                       )}
+
 
                       {/* Glowing download buttons under image */}
                       {(() => {

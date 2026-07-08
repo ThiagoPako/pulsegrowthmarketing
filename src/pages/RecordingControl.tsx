@@ -336,6 +336,13 @@ export default function RecordingControl() {
                           client={getClient(recording.clientId)}
                           isDragging={draggedRecording?.id === recording.id}
                           onDragStart={handleDragStart}
+                          onDelete={async () => {
+                            const label = getClient(recording.clientId)?.companyName || recording.prospectName || 'esta gravação';
+                            if (!window.confirm(`Apagar permanentemente "${label}" às ${recording.startTime}?`)) return;
+                            const ok = await deleteRecording(recording.id);
+                            if (ok) { toast.success('Gravação apagada'); setTimeout(() => refetchData(), 300); }
+                            else toast.error('Erro ao apagar');
+                          }}
                         />
                       ) : isLunch ? (
                         <div className="h-full flex items-center justify-center bg-amber-500/5">
@@ -353,14 +360,26 @@ export default function RecordingControl() {
                           </motion.div>
                         </div>
                       ) : (
-                        <div className="h-full w-full rounded-lg border-2 border-dashed border-transparent hover:border-muted-foreground/10 flex items-center justify-center transition-colors group">
-                           {draggedRecording && !isRestricted && (
-                             <div className="opacity-0 group-hover:opacity-100 flex flex-col items-center gap-1">
-                               <ArrowLeftRight size={14} className="text-primary/40" />
-                               <span className="text-[10px] text-primary/40 font-medium">Soltar aqui</span>
-                             </div>
-                           )}
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewForm({ mode: 'client', clientId: '', prospectName: '', type: 'extra' });
+                            setNewDialog({ open: true, vmId: vm.id, time, date: displayDates[0] });
+                          }}
+                          className="h-full w-full rounded-lg border-2 border-dashed border-transparent hover:border-primary/30 hover:bg-primary/5 flex items-center justify-center transition-colors group"
+                        >
+                          {draggedRecording ? (
+                            <div className="opacity-0 group-hover:opacity-100 flex flex-col items-center gap-1">
+                              <ArrowLeftRight size={14} className="text-primary/40" />
+                              <span className="text-[10px] text-primary/40 font-medium">Soltar aqui</span>
+                            </div>
+                          ) : (
+                            <div className="opacity-0 group-hover:opacity-100 flex flex-col items-center gap-1">
+                              <Plus size={16} className="text-primary/50" />
+                              <span className="text-[10px] text-primary/50 font-medium">Agendar</span>
+                            </div>
+                          )}
+                        </button>
                       )}
                     </div>
                   );

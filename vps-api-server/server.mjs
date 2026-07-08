@@ -6467,17 +6467,16 @@ app.get('/api/tv-dashboard', async (req, res) => {
         AND (ct.assigned_to IS NOT NULL OR ct.reviewing_by IS NOT NULL OR ct.edited_by IS NOT NULL)
     `);
 
-    // 4. Get active design tasks
+    // 4. Get active design tasks (inclui fila de baixa prioridade e nova_tarefa para monitoramento de SLA)
     const designTasks = await safeQuery('design_tasks', `
       SELECT dt.id, dt.title, dt.kanban_column, dt.assigned_to, dt.timer_running,
-             dt.timer_started_at, dt.time_spent_seconds,
+             dt.timer_started_at, dt.time_spent_seconds, dt.created_at, dt.priority,
              c.company_name AS client_name, c.logo_url AS client_logo, c.color AS client_color,
              p.name AS designer_name, p.avatar_url AS designer_avatar
       FROM design_tasks dt
       LEFT JOIN clients c ON c.id = dt.client_id
       LEFT JOIN profiles p ON p.id = dt.assigned_to
-      WHERE dt.kanban_column IN ('executando', 'em_analise', 'ajustes', 'em_andamento', 'revisao_interna')
-        AND dt.assigned_to IS NOT NULL
+      WHERE dt.kanban_column IN ('nova_tarefa', 'executando', 'fila_baixa_prioridade', 'em_analise', 'ajustes', 'em_andamento', 'revisao_interna')
       ORDER BY dt.updated_at DESC
     `);
 

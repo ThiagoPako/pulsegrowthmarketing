@@ -71,7 +71,8 @@ export default function DesignerDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterClient, setFilterClient] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
-  const [queueView, setQueueView] = useState<'all' | 'nova_tarefa' | 'executando' | 'ajustes'>('all');
+  const [copyDialogTask, setCopyDialogTask] = useState<DesignTask | null>(null);
+  const [activeElapsed, setActiveElapsed] = useState('');
 
   const tasks = tasksQuery.data || [];
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;

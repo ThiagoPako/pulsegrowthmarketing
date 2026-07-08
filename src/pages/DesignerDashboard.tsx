@@ -64,7 +64,7 @@ const fadeUp = {
 };
 
 export default function DesignerDashboard() {
-  const { tasksQuery } = useDesignTasks();
+  const { tasksQuery, updateTask, addHistory } = useDesignTasks();
   const { user } = useAuth();
   const { currentUser } = useApp();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -186,20 +186,59 @@ export default function DesignerDashboard() {
     };
   }, [myTasks, filterClient, filterPriority, searchQuery]);
 
-  // Live timer for spotlight active task
+  // Live timer for spotlight active task (HH:MM:SS, respects pause)
+  const activeTask = groupedQueue.active;
   useEffect(() => {
-    const startedAt = groupedQueue.active?.started_at;
-    if (!startedAt) { setActiveElapsed(''); return; }
-    const update = () => {
-      const s = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
+    if (!activeTask) { setActiveElapsed(''); return; }
+    const base = activeTask.time_spent_seconds || 0;
+    const running = activeTask.timer_running && activeTask.timer_started_at;
+    const startMs = running ? new Date(activeTask.timer_started_at as string).getTime() : 0;
+    const fmt = (s: number) => {
+      s = Math.max(0, Math.floor(s));
       const h = Math.floor(s / 3600);
       const m = Math.floor((s % 3600) / 60);
-      setActiveElapsed(h > 0 ? `${h}h ${m}min` : `${m}min`);
+      const sec = s % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    };
+    const update = () => {
+      const extra = running ? (Date.now() - startMs) / 1000 : 0;
+      setActiveElapsed(fmt(base + extra));
     };
     update();
-    const id = setInterval(update, 30000);
+    if (!running) return;
+    const id = setInterval(update, 1000);
     return () => clearInterval(id);
-  }, [groupedQueue.active?.started_at]);
+  }, [activeTask?.id, activeTask?.timer_running, activeTask?.timer_started_at, activeTask?.time_spent_seconds]);
+
+  const handleTogglePause = async () => {
+    if (!activeTask) return;
+    try {
+      if (activeTask.timer_running) {
+        const runSecs = activeTask.timer_started_at
+          ? Math.max(0, Math.floor((Date.now() - new Date(activeTask.timer_started_at).getTime()) / 1000))
+          : 0;
+        await updateTask.mutateAsync({
+          id: activeTask.id,
+          timer_running: false,
+          timer_started_at: null,
+          time_spent_seconds: (activeTask.time_spent_seconds || 0) + runSecs,
+        } as any);
+        await addHistory.mutateAsync({ task_id: activeTask.id, action: 'Cronômetro pausado', user_id: user?.id });
+        toast.success('Tarefa pausada 💜');
+      } else {
+        await updateTask.mutateAsync({
+          id: activeTask.id,
+          timer_running: true,
+          timer_started_at: new Date().toISOString(),
+        } as any);
+        await addHistory.mutateAsync({ task_id: activeTask.id, action: 'Cronômetro retomado', user_id: user?.id });
+        toast.success('Cronômetro retomado ▶');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao alternar cronômetro');
+    }
+  };
+
 
   const activeClients = useMemo(() => {
     const map = new Map<string, string>();
@@ -352,17 +391,34 @@ export default function DesignerDashboard() {
                       </h2>
                       <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1"><Palette size={12} /> {FORMAT_LABELS[t.format_type] || t.format_type}</span>
-                        {activeElapsed && (
-                          <span className="flex items-center gap-1 font-mono font-semibold text-violet-600 dark:text-violet-400">
-                            <Timer size={12} /> {activeElapsed} em execução
-                          </span>
-                        )}
                       </div>
+
                     </div>
                   </div>
 
                   {/* Action buttons */}
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handleTogglePause}
+                      className={`gap-1.5 rounded-xl text-white shadow-md ${
+                        t.timer_running
+                          ? 'bg-amber-500 hover:bg-amber-600'
+                          : 'bg-emerald-500 hover:bg-emerald-600'
+                      }`}
+                    >
+                      {t.timer_running ? <><Pause size={14} fill="currentColor" /> Pausar</> : <><Play size={14} fill="currentColor" /> Retomar</>}
+                    </Button>
+                    <span
+                      className={`flex items-center gap-1.5 font-mono font-bold text-lg tabular-nums px-3 py-1 rounded-lg border ${
+                        t.timer_running
+                          ? 'text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+                          : 'text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/10'
+                      }`}
+                      title="Tempo total (base + sessão atual)"
+                    >
+                      <Timer size={16} /> {activeElapsed || '00:00:00'}
+                    </span>
                     <Button
                       size="sm"
                       onClick={() => setCopyDialogTask(t)}
@@ -394,6 +450,7 @@ export default function DesignerDashboard() {
                       Abrir demanda <ArrowRight size={14} />
                     </Button>
                   </div>
+
 
                   {/* SLA bar */}
                   <div className="mt-4">

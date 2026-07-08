@@ -946,8 +946,8 @@ export default function Scripts() {
     }
   };
 
-  const handleDownloadSelectedPdf = useCallback(async () => {
-    const selected = filteredScripts.filter(s => selectedIds.has(s.id));
+  const handleDownloadSelectedPdf = useCallback(async (scriptsOverride?: Script[]) => {
+    const selected = scriptsOverride ?? filteredScripts.filter(s => selectedIds.has(s.id));
     if (selected.length === 0) { toast.error('Selecione ao menos um roteiro'); return; }
 
     setDownloadingBatch(true);
@@ -961,8 +961,10 @@ export default function Scripts() {
       }
 
       toast.success(`PDF com ${selected.length} roteiro(s) baixado!`);
-      setSelectMode(false);
-      setSelectedIds(new Set());
+      if (!scriptsOverride) {
+        setSelectMode(false);
+        setSelectedIds(new Set());
+      }
     } catch (err) {
       console.error('Batch PDF error:', err);
       toast.error('Erro ao gerar PDF');
@@ -970,6 +972,26 @@ export default function Scripts() {
       setDownloadingBatch(false);
     }
   }, [buildPdfPages, exportPdfPages, filteredScripts, selectedIds]);
+
+  const handlePreviewSelectedPdf = useCallback(async () => {
+    const selected = filteredScripts.filter(s => selectedIds.has(s.id));
+    if (selected.length === 0) { toast.error('Selecione ao menos um roteiro'); return; }
+    setPreviewingBatch(true);
+    try {
+      const { pages, cleanup } = await buildPdfPages(selected, pdfConfig);
+      const clonedPages = pages.map(p => p.cloneNode(true) as HTMLDivElement);
+      setPreviewPages(clonedPages);
+      setOverflowWarnings([]);
+      setPreviewBatch(selected);
+      setPreviewOpen(true);
+      cleanup();
+    } catch (err) {
+      console.error('Batch preview error:', err);
+      toast.error('Erro ao gerar prévia');
+    } finally {
+      setPreviewingBatch(false);
+    }
+  }, [buildPdfPages, filteredScripts, selectedIds, pdfConfig]);
 
   const handleCleanAll = () => {
     let count = 0;

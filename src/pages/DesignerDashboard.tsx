@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import BonusCongratsBanner from '@/components/BonusCongratsBanner';
 import { DESIGNER_SCORE } from '@/lib/scoringSystem';
 import { useDesignTasks, DESIGN_COLUMNS, DesignTask } from '@/hooks/useDesignTasks';
@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import ClientLogo from '@/components/ClientLogo';
 import DesignTaskDetailSheet from '@/components/designer/DesignTaskDetailSheet';
 import DesignTaskCreateDialog from '@/components/designer/DesignTaskCreateDialog';
@@ -21,9 +22,10 @@ import { ptBR } from 'date-fns/locale';
 import {
   Palette, CheckCircle, Clock, BarChart3,
   TrendingUp, Timer, Building2, CalendarDays,
-  Flame, Target, Award, Plus, Search,
-  AlertTriangle, Layers, Heart, Sparkles, Star
+  Flame, Target, Award, Plus, Search, Play, Pause, Send, Upload, FileText, Eye, ZoomIn,
+  AlertTriangle, Layers, Heart, Sparkles, Star, MoonStar, RotateCcw, ArrowRight
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 const PRIORITY_CONFIG: Record<string, { slaHours: number }> = {
   baixa: { slaHours: 72 },
@@ -70,7 +72,8 @@ export default function DesignerDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterClient, setFilterClient] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
-  const [queueView, setQueueView] = useState<'all' | 'nova_tarefa' | 'executando' | 'ajustes'>('all');
+  const [copyDialogTask, setCopyDialogTask] = useState<DesignTask | null>(null);
+  const [activeElapsed, setActiveElapsed] = useState('');
 
   const tasks = tasksQuery.data || [];
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
@@ -143,31 +146,60 @@ export default function DesignerDashboard() {
     };
   }, [myTasks, tasks, user?.id, todayStr]);
 
-  const queueTasks = useMemo(() => {
-    const activeCols = queueView === 'all'
-      ? ['nova_tarefa', 'executando', 'ajustes', 'em_analise', 'enviar_cliente']
-      : [queueView];
-    return myTasks
-      .filter(t => activeCols.includes(t.kanban_column))
-      .filter(t => {
-        if (filterClient !== 'all' && t.client_id !== filterClient) return false;
-        if (filterPriority !== 'all' && t.priority !== filterPriority) return false;
-        if (searchQuery) {
-          const q = searchQuery.toLowerCase();
-          if (!t.title.toLowerCase().includes(q) && !(t.clients?.company_name || '').toLowerCase().includes(q)) return false;
-        }
-        return true;
-      })
-      .sort((a, b) => {
-        if (a.kanban_column === 'ajustes' && b.kanban_column !== 'ajustes') return -1;
-        if (b.kanban_column === 'ajustes' && a.kanban_column !== 'ajustes') return 1;
-        const priorityOrder: Record<string, number> = { urgente: 0, alta: 1, media: 2, baixa: 3 };
-        const pa = priorityOrder[a.priority] ?? 9;
-        const pb = priorityOrder[b.priority] ?? 9;
-        if (pa !== pb) return pa - pb;
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      });
-  }, [myTasks, queueView, filterClient, filterPriority, searchQuery]);
+  const matchesFilters = (t: DesignTask) => {
+    if (filterClient !== 'all' && t.client_id !== filterClient) return false;
+    if (filterPriority !== 'all' && t.priority !== filterPriority) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (!t.title.toLowerCase().includes(q) && !(t.clients?.company_name || '').toLowerCase().includes(q)) return false;
+    }
+    return true;
+  };
+
+  const sortByPriority = (a: DesignTask, b: DesignTask) => {
+    const priorityOrder: Record<string, number> = { urgente: 0, alta: 1, media: 2, baixa: 3 };
+    const pa = priorityOrder[a.priority] ?? 9;
+    const pb = priorityOrder[b.priority] ?? 9;
+    if (pa !== pb) return pa - pb;
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  };
+
+  const groupedQueue = useMemo(() => {
+    const filtered = myTasks.filter(matchesFilters);
+    // Active: only one card in 'executando' (per single-active-task rule). Pick most recently started.
+    const executing = filtered
+      .filter(t => t.kanban_column === 'executando')
+      .sort((a, b) => new Date(b.started_at || b.updated_at).getTime() - new Date(a.started_at || a.updated_at).getTime());
+    const active = executing[0] || null;
+    const otherExecuting = executing.slice(1); // shouldn't happen, but safety
+    return {
+      active,
+      revisao: filtered
+        .filter(t => t.kanban_column === 'ajustes' || t.kanban_column === 'em_analise')
+        .sort(sortByPriority),
+      fila: filtered.filter(t => t.kanban_column === 'nova_tarefa').sort(sortByPriority),
+      filaBaixa: [
+        ...otherExecuting,
+        ...filtered.filter(t => t.kanban_column === 'fila_baixa_prioridade'),
+      ].sort(sortByPriority),
+      cliente: filtered.filter(t => t.kanban_column === 'enviar_cliente').sort(sortByPriority),
+    };
+  }, [myTasks, filterClient, filterPriority, searchQuery]);
+
+  // Live timer for spotlight active task
+  useEffect(() => {
+    const startedAt = groupedQueue.active?.started_at;
+    if (!startedAt) { setActiveElapsed(''); return; }
+    const update = () => {
+      const s = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      setActiveElapsed(h > 0 ? `${h}h ${m}min` : `${m}min`);
+    };
+    update();
+    const id = setInterval(update, 30000);
+    return () => clearInterval(id);
+  }, [groupedQueue.active?.started_at]);
 
   const activeClients = useMemo(() => {
     const map = new Map<string, string>();
@@ -259,110 +291,302 @@ export default function DesignerDashboard() {
         ))}
       </div>
 
-      {/* ═══ FILA DO DESIGNER ═══ */}
-      <motion.div {...fadeUp} transition={{ delay: 0.2 }} className="rounded-2xl border-2 border-violet-200/40 dark:border-violet-800/30 bg-gradient-to-br from-card via-violet-50/10 to-pink-50/10 dark:from-card dark:via-violet-950/10 dark:to-pink-950/10 p-5 shadow-sm">
-        <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-300/30">
-              <Layers size={18} className="text-white" />
-            </div>
-            <div>
-              <h3 className="font-display font-bold text-base">Minha Fila</h3>
-              <p className="text-[11px] text-muted-foreground">{queueTasks.length} tarefa{queueTasks.length !== 1 ? 's' : ''} aguardando sua mágica ✨</p>
-            </div>
-          </div>
-          {/* Column tabs */}
-          <div className="flex rounded-xl border border-pink-200/40 dark:border-pink-800/20 bg-pink-50/30 dark:bg-pink-950/10 p-1 gap-1">
-            {[
-              { key: 'all' as const, label: 'Todas', count: myTasks.filter(t => !['aprovado'].includes(t.kanban_column)).length },
-              { key: 'nova_tarefa' as const, label: '✨ Novas', count: myTasks.filter(t => t.kanban_column === 'nova_tarefa').length },
-              { key: 'executando' as const, label: '🎨 Fazendo', count: myTasks.filter(t => t.kanban_column === 'executando').length },
-              { key: 'ajustes' as const, label: '🔄 Ajustes', count: myTasks.filter(t => t.kanban_column === 'ajustes').length },
-            ].map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setQueueView(tab.key)}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1.5 ${
-                  queueView === tab.key
-                    ? 'bg-white dark:bg-background shadow-md text-violet-700 dark:text-violet-300'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-white/50'
-                }`}
+      {/* ═══ SPOTLIGHT: Tarefa Ativa Agora ═══ */}
+      <AnimatePresence mode="popLayout">
+        {groupedQueue.active && (() => {
+          const t = groupedQueue.active;
+          const arts: string[] = Array.from(new Set([
+            ...(((t as any).attachment_urls as string[]) || []),
+            t.attachment_url,
+          ].filter(Boolean) as string[]));
+          const ds = getDesignDeadlineStatus(t);
+          const isPaused = !t.timer_running && !!t.started_at;
+          const clientName = t.clients?.company_name || t.prospect_name || '—';
+          const clientColor = t.clients?.color || '270 70% 55%';
+          return (
+            <motion.div
+              key={t.id}
+              layout
+              initial={{ opacity: 0, y: -20, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+              className="relative overflow-hidden rounded-3xl border-2 border-violet-400/50 dark:border-violet-500/40 bg-gradient-to-br from-violet-500/10 via-fuchsia-500/8 to-pink-500/10 dark:from-violet-950/40 dark:via-fuchsia-950/30 dark:to-pink-950/30 p-6 shadow-2xl shadow-violet-400/20"
+            >
+              {/* pulsing halo */}
+              <motion.div
+                animate={{ opacity: [0.25, 0.5, 0.25] }}
+                transition={{ duration: 2.5, repeat: Infinity }}
+                className="pointer-events-none absolute -top-32 -right-32 w-80 h-80 rounded-full bg-gradient-to-br from-violet-400 to-fuchsia-400 blur-3xl"
+              />
+
+              <div className="relative flex flex-col lg:flex-row gap-6">
+                {/* LEFT — info + actions */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-3">
+                    <motion.span
+                      animate={{ scale: [1, 1.15, 1], opacity: [0.7, 1, 0.7] }}
+                      transition={{ duration: 1.4, repeat: Infinity }}
+                      className={`w-2.5 h-2.5 rounded-full ${isPaused ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                    />
+                    <span className={`text-[10px] font-bold uppercase tracking-widest ${isPaused ? 'text-amber-600' : 'text-emerald-600'}`}>
+                      {isPaused ? '⏸ Pausada' : '🎨 Executando ao vivo'}
+                    </span>
+                    <Badge className="text-[10px] bg-violet-500/15 text-violet-700 dark:text-violet-300 border-0 rounded-full">
+                      Prioridade {t.priority}
+                    </Badge>
+                    <Badge
+                      variant={ds.variant === 'destructive' ? 'destructive' : 'secondary'}
+                      className="text-[10px] rounded-full"
+                    >
+                      <Clock size={10} className="mr-1" /> {ds.label}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-start gap-4 mb-4">
+                    <ClientLogo client={{ companyName: clientName, color: clientColor, logoUrl: t.clients?.logo_url }} size="lg" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-muted-foreground font-medium">{clientName}</p>
+                      <h2 className="text-2xl md:text-3xl font-display font-bold leading-tight break-words">
+                        {t.title}
+                      </h2>
+                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
+                        <span className="flex items-center gap-1"><Palette size={12} /> {FORMAT_LABELS[t.format_type] || t.format_type}</span>
+                        {activeElapsed && (
+                          <span className="flex items-center gap-1 font-mono font-semibold text-violet-600 dark:text-violet-400">
+                            <Timer size={12} /> {activeElapsed} em execução
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => setCopyDialogTask(t)}
+                      className="gap-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white shadow-md"
+                    >
+                      <FileText size={14} /> Ver copy
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => setSelectedTaskId(t.id)}
+                      className="gap-1.5 rounded-xl bg-gradient-to-r from-fuchsia-500 to-pink-500 hover:from-fuchsia-600 hover:to-pink-600 text-white shadow-md"
+                    >
+                      <Upload size={14} /> Anexar / trocar arte
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setSelectedTaskId(t.id)}
+                      className="gap-1.5 rounded-xl border-violet-300/50"
+                    >
+                      <Send size={14} /> Enviar p/ análise
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setSelectedTaskId(t.id)}
+                      className="gap-1.5 rounded-xl"
+                    >
+                      Abrir demanda <ArrowRight size={14} />
+                    </Button>
+                  </div>
+
+                  {/* SLA bar */}
+                  <div className="mt-4">
+                    <Progress
+                      value={ds.progress}
+                      className={`h-1.5 rounded-full [&>div]:bg-gradient-to-r ${
+                        ds.variant === 'destructive' ? '[&>div]:from-rose-500 [&>div]:to-red-500' :
+                        ds.variant === 'warning' ? '[&>div]:from-amber-500 [&>div]:to-orange-500' :
+                        '[&>div]:from-violet-500 [&>div]:to-fuchsia-500'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                {/* RIGHT — arts preview */}
+                <div className="w-full lg:w-[280px] shrink-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <Sparkles size={11} className="text-violet-500" />
+                    {t.kanban_column === 'ajustes' ? 'Arte da revisão' : 'Artes anexadas'} ({arts.length})
+                  </p>
+                  {arts.length === 0 ? (
+                    <button
+                      onClick={() => setSelectedTaskId(t.id)}
+                      className="w-full h-40 rounded-2xl border-2 border-dashed border-violet-300/50 hover:border-violet-500 bg-violet-50/30 dark:bg-violet-950/20 flex flex-col items-center justify-center gap-2 text-violet-600 hover:bg-violet-100/40 transition-colors"
+                    >
+                      <Upload size={22} />
+                      <span className="text-xs font-semibold">Anexar primeira arte</span>
+                    </button>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {arts.slice(0, 4).map((url, i) => {
+                        const isImg = /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(url);
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => setSelectedTaskId(t.id)}
+                            className="relative group rounded-xl overflow-hidden border border-violet-200/40 aspect-square bg-muted/30 hover:ring-2 hover:ring-violet-500/50 transition-all"
+                          >
+                            {isImg ? (
+                              <img src={url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <FileText size={22} className="text-muted-foreground" />
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
+                              <ZoomIn size={16} className="text-white" />
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {arts.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setSelectedTaskId(t.id)}
+                      className="w-full mt-2 gap-1.5 rounded-xl text-xs text-violet-600 hover:bg-violet-100/40"
+                    >
+                      <RotateCcw size={12} /> Substituir arte
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* ═══ Filtros globais ═══ */}
+      <motion.div {...fadeUp} transition={{ delay: 0.15 }} className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[180px] max-w-xs">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-violet-400" />
+          <Input
+            placeholder="Buscar tarefa ou cliente... 🔍"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="h-9 pl-9 text-xs rounded-xl border-pink-200/40 focus:border-violet-400"
+          />
+        </div>
+        <Select value={filterClient} onValueChange={setFilterClient}>
+          <SelectTrigger className="h-9 w-[160px] text-xs rounded-xl border-pink-200/40">
+            <SelectValue placeholder="Cliente" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos 💖</SelectItem>
+            {activeClients.map(([id, name]) => (
+              <SelectItem key={id} value={id}>{name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterPriority} onValueChange={setFilterPriority}>
+          <SelectTrigger className="h-9 w-[130px] text-xs rounded-xl border-pink-200/40">
+            <SelectValue placeholder="Prioridade" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas</SelectItem>
+            <SelectItem value="urgente">🔥 Urgente</SelectItem>
+            <SelectItem value="alta">⚡ Alta</SelectItem>
+            <SelectItem value="media">💜 Média</SelectItem>
+            <SelectItem value="baixa">🌿 Baixa</SelectItem>
+          </SelectContent>
+        </Select>
+      </motion.div>
+
+      {/* ═══ SECTIONS: Revisão · Fila · Baixa Prioridade · Cliente ═══ */}
+      {(() => {
+        const sections: { key: string; title: string; emoji: string; hint: string; tone: string; items: DesignTask[] }[] = [
+          {
+            key: 'revisao',
+            title: 'Em revisão',
+            emoji: '🔄',
+            hint: 'Ajustes pedidos ou aguardando análise — resolva primeiro para desbloquear a esteira.',
+            tone: 'from-rose-500/10 to-orange-500/10 border-rose-300/40',
+            items: groupedQueue.revisao,
+          },
+          {
+            key: 'fila',
+            title: 'Fila',
+            emoji: '✨',
+            hint: 'Próximas demandas para iniciar. SLA de até 72h após criação.',
+            tone: 'from-violet-500/10 to-fuchsia-500/10 border-violet-300/40',
+            items: groupedQueue.fila,
+          },
+          {
+            key: 'baixa',
+            title: 'Fila baixa prioridade',
+            emoji: '🌙',
+            hint: 'Tarefas pausadas para dar prioridade a outra. Retome assim que possível.',
+            tone: 'from-slate-500/10 to-slate-600/10 border-slate-300/40',
+            items: groupedQueue.filaBaixa,
+          },
+          {
+            key: 'cliente',
+            title: 'Aguardando cliente',
+            emoji: '💌',
+            hint: 'Já enviadas — aguardando aprovação do cliente.',
+            tone: 'from-cyan-500/10 to-teal-500/10 border-cyan-300/40',
+            items: groupedQueue.cliente,
+          },
+        ];
+        const allEmpty = sections.every(s => s.items.length === 0) && !groupedQueue.active;
+        if (allEmpty) {
+          return (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="rounded-2xl border-2 border-dashed border-pink-200/40 p-16 flex flex-col items-center justify-center text-muted-foreground"
+            >
+              <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 3, repeat: Infinity }}>
+                <Heart size={48} className="text-pink-300 mb-3" />
+              </motion.div>
+              <p className="text-base font-display font-semibold">Tudo em dia! 🎉</p>
+              <p className="text-xs text-muted-foreground mt-1">Nenhuma tarefa pendente. Aproveite o momento ☕</p>
+            </motion.div>
+          );
+        }
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {sections.map((s, si) => (
+              <motion.div
+                key={s.key}
+                {...fadeUp}
+                transition={{ delay: 0.2 + si * 0.05 }}
+                className={`rounded-2xl border-2 bg-gradient-to-br ${s.tone} p-4`}
               >
-                {tab.label}
-                {tab.count > 0 && (
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
-                    queueView === tab.key ? 'bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-300' : 'bg-pink-100/50 text-muted-foreground'
-                  }`}>{tab.count}</span>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="font-display font-bold text-sm flex items-center gap-1.5">
+                      <span className="text-base">{s.emoji}</span> {s.title}
+                      <Badge className="text-[10px] bg-background/60 text-foreground border-0 rounded-full ml-1">{s.items.length}</Badge>
+                    </h3>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{s.hint}</p>
+                  </div>
+                </div>
+                {s.items.length === 0 ? (
+                  <div className="py-8 text-center text-[11px] text-muted-foreground italic">Nada por aqui 🌸</div>
+                ) : (
+                  <div className="max-h-[380px] overflow-y-auto pr-1 space-y-2" style={{ scrollbarWidth: 'thin' }}>
+                    <AnimatePresence mode="popLayout">
+                      {s.items.map((task, i) => (
+                        <DesignerTaskCard key={task.id} task={task} index={i} onOpenDetail={setSelectedTaskId} />
+                      ))}
+                    </AnimatePresence>
+                  </div>
                 )}
-              </button>
+              </motion.div>
             ))}
           </div>
-        </div>
+        );
+      })()}
 
-        {/* Filters */}
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <div className="relative flex-1 min-w-[180px] max-w-xs">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-violet-400" />
-            <Input
-              placeholder="Buscar tarefa ou cliente... 🔍"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="h-9 pl-9 text-xs rounded-xl border-pink-200/40 focus:border-violet-400"
-            />
-          </div>
-          <Select value={filterClient} onValueChange={setFilterClient}>
-            <SelectTrigger className="h-9 w-[160px] text-xs rounded-xl border-pink-200/40">
-              <SelectValue placeholder="Cliente" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos 💖</SelectItem>
-              {activeClients.map(([id, name]) => (
-                <SelectItem key={id} value={id}>{name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterPriority} onValueChange={setFilterPriority}>
-            <SelectTrigger className="h-9 w-[130px] text-xs rounded-xl border-pink-200/40">
-              <SelectValue placeholder="Prioridade" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas</SelectItem>
-              <SelectItem value="urgente">🔥 Urgente</SelectItem>
-              <SelectItem value="alta">⚡ Alta</SelectItem>
-              <SelectItem value="media">💜 Média</SelectItem>
-              <SelectItem value="baixa">🌿 Baixa</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Queue */}
-        {queueTasks.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="flex flex-col items-center justify-center py-16 text-muted-foreground"
-          >
-            <motion.div
-              animate={{ y: [0, -8, 0] }}
-              transition={{ duration: 3, repeat: Infinity }}
-            >
-              <Heart size={48} className="text-pink-300 mb-3" />
-            </motion.div>
-            <p className="text-base font-display font-semibold">Tudo em dia! 🎉</p>
-            <p className="text-xs text-muted-foreground mt-1">Nenhuma tarefa pendente. Aproveite o momento ☕</p>
-          </motion.div>
-        ) : (
-          <div className="max-h-[480px] overflow-y-auto pr-1 rounded-lg" style={{ scrollbarWidth: 'thin', scrollbarColor: 'hsl(var(--violet-500, 270 60% 50%) / 0.3) transparent' }}>
-            <div className="space-y-3">
-              <AnimatePresence mode="popLayout">
-                {queueTasks.map((task, i) => (
-                  <DesignerTaskCard key={task.id} task={task} index={i} onOpenDetail={setSelectedTaskId} />
-                ))}
-              </AnimatePresence>
-            </div>
-          </div>
-        )}
-      </motion.div>
 
       {/* ═══ BOTTOM: Performance + Week ═══ */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -548,6 +772,53 @@ export default function DesignerDashboard() {
         <DesignTaskDetailSheet task={selectedTask} open={!!selectedTask} onOpenChange={o => !o && setSelectedTaskId(null)} />
       )}
       <DesignTaskCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
+
+      {/* Copy preview dialog */}
+      <Dialog open={!!copyDialogTask} onOpenChange={o => !o && setCopyDialogTask(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <FileText size={16} className="text-violet-500" />
+              Copy — {copyDialogTask?.title}
+            </DialogTitle>
+          </DialogHeader>
+          {copyDialogTask?.copy_text ? (
+            <div className="rounded-xl bg-muted/40 border border-border p-4 max-h-[60vh] overflow-y-auto">
+              <p className="text-sm whitespace-pre-wrap leading-relaxed">{copyDialogTask.copy_text}</p>
+            </div>
+          ) : (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              <FileText size={28} className="mx-auto text-muted-foreground/40 mb-2" />
+              Ainda não há copy para esta demanda.
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            {copyDialogTask?.copy_text && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  navigator.clipboard.writeText(copyDialogTask.copy_text || '');
+                  toast.success('Copy copiada!');
+                }}
+                className="gap-1.5 rounded-xl"
+              >
+                Copiar texto
+              </Button>
+            )}
+            <Button
+              size="sm"
+              onClick={() => {
+                if (copyDialogTask) setSelectedTaskId(copyDialogTask.id);
+                setCopyDialogTask(null);
+              }}
+              className="gap-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white"
+            >
+              Abrir demanda <ArrowRight size={12} />
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

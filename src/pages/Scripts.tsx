@@ -1287,9 +1287,6 @@ export default function Scripts() {
                 <Button variant="ghost" size="icon" className="h-7 w-7" title="Editar" onClick={() => handleOpen(script)}>
                   <Pencil size={14} />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7" title="Baixar PDF" onClick={() => handleDownloadPdf(script)}>
-                  <Download size={14} />
-                </Button>
                 <Button variant="ghost" size="icon" className="h-7 w-7" title={script.recorded ? 'Desmarcar gravado' : 'Marcar como gravado'}
                   onClick={() => toggleRecorded(script)}>
                   <Check size={14} className={script.recorded ? 'text-success' : ''} />

@@ -225,7 +225,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
 
     if (conflict) {
-      return { hasConflict: true, message: "Conflito de horário com outra gravação deste videomaker." };
+      const conflictClient = data.clients.find(c => c.id === conflict.clientId);
+      const clientLabel = conflictClient?.companyName || conflict.prospectName || 'gravação';
+      return {
+        hasConflict: true,
+        message: `Conflito com ${clientLabel} às ${conflict.startTime} (${conflict.status}, tipo ${conflict.type}). Duração ${duration}min + buffer ${BUFFER_BETWEEN_RECORDINGS}min.`,
+      };
     }
 
     return { hasConflict: false };

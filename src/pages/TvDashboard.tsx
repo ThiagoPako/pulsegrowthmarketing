@@ -605,6 +605,82 @@ function RotatingScheduleCard({ items, isLive, height }: { items: ScheduleItem[]
   );
 }
 
+/* ─── Compact ordered schedule row ──────────────────────── */
+function ScheduleRow({ item, isLive }: { item: ScheduleItem; isLive: boolean }) {
+  const isDone = item.status === 'concluida';
+  const isCancelled = item.status === 'cancelada';
+  const isRescheduled = item.status === 'remarcada' || item.status === 'remarcado';
+
+  let statusLabel = 'Aguardando';
+  let statusColor = 'rgba(255,255,255,0.5)';
+  let statusBg = 'rgba(255,255,255,0.06)';
+  if (isLive) { statusLabel = 'Gravando'; statusColor = PULSE_ORANGE; statusBg = `${PULSE_ORANGE}22`; }
+  else if (isDone) { statusLabel = 'Concluída'; statusColor = '#22c55e'; statusBg = 'rgba(34,197,94,0.15)'; }
+  else if (isCancelled) { statusLabel = 'Cancelada'; statusColor = '#ef4444'; statusBg = 'rgba(239,68,68,0.15)'; }
+  else if (isRescheduled) { statusLabel = 'Remarcada'; statusColor = '#f59e0b'; statusBg = 'rgba(245,158,11,0.15)'; }
+
+  const borderColor = isLive ? `${PULSE_ORANGE}55` : isCancelled ? 'rgba(239,68,68,0.2)' : isDone ? 'rgba(34,197,94,0.2)' : isRescheduled ? 'rgba(245,158,11,0.25)' : 'rgba(255,255,255,0.06)';
+
+  return (
+    <div
+      className="relative flex items-center gap-2 rounded-lg px-2 py-1.5 border"
+      style={{
+        borderColor,
+        background: isLive ? `linear-gradient(90deg, ${PULSE_ORANGE}10, transparent)` : PULSE_CARD,
+        opacity: isCancelled ? 0.5 : 1,
+      }}
+    >
+      {/* Time */}
+      <div className="flex flex-col items-center justify-center min-w-[46px]">
+        <span className="text-sm font-mono font-bold tabular-nums text-white/90">{item.startTime}</span>
+        {item.endTime && (
+          <span className="text-[9px] font-mono text-white/25 tabular-nums">{item.endTime}</span>
+        )}
+      </div>
+
+      {/* Client logo */}
+      <div className="flex-shrink-0 w-7 h-7 rounded-md overflow-hidden border flex items-center justify-center"
+        style={{
+          borderColor: item.clientColor ? `hsl(${item.clientColor} / 0.3)` : 'rgba(255,255,255,0.08)',
+          backgroundColor: item.clientColor ? `hsl(${item.clientColor} / 0.1)` : 'rgba(255,255,255,0.03)',
+        }}>
+        {item.clientLogo ? (
+          <img src={item.clientLogo} alt="" className="w-full h-full object-contain p-0.5" />
+        ) : (
+          <span className="text-[8px] font-bold text-white/40">{getInitials(item.clientName)}</span>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <p className="text-[12px] font-semibold text-white truncate leading-tight">{item.clientName}</p>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          {item.type === 'event' && (
+            <span className="text-[8px] font-bold uppercase px-1 py-px rounded" style={{ backgroundColor: `${PULSE_ORANGE}15`, color: PULSE_ORANGE }}>Evento</span>
+          )}
+          {item.recordingType === 'extra' && <span className="text-[8px] font-bold uppercase px-1 py-px rounded bg-violet-500/10 text-violet-300">Extra</span>}
+          {item.recordingType === 'backup' && <span className="text-[8px] font-bold uppercase px-1 py-px rounded bg-amber-500/10 text-amber-300">Backup</span>}
+          {item.videomakerName && (
+            <span className="text-[10px] text-white/40 truncate">
+              <Camera className="w-2.5 h-2.5 inline mr-0.5 -mt-0.5 text-blue-400/60" />
+              {item.videomakerName.split(' ')[0]}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Status badge */}
+      <div className="flex items-center gap-1 rounded-full px-2 py-0.5 flex-shrink-0" style={{ backgroundColor: statusBg }}>
+        {isLive && (
+          <motion.div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: statusColor }}
+            animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.4, repeat: Infinity }} />
+        )}
+        <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: statusColor }}>{statusLabel}</span>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Editing Pipeline Card ─────────────────────────────── */
 function EditingCard({ task }: { task: EditingTask }) {
   const col = COLUMN_CONFIG[task.column] || COLUMN_CONFIG.edicao;
@@ -1554,127 +1630,15 @@ export default function TvDashboard() {
               <div className="relative">
                 <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${schedule.length} gravações`} />
                 {schedule.length > 0 ? (
-                  <div className="relative" style={{ height: `${TIMELINE_HEIGHT}px` }}>
-                    {/* Linha do Tempo (Clock Marker) — pixel-aligned to the timeline */}
-                    <div className="absolute inset-0 pointer-events-none z-[100] hidden sm:block">
-                      <TimeMarker />
-                    </div>
-
-                    {(() => {
-                      const items: React.ReactNode[] = [];
-                      const addedBuffers = new Set<string>();
-
-                      // Initial Prep block: 08:00 - 08:30
-                      const initialPrepStartPx = (8 * 60 - OPERATIONAL_START) * MINUTE_HEIGHT;
-                      const initialPrepHeightPx = 30 * MINUTE_HEIGHT;
-                      items.push(
-                        <div key="prep-08-break" className="absolute left-0 right-0 pr-1" style={{ top: `${initialPrepStartPx}px`, height: `${initialPrepHeightPx}px` }}>
-                          <BufferCard startTime="08:00" type="prep" height={initialPrepHeightPx} />
-                        </div>
-                      );
-                      addedBuffers.add("08:00");
-
-                      // Lunch block: fixed 12:00 - 14:00
-                      const lunchStartPx = (12 * 60 - OPERATIONAL_START) * MINUTE_HEIGHT;
-                      const lunchHeightPx = 120 * MINUTE_HEIGHT;
-                      items.push(
-                        <div key="lunch-break" className="absolute left-0 right-0" style={{ top: `${lunchStartPx}px`, height: `${lunchHeightPx}px` }}>
-                          <LunchCard startTime="12:00 - 14:00" height={lunchHeightPx} />
-                        </div>
-                      );
-
-                      // Fixed 14:00 - 14:30 Prep block
-                      const prep14StartPx = (14 * 60 - OPERATIONAL_START) * MINUTE_HEIGHT;
-                      const prep14HeightPx = 30 * MINUTE_HEIGHT;
-                      items.push(
-                        <div key="prep-14-break" className="absolute left-0 right-0 pr-1" style={{ top: `${prep14StartPx}px`, height: `${prep14HeightPx}px` }}>
-                          <BufferCard startTime="14:00" type="prep" height={prep14HeightPx} />
-                        </div>
-                      );
-                      addedBuffers.add("14:00");
-
-                      // Fixed 16:00 - 16:30 Prep block
-                      const prep16StartPx = (16 * 60 - OPERATIONAL_START) * MINUTE_HEIGHT;
-                      const prep16HeightPx = 30 * MINUTE_HEIGHT;
-                      items.push(
-                        <div key="prep-16-break" className="absolute left-0 right-0 pr-1" style={{ top: `${prep16StartPx}px`, height: `${prep16HeightPx}px` }}>
-                          <BufferCard startTime="16:00" type="prep" height={prep16HeightPx} />
-                        </div>
-                      );
-                      addedBuffers.add("16:00");
-
-                      const timelineSchedule = schedule.filter(item => {
-                        const [h, m] = item.startTime.split(':').map(Number);
-                        const t = h * 60 + m;
-                        return t >= OPERATIONAL_START && t < OPERATIONAL_END && !(t >= 12 * 60 && t < 14 * 60);
-                      });
-
-                      // Group by startTime to handle simultaneous recordings (different videomakers)
-                      const groupedSchedule = timelineSchedule.reduce((acc, item) => {
-                        const key = item.startTime;
-                        if (!acc[key]) acc[key] = [];
-                        acc[key].push(item);
-                        return acc;
-                      }, {} as Record<string, ScheduleItem[]>);
-
-                      Object.entries(groupedSchedule).forEach(([startTime, itemsGroup]) => {
-                        const [h, m] = startTime.split(':').map(Number);
-                        const startMin = h * 60 + m;
-
-                        // Use duration of first item in group
-                        let duration = 90;
-                        const firstItem = itemsGroup[0];
-                        if (firstItem.endTime) {
-                          const [eh, em] = firstItem.endTime.split(':').map(Number);
-                          const endMin = eh * 60 + em;
-                          if (endMin > startMin) duration = endMin - startMin;
-                        }
-
-                        const topPx = (startMin - OPERATIONAL_START) * MINUTE_HEIGHT;
-                        const heightPx = duration * MINUTE_HEIGHT;
-
-                        if (itemsGroup.length > 1) {
-                          items.push(
-                            <div key={`group-${startTime}`} className="absolute left-0 right-0 pr-1" style={{ top: `${topPx}px`, height: `${heightPx}px` }}>
-                              <RotatingScheduleCard 
-                                items={itemsGroup} 
-                                isLive={(id) => activeRecordingIds.includes(id) || itemsGroup.some(it => it.id === id && it.status === 'recording')} 
-                                height={heightPx} 
-                              />
-                            </div>
-                          );
-                        } else {
-                          items.push(
-                            <div key={firstItem.id} className="absolute left-0 right-0 pr-1" style={{ top: `${topPx}px`, height: `${heightPx}px` }}>
-                              <ScheduleCard item={firstItem} isLive={activeRecordingIds.includes(firstItem.id) || firstItem.status === 'recording'} height={heightPx} />
-                            </div>
-                          );
-                        }
-
-                        // Pulse buffer right after this recording (if at least one in group is not cancelled)
-                        const hasActiveInGroup = itemsGroup.some(it => it.status !== 'cancelada');
-                        if (hasActiveInGroup) {
-                          const bufferStart = startMin + duration;
-                          const bufferEnd = bufferStart + 30;
-                          const bufferTime = `${String(Math.floor(bufferStart / 60)).padStart(2, '0')}:${String(bufferStart % 60).padStart(2, '0')}`;
-                          const overlapsLunch = bufferStart < 14 * 60 && bufferEnd > 12 * 60;
-                          if (!overlapsLunch && bufferEnd <= OPERATIONAL_END && !addedBuffers.has(bufferTime)) {
-                            addedBuffers.add(bufferTime);
-                            const isPrep = bufferTime === '14:00' || bufferTime === '16:00';
-                            const bTop = (bufferStart - OPERATIONAL_START) * MINUTE_HEIGHT;
-                            const bH = 30 * MINUTE_HEIGHT;
-                            items.push(
-                              <div key={`buffer-${bufferTime}`} className="absolute left-0 right-0 pr-1" style={{ top: `${bTop}px`, height: `${bH}px` }}>
-                                <BufferCard startTime={bufferTime} type={isPrep ? 'prep' : 'pulse'} height={bH} />
-                              </div>
-                            );
-                          }
-                        }
-                      });
-
-
-                      return items;
-                    })()}
+                  <div className="space-y-1.5">
+                    {[...schedule]
+                      .sort((a, b) => a.startTime.localeCompare(b.startTime))
+                      .map(item => {
+                        const isLive = activeRecordingIds.includes(item.id) || item.status === 'recording';
+                        return (
+                          <ScheduleRow key={item.id} item={item} isLive={isLive} />
+                        );
+                      })}
                   </div>
                 ) : (
                   <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>

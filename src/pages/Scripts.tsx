@@ -1641,21 +1641,6 @@ export default function Scripts() {
                     ? `Pré-visualização A4 · ${previewBatch.length} roteiros`
                     : 'Pré-visualização do Roteiro (A4)'}
                 </DialogTitle>
-                <Button
-                  onClick={() => {
-                    if (previewBatch && previewBatch.length > 0) {
-                      handleDownloadSelectedPdf(previewBatch);
-                    } else if (viewing) {
-                      handleDownloadPdf(viewing);
-                    }
-                  }}
-                  size="sm"
-                  className="gap-2"
-                  disabled={downloadingBatch}
-                >
-                  <Download size={16} className={downloadingBatch ? 'animate-spin' : ''} />
-                  {downloadingBatch ? 'Gerando...' : 'Baixar PDF'}
-                </Button>
               </div>
               
               <div className="flex flex-wrap items-center gap-6 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-border">

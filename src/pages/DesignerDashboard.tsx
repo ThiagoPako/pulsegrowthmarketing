@@ -147,6 +147,7 @@ export default function DesignerDashboard() {
       pending: pending.length, inProgress: inProgress.length, adjustments: adjustments.length,
       completed: completed.length, urgent: urgent.length, avgTime, overdue,
       completedThisWeek: completedThisWeek.length, completedThisMonth: completedThisMonth.length,
+      completedToday: completedToday.length,
       uniqueClients, totalTime, totalActive: pending.length + inProgress.length + adjustments.length,
       byFormat: Object.entries(byFormat).map(([name, value]) => ({ name, value })),
       byClient: Object.values(byClient).sort((a, b) => b.count - a.count),

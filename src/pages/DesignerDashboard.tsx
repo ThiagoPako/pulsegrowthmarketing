@@ -25,7 +25,8 @@ import {
   Palette, CheckCircle, Clock, BarChart3,
   TrendingUp, Timer, Building2, CalendarDays,
   Flame, Target, Award, Plus, Search, Play, Pause, Send, Upload, FileText, Eye, ZoomIn,
-  AlertTriangle, Layers, Heart, Sparkles, Star, MoonStar, RotateCcw, ArrowRight
+  AlertTriangle, Layers, Heart, Sparkles, Star, MoonStar, RotateCcw, ArrowRight,
+  Maximize2, Minimize2, Keyboard, X, Zap, Copy as CopyIcon, Check
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -80,6 +81,26 @@ export default function DesignerDashboard() {
   const [activeElapsed, setActiveElapsed] = useState('');
   // Optimistic pause override so UI freezes instantly without waiting for refetch
   const [pauseOverride, setPauseOverride] = useState<{ id: string; running: boolean; frozenSeconds?: number; resumedAt?: number } | null>(null);
+  // Modo Foco (Zen) — esconde tudo exceto tarefa ativa
+  const [zenMode, setZenMode] = useState(false);
+  // Meta diária de artes (configurável, persistida por usuário)
+  const dailyGoalKey = `pulse:designer:dailyGoal:${user?.id || 'anon'}`;
+  const [dailyGoal, setDailyGoal] = useState<number>(() => {
+    try { return Number(localStorage.getItem(dailyGoalKey)) || 5; } catch { return 5; }
+  });
+  const [editingGoal, setEditingGoal] = useState(false);
+  useEffect(() => {
+    try { localStorage.setItem(dailyGoalKey, String(dailyGoal)); } catch {}
+  }, [dailyGoal, dailyGoalKey]);
+  // Tour de boas-vindas (mostrado só na 1ª vez)
+  const tourKey = `pulse:designer:tourSeen:${user?.id || 'anon'}`;
+  const [showTour, setShowTour] = useState<boolean>(() => {
+    try { return localStorage.getItem(tourKey) !== '1'; } catch { return false; }
+  });
+  const dismissTour = () => {
+    try { localStorage.setItem(tourKey, '1'); } catch {}
+    setShowTour(false);
+  };
 
   const tasks = tasksQuery.data || [];
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
@@ -114,6 +135,8 @@ export default function DesignerDashboard() {
     const now = new Date();
     const ws = new Date(now); ws.setDate(now.getDate() - now.getDay()); ws.setHours(0,0,0,0);
     const completedThisWeek = completed.filter(t => new Date(t.completed_at || t.updated_at) >= ws);
+    const dayStart = new Date(now); dayStart.setHours(0,0,0,0);
+    const completedToday = completed.filter(t => new Date(t.completed_at || t.updated_at) >= dayStart);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const completedThisMonth = completed.filter(t => new Date(t.completed_at || t.updated_at) >= monthStart);
     const totalTime = completedWithTime.reduce((s, t) => s + t.time_spent_seconds, 0);
@@ -145,6 +168,7 @@ export default function DesignerDashboard() {
       pending: pending.length, inProgress: inProgress.length, adjustments: adjustments.length,
       completed: completed.length, urgent: urgent.length, avgTime, overdue,
       completedThisWeek: completedThisWeek.length, completedThisMonth: completedThisMonth.length,
+      completedToday: completedToday.length,
       uniqueClients, totalTime, totalActive: pending.length + inProgress.length + adjustments.length,
       byFormat: Object.entries(byFormat).map(([name, value]) => ({ name, value })),
       byClient: Object.values(byClient).sort((a, b) => b.count - a.count),
@@ -389,6 +413,73 @@ export default function DesignerDashboard() {
   };
 
 
+  // ═══ Próxima tarefa sugerida (quando não há ativa) ═══
+  const nextSuggested = useMemo(() => {
+    if (activeTask) return null;
+    const priorityRank: Record<string, number> = { urgente: 0, alta: 1, media: 2, baixa: 3 };
+    const candidates = [...groupedQueue.revisao, ...groupedQueue.fila];
+    if (candidates.length === 0) return null;
+    return [...candidates].sort((a, b) => {
+      const pa = priorityRank[a.priority] ?? 9;
+      const pb = priorityRank[b.priority] ?? 9;
+      if (pa !== pb) return pa - pb;
+      return getDesignDeadlineStatus(a).hoursLeft - getDesignDeadlineStatus(b).hoursLeft;
+    })[0];
+  }, [activeTask, groupedQueue.revisao, groupedQueue.fila]);
+
+  const handleAcceptSuggestion = async () => {
+    if (!nextSuggested) return;
+    const now = new Date().toISOString();
+    try {
+      await updateTask.mutateAsync({
+        id: nextSuggested.id,
+        kanban_column: 'executando',
+        started_at: nextSuggested.started_at || now,
+        assigned_to: nextSuggested.assigned_to || user?.id,
+        timer_running: true,
+        timer_started_at: now,
+      } as any);
+      await addHistory.mutateAsync({
+        task_id: nextSuggested.id,
+        action: 'Aceita via sugestão inteligente',
+        user_id: user?.id,
+      });
+      toast.success('Bora criar! 🎨✨');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao iniciar tarefa');
+    }
+  };
+
+  // ═══ Atalhos de teclado ═══
+  useEffect(() => {
+    const isTyping = (el: EventTarget | null) => {
+      const t = el as HTMLElement | null;
+      if (!t) return false;
+      const tag = t.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || t.isContentEditable;
+    };
+    const handler = (e: KeyboardEvent) => {
+      if (isTyping(e.target)) return;
+      if (e.key === 'Escape' && zenMode) { setZenMode(false); e.preventDefault(); return; }
+      if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && activeTask) {
+        setZenMode(v => !v); e.preventDefault(); return;
+      }
+      if (e.code === 'Space' && activeTask) { handleTogglePause(); e.preventDefault(); return; }
+      if ((e.key === 'c' || e.key === 'C') && activeTask && !e.metaKey && !e.ctrlKey) {
+        setCopyDialogTask(activeTask); e.preventDefault(); return;
+      }
+      if ((e.key === 'n' || e.key === 'N') && nextSuggested && !activeTask && !e.metaKey && !e.ctrlKey) {
+        handleAcceptSuggestion(); e.preventDefault(); return;
+      }
+      if ((e.key === 'e' || e.key === 'E') && activeTask && !e.metaKey && !e.ctrlKey) {
+        setSelectedTaskId(activeTask.id); e.preventDefault(); return;
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTask?.id, nextSuggested?.id, zenMode]);
+
 
 
   const activeClients = useMemo(() => {
@@ -426,6 +517,48 @@ export default function DesignerDashboard() {
   const firstName = displayName.split(' ')[0];
 
   return (
+    <>
+      {/* ═══ ZEN MODE — overlay fullscreen só com tarefa ativa ═══ */}
+      <AnimatePresence>
+        {zenMode && activeTask && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-gradient-to-br from-violet-950 via-fuchsia-950/95 to-pink-950/95 backdrop-blur-xl overflow-y-auto"
+          >
+            <div className="min-h-screen flex flex-col items-center justify-center p-6 md:p-12">
+              <div className="w-full max-w-4xl">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-2 text-violet-200">
+                    <Sparkles size={16} />
+                    <span className="text-xs font-bold uppercase tracking-widest">Modo Foco</span>
+                  </div>
+                  <Button
+                    onClick={() => setZenMode(false)}
+                    size="sm"
+                    variant="ghost"
+                    className="gap-1.5 rounded-xl text-violet-100 hover:bg-white/10"
+                    title="Sair (Esc)"
+                  >
+                    <Minimize2 size={14} /> Sair
+                    <kbd className="ml-1 px-1.5 py-0.5 rounded bg-white/15 text-[9px] font-bold">Esc</kbd>
+                  </Button>
+                </div>
+                <ZenActiveCard
+                  task={activeTask}
+                  elapsed={activeElapsed}
+                  effectiveRunning={effectiveRunning}
+                  onTogglePause={handleTogglePause}
+                  onOpenDetail={() => setSelectedTaskId(activeTask.id)}
+                  onOpenCopy={() => setCopyDialogTask(activeTask)}
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     <div className="space-y-6 max-w-[1400px]">
       <BonusCongratsBanner />
 
@@ -445,16 +578,79 @@ export default function DesignerDashboard() {
             {format(today, "EEEE, d 'de' MMMM", { locale: ptBR })}
           </p>
         </div>
-        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-          <Button
-            onClick={() => setCreateOpen(true)}
-            size="sm"
-            className="gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white shadow-lg shadow-violet-300/40 dark:shadow-violet-900/30 font-semibold"
-          >
-            <Plus size={14} /> Nova Demanda ✨
-          </Button>
-        </motion.div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {activeTask && (
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button
+                onClick={() => setZenMode(true)}
+                size="sm"
+                variant="outline"
+                className="gap-2 rounded-xl border-violet-300/60 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40 font-semibold"
+                title="Modo Foco (F) — só sua tarefa ativa em tela cheia"
+              >
+                <Maximize2 size={14} /> Modo Foco
+              </Button>
+            </motion.div>
+          )}
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              onClick={() => setCreateOpen(true)}
+              size="sm"
+              className="gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white shadow-lg shadow-violet-300/40 dark:shadow-violet-900/30 font-semibold"
+            >
+              <Plus size={14} /> Nova Demanda ✨
+            </Button>
+          </motion.div>
+        </div>
       </motion.div>
+
+      {/* ═══ META DIÁRIA — foguetinho sobe conforme conclui ═══ */}
+      <DailyGoalBar
+        completed={stats.completedToday}
+        goal={dailyGoal}
+        onGoalChange={setDailyGoal}
+        editing={editingGoal}
+        setEditing={setEditingGoal}
+      />
+
+      {/* ═══ TOUR de boas-vindas (1ª vez) ═══ */}
+      <AnimatePresence>
+        {showTour && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="rounded-2xl border-2 border-violet-300/60 bg-gradient-to-r from-violet-500/10 via-fuchsia-500/10 to-pink-500/10 p-4 flex items-start gap-3"
+          >
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shrink-0">
+              <Sparkles size={18} className="text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-display font-bold text-violet-700 dark:text-violet-300">Dicas rápidas pra ganhar tempo 💜</p>
+              <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                {[
+                  { k: 'Espaço', d: 'pausar/retomar timer' },
+                  { k: 'C', d: 'ver copy' },
+                  { k: 'N', d: 'próxima tarefa' },
+                  { k: 'E', d: 'enviar p/ análise' },
+                  { k: 'F', d: 'modo foco' },
+                  { k: 'Esc', d: 'sair do foco' },
+                ].map(s => (
+                  <span key={s.k} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/70 dark:bg-white/5 border border-violet-200/50">
+                    <kbd className="px-1.5 py-0.5 rounded bg-violet-600 text-white text-[9px] font-bold">{s.k}</kbd>
+                    <span className="text-muted-foreground">{s.d}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+            <Button size="icon" variant="ghost" onClick={dismissTour} className="w-7 h-7 rounded-lg shrink-0">
+              <X size={14} />
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+
 
       {/* ═══ STATS ═══ */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -546,6 +742,11 @@ export default function DesignerDashboard() {
 
                     </div>
                   </div>
+
+                  {/* Copy inline — sempre visível quando existe */}
+                  {t.copy_text && t.copy_text.trim() && (
+                    <InlineCopyBlock text={t.copy_text} />
+                  )}
 
                   {/* Action buttons */}
                   <div className="flex flex-wrap items-center gap-2">
@@ -671,6 +872,19 @@ export default function DesignerDashboard() {
           );
         })()}
       </AnimatePresence>
+
+      {/* ═══ PRÓXIMA SUGERIDA — quando não há tarefa ativa ═══ */}
+      <AnimatePresence>
+        {!activeTask && nextSuggested && (
+          <NextSuggestedCard
+            task={nextSuggested}
+            onAccept={handleAcceptSuggestion}
+            onOpen={() => setSelectedTaskId(nextSuggested.id)}
+          />
+        )}
+      </AnimatePresence>
+
+
 
       {/* ═══ Filtros globais ═══ */}
       <motion.div {...fadeUp} transition={{ delay: 0.15 }} className="flex items-center gap-2 flex-wrap">
@@ -1039,6 +1253,7 @@ export default function DesignerDashboard() {
         </DialogContent>
       </Dialog>
     </div>
+    </>
   );
 }
 
@@ -1123,4 +1338,340 @@ function LowPriorityCard({ task, index, onOpenDetail, onResume, hasActive }: Low
     </motion.div>
   );
 }
+
+// ═══════════════════════════════════════════════════════════
+// DailyGoalBar — meta diária com foguetinho subindo
+// ═══════════════════════════════════════════════════════════
+interface DailyGoalBarProps {
+  completed: number;
+  goal: number;
+  onGoalChange: (n: number) => void;
+  editing: boolean;
+  setEditing: (v: boolean) => void;
+}
+
+function DailyGoalBar({ completed, goal, onGoalChange, editing, setEditing }: DailyGoalBarProps) {
+  const pct = goal > 0 ? Math.min(100, Math.round((completed / goal) * 100)) : 0;
+  const hit = completed >= goal && goal > 0;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-2xl border-2 border-pink-200/40 dark:border-pink-800/25 bg-gradient-to-r from-pink-500/8 via-fuchsia-500/8 to-violet-500/8 p-4"
+    >
+      <div className="flex items-center gap-3 mb-2">
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-pink-500 to-fuchsia-500 flex items-center justify-center shrink-0">
+          <Target size={16} className="text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-display font-bold">
+              Hoje: {completed}/{editing ? '' : goal}
+              {editing && (
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  defaultValue={goal}
+                  autoFocus
+                  onBlur={(e) => { onGoalChange(Math.max(1, Number(e.target.value) || 1)); setEditing(false); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); } }}
+                  className="w-14 px-2 py-0 text-sm rounded border border-violet-300 bg-background"
+                />
+              )}
+              {' '}artes {hit ? '🎉' : '🎨'}
+            </span>
+            {!editing && (
+              <button
+                onClick={() => setEditing(true)}
+                className="text-[10px] text-muted-foreground hover:text-violet-600 underline"
+              >
+                editar meta
+              </button>
+            )}
+            {hit && (
+              <Badge className="bg-emerald-500 text-white text-[10px] rounded-full animate-pulse">Meta batida! 💜</Badge>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            {hit ? 'Você mandou muito bem hoje! Cada arte extra é bônus 💖' : `Faltam ${Math.max(0, goal - completed)} artes pra bater a meta`}
+          </p>
+        </div>
+      </div>
+      {/* Barra com foguetinho */}
+      <div className="relative h-3 rounded-full bg-white/50 dark:bg-white/5 overflow-hidden border border-pink-200/40">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${pct}%` }}
+          transition={{ type: 'spring', stiffness: 100, damping: 20 }}
+          className={`h-full ${hit
+            ? 'bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500'
+            : 'bg-gradient-to-r from-pink-400 via-fuchsia-500 to-violet-500'}`}
+        />
+        <motion.div
+          animate={{ left: `${pct}%` }}
+          transition={{ type: 'spring', stiffness: 100, damping: 20 }}
+          className="absolute -top-1 -translate-x-1/2 text-sm"
+          style={{ filter: 'drop-shadow(0 0 4px rgba(236,72,153,0.6))' }}
+        >
+          🚀
+        </motion.div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// InlineCopyBlock — copy visível direto no spotlight, com destaque de #hashtags/@mentions e botão copiar
+// ═══════════════════════════════════════════════════════════
+function InlineCopyBlock({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const short = text.length > 240 && !expanded;
+  const displayText = short ? text.slice(0, 240) + '…' : text;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      toast.success('Copy copiada! 💜');
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error('Não foi possível copiar');
+    }
+  };
+
+  // Destaca #hashtags, @mentions e links
+  const parts = displayText.split(/(\s+)/).map((chunk, i) => {
+    if (/^#\w+/.test(chunk)) return <span key={i} className="text-violet-600 dark:text-violet-400 font-semibold">{chunk}</span>;
+    if (/^@\w+/.test(chunk)) return <span key={i} className="text-pink-600 dark:text-pink-400 font-semibold">{chunk}</span>;
+    if (/^https?:\/\//.test(chunk)) return <a key={i} href={chunk} target="_blank" rel="noopener noreferrer" className="text-emerald-600 underline break-all">{chunk}</a>;
+    return <span key={i}>{chunk}</span>;
+  });
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mt-3 mb-4 rounded-2xl border border-violet-300/40 bg-white/60 dark:bg-white/5 backdrop-blur-sm p-3"
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-violet-600 dark:text-violet-400">
+          <FileText size={11} /> Copy
+        </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={handleCopy}
+          className="h-7 gap-1.5 text-[11px] rounded-lg text-violet-600 hover:bg-violet-100/50 dark:hover:bg-violet-950/40"
+        >
+          {copied ? <><Check size={11} /> Copiado</> : <><CopyIcon size={11} /> Copiar</>}
+        </Button>
+      </div>
+      <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-foreground/90">
+        {parts}
+      </p>
+      {text.length > 240 && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="mt-2 text-[11px] text-violet-600 hover:text-violet-700 font-semibold"
+        >
+          {expanded ? '↑ Recolher' : '↓ Ver copy completa'}
+        </button>
+      )}
+    </motion.div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// NextSuggestedCard — sugestão inteligente quando não há ativa
+// ═══════════════════════════════════════════════════════════
+interface NextSuggestedCardProps {
+  task: DesignTask;
+  onAccept: () => void;
+  onOpen: () => void;
+}
+
+function NextSuggestedCard({ task, onAccept, onOpen }: NextSuggestedCardProps) {
+  const clientName = task.clients?.company_name || task.prospect_name || '—';
+  const clientColor = task.clients?.color || '270 70% 55%';
+  const ds = getDesignDeadlineStatus(task);
+  const isAdjustment = task.kanban_column === 'ajustes';
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: -12, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+      className="relative overflow-hidden rounded-3xl border-2 border-dashed border-violet-400/60 bg-gradient-to-br from-violet-500/5 via-fuchsia-500/5 to-pink-500/5 p-5"
+    >
+      <motion.div
+        animate={{ opacity: [0.15, 0.3, 0.15] }}
+        transition={{ duration: 3, repeat: Infinity }}
+        className="pointer-events-none absolute -top-24 -right-24 w-60 h-60 rounded-full bg-gradient-to-br from-violet-300 to-fuchsia-300 blur-3xl"
+      />
+      <div className="relative flex items-center gap-4 flex-wrap">
+        <motion.div
+          animate={{ rotate: [0, -6, 6, -4, 0] }}
+          transition={{ duration: 2, repeat: Infinity, repeatDelay: 2 }}
+          className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shrink-0 shadow-lg shadow-violet-400/40"
+        >
+          <Zap size={22} className="text-white" fill="currentColor" />
+        </motion.div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-violet-600 dark:text-violet-400 flex items-center gap-1.5">
+            <Sparkles size={11} /> Sua próxima sugestão
+            {isAdjustment && <Badge className="text-[9px] rounded-full bg-amber-500 text-white border-0 h-4">Ajuste rápido</Badge>}
+          </p>
+          <div className="flex items-center gap-3 mt-1">
+            <ClientLogo client={{ companyName: clientName, color: clientColor, logoUrl: task.clients?.logo_url }} size="sm" />
+            <div className="min-w-0">
+              <h3 className="font-display font-bold text-base md:text-lg truncate">{task.title}</h3>
+              <p className="text-xs text-muted-foreground truncate">
+                {clientName} · {FORMAT_LABELS[task.format_type] || task.format_type} · <span className={ds.variant === 'destructive' ? 'text-rose-600 font-semibold' : ''}>{ds.label}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 ml-auto">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onOpen}
+            className="gap-1.5 rounded-xl text-violet-700 dark:text-violet-300"
+          >
+            Ver detalhes
+          </Button>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              size="sm"
+              onClick={onAccept}
+              className="gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white shadow-lg shadow-violet-300/40 font-semibold"
+              title="Aceitar e iniciar (tecla N)"
+            >
+              <Play size={13} fill="currentColor" /> Aceitar e iniciar
+              <kbd className="ml-1 px-1.5 py-0.5 rounded bg-white/25 text-[9px] font-bold">N</kbd>
+            </Button>
+          </motion.div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// ZenActiveCard — versão fullscreen minimalista da tarefa ativa
+// ═══════════════════════════════════════════════════════════
+interface ZenActiveCardProps {
+  task: DesignTask;
+  elapsed: string;
+  effectiveRunning: boolean;
+  onTogglePause: () => void;
+  onOpenDetail: () => void;
+  onOpenCopy: () => void;
+}
+
+function ZenActiveCard({ task, elapsed, effectiveRunning, onTogglePause, onOpenDetail, onOpenCopy }: ZenActiveCardProps) {
+  const clientName = task.clients?.company_name || task.prospect_name || '—';
+  const clientColor = task.clients?.color || '270 70% 55%';
+  const arts: string[] = Array.from(new Set([
+    ...(((task as any).attachment_urls as string[]) || []),
+    task.attachment_url,
+  ].filter(Boolean) as string[]));
+
+  return (
+    <motion.div
+      initial={{ scale: 0.96, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ type: 'spring', stiffness: 200, damping: 25 }}
+      className="rounded-[2rem] border-2 border-violet-300/30 bg-gradient-to-br from-white/10 via-white/5 to-white/10 backdrop-blur-xl p-8 md:p-12 shadow-2xl"
+    >
+      <div className="flex items-center gap-4 mb-6">
+        <ClientLogo client={{ companyName: clientName, color: clientColor, logoUrl: task.clients?.logo_url }} size="lg" />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-violet-200 font-medium">{clientName}</p>
+          <h1 className="text-3xl md:text-5xl font-display font-bold text-white leading-tight break-words">
+            {task.title}
+          </h1>
+          <p className="text-sm text-violet-200/80 mt-1">
+            {FORMAT_LABELS[task.format_type] || task.format_type} · Prioridade {task.priority}
+          </p>
+        </div>
+      </div>
+
+      {/* Timer gigante centralizado */}
+      <div className="flex items-center justify-center my-8">
+        <motion.div
+          animate={effectiveRunning ? { boxShadow: ['0 0 0 rgba(52,211,153,0.4)', '0 0 40px rgba(52,211,153,0.6)', '0 0 0 rgba(52,211,153,0.4)'] } : {}}
+          transition={{ duration: 2, repeat: Infinity }}
+          className={`px-8 py-6 rounded-3xl border-2 ${effectiveRunning ? 'border-emerald-400/50 bg-emerald-500/10' : 'border-amber-400/50 bg-amber-500/10'}`}
+        >
+          <div className="font-mono font-bold text-6xl md:text-7xl tabular-nums text-white text-center tracking-wider">
+            {elapsed || '00:00:00'}
+          </div>
+          <div className="text-center mt-2 text-xs uppercase tracking-widest text-violet-200/70">
+            {effectiveRunning ? '● Executando' : '⏸ Pausada'}
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Copy inline (se existir) */}
+      {task.copy_text && task.copy_text.trim() && (
+        <div className="rounded-2xl bg-white/10 border border-white/10 p-4 mb-6 max-h-48 overflow-y-auto">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-violet-200/70 mb-2">Copy</p>
+          <p className="text-sm text-white/90 whitespace-pre-wrap leading-relaxed">{task.copy_text}</p>
+        </div>
+      )}
+
+      {/* Artes preview */}
+      {arts.length > 0 && (
+        <div className="mb-6">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-violet-200/70 mb-2">Artes anexadas ({arts.length})</p>
+          <div className="grid grid-cols-4 gap-2">
+            {arts.slice(0, 4).map((url, i) => {
+              const isImg = /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(url);
+              return (
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="aspect-square rounded-xl overflow-hidden border border-white/20 bg-white/5 hover:ring-2 hover:ring-violet-300 transition-all">
+                  {isImg ? <img src={url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><FileText size={20} className="text-white/60" /></div>}
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Ações grandes */}
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <Button
+          size="lg"
+          onClick={onTogglePause}
+          className={`gap-2 rounded-2xl text-white shadow-2xl min-w-[140px] ${effectiveRunning ? 'bg-amber-500 hover:bg-amber-600' : 'bg-emerald-500 hover:bg-emerald-600'}`}
+        >
+          {effectiveRunning ? <><Pause size={18} fill="currentColor" /> Pausar</> : <><Play size={18} fill="currentColor" /> Retomar</>}
+          <kbd className="ml-1 px-2 py-0.5 rounded bg-white/25 text-[10px] font-bold">Espaço</kbd>
+        </Button>
+        <Button
+          size="lg"
+          onClick={onOpenCopy}
+          variant="outline"
+          className="gap-2 rounded-2xl border-white/30 text-white hover:bg-white/10"
+        >
+          <FileText size={18} /> Copy <kbd className="ml-1 px-2 py-0.5 rounded bg-white/20 text-[10px] font-bold">C</kbd>
+        </Button>
+        <Button
+          size="lg"
+          onClick={onOpenDetail}
+          className="gap-2 rounded-2xl bg-gradient-to-r from-fuchsia-500 to-pink-500 hover:from-fuchsia-600 hover:to-pink-600 text-white shadow-lg"
+        >
+          <Upload size={18} /> Anexar / Enviar <kbd className="ml-1 px-2 py-0.5 rounded bg-white/20 text-[10px] font-bold">E</kbd>
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
+
+
+
 

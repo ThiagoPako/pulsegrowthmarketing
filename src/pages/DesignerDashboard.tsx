@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import BonusCongratsBanner from '@/components/BonusCongratsBanner';
 import { DESIGNER_SCORE } from '@/lib/scoringSystem';
 import { useDesignTasks, DESIGN_COLUMNS, DesignTask } from '@/hooks/useDesignTasks';

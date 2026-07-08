@@ -771,6 +771,53 @@ export default function DesignerDashboard() {
         <DesignTaskDetailSheet task={selectedTask} open={!!selectedTask} onOpenChange={o => !o && setSelectedTaskId(null)} />
       )}
       <DesignTaskCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
+
+      {/* Copy preview dialog */}
+      <Dialog open={!!copyDialogTask} onOpenChange={o => !o && setCopyDialogTask(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <FileText size={16} className="text-violet-500" />
+              Copy — {copyDialogTask?.title}
+            </DialogTitle>
+          </DialogHeader>
+          {copyDialogTask?.copy_text ? (
+            <div className="rounded-xl bg-muted/40 border border-border p-4 max-h-[60vh] overflow-y-auto">
+              <p className="text-sm whitespace-pre-wrap leading-relaxed">{copyDialogTask.copy_text}</p>
+            </div>
+          ) : (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              <FileText size={28} className="mx-auto text-muted-foreground/40 mb-2" />
+              Ainda não há copy para esta demanda.
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            {copyDialogTask?.copy_text && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  navigator.clipboard.writeText(copyDialogTask.copy_text || '');
+                  toast.success('Copy copiada!');
+                }}
+                className="gap-1.5 rounded-xl"
+              >
+                Copiar texto
+              </Button>
+            )}
+            <Button
+              size="sm"
+              onClick={() => {
+                if (copyDialogTask) setSelectedTaskId(copyDialogTask.id);
+                setCopyDialogTask(null);
+              }}
+              className="gap-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white"
+            >
+              Abrir demanda <ArrowRight size={12} />
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

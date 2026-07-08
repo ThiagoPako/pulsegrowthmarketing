@@ -30,9 +30,22 @@ const FORMAT_LABELS: Record<string, string> = {
   midia_fisica: 'Mídia Física',
 };
 
+// SLA em horas para toda demanda de design
+export const DESIGN_SLA_HOURS = 72;
+
+export function getDesignSlaStatus(task: { created_at?: string }) {
+  if (!task.created_at) return null;
+  const created = new Date(task.created_at).getTime();
+  const deadline = created + DESIGN_SLA_HOURS * 3600 * 1000;
+  const remainingMs = deadline - Date.now();
+  const hours = remainingMs / 3600 / 1000;
+  return { remainingMs, hours, isOverdue: hours < 0, isCritical: hours >= 0 && hours < 12 };
+}
+
 const COLUMN_CONFIG: Record<string, { icon: React.ReactNode; gradient: string }> = {
   nova_tarefa: { icon: <Sparkles size={15} />, gradient: 'from-blue-500/20 to-blue-600/10 dark:from-blue-500/30 dark:to-blue-600/10' },
   executando: { icon: <Zap size={15} />, gradient: 'from-amber-500/20 to-yellow-500/10 dark:from-amber-500/30 dark:to-yellow-500/10' },
+  fila_baixa_prioridade: { icon: <Pause size={15} />, gradient: 'from-slate-500/20 to-zinc-500/10 dark:from-slate-500/30 dark:to-zinc-500/10' },
   em_analise: { icon: <Eye size={15} />, gradient: 'from-purple-500/20 to-violet-500/10 dark:from-purple-500/30 dark:to-violet-500/10' },
   enviar_cliente: { icon: <Send size={15} />, gradient: 'from-cyan-500/20 to-teal-500/10 dark:from-cyan-500/30 dark:to-teal-500/10' },
   aprovado: { icon: <CheckCircle2 size={15} />, gradient: 'from-emerald-500/20 to-green-500/10 dark:from-emerald-500/30 dark:to-green-500/10' },

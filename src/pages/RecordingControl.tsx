@@ -215,6 +215,33 @@ export default function RecordingControl() {
     }
   };
 
+  // Drop on a week-view cell: move recording to a different date/time, keeping the same videomaker
+  const handleDropOnDayCell = async (e: React.DragEvent, targetDate: string, targetTime: string) => {
+    e.preventDefault();
+    setDragOverWeekCell(null);
+    if (!draggedRecording) return;
+    if (draggedRecording.date === targetDate && draggedRecording.startTime === targetTime) {
+      setDraggedRecording(null);
+      return;
+    }
+    setReassigning(true);
+    const client = clients.find(c => c.id === draggedRecording.clientId);
+    try {
+      const updated: Recording = { ...draggedRecording, date: targetDate, startTime: targetTime };
+      updateRecording(updated);
+      toast.success(
+        `Gravação "${client?.companyName || draggedRecording.prospectName || 'Cliente'}" movida para ${format(new Date(targetDate + 'T12:00:00'), 'dd/MM', { locale: ptBR })} às ${targetTime}`,
+        { duration: 3500 }
+      );
+      setTimeout(() => refetchData(), 400);
+    } catch (err: any) {
+      toast.error('Erro ao mover: ' + (err.message || 'erro'));
+    } finally {
+      setReassigning(false);
+      setDraggedRecording(null);
+    }
+  };
+
   const getClient = (clientId: string) => clients.find(c => c.id === clientId);
 
   const dateLabel = viewMode === 'day'

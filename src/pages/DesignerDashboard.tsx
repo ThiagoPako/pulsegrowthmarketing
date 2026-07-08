@@ -74,6 +74,8 @@ export default function DesignerDashboard() {
   const [filterPriority, setFilterPriority] = useState('all');
   const [copyDialogTask, setCopyDialogTask] = useState<DesignTask | null>(null);
   const [activeElapsed, setActiveElapsed] = useState('');
+  // Optimistic pause override so UI freezes instantly without waiting for refetch
+  const [pauseOverride, setPauseOverride] = useState<{ id: string; running: boolean; frozenSeconds?: number; resumedAt?: number } | null>(null);
 
   const tasks = tasksQuery.data || [];
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;
@@ -188,11 +190,32 @@ export default function DesignerDashboard() {
 
   // Live timer for spotlight active task (HH:MM:SS, respects pause)
   const activeTask = groupedQueue.active;
+
+  // Clear stale override when task changes or when server state matches override
+  useEffect(() => {
+    if (!activeTask) { setPauseOverride(null); return; }
+    if (pauseOverride && pauseOverride.id !== activeTask.id) {
+      setPauseOverride(null);
+      return;
+    }
+    if (pauseOverride && !!activeTask.timer_running === pauseOverride.running) {
+      setPauseOverride(null);
+    }
+  }, [activeTask?.id, activeTask?.timer_running, pauseOverride]);
+
+  // Effective running state (override wins over stale server data)
+  const effectiveRunning = pauseOverride && activeTask && pauseOverride.id === activeTask.id
+    ? pauseOverride.running
+    : !!activeTask?.timer_running;
+
   useEffect(() => {
     if (!activeTask) { setActiveElapsed(''); return; }
-    const base = activeTask.time_spent_seconds || 0;
-    const running = activeTask.timer_running && activeTask.timer_started_at;
-    const startMs = running ? new Date(activeTask.timer_started_at as string).getTime() : 0;
+    const override = pauseOverride && pauseOverride.id === activeTask.id ? pauseOverride : null;
+    const base = override?.frozenSeconds ?? (activeTask.time_spent_seconds || 0);
+    const running = override ? override.running : (activeTask.timer_running && !!activeTask.timer_started_at);
+    const startMs = running
+      ? (override?.resumedAt ?? new Date(activeTask.timer_started_at as string).getTime())
+      : 0;
     const fmt = (s: number) => {
       s = Math.max(0, Math.floor(s));
       const h = Math.floor(s / 3600);
@@ -208,36 +231,46 @@ export default function DesignerDashboard() {
     if (!running) return;
     const id = setInterval(update, 1000);
     return () => clearInterval(id);
-  }, [activeTask?.id, activeTask?.timer_running, activeTask?.timer_started_at, activeTask?.time_spent_seconds]);
+  }, [activeTask?.id, activeTask?.timer_running, activeTask?.timer_started_at, activeTask?.time_spent_seconds, pauseOverride]);
 
   const handleTogglePause = async () => {
     if (!activeTask) return;
+    const currentlyRunning = pauseOverride && pauseOverride.id === activeTask.id
+      ? pauseOverride.running
+      : !!activeTask.timer_running;
     try {
-      if (activeTask.timer_running) {
+      if (currentlyRunning) {
         const runSecs = activeTask.timer_started_at
           ? Math.max(0, Math.floor((Date.now() - new Date(activeTask.timer_started_at).getTime()) / 1000))
           : 0;
+        const frozen = (activeTask.time_spent_seconds || 0) + runSecs;
+        // Freeze UI immediately
+        setPauseOverride({ id: activeTask.id, running: false, frozenSeconds: frozen });
         await updateTask.mutateAsync({
           id: activeTask.id,
           timer_running: false,
           timer_started_at: null,
-          time_spent_seconds: (activeTask.time_spent_seconds || 0) + runSecs,
+          time_spent_seconds: frozen,
         } as any);
         await addHistory.mutateAsync({ task_id: activeTask.id, action: 'Cronômetro pausado', user_id: user?.id });
         toast.success('Tarefa pausada 💜');
       } else {
+        const resumedAt = Date.now();
+        setPauseOverride({ id: activeTask.id, running: true, frozenSeconds: activeTask.time_spent_seconds || 0, resumedAt });
         await updateTask.mutateAsync({
           id: activeTask.id,
           timer_running: true,
-          timer_started_at: new Date().toISOString(),
+          timer_started_at: new Date(resumedAt).toISOString(),
         } as any);
         await addHistory.mutateAsync({ task_id: activeTask.id, action: 'Cronômetro retomado', user_id: user?.id });
         toast.success('Cronômetro retomado ▶');
       }
     } catch (err: any) {
+      setPauseOverride(null);
       toast.error(err.message || 'Erro ao alternar cronômetro');
     }
   };
+
 
 
   const activeClients = useMemo(() => {
@@ -339,7 +372,7 @@ export default function DesignerDashboard() {
             t.attachment_url,
           ].filter(Boolean) as string[]));
           const ds = getDesignDeadlineStatus(t);
-          const isPaused = !t.timer_running && !!t.started_at;
+          const isPaused = !effectiveRunning && !!t.started_at;
           const clientName = t.clients?.company_name || t.prospect_name || '—';
           const clientColor = t.clients?.color || '270 70% 55%';
           return (
@@ -402,16 +435,16 @@ export default function DesignerDashboard() {
                       size="sm"
                       onClick={handleTogglePause}
                       className={`gap-1.5 rounded-xl text-white shadow-md ${
-                        t.timer_running
+                        effectiveRunning
                           ? 'bg-amber-500 hover:bg-amber-600'
                           : 'bg-emerald-500 hover:bg-emerald-600'
                       }`}
                     >
-                      {t.timer_running ? <><Pause size={14} fill="currentColor" /> Pausar</> : <><Play size={14} fill="currentColor" /> Retomar</>}
+                      {effectiveRunning ? <><Pause size={14} fill="currentColor" /> Pausar</> : <><Play size={14} fill="currentColor" /> Retomar</>}
                     </Button>
                     <span
                       className={`flex items-center gap-1.5 font-mono font-bold text-lg tabular-nums px-3 py-1 rounded-lg border ${
-                        t.timer_running
+                        effectiveRunning
                           ? 'text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
                           : 'text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/10'
                       }`}

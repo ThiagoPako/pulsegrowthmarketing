@@ -1253,6 +1253,7 @@ export default function DesignerDashboard() {
         </DialogContent>
       </Dialog>
     </div>
+    </>
   );
 }
 

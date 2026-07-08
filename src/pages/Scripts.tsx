@@ -155,6 +155,8 @@ export default function Scripts() {
   const [downloadingBatch, setDownloadingBatch] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPages, setPreviewPages] = useState<HTMLDivElement[]>([]);
+  const [previewBatch, setPreviewBatch] = useState<Script[] | null>(null);
+  const [previewingBatch, setPreviewingBatch] = useState(false);
   const [pdfConfig, setPdfConfig] = useState(() => {
     const stored = localStorage.getItem('pulse_pdf_config');
     if (stored) {

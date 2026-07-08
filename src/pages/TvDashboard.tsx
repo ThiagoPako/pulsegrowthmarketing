@@ -1759,17 +1759,19 @@ export default function TvDashboard() {
                         )}
 
                         {/* Status geral */}
-                        <div className="grid grid-cols-4 gap-1.5 mt-2">
+                        <div className="grid grid-cols-5 gap-1.5 mt-2">
                           <DesignStat label="Fila" value={queue.length} color="hsl(217 91% 60%)" icon={Sparkles} />
                           <DesignStat label="Pausadas" value={paused.length} color="hsl(240 5% 65%)" icon={Pause} />
+                          <DesignStat label="Paradas 4h+" value={stuck.length} color="hsl(48 95% 60%)" icon={Clock} pulse={stuck.length > 0} />
                           <DesignStat label="Crítica <12h" value={critical.length} color="hsl(32 95% 58%)" icon={Clock} />
                           <DesignStat label="Atrasada" value={overdue.length} color="hsl(0 84% 60%)" icon={AlertTriangle} pulse={overdue.length > 0} />
                         </div>
 
-                        {/* Lista de pausadas + atrasadas */}
-                        {(paused.length > 0 || overdue.length > 0) && (
+                        {/* Lista de pausadas + atrasadas + travadas */}
+                        {(paused.length > 0 || overdue.length > 0 || stuck.length > 0) && (
                           <div className="mt-2 space-y-1.5">
                             {overdue.slice(0, 3).map(t => <DesignMiniRow key={`o-${t.id}`} task={t} status="overdue" />)}
+                            {stuck.filter(t => !overdue.some(o => o.id === t.id) && !paused.some(p => p.id === t.id)).slice(0, 3).map(t => <DesignMiniRow key={`s-${t.id}`} task={t} status="paused" />)}
                             {paused.slice(0, 3).map(t => <DesignMiniRow key={`p-${t.id}`} task={t} status="paused" />)}
                           </div>
                         )}

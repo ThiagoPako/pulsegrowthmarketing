@@ -372,7 +372,7 @@ export default function DesignerDashboard() {
             t.attachment_url,
           ].filter(Boolean) as string[]));
           const ds = getDesignDeadlineStatus(t);
-          const isPaused = !t.timer_running && !!t.started_at;
+          const isPaused = !effectiveRunning && !!t.started_at;
           const clientName = t.clients?.company_name || t.prospect_name || '—';
           const clientColor = t.clients?.color || '270 70% 55%';
           return (

@@ -42,13 +42,23 @@ const LUNCH_SLOTS = ['12:30', '13:30'];
 
 
 export default function RecordingControl() {
-  const { recordings, clients, users, updateRecording, settings, refetchData } = useApp();
+  const { recordings, clients, users, updateRecording, addRecording, deleteRecording, hasConflict, settings, refetchData } = useApp();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'day' | 'week'>('day');
   const [draggedRecording, setDraggedRecording] = useState<Recording | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<{ vmId: string; time: string } | null>(null);
   const [dragOverVideomaker, setDragOverVideomaker] = useState<string | null>(null);
   const [reassigning, setReassigning] = useState(false);
+
+  // New-recording dialog
+  const [newDialog, setNewDialog] = useState<{ open: boolean; vmId: string; time: string; date: string }>({ open: false, vmId: '', time: '', date: '' });
+  const [newForm, setNewForm] = useState<{ mode: 'client' | 'avulso'; clientId: string; prospectName: string; type: RecordingType }>({ mode: 'client', clientId: '', prospectName: '', type: 'extra' });
+  const [saving, setSaving] = useState(false);
+
+  const activeClients = useMemo(() =>
+    clients.filter(c => c.status !== 'cancelado').sort((a, b) => a.companyName.localeCompare(b.companyName)),
+    [clients]
+  );
 
   // Get all videomakers
   const videomakers = useMemo(() =>

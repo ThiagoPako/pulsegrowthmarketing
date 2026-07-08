@@ -6780,13 +6780,16 @@ app.get('/api/tv-dashboard', async (req, res) => {
                c.company_name AS client_name, c.logo_url AS client_logo, c.color AS client_color
         FROM social_media_deliveries smd
         LEFT JOIN clients c ON c.id = smd.client_id
-        WHERE smd.delivered_at = $1::date
-           OR smd.posted_at = $1::date
-           OR (
-             smd.scheduled_time IS NOT NULL
-             AND smd.scheduled_time ~ '^\\d{4}-\\d{2}-\\d{2}'
-             AND split_part(replace(smd.scheduled_time, 'T', ' '), ' ', 1)::date = $1::date
-           )
+        WHERE smd.content_type = 'reels'
+          AND (
+            smd.delivered_at = $1::date
+            OR smd.posted_at = $1::date
+            OR (
+              smd.scheduled_time IS NOT NULL
+              AND smd.scheduled_time ~ '^\\d{4}-\\d{2}-\\d{2}'
+              AND split_part(replace(smd.scheduled_time, 'T', ' '), ' ', 1)::date = $1::date
+            )
+          )
         ORDER BY CASE
           WHEN smd.scheduled_time ~ '^\\d{2}:\\d{2}' THEN smd.scheduled_time
           WHEN smd.scheduled_time ~ '^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}' THEN substring(replace(smd.scheduled_time, 'T', ' ') from 12 for 5)

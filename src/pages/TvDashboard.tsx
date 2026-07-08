@@ -1323,7 +1323,7 @@ export default function TvDashboard() {
       setEditingPipeline(data.editingPipeline || []);
       setDesignPipeline(data.designPipeline || []);
       setActiveRecordingIds(data.activeRecordingIds || []);
-      setTodayPosts(data.todayPosts || []);
+      setTodayPosts((data.todayPosts || []).filter((p: ScheduledPost) => (p.contentType || '').toLowerCase() === 'reels'));
       if (Array.isArray(data.seasonalSlides) && data.seasonalSlides.length > 0) {
         setSeasonalSlides(data.seasonalSlides);
       }

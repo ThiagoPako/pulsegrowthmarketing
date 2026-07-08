@@ -25,7 +25,8 @@ import {
   Palette, CheckCircle, Clock, BarChart3,
   TrendingUp, Timer, Building2, CalendarDays,
   Flame, Target, Award, Plus, Search, Play, Pause, Send, Upload, FileText, Eye, ZoomIn,
-  AlertTriangle, Layers, Heart, Sparkles, Star, MoonStar, RotateCcw, ArrowRight
+  AlertTriangle, Layers, Heart, Sparkles, Star, MoonStar, RotateCcw, ArrowRight,
+  Maximize2, Minimize2, Keyboard, X, Zap, Copy as CopyIcon, Check
 } from 'lucide-react';
 import { toast } from 'sonner';
 

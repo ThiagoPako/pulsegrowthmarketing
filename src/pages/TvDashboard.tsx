@@ -1074,6 +1074,131 @@ function DesignMiniRow({ task, status }: { task: DesignActivityTask; status: 'pa
   );
 }
 
+/* ─── Editor Live Card (grupo por editor) ───────────────── */
+function EditorLiveCard({ editorName, editorAvatar, tasks }: { editorName: string; editorAvatar?: string | null; tasks: EditingTask[] }) {
+  const accent = '#8b5cf6';
+  const active = tasks.find(t => t.column === 'edicao' && !t.isPaused)
+    || tasks.find(t => t.column === 'edicao')
+    || tasks[0];
+  const others = tasks.filter(t => t.id !== active?.id).slice(0, 4);
+  const isEditingNow = !!active && active.column === 'edicao' && !active.isPaused;
+  const col = active ? (COLUMN_CONFIG[active.column] || COLUMN_CONFIG.edicao) : COLUMN_CONFIG.edicao;
+  const ColIcon = col.icon;
+
+  return (
+    <motion.div
+      className="rounded-2xl overflow-hidden border-2 relative"
+      style={{
+        borderColor: isEditingNow ? `${accent}55` : `${accent}22`,
+        background: `linear-gradient(135deg, ${accent}18, transparent 65%), rgba(0,0,0,0.32)`,
+        boxShadow: isEditingNow ? `0 0 32px ${accent}22` : 'none',
+      }}
+      initial={{ opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.25 }}
+    >
+      {isEditingNow && (
+        <div className="h-1 w-full relative overflow-hidden" style={{ background: `${accent}22` }}>
+          <motion.div
+            className="absolute inset-y-0 w-1/3"
+            style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)` }}
+            animate={{ x: ['-100%', '400%'] }}
+            transition={{ repeat: Infinity, duration: 2.2, ease: 'linear' }}
+          />
+        </div>
+      )}
+
+      <div className="p-3">
+        {/* Header do editor */}
+        <div className="flex items-center gap-2 mb-2.5">
+          <div className="w-9 h-9 rounded-full overflow-hidden border-2 flex items-center justify-center flex-shrink-0"
+            style={{ borderColor: accent, background: `${accent}18` }}>
+            {editorAvatar ? (
+              <img src={editorAvatar} alt={editorName} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-[11px] font-bold text-white">{getInitials(editorName)}</span>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-bold text-white truncate">{editorName}</p>
+            <p className="text-[9px] uppercase tracking-wider text-white/40">
+              {tasks.length} {tasks.length === 1 ? 'vídeo' : 'vídeos'} · Editor
+            </p>
+          </div>
+          {isEditingNow ? (
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-full flex-shrink-0" style={{ background: `${accent}25` }}>
+              <motion.div className="w-1.5 h-1.5 rounded-full" style={{ background: accent }}
+                animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1.2 }} />
+              <span className="text-[9px] font-black tracking-widest" style={{ color: accent }}>AO VIVO</span>
+            </div>
+          ) : active?.isPaused ? (
+            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/15 flex-shrink-0">
+              <Pause className="w-2.5 h-2.5 text-amber-400" />
+              <span className="text-[8px] font-bold text-amber-400">PAUSADO</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/5 text-white/40 flex-shrink-0">
+              <span className="text-[8px] font-bold uppercase">Aguardando</span>
+            </div>
+          )}
+        </div>
+
+        {/* Tarefa ativa */}
+        {active ? (
+          <div className="rounded-xl p-2.5 border" style={{ borderColor: `${col.color}33`, background: `${col.color}10` }}>
+            <div className="flex items-center gap-2 mb-1.5">
+              <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${col.color}22` }}>
+                <ColIcon className="w-2.5 h-2.5" style={{ color: col.color }} />
+                <span className="text-[8px] font-bold uppercase tracking-wider" style={{ color: col.color }}>{col.label}</span>
+              </div>
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/8">
+                <Clock className="w-2.5 h-2.5 text-white/60" />
+                <span className="text-[9px] font-mono font-bold text-white/85">{formatElapsedTime(active.timeOnTask)}</span>
+              </div>
+              <span className="ml-auto text-[8px] uppercase tracking-wider text-white/30">{active.contentType}</span>
+            </div>
+            <p className="text-[13px] font-semibold text-white leading-tight truncate">{active.title}</p>
+            <div className="flex items-center gap-1.5 mt-1.5">
+              {active.clientLogo ? (
+                <img src={active.clientLogo} alt="" className="w-4 h-4 rounded object-contain" />
+              ) : (
+                <div className="w-4 h-4 rounded flex items-center justify-center text-[7px] font-bold"
+                  style={{ background: active.clientColor ? `hsl(${active.clientColor} / 0.15)` : 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.45)' }}>
+                  {getInitials(active.clientName)}
+                </div>
+              )}
+              <span className="text-[10px] text-white/55 truncate">{active.clientName}</span>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-white/8 p-2.5 text-center">
+            <p className="text-[10px] text-white/25">Sem vídeo em edição</p>
+          </div>
+        )}
+
+        {/* Fila do editor */}
+        {others.length > 0 && (
+          <div className="mt-2 space-y-1">
+            <p className="text-[8px] uppercase tracking-wider text-white/30 font-bold px-0.5">Próximos na fila</p>
+            {others.map(t => {
+              const c = COLUMN_CONFIG[t.column] || COLUMN_CONFIG.edicao;
+              return (
+                <div key={t.id} className="flex items-center gap-2 px-2 py-1 rounded-lg border"
+                  style={{ borderColor: `${c.color}22`, background: `${c.color}06` }}>
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: c.color }} />
+                  <span className="text-[10px] text-white/75 truncate flex-1">{t.title}</span>
+                  <span className="text-[9px] text-white/35 truncate flex-shrink-0 max-w-[80px]">{t.clientName}</span>
+                  <span className="text-[8px] uppercase tracking-wider font-bold flex-shrink-0" style={{ color: c.color }}>{c.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
 /* ─── Scheduled Post Card ───────────────────────────────── */
 function PostCard({ post }: { post: ScheduledPost }) {
   const statusConfig: Record<string, { color: string; label: string }> = {

@@ -74,6 +74,8 @@ export default function DesignerDashboard() {
   const [filterPriority, setFilterPriority] = useState('all');
   const [copyDialogTask, setCopyDialogTask] = useState<DesignTask | null>(null);
   const [activeElapsed, setActiveElapsed] = useState('');
+  // Optimistic pause override so UI freezes instantly without waiting for refetch
+  const [pauseOverride, setPauseOverride] = useState<{ id: string; running: boolean; frozenSeconds?: number; resumedAt?: number } | null>(null);
 
   const tasks = tasksQuery.data || [];
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;

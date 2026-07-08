@@ -115,14 +115,16 @@ const OPERATIONAL_END = 19 * 60;   // 19:00
 const TIMELINE_HEIGHT = (OPERATIONAL_END - OPERATIONAL_START) * MINUTE_HEIGHT;
 
 const ROLE_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
-  admin:         { label: 'ADMINISTRAÇÃO',  color: PULSE_ORANGE, icon: Monitor },
-  social_media:  { label: 'SOCIAL MEDIA',   color: '#22c55e',    icon: Users },
-  videomaker:    { label: 'VIDEOMAKER',      color: '#3b82f6',    icon: Camera },
-  editor:        { label: 'EDITOR',          color: '#8b5cf6',    icon: Film },
-  designer:      { label: 'DESIGNER',        color: '#f97316',    icon: Palette },
-  fotografo:     { label: 'FOTÓGRAFO',       color: '#ec4899',    icon: Image },
-  endomarketing: { label: 'ENDOMARKETING',   color: '#06b6d4',    icon: Megaphone },
-  parceiro:      { label: 'PARCEIRO',        color: '#14b8a6',    icon: Megaphone },
+  admin:           { label: 'ADMINISTRAÇÃO',   color: PULSE_ORANGE, icon: Monitor },
+  social_media:    { label: 'GERINDO REDES',   color: '#22c55e',    icon: Share2 },
+  videomaker:      { label: 'VIDEOMAKER',      color: '#3b82f6',    icon: Camera },
+  editor:          { label: 'EDITOR',          color: '#8b5cf6',    icon: Film },
+  designer:        { label: 'DESIGNER',        color: '#f97316',    icon: Palette },
+  fotografo:       { label: 'FOTÓGRAFO',       color: '#ec4899',    icon: Image },
+  endomarketing:   { label: 'ENDOMARKETING',   color: '#06b6d4',    icon: Megaphone },
+  parceiro:        { label: 'PARCEIRO',        color: '#14b8a6',    icon: Megaphone },
+  copywriter:      { label: 'CRIANDO IDEIAS',  color: '#eab308',    icon: PenTool },
+  gestor_projetos: { label: 'ORGANIZANDO',     color: '#0ea5e9',    icon: ClipboardList },
 };
 
 const ACTIVITY_LABELS: Record<string, string> = {

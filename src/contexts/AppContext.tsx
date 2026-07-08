@@ -226,7 +226,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     if (conflict) {
       const conflictClient = data.clients.find(c => c.id === conflict.clientId);
-      const clientLabel = conflictClient?.companyName || conflictClient?.displayName || conflict.prospectName || 'gravação';
+      const clientLabel = conflictClient?.companyName || conflict.prospectName || 'gravação';
       return {
         hasConflict: true,
         message: `Conflito com ${clientLabel} às ${conflict.startTime} (${conflict.status}, tipo ${conflict.type}). Duração ${duration}min + buffer ${BUFFER_BETWEEN_RECORDINGS}min.`,

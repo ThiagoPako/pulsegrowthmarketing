@@ -232,6 +232,47 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
     }
   };
 
+  /**
+   * Replace an already-attached art at index `idx` with a new uploaded file.
+   * Works even after the card was already sent — allows quick swap for a corrected version.
+   * If idx = -1, replaces the legacy single attachment_url.
+   */
+  const handleReplaceArt = async (idx: number, file: File) => {
+    setUploadingArt(true);
+    try {
+      const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
+      const currentUrls = ((task as any).attachment_urls as string[]) || [];
+      let newUrls: string[];
+      if (idx === -1) {
+        newUrls = [publicUrl];
+      } else {
+        newUrls = [...currentUrls];
+        newUrls[idx] = publicUrl;
+      }
+      setAttachmentUrls(newUrls);
+      setAttachmentUrl(newUrls[0] || publicUrl);
+      await updateTask.mutateAsync({
+        id: task.id,
+        attachment_urls: newUrls,
+        attachment_url: newUrls[0] || publicUrl,
+      } as any);
+      await addHistory.mutateAsync({
+        task_id: task.id,
+        action: `Arte ${idx === -1 ? '' : (idx + 1) + ' '}substituída por versão nova`,
+        details: file.name,
+        attachment_url: publicUrl,
+        user_id: user?.id,
+      });
+      toast.success('Arte substituída! ✨');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao substituir arte');
+    } finally {
+      setUploadingArt(false);
+    }
+  };
+
+
+
   const handleSendToClient = async () => {
     const fileUrl = attachmentUrl || task.attachment_url;
     

@@ -73,6 +73,12 @@ interface DesignActivityTask {
   designerAvatar?: string | null;
   timeOnTask: number;
   isPaused: boolean;
+  isLive?: boolean;
+  timerRunning?: boolean;
+  timerStartedAt?: string | null;
+  createdAt?: string | null;
+  priority?: string;
+  assignedTo?: string | null;
 }
 
 interface ScheduledPost {

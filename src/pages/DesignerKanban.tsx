@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef, DragEvent } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect, DragEvent } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn } from '@/hooks/useDesignTasks';
 import { useApp } from '@/contexts/AppContext';
@@ -7,7 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2, Play, Image as ImageIcon, Upload, Download, FileDown, Calendar, Undo2, Flame, Pause, AlertTriangle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2, Play, Image as ImageIcon, Upload, Download, FileDown, Calendar, Undo2, Flame, Pause, AlertTriangle, Timer } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DesignTaskCreateDialog from '@/components/designer/DesignTaskCreateDialog';
 import DesignTaskDetailSheet from '@/components/designer/DesignTaskDetailSheet';
@@ -125,6 +127,14 @@ export default function DesignerKanban() {
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [copyPreviewTask, setCopyPreviewTask] = useState<DesignTask | null>(null);
+  // Prompt para justificativa quando iniciar demanda com outra em execução
+  const [pausePrompt, setPausePrompt] = useState<null | {
+    taskToStart: DesignTask;
+    conflicting: DesignTask[];
+    onConfirm: (reason: string) => Promise<void>;
+  }>(null);
+  const [pauseReasonText, setPauseReasonText] = useState('');
+  const [pausePromptSubmitting, setPausePromptSubmitting] = useState(false);
 
   const tasks = tasksQuery.data || [];
   const error = tasksQuery.error as any;
@@ -270,7 +280,41 @@ export default function DesignerKanban() {
       extraFields.timer_running = false;
     }
 
-    try {
+    // Pausa as tarefas conflitantes (movendo pra fila_baixa_prioridade), acumulando o tempo
+    // e opcionalmente registrando o motivo (justificativa da designer).
+    const pauseConflicting = async (conflicting: DesignTask[], newTitle: string, reason: string) => {
+      for (const other of conflicting) {
+        const runSecs = other.timer_running && other.timer_started_at
+          ? Math.max(0, Math.floor((Date.now() - new Date(other.timer_started_at).getTime()) / 1000))
+          : 0;
+        const nowIso = new Date().toISOString();
+        const reasonLine = reason
+          ? `⏸ ${new Date().toLocaleString('pt-BR')} — Pausada para priorizar "${newTitle}": ${reason}`
+          : `⏸ ${new Date().toLocaleString('pt-BR')} — Pausada para priorizar "${newTitle}"`;
+        await updateTask.mutateAsync({
+          id: other.id,
+          kanban_column: 'fila_baixa_prioridade',
+          timer_running: false,
+          timer_started_at: null,
+          time_spent_seconds: (other.time_spent_seconds || 0) + runSecs,
+          observations: `${other.observations ? other.observations + '\n\n' : ''}${reasonLine}`,
+          updated_at: nowIso,
+        } as any);
+        await addHistory.mutateAsync({
+          task_id: other.id,
+          action: 'Pausada por prioridade',
+          details: reason
+            ? `Movida para Fila Baixa Prioridade porque "${newTitle}" entrou em execução.\nMotivo: ${reason}`
+            : `Movida para Fila Baixa Prioridade porque "${newTitle}" entrou em execução`,
+          user_id: user?.id,
+        });
+      }
+      if (conflicting.length > 0) {
+        toast.info(`${conflicting.length} tarefa(s) movida(s) para Fila Baixa Prioridade`);
+      }
+    };
+
+    const performStart = async (reason: string) => {
       if (renormalizeUpdates.length > 0) {
         await Promise.all(
           renormalizeUpdates
@@ -278,40 +322,34 @@ export default function DesignerKanban() {
             .map(u => supabase.from('design_tasks').update({ position: u.position }).eq('id', u.id))
         );
       }
-
-      // Regra: 1 tarefa ativa por vez. Ao mover para "executando",
-      // mover as outras da mesma designer que estejam em "executando" para "fila_baixa_prioridade".
-      if (targetColumn === 'executando') {
-        const designerId = task.assigned_to || user?.id;
-        if (designerId) {
-          const conflicting = tasks.filter(t =>
-            t.id !== taskId &&
-            t.kanban_column === 'executando' &&
-            t.assigned_to === designerId
-          );
-          for (const other of conflicting) {
-            await updateTask.mutateAsync({
-              id: other.id,
-              kanban_column: 'fila_baixa_prioridade',
-              timer_running: false,
-              timer_started_at: null,
-            } as any);
-            await addHistory.mutateAsync({
-              task_id: other.id,
-              action: 'Pausada por prioridade',
-              details: `Movida para Fila Baixa Prioridade porque "${task.title}" entrou em execução`,
-              user_id: user?.id,
-            });
-          }
-          if (conflicting.length > 0) {
-            toast.info(`${conflicting.length} tarefa(s) movida(s) para Fila Baixa Prioridade`);
-          }
-        }
-      }
-
+      const designerId = task.assigned_to || user?.id;
+      const conflicting = designerId
+        ? tasks.filter(t => t.id !== taskId && t.kanban_column === 'executando' && t.assigned_to === designerId)
+        : [];
+      if (conflicting.length > 0) await pauseConflicting(conflicting, task.title, reason);
       await updateTask.mutateAsync({ id: taskId, kanban_column: targetColumn, ...extraFields } as any);
       await addHistory.mutateAsync({ task_id: taskId, action: `Movido para ${targetLabel}`, user_id: user?.id });
       toast.success(`Tarefa movida para "${targetLabel}"`);
+    };
+
+    try {
+      // Se iniciar execução e já houver outra ativa → pedir justificativa antes
+      if (targetColumn === 'executando') {
+        const designerId = task.assigned_to || user?.id;
+        const conflicting = designerId
+          ? tasks.filter(t => t.id !== taskId && t.kanban_column === 'executando' && t.assigned_to === designerId)
+          : [];
+        if (conflicting.length > 0) {
+          setPauseReasonText('');
+          setPausePrompt({
+            taskToStart: task,
+            conflicting,
+            onConfirm: async (reason) => { await performStart(reason); },
+          });
+          return;
+        }
+      }
+      await performStart('');
     } catch (err: any) {
       toast.error(err.message || 'Erro ao mover tarefa');
     }
@@ -323,60 +361,117 @@ export default function DesignerKanban() {
     setDragOverTaskId(null);
   }, []);
 
+  const pauseConflictingTasksExt = async (conflicting: DesignTask[], newTitle: string, reason: string) => {
+    for (const other of conflicting) {
+      const runSecs = other.timer_running && other.timer_started_at
+        ? Math.max(0, Math.floor((Date.now() - new Date(other.timer_started_at).getTime()) / 1000))
+        : 0;
+      const reasonLine = reason
+        ? `⏸ ${new Date().toLocaleString('pt-BR')} — Pausada para priorizar "${newTitle}": ${reason}`
+        : `⏸ ${new Date().toLocaleString('pt-BR')} — Pausada para priorizar "${newTitle}"`;
+      await updateTask.mutateAsync({
+        id: other.id,
+        kanban_column: 'fila_baixa_prioridade',
+        timer_running: false,
+        timer_started_at: null,
+        time_spent_seconds: (other.time_spent_seconds || 0) + runSecs,
+        observations: `${other.observations ? other.observations + '\n\n' : ''}${reasonLine}`,
+      } as any);
+      await addHistory.mutateAsync({
+        task_id: other.id,
+        action: 'Pausada por prioridade',
+        details: reason
+          ? `Movida para Fila Baixa Prioridade porque "${newTitle}" entrou em execução.\nMotivo: ${reason}`
+          : `Movida para Fila Baixa Prioridade porque "${newTitle}" entrou em execução`,
+        user_id: user?.id,
+      });
+    }
+    if (conflicting.length > 0) toast.info(`${conflicting.length} tarefa(s) pausada(s) na Fila Baixa Prioridade`);
+  };
+
   const handleQuickStart = async (task: DesignTask) => {
-    try {
-      const now = new Date().toISOString();
-      const designerId = user?.id || task.assigned_to;
+    const now = new Date().toISOString();
+    const designerId = user?.id || task.assigned_to;
+    const conflicting = designerId
+      ? tasks.filter(t => t.id !== task.id && t.kanban_column === 'executando' && t.assigned_to === designerId)
+      : [];
 
-      // Regra: 1 tarefa ativa por vez. Pausa qualquer outra em execução da mesma designer.
-      if (designerId) {
-        const conflicting = tasks.filter(t =>
-          t.id !== task.id &&
-          t.kanban_column === 'executando' &&
-          t.assigned_to === designerId
-        );
-        for (const other of conflicting) {
-          await updateTask.mutateAsync({
-            id: other.id,
-            kanban_column: 'fila_baixa_prioridade',
-            timer_running: false,
-            timer_started_at: null,
-          } as any);
-          await addHistory.mutateAsync({
-            task_id: other.id,
-            action: 'Pausada por prioridade',
-            details: `Movida para Fila Baixa Prioridade porque "${task.title}" entrou em execução`,
-            user_id: user?.id,
-          });
-        }
-        if (conflicting.length > 0) {
-          toast.info(`${conflicting.length} tarefa(s) pausada(s) na Fila Baixa Prioridade`);
-        }
+    const doStart = async () => {
+      try {
+        await updateTask.mutateAsync({
+          id: task.id,
+          kanban_column: 'executando',
+          started_at: task.started_at || now,
+          assigned_to: user?.id || task.assigned_to,
+          timer_running: true,
+          timer_started_at: now,
+        } as any);
+        await addHistory.mutateAsync({ task_id: task.id, action: 'Iniciou execução', user_id: user?.id });
+        toast.success('Tarefa iniciada! 🎨');
+      } catch (err: any) {
+        toast.error(err.message || 'Erro ao iniciar');
       }
+    };
 
+    if (conflicting.length > 0) {
+      setPauseReasonText('');
+      setPausePrompt({
+        taskToStart: task,
+        conflicting,
+        onConfirm: async (reason) => {
+          await pauseConflictingTasksExt(conflicting, task.title, reason);
+          await doStart();
+        },
+      });
+      return;
+    }
+    await doStart();
+  };
+
+  const handlePauseTask = async (task: DesignTask) => {
+    try {
+      const runSecs = task.timer_running && task.timer_started_at
+        ? Math.max(0, Math.floor((Date.now() - new Date(task.timer_started_at).getTime()) / 1000))
+        : 0;
       await updateTask.mutateAsync({
         id: task.id,
-        kanban_column: 'executando',
-        started_at: task.started_at || now,
-        assigned_to: user?.id || task.assigned_to,
-        timer_running: true,
-        timer_started_at: now,
+        timer_running: false,
+        timer_started_at: null,
+        time_spent_seconds: (task.time_spent_seconds || 0) + runSecs,
       } as any);
-      await addHistory.mutateAsync({ task_id: task.id, action: 'Iniciou execução', user_id: user?.id });
-      toast.success('Tarefa iniciada! 🎨');
+      await addHistory.mutateAsync({ task_id: task.id, action: 'Cronômetro pausado', user_id: user?.id });
+      toast.success('Tarefa pausada. Retome quando voltar 💜');
     } catch (err: any) {
-      toast.error(err.message || 'Erro ao iniciar');
+      toast.error(err.message || 'Erro ao pausar');
+    }
+  };
+
+  const handleResumeTask = async (task: DesignTask) => {
+    try {
+      await updateTask.mutateAsync({
+        id: task.id,
+        timer_running: true,
+        timer_started_at: new Date().toISOString(),
+      } as any);
+      await addHistory.mutateAsync({ task_id: task.id, action: 'Cronômetro retomado', user_id: user?.id });
+      toast.success('Cronômetro retomado ▶');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao retomar');
     }
   };
 
   const handleReturnToQueue = async (task: DesignTask) => {
     if (!window.confirm(`Devolver "${task.title}" para Nova Tarefa? O cronômetro será pausado.`)) return;
     try {
+      const runSecs = task.timer_running && task.timer_started_at
+        ? Math.max(0, Math.floor((Date.now() - new Date(task.timer_started_at).getTime()) / 1000))
+        : 0;
       await updateTask.mutateAsync({
         id: task.id,
         kanban_column: 'nova_tarefa',
         timer_running: false,
         timer_started_at: null,
+        time_spent_seconds: (task.time_spent_seconds || 0) + runSecs,
       } as any);
       await addHistory.mutateAsync({
         task_id: task.id,
@@ -537,6 +632,8 @@ export default function DesignerKanban() {
                             canDelete={canDelete}
                             onQuickStart={(col.key === 'nova_tarefa' || col.key === 'fila_baixa_prioridade') ? () => handleQuickStart(task) : undefined}
                             onReturnToQueue={col.key === 'executando' ? () => handleReturnToQueue(task) : undefined}
+                            onPause={col.key === 'executando' && task.timer_running ? () => handlePauseTask(task) : undefined}
+                            onResume={col.key === 'executando' && !task.timer_running ? () => handleResumeTask(task) : undefined}
                             onDragStart={e => handleDragStart(e, task)}
                             onDragEnd={handleDragEnd}
                           />
@@ -638,6 +735,113 @@ export default function DesignerKanban() {
       {selectedTask && (
         <DesignTaskDetailSheet task={selectedTask} open={!!selectedTask} onOpenChange={o => !o && setSelectedTaskId(null)} />
       )}
+
+      {/* Diálogo de justificativa ao mover tarefa ativa para Fila Baixa Prioridade */}
+      <Dialog
+        open={!!pausePrompt}
+        onOpenChange={(o) => {
+          if (!o && !pausePromptSubmitting) {
+            setPausePrompt(null);
+            setPauseReasonText('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Pause size={16} className="text-amber-500" />
+              Pausar tarefa atual?
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Você já está com {pausePrompt?.conflicting.length || 0} demanda(s) em execução. Ao iniciar
+              <span className="font-semibold text-foreground"> “{pausePrompt?.taskToStart.title}”</span>,
+              a{pausePrompt && pausePrompt.conflicting.length > 1 ? 's' : ''} atual{pausePrompt && pausePrompt.conflicting.length > 1 ? 'is' : ''} irá para <b>Fila Baixa Prioridade</b>.
+              Conte o motivo pra ficar registrado no histórico e ajudar a gestão a acompanhar.
+            </DialogDescription>
+          </DialogHeader>
+
+          {pausePrompt && (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-amber-200/60 bg-amber-50/50 dark:bg-amber-950/20 p-2.5 space-y-1">
+                <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 uppercase tracking-wider">Será pausada:</p>
+                {pausePrompt.conflicting.map(c => (
+                  <div key={c.id} className="flex items-center gap-2 text-xs">
+                    <ClientLogo client={{ companyName: c.clients?.company_name || '', color: c.clients?.color || '217 91% 60%', logoUrl: c.clients?.logo_url }} size="sm" />
+                    <span className="truncate">
+                      <span className="text-muted-foreground">{c.clients?.company_name || '—'} · </span>
+                      <span className="font-medium">{c.title}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Motivo <span className="text-destructive">*</span>
+                </label>
+                <Textarea
+                  value={pauseReasonText}
+                  onChange={e => setPauseReasonText(e.target.value)}
+                  rows={3}
+                  placeholder="Ex.: Cliente enviou material urgente para amanhã, preciso priorizar."
+                  className="mt-1 text-xs"
+                  autoFocus
+                />
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {[
+                    'Cliente pediu urgência',
+                    'Aguardando material do cliente',
+                    'SLA da nova é mais curto',
+                    'Bloqueada por dúvida',
+                  ].map(q => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => setPauseReasonText(q)}
+                      className="text-[10px] px-2 py-1 rounded-full bg-muted hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => { setPausePrompt(null); setPauseReasonText(''); }}
+              disabled={pausePromptSubmitting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5"
+              disabled={!pauseReasonText.trim() || pausePromptSubmitting}
+              onClick={async () => {
+                if (!pausePrompt) return;
+                const reason = pauseReasonText.trim();
+                if (!reason) { toast.error('Descreva o motivo da pausa'); return; }
+                setPausePromptSubmitting(true);
+                try {
+                  await pausePrompt.onConfirm(reason);
+                  setPausePrompt(null);
+                  setPauseReasonText('');
+                } catch (err: any) {
+                  toast.error(err.message || 'Erro ao pausar');
+                } finally {
+                  setPausePromptSubmitting(false);
+                }
+              }}
+            >
+              {pausePromptSubmitting ? 'Aplicando...' : <><Pause size={12} fill="currentColor" /> Pausar e iniciar nova</>}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -847,11 +1051,33 @@ interface TaskCardProps {
   canDelete: boolean;
   onQuickStart?: () => void;
   onReturnToQueue?: () => void;
+  onPause?: () => void;
+  onResume?: () => void;
   onDragStart: (e: DragEvent<HTMLDivElement>) => void;
   onDragEnd: () => void;
 }
 
-function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDetail, onDelete, canDelete, onQuickStart, onReturnToQueue, onDragStart, onDragEnd }: TaskCardProps) {
+function LiveTimer({ startedAt, baseSeconds, running }: { startedAt: string | null; baseSeconds: number; running: boolean }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!running || !startedAt) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [running, startedAt]);
+  const extra = running && startedAt ? Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000)) : 0;
+  const total = (baseSeconds || 0) + extra;
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return (
+    <span className="font-mono tabular-nums text-[10px] font-bold">
+      {h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`}
+    </span>
+  );
+}
+
+function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDetail, onDelete, canDelete, onQuickStart, onReturnToQueue, onPause, onResume, onDragStart, onDragEnd }: TaskCardProps) {
   const priorityCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.media;
   
   const COMPLETED_COLS = ['em_analise', 'enviar_cliente', 'aprovado'];
@@ -926,8 +1152,15 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
             <Calendar size={10} /> {formattedDueDate}
           </Badge>
         )}
-        {task.timer_running && (
-          <Badge variant="secondary" className="text-[10px] gap-0.5 animate-pulse"><Clock size={10} /> Em andamento</Badge>
+        {(task.kanban_column === 'executando' || (task.time_spent_seconds || 0) > 0) && (
+          <Badge
+            variant="secondary"
+            className={`text-[10px] gap-1 ${task.timer_running ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 animate-pulse' : ''}`}
+            title={task.timer_running ? 'Cronômetro rodando' : 'Cronômetro pausado'}
+          >
+            <Timer size={10} />
+            <LiveTimer startedAt={task.timer_started_at} baseSeconds={task.time_spent_seconds || 0} running={!!task.timer_running} />
+          </Badge>
         )}
         {task.kanban_column === 'fila_baixa_prioridade' && (
           <Badge className="text-[10px] gap-0.5 bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
@@ -992,6 +1225,23 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
           <Play size={12} fill="currentColor" /> {task.kanban_column === 'fila_baixa_prioridade' ? 'Retomar Tarefa' : 'Iniciar Tarefa'}
         </Button>
       )}
+
+      {/* Pause / Resume enquanto está em execução */}
+      {(onPause || onResume) && (
+        <Button
+          size="sm"
+          className={`w-full h-8 text-xs gap-1.5 rounded-lg ${
+            onPause
+              ? 'bg-amber-500 hover:bg-amber-600 text-white'
+              : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+          }`}
+          onClick={(e) => { e.stopPropagation(); (onPause || onResume)?.(); }}
+          title={onPause ? 'Pausar cronômetro' : 'Retomar cronômetro'}
+        >
+          {onPause ? <><Pause size={12} fill="currentColor" /> Pausar</> : <><Play size={12} fill="currentColor" /> Retomar</>}
+        </Button>
+      )}
+
 
       {/* Return to queue button for executando */}
       {onReturnToQueue && (

@@ -735,6 +735,113 @@ export default function DesignerKanban() {
       {selectedTask && (
         <DesignTaskDetailSheet task={selectedTask} open={!!selectedTask} onOpenChange={o => !o && setSelectedTaskId(null)} />
       )}
+
+      {/* Diálogo de justificativa ao mover tarefa ativa para Fila Baixa Prioridade */}
+      <Dialog
+        open={!!pausePrompt}
+        onOpenChange={(o) => {
+          if (!o && !pausePromptSubmitting) {
+            setPausePrompt(null);
+            setPauseReasonText('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Pause size={16} className="text-amber-500" />
+              Pausar tarefa atual?
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Você já está com {pausePrompt?.conflicting.length || 0} demanda(s) em execução. Ao iniciar
+              <span className="font-semibold text-foreground"> “{pausePrompt?.taskToStart.title}”</span>,
+              a{pausePrompt && pausePrompt.conflicting.length > 1 ? 's' : ''} atual{pausePrompt && pausePrompt.conflicting.length > 1 ? 'is' : ''} irá para <b>Fila Baixa Prioridade</b>.
+              Conte o motivo pra ficar registrado no histórico e ajudar a gestão a acompanhar.
+            </DialogDescription>
+          </DialogHeader>
+
+          {pausePrompt && (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-amber-200/60 bg-amber-50/50 dark:bg-amber-950/20 p-2.5 space-y-1">
+                <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 uppercase tracking-wider">Será pausada:</p>
+                {pausePrompt.conflicting.map(c => (
+                  <div key={c.id} className="flex items-center gap-2 text-xs">
+                    <ClientLogo client={{ companyName: c.clients?.company_name || '', color: c.clients?.color || '217 91% 60%', logoUrl: c.clients?.logo_url }} size="sm" />
+                    <span className="truncate">
+                      <span className="text-muted-foreground">{c.clients?.company_name || '—'} · </span>
+                      <span className="font-medium">{c.title}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Motivo <span className="text-destructive">*</span>
+                </label>
+                <Textarea
+                  value={pauseReasonText}
+                  onChange={e => setPauseReasonText(e.target.value)}
+                  rows={3}
+                  placeholder="Ex.: Cliente enviou material urgente para amanhã, preciso priorizar."
+                  className="mt-1 text-xs"
+                  autoFocus
+                />
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {[
+                    'Cliente pediu urgência',
+                    'Aguardando material do cliente',
+                    'SLA da nova é mais curto',
+                    'Bloqueada por dúvida',
+                  ].map(q => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => setPauseReasonText(q)}
+                      className="text-[10px] px-2 py-1 rounded-full bg-muted hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => { setPausePrompt(null); setPauseReasonText(''); }}
+              disabled={pausePromptSubmitting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5"
+              disabled={!pauseReasonText.trim() || pausePromptSubmitting}
+              onClick={async () => {
+                if (!pausePrompt) return;
+                const reason = pauseReasonText.trim();
+                if (!reason) { toast.error('Descreva o motivo da pausa'); return; }
+                setPausePromptSubmitting(true);
+                try {
+                  await pausePrompt.onConfirm(reason);
+                  setPausePrompt(null);
+                  setPauseReasonText('');
+                } catch (err: any) {
+                  toast.error(err.message || 'Erro ao pausar');
+                } finally {
+                  setPausePromptSubmitting(false);
+                }
+              }}
+            >
+              {pausePromptSubmitting ? 'Aplicando...' : <><Pause size={12} fill="currentColor" /> Pausar e iniciar nova</>}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

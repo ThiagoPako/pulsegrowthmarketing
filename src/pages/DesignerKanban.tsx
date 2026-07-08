@@ -127,6 +127,14 @@ export default function DesignerKanban() {
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [copyPreviewTask, setCopyPreviewTask] = useState<DesignTask | null>(null);
+  // Prompt para justificativa quando iniciar demanda com outra em execução
+  const [pausePrompt, setPausePrompt] = useState<null | {
+    taskToStart: DesignTask;
+    conflicting: DesignTask[];
+    onConfirm: (reason: string) => Promise<void>;
+  }>(null);
+  const [pauseReasonText, setPauseReasonText] = useState('');
+  const [pausePromptSubmitting, setPausePromptSubmitting] = useState(false);
 
   const tasks = tasksQuery.data || [];
   const error = tasksQuery.error as any;

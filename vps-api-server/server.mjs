@@ -6771,44 +6771,52 @@ app.get('/api/tv-dashboard', async (req, res) => {
       };
     });
 
-    // 9. Get today's scheduled posts (optional; tolerate legacy scheduled_time formats)
+    // 9. Get today's scheduled posts + week ahead (reels only)
     let todayPosts = [];
+    let weekPosts = [];
     try {
       const { rows: scheduledPosts } = await pool.query(`
-        SELECT smd.id, smd.title, smd.content_type, smd.platform, smd.status,
-               smd.scheduled_time, smd.delivered_at, smd.posted_at,
-               c.company_name AS client_name, c.logo_url AS client_logo, c.color AS client_color
-        FROM social_media_deliveries smd
-        LEFT JOIN clients c ON c.id = smd.client_id
-        WHERE smd.content_type = 'reels'
-          AND (
-            smd.delivered_at = $1::date
-            OR smd.posted_at = $1::date
-            OR (
-              smd.scheduled_time IS NOT NULL
-              AND smd.scheduled_time ~ '^\\d{4}-\\d{2}-\\d{2}'
-              AND split_part(replace(smd.scheduled_time, 'T', ' '), ' ', 1)::date = $1::date
-            )
-          )
-        ORDER BY CASE
-          WHEN smd.scheduled_time ~ '^\\d{2}:\\d{2}' THEN smd.scheduled_time
-          WHEN smd.scheduled_time ~ '^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}' THEN substring(replace(smd.scheduled_time, 'T', ' ') from 12 for 5)
-          ELSE '23:59'
-        END ASC,
-        smd.created_at ASC
+        WITH parsed AS (
+          SELECT smd.id, smd.title, smd.content_type, smd.platform, smd.status,
+                 smd.scheduled_time, smd.delivered_at, smd.posted_at,
+                 c.company_name AS client_name, c.logo_url AS client_logo, c.color AS client_color,
+                 CASE
+                   WHEN smd.scheduled_time ~ '^\\d{4}-\\d{2}-\\d{2}'
+                     THEN split_part(replace(smd.scheduled_time, 'T', ' '), ' ', 1)::date
+                   WHEN smd.delivered_at IS NOT NULL THEN smd.delivered_at
+                   WHEN smd.posted_at IS NOT NULL THEN smd.posted_at
+                   ELSE NULL
+                 END AS post_date,
+                 CASE
+                   WHEN smd.scheduled_time ~ '^\\d{2}:\\d{2}$' THEN smd.scheduled_time
+                   WHEN smd.scheduled_time ~ '^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}'
+                     THEN substring(replace(smd.scheduled_time, 'T', ' ') from 12 for 5)
+                   ELSE NULL
+                 END AS post_time
+          FROM social_media_deliveries smd
+          LEFT JOIN clients c ON c.id = smd.client_id
+          WHERE smd.content_type = 'reels'
+        )
+        SELECT * FROM parsed
+        WHERE post_date IS NOT NULL
+          AND post_date BETWEEN $1::date AND ($1::date + INTERVAL '6 days')
+        ORDER BY post_date ASC, post_time ASC NULLS LAST
       `, [today]);
 
-      todayPosts = (scheduledPosts || []).map((p) => ({
+      weekPosts = (scheduledPosts || []).map((p) => ({
         id: p?.id || crypto.randomUUID(),
         title: p?.title || 'Sem título',
         contentType: p?.content_type || 'conteúdo',
         platform: p?.platform || null,
         status: p?.status || 'pendente',
-        scheduledTime: p?.scheduled_time || p?.delivered_at || null,
+        scheduledTime: p?.post_time || null,
+        scheduledDate: p?.post_date ? new Date(p.post_date).toISOString().slice(0, 10) : null,
         clientName: p?.client_name || 'Cliente',
         clientLogo: p?.client_logo || null,
         clientColor: p?.client_color || null,
       }));
+
+      todayPosts = weekPosts.filter(p => p.scheduledDate === today);
     } catch (error) {
       console.warn('[tv-dashboard] Failed to load social_media_deliveries:', error?.message || error);
     }
@@ -6821,10 +6829,10 @@ app.get('/api/tv-dashboard', async (req, res) => {
     // Build list of recording IDs that are actively being recorded
     const activeRecordingIds = (activeRecs || []).map(r => r?.recording_id).filter(Boolean);
 
-    res.json({ members, todaySchedule, editingPipeline, designPipeline, todayPosts, seasonalSlides, activeRecordingIds, updatedAt: new Date().toISOString() });
+    res.json({ members, todaySchedule, editingPipeline, designPipeline, todayPosts, weekPosts, seasonalSlides, activeRecordingIds, updatedAt: new Date().toISOString() });
   } catch (err) {
     console.error('[tv-dashboard] Error at stage:', stage, err);
-    res.json({ members: [], todaySchedule: [], editingPipeline: [], designPipeline: [], todayPosts: [], seasonalSlides: [], activeRecordingIds: [], updatedAt: new Date().toISOString(), error: 'fallback' });
+    res.json({ members: [], todaySchedule: [], editingPipeline: [], designPipeline: [], todayPosts: [], weekPosts: [], seasonalSlides: [], activeRecordingIds: [], updatedAt: new Date().toISOString(), error: 'fallback' });
   }
 });
 

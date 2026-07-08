@@ -1,5 +1,5 @@
 // Last Updated: 2026-05-20T14:45:00Z
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform, animate, useReducedMotion } from 'framer-motion';
 import {
   Monitor, Clock, Coffee, Camera, Film, Palette, Megaphone, Image, Users,
@@ -90,6 +90,7 @@ interface ScheduledPost {
   platform?: string;
   status: string;
   scheduledTime?: string;
+  scheduledDate?: string;
   clientName: string;
   clientLogo?: string | null;
   clientColor?: string | null;
@@ -609,10 +610,27 @@ function RotatingScheduleCard({ items, isLive, height }: { items: ScheduleItem[]
 }
 
 /* ─── Compact ordered schedule row ──────────────────────── */
-function ScheduleRow({ item, isLive }: { item: ScheduleItem; isLive: boolean }) {
+function ScheduleRow({ item, isLive, nowMinutes, recordingDurationMin }: { item: ScheduleItem; isLive: boolean; nowMinutes: number; recordingDurationMin: number }) {
   const isDone = item.status === 'concluida';
   const isCancelled = item.status === 'cancelada';
   const isRescheduled = item.status === 'remarcada' || item.status === 'remarcado';
+  const isConfirmed = (item.confirmationStatus || '').toLowerCase() === 'confirmado' || (item.confirmationStatus || '').toLowerCase() === 'confirmada';
+  const isPending = (item.confirmationStatus || '').toLowerCase() === 'pendente';
+
+  // Time calculations
+  const [sh, sm] = (item.startTime || '00:00').split(':').map(Number);
+  const startMin = (sh || 0) * 60 + (sm || 0);
+  let endMin = startMin + recordingDurationMin;
+  if (item.endTime) {
+    const [eh, em] = item.endTime.split(':').map(Number);
+    endMin = (eh || 0) * 60 + (em || 0);
+  }
+  const minutesUntil = startMin - nowMinutes;
+  const isUpcomingSoon = !isLive && !isDone && !isCancelled && minutesUntil > 0 && minutesUntil <= 60;
+  const isPast = !isLive && !isDone && !isCancelled && endMin < nowMinutes;
+
+  // Progress bar for live recording
+  const liveProgress = isLive ? Math.min(100, Math.max(0, ((nowMinutes - startMin) / (endMin - startMin)) * 100)) : 0;
 
   let statusLabel = 'Aguardando';
   let statusColor = 'rgba(255,255,255,0.5)';
@@ -621,30 +639,49 @@ function ScheduleRow({ item, isLive }: { item: ScheduleItem; isLive: boolean }) 
   else if (isDone) { statusLabel = 'Concluída'; statusColor = '#22c55e'; statusBg = 'rgba(34,197,94,0.15)'; }
   else if (isCancelled) { statusLabel = 'Cancelada'; statusColor = '#ef4444'; statusBg = 'rgba(239,68,68,0.15)'; }
   else if (isRescheduled) { statusLabel = 'Remarcada'; statusColor = '#f59e0b'; statusBg = 'rgba(245,158,11,0.15)'; }
+  else if (isPast) { statusLabel = 'Atrasada'; statusColor = '#ef4444'; statusBg = 'rgba(239,68,68,0.12)'; }
+  else if (isUpcomingSoon) { statusLabel = minutesUntil <= 5 ? 'Agora' : `Em ${minutesUntil}min`; statusColor = PULSE_ORANGE; statusBg = `${PULSE_ORANGE}18`; }
 
-  const borderColor = isLive ? `${PULSE_ORANGE}55` : isCancelled ? 'rgba(239,68,68,0.2)' : isDone ? 'rgba(34,197,94,0.2)' : isRescheduled ? 'rgba(245,158,11,0.25)' : 'rgba(255,255,255,0.06)';
+  const borderColor = isLive ? `${PULSE_ORANGE}55` : isCancelled ? 'rgba(239,68,68,0.2)' : isDone ? 'rgba(34,197,94,0.2)' : isRescheduled ? 'rgba(245,158,11,0.25)' : isUpcomingSoon ? `${PULSE_ORANGE}30` : 'rgba(255,255,255,0.06)';
 
   return (
-    <div
-      className="relative flex items-center gap-2 rounded-lg px-2 py-1.5 border"
+    <motion.div
+      className="relative flex items-center gap-2 rounded-lg px-2 py-1.5 border overflow-hidden"
+      initial={{ opacity: 0, x: -6 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.2 }}
       style={{
         borderColor,
-        background: isLive ? `linear-gradient(90deg, ${PULSE_ORANGE}10, transparent)` : PULSE_CARD,
+        background: isLive ? `linear-gradient(90deg, ${PULSE_ORANGE}14, transparent 60%)` : PULSE_CARD,
         opacity: isCancelled ? 0.5 : 1,
       }}
     >
+      {/* Live progress bar */}
+      {isLive && (
+        <div className="absolute inset-x-0 bottom-0 h-[2px] bg-white/5 overflow-hidden">
+          <motion.div
+            className="h-full"
+            style={{ background: `linear-gradient(90deg, ${PULSE_ORANGE}, #fbbf24)` }}
+            initial={{ width: 0 }}
+            animate={{ width: `${liveProgress}%` }}
+            transition={{ duration: 0.6 }}
+          />
+        </div>
+      )}
+
       {/* Time */}
-      <div className="flex flex-col items-center justify-center min-w-[46px]">
-        <span className="text-sm font-mono font-bold tabular-nums text-white/90">{item.startTime}</span>
-        {item.endTime && (
-          <span className="text-[9px] font-mono text-white/25 tabular-nums">{item.endTime}</span>
-        )}
+      <div className="flex flex-col items-center justify-center min-w-[48px] py-0.5 rounded-md"
+        style={{ background: isLive ? `${PULSE_ORANGE}12` : 'rgba(255,255,255,0.02)' }}>
+        <span className="text-sm font-mono font-bold tabular-nums text-white/90 leading-none">{item.startTime}</span>
+        <span className="text-[9px] font-mono text-white/25 tabular-nums mt-0.5">
+          {item.endTime || `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`}
+        </span>
       </div>
 
       {/* Client logo */}
-      <div className="flex-shrink-0 w-7 h-7 rounded-md overflow-hidden border flex items-center justify-center"
+      <div className="flex-shrink-0 w-8 h-8 rounded-md overflow-hidden border flex items-center justify-center"
         style={{
-          borderColor: item.clientColor ? `hsl(${item.clientColor} / 0.3)` : 'rgba(255,255,255,0.08)',
+          borderColor: item.clientColor ? `hsl(${item.clientColor} / 0.35)` : 'rgba(255,255,255,0.08)',
           backgroundColor: item.clientColor ? `hsl(${item.clientColor} / 0.1)` : 'rgba(255,255,255,0.03)',
         }}>
         {item.clientLogo ? (
@@ -656,18 +693,37 @@ function ScheduleRow({ item, isLive }: { item: ScheduleItem; isLive: boolean }) 
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <p className="text-[12px] font-semibold text-white truncate leading-tight">{item.clientName}</p>
-        <div className="flex items-center gap-1.5 mt-0.5">
+        <div className="flex items-center gap-1.5">
+          <p className="text-[12px] font-semibold text-white truncate leading-tight">{item.clientName}</p>
+          {isConfirmed && (
+            <span title="Cliente confirmou" className="inline-flex items-center justify-center w-3 h-3 rounded-full bg-emerald-500/20 flex-shrink-0">
+              <span className="w-1 h-1 rounded-full bg-emerald-400" />
+            </span>
+          )}
+          {isPending && !isLive && !isDone && (
+            <span title="Aguardando confirmação" className="inline-flex items-center justify-center w-3 h-3 rounded-full bg-amber-500/20 flex-shrink-0">
+              <span className="w-1 h-1 rounded-full bg-amber-400" />
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
           {item.type === 'event' && (
             <span className="text-[8px] font-bold uppercase px-1 py-px rounded" style={{ backgroundColor: `${PULSE_ORANGE}15`, color: PULSE_ORANGE }}>Evento</span>
           )}
           {item.recordingType === 'extra' && <span className="text-[8px] font-bold uppercase px-1 py-px rounded bg-violet-500/10 text-violet-300">Extra</span>}
           {item.recordingType === 'backup' && <span className="text-[8px] font-bold uppercase px-1 py-px rounded bg-amber-500/10 text-amber-300">Backup</span>}
           {item.videomakerName && (
-            <span className="text-[10px] text-white/40 truncate">
-              <Camera className="w-2.5 h-2.5 inline mr-0.5 -mt-0.5 text-blue-400/60" />
+            <span className="inline-flex items-center gap-1 text-[10px] text-white/45 truncate">
+              {item.videomakerAvatar ? (
+                <img src={item.videomakerAvatar} alt="" className="w-3.5 h-3.5 rounded-full object-cover" />
+              ) : (
+                <Camera className="w-2.5 h-2.5 text-blue-400/70" />
+              )}
               {item.videomakerName.split(' ')[0]}
             </span>
+          )}
+          {item.address && item.type === 'event' && (
+            <span className="text-[9px] text-white/30 truncate">📍 {item.address}</span>
           )}
         </div>
       </div>
@@ -680,6 +736,21 @@ function ScheduleRow({ item, isLive }: { item: ScheduleItem; isLive: boolean }) 
         )}
         <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: statusColor }}>{statusLabel}</span>
       </div>
+    </motion.div>
+  );
+}
+
+/* ─── Now Divider (linha "AGORA" no cronograma) ─────────── */
+function NowDivider({ time }: { time: string }) {
+  return (
+    <div className="flex items-center gap-2 py-0.5">
+      <div className="flex-shrink-0 flex items-center gap-1.5 px-2 py-0.5 rounded-full"
+        style={{ background: `linear-gradient(90deg, ${PULSE_ORANGE}, ${PULSE_ORANGE}88)` }}>
+        <motion.div className="w-1.5 h-1.5 rounded-full bg-white"
+          animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 1.2, repeat: Infinity }} />
+        <span className="text-[9px] font-black uppercase tracking-wider text-white">Agora {time}</span>
+      </div>
+      <div className="flex-1 h-px" style={{ background: `linear-gradient(90deg, ${PULSE_ORANGE}55, transparent)` }} />
     </div>
   );
 }
@@ -1299,6 +1370,7 @@ export default function TvDashboard() {
   const [editingPipeline, setEditingPipeline] = useState<EditingTask[]>([]);
   const [designPipeline, setDesignPipeline] = useState<DesignActivityTask[]>([]);
   const [todayPosts, setTodayPosts] = useState<ScheduledPost[]>([]);
+  const [weekPosts, setWeekPosts] = useState<ScheduledPost[]>([]);
   const [activeRecordingIds, setActiveRecordingIds] = useState<string[]>([]);
   const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());
@@ -1324,6 +1396,7 @@ export default function TvDashboard() {
       setDesignPipeline(data.designPipeline || []);
       setActiveRecordingIds(data.activeRecordingIds || []);
       setTodayPosts((data.todayPosts || []).filter((p: ScheduledPost) => (p.contentType || '').toLowerCase() === 'reels'));
+      setWeekPosts((data.weekPosts || []).filter((p: ScheduledPost) => (p.contentType || '').toLowerCase() === 'reels'));
       if (Array.isArray(data.seasonalSlides) && data.seasonalSlides.length > 0) {
         setSeasonalSlides(data.seasonalSlides);
       }
@@ -1629,49 +1702,128 @@ export default function TvDashboard() {
           {/* CENTER COLUMN: Schedule + Posts */}
           <div className="col-span-5 space-y-2.5 overflow-y-auto scrollbar-hide px-1">
             {/* Schedule */}
-            {visibility.show_schedule && (
-              <div className="relative">
-                <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${schedule.length} gravações`} />
-                {schedule.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {[...schedule]
-                      .sort((a, b) => a.startTime.localeCompare(b.startTime))
-                      .map(item => {
+            {visibility.show_schedule && (() => {
+              const sorted = [...schedule].sort((a, b) => a.startTime.localeCompare(b.startTime));
+              const nowMin = clock.getHours() * 60 + clock.getMinutes();
+              const nowLabel = `${String(clock.getHours()).padStart(2, '0')}:${String(clock.getMinutes()).padStart(2, '0')}`;
+              const done = sorted.filter(s => s.status === 'concluida').length;
+              const live = sorted.filter(s => activeRecordingIds.includes(s.id) || s.status === 'recording').length;
+              const upcoming = sorted.filter(s => {
+                if (s.status === 'concluida' || s.status === 'cancelada') return false;
+                const [h, m] = (s.startTime || '00:00').split(':').map(Number);
+                return (h * 60 + m) >= nowMin;
+              }).length;
+              // find first upcoming index for NowDivider
+              let nowDividerIdx = -1;
+              for (let i = 0; i < sorted.length; i++) {
+                const [h, m] = (sorted[i].startTime || '00:00').split(':').map(Number);
+                if (h * 60 + m >= nowMin && sorted[i].status !== 'cancelada' && sorted[i].status !== 'concluida') {
+                  nowDividerIdx = i;
+                  break;
+                }
+              }
+              return (
+                <div className="relative">
+                  <SectionHeader icon={CalendarDays} title="Gravações do Dia" badge={`${sorted.length} agendadas`} />
+                  {sorted.length > 0 && (
+                    <div className="flex items-center gap-2 mb-2 text-[9px] uppercase font-bold tracking-wider">
+                      {live > 0 && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded" style={{ backgroundColor: `${PULSE_ORANGE}18`, color: PULSE_ORANGE }}>
+                          <span className="w-1 h-1 rounded-full bg-current animate-pulse" /> {live} ao vivo
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/12 text-emerald-300">✓ {done} feitas</span>
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/5 text-white/50">↻ {upcoming} restantes</span>
+                    </div>
+                  )}
+                  {sorted.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {sorted.map((item, idx) => {
                         const isLive = activeRecordingIds.includes(item.id) || item.status === 'recording';
                         return (
-                          <ScheduleRow key={item.id} item={item} isLive={isLive} />
+                          <Fragment key={item.id}>
+                            {idx === nowDividerIdx && !isLive && <NowDivider time={nowLabel} />}
+                            <ScheduleRow item={item} isLive={isLive} nowMinutes={nowMin} recordingDurationMin={90} />
+                          </Fragment>
                         );
                       })}
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                    <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
-                    <p className="text-[10px] text-white/20">Nenhuma gravação hoje</p>
-                  </div>
-                )}
-              </div>
-            )}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                      <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                      <p className="text-[10px] text-white/20">Nenhuma gravação hoje</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
 
-            {/* Scheduled Posts */}
-            {visibility.show_posts && (
-              <div>
-                <SectionHeader icon={Send} iconColor="#3b82f6" title="Posts do Dia" badge={`${todayPosts.length} posts`} />
-                {todayPosts.length > 0 ? (
-                  <div className="space-y-2">
-                    <AnimatePresence>
-                      {todayPosts.map(post => <PostCard key={post.id} post={post} />)}
-                    </AnimatePresence>
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                    <Send className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
-                    <p className="text-[10px] text-white/20">Nenhum post agendado hoje</p>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Week Scheduled Posts (reels) */}
+            {visibility.show_posts && (() => {
+              const groups: Record<string, ScheduledPost[]> = {};
+              [...weekPosts]
+                .sort((a, b) => (a.scheduledDate || '').localeCompare(b.scheduledDate || '') || (a.scheduledTime || '99:99').localeCompare(b.scheduledTime || '99:99'))
+                .forEach(p => {
+                  const k = p.scheduledDate || 'sem-data';
+                  (groups[k] = groups[k] || []).push(p);
+                });
+              const todayIso = new Date().toISOString().slice(0, 10);
+              const tomorrowIso = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+              const weekdayLabels = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+              const orderedKeys = Object.keys(groups).sort();
+
+              return (
+                <div>
+                  <SectionHeader icon={Send} iconColor="#3b82f6" title="Reels da Semana" badge={`${weekPosts.length} agendados`} />
+                  {orderedKeys.length > 0 ? (
+                    <div className="space-y-2.5">
+                      {orderedKeys.map(dateKey => {
+                        const posts = groups[dateKey];
+                        const [y, m, d] = dateKey.split('-').map(Number);
+                        const dateObj = new Date(y, (m || 1) - 1, d || 1);
+                        const isToday = dateKey === todayIso;
+                        const isTomorrow = dateKey === tomorrowIso;
+                        const label = isToday
+                          ? 'Hoje'
+                          : isTomorrow
+                          ? 'Amanhã'
+                          : weekdayLabels[dateObj.getDay()];
+                        const shortDate = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
+                        return (
+                          <div key={dateKey}>
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full"
+                                style={{
+                                  background: isToday ? `${PULSE_ORANGE}18` : 'rgba(255,255,255,0.05)',
+                                  border: isToday ? `1px solid ${PULSE_ORANGE}55` : '1px solid rgba(255,255,255,0.06)',
+                                }}>
+                                <span className="text-[9px] font-black uppercase tracking-wider" style={{ color: isToday ? PULSE_ORANGE : 'rgba(255,255,255,0.7)' }}>
+                                  {label}
+                                </span>
+                                <span className="text-[9px] font-mono tabular-nums text-white/40">{shortDate}</span>
+                              </div>
+                              <span className="text-[9px] text-white/25 font-semibold">{posts.length} {posts.length === 1 ? 'post' : 'posts'}</span>
+                              <div className="flex-1 h-px bg-white/5" />
+                            </div>
+                            <div className="space-y-1.5">
+                              {posts.map(post => <PostCard key={post.id} post={post} />)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                      <Send className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                      <p className="text-[10px] text-white/20">Nenhum reel agendado para os próximos 7 dias</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
+
 
           {/* RIGHT COLUMN: Designer + Editing */}
           <div className="col-span-4 space-y-2.5 overflow-y-auto scrollbar-hide pl-1">

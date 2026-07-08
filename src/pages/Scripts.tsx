@@ -1116,11 +1116,6 @@ export default function Scripts() {
                 <Eye size={14} className={previewingBatch ? 'animate-pulse' : ''} />
                 {previewingBatch ? 'Gerando...' : `Prévia A4 (${selectedIds.size})`}
               </Button>
-              <Button size="sm" onClick={() => handleDownloadSelectedPdf()} disabled={selectedIds.size === 0 || downloadingBatch}
-                className="gap-1.5 bg-gradient-to-r from-primary to-primary/80">
-                <Download size={14} className={downloadingBatch ? 'animate-spin' : ''} />
-                {downloadingBatch ? 'Gerando...' : `Baixar ${selectedIds.size} selecionado(s)`}
-              </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}>
                 <X size={16} />
               </Button>

@@ -77,6 +77,7 @@ interface DesignActivityTask {
   timerRunning?: boolean;
   timerStartedAt?: string | null;
   createdAt?: string | null;
+  updatedAt?: string | null;
   priority?: string;
   assignedTo?: string | null;
 }

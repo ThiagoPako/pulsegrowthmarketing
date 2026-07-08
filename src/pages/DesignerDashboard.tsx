@@ -1440,5 +1440,83 @@ function InlineCopyBlock({ text }: { text: string }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════
+// NextSuggestedCard — sugestão inteligente quando não há ativa
+// ═══════════════════════════════════════════════════════════
+interface NextSuggestedCardProps {
+  task: DesignTask;
+  onAccept: () => void;
+  onOpen: () => void;
+}
+
+function NextSuggestedCard({ task, onAccept, onOpen }: NextSuggestedCardProps) {
+  const clientName = task.clients?.company_name || task.prospect_name || '—';
+  const clientColor = task.clients?.color || '270 70% 55%';
+  const ds = getDesignDeadlineStatus(task);
+  const isAdjustment = task.kanban_column === 'ajustes';
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: -12, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+      className="relative overflow-hidden rounded-3xl border-2 border-dashed border-violet-400/60 bg-gradient-to-br from-violet-500/5 via-fuchsia-500/5 to-pink-500/5 p-5"
+    >
+      <motion.div
+        animate={{ opacity: [0.15, 0.3, 0.15] }}
+        transition={{ duration: 3, repeat: Infinity }}
+        className="pointer-events-none absolute -top-24 -right-24 w-60 h-60 rounded-full bg-gradient-to-br from-violet-300 to-fuchsia-300 blur-3xl"
+      />
+      <div className="relative flex items-center gap-4 flex-wrap">
+        <motion.div
+          animate={{ rotate: [0, -6, 6, -4, 0] }}
+          transition={{ duration: 2, repeat: Infinity, repeatDelay: 2 }}
+          className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shrink-0 shadow-lg shadow-violet-400/40"
+        >
+          <Zap size={22} className="text-white" fill="currentColor" />
+        </motion.div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-violet-600 dark:text-violet-400 flex items-center gap-1.5">
+            <Sparkles size={11} /> Sua próxima sugestão
+            {isAdjustment && <Badge className="text-[9px] rounded-full bg-amber-500 text-white border-0 h-4">Ajuste rápido</Badge>}
+          </p>
+          <div className="flex items-center gap-3 mt-1">
+            <ClientLogo client={{ companyName: clientName, color: clientColor, logoUrl: task.clients?.logo_url }} size="sm" />
+            <div className="min-w-0">
+              <h3 className="font-display font-bold text-base md:text-lg truncate">{task.title}</h3>
+              <p className="text-xs text-muted-foreground truncate">
+                {clientName} · {FORMAT_LABELS[task.format_type] || task.format_type} · <span className={ds.variant === 'destructive' ? 'text-rose-600 font-semibold' : ''}>{ds.label}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 ml-auto">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onOpen}
+            className="gap-1.5 rounded-xl text-violet-700 dark:text-violet-300"
+          >
+            Ver detalhes
+          </Button>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              size="sm"
+              onClick={onAccept}
+              className="gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white shadow-lg shadow-violet-300/40 font-semibold"
+              title="Aceitar e iniciar (tecla N)"
+            >
+              <Play size={13} fill="currentColor" /> Aceitar e iniciar
+              <kbd className="ml-1 px-1.5 py-0.5 rounded bg-white/25 text-[9px] font-bold">N</kbd>
+            </Button>
+          </motion.div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+
 
 

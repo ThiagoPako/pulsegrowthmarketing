@@ -517,6 +517,48 @@ export default function DesignerDashboard() {
   const firstName = displayName.split(' ')[0];
 
   return (
+    <>
+      {/* ═══ ZEN MODE — overlay fullscreen só com tarefa ativa ═══ */}
+      <AnimatePresence>
+        {zenMode && activeTask && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-gradient-to-br from-violet-950 via-fuchsia-950/95 to-pink-950/95 backdrop-blur-xl overflow-y-auto"
+          >
+            <div className="min-h-screen flex flex-col items-center justify-center p-6 md:p-12">
+              <div className="w-full max-w-4xl">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-2 text-violet-200">
+                    <Sparkles size={16} />
+                    <span className="text-xs font-bold uppercase tracking-widest">Modo Foco</span>
+                  </div>
+                  <Button
+                    onClick={() => setZenMode(false)}
+                    size="sm"
+                    variant="ghost"
+                    className="gap-1.5 rounded-xl text-violet-100 hover:bg-white/10"
+                    title="Sair (Esc)"
+                  >
+                    <Minimize2 size={14} /> Sair
+                    <kbd className="ml-1 px-1.5 py-0.5 rounded bg-white/15 text-[9px] font-bold">Esc</kbd>
+                  </Button>
+                </div>
+                <ZenActiveCard
+                  task={activeTask}
+                  elapsed={activeElapsed}
+                  effectiveRunning={effectiveRunning}
+                  onTogglePause={handleTogglePause}
+                  onOpenDetail={() => setSelectedTaskId(activeTask.id)}
+                  onOpenCopy={() => setCopyDialogTask(activeTask)}
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     <div className="space-y-6 max-w-[1400px]">
       <BonusCongratsBanner />
 

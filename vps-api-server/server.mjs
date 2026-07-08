@@ -6714,8 +6714,14 @@ app.get('/api/tv-dashboard', async (req, res) => {
         clientColor: t?.client_color || null,
         designerName: t?.designer_name || null,
         designerAvatar: t?.designer_avatar || null,
+        assignedTo: t?.assigned_to || null,
+        priority: t?.priority || 'media',
+        createdAt: t?.created_at || null,
+        timerRunning: !!t?.timer_running,
+        timerStartedAt: t?.timer_started_at || null,
         timeOnTask: Math.max(0, timeOnTask),
         isPaused: !t?.timer_running,
+        isLive: t?.kanban_column === 'executando' && !!t?.timer_running,
       };
     });
 

@@ -271,6 +271,77 @@ export default function DesignerDashboard() {
     }
   };
 
+  // Auto-pause: qualquer tarefa em fila_baixa_prioridade com timer rodando deve pausar automaticamente.
+  // Também normaliza "otherExecuting" (2ª+ tarefa em execução) para fila_baixa_prioridade + pausada.
+  useEffect(() => {
+    const toPause: DesignTask[] = [
+      ...groupedQueue.filaBaixa.filter(t => t.timer_running),
+    ];
+    if (toPause.length === 0) return;
+    (async () => {
+      for (const t of toPause) {
+        try {
+          const runSecs = t.timer_started_at
+            ? Math.max(0, Math.floor((Date.now() - new Date(t.timer_started_at).getTime()) / 1000))
+            : 0;
+          await updateTask.mutateAsync({
+            id: t.id,
+            kanban_column: 'fila_baixa_prioridade',
+            timer_running: false,
+            timer_started_at: null,
+            time_spent_seconds: (t.time_spent_seconds || 0) + runSecs,
+          } as any);
+        } catch { /* ignore, will retry on next render */ }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupedQueue.filaBaixa.map(t => `${t.id}:${t.timer_running}:${t.kanban_column}`).join('|')]);
+
+  // Retomar tarefa da fila baixa prioridade: troca com a atual (se houver) e inicia timer.
+  const handleResumeFromLowPriority = async (task: DesignTask) => {
+    try {
+      const now = new Date().toISOString();
+      const nowMs = Date.now();
+
+      // 1. Se há tarefa ativa, pausar + mover para fila baixa prioridade
+      if (activeTask && activeTask.id !== task.id) {
+        const runSecs = activeTask.timer_running && activeTask.timer_started_at
+          ? Math.max(0, Math.floor((nowMs - new Date(activeTask.timer_started_at).getTime()) / 1000))
+          : 0;
+        await updateTask.mutateAsync({
+          id: activeTask.id,
+          kanban_column: 'fila_baixa_prioridade',
+          timer_running: false,
+          timer_started_at: null,
+          time_spent_seconds: (activeTask.time_spent_seconds || 0) + runSecs,
+        } as any);
+        await addHistory.mutateAsync({
+          task_id: activeTask.id,
+          action: 'Movida para fila baixa prioridade',
+          details: `Trocada por: ${task.title}`,
+          user_id: user?.id,
+        });
+      }
+
+      // 2. Retomar a tarefa selecionada como ativa
+      await updateTask.mutateAsync({
+        id: task.id,
+        kanban_column: 'executando',
+        started_at: task.started_at || now,
+        assigned_to: task.assigned_to || user?.id,
+        timer_running: true,
+        timer_started_at: now,
+      } as any);
+      await addHistory.mutateAsync({
+        task_id: task.id,
+        action: 'Atividade retomada da fila baixa prioridade',
+        user_id: user?.id,
+      });
+      toast.success('Atividade retomada! 💜');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao retomar atividade');
+    }
+  };
 
 
   const activeClients = useMemo(() => {

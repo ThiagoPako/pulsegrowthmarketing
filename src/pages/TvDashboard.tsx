@@ -1370,6 +1370,7 @@ export default function TvDashboard() {
   const [editingPipeline, setEditingPipeline] = useState<EditingTask[]>([]);
   const [designPipeline, setDesignPipeline] = useState<DesignActivityTask[]>([]);
   const [todayPosts, setTodayPosts] = useState<ScheduledPost[]>([]);
+  const [weekPosts, setWeekPosts] = useState<ScheduledPost[]>([]);
   const [activeRecordingIds, setActiveRecordingIds] = useState<string[]>([]);
   const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());

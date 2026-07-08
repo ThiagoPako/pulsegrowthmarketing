@@ -303,49 +303,92 @@ export default function DesignerDashboard() {
 
   // Retomar tarefa da fila baixa prioridade: troca com a atual (se houver) e inicia timer.
   const handleResumeFromLowPriority = async (task: DesignTask) => {
-    try {
-      const now = new Date().toISOString();
-      const nowMs = Date.now();
+    const now = new Date().toISOString();
+    const nowMs = Date.now();
+    const queryKey = ['design-tasks', activeCity];
 
-      // 1. Se há tarefa ativa, pausar + mover para fila baixa prioridade
-      if (activeTask && activeTask.id !== task.id) {
-        const runSecs = activeTask.timer_running && activeTask.timer_started_at
-          ? Math.max(0, Math.floor((nowMs - new Date(activeTask.timer_started_at).getTime()) / 1000))
+    // Snapshot antes do update otimista para rollback
+    const previous = queryClient.getQueryData<DesignTask[]>(queryKey);
+    const activeToSwap = activeTask && activeTask.id !== task.id ? activeTask : null;
+
+    // === UPDATE OTIMISTA — swap imediato no cache ===
+    if (previous) {
+      const next = previous.map(t => {
+        if (activeToSwap && t.id === activeToSwap.id) {
+          const runSecs = activeToSwap.timer_running && activeToSwap.timer_started_at
+            ? Math.max(0, Math.floor((nowMs - new Date(activeToSwap.timer_started_at).getTime()) / 1000))
+            : 0;
+          return {
+            ...t,
+            kanban_column: 'fila_baixa_prioridade' as const,
+            timer_running: false,
+            timer_started_at: null,
+            time_spent_seconds: (t.time_spent_seconds || 0) + runSecs,
+          };
+        }
+        if (t.id === task.id) {
+          return {
+            ...t,
+            kanban_column: 'executando' as const,
+            started_at: t.started_at || now,
+            assigned_to: t.assigned_to || user?.id || null,
+            timer_running: true,
+            timer_started_at: now,
+          };
+        }
+        return t;
+      });
+      queryClient.setQueryData(queryKey, next);
+    }
+
+    toast.success(activeToSwap ? 'Trocando atividade… 💜' : 'Iniciando atividade… 💜');
+
+    try {
+      // Executa os updates em paralelo pra reduzir latência
+      const ops: Promise<any>[] = [];
+      if (activeToSwap) {
+        const runSecs = activeToSwap.timer_running && activeToSwap.timer_started_at
+          ? Math.max(0, Math.floor((nowMs - new Date(activeToSwap.timer_started_at).getTime()) / 1000))
           : 0;
-        await updateTask.mutateAsync({
-          id: activeTask.id,
+        ops.push(updateTask.mutateAsync({
+          id: activeToSwap.id,
           kanban_column: 'fila_baixa_prioridade',
           timer_running: false,
           timer_started_at: null,
-          time_spent_seconds: (activeTask.time_spent_seconds || 0) + runSecs,
-        } as any);
-        await addHistory.mutateAsync({
-          task_id: activeTask.id,
+          time_spent_seconds: (activeToSwap.time_spent_seconds || 0) + runSecs,
+        } as any));
+        ops.push(addHistory.mutateAsync({
+          task_id: activeToSwap.id,
           action: 'Movida para fila baixa prioridade',
           details: `Trocada por: ${task.title}`,
           user_id: user?.id,
-        });
+        }));
       }
-
-      // 2. Retomar a tarefa selecionada como ativa
-      await updateTask.mutateAsync({
+      ops.push(updateTask.mutateAsync({
         id: task.id,
         kanban_column: 'executando',
         started_at: task.started_at || now,
         assigned_to: task.assigned_to || user?.id,
         timer_running: true,
         timer_started_at: now,
-      } as any);
-      await addHistory.mutateAsync({
+      } as any));
+      ops.push(addHistory.mutateAsync({
         task_id: task.id,
         action: 'Atividade retomada da fila baixa prioridade',
         user_id: user?.id,
-      });
-      toast.success('Atividade retomada! 💜');
+      }));
+
+      await Promise.all(ops);
+      queryClient.invalidateQueries({ queryKey: ['design-tasks'] });
     } catch (err: any) {
-      toast.error(err.message || 'Erro ao retomar atividade');
+      // Rollback do cache em caso de falha
+      if (previous) queryClient.setQueryData(queryKey, previous);
+      console.error('[handleResumeFromLowPriority]', err);
+      toast.error(err?.message || 'Erro ao retomar atividade');
     }
   };
+
+
 
 
   const activeClients = useMemo(() => {

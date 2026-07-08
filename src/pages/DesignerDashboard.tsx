@@ -401,7 +401,28 @@ export default function DesignerDashboard() {
                   </div>
 
                   {/* Action buttons */}
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handleTogglePause}
+                      className={`gap-1.5 rounded-xl text-white shadow-md ${
+                        t.timer_running
+                          ? 'bg-amber-500 hover:bg-amber-600'
+                          : 'bg-emerald-500 hover:bg-emerald-600'
+                      }`}
+                    >
+                      {t.timer_running ? <><Pause size={14} fill="currentColor" /> Pausar</> : <><Play size={14} fill="currentColor" /> Retomar</>}
+                    </Button>
+                    <span
+                      className={`flex items-center gap-1.5 font-mono font-bold text-lg tabular-nums px-3 py-1 rounded-lg border ${
+                        t.timer_running
+                          ? 'text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+                          : 'text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/10'
+                      }`}
+                      title="Tempo total (base + sessão atual)"
+                    >
+                      <Timer size={16} /> {activeElapsed || '00:00:00'}
+                    </span>
                     <Button
                       size="sm"
                       onClick={() => setCopyDialogTask(t)}
@@ -433,6 +454,7 @@ export default function DesignerDashboard() {
                       Abrir demanda <ArrowRight size={14} />
                     </Button>
                   </div>
+
 
                   {/* SLA bar */}
                   <div className="mt-4">

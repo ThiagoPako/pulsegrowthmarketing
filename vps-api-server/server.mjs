@@ -6470,7 +6470,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
     // 4. Get active design tasks (inclui fila de baixa prioridade e nova_tarefa para monitoramento de SLA)
     const designTasks = await safeQuery('design_tasks', `
       SELECT dt.id, dt.title, dt.kanban_column, dt.assigned_to, dt.timer_running,
-             dt.timer_started_at, dt.time_spent_seconds, dt.created_at, dt.priority,
+             dt.timer_started_at, dt.time_spent_seconds, dt.created_at, dt.updated_at, dt.priority,
              c.company_name AS client_name, c.logo_url AS client_logo, c.color AS client_color,
              p.name AS designer_name, p.avatar_url AS designer_avatar
       FROM design_tasks dt

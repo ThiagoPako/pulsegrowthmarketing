@@ -1110,7 +1110,13 @@ export default function Scripts() {
                 <CheckSquare size={14} />
                 {selectedIds.size === filteredScripts.length ? 'Desmarcar todos' : 'Selecionar todos'}
               </Button>
-              <Button size="sm" onClick={handleDownloadSelectedPdf} disabled={selectedIds.size === 0 || downloadingBatch}
+              <Button variant="outline" size="sm" onClick={handlePreviewSelectedPdf}
+                disabled={selectedIds.size === 0 || previewingBatch}
+                className="gap-1.5">
+                <Eye size={14} className={previewingBatch ? 'animate-pulse' : ''} />
+                {previewingBatch ? 'Gerando...' : `Prévia A4 (${selectedIds.size})`}
+              </Button>
+              <Button size="sm" onClick={() => handleDownloadSelectedPdf()} disabled={selectedIds.size === 0 || downloadingBatch}
                 className="gap-1.5 bg-gradient-to-r from-primary to-primary/80">
                 <Download size={14} className={downloadingBatch ? 'animate-spin' : ''} />
                 {downloadingBatch ? 'Gerando...' : `Baixar ${selectedIds.size} selecionado(s)`}

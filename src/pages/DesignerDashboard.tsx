@@ -1560,6 +1560,118 @@ function NextSuggestedCard({ task, onAccept, onOpen }: NextSuggestedCardProps) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════
+// ZenActiveCard — versão fullscreen minimalista da tarefa ativa
+// ═══════════════════════════════════════════════════════════
+interface ZenActiveCardProps {
+  task: DesignTask;
+  elapsed: string;
+  effectiveRunning: boolean;
+  onTogglePause: () => void;
+  onOpenDetail: () => void;
+  onOpenCopy: () => void;
+}
+
+function ZenActiveCard({ task, elapsed, effectiveRunning, onTogglePause, onOpenDetail, onOpenCopy }: ZenActiveCardProps) {
+  const clientName = task.clients?.company_name || task.prospect_name || '—';
+  const clientColor = task.clients?.color || '270 70% 55%';
+  const arts: string[] = Array.from(new Set([
+    ...(((task as any).attachment_urls as string[]) || []),
+    task.attachment_url,
+  ].filter(Boolean) as string[]));
+
+  return (
+    <motion.div
+      initial={{ scale: 0.96, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ type: 'spring', stiffness: 200, damping: 25 }}
+      className="rounded-[2rem] border-2 border-violet-300/30 bg-gradient-to-br from-white/10 via-white/5 to-white/10 backdrop-blur-xl p-8 md:p-12 shadow-2xl"
+    >
+      <div className="flex items-center gap-4 mb-6">
+        <ClientLogo client={{ companyName: clientName, color: clientColor, logoUrl: task.clients?.logo_url }} size="lg" />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-violet-200 font-medium">{clientName}</p>
+          <h1 className="text-3xl md:text-5xl font-display font-bold text-white leading-tight break-words">
+            {task.title}
+          </h1>
+          <p className="text-sm text-violet-200/80 mt-1">
+            {FORMAT_LABELS[task.format_type] || task.format_type} · Prioridade {task.priority}
+          </p>
+        </div>
+      </div>
+
+      {/* Timer gigante centralizado */}
+      <div className="flex items-center justify-center my-8">
+        <motion.div
+          animate={effectiveRunning ? { boxShadow: ['0 0 0 rgba(52,211,153,0.4)', '0 0 40px rgba(52,211,153,0.6)', '0 0 0 rgba(52,211,153,0.4)'] } : {}}
+          transition={{ duration: 2, repeat: Infinity }}
+          className={`px-8 py-6 rounded-3xl border-2 ${effectiveRunning ? 'border-emerald-400/50 bg-emerald-500/10' : 'border-amber-400/50 bg-amber-500/10'}`}
+        >
+          <div className="font-mono font-bold text-6xl md:text-7xl tabular-nums text-white text-center tracking-wider">
+            {elapsed || '00:00:00'}
+          </div>
+          <div className="text-center mt-2 text-xs uppercase tracking-widest text-violet-200/70">
+            {effectiveRunning ? '● Executando' : '⏸ Pausada'}
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Copy inline (se existir) */}
+      {task.copy_text && task.copy_text.trim() && (
+        <div className="rounded-2xl bg-white/10 border border-white/10 p-4 mb-6 max-h-48 overflow-y-auto">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-violet-200/70 mb-2">Copy</p>
+          <p className="text-sm text-white/90 whitespace-pre-wrap leading-relaxed">{task.copy_text}</p>
+        </div>
+      )}
+
+      {/* Artes preview */}
+      {arts.length > 0 && (
+        <div className="mb-6">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-violet-200/70 mb-2">Artes anexadas ({arts.length})</p>
+          <div className="grid grid-cols-4 gap-2">
+            {arts.slice(0, 4).map((url, i) => {
+              const isImg = /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(url);
+              return (
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="aspect-square rounded-xl overflow-hidden border border-white/20 bg-white/5 hover:ring-2 hover:ring-violet-300 transition-all">
+                  {isImg ? <img src={url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><FileText size={20} className="text-white/60" /></div>}
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Ações grandes */}
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <Button
+          size="lg"
+          onClick={onTogglePause}
+          className={`gap-2 rounded-2xl text-white shadow-2xl min-w-[140px] ${effectiveRunning ? 'bg-amber-500 hover:bg-amber-600' : 'bg-emerald-500 hover:bg-emerald-600'}`}
+        >
+          {effectiveRunning ? <><Pause size={18} fill="currentColor" /> Pausar</> : <><Play size={18} fill="currentColor" /> Retomar</>}
+          <kbd className="ml-1 px-2 py-0.5 rounded bg-white/25 text-[10px] font-bold">Espaço</kbd>
+        </Button>
+        <Button
+          size="lg"
+          onClick={onOpenCopy}
+          variant="outline"
+          className="gap-2 rounded-2xl border-white/30 text-white hover:bg-white/10"
+        >
+          <FileText size={18} /> Copy <kbd className="ml-1 px-2 py-0.5 rounded bg-white/20 text-[10px] font-bold">C</kbd>
+        </Button>
+        <Button
+          size="lg"
+          onClick={onOpenDetail}
+          className="gap-2 rounded-2xl bg-gradient-to-r from-fuchsia-500 to-pink-500 hover:from-fuchsia-600 hover:to-pink-600 text-white shadow-lg"
+        >
+          <Upload size={18} /> Anexar / Enviar <kbd className="ml-1 px-2 py-0.5 rounded bg-white/20 text-[10px] font-bold">E</kbd>
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
+
 
 
 

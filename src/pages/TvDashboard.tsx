@@ -610,10 +610,27 @@ function RotatingScheduleCard({ items, isLive, height }: { items: ScheduleItem[]
 }
 
 /* ─── Compact ordered schedule row ──────────────────────── */
-function ScheduleRow({ item, isLive }: { item: ScheduleItem; isLive: boolean }) {
+function ScheduleRow({ item, isLive, nowMinutes, recordingDurationMin }: { item: ScheduleItem; isLive: boolean; nowMinutes: number; recordingDurationMin: number }) {
   const isDone = item.status === 'concluida';
   const isCancelled = item.status === 'cancelada';
   const isRescheduled = item.status === 'remarcada' || item.status === 'remarcado';
+  const isConfirmed = (item.confirmationStatus || '').toLowerCase() === 'confirmado' || (item.confirmationStatus || '').toLowerCase() === 'confirmada';
+  const isPending = (item.confirmationStatus || '').toLowerCase() === 'pendente';
+
+  // Time calculations
+  const [sh, sm] = (item.startTime || '00:00').split(':').map(Number);
+  const startMin = (sh || 0) * 60 + (sm || 0);
+  let endMin = startMin + recordingDurationMin;
+  if (item.endTime) {
+    const [eh, em] = item.endTime.split(':').map(Number);
+    endMin = (eh || 0) * 60 + (em || 0);
+  }
+  const minutesUntil = startMin - nowMinutes;
+  const isUpcomingSoon = !isLive && !isDone && !isCancelled && minutesUntil > 0 && minutesUntil <= 60;
+  const isPast = !isLive && !isDone && !isCancelled && endMin < nowMinutes;
+
+  // Progress bar for live recording
+  const liveProgress = isLive ? Math.min(100, Math.max(0, ((nowMinutes - startMin) / (endMin - startMin)) * 100)) : 0;
 
   let statusLabel = 'Aguardando';
   let statusColor = 'rgba(255,255,255,0.5)';
@@ -622,30 +639,49 @@ function ScheduleRow({ item, isLive }: { item: ScheduleItem; isLive: boolean }) 
   else if (isDone) { statusLabel = 'Concluída'; statusColor = '#22c55e'; statusBg = 'rgba(34,197,94,0.15)'; }
   else if (isCancelled) { statusLabel = 'Cancelada'; statusColor = '#ef4444'; statusBg = 'rgba(239,68,68,0.15)'; }
   else if (isRescheduled) { statusLabel = 'Remarcada'; statusColor = '#f59e0b'; statusBg = 'rgba(245,158,11,0.15)'; }
+  else if (isPast) { statusLabel = 'Atrasada'; statusColor = '#ef4444'; statusBg = 'rgba(239,68,68,0.12)'; }
+  else if (isUpcomingSoon) { statusLabel = minutesUntil <= 5 ? 'Agora' : `Em ${minutesUntil}min`; statusColor = PULSE_ORANGE; statusBg = `${PULSE_ORANGE}18`; }
 
-  const borderColor = isLive ? `${PULSE_ORANGE}55` : isCancelled ? 'rgba(239,68,68,0.2)' : isDone ? 'rgba(34,197,94,0.2)' : isRescheduled ? 'rgba(245,158,11,0.25)' : 'rgba(255,255,255,0.06)';
+  const borderColor = isLive ? `${PULSE_ORANGE}55` : isCancelled ? 'rgba(239,68,68,0.2)' : isDone ? 'rgba(34,197,94,0.2)' : isRescheduled ? 'rgba(245,158,11,0.25)' : isUpcomingSoon ? `${PULSE_ORANGE}30` : 'rgba(255,255,255,0.06)';
 
   return (
-    <div
-      className="relative flex items-center gap-2 rounded-lg px-2 py-1.5 border"
+    <motion.div
+      className="relative flex items-center gap-2 rounded-lg px-2 py-1.5 border overflow-hidden"
+      initial={{ opacity: 0, x: -6 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.2 }}
       style={{
         borderColor,
-        background: isLive ? `linear-gradient(90deg, ${PULSE_ORANGE}10, transparent)` : PULSE_CARD,
+        background: isLive ? `linear-gradient(90deg, ${PULSE_ORANGE}14, transparent 60%)` : PULSE_CARD,
         opacity: isCancelled ? 0.5 : 1,
       }}
     >
+      {/* Live progress bar */}
+      {isLive && (
+        <div className="absolute inset-x-0 bottom-0 h-[2px] bg-white/5 overflow-hidden">
+          <motion.div
+            className="h-full"
+            style={{ background: `linear-gradient(90deg, ${PULSE_ORANGE}, #fbbf24)` }}
+            initial={{ width: 0 }}
+            animate={{ width: `${liveProgress}%` }}
+            transition={{ duration: 0.6 }}
+          />
+        </div>
+      )}
+
       {/* Time */}
-      <div className="flex flex-col items-center justify-center min-w-[46px]">
-        <span className="text-sm font-mono font-bold tabular-nums text-white/90">{item.startTime}</span>
-        {item.endTime && (
-          <span className="text-[9px] font-mono text-white/25 tabular-nums">{item.endTime}</span>
-        )}
+      <div className="flex flex-col items-center justify-center min-w-[48px] py-0.5 rounded-md"
+        style={{ background: isLive ? `${PULSE_ORANGE}12` : 'rgba(255,255,255,0.02)' }}>
+        <span className="text-sm font-mono font-bold tabular-nums text-white/90 leading-none">{item.startTime}</span>
+        <span className="text-[9px] font-mono text-white/25 tabular-nums mt-0.5">
+          {item.endTime || `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`}
+        </span>
       </div>
 
       {/* Client logo */}
-      <div className="flex-shrink-0 w-7 h-7 rounded-md overflow-hidden border flex items-center justify-center"
+      <div className="flex-shrink-0 w-8 h-8 rounded-md overflow-hidden border flex items-center justify-center"
         style={{
-          borderColor: item.clientColor ? `hsl(${item.clientColor} / 0.3)` : 'rgba(255,255,255,0.08)',
+          borderColor: item.clientColor ? `hsl(${item.clientColor} / 0.35)` : 'rgba(255,255,255,0.08)',
           backgroundColor: item.clientColor ? `hsl(${item.clientColor} / 0.1)` : 'rgba(255,255,255,0.03)',
         }}>
         {item.clientLogo ? (
@@ -657,18 +693,37 @@ function ScheduleRow({ item, isLive }: { item: ScheduleItem; isLive: boolean }) 
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <p className="text-[12px] font-semibold text-white truncate leading-tight">{item.clientName}</p>
-        <div className="flex items-center gap-1.5 mt-0.5">
+        <div className="flex items-center gap-1.5">
+          <p className="text-[12px] font-semibold text-white truncate leading-tight">{item.clientName}</p>
+          {isConfirmed && (
+            <span title="Cliente confirmou" className="inline-flex items-center justify-center w-3 h-3 rounded-full bg-emerald-500/20 flex-shrink-0">
+              <span className="w-1 h-1 rounded-full bg-emerald-400" />
+            </span>
+          )}
+          {isPending && !isLive && !isDone && (
+            <span title="Aguardando confirmação" className="inline-flex items-center justify-center w-3 h-3 rounded-full bg-amber-500/20 flex-shrink-0">
+              <span className="w-1 h-1 rounded-full bg-amber-400" />
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
           {item.type === 'event' && (
             <span className="text-[8px] font-bold uppercase px-1 py-px rounded" style={{ backgroundColor: `${PULSE_ORANGE}15`, color: PULSE_ORANGE }}>Evento</span>
           )}
           {item.recordingType === 'extra' && <span className="text-[8px] font-bold uppercase px-1 py-px rounded bg-violet-500/10 text-violet-300">Extra</span>}
           {item.recordingType === 'backup' && <span className="text-[8px] font-bold uppercase px-1 py-px rounded bg-amber-500/10 text-amber-300">Backup</span>}
           {item.videomakerName && (
-            <span className="text-[10px] text-white/40 truncate">
-              <Camera className="w-2.5 h-2.5 inline mr-0.5 -mt-0.5 text-blue-400/60" />
+            <span className="inline-flex items-center gap-1 text-[10px] text-white/45 truncate">
+              {item.videomakerAvatar ? (
+                <img src={item.videomakerAvatar} alt="" className="w-3.5 h-3.5 rounded-full object-cover" />
+              ) : (
+                <Camera className="w-2.5 h-2.5 text-blue-400/70" />
+              )}
               {item.videomakerName.split(' ')[0]}
             </span>
+          )}
+          {item.address && item.type === 'event' && (
+            <span className="text-[9px] text-white/30 truncate">📍 {item.address}</span>
           )}
         </div>
       </div>
@@ -681,6 +736,21 @@ function ScheduleRow({ item, isLive }: { item: ScheduleItem; isLive: boolean }) 
         )}
         <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: statusColor }}>{statusLabel}</span>
       </div>
+    </motion.div>
+  );
+}
+
+/* ─── Now Divider (linha "AGORA" no cronograma) ─────────── */
+function NowDivider({ time }: { time: string }) {
+  return (
+    <div className="flex items-center gap-2 py-0.5">
+      <div className="flex-shrink-0 flex items-center gap-1.5 px-2 py-0.5 rounded-full"
+        style={{ background: `linear-gradient(90deg, ${PULSE_ORANGE}, ${PULSE_ORANGE}88)` }}>
+        <motion.div className="w-1.5 h-1.5 rounded-full bg-white"
+          animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 1.2, repeat: Infinity }} />
+        <span className="text-[9px] font-black uppercase tracking-wider text-white">Agora {time}</span>
+      </div>
+      <div className="flex-1 h-px" style={{ background: `linear-gradient(90deg, ${PULSE_ORANGE}55, transparent)` }} />
     </div>
   );
 }

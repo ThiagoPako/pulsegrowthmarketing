@@ -407,6 +407,13 @@ export default function RecordingControl() {
                 client={getClient(rec.clientId)}
                 isDragging={draggedRecording?.id === rec.id}
                 onDragStart={handleDragStart}
+                onDelete={async () => {
+                  const label = getClient(rec.clientId)?.companyName || rec.prospectName || 'esta gravação';
+                  if (!window.confirm(`Apagar permanentemente "${label}" às ${rec.startTime}?`)) return;
+                  const ok = await deleteRecording(rec.id);
+                  if (ok) { toast.success('Gravação apagada'); setTimeout(() => refetchData(), 300); }
+                  else toast.error('Erro ao apagar');
+                }}
               />
             ))}
           </div>

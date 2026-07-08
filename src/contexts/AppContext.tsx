@@ -31,7 +31,7 @@ interface AppContextType {
   addClient: (client: Client) => Promise<boolean>;
   updateClient: (client: Client) => Promise<void>;
   deleteClient: (id: string) => Promise<boolean>;
-  addRecording: (recording: Recording) => Promise<boolean>;
+  addRecording: (recording: Recording, options?: { skipClientDayCheck?: boolean }) => Promise<boolean>;
   updateRecording: (recording: Recording) => void;
   cancelRecording: (id: string) => void;
   deleteRecording: (id: string) => Promise<boolean>;
@@ -55,7 +55,7 @@ interface AppContextType {
   updateSettings: (settings: CompanySettings) => void;
   startActiveRecording: (rec: ActiveRecording) => void;
   stopActiveRecording: (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]) => void;
-  hasConflict: (videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType, clientId?: string) => { hasConflict: boolean; message?: string };
+  hasConflict: (videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType, clientId?: string, options?: { skipClientDayCheck?: boolean }) => { hasConflict: boolean; message?: string };
   isWithinWorkHours: (day: DayOfWeek, startTime: string) => boolean;
 
   getSuggestionsForCancellation: (recording: Recording) => Client[];
@@ -185,13 +185,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
   const LOWER_PRIORITY_TYPES_FOR_FIXED = new Set<RecordingType>(['extra', 'backup', 'secundaria']);
 
-  const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType, clientId?: string) => {
+  const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType, clientId?: string, options?: { skipClientDayCheck?: boolean }) => {
     const newStart = timeToMinutes(startTime);
     const duration = data.settings.recordingDuration || 90;
     const newEnd = newStart + duration;
 
-    // 1. Check if client already has a recording on this day (unless full-shift)
-    if (clientId) {
+    // 1. Check if client already has a recording on this day (unless full-shift or explicitly skipped)
+    if (clientId && !options?.skipClientDayCheck) {
       const client = data.clients.find(c => c.id === clientId);
       const clientDayRecs = data.recordings.filter(r => r.clientId === clientId && r.date === date && r.status !== 'cancelada' && r.id !== excludeId);
       
@@ -249,8 +249,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [data.settings]);
 
 
-  const addRecording = useCallback(async (recording: Recording): Promise<boolean> => {
-    if (hasConflict(recording.videomakerId, recording.date, recording.startTime, undefined, recording.type, recording.clientId).hasConflict) return false;
+  const addRecording = useCallback(async (recording: Recording, options?: { skipClientDayCheck?: boolean }): Promise<boolean> => {
+    if (hasConflict(recording.videomakerId, recording.date, recording.startTime, undefined, recording.type, recording.clientId, options).hasConflict) return false;
     const ok = await data.addRecording(recording);
     if (!ok) {
       console.error('addRecording: VPS insert failed for recording', recording);

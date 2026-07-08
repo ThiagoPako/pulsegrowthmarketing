@@ -1725,6 +1725,13 @@ export default function TvDashboard() {
                       const h = getDesignSlaHours(t.createdAt);
                       return h !== null && h >= 0 && h < 12;
                     });
+                    // Tarefas travadas: sem update há 4h+, com cronômetro parado e não concluídas
+                    const stuck = designPipeline.filter(t => {
+                      if (['em_analise'].includes(t.column)) return false;
+                      if (t.timerRunning) return false;
+                      const idle = getIdleHours(t.updatedAt);
+                      return idle !== null && idle >= 4;
+                    });
 
                     return (
                       <>

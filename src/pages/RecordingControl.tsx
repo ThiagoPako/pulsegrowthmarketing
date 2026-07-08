@@ -336,6 +336,7 @@ export default function RecordingControl() {
       </AnimatePresence>
 
       {/* Grid View */}
+      {viewMode === 'day' && (
       <div className="relative overflow-x-auto pb-6 border rounded-2xl bg-muted/5">
         <div className="min-w-[1000px] relative">
           {/* Time Marker */}

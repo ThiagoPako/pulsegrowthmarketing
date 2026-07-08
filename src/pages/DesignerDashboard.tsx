@@ -271,6 +271,77 @@ export default function DesignerDashboard() {
     }
   };
 
+  // Auto-pause: qualquer tarefa em fila_baixa_prioridade com timer rodando deve pausar automaticamente.
+  // Também normaliza "otherExecuting" (2ª+ tarefa em execução) para fila_baixa_prioridade + pausada.
+  useEffect(() => {
+    const toPause: DesignTask[] = [
+      ...groupedQueue.filaBaixa.filter(t => t.timer_running),
+    ];
+    if (toPause.length === 0) return;
+    (async () => {
+      for (const t of toPause) {
+        try {
+          const runSecs = t.timer_started_at
+            ? Math.max(0, Math.floor((Date.now() - new Date(t.timer_started_at).getTime()) / 1000))
+            : 0;
+          await updateTask.mutateAsync({
+            id: t.id,
+            kanban_column: 'fila_baixa_prioridade',
+            timer_running: false,
+            timer_started_at: null,
+            time_spent_seconds: (t.time_spent_seconds || 0) + runSecs,
+          } as any);
+        } catch { /* ignore, will retry on next render */ }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupedQueue.filaBaixa.map(t => `${t.id}:${t.timer_running}:${t.kanban_column}`).join('|')]);
+
+  // Retomar tarefa da fila baixa prioridade: troca com a atual (se houver) e inicia timer.
+  const handleResumeFromLowPriority = async (task: DesignTask) => {
+    try {
+      const now = new Date().toISOString();
+      const nowMs = Date.now();
+
+      // 1. Se há tarefa ativa, pausar + mover para fila baixa prioridade
+      if (activeTask && activeTask.id !== task.id) {
+        const runSecs = activeTask.timer_running && activeTask.timer_started_at
+          ? Math.max(0, Math.floor((nowMs - new Date(activeTask.timer_started_at).getTime()) / 1000))
+          : 0;
+        await updateTask.mutateAsync({
+          id: activeTask.id,
+          kanban_column: 'fila_baixa_prioridade',
+          timer_running: false,
+          timer_started_at: null,
+          time_spent_seconds: (activeTask.time_spent_seconds || 0) + runSecs,
+        } as any);
+        await addHistory.mutateAsync({
+          task_id: activeTask.id,
+          action: 'Movida para fila baixa prioridade',
+          details: `Trocada por: ${task.title}`,
+          user_id: user?.id,
+        });
+      }
+
+      // 2. Retomar a tarefa selecionada como ativa
+      await updateTask.mutateAsync({
+        id: task.id,
+        kanban_column: 'executando',
+        started_at: task.started_at || now,
+        assigned_to: task.assigned_to || user?.id,
+        timer_running: true,
+        timer_started_at: now,
+      } as any);
+      await addHistory.mutateAsync({
+        task_id: task.id,
+        action: 'Atividade retomada da fila baixa prioridade',
+        user_id: user?.id,
+      });
+      toast.success('Atividade retomada! 💜');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao retomar atividade');
+    }
+  };
 
 
   const activeClients = useMemo(() => {
@@ -666,7 +737,18 @@ export default function DesignerDashboard() {
                   <div className="max-h-[380px] overflow-y-auto pr-1 space-y-2" style={{ scrollbarWidth: 'thin' }}>
                     <AnimatePresence mode="popLayout">
                       {s.items.map((task, i) => (
-                        <DesignerTaskCard key={task.id} task={task} index={i} onOpenDetail={setSelectedTaskId} />
+                        s.key === 'baixa' ? (
+                          <LowPriorityCard
+                            key={task.id}
+                            task={task}
+                            index={i}
+                            onOpenDetail={setSelectedTaskId}
+                            onResume={() => handleResumeFromLowPriority(task)}
+                            hasActive={!!activeTask && activeTask.id !== task.id}
+                          />
+                        ) : (
+                          <DesignerTaskCard key={task.id} task={task} index={i} onOpenDetail={setSelectedTaskId} />
+                        )
                       ))}
                     </AnimatePresence>
                   </div>
@@ -912,3 +994,86 @@ export default function DesignerDashboard() {
     </div>
   );
 }
+
+// ═══════════════════════════════════════════════════════════
+// Card compacto para "Fila baixa prioridade"
+// Timer sempre pausado; único botão retoma a atividade (troca com a ativa)
+// ═══════════════════════════════════════════════════════════
+interface LowPriorityCardProps {
+  task: DesignTask;
+  index: number;
+  onOpenDetail: (id: string) => void;
+  onResume: () => void;
+  hasActive: boolean;
+}
+
+function LowPriorityCard({ task, index, onOpenDetail, onResume, hasActive }: LowPriorityCardProps) {
+  const clientName = task.clients?.company_name || task.prospect_name || '—';
+  const clientColor = task.clients?.color || '240 5% 55%';
+  const totalSecs = task.time_spent_seconds || 0;
+  const fmtTime = (s: number) => {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    if (h > 0) return `${h}h${String(m).padStart(2, '0')}m`;
+    return `${m}m`;
+  };
+  const ds = getDesignDeadlineStatus(task);
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ delay: index * 0.04, type: 'spring', stiffness: 300, damping: 28 }}
+      className="rounded-2xl border-2 border-slate-300/40 dark:border-slate-700/40 bg-gradient-to-r from-slate-500/5 to-slate-600/5 dark:from-slate-900/20 dark:to-slate-800/10 p-3 hover:border-violet-300/50 transition-colors"
+    >
+      <div
+        onClick={() => onOpenDetail(task.id)}
+        className="flex items-center gap-3 cursor-pointer"
+      >
+        <div className="w-1 h-12 rounded-full shrink-0" style={{ background: `hsl(${clientColor})` }} />
+        <ClientLogo client={{ companyName: clientName, color: clientColor, logoUrl: task.clients?.logo_url }} size="sm" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <MoonStar size={12} className="text-slate-500 shrink-0" />
+            <span className="font-semibold text-sm truncate">{task.title}</span>
+          </div>
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
+            <span className="truncate">{clientName}</span>
+            <span className="text-slate-400">•</span>
+            <span>{FORMAT_LABELS[task.format_type] || task.format_type}</span>
+            {totalSecs > 0 && (
+              <>
+                <span className="text-slate-400">•</span>
+                <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium">
+                  <Pause size={10} /> {fmtTime(totalSecs)}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+        <Badge
+          variant={ds.variant === 'destructive' ? 'destructive' : 'secondary'}
+          className="text-[9px] rounded-full shrink-0"
+        >
+          <Clock size={9} className="mr-1" /> {ds.label}
+        </Badge>
+      </div>
+      <div className="mt-3 pt-3 border-t border-slate-200/40 dark:border-slate-700/30 flex justify-end">
+        <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+          <Button
+            size="sm"
+            onClick={(e) => { e.stopPropagation(); onResume(); }}
+            className="h-9 text-xs gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white shadow-lg shadow-violet-300/40 font-semibold"
+            title={hasActive ? 'Vai trocar de lugar com a tarefa ativa' : 'Iniciar esta tarefa'}
+          >
+            <Play size={13} fill="currentColor" />
+            {hasActive ? 'Retomar atividade (trocar)' : 'Retomar atividade'}
+          </Button>
+        </motion.div>
+      </div>
+    </motion.div>
+  );
+}
+

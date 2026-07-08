@@ -632,6 +632,8 @@ export default function DesignerKanban() {
                             canDelete={canDelete}
                             onQuickStart={(col.key === 'nova_tarefa' || col.key === 'fila_baixa_prioridade') ? () => handleQuickStart(task) : undefined}
                             onReturnToQueue={col.key === 'executando' ? () => handleReturnToQueue(task) : undefined}
+                            onPause={col.key === 'executando' && task.timer_running ? () => handlePauseTask(task) : undefined}
+                            onResume={col.key === 'executando' && !task.timer_running ? () => handleResumeTask(task) : undefined}
                             onDragStart={e => handleDragStart(e, task)}
                             onDragEnd={handleDragEnd}
                           />

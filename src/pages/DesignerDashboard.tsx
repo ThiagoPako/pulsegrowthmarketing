@@ -25,6 +25,7 @@ import {
   Flame, Target, Award, Plus, Search, Play, Pause, Send, Upload, FileText, Eye, ZoomIn,
   AlertTriangle, Layers, Heart, Sparkles, Star, MoonStar, RotateCcw, ArrowRight
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 const PRIORITY_CONFIG: Record<string, { slaHours: number }> = {
   baixa: { slaHours: 72 },

@@ -155,6 +155,8 @@ export default function Scripts() {
   const [downloadingBatch, setDownloadingBatch] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPages, setPreviewPages] = useState<HTMLDivElement[]>([]);
+  const [previewBatch, setPreviewBatch] = useState<Script[] | null>(null);
+  const [previewingBatch, setPreviewingBatch] = useState(false);
   const [pdfConfig, setPdfConfig] = useState(() => {
     const stored = localStorage.getItem('pulse_pdf_config');
     if (stored) {
@@ -902,9 +904,17 @@ export default function Scripts() {
     setPreviewOpen(true);
   }, [buildPdfPages, pdfConfig, isAutoCorrecting]);
 
-  // Re-generate preview when config changes
+  // Re-generate preview when config changes (single OR batch)
   useEffect(() => {
-    if (previewOpen && viewing) {
+    if (!previewOpen) return;
+    if (previewBatch && previewBatch.length > 0) {
+      (async () => {
+        const { pages, cleanup } = await buildPdfPages(previewBatch, pdfConfig);
+        const clonedPages = pages.map(p => p.cloneNode(true) as HTMLDivElement);
+        setPreviewPages(clonedPages);
+        cleanup();
+      })();
+    } else if (viewing) {
       handlePreviewPdf(viewing);
     }
   }, [pdfConfig, previewOpen]);
@@ -936,8 +946,8 @@ export default function Scripts() {
     }
   };
 
-  const handleDownloadSelectedPdf = useCallback(async () => {
-    const selected = filteredScripts.filter(s => selectedIds.has(s.id));
+  const handleDownloadSelectedPdf = useCallback(async (scriptsOverride?: Script[]) => {
+    const selected = scriptsOverride ?? filteredScripts.filter(s => selectedIds.has(s.id));
     if (selected.length === 0) { toast.error('Selecione ao menos um roteiro'); return; }
 
     setDownloadingBatch(true);
@@ -951,8 +961,10 @@ export default function Scripts() {
       }
 
       toast.success(`PDF com ${selected.length} roteiro(s) baixado!`);
-      setSelectMode(false);
-      setSelectedIds(new Set());
+      if (!scriptsOverride) {
+        setSelectMode(false);
+        setSelectedIds(new Set());
+      }
     } catch (err) {
       console.error('Batch PDF error:', err);
       toast.error('Erro ao gerar PDF');
@@ -960,6 +972,26 @@ export default function Scripts() {
       setDownloadingBatch(false);
     }
   }, [buildPdfPages, exportPdfPages, filteredScripts, selectedIds]);
+
+  const handlePreviewSelectedPdf = useCallback(async () => {
+    const selected = filteredScripts.filter(s => selectedIds.has(s.id));
+    if (selected.length === 0) { toast.error('Selecione ao menos um roteiro'); return; }
+    setPreviewingBatch(true);
+    try {
+      const { pages, cleanup } = await buildPdfPages(selected, pdfConfig);
+      const clonedPages = pages.map(p => p.cloneNode(true) as HTMLDivElement);
+      setPreviewPages(clonedPages);
+      setOverflowWarnings([]);
+      setPreviewBatch(selected);
+      setPreviewOpen(true);
+      cleanup();
+    } catch (err) {
+      console.error('Batch preview error:', err);
+      toast.error('Erro ao gerar prévia');
+    } finally {
+      setPreviewingBatch(false);
+    }
+  }, [buildPdfPages, filteredScripts, selectedIds, pdfConfig]);
 
   const handleCleanAll = () => {
     let count = 0;
@@ -1078,7 +1110,13 @@ export default function Scripts() {
                 <CheckSquare size={14} />
                 {selectedIds.size === filteredScripts.length ? 'Desmarcar todos' : 'Selecionar todos'}
               </Button>
-              <Button size="sm" onClick={handleDownloadSelectedPdf} disabled={selectedIds.size === 0 || downloadingBatch}
+              <Button variant="outline" size="sm" onClick={handlePreviewSelectedPdf}
+                disabled={selectedIds.size === 0 || previewingBatch}
+                className="gap-1.5">
+                <Eye size={14} className={previewingBatch ? 'animate-pulse' : ''} />
+                {previewingBatch ? 'Gerando...' : `Prévia A4 (${selectedIds.size})`}
+              </Button>
+              <Button size="sm" onClick={() => handleDownloadSelectedPdf()} disabled={selectedIds.size === 0 || downloadingBatch}
                 className="gap-1.5 bg-gradient-to-r from-primary to-primary/80">
                 <Download size={14} className={downloadingBatch ? 'animate-spin' : ''} />
                 {downloadingBatch ? 'Gerando...' : `Baixar ${selectedIds.size} selecionado(s)`}
@@ -1603,17 +1641,31 @@ export default function Scripts() {
       </Dialog>
 
       {/* PDF Preview Modal */}
-      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+      <Dialog open={previewOpen} onOpenChange={(open) => { setPreviewOpen(open); if (!open) setPreviewBatch(null); }}>
         <DialogContent className="max-w-[900px] max-h-[90vh] p-0 overflow-hidden bg-zinc-200/50 dark:bg-zinc-900/50 flex flex-col backdrop-blur-sm">
           <DialogHeader className="p-4 bg-white dark:bg-zinc-950 border-b shrink-0">
             <div className="flex flex-col gap-4 w-full">
               <div className="flex items-center justify-between">
                 <DialogTitle className="flex items-center gap-2">
                   <Eye size={18} className="text-primary" />
-                  Pré-visualização do Roteiro (A4)
+                  {previewBatch && previewBatch.length > 0
+                    ? `Pré-visualização A4 · ${previewBatch.length} roteiros`
+                    : 'Pré-visualização do Roteiro (A4)'}
                 </DialogTitle>
-                <Button onClick={() => viewing && handleDownloadPdf(viewing)} size="sm" className="gap-2">
-                  <Download size={16} /> Baixar PDF
+                <Button
+                  onClick={() => {
+                    if (previewBatch && previewBatch.length > 0) {
+                      handleDownloadSelectedPdf(previewBatch);
+                    } else if (viewing) {
+                      handleDownloadPdf(viewing);
+                    }
+                  }}
+                  size="sm"
+                  className="gap-2"
+                  disabled={downloadingBatch}
+                >
+                  <Download size={16} className={downloadingBatch ? 'animate-spin' : ''} />
+                  {downloadingBatch ? 'Gerando...' : 'Baixar PDF'}
                 </Button>
               </div>
               

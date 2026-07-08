@@ -42,10 +42,10 @@ export default function TvPanelControl() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     const settings = await fetchTvSettings();
-    if (settings.youtube_playlist_url) {
-      setRadioUrl(settings.youtube_playlist_url);
-      setDraftUrl(settings.youtube_playlist_url);
-    }
+    const DEFAULT_RADIO = 'https://www.youtube.com/watch?v=sNd2wRqdgvg&list=RDsNd2wRqdgvg&start_radio=1';
+    const url = settings.youtube_playlist_url || DEFAULT_RADIO;
+    setRadioUrl(url);
+    setDraftUrl(url);
     setVisibility(prev => {
       const next = { ...prev };
       for (const k of VISIBILITY_KEYS) {

@@ -435,16 +435,16 @@ export default function DesignerDashboard() {
                       size="sm"
                       onClick={handleTogglePause}
                       className={`gap-1.5 rounded-xl text-white shadow-md ${
-                        t.timer_running
+                        effectiveRunning
                           ? 'bg-amber-500 hover:bg-amber-600'
                           : 'bg-emerald-500 hover:bg-emerald-600'
                       }`}
                     >
-                      {t.timer_running ? <><Pause size={14} fill="currentColor" /> Pausar</> : <><Play size={14} fill="currentColor" /> Retomar</>}
+                      {effectiveRunning ? <><Pause size={14} fill="currentColor" /> Pausar</> : <><Play size={14} fill="currentColor" /> Retomar</>}
                     </Button>
                     <span
                       className={`flex items-center gap-1.5 font-mono font-bold text-lg tabular-nums px-3 py-1 rounded-lg border ${
-                        t.timer_running
+                        effectiveRunning
                           ? 'text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
                           : 'text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/10'
                       }`}

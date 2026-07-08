@@ -433,6 +433,112 @@ export default function RecordingControl() {
           <GripVertical size={10} /> Arraste entre os slots para remarcar automaticamente
         </span>
       </div>
+
+      {/* New recording dialog */}
+      <Dialog open={newDialog.open} onOpenChange={(open) => setNewDialog(prev => ({ ...prev, open }))}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Agendar Gravação</DialogTitle>
+            <DialogDescription>
+              {(() => {
+                const vm = users.find(u => u.id === newDialog.vmId);
+                const dateLbl = newDialog.date ? format(new Date(newDialog.date + 'T12:00:00'), "dd/MM (EEE)", { locale: ptBR }) : '';
+                return `${vm?.displayName || vm?.name || 'Videomaker'} • ${dateLbl} • ${newDialog.time}`;
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setNewForm(f => ({ ...f, mode: 'client' }))}
+                className={`p-3 rounded-lg border-2 text-sm font-semibold transition-all ${newForm.mode === 'client' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-muted-foreground/30'}`}
+              >
+                Cliente
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewForm(f => ({ ...f, mode: 'avulso', type: 'avulso' }))}
+                className={`p-3 rounded-lg border-2 text-sm font-semibold transition-all ${newForm.mode === 'avulso' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-muted-foreground/30'}`}
+              >
+                Avulso / Prospect
+              </button>
+            </div>
+
+            {newForm.mode === 'client' ? (
+              <div className="space-y-1.5">
+                <Label>Cliente</Label>
+                <Select value={newForm.clientId} onValueChange={(v) => setNewForm(f => ({ ...f, clientId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
+                  <SelectContent>
+                    {activeClients.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label>Nome do prospect / avulso</Label>
+                <Input
+                  value={newForm.prospectName}
+                  onChange={(e) => setNewForm(f => ({ ...f, prospectName: e.target.value }))}
+                  placeholder="Ex.: Padaria do João"
+                  autoFocus
+                />
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label>Tipo</Label>
+              <Select value={newForm.type} onValueChange={(v) => setNewForm(f => ({ ...f, type: v as RecordingType }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {newForm.mode === 'client' && <SelectItem value="fixa">Fixa</SelectItem>}
+                  <SelectItem value="extra">Extra</SelectItem>
+                  {newForm.mode === 'client' && <SelectItem value="secundaria">Secundária</SelectItem>}
+                  {newForm.mode === 'client' && <SelectItem value="backup">Backup</SelectItem>}
+                  {newForm.mode === 'avulso' && <SelectItem value="avulso">Avulso</SelectItem>}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewDialog(prev => ({ ...prev, open: false }))} disabled={saving}>Cancelar</Button>
+            <Button
+              onClick={async () => {
+                if (newForm.mode === 'client' && !newForm.clientId) { toast.error('Selecione um cliente'); return; }
+                if (newForm.mode === 'avulso' && !newForm.prospectName.trim()) { toast.error('Informe o nome do prospect'); return; }
+                const conflict = hasConflict(newDialog.vmId, newDialog.date, newDialog.time, undefined, newForm.type, newForm.mode === 'avulso' ? undefined : newForm.clientId);
+                if (conflict.hasConflict) { toast.error(conflict.message || 'Conflito de horário'); return; }
+                setSaving(true);
+                const rec: Recording = {
+                  id: crypto.randomUUID(),
+                  clientId: newForm.mode === 'avulso' ? '' : newForm.clientId,
+                  videomakerId: newDialog.vmId,
+                  date: newDialog.date,
+                  startTime: newDialog.time,
+                  type: newForm.type,
+                  status: 'agendada',
+                  ...(newForm.mode === 'avulso' ? { prospectName: newForm.prospectName.trim() } : {}),
+                };
+                const ok = await addRecording(rec);
+                setSaving(false);
+                if (!ok) { toast.error('Erro ao agendar'); return; }
+                toast.success('Gravação agendada');
+                setNewDialog({ open: false, vmId: '', time: '', date: '' });
+                setTimeout(() => refetchData(), 300);
+              }}
+              disabled={saving}
+            >
+              {saving ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Check size={14} className="mr-1.5" />}
+              Agendar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

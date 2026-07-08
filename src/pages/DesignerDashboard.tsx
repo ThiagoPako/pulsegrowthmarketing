@@ -80,6 +80,26 @@ export default function DesignerDashboard() {
   const [activeElapsed, setActiveElapsed] = useState('');
   // Optimistic pause override so UI freezes instantly without waiting for refetch
   const [pauseOverride, setPauseOverride] = useState<{ id: string; running: boolean; frozenSeconds?: number; resumedAt?: number } | null>(null);
+  // Modo Foco (Zen) — esconde tudo exceto tarefa ativa
+  const [zenMode, setZenMode] = useState(false);
+  // Meta diária de artes (configurável, persistida por usuário)
+  const dailyGoalKey = `pulse:designer:dailyGoal:${user?.id || 'anon'}`;
+  const [dailyGoal, setDailyGoal] = useState<number>(() => {
+    try { return Number(localStorage.getItem(dailyGoalKey)) || 5; } catch { return 5; }
+  });
+  const [editingGoal, setEditingGoal] = useState(false);
+  useEffect(() => {
+    try { localStorage.setItem(dailyGoalKey, String(dailyGoal)); } catch {}
+  }, [dailyGoal, dailyGoalKey]);
+  // Tour de boas-vindas (mostrado só na 1ª vez)
+  const tourKey = `pulse:designer:tourSeen:${user?.id || 'anon'}`;
+  const [showTour, setShowTour] = useState<boolean>(() => {
+    try { return localStorage.getItem(tourKey) !== '1'; } catch { return false; }
+  });
+  const dismissTour = () => {
+    try { localStorage.setItem(tourKey, '1'); } catch {}
+    setShowTour(false);
+  };
 
   const tasks = tasksQuery.data || [];
   const selectedTask = tasks.find(t => t.id === selectedTaskId) || null;

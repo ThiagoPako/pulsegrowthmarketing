@@ -439,12 +439,13 @@ export default function RecordingControl() {
 
 /* ── Recording Card ── */
 function RecordingCard({
-  recording, client, isDragging, onDragStart,
+  recording, client, isDragging, onDragStart, onDelete,
 }: {
   recording: Recording;
   client?: { id: string; companyName: string; color: string; logoUrl?: string; responsiblePerson: string };
   isDragging: boolean;
   onDragStart: (e: React.DragEvent, r: Recording) => void;
+  onDelete?: () => void;
 }) {
   const status = STATUS_COLORS[recording.status] || STATUS_COLORS.agendada;
   const isCompleted = recording.status === 'concluida';
@@ -465,8 +466,21 @@ function RecordingCard({
             : 'border-border bg-background hover:border-primary/40 hover:shadow-xl hover:-translate-y-0.5'
       }`}
     >
+      {/* Delete button */}
+      {onDelete && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          onMouseDown={(e) => e.stopPropagation()}
+          draggable={false}
+          className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-red-500/15 text-red-400 z-10"
+          title="Apagar gravação"
+        >
+          <Trash2 size={12} />
+        </button>
+      )}
       {/* Drag handle */}
-      {!isCompleted && (
+      {!isCompleted && !onDelete && (
         <div className="absolute right-1.5 top-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <GripVertical size={12} className="text-muted-foreground" />
         </div>

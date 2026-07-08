@@ -42,6 +42,29 @@ export function getDesignSlaStatus(task: { created_at?: string }) {
   return { remainingMs, hours, isOverdue: hours < 0, isCritical: hours >= 0 && hours < 12 };
 }
 
+// Tempo sem atualização (baseado em updated_at)
+export function getIdleStatus(task: { updated_at?: string; kanban_column?: string }) {
+  if (!task.updated_at) return null;
+  const updated = new Date(task.updated_at).getTime();
+  if (!Number.isFinite(updated)) return null;
+  const hoursIdle = (Date.now() - updated) / 3600 / 1000;
+  // Só sinaliza como "travada" após 4h sem mexer
+  const isStuck = hoursIdle >= 4;
+  const isSevere = hoursIdle >= 12;
+  return { hoursIdle, isStuck, isSevere };
+}
+
+function formatIdleLabel(hours: number) {
+  if (hours < 1) {
+    const mins = Math.max(1, Math.floor(hours * 60));
+    return `${mins}min`;
+  }
+  if (hours < 24) return `${Math.floor(hours)}h`;
+  const days = Math.floor(hours / 24);
+  const rest = Math.floor(hours - days * 24);
+  return rest > 0 ? `${days}d ${rest}h` : `${days}d`;
+}
+
 const COLUMN_CONFIG: Record<string, { icon: React.ReactNode; gradient: string }> = {
   nova_tarefa: { icon: <Sparkles size={15} />, gradient: 'from-blue-500/20 to-blue-600/10 dark:from-blue-500/30 dark:to-blue-600/10' },
   executando: { icon: <Zap size={15} />, gradient: 'from-amber-500/20 to-yellow-500/10 dark:from-amber-500/30 dark:to-yellow-500/10' },
@@ -933,6 +956,22 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
           return (
             <Badge variant="outline" className="text-[10px] gap-0.5 text-muted-foreground">
               <Clock size={10} /> {Math.ceil(sla.hours)}h SLA
+            </Badge>
+          );
+        })()}
+        {(() => {
+          if (COMPLETED_COLS.includes(task.kanban_column)) return null;
+          // Não sinaliza "parada" enquanto o cronômetro está rodando (designer trabalhando)
+          if (task.timer_running) return null;
+          const idle = getIdleStatus(task);
+          if (!idle || !idle.isStuck) return null;
+          const label = formatIdleLabel(idle.hoursIdle);
+          const cls = idle.isSevere
+            ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 animate-pulse'
+            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200';
+          return (
+            <Badge className={`text-[10px] gap-0.5 ${cls}`} title={`Sem atualização desde ${new Date(task.updated_at).toLocaleString('pt-BR')}`}>
+              <Pause size={10} /> Parada há {label}
             </Badge>
           );
         })()}

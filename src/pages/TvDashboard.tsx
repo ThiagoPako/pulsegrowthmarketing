@@ -77,6 +77,7 @@ interface DesignActivityTask {
   timerRunning?: boolean;
   timerStartedAt?: string | null;
   createdAt?: string | null;
+  updatedAt?: string | null;
   priority?: string;
   assignedTo?: string | null;
 }
@@ -158,6 +159,21 @@ function getDesignSlaHours(createdAt?: string | null) {
   if (!Number.isFinite(created)) return null;
   const deadlineMs = created + DESIGN_SLA_HOURS_TV * 3600 * 1000;
   return (deadlineMs - Date.now()) / 3600 / 1000;
+}
+
+function getIdleHours(updatedAt?: string | null) {
+  if (!updatedAt) return null;
+  const u = new Date(updatedAt).getTime();
+  if (!Number.isFinite(u)) return null;
+  return (Date.now() - u) / 3600 / 1000;
+}
+
+function formatIdle(hours: number) {
+  if (hours < 1) return `${Math.max(1, Math.floor(hours * 60))}min`;
+  if (hours < 24) return `${Math.floor(hours)}h`;
+  const d = Math.floor(hours / 24);
+  const r = Math.floor(hours - d * 24);
+  return r > 0 ? `${d}d ${r}h` : `${d}d`;
 }
 
 /* ─── Utils ─────────────────────────────────────────────── */
@@ -877,6 +893,8 @@ function DesignMiniRow({ task, status }: { task: DesignActivityTask; status: 'pa
   const color = status === 'overdue' ? 'hsl(0 84% 60%)' : 'hsl(240 5% 65%)';
   const Icon = status === 'overdue' ? AlertTriangle : Pause;
   const slaHours = getDesignSlaHours(task.createdAt);
+  const idle = getIdleHours(task.updatedAt);
+  const idleSevere = idle !== null && idle >= 12;
   const suffix = status === 'overdue' && slaHours !== null
     ? `vencido ${Math.floor(Math.abs(slaHours))}h`
     : status === 'paused'
@@ -889,6 +907,18 @@ function DesignMiniRow({ task, status }: { task: DesignActivityTask; status: 'pa
       <Icon className="w-3 h-3 flex-shrink-0" style={{ color }} />
       <span className="text-[11px] text-white/85 truncate flex-1">{task.title}</span>
       <span className="text-[9px] text-white/50 truncate flex-shrink-0">{task.clientName}</span>
+      {idle !== null && idle >= 4 && (
+        <span
+          className={`text-[9px] font-bold uppercase tracking-wider flex-shrink-0 px-1.5 py-0.5 rounded ${idleSevere ? 'animate-pulse' : ''}`}
+          style={{
+            color: idleSevere ? 'hsl(24 95% 60%)' : 'hsl(48 95% 60%)',
+            background: idleSevere ? 'hsl(24 95% 60% / 0.15)' : 'hsl(48 95% 60% / 0.12)',
+          }}
+          title={`Sem atualização há ${formatIdle(idle)}`}
+        >
+          ⏸ {formatIdle(idle)}
+        </span>
+      )}
       <span className="text-[9px] font-bold uppercase tracking-wider flex-shrink-0" style={{ color }}>{suffix}</span>
     </div>
   );
@@ -1695,6 +1725,13 @@ export default function TvDashboard() {
                       const h = getDesignSlaHours(t.createdAt);
                       return h !== null && h >= 0 && h < 12;
                     });
+                    // Tarefas travadas: sem update há 4h+, com cronômetro parado e não concluídas
+                    const stuck = designPipeline.filter(t => {
+                      if (['em_analise'].includes(t.column)) return false;
+                      if (t.timerRunning) return false;
+                      const idle = getIdleHours(t.updatedAt);
+                      return idle !== null && idle >= 4;
+                    });
 
                     return (
                       <>
@@ -1722,17 +1759,19 @@ export default function TvDashboard() {
                         )}
 
                         {/* Status geral */}
-                        <div className="grid grid-cols-4 gap-1.5 mt-2">
+                        <div className="grid grid-cols-5 gap-1.5 mt-2">
                           <DesignStat label="Fila" value={queue.length} color="hsl(217 91% 60%)" icon={Sparkles} />
                           <DesignStat label="Pausadas" value={paused.length} color="hsl(240 5% 65%)" icon={Pause} />
+                          <DesignStat label="Paradas 4h+" value={stuck.length} color="hsl(48 95% 60%)" icon={Clock} pulse={stuck.length > 0} />
                           <DesignStat label="Crítica <12h" value={critical.length} color="hsl(32 95% 58%)" icon={Clock} />
                           <DesignStat label="Atrasada" value={overdue.length} color="hsl(0 84% 60%)" icon={AlertTriangle} pulse={overdue.length > 0} />
                         </div>
 
-                        {/* Lista de pausadas + atrasadas */}
-                        {(paused.length > 0 || overdue.length > 0) && (
+                        {/* Lista de pausadas + atrasadas + travadas */}
+                        {(paused.length > 0 || overdue.length > 0 || stuck.length > 0) && (
                           <div className="mt-2 space-y-1.5">
                             {overdue.slice(0, 3).map(t => <DesignMiniRow key={`o-${t.id}`} task={t} status="overdue" />)}
+                            {stuck.filter(t => !overdue.some(o => o.id === t.id) && !paused.some(p => p.id === t.id)).slice(0, 3).map(t => <DesignMiniRow key={`s-${t.id}`} task={t} status="paused" />)}
                             {paused.slice(0, 3).map(t => <DesignMiniRow key={`p-${t.id}`} task={t} status="paused" />)}
                           </div>
                         )}

@@ -511,7 +511,7 @@ export default function RecordingControl() {
               onClick={async () => {
                 if (newForm.mode === 'client' && !newForm.clientId) { toast.error('Selecione um cliente'); return; }
                 if (newForm.mode === 'avulso' && !newForm.prospectName.trim()) { toast.error('Informe o nome do prospect'); return; }
-                const conflict = hasConflict(newDialog.vmId, newDialog.date, newDialog.time, undefined, newForm.type, newForm.mode === 'avulso' ? undefined : newForm.clientId);
+                const conflict = hasConflict(newDialog.vmId, newDialog.date, newDialog.time, undefined, newForm.type, newForm.mode === 'avulso' ? undefined : newForm.clientId, { skipClientDayCheck: true });
                 if (conflict.hasConflict) { toast.error(conflict.message || 'Conflito de horário'); return; }
                 setSaving(true);
                 const rec: Recording = {
@@ -524,7 +524,7 @@ export default function RecordingControl() {
                   status: 'agendada',
                   ...(newForm.mode === 'avulso' ? { prospectName: newForm.prospectName.trim() } : {}),
                 };
-                const ok = await addRecording(rec);
+                const ok = await addRecording(rec, { skipClientDayCheck: true });
                 setSaving(false);
                 if (!ok) { toast.error('Erro ao agendar'); return; }
                 toast.success('Gravação agendada');

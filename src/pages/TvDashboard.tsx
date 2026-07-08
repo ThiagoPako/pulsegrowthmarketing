@@ -1074,6 +1074,131 @@ function DesignMiniRow({ task, status }: { task: DesignActivityTask; status: 'pa
   );
 }
 
+/* ─── Editor Live Card (grupo por editor) ───────────────── */
+function EditorLiveCard({ editorName, editorAvatar, tasks }: { editorName: string; editorAvatar?: string | null; tasks: EditingTask[] }) {
+  const accent = '#8b5cf6';
+  const active = tasks.find(t => t.column === 'edicao' && !t.isPaused)
+    || tasks.find(t => t.column === 'edicao')
+    || tasks[0];
+  const others = tasks.filter(t => t.id !== active?.id).slice(0, 4);
+  const isEditingNow = !!active && active.column === 'edicao' && !active.isPaused;
+  const col = active ? (COLUMN_CONFIG[active.column] || COLUMN_CONFIG.edicao) : COLUMN_CONFIG.edicao;
+  const ColIcon = col.icon;
+
+  return (
+    <motion.div
+      className="rounded-2xl overflow-hidden border-2 relative"
+      style={{
+        borderColor: isEditingNow ? `${accent}55` : `${accent}22`,
+        background: `linear-gradient(135deg, ${accent}18, transparent 65%), rgba(0,0,0,0.32)`,
+        boxShadow: isEditingNow ? `0 0 32px ${accent}22` : 'none',
+      }}
+      initial={{ opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.25 }}
+    >
+      {isEditingNow && (
+        <div className="h-1 w-full relative overflow-hidden" style={{ background: `${accent}22` }}>
+          <motion.div
+            className="absolute inset-y-0 w-1/3"
+            style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)` }}
+            animate={{ x: ['-100%', '400%'] }}
+            transition={{ repeat: Infinity, duration: 2.2, ease: 'linear' }}
+          />
+        </div>
+      )}
+
+      <div className="p-3">
+        {/* Header do editor */}
+        <div className="flex items-center gap-2 mb-2.5">
+          <div className="w-9 h-9 rounded-full overflow-hidden border-2 flex items-center justify-center flex-shrink-0"
+            style={{ borderColor: accent, background: `${accent}18` }}>
+            {editorAvatar ? (
+              <img src={editorAvatar} alt={editorName} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-[11px] font-bold text-white">{getInitials(editorName)}</span>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-bold text-white truncate">{editorName}</p>
+            <p className="text-[9px] uppercase tracking-wider text-white/40">
+              {tasks.length} {tasks.length === 1 ? 'vídeo' : 'vídeos'} · Editor
+            </p>
+          </div>
+          {isEditingNow ? (
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-full flex-shrink-0" style={{ background: `${accent}25` }}>
+              <motion.div className="w-1.5 h-1.5 rounded-full" style={{ background: accent }}
+                animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1.2 }} />
+              <span className="text-[9px] font-black tracking-widest" style={{ color: accent }}>AO VIVO</span>
+            </div>
+          ) : active?.isPaused ? (
+            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/15 flex-shrink-0">
+              <Pause className="w-2.5 h-2.5 text-amber-400" />
+              <span className="text-[8px] font-bold text-amber-400">PAUSADO</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/5 text-white/40 flex-shrink-0">
+              <span className="text-[8px] font-bold uppercase">Aguardando</span>
+            </div>
+          )}
+        </div>
+
+        {/* Tarefa ativa */}
+        {active ? (
+          <div className="rounded-xl p-2.5 border" style={{ borderColor: `${col.color}33`, background: `${col.color}10` }}>
+            <div className="flex items-center gap-2 mb-1.5">
+              <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${col.color}22` }}>
+                <ColIcon className="w-2.5 h-2.5" style={{ color: col.color }} />
+                <span className="text-[8px] font-bold uppercase tracking-wider" style={{ color: col.color }}>{col.label}</span>
+              </div>
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/8">
+                <Clock className="w-2.5 h-2.5 text-white/60" />
+                <span className="text-[9px] font-mono font-bold text-white/85">{formatElapsedTime(active.timeOnTask)}</span>
+              </div>
+              <span className="ml-auto text-[8px] uppercase tracking-wider text-white/30">{active.contentType}</span>
+            </div>
+            <p className="text-[13px] font-semibold text-white leading-tight truncate">{active.title}</p>
+            <div className="flex items-center gap-1.5 mt-1.5">
+              {active.clientLogo ? (
+                <img src={active.clientLogo} alt="" className="w-4 h-4 rounded object-contain" />
+              ) : (
+                <div className="w-4 h-4 rounded flex items-center justify-center text-[7px] font-bold"
+                  style={{ background: active.clientColor ? `hsl(${active.clientColor} / 0.15)` : 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.45)' }}>
+                  {getInitials(active.clientName)}
+                </div>
+              )}
+              <span className="text-[10px] text-white/55 truncate">{active.clientName}</span>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-white/8 p-2.5 text-center">
+            <p className="text-[10px] text-white/25">Sem vídeo em edição</p>
+          </div>
+        )}
+
+        {/* Fila do editor */}
+        {others.length > 0 && (
+          <div className="mt-2 space-y-1">
+            <p className="text-[8px] uppercase tracking-wider text-white/30 font-bold px-0.5">Próximos na fila</p>
+            {others.map(t => {
+              const c = COLUMN_CONFIG[t.column] || COLUMN_CONFIG.edicao;
+              return (
+                <div key={t.id} className="flex items-center gap-2 px-2 py-1 rounded-lg border"
+                  style={{ borderColor: `${c.color}22`, background: `${c.color}06` }}>
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: c.color }} />
+                  <span className="text-[10px] text-white/75 truncate flex-1">{t.title}</span>
+                  <span className="text-[9px] text-white/35 truncate flex-shrink-0 max-w-[80px]">{t.clientName}</span>
+                  <span className="text-[8px] uppercase tracking-wider font-bold flex-shrink-0" style={{ color: c.color }}>{c.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
 /* ─── Scheduled Post Card ───────────────────────────────── */
 function PostCard({ post }: { post: ScheduledPost }) {
   const statusConfig: Record<string, { color: string; label: string }> = {
@@ -1759,64 +1884,51 @@ export default function TvDashboard() {
             })()}
 
 
-            {/* Week Scheduled Posts (reels) */}
+            {/* Editors — ao vivo (vídeos em edição por editor) */}
             {visibility.show_posts && (() => {
-              const groups: Record<string, ScheduledPost[]> = {};
-              [...weekPosts]
-                .sort((a, b) => (a.scheduledDate || '').localeCompare(b.scheduledDate || '') || (a.scheduledTime || '99:99').localeCompare(b.scheduledTime || '99:99'))
-                .forEach(p => {
-                  const k = p.scheduledDate || 'sem-data';
-                  (groups[k] = groups[k] || []).push(p);
-                });
-              const todayIso = new Date().toISOString().slice(0, 10);
-              const tomorrowIso = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-              const weekdayLabels = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-              const orderedKeys = Object.keys(groups).sort();
+              // Agrupa tarefas por pessoa responsável (editor em 'edicao'/'alteracao', revisor em 'revisao')
+              const groups = new Map<string, { name: string; avatar?: string | null; tasks: EditingTask[] }>();
+              editingPipeline.forEach(t => {
+                const isReview = t.column === 'revisao';
+                const name = (isReview ? t.reviewerName : t.editorName) || null;
+                const avatar = (isReview ? t.reviewerAvatar : t.editorAvatar) || null;
+                if (!name) return;
+                const key = name.toLowerCase();
+                const existing = groups.get(key);
+                if (existing) existing.tasks.push(t);
+                else groups.set(key, { name, avatar, tasks: [t] });
+              });
+              const editorGroups = Array.from(groups.values()).sort((a, b) => {
+                const aLive = a.tasks.some(t => t.column === 'edicao' && !t.isPaused);
+                const bLive = b.tasks.some(t => t.column === 'edicao' && !t.isPaused);
+                if (aLive !== bLive) return aLive ? -1 : 1;
+                return b.tasks.length - a.tasks.length;
+              });
+              const totalLive = editorGroups.filter(g => g.tasks.some(t => t.column === 'edicao' && !t.isPaused)).length;
 
               return (
                 <div>
-                  <SectionHeader icon={Send} iconColor="#3b82f6" title="Reels da Semana" badge={`${weekPosts.length} agendados`} />
-                  {orderedKeys.length > 0 ? (
-                    <div className="space-y-2.5">
-                      {orderedKeys.map(dateKey => {
-                        const posts = groups[dateKey];
-                        const [y, m, d] = dateKey.split('-').map(Number);
-                        const dateObj = new Date(y, (m || 1) - 1, d || 1);
-                        const isToday = dateKey === todayIso;
-                        const isTomorrow = dateKey === tomorrowIso;
-                        const label = isToday
-                          ? 'Hoje'
-                          : isTomorrow
-                          ? 'Amanhã'
-                          : weekdayLabels[dateObj.getDay()];
-                        const shortDate = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
-                        return (
-                          <div key={dateKey}>
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full"
-                                style={{
-                                  background: isToday ? `${PULSE_ORANGE}18` : 'rgba(255,255,255,0.05)',
-                                  border: isToday ? `1px solid ${PULSE_ORANGE}55` : '1px solid rgba(255,255,255,0.06)',
-                                }}>
-                                <span className="text-[9px] font-black uppercase tracking-wider" style={{ color: isToday ? PULSE_ORANGE : 'rgba(255,255,255,0.7)' }}>
-                                  {label}
-                                </span>
-                                <span className="text-[9px] font-mono tabular-nums text-white/40">{shortDate}</span>
-                              </div>
-                              <span className="text-[9px] text-white/25 font-semibold">{posts.length} {posts.length === 1 ? 'post' : 'posts'}</span>
-                              <div className="flex-1 h-px bg-white/5" />
-                            </div>
-                            <div className="space-y-1.5">
-                              {posts.map(post => <PostCard key={post.id} post={post} />)}
-                            </div>
-                          </div>
-                        );
-                      })}
+                  <SectionHeader
+                    icon={Scissors}
+                    iconColor="#8b5cf6"
+                    title="Editores — ao vivo"
+                    badge={totalLive > 0 ? `● ${totalLive} editando` : `${editorGroups.length} editores`}
+                  />
+                  {editorGroups.length > 0 ? (
+                    <div className="space-y-2">
+                      {editorGroups.map(g => (
+                        <EditorLiveCard
+                          key={g.name}
+                          editorName={g.name}
+                          editorAvatar={g.avatar}
+                          tasks={g.tasks}
+                        />
+                      ))}
                     </div>
                   ) : (
                     <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                      <Send className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
-                      <p className="text-[10px] text-white/20">Nenhum reel agendado para os próximos 7 dias</p>
+                      <Scissors className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                      <p className="text-[10px] text-white/20">Nenhum vídeo em edição no momento</p>
                     </div>
                   )}
                 </div>

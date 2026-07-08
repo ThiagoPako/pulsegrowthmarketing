@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import ClientLogo from '@/components/ClientLogo';
 import DesignTaskDetailSheet from '@/components/designer/DesignTaskDetailSheet';
 import DesignTaskCreateDialog from '@/components/designer/DesignTaskCreateDialog';
@@ -21,8 +22,8 @@ import { ptBR } from 'date-fns/locale';
 import {
   Palette, CheckCircle, Clock, BarChart3,
   TrendingUp, Timer, Building2, CalendarDays,
-  Flame, Target, Award, Plus, Search,
-  AlertTriangle, Layers, Heart, Sparkles, Star
+  Flame, Target, Award, Plus, Search, Play, Pause, Send, Upload, FileText, Eye, ZoomIn,
+  AlertTriangle, Layers, Heart, Sparkles, Star, MoonStar, RotateCcw, ArrowRight
 } from 'lucide-react';
 
 const PRIORITY_CONFIG: Record<string, { slaHours: number }> = {

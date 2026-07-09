@@ -134,18 +134,15 @@ export function useDesignTasks() {
     },
     enabled: !cityLoading,
     // Cache local pra 1ª pintura instantânea; refetch acontece em background.
-    initialData: () => (activeCity ? readLocalTasks(activeCity) : undefined),
-    initialDataUpdatedAt: () => {
-      try {
-        const raw = localStorage.getItem(LS_KEY(activeCity || 'default'));
-        return raw ? JSON.parse(raw).at : 0;
-      } catch { return 0; }
-    },
+    // Tenta a cidade ativa; se ainda não resolveu, cai pra última cidade usada.
+    initialData: () => readLocalTasks(activeCity),
+    initialDataUpdatedAt: () => readLocalUpdatedAt(activeCity),
     placeholderData: (prev) => prev, // mantém cards antigos durante troca de cidade
-    staleTime: 30_000,
-    refetchInterval: 30_000,
+    staleTime: 60_000,
+    gcTime: 30 * 60_000, // mantém em memória 30min entre navegações
+    refetchInterval: 60_000,
     refetchOnWindowFocus: false,
-    refetchOnMount: 'always', // sempre valida em background, mas UI já pintou
+    refetchOnMount: false, // usa cache; refetchInterval mantém fresco
   });
 
 

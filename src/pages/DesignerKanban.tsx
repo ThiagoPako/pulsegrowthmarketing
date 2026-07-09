@@ -338,10 +338,7 @@ export default function DesignerKanban() {
             .map(u => supabase.from('design_tasks').update({ position: u.position }).eq('id', u.id))
         );
       }
-      const designerId = task.assigned_to || user?.id;
-      const conflicting = designerId
-        ? tasks.filter(t => t.id !== taskId && t.kanban_column === 'executando' && t.assigned_to === designerId)
-        : [];
+      const conflicting = tasks.filter(t => t.id !== taskId && t.kanban_column === 'executando');
       if (conflicting.length > 0) await pauseConflicting(conflicting, task.title, reason);
       await updateTask.mutateAsync({ id: taskId, kanban_column: targetColumn, ...extraFields } as any);
       await addHistory.mutateAsync({ task_id: taskId, action: `Movido para ${targetLabel}`, user_id: user?.id });
@@ -351,10 +348,7 @@ export default function DesignerKanban() {
     try {
       // Se iniciar execução e já houver outra ativa → pedir justificativa antes
       if (targetColumn === 'executando') {
-        const designerId = task.assigned_to || user?.id;
-        const conflicting = designerId
-          ? tasks.filter(t => t.id !== taskId && t.kanban_column === 'executando' && t.assigned_to === designerId)
-          : [];
+        const conflicting = tasks.filter(t => t.id !== taskId && t.kanban_column === 'executando');
         if (conflicting.length > 0) {
           setPauseReasonText('');
           setPausePrompt({

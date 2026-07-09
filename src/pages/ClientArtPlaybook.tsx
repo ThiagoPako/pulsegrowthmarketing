@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { ArrowLeft, Search, Download, ExternalLink, Image as ImageIcon, FileText, Sparkles, Grid3x3, LayoutList } from 'lucide-react';
+import { ArrowLeft, Search, Download, ExternalLink, Image as ImageIcon, FileText, Sparkles, Grid3x3, LayoutList, Clock, AlertTriangle } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import { motion } from 'framer-motion';
 import { downloadSingleArt } from '@/lib/designerDownload';
@@ -37,7 +37,29 @@ const FORMAT_LABELS: Record<string, string> = {
   feed: 'Feed', story: 'Story', logomarca: 'Logo', midia_fisica: 'Mídia Física',
 };
 
+const COLUMN_LABELS: Record<string, string> = {
+  nova_tarefa: 'Nova tarefa',
+  executando: 'Executando',
+  fila_baixa_prioridade: 'Fila baixa',
+  em_analise: 'Em análise',
+  enviar_cliente: 'Enviar cliente',
+  ajustes: 'Ajustes',
+  aprovado: 'Aprovada',
+  postado: 'Postada',
+};
+
+const PENDING_COLUMNS = ['nova_tarefa', 'executando', 'fila_baixa_prioridade', 'em_analise', 'enviar_cliente', 'ajustes'];
+
+type StatusKey = 'aprovado' | 'postado' | 'pendente' | 'mes' | 'all';
+
 const isImage = (url: string) => /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(url);
+
+function isCurrentMonth(iso?: string | null) {
+  if (!iso) return false;
+  const d = new Date(iso);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+}
 
 export default function ClientArtPlaybook() {
   const { clientId } = useParams<{ clientId: string }>();
@@ -47,8 +69,7 @@ export default function ClientArtPlaybook() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [format, setFormat] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<'aprovado' | 'postado' | 'all'>('aprovado');
-  const [periodFilter, setPeriodFilter] = useState<'all' | '7d' | '30d' | '90d'>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusKey>('aprovado');
   const [view, setView] = useState<'grid' | 'mosaic'>('mosaic');
   const [preview, setPreview] = useState<string | null>(null);
 
@@ -63,39 +84,46 @@ export default function ClientArtPlaybook() {
       ]);
       if (cancel) return;
       setClient((c as ClientRow) || null);
-      setArts(((a as ArtRow[]) || []).filter(x => x.attachment_url || x.mockup_url));
+      setArts((a as ArtRow[]) || []);
       setLoading(false);
     })();
     return () => { cancel = true; };
   }, [clientId]);
 
-  const periodCutoff = useMemo(() => {
-    if (periodFilter === 'all') return 0;
-    const days = periodFilter === '7d' ? 7 : periodFilter === '30d' ? 30 : 90;
-    return Date.now() - days * 24 * 60 * 60 * 1000;
-  }, [periodFilter]);
+  const matchesStatus = (a: ArtRow, s: StatusKey) => {
+    if (s === 'all') return true;
+    if (s === 'aprovado') return a.kanban_column === 'aprovado';
+    if (s === 'postado') return a.kanban_column === 'postado';
+    if (s === 'pendente') return PENDING_COLUMNS.includes(a.kanban_column);
+    if (s === 'mes') return isCurrentMonth(a.completed_at || a.created_at);
+    return true;
+  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return arts.filter(a => {
-      if (statusFilter !== 'all' && a.kanban_column !== statusFilter) return false;
+      if (!matchesStatus(a, statusFilter)) return false;
+      // Pendentes podem não ter anexo; nos demais status exigimos arquivo
+      if (statusFilter !== 'pendente' && !(a.attachment_url || a.mockup_url)) return false;
       if (format !== 'all' && a.format_type !== format) return false;
       if (q && !a.title.toLowerCase().includes(q)) return false;
-      if (periodCutoff) {
-        const ts = new Date(a.completed_at || a.created_at).getTime();
-        if (ts < periodCutoff) return false;
-      }
       return true;
     });
-  }, [arts, search, format, statusFilter, periodCutoff]);
+  }, [arts, search, format, statusFilter]);
 
   const formatCounts = useMemo(() => {
-    const src = statusFilter === 'all' ? arts : arts.filter(a => a.kanban_column === statusFilter);
+    const src = arts.filter(a => matchesStatus(a, statusFilter));
     return src.reduce<Record<string, number>>((m, a) => { m[a.format_type] = (m[a.format_type] || 0) + 1; return m; }, {});
   }, [arts, statusFilter]);
 
-  const totalApproved = arts.filter(a => a.kanban_column === 'aprovado').length;
-  const totalPosted = arts.filter(a => a.kanban_column === 'postado').length;
+  const counts = useMemo(() => ({
+    aprovado: arts.filter(a => a.kanban_column === 'aprovado' && (a.attachment_url || a.mockup_url)).length,
+    postado: arts.filter(a => a.kanban_column === 'postado' && (a.attachment_url || a.mockup_url)).length,
+    pendente: arts.filter(a => PENDING_COLUMNS.includes(a.kanban_column)).length,
+    mes: arts.filter(a => isCurrentMonth(a.completed_at || a.created_at) && (a.attachment_url || a.mockup_url)).length,
+    total: arts.filter(a => a.attachment_url || a.mockup_url).length,
+  }), [arts]);
+
   const backHref = searchParams.get('from') || '/dashboard';
 
   const handleDownloadAll = async () => {
@@ -120,6 +148,14 @@ export default function ClientArtPlaybook() {
 
   const brand = `hsl(${client.color})`;
 
+  const statusOptions: { key: StatusKey; label: string; count: number }[] = [
+    { key: 'aprovado', label: 'Aprovadas', count: counts.aprovado },
+    { key: 'postado', label: 'Postadas', count: counts.postado },
+    { key: 'pendente', label: 'Pendentes', count: counts.pendente },
+    { key: 'mes', label: 'Mês atual', count: counts.mes },
+    { key: 'all', label: 'Todas', count: counts.total },
+  ];
+
   return (
     <div className="min-h-screen bg-background">
       {/* Hero */}
@@ -140,12 +176,11 @@ export default function ClientArtPlaybook() {
                 Portfólio de artes produzidas {client.niche ? `• ${client.niche}` : ''} {client.responsible_person ? `• ${client.responsible_person}` : ''}
               </p>
               <div className="flex items-center gap-2 mt-3 flex-wrap">
-                <Badge className="text-[11px]" style={{ background: brand, color: 'white' }}>✅ {totalApproved} aprovadas</Badge>
-                <Badge variant="secondary" className="text-[11px]">📤 {totalPosted} postadas</Badge>
-                <Badge variant="secondary" className="text-[11px]">🎨 {arts.length} totais</Badge>
-                {Object.entries(formatCounts).slice(0, 4).map(([k, v]) => (
-                  <Badge key={k} variant="outline" className="text-[10px]">{FORMAT_LABELS[k] || k}: {v}</Badge>
-                ))}
+                <Badge className="text-[11px]" style={{ background: brand, color: 'white' }}>✅ {counts.aprovado} aprovadas</Badge>
+                <Badge variant="secondary" className="text-[11px]">📤 {counts.postado} postadas</Badge>
+                <Badge variant="secondary" className="text-[11px]">⏳ {counts.pendente} pendentes</Badge>
+                <Badge variant="secondary" className="text-[11px]">📅 {counts.mes} no mês</Badge>
+                <Badge variant="outline" className="text-[11px]">🎨 {counts.total} totais</Badge>
               </div>
             </div>
           </div>
@@ -167,20 +202,22 @@ export default function ClientArtPlaybook() {
           </div>
           <div className="ml-auto flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-0.5 border border-border rounded-full p-0.5">
-              {([['aprovado','Aprovadas'],['postado','Postadas'],['all','Todas']] as const).map(([k,l]) => (
-                <button key={k} onClick={() => setStatusFilter(k)} className={`text-[11px] px-3 h-7 rounded-full transition-colors ${statusFilter===k ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{l}</button>
-              ))}
-            </div>
-            <div className="flex items-center gap-0.5 border border-border rounded-full p-0.5">
-              {([['all','Sempre'],['7d','7d'],['30d','30d'],['90d','90d']] as const).map(([k,l]) => (
-                <button key={k} onClick={() => setPeriodFilter(k)} className={`text-[11px] px-2.5 h-7 rounded-full transition-colors ${periodFilter===k ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{l}</button>
+              {statusOptions.map(o => (
+                <button
+                  key={o.key}
+                  onClick={() => setStatusFilter(o.key)}
+                  className={`text-[11px] px-3 h-7 rounded-full transition-colors flex items-center gap-1 ${statusFilter===o.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  {o.label}
+                  <span className={`text-[9px] px-1 rounded ${statusFilter===o.key ? 'bg-primary-foreground/20' : 'bg-muted'}`}>{o.count}</span>
+                </button>
               ))}
             </div>
             <div className="flex items-center gap-0.5 border border-border rounded-full p-0.5">
               <button onClick={() => setView('mosaic')} className={`h-7 w-7 flex items-center justify-center rounded-full ${view === 'mosaic' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}><LayoutList size={13} /></button>
               <button onClick={() => setView('grid')} className={`h-7 w-7 flex items-center justify-center rounded-full ${view === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}><Grid3x3 size={13} /></button>
             </div>
-            <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={handleDownloadAll} disabled={!filtered.length}>
+            <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={handleDownloadAll} disabled={!filtered.some(a => a.attachment_url || a.mockup_url)}>
               <Download size={13} /> Baixar filtradas
             </Button>
           </div>
@@ -194,10 +231,12 @@ export default function ClientArtPlaybook() {
             <ImageIcon size={40} className="mx-auto text-muted-foreground/30 mb-3" />
             <p className="text-sm text-muted-foreground">Nenhuma arte encontrada com esses filtros.</p>
           </div>
+        ) : statusFilter === 'pendente' ? (
+          <PendingList arts={filtered} brand={brand} />
         ) : view === 'mosaic' ? (
           <div className="columns-2 sm:columns-3 lg:columns-4 gap-3 [column-fill:_balance]">
             {filtered.map((a, i) => {
-              const url = a.attachment_url || a.mockup_url!;
+              const url = (a.attachment_url || a.mockup_url) as string;
               return (
                 <motion.div
                   key={a.id}
@@ -229,7 +268,7 @@ export default function ClientArtPlaybook() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {filtered.map((a, i) => {
-              const url = a.attachment_url || a.mockup_url!;
+              const url = (a.attachment_url || a.mockup_url) as string;
               return (
                 <motion.div
                   key={a.id}
@@ -268,6 +307,68 @@ export default function ClientArtPlaybook() {
           {preview && <img src={preview} alt="preview" className="w-full max-h-[85vh] object-contain rounded" />}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function PendingList({ arts, brand }: { arts: ArtRow[]; brand: string }) {
+  const grouped = useMemo(() => {
+    const map: Record<string, ArtRow[]> = {};
+    arts.forEach(a => {
+      const k = a.kanban_column;
+      if (!map[k]) map[k] = [];
+      map[k].push(a);
+    });
+    return map;
+  }, [arts]);
+
+  const order = ['executando', 'em_analise', 'enviar_cliente', 'ajustes', 'nova_tarefa', 'fila_baixa_prioridade'];
+
+  return (
+    <div className="space-y-6">
+      {order.filter(k => grouped[k]?.length).map(k => (
+        <div key={k}>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="h-2 w-2 rounded-full" style={{ background: brand }} />
+            <h3 className="text-sm font-semibold">{COLUMN_LABELS[k] || k}</h3>
+            <Badge variant="outline" className="text-[10px]">{grouped[k].length}</Badge>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {grouped[k].map(a => {
+              const created = new Date(a.created_at);
+              const ageDays = Math.floor((Date.now() - created.getTime()) / (24 * 3600 * 1000));
+              const overdue = ageDays >= 3;
+              const hasArt = !!(a.attachment_url || a.mockup_url);
+              return (
+                <div key={a.id} className="border border-border rounded-xl p-3 bg-card hover:border-primary/40 transition-colors">
+                  <div className="flex items-start gap-3">
+                    <div className="w-14 h-14 rounded-lg bg-muted/50 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      {hasArt && isImage(a.attachment_url || a.mockup_url!) ? (
+                        <img src={(a.attachment_url || a.mockup_url)!} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <ImageIcon size={20} className="text-muted-foreground/50" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{a.title}</p>
+                      <div className="flex items-center gap-1 mt-1 flex-wrap">
+                        <Badge variant="secondary" className="text-[9px] h-4 px-1.5">{FORMAT_LABELS[a.format_type] || a.format_type}</Badge>
+                        {a.priority && a.priority !== 'media' && (
+                          <Badge variant="outline" className="text-[9px] h-4 px-1.5">{a.priority}</Badge>
+                        )}
+                      </div>
+                      <div className={`flex items-center gap-1 mt-2 text-[10px] ${overdue ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        {overdue ? <AlertTriangle size={10} /> : <Clock size={10} />}
+                        {ageDays === 0 ? 'hoje' : `há ${ageDays}d`} · SLA 3d
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

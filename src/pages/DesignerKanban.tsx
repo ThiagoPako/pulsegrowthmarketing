@@ -696,12 +696,12 @@ export default function DesignerKanban() {
                         <span className="text-[10px] mt-2">Nenhuma tarefa</span>
                       </motion.div>
                     )}
-                    {isAprovado && hiddenCount > 0 && (
+                    {isPaginated && hiddenCount > 0 && (
                       <Button
                         size="sm"
                         variant="outline"
                         className="w-full h-8 text-xs mt-2"
-                        onClick={() => setAprovadoLimit(l => l + 10)}
+                        onClick={() => setColumnLimits(prev => ({ ...prev, [col.key]: (prev[col.key] || 10) + 10 }))}
                       >
                         Carregar mais 10 ({hiddenCount} restantes)
                       </Button>

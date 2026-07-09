@@ -80,7 +80,15 @@ function readLocalUpdatedAt(city: string): number {
 
 function writeLocalTasks(city: string, data: DesignTask[]) {
   try {
-    localStorage.setItem(LS_KEY(city), JSON.stringify({ at: Date.now(), data }));
+    // Não apagar cache bom com resultado vazio (evita "flash 0" no kanban).
+    if (!data || data.length === 0) {
+      const existing = readLocalTasks(city);
+      if (existing && existing.length > 0) return;
+    }
+    const payload = JSON.stringify({ at: Date.now(), data });
+    localStorage.setItem(LS_KEY(city), payload);
+    // Espelha em 'default' também, pra hidratar antes do CityContext resolver.
+    localStorage.setItem(LS_KEY('default'), payload);
     if (city) localStorage.setItem(LS_LAST_CITY, city);
   } catch { /* quota exceeded — ignore */ }
 }
@@ -89,10 +97,21 @@ export function useDesignTasks() {
   const queryClient = useQueryClient();
   const { activeCity, isLoading: cityLoading } = useCity();
 
-  // Only fetch tasks from the last 90 days to keep the kanban snappy.
-  // Older 'aprovado' cards stay in reports; the kanban shows recent work.
-  const RECENT_WINDOW_DAYS = 90;
+  // Only fetch tasks from the last 60 days to keep the kanban snappy.
+  const RECENT_WINDOW_DAYS = 60;
   const recentSince = new Date(Date.now() - RECENT_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  // Cards já postados só interessam recentes; antigos vão pra relatórios.
+  const POSTADO_WINDOW_DAYS = 21;
+  const postadoSince = new Date(Date.now() - POSTADO_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+  // Colunas enxutas — evita puxar campos pesados desnecessários no kanban.
+  const LIST_COLS = [
+    'id','client_id','prospect_name','title','description','format_type','kanban_column',
+    'priority','copy_text','attachment_url','attachment_urls','editable_file_url',
+    'assigned_to','started_at','completed_at','sent_to_client_at','client_approved_at',
+    'auto_approved','time_spent_seconds','timer_running','timer_started_at','version',
+    'mockup_url','due_date','position','created_at','updated_at'
+  ].join(',');
 
   const tasksQuery = useQuery({
     queryKey: ['design-tasks', activeCity],
@@ -100,20 +119,21 @@ export function useDesignTasks() {
       try {
         const { data, error } = await supabase
           .from('design_tasks')
-          .select('*, clients(company_name, color, logo_url, whatsapp, responsible_person, editorial), profiles!design_tasks_assigned_to_fkey(name, display_name, avatar_url)')
+          .select(`${LIST_COLS}, clients(company_name, color, logo_url, whatsapp, responsible_person, editorial), profiles!design_tasks_assigned_to_fkey(name, display_name, avatar_url)`)
           .gte('created_at', recentSince)
+          .or(`kanban_column.neq.postado,updated_at.gte.${postadoSince}`)
           .order('created_at', { ascending: false })
-          .limit(500);
+          .limit(300);
 
         if (error) {
           console.warn('Error fetching design tasks with relations, retrying simple query:', error);
 
           const fallback = await supabase
             .from('design_tasks')
-            .select('*')
+            .select(LIST_COLS)
             .gte('created_at', recentSince)
             .order('created_at', { ascending: false })
-            .limit(500);
+            .limit(300);
 
           if (fallback.error) {
             console.error('Error fetching design tasks:', fallback.error);
@@ -133,16 +153,14 @@ export function useDesignTasks() {
       }
     },
     enabled: !cityLoading,
-    // Cache local pra 1ª pintura instantânea; refetch acontece em background.
-    // Tenta a cidade ativa; se ainda não resolveu, cai pra última cidade usada.
     initialData: () => readLocalTasks(activeCity),
     initialDataUpdatedAt: () => readLocalUpdatedAt(activeCity),
-    placeholderData: (prev) => prev, // mantém cards antigos durante troca de cidade
+    placeholderData: (prev) => prev,
     staleTime: 60_000,
-    gcTime: 30 * 60_000, // mantém em memória 30min entre navegações
+    gcTime: 30 * 60_000,
     refetchInterval: 60_000,
     refetchOnWindowFocus: false,
-    refetchOnMount: false, // usa cache; refetchInterval mantém fresco
+    refetchOnMount: false,
   });
 
 

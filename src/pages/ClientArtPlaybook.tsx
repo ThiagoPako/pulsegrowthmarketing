@@ -69,22 +69,33 @@ export default function ClientArtPlaybook() {
     return () => { cancel = true; };
   }, [clientId]);
 
+  const periodCutoff = useMemo(() => {
+    if (periodFilter === 'all') return 0;
+    const days = periodFilter === '7d' ? 7 : periodFilter === '30d' ? 30 : 90;
+    return Date.now() - days * 24 * 60 * 60 * 1000;
+  }, [periodFilter]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return arts.filter(a => {
-      if (onlyApproved && a.kanban_column !== 'aprovado') return false;
+      if (statusFilter !== 'all' && a.kanban_column !== statusFilter) return false;
       if (format !== 'all' && a.format_type !== format) return false;
       if (q && !a.title.toLowerCase().includes(q)) return false;
+      if (periodCutoff) {
+        const ts = new Date(a.completed_at || a.created_at).getTime();
+        if (ts < periodCutoff) return false;
+      }
       return true;
     });
-  }, [arts, search, format, onlyApproved]);
+  }, [arts, search, format, statusFilter, periodCutoff]);
 
   const formatCounts = useMemo(() => {
-    const src = onlyApproved ? arts.filter(a => a.kanban_column === 'aprovado') : arts;
+    const src = statusFilter === 'all' ? arts : arts.filter(a => a.kanban_column === statusFilter);
     return src.reduce<Record<string, number>>((m, a) => { m[a.format_type] = (m[a.format_type] || 0) + 1; return m; }, {});
-  }, [arts, onlyApproved]);
+  }, [arts, statusFilter]);
 
   const totalApproved = arts.filter(a => a.kanban_column === 'aprovado').length;
+  const totalPosted = arts.filter(a => a.kanban_column === 'postado').length;
   const backHref = searchParams.get('from') || '/dashboard';
 
   const handleDownloadAll = async () => {

@@ -122,7 +122,7 @@ function DragScrollContainer({ children, className }: { children: React.ReactNod
 
 export default function DesignerKanban() {
   const { tasksQuery, updateTask, addHistory, deleteTask } = useDesignTasks();
-  const { currentUser } = useApp();
+  const { currentUser, clients } = useApp();
   const { user } = useAuth();
   const [view, setView] = useState<'kanban' | 'lista' | 'agendamentos'>('kanban');
   const [createOpen, setCreateOpen] = useState(false);
@@ -151,13 +151,19 @@ export default function DesignerKanban() {
 
   const clientOptions = useMemo(() => {
     const map = new Map<string, { name: string; logoUrl: string | null; color: string }>();
+    // Base: todos os clientes cadastrados (garante que o filtro sempre tenha opções,
+    // mesmo se a relação `clients` não vier no join das tasks).
+    clients.forEach(c => {
+      map.set(c.id, { name: c.companyName, logoUrl: c.logoUrl || null, color: c.color || '217 91% 60%' });
+    });
+    // Complementa com dados vindos das tasks (caso algum cliente não esteja em `clients`).
     tasks.forEach(t => {
-      if (t.client_id && t.clients?.company_name) {
+      if (t.client_id && !map.has(t.client_id) && t.clients?.company_name) {
         map.set(t.client_id, { name: t.clients.company_name, logoUrl: t.clients.logo_url || null, color: t.clients.color || '217 91% 60%' });
       }
     });
     return Array.from(map.entries()).sort((a, b) => a[1].name.localeCompare(b[1].name));
-  }, [tasks]);
+  }, [tasks, clients]);
 
   const tasksByColumn = useMemo(() => {
     const map: Record<string, DesignTask[]> = {};

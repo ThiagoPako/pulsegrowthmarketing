@@ -401,10 +401,7 @@ export default function DesignerKanban() {
 
   const handleQuickStart = async (task: DesignTask) => {
     const now = new Date().toISOString();
-    const designerId = user?.id || task.assigned_to;
-    const conflicting = designerId
-      ? tasks.filter(t => t.id !== task.id && t.kanban_column === 'executando' && t.assigned_to === designerId)
-      : [];
+    const conflicting = tasks.filter(t => t.id !== task.id && t.kanban_column === 'executando');
 
     const doStart = async () => {
       try {

@@ -55,11 +55,13 @@ export interface DesignTask {
 // Persistência local pra primeira renderização instantânea entre reloads/navegações.
 // Guarda por cidade e limita ao que é útil pro kanban/painel.
 const LS_KEY = (city: string) => `pulse:design-tasks:${city || 'default'}`;
-const LS_MAX_AGE_MS = 10 * 60 * 1000; // 10 min — usado só como cache-warm inicial
+const LS_LAST_CITY = 'pulse:design-tasks:last-city';
+const LS_MAX_AGE_MS = 60 * 60 * 1000; // 1h — cache local mais generoso; refetch em background mantém fresco
 
 function readLocalTasks(city: string): DesignTask[] | undefined {
   try {
-    const raw = localStorage.getItem(LS_KEY(city));
+    const key = city ? LS_KEY(city) : LS_KEY(localStorage.getItem(LS_LAST_CITY) || 'default');
+    const raw = localStorage.getItem(key);
     if (!raw) return undefined;
     const parsed = JSON.parse(raw) as { at: number; data: DesignTask[] };
     if (!parsed?.data || !Array.isArray(parsed.data)) return undefined;
@@ -68,9 +70,18 @@ function readLocalTasks(city: string): DesignTask[] | undefined {
   } catch { return undefined; }
 }
 
+function readLocalUpdatedAt(city: string): number {
+  try {
+    const key = city ? LS_KEY(city) : LS_KEY(localStorage.getItem(LS_LAST_CITY) || 'default');
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw).at || 0 : 0;
+  } catch { return 0; }
+}
+
 function writeLocalTasks(city: string, data: DesignTask[]) {
   try {
     localStorage.setItem(LS_KEY(city), JSON.stringify({ at: Date.now(), data }));
+    if (city) localStorage.setItem(LS_LAST_CITY, city);
   } catch { /* quota exceeded — ignore */ }
 }
 
@@ -123,18 +134,15 @@ export function useDesignTasks() {
     },
     enabled: !cityLoading,
     // Cache local pra 1ª pintura instantânea; refetch acontece em background.
-    initialData: () => (activeCity ? readLocalTasks(activeCity) : undefined),
-    initialDataUpdatedAt: () => {
-      try {
-        const raw = localStorage.getItem(LS_KEY(activeCity || 'default'));
-        return raw ? JSON.parse(raw).at : 0;
-      } catch { return 0; }
-    },
+    // Tenta a cidade ativa; se ainda não resolveu, cai pra última cidade usada.
+    initialData: () => readLocalTasks(activeCity),
+    initialDataUpdatedAt: () => readLocalUpdatedAt(activeCity),
     placeholderData: (prev) => prev, // mantém cards antigos durante troca de cidade
-    staleTime: 30_000,
-    refetchInterval: 30_000,
+    staleTime: 60_000,
+    gcTime: 30 * 60_000, // mantém em memória 30min entre navegações
+    refetchInterval: 60_000,
     refetchOnWindowFocus: false,
-    refetchOnMount: 'always', // sempre valida em background, mas UI já pintou
+    refetchOnMount: false, // usa cache; refetchInterval mantém fresco
   });
 
 

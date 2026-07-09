@@ -131,6 +131,7 @@ export default function DesignerKanban() {
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [filterClient, setFilterClient] = useState<string>('all');
+  const [aprovadoLimit, setAprovadoLimit] = useState(10);
   const [copyPreviewTask, setCopyPreviewTask] = useState<DesignTask | null>(null);
   // Prompt para justificativa quando iniciar demanda com outra em execução
   const [pausePrompt, setPausePrompt] = useState<null | {

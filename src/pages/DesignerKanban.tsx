@@ -131,7 +131,7 @@ export default function DesignerKanban() {
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [filterClient, setFilterClient] = useState<string>('all');
-  const [aprovadoLimit, setAprovadoLimit] = useState(10);
+  const [columnLimits, setColumnLimits] = useState<Record<string, number>>({ aprovado: 10, fila_baixa_prioridade: 10, ajustes: 10 });
   const [copyPreviewTask, setCopyPreviewTask] = useState<DesignTask | null>(null);
   // Prompt para justificativa quando iniciar demanda com outra em execução
   const [pausePrompt, setPausePrompt] = useState<null | {
@@ -547,9 +547,11 @@ export default function DesignerKanban() {
             {DESIGN_COLUMNS.map((col, colIdx) => {
               const cfg = COLUMN_CONFIG[col.key];
               const allColTasks = tasksByColumn[col.key] || [];
+              const limit = columnLimits[col.key];
+              const isPaginated = typeof limit === 'number';
+              const colTasks = isPaginated ? allColTasks.slice(0, limit) : allColTasks;
               const isAprovado = col.key === 'aprovado';
-              const colTasks = isAprovado ? allColTasks.slice(0, aprovadoLimit) : allColTasks;
-              const hiddenCount = isAprovado ? Math.max(0, allColTasks.length - colTasks.length) : 0;
+              const hiddenCount = isPaginated ? Math.max(0, allColTasks.length - colTasks.length) : 0;
               return (
                 <motion.div
                   key={col.key}
@@ -694,12 +696,12 @@ export default function DesignerKanban() {
                         <span className="text-[10px] mt-2">Nenhuma tarefa</span>
                       </motion.div>
                     )}
-                    {isAprovado && hiddenCount > 0 && (
+                    {isPaginated && hiddenCount > 0 && (
                       <Button
                         size="sm"
                         variant="outline"
                         className="w-full h-8 text-xs mt-2"
-                        onClick={() => setAprovadoLimit(l => l + 10)}
+                        onClick={() => setColumnLimits(prev => ({ ...prev, [col.key]: (prev[col.key] || 10) + 10 }))}
                       >
                         Carregar mais 10 ({hiddenCount} restantes)
                       </Button>

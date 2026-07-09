@@ -141,6 +141,7 @@ export default function ClientArtPlaybook() {
               </p>
               <div className="flex items-center gap-2 mt-3 flex-wrap">
                 <Badge className="text-[11px]" style={{ background: brand, color: 'white' }}>✅ {totalApproved} aprovadas</Badge>
+                <Badge variant="secondary" className="text-[11px]">📤 {totalPosted} postadas</Badge>
                 <Badge variant="secondary" className="text-[11px]">🎨 {arts.length} totais</Badge>
                 {Object.entries(formatCounts).slice(0, 4).map(([k, v]) => (
                   <Badge key={k} variant="outline" className="text-[10px]">{FORMAT_LABELS[k] || k}: {v}</Badge>

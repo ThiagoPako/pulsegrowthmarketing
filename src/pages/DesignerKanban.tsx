@@ -1,4 +1,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect, DragEvent } from 'react';
+import { Link } from 'react-router-dom';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { BookOpen } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
 import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn } from '@/hooks/useDesignTasks';
 import { useApp } from '@/contexts/AppContext';
@@ -126,6 +129,7 @@ export default function DesignerKanban() {
   const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [filterClient, setFilterClient] = useState<string>('all');
   const [copyPreviewTask, setCopyPreviewTask] = useState<DesignTask | null>(null);
   // Prompt para justificativa quando iniciar demanda com outra em execução
   const [pausePrompt, setPausePrompt] = useState<null | {

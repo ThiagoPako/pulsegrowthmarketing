@@ -147,13 +147,23 @@ export default function DesignerKanban() {
 
   const PRIORITY_WEIGHT: Record<string, number> = { urgente: 0, alta: 1, media: 2, baixa: 3 };
 
+  const clientOptions = useMemo(() => {
+    const map = new Map<string, { name: string; logoUrl: string | null; color: string }>();
+    tasks.forEach(t => {
+      if (t.client_id && t.clients?.company_name) {
+        map.set(t.client_id, { name: t.clients.company_name, logoUrl: t.clients.logo_url || null, color: t.clients.color || '217 91% 60%' });
+      }
+    });
+    return Array.from(map.entries()).sort((a, b) => a[1].name.localeCompare(b[1].name));
+  }, [tasks]);
+
   const tasksByColumn = useMemo(() => {
     const map: Record<string, DesignTask[]> = {};
     DESIGN_COLUMNS.forEach(c => { map[c.key] = []; });
     tasks.forEach(t => {
+      if (filterClient !== 'all' && t.client_id !== filterClient) return;
       if (map[t.kanban_column]) map[t.kanban_column].push(t);
     });
-    // Order by position asc, then priority weight, then created_at asc
     Object.keys(map).forEach(k => {
       map[k].sort((a, b) => {
         const pa = a.position != null ? Number(a.position) : 999999;
@@ -166,7 +176,8 @@ export default function DesignerKanban() {
       });
     });
     return map;
-  }, [tasks]);
+  }, [tasks, filterClient]);
+
 
   const handleDragStart = useCallback((e: DragEvent, task: DesignTask) => {
     e.dataTransfer.setData('text/plain', task.id);

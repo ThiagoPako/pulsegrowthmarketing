@@ -547,9 +547,11 @@ export default function DesignerKanban() {
             {DESIGN_COLUMNS.map((col, colIdx) => {
               const cfg = COLUMN_CONFIG[col.key];
               const allColTasks = tasksByColumn[col.key] || [];
+              const limit = columnLimits[col.key];
+              const isPaginated = typeof limit === 'number';
+              const colTasks = isPaginated ? allColTasks.slice(0, limit) : allColTasks;
               const isAprovado = col.key === 'aprovado';
-              const colTasks = isAprovado ? allColTasks.slice(0, aprovadoLimit) : allColTasks;
-              const hiddenCount = isAprovado ? Math.max(0, allColTasks.length - colTasks.length) : 0;
+              const hiddenCount = isPaginated ? Math.max(0, allColTasks.length - colTasks.length) : 0;
               return (
                 <motion.div
                   key={col.key}

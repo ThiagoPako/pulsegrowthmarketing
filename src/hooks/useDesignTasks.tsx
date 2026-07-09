@@ -3,7 +3,7 @@ import { supabase } from '@/lib/vpsDb';
 import { useCity } from '@/contexts/CityContext';
 import { toast } from 'sonner';
 
-export type DesignTaskColumn = 'nova_tarefa' | 'executando' | 'fila_baixa_prioridade' | 'em_analise' | 'enviar_cliente' | 'aprovado' | 'ajustes';
+export type DesignTaskColumn = 'nova_tarefa' | 'executando' | 'fila_baixa_prioridade' | 'em_analise' | 'enviar_cliente' | 'aprovado' | 'ajustes' | 'postado';
 
 export const DESIGN_COLUMNS: { key: DesignTaskColumn; label: string; color: string }[] = [
   { key: 'nova_tarefa', label: 'Nova Tarefa', color: '217 91% 60%' },
@@ -13,6 +13,7 @@ export const DESIGN_COLUMNS: { key: DesignTaskColumn; label: string; color: stri
   { key: 'enviar_cliente', label: 'Enviar para Cliente', color: '187 85% 43%' },
   { key: 'aprovado', label: 'Aprovado', color: '142 71% 45%' },
   { key: 'ajustes', label: 'Ajustes Solicitados', color: '0 72% 51%' },
+  { key: 'postado', label: 'Artes Postadas', color: '280 65% 60%' },
 ];
 
 export interface DesignTask {

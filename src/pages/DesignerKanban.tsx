@@ -1,4 +1,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect, DragEvent } from 'react';
+import { Link } from 'react-router-dom';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { BookOpen } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
 import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn } from '@/hooks/useDesignTasks';
 import { useApp } from '@/contexts/AppContext';
@@ -126,6 +129,7 @@ export default function DesignerKanban() {
   const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [filterClient, setFilterClient] = useState<string>('all');
   const [copyPreviewTask, setCopyPreviewTask] = useState<DesignTask | null>(null);
   // Prompt para justificativa quando iniciar demanda com outra em execução
   const [pausePrompt, setPausePrompt] = useState<null | {
@@ -143,13 +147,23 @@ export default function DesignerKanban() {
 
   const PRIORITY_WEIGHT: Record<string, number> = { urgente: 0, alta: 1, media: 2, baixa: 3 };
 
+  const clientOptions = useMemo(() => {
+    const map = new Map<string, { name: string; logoUrl: string | null; color: string }>();
+    tasks.forEach(t => {
+      if (t.client_id && t.clients?.company_name) {
+        map.set(t.client_id, { name: t.clients.company_name, logoUrl: t.clients.logo_url || null, color: t.clients.color || '217 91% 60%' });
+      }
+    });
+    return Array.from(map.entries()).sort((a, b) => a[1].name.localeCompare(b[1].name));
+  }, [tasks]);
+
   const tasksByColumn = useMemo(() => {
     const map: Record<string, DesignTask[]> = {};
     DESIGN_COLUMNS.forEach(c => { map[c.key] = []; });
     tasks.forEach(t => {
+      if (filterClient !== 'all' && t.client_id !== filterClient) return;
       if (map[t.kanban_column]) map[t.kanban_column].push(t);
     });
-    // Order by position asc, then priority weight, then created_at asc
     Object.keys(map).forEach(k => {
       map[k].sort((a, b) => {
         const pa = a.position != null ? Number(a.position) : 999999;
@@ -162,7 +176,8 @@ export default function DesignerKanban() {
       });
     });
     return map;
-  }, [tasks]);
+  }, [tasks, filterClient]);
+
 
   const handleDragStart = useCallback((e: DragEvent, task: DesignTask) => {
     e.dataTransfer.setData('text/plain', task.id);
@@ -492,7 +507,25 @@ export default function DesignerKanban() {
           <h1 className="text-2xl font-display font-bold">Designer</h1>
           <p className="text-sm text-muted-foreground">Gerenciamento de tarefas de design</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={filterClient} onValueChange={setFilterClient}>
+            <SelectTrigger className="h-8 w-[180px] text-xs">
+              <SelectValue placeholder="Filtrar cliente" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os clientes</SelectItem>
+              {clientOptions.map(([id, info]) => (
+                <SelectItem key={id} value={id}>{info.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {filterClient !== 'all' && (
+            <Link to={`/designer/playbook/${filterClient}?from=/designer`}>
+              <Button size="sm" variant="outline" className="h-8 gap-1 text-xs">
+                <BookOpen size={13} /> Ver Playbook
+              </Button>
+            </Link>
+          )}
           <Tabs value={view} onValueChange={v => setView(v as any)}>
             <TabsList className="h-8">
               <TabsTrigger value="kanban" className="text-xs gap-1"><Kanban size={14} /> Kanban</TabsTrigger>

@@ -920,6 +920,13 @@ export default function DesignerDashboard() {
             <SelectItem value="baixa">🌿 Baixa</SelectItem>
           </SelectContent>
         </Select>
+        {filterClient !== 'all' && (
+          <a href={`/designer/playbook/${filterClient}?from=/dashboard`} className="inline-flex">
+            <Button size="sm" variant="outline" className="h-9 gap-1 text-xs rounded-xl border-violet-300/50 text-violet-700 dark:text-violet-300">
+              <BarChart3 size={13} /> Ver Playbook do cliente
+            </Button>
+          </a>
+        )}
       </motion.div>
 
       {/* ═══ SECTIONS: Revisão · Fila · Baixa Prioridade · Cliente ═══ */}

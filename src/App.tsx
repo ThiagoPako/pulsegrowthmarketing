@@ -54,6 +54,7 @@ const ClientOnboarding = lazy(() => import("@/pages/ClientOnboarding"));
 const DesignerKanban = lazy(() => import("@/pages/DesignerKanban"));
 const DesignerDashboard = lazy(() => import("@/pages/DesignerDashboard"));
 const DesignerReports = lazy(() => import("@/pages/DesignerReports"));
+const ClientArtPlaybook = lazy(() => import("@/pages/ClientArtPlaybook"));
 const OnboardingManagement = lazy(() => import("@/pages/OnboardingManagement"));
 const ClientBriefing = lazy(() => import("@/pages/ClientBriefing"));
 const ClientPortal = lazy(() => import("@/pages/ClientPortal"));
@@ -241,6 +242,7 @@ function AppRoutes() {
         <Route path="/regulamento/:slug" element={<RegulationRedirect />} />
 
         <Route path="/tv" element={<Suspense fallback={<PageLoader />}><TvDashboard /></Suspense>} />
+        <Route path="/designer/playbook/:clientId" element={<ProtectedRoute><ClientArtPlaybook /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>

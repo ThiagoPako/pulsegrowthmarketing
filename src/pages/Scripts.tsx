@@ -1634,13 +1634,23 @@ export default function Scripts() {
         <DialogContent className="max-w-[900px] max-h-[90vh] p-0 overflow-hidden bg-zinc-200/50 dark:bg-zinc-900/50 flex flex-col backdrop-blur-sm">
           <DialogHeader className="p-4 bg-white dark:bg-zinc-950 border-b shrink-0">
             <div className="flex flex-col gap-4 w-full">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <DialogTitle className="flex items-center gap-2">
                   <Eye size={18} className="text-primary" />
                   {previewBatch && previewBatch.length > 0
                     ? `Pré-visualização A4 · ${previewBatch.length} roteiros`
                     : 'Pré-visualização do Roteiro (A4)'}
                 </DialogTitle>
+                {previewBatch && previewBatch.length > 0 && (
+                  <Button
+                    size="sm"
+                    onClick={() => handleDownloadSelectedPdf(previewBatch)}
+                    disabled={downloadingBatch}
+                  >
+                    <Download size={14} className="mr-2" />
+                    {downloadingBatch ? 'Gerando...' : `Baixar PDF (${previewBatch.length})`}
+                  </Button>
+                )}
               </div>
               
               <div className="flex flex-wrap items-center gap-6 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-border">

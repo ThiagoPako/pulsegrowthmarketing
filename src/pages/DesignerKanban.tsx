@@ -507,7 +507,25 @@ export default function DesignerKanban() {
           <h1 className="text-2xl font-display font-bold">Designer</h1>
           <p className="text-sm text-muted-foreground">Gerenciamento de tarefas de design</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={filterClient} onValueChange={setFilterClient}>
+            <SelectTrigger className="h-8 w-[180px] text-xs">
+              <SelectValue placeholder="Filtrar cliente" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os clientes</SelectItem>
+              {clientOptions.map(([id, info]) => (
+                <SelectItem key={id} value={id}>{info.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {filterClient !== 'all' && (
+            <Link to={`/designer/playbook/${filterClient}?from=/designer`}>
+              <Button size="sm" variant="outline" className="h-8 gap-1 text-xs">
+                <BookOpen size={13} /> Ver Playbook
+              </Button>
+            </Link>
+          )}
           <Tabs value={view} onValueChange={v => setView(v as any)}>
             <TabsList className="h-8">
               <TabsTrigger value="kanban" className="text-xs gap-1"><Kanban size={14} /> Kanban</TabsTrigger>

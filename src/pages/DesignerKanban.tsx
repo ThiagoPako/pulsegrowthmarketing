@@ -546,7 +546,10 @@ export default function DesignerKanban() {
           <div className="flex gap-3 min-w-max" style={{ height: 'calc(100vh - 180px)' }}>
             {DESIGN_COLUMNS.map((col, colIdx) => {
               const cfg = COLUMN_CONFIG[col.key];
-              const colTasks = tasksByColumn[col.key] || [];
+              const allColTasks = tasksByColumn[col.key] || [];
+              const isAprovado = col.key === 'aprovado';
+              const colTasks = isAprovado ? allColTasks.slice(0, aprovadoLimit) : allColTasks;
+              const hiddenCount = isAprovado ? Math.max(0, allColTasks.length - colTasks.length) : 0;
               return (
                 <motion.div
                   key={col.key}

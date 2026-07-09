@@ -626,6 +626,19 @@ export default function DesignerKanban() {
                               >
                                 <FileDown size={14} className="mr-2" /> Agrupar em PDF
                               </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  if (allColTasks.length === 0) return;
+                                  if (!window.confirm(`Enviar todas as ${allColTasks.length} artes aprovadas para "Artes Postadas"?`)) return;
+                                  toast.info(`Enviando ${allColTasks.length} arte(s) para postadas...`);
+                                  for (const t of allColTasks) {
+                                    await updateTask.mutateAsync({ id: t.id, kanban_column: 'postado' } as any);
+                                  }
+                                  toast.success('Todas movidas para Artes Postadas!');
+                                }}
+                              >
+                                <Send size={14} className="mr-2" /> Enviar todas para Postadas
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         )}

@@ -131,6 +131,7 @@ export default function DesignerKanban() {
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [filterClient, setFilterClient] = useState<string>('all');
+  const [aprovadoLimit, setAprovadoLimit] = useState(10);
   const [copyPreviewTask, setCopyPreviewTask] = useState<DesignTask | null>(null);
   // Prompt para justificativa quando iniciar demanda com outra em execução
   const [pausePrompt, setPausePrompt] = useState<null | {
@@ -338,10 +339,7 @@ export default function DesignerKanban() {
             .map(u => supabase.from('design_tasks').update({ position: u.position }).eq('id', u.id))
         );
       }
-      const designerId = task.assigned_to || user?.id;
-      const conflicting = designerId
-        ? tasks.filter(t => t.id !== taskId && t.kanban_column === 'executando' && t.assigned_to === designerId)
-        : [];
+      const conflicting = tasks.filter(t => t.id !== taskId && t.kanban_column === 'executando');
       if (conflicting.length > 0) await pauseConflicting(conflicting, task.title, reason);
       await updateTask.mutateAsync({ id: taskId, kanban_column: targetColumn, ...extraFields } as any);
       await addHistory.mutateAsync({ task_id: taskId, action: `Movido para ${targetLabel}`, user_id: user?.id });
@@ -351,10 +349,7 @@ export default function DesignerKanban() {
     try {
       // Se iniciar execução e já houver outra ativa → pedir justificativa antes
       if (targetColumn === 'executando') {
-        const designerId = task.assigned_to || user?.id;
-        const conflicting = designerId
-          ? tasks.filter(t => t.id !== taskId && t.kanban_column === 'executando' && t.assigned_to === designerId)
-          : [];
+        const conflicting = tasks.filter(t => t.id !== taskId && t.kanban_column === 'executando');
         if (conflicting.length > 0) {
           setPauseReasonText('');
           setPausePrompt({
@@ -407,10 +402,7 @@ export default function DesignerKanban() {
 
   const handleQuickStart = async (task: DesignTask) => {
     const now = new Date().toISOString();
-    const designerId = user?.id || task.assigned_to;
-    const conflicting = designerId
-      ? tasks.filter(t => t.id !== task.id && t.kanban_column === 'executando' && t.assigned_to === designerId)
-      : [];
+    const conflicting = tasks.filter(t => t.id !== task.id && t.kanban_column === 'executando');
 
     const doStart = async () => {
       try {
@@ -554,7 +546,10 @@ export default function DesignerKanban() {
           <div className="flex gap-3 min-w-max" style={{ height: 'calc(100vh - 180px)' }}>
             {DESIGN_COLUMNS.map((col, colIdx) => {
               const cfg = COLUMN_CONFIG[col.key];
-              const colTasks = tasksByColumn[col.key] || [];
+              const allColTasks = tasksByColumn[col.key] || [];
+              const isAprovado = col.key === 'aprovado';
+              const colTasks = isAprovado ? allColTasks.slice(0, aprovadoLimit) : allColTasks;
+              const hiddenCount = isAprovado ? Math.max(0, allColTasks.length - colTasks.length) : 0;
               return (
                 <motion.div
                   key={col.key}
@@ -593,7 +588,7 @@ export default function DesignerKanban() {
                         transition={{ type: 'spring', stiffness: 500 }}
                         className="ml-auto flex items-center gap-1"
                       >
-                        <Badge variant="secondary" className="text-[10px] h-5">{colTasks.length}</Badge>
+                        <Badge variant="secondary" className="text-[10px] h-5">{allColTasks.length}</Badge>
                         {col.key === 'aprovado' && colTasks.some(t => t.attachment_url || (t as any).mockup_url) && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -630,6 +625,19 @@ export default function DesignerKanban() {
                                 }}
                               >
                                 <FileDown size={14} className="mr-2" /> Agrupar em PDF
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  if (allColTasks.length === 0) return;
+                                  if (!window.confirm(`Enviar todas as ${allColTasks.length} artes aprovadas para "Artes Postadas"?`)) return;
+                                  toast.info(`Enviando ${allColTasks.length} arte(s) para postadas...`);
+                                  for (const t of allColTasks) {
+                                    await updateTask.mutateAsync({ id: t.id, kanban_column: 'postado' } as any);
+                                  }
+                                  toast.success('Todas movidas para Artes Postadas!');
+                                }}
+                              >
+                                <Send size={14} className="mr-2" /> Enviar todas para Postadas
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -685,6 +693,16 @@ export default function DesignerKanban() {
                         </motion.div>
                         <span className="text-[10px] mt-2">Nenhuma tarefa</span>
                       </motion.div>
+                    )}
+                    {isAprovado && hiddenCount > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full h-8 text-xs mt-2"
+                        onClick={() => setAprovadoLimit(l => l + 10)}
+                      >
+                        Carregar mais 10 ({hiddenCount} restantes)
+                      </Button>
                     )}
                   </div>
                 </motion.div>

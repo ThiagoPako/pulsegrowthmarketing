@@ -9,10 +9,10 @@ export const DESIGN_COLUMNS: { key: DesignTaskColumn; label: string; color: stri
   { key: 'nova_tarefa', label: 'Nova Tarefa', color: '217 91% 60%' },
   { key: 'executando', label: 'Executando', color: '45 93% 47%' },
   { key: 'fila_baixa_prioridade', label: 'Fila Baixa Prioridade', color: '240 5% 55%' },
+  { key: 'ajustes', label: 'Ajustes Solicitados', color: '0 72% 51%' },
   { key: 'em_analise', label: 'Em Análise', color: '262 83% 58%' },
   { key: 'enviar_cliente', label: 'Enviar para Cliente', color: '187 85% 43%' },
-  { key: 'aprovado', label: 'Aprovado', color: '142 71% 45%' },
-  { key: 'ajustes', label: 'Ajustes Solicitados', color: '0 72% 51%' },
+  { key: 'aprovado', label: 'Aprovadas — Artes para Agendar', color: '142 71% 45%' },
   { key: 'postado', label: 'Artes Postadas', color: '280 65% 60%' },
 ];
 

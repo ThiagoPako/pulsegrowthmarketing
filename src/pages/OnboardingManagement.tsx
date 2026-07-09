@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useOnboarding, ONBOARDING_STAGES, OnboardingTask, OnboardingStage } from '@/hooks/useOnboarding';
 import { supabase } from '@/lib/vpsDb';
 import { uploadFileToVps } from '@/services/vpsApi';
@@ -7,19 +7,24 @@ import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { Progress } from '@/components/ui/progress';
 import { Card } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import ClientLogo from '@/components/ClientLogo';
 import {
-  Kanban, CheckCircle, FileText, Palette, ArrowRight, Clock, User,
-  Camera, Upload, ExternalLink, Copy, AlertTriangle, Sparkles, Image, Phone, Mail, MapPin, Building2, CalendarDays, Trash2
+  CheckCircle, FileText, Palette, ArrowRight, Clock, User,
+  Camera, Upload, ExternalLink, Copy, Sparkles, Image as ImageIcon,
+  Phone, Mail, MapPin, Building2, Trash2, Link2, Rocket,
 } from 'lucide-react';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 
 const STATUS_COLORS: Record<string, string> = {
   pendente: 'bg-muted text-muted-foreground',
@@ -42,16 +47,17 @@ interface ClientGroup {
   hasPhotoShoot: boolean;
   briefingData: any;
   clientType: string;
+  editorial: string | null;
+  driveFotos: string | null;
+  driveIdentidade: string | null;
   tasks: OnboardingTask[];
   currentStage: OnboardingStage;
-  activeStages: OnboardingStage[]; // parallel stages currently active
-  allStages: OnboardingStage[];
   completedStages: OnboardingStage[];
 }
 
 export default function OnboardingManagement() {
-  const { tasksQuery, updateOnboardingTask, advanceToNextStage, createDesignTasksForClient, deleteOnboardingClient } = useOnboarding();
-  const [selectedGroup, setSelectedGroup] = useState<ClientGroup | null>(null);
+  const { tasksQuery, deleteOnboardingClient } = useOnboarding();
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
   const tasks = tasksQuery.data || [];
 
@@ -60,14 +66,6 @@ export default function OnboardingManagement() {
     tasks.forEach(t => {
       if (!map.has(t.client_id)) {
         const c = t.clients;
-        const hasIdentity = c?.briefing_data?.has_identity?.toLowerCase() === 'sim';
-        const needsPhotos = c?.photo_preference === 'fotos_reais';
-
-        const allStages: OnboardingStage[] = ['cliente_novo', 'contrato'];
-        if (!hasIdentity) allStages.push('identidade_visual');
-        if (needsPhotos) allStages.push('fotografia');
-        allStages.push('reformulacao_perfil');
-
         map.set(t.client_id, {
           clientId: t.client_id,
           companyName: c?.company_name || 'Cliente',
@@ -83,10 +81,11 @@ export default function OnboardingManagement() {
           hasPhotoShoot: c?.has_photo_shoot || false,
           briefingData: c?.briefing_data || {},
           clientType: c?.client_type || 'novo',
+          editorial: c?.editorial || null,
+          driveFotos: c?.drive_fotos || null,
+          driveIdentidade: c?.drive_identidade_visual || null,
           tasks: [],
           currentStage: 'cliente_novo',
-          activeStages: [],
-          allStages,
           completedStages: [],
         });
       }
@@ -98,11 +97,17 @@ export default function OnboardingManagement() {
         .filter(t => t.status === 'concluido')
         .map(t => t.stage as OnboardingStage);
 
-      // Find all active (non-completed) stages
-      const activeTasks = group.tasks.filter(t => t.status !== 'concluido');
-      group.activeStages = activeTasks.map(t => t.stage as OnboardingStage);
-      group.currentStage = (activeTasks[0]?.stage as OnboardingStage) || 
-        (group.completedStages.length === group.tasks.length && group.tasks.length > 0 ? 'reformulacao_perfil' : 'cliente_novo');
+      const activeTasks = group.tasks
+        .filter(t => t.status !== 'concluido')
+        .sort((a, b) =>
+          ONBOARDING_STAGES.findIndex(s => s.key === a.stage) -
+          ONBOARDING_STAGES.findIndex(s => s.key === b.stage)
+        );
+
+      const allDone = group.tasks.length > 0 && activeTasks.length === 0;
+      group.currentStage = allDone
+        ? 'cliente_bordo'
+        : (activeTasks[0]?.stage as OnboardingStage) || 'cliente_novo';
     });
 
     return Array.from(map.values());
@@ -112,33 +117,21 @@ export default function OnboardingManagement() {
     const result: Record<string, ClientGroup[]> = {};
     ONBOARDING_STAGES.forEach(s => { result[s.key] = []; });
     clientGroups.forEach(g => {
-      const allDone = g.tasks.length > 0 && g.tasks.every(t => t.status === 'concluido');
-      if (allDone) {
-        result['reformulacao_perfil']?.push(g);
-      } else {
-        // A client can appear in MULTIPLE columns if they have parallel stages
-        const placed = new Set<string>();
-        g.activeStages.forEach(stage => {
-          if (result[stage] && !placed.has(stage)) {
-            result[stage].push(g);
-            placed.add(stage);
-          }
-        });
-        // If no active stages placed yet (shouldn't happen), fall back
-        if (placed.size === 0 && result[g.currentStage]) {
-          result[g.currentStage].push(g);
-        }
-      }
+      if (result[g.currentStage]) result[g.currentStage].push(g);
     });
     return result;
   }, [clientGroups]);
+
+  const selectedGroup = selectedClientId
+    ? clientGroups.find(g => g.clientId === selectedClientId) || null
+    : null;
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-display font-bold">Onboarding de Clientes</h1>
         <p className="text-sm text-muted-foreground">
-          Acompanhe cada etapa do processo de integração
+          Fluxo linear em 7 etapas — do cliente novo à integração completa
           <Badge variant="secondary" className="ml-2 text-[10px]">{clientGroups.length} clientes</Badge>
         </p>
       </div>
@@ -146,7 +139,7 @@ export default function OnboardingManagement() {
       {/* Kanban Board */}
       <div className="flex gap-3 overflow-x-auto pb-4">
         {ONBOARDING_STAGES.map(stage => (
-          <div key={stage.key} className="min-w-[280px] w-[280px] flex-shrink-0">
+          <div key={stage.key} className="min-w-[260px] w-[260px] flex-shrink-0">
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: `hsl(${stage.color})` }} />
               <span className="text-[11px] font-bold uppercase tracking-wider">{stage.icon} {stage.label}</span>
@@ -156,7 +149,12 @@ export default function OnboardingManagement() {
             </div>
             <div className="space-y-2.5 min-h-[100px]">
               {clientsByStage[stage.key]?.map(group => (
-                <OnboardingCard key={group.clientId} group={group} onClick={() => setSelectedGroup(group)} onDelete={() => deleteOnboardingClient.mutate(group.clientId)} />
+                <OnboardingCard
+                  key={group.clientId}
+                  group={group}
+                  onClick={() => setSelectedClientId(group.clientId)}
+                  onDelete={() => deleteOnboardingClient.mutate(group.clientId)}
+                />
               ))}
               {clientsByStage[stage.key]?.length === 0 && (
                 <div className="rounded-xl border border-dashed p-6 text-center">
@@ -172,7 +170,7 @@ export default function OnboardingManagement() {
         <OnboardingDetailSheet
           group={selectedGroup}
           open={!!selectedGroup}
-          onOpenChange={o => !o && setSelectedGroup(null)}
+          onOpenChange={o => !o && setSelectedClientId(null)}
         />
       )}
     </div>
@@ -181,15 +179,14 @@ export default function OnboardingManagement() {
 
 /* ── Kanban Card ── */
 function OnboardingCard({ group, onClick, onDelete }: { group: ClientGroup; onClick: () => void; onDelete: () => void }) {
-  const progress = group.tasks.length > 0
-    ? Math.round((group.completedStages.length / group.allStages.length) * 100)
-    : 0;
-
+  const total = ONBOARDING_STAGES.length;
+  const doneCount = group.completedStages.length;
+  const progress = Math.round((doneCount / total) * 100);
   const currentTask = group.tasks.find(t => t.status !== 'concluido');
+  const currentStageInfo = ONBOARDING_STAGES.find(s => s.key === group.currentStage);
 
   return (
     <Card className="p-3 space-y-2.5 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all group/card relative" onClick={onClick}>
-      {/* Delete button */}
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <Button
@@ -205,7 +202,7 @@ function OnboardingCard({ group, onClick, onDelete }: { group: ClientGroup; onCl
           <AlertDialogHeader>
             <AlertDialogTitle>Apagar card de onboarding?</AlertDialogTitle>
             <AlertDialogDescription>
-              Todas as tarefas de onboarding de <strong>{group.companyName}</strong> serão removidas. Esta ação não pode ser desfeita.
+              Todas as tarefas de onboarding de <strong>{group.companyName}</strong> serão removidas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -216,6 +213,7 @@ function OnboardingCard({ group, onClick, onDelete }: { group: ClientGroup; onCl
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
       <div className="flex items-center gap-2">
         <ClientLogo client={{ companyName: group.companyName, color: group.color, logoUrl: group.logoUrl }} size="sm" />
         <div className="flex-1 min-w-0">
@@ -228,87 +226,89 @@ function OnboardingCard({ group, onClick, onDelete }: { group: ClientGroup; onCl
 
       {/* Stage pipeline */}
       <div className="flex items-center gap-0.5">
-        {group.allStages.map((stageKey, i) => {
-          const isDone = group.completedStages.includes(stageKey);
-          const isCurrent = group.activeStages.includes(stageKey) && !isDone;
-          const stage = ONBOARDING_STAGES.find(s => s.key === stageKey)!;
+        {ONBOARDING_STAGES.map(stage => {
+          const isDone = group.completedStages.includes(stage.key);
+          const isCurrent = stage.key === group.currentStage && !isDone;
           return (
-            <div key={stageKey} className="flex items-center gap-0.5 flex-1">
-              <div
-                className={`h-1.5 rounded-full flex-1 transition-colors ${
-                  isDone ? 'bg-emerald-500' : isCurrent ? 'bg-primary animate-pulse' : 'bg-muted'
-                }`}
-                title={stage.label}
-              />
-            </div>
+            <div
+              key={stage.key}
+              className={`h-1.5 rounded-full flex-1 transition-colors ${
+                isDone ? 'bg-emerald-500' : isCurrent ? 'bg-primary animate-pulse' : 'bg-muted'
+              }`}
+              title={stage.label}
+            />
           );
         })}
       </div>
 
       <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-        <span>{group.completedStages.length}/{group.allStages.length} etapas</span>
+        <span>{doneCount}/{total} etapas</span>
         <span className="font-semibold">{progress}%</span>
       </div>
 
-      {currentTask && (
+      {currentStageInfo && (
         <div className="p-2 rounded-lg bg-muted/50 text-xs">
           <div className="flex items-center gap-1.5">
             <Clock size={10} className="text-muted-foreground" />
-            <span className="font-medium truncate">{currentTask.title}</span>
+            <span className="font-medium truncate">{currentStageInfo.icon} {currentStageInfo.label}</span>
           </div>
         </div>
       )}
 
-      {group.niche && (
-        <Badge variant="outline" className="text-[9px]">{group.niche}</Badge>
-      )}
+      {group.niche && <Badge variant="outline" className="text-[9px]">{group.niche}</Badge>}
     </Card>
   );
 }
 
-/* ── Detail Sheet with 2 Columns ── */
+/* ── Detail Sheet ── */
 function OnboardingDetailSheet({ group, open, onOpenChange }: { group: ClientGroup; open: boolean; onOpenChange: (o: boolean) => void }) {
-  const { updateOnboardingTask, advanceToNextStage, createDesignTasksForClient } = useOnboarding();
+  const {
+    updateOnboardingTask, advanceToNextStage,
+    attachEditorial, saveEditorialDraft,
+    triggerReformulacaoPerfil, triggerIdentidadeVisual, triggerAgendarFotografia,
+    finishOnboarding,
+  } = useOnboarding();
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [driveLink, setDriveLink] = useState('');
 
-  const activeTasks = group.tasks.filter(t => t.status !== 'concluido');
-  const currentTask = activeTasks[0]; // primary task for non-parallel views
-  const completedTasks = group.tasks.filter(t => t.status === 'concluido').sort(
-    (a, b) => new Date(a.completed_at || a.created_at).getTime() - new Date(b.completed_at || b.created_at).getTime()
-  );
-  const allDone = group.tasks.length > 0 && group.tasks.every(t => t.status === 'concluido');
-  const hasParallelStages = activeTasks.length > 1;
+  const activeTask = group.tasks
+    .filter(t => t.status !== 'concluido')
+    .sort((a, b) =>
+      ONBOARDING_STAGES.findIndex(s => s.key === a.stage) -
+      ONBOARDING_STAGES.findIndex(s => s.key === b.stage)
+    )[0];
 
-  const handleAdvance = async (stage?: OnboardingStage) => {
-    const task = stage ? activeTasks.find(t => t.stage === stage) : currentTask;
-    if (!task) return;
+  const allDone = group.tasks.length > 0 && !activeTask;
+  const currentStageInfo = ONBOARDING_STAGES.find(s => s.key === (activeTask?.stage || 'cliente_bordo'));
+
+  const handleAdvance = async () => {
+    if (!activeTask) return;
     try {
       await advanceToNextStage.mutateAsync({
         clientId: group.clientId,
-        currentStage: task.stage as OnboardingStage,
+        currentStage: activeTask.stage as OnboardingStage,
       });
-      const otherActive = activeTasks.filter(t => t.id !== task.id && t.status !== 'concluido');
-      if (otherActive.length === 0) {
-        toast.success('Etapas concluídas! Avançando...');
-      } else {
-        toast.success('Etapa concluída! Aguardando a outra etapa paralela.');
-      }
-      onOpenChange(false);
+      toast.success('Etapa concluída!');
     } catch (e) {
       console.error(e);
     }
   };
 
+  const handleStart = async () => {
+    if (!activeTask) return;
+    await updateOnboardingTask.mutateAsync({ id: activeTask.id, status: 'em_andamento' } as any);
+    toast.success('Etapa iniciada!');
+  };
+
   const handleContractUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !currentTask) return;
+    if (!file || !activeTask) return;
     setUploading(true);
     try {
       const publicUrl = await uploadFileToVps(file, `contracts/${group.clientId}`);
       await updateOnboardingTask.mutateAsync({
-        id: currentTask.id,
+        id: activeTask.id,
         contract_url: publicUrl,
         contract_signed: true,
       } as any);
@@ -320,51 +320,9 @@ function OnboardingDetailSheet({ group, open, onOpenChange }: { group: ClientGro
     }
   };
 
-  const handleSaveDriveLink = async () => {
-    if (!currentTask || !driveLink) return;
-    try {
-      // Save drive link to onboarding task and to client record
-      await updateOnboardingTask.mutateAsync({
-        id: currentTask.id,
-        drive_link: driveLink,
-      } as any);
-      await supabase
-        .from('clients')
-        .update({ drive_fotos: driveLink } as any)
-        .eq('id', group.clientId);
-      toast.success('Link do Drive salvo!');
-    } catch (err: any) {
-      toast.error(err.message);
-    }
-  };
-
-  const handleFinishReformulacao = async () => {
-    if (!currentTask) return;
-    try {
-      await createDesignTasksForClient.mutateAsync(group.clientId);
-      await advanceToNextStage.mutateAsync({
-        clientId: group.clientId,
-        currentStage: currentTask.stage as OnboardingStage,
-      });
-      toast.success('Tarefas de reformulação criadas! Cliente integrado.');
-      onOpenChange(false);
-    } catch (err: any) {
-      toast.error(err.message);
-    }
-  };
-
-  const handleStartStage = async (taskId?: string) => {
-    const task = taskId ? activeTasks.find(t => t.id === taskId) : currentTask;
-    if (!task) return;
-    await updateOnboardingTask.mutateAsync({ id: task.id, status: 'em_andamento' } as any);
-    toast.success('Etapa iniciada!');
-  };
-
-  const briefing = group.briefingData || {};
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[90vw] sm:w-[800px] sm:max-w-[800px] overflow-y-auto p-0">
+      <SheetContent className="w-[95vw] sm:w-[780px] sm:max-w-[780px] overflow-y-auto p-0">
         {/* Header */}
         <div className="p-6 pb-4 border-b">
           <SheetHeader>
@@ -375,229 +333,117 @@ function OnboardingDetailSheet({ group, open, onOpenChange }: { group: ClientGro
                 <div className="flex items-center gap-2 mt-1">
                   {group.niche && <Badge variant="outline" className="text-[10px]">{group.niche}</Badge>}
                   <Badge variant="secondary" className="text-[10px]">
-                    {group.completedStages.length}/{group.allStages.length} etapas
+                    {group.completedStages.length}/{ONBOARDING_STAGES.length} etapas
                   </Badge>
                 </div>
               </div>
             </SheetTitle>
           </SheetHeader>
 
-          {/* Client info bar */}
           <div className="flex flex-wrap gap-3 mt-4 text-xs text-muted-foreground">
-            {group.responsiblePerson && (
-              <span className="flex items-center gap-1"><User size={11} />{group.responsiblePerson}</span>
-            )}
-            {group.whatsapp && (
-              <span className="flex items-center gap-1"><Phone size={11} />{group.whatsapp}</span>
-            )}
-            {group.email && (
-              <span className="flex items-center gap-1"><Mail size={11} />{group.email}</span>
-            )}
-            {group.city && (
-              <span className="flex items-center gap-1"><MapPin size={11} />{group.city}</span>
-            )}
+            {group.responsiblePerson && <span className="flex items-center gap-1"><User size={11} />{group.responsiblePerson}</span>}
+            {group.whatsapp && <span className="flex items-center gap-1"><Phone size={11} />{group.whatsapp}</span>}
+            {group.email && <span className="flex items-center gap-1"><Mail size={11} />{group.email}</span>}
+            {group.city && <span className="flex items-center gap-1"><MapPin size={11} />{group.city}</span>}
           </div>
 
-          {/* Stage pipeline visual */}
+          {/* Pipeline */}
           <div className="flex items-center gap-1 mt-4">
-            {group.allStages.map((stageKey, i) => {
-              const isDone = group.completedStages.includes(stageKey);
-              const isCurrent = group.activeStages.includes(stageKey) && !isDone;
-              const stage = ONBOARDING_STAGES.find(s => s.key === stageKey)!;
+            {ONBOARDING_STAGES.map((stage, i) => {
+              const isDone = group.completedStages.includes(stage.key);
+              const isCurrent = stage.key === (activeTask?.stage || (allDone ? 'cliente_bordo' : ''));
               return (
-                <div key={stageKey} className="flex items-center gap-1 flex-1">
+                <div key={stage.key} className="flex items-center gap-1 flex-1">
                   <div className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-semibold w-full justify-center transition-all ${
                     isDone ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
                     : isCurrent ? 'bg-primary/15 text-primary ring-1 ring-primary/40'
                     : 'bg-muted text-muted-foreground'
                   }`}>
                     {isDone ? <CheckCircle size={10} /> : null}
-                    <span className="truncate">{stage.icon} {stage.label}</span>
+                    <span className="truncate">{stage.icon}</span>
                   </div>
-                  {i < group.allStages.length - 1 && <ArrowRight size={10} className="text-muted-foreground/40 shrink-0" />}
+                  {i < ONBOARDING_STAGES.length - 1 && <ArrowRight size={9} className="text-muted-foreground/40 shrink-0" />}
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* Two Column Layout */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 min-h-[400px]">
-          {/* Left Column - History */}
-          <div className="p-5 border-r border-border bg-muted/20">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
-              <Clock size={12} /> Histórico
-            </h3>
+        {/* Body — single stage panel */}
+        <div className="p-6 space-y-4">
+          {allDone ? (
+            <ClienteBordoActions group={group} />
+          ) : activeTask ? (
+            <>
+              <div className="flex items-center gap-2">
+                <Badge className="bg-primary/15 text-primary text-xs">
+                  {currentStageInfo?.icon} {currentStageInfo?.label}
+                </Badge>
+                <Badge className={STATUS_COLORS[activeTask.status]}>
+                  {activeTask.status === 'pendente' ? 'Pendente' : activeTask.status === 'em_andamento' ? 'Em Andamento' : 'Concluído'}
+                </Badge>
+              </div>
+              <Separator />
 
-            {completedTasks.length === 0 && !allDone && (
-              <p className="text-xs text-muted-foreground italic">Nenhuma etapa concluída ainda.</p>
-            )}
-
-            <div className="space-y-3">
-              {completedTasks.map(task => {
-                const stage = ONBOARDING_STAGES.find(s => s.key === task.stage);
-                return (
-                  <div key={task.id} className="p-3 rounded-lg bg-card border">
-                    <div className="flex items-center gap-2 mb-1">
-                      <CheckCircle size={12} className="text-emerald-500 shrink-0" />
-                      <span className="text-xs font-semibold">{stage?.icon} {stage?.label}</span>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">{task.title}</p>
-                    {task.completed_at && (
-                      <p className="text-[10px] text-muted-foreground/60 mt-1">
-                        {format(new Date(task.completed_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                      </p>
-                    )}
-
-                    {/* Stage-specific completed info */}
-                    {task.stage === 'contrato' && task.contract_url && (
-                      <a href={task.contract_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary flex items-center gap-1 mt-1 hover:underline">
-                        <FileText size={10} /> Ver contrato assinado
-                      </a>
-                    )}
-                    {task.stage === 'fotografia' && task.drive_link && (
-                      <a href={task.drive_link} target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary flex items-center gap-1 mt-1 hover:underline">
-                        <ExternalLink size={10} /> Drive do ensaio
-                      </a>
-                    )}
-                  </div>
-                );
-              })}
-
-              {/* Briefing data summary if available */}
-              {Object.keys(briefing).length > 0 && briefing.niche && (
-                <div className="p-3 rounded-lg bg-card border mt-2">
-                  <h4 className="text-[11px] font-bold mb-2 flex items-center gap-1">
-                    <Building2 size={11} /> Dados do Briefing
-                  </h4>
-                  <div className="space-y-1 text-[10px] text-muted-foreground">
-                    {briefing.niche && <p><strong>Nicho:</strong> {briefing.niche}</p>}
-                    {briefing.differentials && <p><strong>Diferenciais:</strong> {briefing.differentials}</p>}
-                    {briefing.products_services && <p><strong>Produtos/Serviços:</strong> {briefing.products_services}</p>}
-                    {briefing.target_cities && <p><strong>Cidades:</strong> {briefing.target_cities}</p>}
-                    {briefing.ideal_client && <p><strong>Cliente ideal:</strong> {briefing.ideal_client}</p>}
-                    {briefing.brand_voice && <p><strong>Tom de voz:</strong> {briefing.brand_voice}</p>}
-                    {briefing.competitors && <p><strong>Concorrentes:</strong> {briefing.competitors}</p>}
-                    {briefing.has_identity && <p><strong>Identidade visual:</strong> {briefing.has_identity === 'sim' ? 'Já possui' : 'Precisa criar'}</p>}
-                    {briefing.comfortable_on_camera && <p><strong>Câmera:</strong> {briefing.comfortable_on_camera}</p>}
-                  </div>
-                </div>
+              {activeTask.stage === 'cliente_novo' && (
+                <ClienteNovoActions group={group} task={activeTask} onAdvance={handleAdvance} onStart={handleStart} />
               )}
-
-              {/* Photo preference info */}
-              <div className="p-3 rounded-lg bg-card border">
-                <h4 className="text-[11px] font-bold mb-1 flex items-center gap-1">
-                  <Camera size={11} /> Preferência de Fotos
-                </h4>
-                <p className="text-[10px] text-muted-foreground">
-                  {group.photoPreference === 'fotos_reais' ? '📸 Quer fotos reais' : 
-                   group.photoPreference === 'banco_imagens' ? '🖼️ Banco de imagens' : '➖ Não precisa'}
-                  {group.photoPreference === 'fotos_reais' && !group.hasPhotoShoot && (
-                    <span className="block mt-0.5 text-amber-600">⚠️ Não tem ensaio - Aceita agendar</span>
-                  )}
-                  {group.photoPreference === 'fotos_reais' && group.hasPhotoShoot && (
-                    <span className="block mt-0.5 text-emerald-600">✅ Já tem ensaio fotográfico</span>
-                  )}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column - Current Stage Actions */}
-          <div className="p-5">
-            {allDone ? (
-              <div className="text-center py-8 space-y-3">
-                <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto">
-                  <CheckCircle size={32} className="text-emerald-500" />
-                </div>
-                <h3 className="text-sm font-bold text-emerald-700 dark:text-emerald-300">Cliente Integrado!</h3>
-                <p className="text-xs text-muted-foreground">Todas as etapas de onboarding foram concluídas.</p>
-              </div>
-            ) : activeTasks.length > 0 ? (
-              <div className="space-y-4">
-                {hasParallelStages && (
-                  <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                    <p className="text-[10px] text-blue-700 dark:text-blue-300 font-semibold">
-                      ⚡ Etapas simultâneas — Identidade Visual e Fotografia estão sendo executadas em paralelo.
-                    </p>
-                  </div>
-                )}
-
-                {activeTasks.map(task => {
-                  const stage = ONBOARDING_STAGES.find(s => s.key === task.stage);
-                  return (
-                    <div key={task.id} className="space-y-3">
-                      <div>
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1.5">
-                          <Sparkles size={12} /> {hasParallelStages ? stage?.label : 'Etapa Atual'}
-                        </h3>
-                        <div className="flex items-center gap-2">
-                          <Badge className="bg-primary/15 text-primary text-xs">
-                            {stage?.icon} {stage?.label}
-                          </Badge>
-                          <Badge className={STATUS_COLORS[task.status]}>
-                            {task.status === 'pendente' ? 'Pendente' : task.status === 'em_andamento' ? 'Em Andamento' : 'Concluído'}
-                          </Badge>
-                        </div>
-                      </div>
-
-                      <Separator />
-
-                      {task.stage === 'cliente_novo' && (
-                        <ClienteNovoActions group={group} task={task} onAdvance={() => handleAdvance()} onStart={() => handleStartStage(task.id)} />
-                      )}
-                      {task.stage === 'contrato' && (
-                        <ContratoActions
-                          task={task}
-                          fileInputRef={fileInputRef}
-                          uploading={uploading}
-                          onUpload={handleContractUpload}
-                          onAdvance={() => handleAdvance()}
-                          onStart={() => handleStartStage(task.id)}
-                        />
-                      )}
-                      {task.stage === 'identidade_visual' && (
-                        <IdentidadeVisualActions task={task} onAdvance={() => handleAdvance('identidade_visual')} onStart={() => handleStartStage(task.id)} />
-                      )}
-                      {task.stage === 'fotografia' && (
-                        <FotografiaActions
-                          task={task}
-                          driveLink={driveLink}
-                          setDriveLink={setDriveLink}
-                          onSaveDrive={handleSaveDriveLink}
-                          onAdvance={() => handleAdvance('fotografia')}
-                          onStart={() => handleStartStage(task.id)}
-                        />
-                      )}
-                      {task.stage === 'reformulacao_perfil' && (
-                        <ReformulacaoActions task={task} onFinish={handleFinishReformulacao} onStart={() => handleStartStage(task.id)} />
-                      )}
-
-                      {hasParallelStages && task !== activeTasks[activeTasks.length - 1] && (
-                        <Separator className="my-2" />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>
+              {activeTask.stage === 'contrato' && (
+                <ContratoActions
+                  task={activeTask}
+                  fileInputRef={fileInputRef}
+                  uploading={uploading}
+                  onUpload={handleContractUpload}
+                  onAdvance={handleAdvance}
+                  onStart={handleStart}
+                />
+              )}
+              {activeTask.stage === 'briefing' && (
+                <BriefingActions group={group} task={activeTask} onAdvance={handleAdvance} onStart={handleStart} />
+              )}
+              {activeTask.stage === 'criar_editorial' && (
+                <CriarEditorialActions
+                  group={group}
+                  task={activeTask}
+                  onSaveDraft={(editorial) => saveEditorialDraft.mutateAsync({ clientId: group.clientId, editorial })}
+                  onAdvance={handleAdvance}
+                  onStart={handleStart}
+                />
+              )}
+              {activeTask.stage === 'anexar_editorial' && (
+                <AnexarEditorialActions
+                  group={group}
+                  task={activeTask}
+                  onAttach={(editorial) => attachEditorial.mutateAsync({ clientId: group.clientId, editorial })}
+                  onStart={handleStart}
+                />
+              )}
+              {activeTask.stage === 'distribuicao' && (
+                <DistribuicaoActions
+                  group={group}
+                  task={activeTask}
+                  onStart={handleStart}
+                  onTriggerReformulacao={() => triggerReformulacaoPerfil.mutateAsync(group.clientId)}
+                  onTriggerIdentidade={() => triggerIdentidadeVisual.mutateAsync(group.clientId)}
+                  onSaveFotografia={(link) => triggerAgendarFotografia.mutateAsync({ clientId: group.clientId, driveLink: link })}
+                  onFinish={() => finishOnboarding.mutateAsync(group.clientId)}
+                />
+              )}
+            </>
+          ) : null}
         </div>
       </SheetContent>
     </Sheet>
   );
 }
 
-/* ── Stage Action Components ── */
+/* ── Stage Actions ── */
 
 function ClienteNovoActions({ group, task, onAdvance, onStart }: { group: ClientGroup; task: OnboardingTask; onAdvance: () => void; onStart: () => void }) {
   const briefing = group.briefingData || {};
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
-        Revise as informações do cliente enviadas no link de onboarding e avance para a próxima etapa.
-      </p>
-
+      <p className="text-xs text-muted-foreground">Revise as informações do cliente e avance para o contrato.</p>
       <div className="space-y-2">
         <InfoRow icon={<Building2 size={12} />} label="Empresa" value={group.companyName} />
         <InfoRow icon={<User size={12} />} label="Responsável" value={group.responsiblePerson} />
@@ -605,15 +451,7 @@ function ClienteNovoActions({ group, task, onAdvance, onStart }: { group: Client
         <InfoRow icon={<Mail size={12} />} label="E-mail" value={group.email} />
         <InfoRow icon={<MapPin size={12} />} label="Cidade" value={group.city} />
         {group.niche && <InfoRow icon={<Building2 size={12} />} label="Nicho" value={group.niche} />}
-        <InfoRow icon={<Camera size={12} />} label="Fotos" value={
-          group.photoPreference === 'fotos_reais' ? 'Fotos reais' :
-          group.photoPreference === 'banco_imagens' ? 'Banco de imagens' : 'Não precisa'
-        } />
-        {briefing.has_identity && (
-          <InfoRow icon={<Palette size={12} />} label="Identidade Visual" value={briefing.has_identity === 'sim' ? 'Já possui' : 'Precisa criar'} />
-        )}
       </div>
-
       {briefing.social_objectives?.length > 0 && (
         <div className="p-2 rounded-lg bg-muted/50">
           <p className="text-[10px] font-semibold mb-1">Objetivos nas redes:</p>
@@ -624,7 +462,6 @@ function ClienteNovoActions({ group, task, onAdvance, onStart }: { group: Client
           </div>
         </div>
       )}
-
       <div className="flex gap-2 pt-2">
         {task.status === 'pendente' && (
           <Button size="sm" variant="outline" onClick={onStart} className="flex-1 gap-1">
@@ -645,10 +482,7 @@ function ContratoActions({ task, fileInputRef, uploading, onUpload, onAdvance, o
 }) {
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
-        Faça upload do contrato assinado em PDF para registrar e avançar.
-      </p>
-
+      <p className="text-xs text-muted-foreground">Faça upload do contrato assinado em PDF.</p>
       {task.contract_url ? (
         <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
           <div className="flex items-center gap-2">
@@ -671,7 +505,6 @@ function ContratoActions({ task, fileInputRef, uploading, onUpload, onAdvance, o
         </div>
       )}
       <input ref={fileInputRef} type="file" accept=".pdf" className="hidden" onChange={onUpload} />
-
       <div className="flex gap-2 pt-2">
         {task.status === 'pendente' && (
           <Button size="sm" variant="outline" onClick={onStart} className="flex-1 gap-1">
@@ -679,73 +512,53 @@ function ContratoActions({ task, fileInputRef, uploading, onUpload, onAdvance, o
           </Button>
         )}
         <Button size="sm" onClick={onAdvance} className="flex-1 gap-1" disabled={!task.contract_url && !task.contract_signed}>
-          <ArrowRight size={13} /> Avançar
+          <ArrowRight size={13} /> Avançar para Briefing
         </Button>
       </div>
     </div>
   );
 }
 
-function IdentidadeVisualActions({ task, onAdvance, onStart }: { task: OnboardingTask; onAdvance: () => void; onStart: () => void }) {
+function BriefingActions({ group, task, onAdvance, onStart }: { group: ClientGroup; task: OnboardingTask; onAdvance: () => void; onStart: () => void }) {
+  const briefingLink = `${window.location.origin}/onboarding/${group.clientId}`;
+  const hasBriefing = group.briefingData && Object.keys(group.briefingData).length > 0;
+
+  const copyBriefingLink = () => {
+    navigator.clipboard.writeText(briefingLink);
+    toast.success('Link de briefing copiado!');
+  };
+
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        O cliente não possui identidade visual. Gerencie a criação no módulo Designer e avance quando finalizada.
+        Envie o link de briefing para o cliente preencher. Ao concluir, avance para criar o editorial.
       </p>
 
-      <div className="p-3 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800">
-        <div className="flex items-center gap-2">
-          <Palette size={14} className="text-violet-500" />
-          <span className="text-xs font-semibold text-violet-700 dark:text-violet-300">Criação de identidade visual em andamento</span>
-        </div>
-        <p className="text-[10px] text-muted-foreground mt-1">
-          A Social Media pode acompanhar e solicitar urgência pelo seu painel.
-        </p>
-      </div>
-
-      <div className="flex gap-2 pt-2">
-        {task.status === 'pendente' && (
-          <Button size="sm" variant="outline" onClick={onStart} className="flex-1 gap-1">
-            <Clock size={13} /> Iniciar
+      <div className="p-3 rounded-lg border">
+        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Link do briefing</Label>
+        <div className="flex gap-2 mt-1.5">
+          <Input value={briefingLink} readOnly className="text-xs" />
+          <Button size="sm" variant="outline" onClick={copyBriefingLink} className="gap-1">
+            <Copy size={12} /> Copiar
           </Button>
-        )}
-        <Button size="sm" onClick={onAdvance} className="flex-1 gap-1">
-          <ArrowRight size={13} /> Identidade Concluída
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function FotografiaActions({ task, driveLink, setDriveLink, onSaveDrive, onAdvance, onStart }: {
-  task: OnboardingTask; driveLink: string; setDriveLink: (v: string) => void;
-  onSaveDrive: () => void; onAdvance: () => void; onStart: () => void;
-}) {
-  return (
-    <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
-        Adicione o link do Google Drive com as fotos do ensaio fotográfico do cliente.
-      </p>
-
-      <div>
-        <Label className="text-xs">Link do Drive (Ensaio Fotográfico)</Label>
-        <div className="flex gap-2 mt-1">
-          <Input
-            value={driveLink || task.drive_link || ''}
-            onChange={e => setDriveLink(e.target.value)}
-            placeholder="https://drive.google.com/..."
-            className="text-xs"
-          />
-          <Button size="sm" variant="outline" onClick={onSaveDrive} disabled={!driveLink}>Salvar</Button>
         </div>
       </div>
 
-      {(task.drive_link || driveLink) && (
+      {hasBriefing ? (
         <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
           <div className="flex items-center gap-2">
             <CheckCircle size={14} className="text-emerald-500" />
-            <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Drive anexado</span>
+            <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Briefing preenchido</span>
           </div>
+          <p className="text-[10px] text-muted-foreground mt-1">
+            {Object.keys(group.briefingData).length} campos respondidos
+          </p>
+        </div>
+      ) : (
+        <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+          <p className="text-xs text-amber-700 dark:text-amber-300">
+            ⏳ Aguardando o cliente preencher o briefing pelo link.
+          </p>
         </div>
       )}
 
@@ -755,57 +568,310 @@ function FotografiaActions({ task, driveLink, setDriveLink, onSaveDrive, onAdvan
             <Clock size={13} /> Iniciar
           </Button>
         )}
-        <Button size="sm" onClick={onAdvance} className="flex-1 gap-1" disabled={!task.drive_link && !driveLink}>
-          <ArrowRight size={13} /> Ensaio Aprovado
+        <Button size="sm" onClick={onAdvance} className="flex-1 gap-1">
+          <ArrowRight size={13} /> Avançar para Criar Editorial
         </Button>
       </div>
     </div>
   );
 }
 
-function ReformulacaoActions({ task, onFinish, onStart }: { task: OnboardingTask; onFinish: () => void; onStart: () => void }) {
+function CriarEditorialActions({ group, task, onSaveDraft, onAdvance, onStart }: {
+  group: ClientGroup; task: OnboardingTask;
+  onSaveDraft: (editorial: string) => Promise<any>;
+  onAdvance: () => void; onStart: () => void;
+}) {
+  const [editorial, setEditorial] = useState(group.editorial || '');
+  useEffect(() => { setEditorial(group.editorial || ''); }, [group.editorial]);
+
+  const briefing = group.briefingData || {};
+
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Ao finalizar, serão criadas automaticamente as tarefas de reformulação de perfil no módulo Designer:
+        Redija a linha editorial com base no briefing do cliente. Esse conteúdo será a fonte de verdade para roteiros e design.
       </p>
 
-      <div className="space-y-1.5">
-        {['Foto de Perfil', '5 Destaques', '6 Artes para o Feed'].map(item => (
-          <div key={item} className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-xs">
-            <Image size={12} className="text-primary" />
-            <span>{item}</span>
-          </div>
-        ))}
-      </div>
+      {briefing.brand_voice && (
+        <div className="p-2 rounded-lg bg-muted/50 text-xs">
+          <span className="font-semibold">Tom de voz:</span> {briefing.brand_voice}
+        </div>
+      )}
 
-      <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-        <p className="text-[10px] text-muted-foreground">
-          💡 As tarefas serão visíveis para o Designer e a Social Media poderá acompanhar e solicitar urgência pelo seu painel.
+      <div>
+        <Label className="text-xs">Linha Editorial</Label>
+        <Textarea
+          value={editorial}
+          onChange={e => setEditorial(e.target.value)}
+          placeholder="Descreva a linha editorial: pilares de conteúdo, tom, estilo, temas, calls-to-action..."
+          className="text-sm min-h-[280px] mt-1.5 font-mono"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Aceita HTML simples. Este conteúdo será usado pelo sistema para criar roteiros e artes.
         </p>
       </div>
 
       <div className="flex gap-2 pt-2">
         {task.status === 'pendente' && (
-          <Button size="sm" variant="outline" onClick={onStart} className="flex-1 gap-1">
+          <Button size="sm" variant="outline" onClick={onStart} className="gap-1">
             <Clock size={13} /> Iniciar
           </Button>
         )}
-        <Button size="sm" onClick={onFinish} className="flex-1 gap-1 bg-emerald-600 hover:bg-emerald-700">
-          <Sparkles size={13} /> Criar Tarefas & Finalizar
+        <Button size="sm" variant="outline" onClick={() => onSaveDraft(editorial)} className="gap-1" disabled={!editorial.trim()}>
+          <FileText size={13} /> Salvar Rascunho
+        </Button>
+        <Button
+          size="sm"
+          onClick={async () => { await onSaveDraft(editorial); onAdvance(); }}
+          className="flex-1 gap-1"
+          disabled={!editorial.trim()}
+        >
+          <ArrowRight size={13} /> Editorial Pronto
         </Button>
       </div>
     </div>
   );
 }
 
-/* ── Helper ── */
+function AnexarEditorialActions({ group, task, onAttach, onStart }: {
+  group: ClientGroup; task: OnboardingTask;
+  onAttach: (editorial: string) => Promise<any>;
+  onStart: () => void;
+}) {
+  const [editorial, setEditorial] = useState(group.editorial || '');
+  const [editing, setEditing] = useState(!group.editorial);
+  useEffect(() => { setEditorial(group.editorial || ''); }, [group.editorial]);
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Revise o editorial e anexe ao cadastro do cliente. Depois de anexado, o sistema passa a usá-lo para criar roteiros.
+      </p>
+
+      {!editing && group.editorial ? (
+        <div className="rounded-lg border border-accent bg-accent/10 p-4 max-h-[280px] overflow-auto">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
+            <FileText size={10} /> Linha Editorial
+          </p>
+          <div className="text-sm leading-relaxed whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: group.editorial }} />
+        </div>
+      ) : (
+        <Textarea
+          value={editorial}
+          onChange={e => setEditorial(e.target.value)}
+          className="text-sm min-h-[280px] font-mono"
+          placeholder="Cole ou edite a linha editorial..."
+        />
+      )}
+
+      <div className="flex gap-2 pt-2 flex-wrap">
+        {task.status === 'pendente' && (
+          <Button size="sm" variant="outline" onClick={onStart} className="gap-1">
+            <Clock size={13} /> Iniciar
+          </Button>
+        )}
+        <Button size="sm" variant="outline" onClick={() => setEditing(v => !v)} className="gap-1">
+          <FileText size={13} /> {editing ? 'Visualizar' : 'Editar'}
+        </Button>
+        <Button
+          size="sm"
+          onClick={() => onAttach(editorial)}
+          className="flex-1 gap-1 bg-emerald-600 hover:bg-emerald-700"
+          disabled={!editorial.trim()}
+        >
+          <CheckCircle size={13} /> Aprovar e Anexar
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function DistribuicaoActions({
+  group, task, onStart, onTriggerReformulacao, onTriggerIdentidade, onSaveFotografia, onFinish,
+}: {
+  group: ClientGroup; task: OnboardingTask; onStart: () => void;
+  onTriggerReformulacao: () => Promise<any>;
+  onTriggerIdentidade: () => Promise<any>;
+  onSaveFotografia: (link: string) => Promise<any>;
+  onFinish: () => Promise<any>;
+}) {
+  const [designTasksState, setDesignTasksState] = useState<{ reformulacao: boolean; identidade: boolean }>({ reformulacao: false, identidade: false });
+  const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
+  const [driveLink, setDriveLink] = useState(group.driveFotos || '');
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const [{ data: reforma }, { data: identidade }] = await Promise.all([
+        supabase.from('design_tasks').select('id').eq('client_id', group.clientId).ilike('title', '%Reformulação%').limit(1),
+        supabase.from('design_tasks').select('id').eq('client_id', group.clientId).ilike('title', '%Identidade Visual%').limit(1),
+      ]);
+      setDesignTasksState({
+        reformulacao: (reforma || []).length > 0,
+        identidade: (identidade || []).length > 0,
+      });
+    })();
+  }, [group.clientId]);
+
+  const portalLink = `${window.location.origin}/portal-registro/${group.clientId}`;
+
+  const copyPortalLink = () => {
+    navigator.clipboard.writeText(portalLink);
+    setCopied(true);
+    toast.success('Link do portal copiado!');
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const hubActions = [
+    {
+      key: 'reformulacao',
+      icon: <ImageIcon size={20} />,
+      title: 'Reformulação de Perfil',
+      description: '12 tarefas: foto de perfil + 5 destaques + 6 artes',
+      done: designTasksState.reformulacao,
+      color: 'from-violet-500/10 to-purple-500/10 border-violet-200 dark:border-violet-800',
+      onClick: async () => { await onTriggerReformulacao(); setDesignTasksState(s => ({ ...s, reformulacao: true })); },
+    },
+    {
+      key: 'identidade',
+      icon: <Palette size={20} />,
+      title: 'Criar Identidade Visual',
+      description: 'Logotipo, paleta, tipografia e aplicações',
+      done: designTasksState.identidade,
+      color: 'from-pink-500/10 to-rose-500/10 border-pink-200 dark:border-pink-800',
+      onClick: async () => { await onTriggerIdentidade(); setDesignTasksState(s => ({ ...s, identidade: true })); },
+    },
+    {
+      key: 'fotografia',
+      icon: <Camera size={20} />,
+      title: 'Agendar Fotografia',
+      description: 'Link do Drive com ensaio fotográfico',
+      done: !!group.driveFotos,
+      color: 'from-sky-500/10 to-blue-500/10 border-sky-200 dark:border-sky-800',
+      onClick: () => setPhotoDialogOpen(true),
+    },
+    {
+      key: 'portal',
+      icon: <Link2 size={20} />,
+      title: 'Portal do Cliente',
+      description: 'Copiar link para o cliente criar a conta',
+      done: false,
+      color: 'from-emerald-500/10 to-teal-500/10 border-emerald-200 dark:border-emerald-800',
+      onClick: copyPortalLink,
+      customBadge: copied ? '✓ Copiado' : undefined,
+    },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">
+        Distribua as tarefas iniciais do cliente. Ao terminar, finalize o onboarding.
+      </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {hubActions.map(action => (
+          <button
+            key={action.key}
+            onClick={action.onClick}
+            className={`text-left p-4 rounded-xl border bg-gradient-to-br ${action.color} hover:scale-[1.02] transition-transform relative`}
+          >
+            {(action.done || action.customBadge) && (
+              <Badge className="absolute top-2 right-2 bg-emerald-500 text-white text-[9px]">
+                {action.customBadge || '✓ Feito'}
+              </Badge>
+            )}
+            <div className="flex items-center gap-2 mb-2 text-primary">
+              {action.icon}
+              <span className="font-semibold text-sm">{action.title}</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground">{action.description}</p>
+          </button>
+        ))}
+      </div>
+
+      {group.driveFotos && (
+        <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+          <a href={group.driveFotos} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+            <ExternalLink size={11} /> Drive de fotos anexado
+          </a>
+        </div>
+      )}
+
+      <Separator />
+
+      <div className="flex gap-2">
+        {task.status === 'pendente' && (
+          <Button size="sm" variant="outline" onClick={onStart} className="gap-1">
+            <Clock size={13} /> Iniciar
+          </Button>
+        )}
+        <Button
+          size="lg"
+          onClick={onFinish}
+          className="flex-1 gap-2 bg-emerald-600 hover:bg-emerald-700 text-base font-bold"
+        >
+          <Rocket size={16} /> Cliente a Bordo — Finalizar Onboarding
+        </Button>
+      </div>
+
+      {/* Photo dialog */}
+      <Dialog open={photoDialogOpen} onOpenChange={setPhotoDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Agendar Fotografia</DialogTitle>
+            <DialogDescription>
+              Cole o link do Google Drive com o ensaio fotográfico do cliente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label className="text-xs">Link do Drive</Label>
+            <Input
+              value={driveLink}
+              onChange={e => setDriveLink(e.target.value)}
+              placeholder="https://drive.google.com/..."
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPhotoDialogOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={async () => {
+                if (!driveLink.trim()) return;
+                await onSaveFotografia(driveLink.trim());
+                setPhotoDialogOpen(false);
+              }}
+              disabled={!driveLink.trim()}
+            >
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function ClienteBordoActions({ group }: { group: ClientGroup }) {
+  return (
+    <div className="text-center py-10 space-y-4">
+      <div className="w-20 h-20 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto">
+        <Sparkles size={40} className="text-emerald-500" />
+      </div>
+      <div>
+        <h3 className="text-lg font-bold text-emerald-700 dark:text-emerald-300">🎉 Cliente Integrado!</h3>
+        <p className="text-sm text-muted-foreground mt-1">
+          {group.companyName} concluiu todas as 7 etapas do onboarding.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   if (!value) return null;
   return (
     <div className="flex items-center gap-2 text-xs p-2 rounded-lg bg-muted/30">
       <span className="text-muted-foreground shrink-0">{icon}</span>
-      <span className="text-muted-foreground font-medium w-20 shrink-0">{label}</span>
+      <span className="text-muted-foreground font-medium w-24 shrink-0">{label}</span>
       <span className="font-medium truncate">{value}</span>
     </div>
   );

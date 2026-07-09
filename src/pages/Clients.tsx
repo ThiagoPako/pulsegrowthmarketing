@@ -2672,9 +2672,31 @@ function ClientBriefingView({ client }: { client: Client }) {
         {/* Editorial line */}
         {editorial && (
           <div className="rounded-lg border border-accent bg-accent/10 p-4">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
-              <FileTextIcon size={10} /> Linha Editorial
-            </p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                <FileTextIcon size={10} /> Linha Editorial
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-[11px] gap-1"
+                onClick={() => {
+                  const safeName = (client.companyName || 'cliente').replace(/[^a-z0-9-_]+/gi, '_');
+                  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Editorial - ${client.companyName}</title><style>body{font-family:system-ui,-apple-system,sans-serif;max-width:820px;margin:2rem auto;padding:0 1.5rem;line-height:1.6;color:#111}h1{border-bottom:2px solid #eee;padding-bottom:.5rem}</style></head><body><h1>Linha Editorial — ${client.companyName}</h1>${editorial}</body></html>`;
+                  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `editorial-${safeName}.html`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                <ExternalLink size={11} /> Baixar Editorial
+              </Button>
+            </div>
             <div className="text-sm leading-relaxed prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: editorial }} />
           </div>
         )}

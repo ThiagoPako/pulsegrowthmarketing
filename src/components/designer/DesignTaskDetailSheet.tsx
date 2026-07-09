@@ -714,6 +714,19 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                       <p className="text-sm mt-1.5 whitespace-pre-line leading-relaxed">{task.description}</p>
                     </div>
                   )}
+                  {(task.clients as any)?.editorial && (
+                    <details className="rounded-lg border border-accent bg-accent/10 p-3 group/ed">
+                      <summary className="cursor-pointer text-xs font-semibold flex items-center gap-1.5 select-none">
+                        📖 <span>Editorial do Cliente</span>
+                        <span className="ml-auto text-[10px] text-muted-foreground group-open/ed:hidden">Clique para expandir</span>
+                        <span className="ml-auto text-[10px] text-muted-foreground hidden group-open/ed:inline">Clique para recolher</span>
+                      </summary>
+                      <div
+                        className="text-sm mt-2 leading-relaxed prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap"
+                        dangerouslySetInnerHTML={{ __html: (task.clients as any).editorial }}
+                      />
+                    </details>
+                  )}
 
                   {/* References with image preview */}
                   {task.references_links?.length > 0 && (

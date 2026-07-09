@@ -78,6 +78,7 @@ const COLUMN_CONFIG: Record<string, { icon: React.ReactNode; gradient: string }>
   enviar_cliente: { icon: <Send size={15} />, gradient: 'from-cyan-500/20 to-teal-500/10 dark:from-cyan-500/30 dark:to-teal-500/10' },
   aprovado: { icon: <CheckCircle2 size={15} />, gradient: 'from-emerald-500/20 to-green-500/10 dark:from-emerald-500/30 dark:to-green-500/10' },
   ajustes: { icon: <RotateCcw size={15} />, gradient: 'from-red-500/20 to-rose-500/10 dark:from-red-500/30 dark:to-rose-500/10' },
+  postado: { icon: <Send size={15} />, gradient: 'from-fuchsia-500/20 to-purple-500/10 dark:from-fuchsia-500/30 dark:to-purple-500/10' },
 };
 
 /* ── Drag-to-scroll container ── */

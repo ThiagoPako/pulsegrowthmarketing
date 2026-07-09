@@ -165,13 +165,17 @@ export default function ClientArtPlaybook() {
               <FilterChip key={k} active={format === k} onClick={() => setFormat(k)}>{FORMAT_LABELS[k] || k}</FilterChip>
             ))}
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={() => setOnlyApproved(v => !v)}
-              className={`text-[11px] px-3 h-8 rounded-full border transition-colors ${onlyApproved ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent border-border text-muted-foreground hover:border-primary/50'}`}
-            >
-              {onlyApproved ? 'Só aprovadas' : 'Todas'}
-            </button>
+          <div className="ml-auto flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-0.5 border border-border rounded-full p-0.5">
+              {([['aprovado','Aprovadas'],['postado','Postadas'],['all','Todas']] as const).map(([k,l]) => (
+                <button key={k} onClick={() => setStatusFilter(k)} className={`text-[11px] px-3 h-7 rounded-full transition-colors ${statusFilter===k ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{l}</button>
+              ))}
+            </div>
+            <div className="flex items-center gap-0.5 border border-border rounded-full p-0.5">
+              {([['all','Sempre'],['7d','7d'],['30d','30d'],['90d','90d']] as const).map(([k,l]) => (
+                <button key={k} onClick={() => setPeriodFilter(k)} className={`text-[11px] px-2.5 h-7 rounded-full transition-colors ${periodFilter===k ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{l}</button>
+              ))}
+            </div>
             <div className="flex items-center gap-0.5 border border-border rounded-full p-0.5">
               <button onClick={() => setView('mosaic')} className={`h-7 w-7 flex items-center justify-center rounded-full ${view === 'mosaic' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}><LayoutList size={13} /></button>
               <button onClick={() => setView('grid')} className={`h-7 w-7 flex items-center justify-center rounded-full ${view === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}><Grid3x3 size={13} /></button>

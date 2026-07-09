@@ -694,6 +694,16 @@ export default function DesignerKanban() {
                         <span className="text-[10px] mt-2">Nenhuma tarefa</span>
                       </motion.div>
                     )}
+                    {isAprovado && hiddenCount > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full h-8 text-xs mt-2"
+                        onClick={() => setAprovadoLimit(l => l + 10)}
+                      >
+                        Carregar mais 10 ({hiddenCount} restantes)
+                      </Button>
+                    )}
                   </div>
                 </motion.div>
               );

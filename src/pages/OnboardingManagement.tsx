@@ -56,8 +56,11 @@ interface ClientGroup {
 }
 
 export default function OnboardingManagement() {
-  const { tasksQuery, deleteOnboardingClient } = useOnboarding();
+  const { tasksQuery, deleteOnboardingClient, moveClientToStage } = useOnboarding();
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [draggingClientId, setDraggingClientId] = useState<string | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<string | null>(null);
+
 
   const tasks = tasksQuery.data || [];
 
@@ -138,8 +141,26 @@ export default function OnboardingManagement() {
 
       {/* Kanban Board */}
       <div className="flex gap-3 overflow-x-auto pb-4">
-        {ONBOARDING_STAGES.map(stage => (
-          <div key={stage.key} className="min-w-[260px] w-[260px] flex-shrink-0">
+        {ONBOARDING_STAGES.map(stage => {
+          const isOver = dragOverStage === stage.key;
+          return (
+          <div
+            key={stage.key}
+            className={`min-w-[260px] w-[260px] flex-shrink-0 rounded-xl transition-colors ${isOver ? 'bg-primary/5 ring-2 ring-primary/40' : ''}`}
+            onDragOver={e => { if (draggingClientId) { e.preventDefault(); setDragOverStage(stage.key); } }}
+            onDragLeave={() => setDragOverStage(prev => (prev === stage.key ? null : prev))}
+            onDrop={e => {
+              e.preventDefault();
+              if (draggingClientId) {
+                const group = clientGroups.find(g => g.clientId === draggingClientId);
+                if (group && group.currentStage !== stage.key) {
+                  moveClientToStage.mutate({ clientId: draggingClientId, targetStage: stage.key });
+                }
+              }
+              setDraggingClientId(null);
+              setDragOverStage(null);
+            }}
+          >
             <div className="flex items-center gap-2 mb-3 px-1">
               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: `hsl(${stage.color})` }} />
               <span className="text-[11px] font-bold uppercase tracking-wider">{stage.icon} {stage.label}</span>
@@ -147,23 +168,37 @@ export default function OnboardingManagement() {
                 {clientsByStage[stage.key]?.length || 0}
               </Badge>
             </div>
-            <div className="space-y-2.5 min-h-[100px]">
+            <div className="space-y-2.5 min-h-[100px] p-1">
               {clientsByStage[stage.key]?.map(group => (
-                <OnboardingCard
+                <div
                   key={group.clientId}
-                  group={group}
-                  onClick={() => setSelectedClientId(group.clientId)}
-                  onDelete={() => deleteOnboardingClient.mutate(group.clientId)}
-                />
+                  draggable
+                  onDragStart={e => {
+                    setDraggingClientId(group.clientId);
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                  onDragEnd={() => { setDraggingClientId(null); setDragOverStage(null); }}
+                  className={draggingClientId === group.clientId ? 'opacity-40' : ''}
+                >
+                  <OnboardingCard
+                    group={group}
+                    onClick={() => setSelectedClientId(group.clientId)}
+                    onDelete={() => deleteOnboardingClient.mutate(group.clientId)}
+                  />
+                </div>
               ))}
               {clientsByStage[stage.key]?.length === 0 && (
                 <div className="rounded-xl border border-dashed p-6 text-center">
-                  <p className="text-[11px] text-muted-foreground">Nenhum cliente</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {isOver ? 'Solte aqui' : 'Nenhum cliente'}
+                  </p>
                 </div>
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
+
       </div>
 
       {selectedGroup && (

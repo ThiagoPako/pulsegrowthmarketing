@@ -441,6 +441,65 @@ export function useOnboarding() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  // Move a client to any stage via drag & drop
+  const moveClientToStage = useMutation({
+    mutationFn: async ({ clientId, targetStage }: { clientId: string; targetStage: OnboardingStage }) => {
+      const targetIdx = STAGE_ORDER.indexOf(targetStage);
+      if (targetIdx === -1) throw new Error(`Etapa inválida: ${targetStage}`);
+
+      const { data: existing } = await supabase
+        .from('onboarding_tasks')
+        .select('id, stage, status')
+        .eq('client_id', clientId);
+
+      const rows = (existing || []) as Array<{ id: string; stage: string; status: string }>;
+      const now = new Date().toISOString();
+
+      for (const r of rows) {
+        const normalized = normalizeStage(r.stage);
+        const idx = STAGE_ORDER.indexOf(normalized);
+        if (idx < targetIdx) {
+          if (r.status !== 'concluido') {
+            await supabase.from('onboarding_tasks')
+              .update({ status: 'concluido', completed_at: now, updated_at: now } as any)
+              .eq('id', r.id);
+          }
+        } else if (idx === targetIdx) {
+          if (r.status === 'concluido') {
+            await supabase.from('onboarding_tasks')
+              .update({ status: 'pendente', completed_at: null, updated_at: now } as any)
+              .eq('id', r.id);
+          }
+        } else {
+          await supabase.from('onboarding_tasks').delete().eq('id', r.id);
+        }
+      }
+
+      const hasTarget = rows.some(r => normalizeStage(r.stage) === targetStage);
+      if (!hasTarget) {
+        await supabase.from('onboarding_tasks').insert({
+          client_id: clientId,
+          stage: targetStage,
+          title: STAGE_TITLES[targetStage],
+          status: targetStage === 'cliente_bordo' ? 'concluido' : 'pendente',
+          completed_at: targetStage === 'cliente_bordo' ? now : null,
+        } as any);
+      }
+
+      if (targetStage === 'cliente_bordo') {
+        await supabase.from('clients').update({ onboarding_completed: true } as any).eq('id', clientId);
+      } else {
+        await supabase.from('clients').update({ onboarding_completed: false } as any).eq('id', clientId);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['onboarding-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      toast.success('Cliente movido!');
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   // Back-compat aliases used elsewhere
   const createDesignTasksForClient = triggerReformulacaoPerfil;
 
@@ -457,5 +516,7 @@ export function useOnboarding() {
     finishOnboarding,
     createDesignTasksForClient,
     deleteOnboardingClient,
+    moveClientToStage,
   };
 }
+

@@ -588,7 +588,7 @@ export default function DesignerKanban() {
                         transition={{ type: 'spring', stiffness: 500 }}
                         className="ml-auto flex items-center gap-1"
                       >
-                        <Badge variant="secondary" className="text-[10px] h-5">{colTasks.length}</Badge>
+                        <Badge variant="secondary" className="text-[10px] h-5">{allColTasks.length}</Badge>
                         {col.key === 'aprovado' && colTasks.some(t => t.attachment_url || (t as any).mockup_url) && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>

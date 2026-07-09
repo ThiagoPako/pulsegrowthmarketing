@@ -47,7 +47,8 @@ export default function ClientArtPlaybook() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [format, setFormat] = useState<string>('all');
-  const [onlyApproved, setOnlyApproved] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<'aprovado' | 'postado' | 'all'>('aprovado');
+  const [periodFilter, setPeriodFilter] = useState<'all' | '7d' | '30d' | '90d'>('all');
   const [view, setView] = useState<'grid' | 'mosaic'>('mosaic');
   const [preview, setPreview] = useState<string | null>(null);
 
@@ -68,22 +69,33 @@ export default function ClientArtPlaybook() {
     return () => { cancel = true; };
   }, [clientId]);
 
+  const periodCutoff = useMemo(() => {
+    if (periodFilter === 'all') return 0;
+    const days = periodFilter === '7d' ? 7 : periodFilter === '30d' ? 30 : 90;
+    return Date.now() - days * 24 * 60 * 60 * 1000;
+  }, [periodFilter]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return arts.filter(a => {
-      if (onlyApproved && a.kanban_column !== 'aprovado') return false;
+      if (statusFilter !== 'all' && a.kanban_column !== statusFilter) return false;
       if (format !== 'all' && a.format_type !== format) return false;
       if (q && !a.title.toLowerCase().includes(q)) return false;
+      if (periodCutoff) {
+        const ts = new Date(a.completed_at || a.created_at).getTime();
+        if (ts < periodCutoff) return false;
+      }
       return true;
     });
-  }, [arts, search, format, onlyApproved]);
+  }, [arts, search, format, statusFilter, periodCutoff]);
 
   const formatCounts = useMemo(() => {
-    const src = onlyApproved ? arts.filter(a => a.kanban_column === 'aprovado') : arts;
+    const src = statusFilter === 'all' ? arts : arts.filter(a => a.kanban_column === statusFilter);
     return src.reduce<Record<string, number>>((m, a) => { m[a.format_type] = (m[a.format_type] || 0) + 1; return m; }, {});
-  }, [arts, onlyApproved]);
+  }, [arts, statusFilter]);
 
   const totalApproved = arts.filter(a => a.kanban_column === 'aprovado').length;
+  const totalPosted = arts.filter(a => a.kanban_column === 'postado').length;
   const backHref = searchParams.get('from') || '/dashboard';
 
   const handleDownloadAll = async () => {
@@ -129,6 +141,7 @@ export default function ClientArtPlaybook() {
               </p>
               <div className="flex items-center gap-2 mt-3 flex-wrap">
                 <Badge className="text-[11px]" style={{ background: brand, color: 'white' }}>✅ {totalApproved} aprovadas</Badge>
+                <Badge variant="secondary" className="text-[11px]">📤 {totalPosted} postadas</Badge>
                 <Badge variant="secondary" className="text-[11px]">🎨 {arts.length} totais</Badge>
                 {Object.entries(formatCounts).slice(0, 4).map(([k, v]) => (
                   <Badge key={k} variant="outline" className="text-[10px]">{FORMAT_LABELS[k] || k}: {v}</Badge>
@@ -152,13 +165,17 @@ export default function ClientArtPlaybook() {
               <FilterChip key={k} active={format === k} onClick={() => setFormat(k)}>{FORMAT_LABELS[k] || k}</FilterChip>
             ))}
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={() => setOnlyApproved(v => !v)}
-              className={`text-[11px] px-3 h-8 rounded-full border transition-colors ${onlyApproved ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent border-border text-muted-foreground hover:border-primary/50'}`}
-            >
-              {onlyApproved ? 'Só aprovadas' : 'Todas'}
-            </button>
+          <div className="ml-auto flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-0.5 border border-border rounded-full p-0.5">
+              {([['aprovado','Aprovadas'],['postado','Postadas'],['all','Todas']] as const).map(([k,l]) => (
+                <button key={k} onClick={() => setStatusFilter(k)} className={`text-[11px] px-3 h-7 rounded-full transition-colors ${statusFilter===k ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{l}</button>
+              ))}
+            </div>
+            <div className="flex items-center gap-0.5 border border-border rounded-full p-0.5">
+              {([['all','Sempre'],['7d','7d'],['30d','30d'],['90d','90d']] as const).map(([k,l]) => (
+                <button key={k} onClick={() => setPeriodFilter(k)} className={`text-[11px] px-2.5 h-7 rounded-full transition-colors ${periodFilter===k ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>{l}</button>
+              ))}
+            </div>
             <div className="flex items-center gap-0.5 border border-border rounded-full p-0.5">
               <button onClick={() => setView('mosaic')} className={`h-7 w-7 flex items-center justify-center rounded-full ${view === 'mosaic' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}><LayoutList size={13} /></button>
               <button onClick={() => setView('grid')} className={`h-7 w-7 flex items-center justify-center rounded-full ${view === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}><Grid3x3 size={13} /></button>

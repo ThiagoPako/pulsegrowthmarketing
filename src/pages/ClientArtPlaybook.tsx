@@ -47,7 +47,8 @@ export default function ClientArtPlaybook() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [format, setFormat] = useState<string>('all');
-  const [onlyApproved, setOnlyApproved] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<'aprovado' | 'postado' | 'all'>('aprovado');
+  const [periodFilter, setPeriodFilter] = useState<'all' | '7d' | '30d' | '90d'>('all');
   const [view, setView] = useState<'grid' | 'mosaic'>('mosaic');
   const [preview, setPreview] = useState<string | null>(null);
 

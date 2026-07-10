@@ -4177,6 +4177,39 @@ app.all('/api/client-onboarding', async (req, res) => {
   }
 });
 
+// ─── Public Team Presentation ────────────────────────────────
+// Used by /equipe/apresentacao. This route is intentionally public because
+// the page is sent to clients before they have portal access.
+app.get('/api/public-team-presentation', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, display_name, role, avatar_url, bio, job_title
+       FROM profiles
+       WHERE name IS NOT NULL
+         AND role IN ('admin','gestor_projetos','copywriter','social_media','designer','videomaker','editor','fotografo','endomarketing','parceiro')
+       ORDER BY CASE
+         WHEN lower(coalesce(display_name, name)) LIKE '%thiago%' THEN 1
+         WHEN lower(coalesce(display_name, name)) LIKE '%naay%' THEN 2
+         WHEN lower(coalesce(display_name, name)) LIKE '%naraely%' THEN 3
+         WHEN lower(coalesce(display_name, name)) LIKE '%rayssa%' THEN 4
+         WHEN lower(coalesce(display_name, name)) LIKE '%adriely%' THEN 5
+         WHEN lower(coalesce(display_name, name)) LIKE '%victor gabriel%' THEN 6
+         WHEN lower(coalesce(display_name, name)) LIKE '%fabiely%' THEN 7
+         WHEN lower(coalesce(display_name, name)) = 'victor' THEN 8
+         WHEN lower(coalesce(display_name, name)) LIKE '%iggor%' THEN 9
+         WHEN lower(coalesce(display_name, name)) LIKE '%victor oliveira%' THEN 10
+         ELSE 99
+       END, name ASC`
+    );
+
+    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+    return res.json({ members: rows || [] });
+  } catch (error) {
+    console.error('public-team-presentation error:', error);
+    return res.status(500).json({ error: 'Não foi possível carregar a equipe.' });
+  }
+});
+
 // ─── 15. Billing Automation ─────────────────────────────────
 app.post('/api/billing-automation', async (req, res) => {
   try {

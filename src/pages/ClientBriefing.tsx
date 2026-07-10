@@ -247,14 +247,7 @@ export default function ClientBriefing() {
           setFacebookPassword(d.facebookPassword || '');
           setOtherAccesses(d.otherAccesses || '');
           setUseRealPhotos(d.useRealPhotos || '');
-          setTicketMedio(d.ticketMedio || '');
-          setFaturamentoAtual(d.faturamentoAtual || '');
-          setMetaFaturamento(d.metaFaturamento || '');
           setCanaisAquisicao(Array.isArray(d.canaisAquisicao) ? d.canaisAquisicao : []);
-          setJaInvesteAds(d.jaInvesteAds || '');
-          setOrcamentoMkt(d.orcamentoMkt || '');
-          setCicloVenda(d.ciclovenda || '');
-          setSazonalidade(d.sazonalidade || '');
           setIdentidadeVisualLink(d.identidadeVisualLink || '');
           setFotosEstudioLink(d.fotosEstudioLink || '');
           setAdditionalAttachments(Array.isArray(d.additionalAttachments) ? d.additionalAttachments : []);

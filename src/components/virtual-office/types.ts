@@ -10,7 +10,7 @@ export interface OfficeMember {
   gender?: 'male' | 'female';
 }
 
-export type RoomId = 'admin' | 'studio' | 'editing' | 'atelier' | 'social' | 'coffee' | 'endomarketing' | 'photo' | 'projetos';
+export type RoomId = 'admin' | 'studio' | 'editing' | 'atelier' | 'social' | 'coffee' | 'endomarketing' | 'photo' | 'projetos' | 'copy';
 
 export interface RoomConfig {
   id: RoomId;

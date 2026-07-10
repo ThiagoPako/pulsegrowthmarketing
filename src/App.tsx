@@ -38,6 +38,7 @@ const EditorDashboard = lazy(() => import("@/pages/EditorDashboard"));
 const EditorKanban = lazy(() => import("@/pages/EditorKanban"));
 const FinancialDashboard = lazy(() => import("@/pages/FinancialDashboard"));
 const FinancialContracts = lazy(() => import("@/pages/FinancialContracts"));
+const ContractsManagement = lazy(() => import("@/pages/ContractsManagement"));
 const FinancialRevenues = lazy(() => import("@/pages/FinancialRevenues"));
 const FinancialExpenses = lazy(() => import("@/pages/FinancialExpenses"));
 const FinancialDelinquency = lazy(() => import("@/pages/FinancialDelinquency"));
@@ -181,6 +182,7 @@ function AppRoutes() {
         <Route path="/designer" element={<ProtectedRoute><DesignerKanban /></ProtectedRoute>} />
         <Route path="/designer/relatorios" element={<ProtectedRoute><DesignerReports /></ProtectedRoute>} />
         <Route path="/onboarding-gestao" element={<ProtectedRoute><OnboardingManagement /></ProtectedRoute>} />
+        <Route path="/gestao/contratos" element={<ProtectedRoute><ContractsManagement /></ProtectedRoute>} />
         <Route path="/briefing/:clientId" element={<ClientBriefing />} />
         <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppDashboard /></ProtectedRoute>} />
         <Route path="/financeiro" element={<ProtectedRoute><FinancialDashboard /></ProtectedRoute>} />

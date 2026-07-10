@@ -113,6 +113,7 @@ const navCategories: NavCategory[] = [
       { path: '/relacionamento', label: 'Relacionamento', icon: Handshake, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/depoimentos', label: 'Depoimentos', icon: Star, roles: ['admin', 'social_media'] },
       { path: '/onboarding-gestao', label: 'Onboarding', icon: UserPlus, roles: ['admin', 'social_media', 'gestor_projetos'] },
+      { path: '/gestao/contratos', label: 'Contratos', icon: FileText, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/equipe', label: 'Equipe', icon: Users, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/planos', label: 'Planos', icon: Package, roles: ['admin', 'social_media'] },
       { path: '/relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin', 'social_media', 'gestor_projetos'] },

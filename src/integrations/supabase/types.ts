@@ -2441,6 +2441,8 @@ export type Database = {
         Row: {
           billing_enabled: boolean
           client_id: string
+          contract_duration_months: number | null
+          contract_end_date: string | null
           contract_start_date: string
           contract_value: number
           created_at: string
@@ -2448,12 +2450,16 @@ export type Database = {
           id: string
           payment_method: string
           plan_id: string | null
+          renewal_count: number | null
+          renewed_at: string | null
           status: string
           updated_at: string
         }
         Insert: {
           billing_enabled?: boolean
           client_id: string
+          contract_duration_months?: number | null
+          contract_end_date?: string | null
           contract_start_date?: string
           contract_value?: number
           created_at?: string
@@ -2461,12 +2467,16 @@ export type Database = {
           id?: string
           payment_method?: string
           plan_id?: string | null
+          renewal_count?: number | null
+          renewed_at?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
           billing_enabled?: boolean
           client_id?: string
+          contract_duration_months?: number | null
+          contract_end_date?: string | null
           contract_start_date?: string
           contract_value?: number
           created_at?: string
@@ -2474,6 +2484,8 @@ export type Database = {
           id?: string
           payment_method?: string
           plan_id?: string | null
+          renewal_count?: number | null
+          renewed_at?: string | null
           status?: string
           updated_at?: string
         }

@@ -208,6 +208,71 @@ function RoomDecor({ id }: { id: string }) {
     </div>
   );
 
+  if (id === 'copy') return (
+    <div className="absolute bottom-1 left-1 right-1 flex items-end justify-between pointer-events-none select-none opacity-50">
+      {/* Estante de livros */}
+      <div style={{ width: 22, height: 28, backgroundColor: '#6b4423', borderRadius: 1, padding: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+        {[
+          ['#c0392b', '#2c3e50', '#d4a017', '#0e8478'],
+          ['#8e44ad', '#16a085', '#e67e22', '#34495e'],
+          ['#c0392b', '#0e8478', '#8e44ad', '#d4a017'],
+        ].map((row, ri) => (
+          <div key={ri} style={{ display: 'flex', gap: 0.5, height: 7, backgroundColor: '#3a2410', padding: 0.5 }}>
+            {row.map((c, i) => (
+              <div key={i} style={{ width: 4, height: 6, backgroundColor: c, borderRadius: 0.5 }} />
+            ))}
+          </div>
+        ))}
+      </div>
+      {/* Papéis amassados no chão + folhas escritas */}
+      <div className="relative" style={{ width: 18, height: 22 }}>
+        {/* Folhas escritas empilhadas */}
+        <div style={{ position: 'absolute', bottom: 8, left: 2, width: 10, height: 12, backgroundColor: '#faf3e0', border: '1px solid #d4c5a0', transform: 'rotate(-4deg)' }}>
+          {[1, 3, 5, 7, 9].map(y => (
+            <div key={y} style={{ width: 7, height: 0.5, backgroundColor: '#78350f', marginTop: y === 1 ? 1 : 1.5, marginLeft: 1 }} />
+          ))}
+        </div>
+        <div style={{ position: 'absolute', bottom: 10, left: 5, width: 10, height: 12, backgroundColor: '#fef9ec', border: '1px solid #d4c5a0', transform: 'rotate(3deg)' }}>
+          {[1, 3, 5, 7].map(y => (
+            <motion.div key={y}
+              animate={{ opacity: [0.6, 1, 0.6] }}
+              transition={{ duration: 2, repeat: Infinity, delay: y * 0.1 }}
+              style={{ width: 7, height: 0.5, backgroundColor: '#3a2a1a', marginTop: y === 1 ? 1 : 1.5, marginLeft: 1 }}
+            />
+          ))}
+        </div>
+        {/* Bolinha de papel amassado */}
+        <motion.div
+          animate={{ rotate: [-8, 8, -8] }}
+          transition={{ duration: 4, repeat: Infinity }}
+          style={{ position: 'absolute', bottom: 0, left: 0, width: 5, height: 5, backgroundColor: '#f5f0e0', borderRadius: '50%', border: '1px solid #c0b090' }}
+        />
+        <div style={{ position: 'absolute', bottom: 1, right: 1, width: 4, height: 4, backgroundColor: '#f5f0e0', borderRadius: '50%', border: '1px solid #c0b090' }} />
+      </div>
+      {/* Caneca de café fumegando + planta */}
+      <div className="relative" style={{ width: 12, height: 22 }}>
+        {/* Vapor */}
+        {[0, 1].map(i => (
+          <motion.div key={i}
+            animate={{ y: [-2, -8, -2], opacity: [0, 0.7, 0] }}
+            transition={{ duration: 2.5, repeat: Infinity, delay: i * 0.6 }}
+            style={{ position: 'absolute', top: 4, left: 3 + i * 3, width: 2, height: 2, backgroundColor: '#e5d5b5', borderRadius: '50%' }}
+          />
+        ))}
+        {/* Caneca */}
+        <div style={{ position: 'absolute', bottom: 10, left: 1, width: 8, height: 7, backgroundColor: '#d97706', borderRadius: '1px 1px 2px 2px', border: '1px solid #78350f' }}>
+          <div style={{ width: 6, height: 1.5, backgroundColor: '#3a2410', marginTop: 0.5, marginLeft: 0.5 }} />
+        </div>
+        {/* Alça */}
+        <div style={{ position: 'absolute', bottom: 11, right: 0, width: 3, height: 4, border: '1px solid #78350f', borderLeft: 'none', borderRadius: '0 4px 4px 0' }} />
+        {/* Vaso pequeno com planta */}
+        <div style={{ position: 'absolute', bottom: 0, left: 3, width: 6, height: 4, backgroundColor: '#6b4423', borderRadius: '0 0 2px 2px' }} />
+        <motion.div animate={{ rotate: [-4, 4, -4] }} transition={{ duration: 3, repeat: Infinity }}
+          style={{ position: 'absolute', bottom: 3, left: 2, width: 8, height: 6, backgroundColor: '#22c55e', borderRadius: '50%', opacity: 0.8 }} />
+      </div>
+    </div>
+  );
+
   return null;
 }
 

@@ -71,6 +71,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   alteracao: '🔧 Alteração',
   aprovacao: '✅ Aprovação',
   designing: '🎨 Criando arte',
+  copywriting: '✍️ Escrevendo copy',
   idle: '💤 Ocioso',
   paused: '⏸️ Pausado',
 };

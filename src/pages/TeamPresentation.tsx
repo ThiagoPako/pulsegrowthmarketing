@@ -161,9 +161,25 @@ function InitialsBlock({ name }: { name: string }) {
 
 /* ---------- Página ---------- */
 
+/* ---------- Equipe fixa (carregamento instantâneo) ----------
+ * Lista estática — evita loading lento/vazio na página pública.
+ * Para adicionar/remover alguém, edite este array.
+ */
+const STATIC_MEMBERS: Member[] = [
+  { id: 'thiago', name: 'Thiago', displayName: 'Thiago', role: 'admin' },
+  { id: 'naay', name: 'Naay', displayName: 'Naay', role: 'gestor_projetos' },
+  { id: 'naraely', name: 'Naraely', displayName: 'Naraely', role: 'copywriter' },
+  { id: 'rayssa', name: 'Rayssa', displayName: 'Rayssa', role: 'social_media' },
+  { id: 'adriely', name: 'Adriely', displayName: 'Adriely', role: 'designer' },
+  { id: 'victor-g', name: 'Victor Gabriel', displayName: 'Victor Gabriel', role: 'videomaker' },
+  { id: 'fabiely', name: 'Fabiely', displayName: 'Fabiely', role: 'videomaker' },
+  { id: 'victor', name: 'Victor', displayName: 'Victor', role: 'videomaker' },
+  { id: 'iggor', name: 'Iggor', displayName: 'Iggor', role: 'editor' },
+  { id: 'victor-o', name: 'Victor Oliveira', displayName: 'Victor Oliveira', role: 'editor' },
+];
+
 export default function TeamPresentation() {
-  const [members, setMembers] = useState<Member[]>([]);
-  const [loading, setLoading] = useState(true);
+  const members = STATIC_MEMBERS;
 
   // Inject Google Fonts once (Fraunces + Inter)
   useEffect(() => {
@@ -175,44 +191,6 @@ export default function TeamPresentation() {
     link.href =
       'https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Inter:wght@300;400;500;600;700&display=swap';
     document.head.appendChild(link);
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await supabase.from('profiles').select('*');
-        if (data) {
-          // Ordem pela dinâmica do projeto — não é hierarquia, é fluxo de trabalho.
-          const order: UserRole[] = [
-            'admin',
-            'gestor_projetos',
-            'copywriter',
-            'social_media',
-            'designer',
-            'videomaker',
-            'editor',
-            'fotografo',
-            'endomarketing',
-            'parceiro',
-          ];
-          const mapped: Member[] = (data as any[])
-            .filter(p => p.role && ROLE_INFO[p.role as UserRole])
-            .map(p => ({
-              id: p.id,
-              name: p.name,
-              displayName: p.display_name,
-              role: p.role as UserRole,
-              jobTitle: p.job_title,
-              bio: p.bio,
-              avatarUrl: p.avatar_url,
-            }))
-            .sort((a, b) => order.indexOf(a.role) - order.indexOf(b.role));
-          setMembers(mapped);
-        }
-      } finally {
-        setLoading(false);
-      }
-    })();
   }, []);
 
   return (
@@ -255,22 +233,12 @@ export default function TeamPresentation() {
           />
         </motion.header>
 
-        {/* ---------- Estados ---------- */}
-        {loading ? (
-          <div className="text-center py-20" style={{ color: `${C.ink}66` }}>
-            Carregando equipe...
-          </div>
-        ) : members.length === 0 ? (
-          <div className="text-center py-20" style={{ color: `${C.ink}66` }}>
-            Nenhum membro cadastrado.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-16 md:gap-x-14 md:gap-y-24">
-            {members.map((m, i) => (
-              <MemberCard key={m.id} m={m} index={i} />
-            ))}
-          </div>
-        )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-16 md:gap-x-14 md:gap-y-24">
+          {members.map((m, i) => (
+            <MemberCard key={m.id} m={m} index={i} />
+          ))}
+        </div>
+
 
         {/* ---------- Como funciona a dinâmica ---------- */}
         <motion.section

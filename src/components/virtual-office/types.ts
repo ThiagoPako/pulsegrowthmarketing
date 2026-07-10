@@ -34,11 +34,10 @@ export const ROOMS: RoomConfig[] = [
   { id: 'coffee', label: 'Cantinho do Café', emoji: '☕', floorColor: '#a08060', wallColor: '#806040', roles: [] },
 ];
 
-/** Admin, Social Media e Gestor de Projetos (quando marcou trabalhando) são SEMPRE trabalhando quando online. */
+/** Admin, Social Media, Copywriter e Gestor de Projetos (quando marcou trabalhando) são SEMPRE trabalhando quando online. */
 export function shouldBeInCoffeeRoom(m: OfficeMember): boolean {
   if (!m.isOnline) return false;
-  if (m.role === 'admin' || m.role === 'social_media') return false;
+  if (m.role === 'admin' || m.role === 'social_media' || m.role === 'copywriter') return false;
   if (m.role === 'gestor_projetos' && m.activity === 'gestao') return false;
-  if (m.role === 'copywriter' && m.activity === 'copywriting') return false;
   return !m.activity || m.activity === 'idle' || m.activity === 'paused';
 }

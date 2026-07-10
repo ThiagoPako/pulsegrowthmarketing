@@ -22,7 +22,7 @@ export interface RoomConfig {
 }
 
 export const ROOMS: RoomConfig[] = [
-  { id: 'admin', label: 'Administração', emoji: '🏛️', floorColor: '#2a2a2e', wallColor: '#1a1a1e', roles: ['admin'] },
+  { id: 'admin', label: 'Sala de Vendas', emoji: '📞', floorColor: '#2a2a2e', wallColor: '#1a1a1e', roles: ['admin'] },
   { id: 'projetos', label: 'Gestão de Projetos', emoji: '💼', floorColor: '#c8a2c8', wallColor: '#7a4a7a', roles: ['gestor_projetos'] },
   { id: 'copy', label: 'Criando Ideias', emoji: '✍️', floorColor: '#b8a888', wallColor: '#6a5540', roles: ['copywriter'] },
   { id: 'studio', label: 'Estúdio', emoji: '🎬', floorColor: '#8b7355', wallColor: '#6b4423', roles: ['videomaker'] },

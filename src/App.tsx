@@ -182,6 +182,7 @@ function AppRoutes() {
         <Route path="/designer" element={<ProtectedRoute><DesignerKanban /></ProtectedRoute>} />
         <Route path="/designer/relatorios" element={<ProtectedRoute><DesignerReports /></ProtectedRoute>} />
         <Route path="/onboarding-gestao" element={<ProtectedRoute><OnboardingManagement /></ProtectedRoute>} />
+        <Route path="/gestao/contratos" element={<ProtectedRoute><ContractsManagement /></ProtectedRoute>} />
         <Route path="/briefing/:clientId" element={<ClientBriefing />} />
         <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppDashboard /></ProtectedRoute>} />
         <Route path="/financeiro" element={<ProtectedRoute><FinancialDashboard /></ProtectedRoute>} />

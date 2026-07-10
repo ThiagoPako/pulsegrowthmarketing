@@ -580,6 +580,7 @@ export default function DesignerDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <DesignerTutorial />
           {activeTask && (
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Button

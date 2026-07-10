@@ -264,8 +264,20 @@ export default function ClientBriefing() {
   }, [clientId]);
 
   const handleSubmit = async () => {
-    if (!ownerName || !niche || !mainDifferential) {
-      toast.error('Preencha os campos obrigatórios (nome, nicho, diferencial)');
+    // Validação client-side
+    const ownerNameT = ownerName.trim();
+    const nicheT = niche.trim();
+    const diffT = mainDifferential.trim();
+    if (!ownerNameT || ownerNameT.length > 120) {
+      toast.error('Informe o nome do responsável (até 120 caracteres).');
+      return;
+    }
+    if (!nicheT || nicheT.length > 120) {
+      toast.error('Informe o nicho de atuação (até 120 caracteres).');
+      return;
+    }
+    if (!diffT || diffT.length > 2000) {
+      toast.error('Informe o principal diferencial (até 2000 caracteres).');
       return;
     }
     // 🔒 só permite enviar para o MESMO cliente que foi carregado nesta sessão
@@ -279,8 +291,15 @@ export default function ClientBriefing() {
     }
     setSaving(true);
     try {
-      const briefingData = {
-        ownerName, niche, mainDifferential, productsServices, businessGoals, attendanceType,
+      // Monta payload apenas com campos efetivamente preenchidos
+      const productsServicesT = productsServices.trim();
+      const canaisFiltrados = canaisAquisicao.filter(c => c && c.trim());
+
+      const briefingData: Record<string, any> = {
+        ownerName: ownerNameT,
+        niche: nicheT,
+        mainDifferential: diffT,
+        businessGoals, attendanceType,
         targetCities, hasVisualIdentity, hasSite, competitors, digitalReferences, nicheReferences,
         dislikedCommunication, socialObjectives, digitalDifficulty, socialLinks, importantTopics,
         comfortOnCamera, focusProducts, businessDifficulty, desiredRecognition, undesiredRecognition,
@@ -288,12 +307,14 @@ export default function ClientBriefing() {
         socialClass, clientUsesSocial, idealClient, finalNotes,
         instagramLogin, instagramPassword, facebookLogin, facebookPassword, otherAccesses,
         useRealPhotos,
-        canaisAquisicao,
         identidadeVisualLink, fotosEstudioLink,
         additionalAttachments: additionalAttachments.filter(a => a.url && a.url.trim()),
         _completed: true, _submittedAt: new Date().toISOString(),
         _clientId: lockedClientId, // 🔒 carimba o destino dentro do payload
       };
+      if (productsServicesT) briefingData.productsServices = productsServicesT;
+      if (canaisFiltrados.length > 0) briefingData.canaisAquisicao = canaisFiltrados;
+
 
       // Build editorial text
       const editorial = [

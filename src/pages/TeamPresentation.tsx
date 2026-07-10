@@ -199,13 +199,14 @@ export default function TeamPresentation() {
           .select('name, display_name, avatar_url')
           .not('avatar_url', 'is', null);
         if (cancelled || !data) return;
-        const byName = new Map(
+        const byName = new Map<string, string>(
           data.flatMap((p: { name: string | null; display_name?: string | null; avatar_url: string | null }) => {
+            if (!p.avatar_url) return [];
             const names = [p.name, p.display_name]
               .filter(Boolean)
               .map(n => String(n).trim().toLowerCase())
               .filter(Boolean);
-            return names.map(name => [name, p.avatar_url] as const);
+            return names.map(name => [name, p.avatar_url as string] as const);
           }),
         );
         setMembers(prev =>

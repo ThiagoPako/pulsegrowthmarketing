@@ -440,6 +440,29 @@ function ActivityScene({ member, inCoffeeRoom }: { member: OfficeMember; inCoffe
     </div>
   );
 
+  // Gestor(a) de Projetos trabalhando: anda com iPad e supervisa via computador
+  if (role === 'gestor_projetos' && activity === 'gestao') return (
+    <div className="relative flex flex-col items-center gap-0.5">
+      <div className="flex items-end gap-1">
+        <div className="relative">
+          <PersonSprite role={role} gender="female" isTyping />
+          {/* iPad na mão */}
+          <motion.div
+            animate={{ y: [0, -1, 0], rotate: [-2, 2, -2] }}
+            transition={{ duration: 2.5, repeat: Infinity }}
+            style={{ position: 'absolute', top: 16, right: -6 }}
+          >
+            <Tablet />
+          </motion.div>
+        </div>
+        <DeskWithMonitor screenColor="#3b0764" screenGlow="#c084fc" />
+      </div>
+      <span className="text-[7px] font-bold px-1 rounded" style={{ backgroundColor: '#7c3aed33', color: '#e9d5ff' }}>
+        💼 Gerenciando
+      </span>
+    </div>
+  );
+
   if (role === 'social_media') return (
     <div className="flex flex-col items-center gap-0.5">
       <div className="flex items-end gap-1">

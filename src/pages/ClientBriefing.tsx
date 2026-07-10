@@ -162,8 +162,22 @@ export default function ClientBriefing() {
   const [facebookPassword, setFacebookPassword] = useState('');
   const [otherAccesses, setOtherAccesses] = useState('');
 
-  // Foto preferência
+  // Foto preferência (mantido para retrocompat — decisão é interna agora)
   const [useRealPhotos, setUseRealPhotos] = useState('');
+
+  // Comercial / Vendas
+  const [ticketMedio, setTicketMedio] = useState('');
+  const [faturamentoAtual, setFaturamentoAtual] = useState('');
+  const [metaFaturamento, setMetaFaturamento] = useState('');
+  const [canaisAquisicao, setCanaisAquisicao] = useState<string[]>([]);
+  const [jaInvesteAds, setJaInvesteAds] = useState('');
+  const [orcamentoMkt, setOrcamentoMkt] = useState('');
+  const [ciclovenda, setCicloVenda] = useState('');
+  const [sazonalidade, setSazonalidade] = useState('');
+
+  // Materiais opcionais (links)
+  const [identidadeVisualLink, setIdentidadeVisualLink] = useState('');
+  const [fotosEstudioLink, setFotosEstudioLink] = useState('');
 
   // Anexos / Links adicionais
   const [additionalAttachments, setAdditionalAttachments] = useState<{ label: string; url: string }[]>([]);

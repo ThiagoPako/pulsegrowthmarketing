@@ -56,7 +56,9 @@ export default function VirtualOffice() {
     if (!data) return;
     setMembers(data.map((p: any) => {
       const firstName = (p.name || '').split(' ')[0].toLowerCase();
-      const gender = FEMALE_NAMES.includes(firstName) ? 'female' as const : 'male' as const;
+      // Gestora de Projetos é sempre representada como mulher (cabelo preto longo).
+      const isForcedFemale = p.role === 'gestor_projetos';
+      const gender = (isForcedFemale || FEMALE_NAMES.includes(firstName)) ? 'female' as const : 'male' as const;
       return {
         id: p.id, name: p.name || 'Usuário', role: p.role as UserRole,
         avatarUrl: p.avatar_url, isOnline: false, gender,

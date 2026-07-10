@@ -427,6 +427,15 @@ export default function Team() {
 
       {/* Birthday Countdown Widget */}
       <BirthdayCountdown />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => window.open('/equipe/apresentacao', '_blank')}
+            className="gap-2"
+            title="Abrir página de apresentação da equipe para enviar ao cliente"
+          >
+            <Users size={16} /> Apresentação para Cliente
+          </Button>
         {currentUser?.role === 'admin' && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>

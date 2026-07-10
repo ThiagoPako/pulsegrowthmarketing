@@ -11,7 +11,9 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, RefreshCw, Search, FileSignature } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, RefreshCw, Search, FileSignature, Users, Building2 } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import InternalContractsTab from '@/components/contracts/InternalContractsTab';
 import { toast } from 'sonner';
 
 type ContractExt = FinancialContract & {

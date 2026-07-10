@@ -10,7 +10,7 @@ export interface OfficeMember {
   gender?: 'male' | 'female';
 }
 
-export type RoomId = 'admin' | 'studio' | 'editing' | 'atelier' | 'social' | 'coffee' | 'endomarketing' | 'photo';
+export type RoomId = 'admin' | 'studio' | 'editing' | 'atelier' | 'social' | 'coffee' | 'endomarketing' | 'photo' | 'projetos';
 
 export interface RoomConfig {
   id: RoomId;
@@ -23,6 +23,7 @@ export interface RoomConfig {
 
 export const ROOMS: RoomConfig[] = [
   { id: 'admin', label: 'Administração', emoji: '🏛️', floorColor: '#2a2a2e', wallColor: '#1a1a1e', roles: ['admin'] },
+  { id: 'projetos', label: 'Gestão de Projetos', emoji: '💼', floorColor: '#c8a2c8', wallColor: '#7a4a7a', roles: ['gestor_projetos'] },
   { id: 'studio', label: 'Estúdio', emoji: '🎬', floorColor: '#8b7355', wallColor: '#6b4423', roles: ['videomaker'] },
   { id: 'editing', label: 'Sala de Edição', emoji: '🖥️', floorColor: '#3d4f6a', wallColor: '#2a3a52', roles: ['editor'] },
   { id: 'atelier', label: 'Ateliê Criativo', emoji: '🎨', floorColor: '#7a5c8a', wallColor: '#5a3c6a', roles: ['designer'] },
@@ -32,9 +33,10 @@ export const ROOMS: RoomConfig[] = [
   { id: 'coffee', label: 'Cantinho do Café', emoji: '☕', floorColor: '#a08060', wallColor: '#806040', roles: [] },
 ];
 
-/** Admin and Social Media are ALWAYS working when online. */
+/** Admin, Social Media e Gestor de Projetos (quando marcou trabalhando) são SEMPRE trabalhando quando online. */
 export function shouldBeInCoffeeRoom(m: OfficeMember): boolean {
   if (!m.isOnline) return false;
   if (m.role === 'admin' || m.role === 'social_media') return false;
+  if (m.role === 'gestor_projetos' && m.activity === 'gestao') return false;
   return !m.activity || m.activity === 'idle' || m.activity === 'paused';
 }

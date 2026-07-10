@@ -33,6 +33,9 @@ const PALETTES: Record<string, { skin: string; hair: string; shirt: string; pant
   fotografo:    { skin: '#e8c0a0', hair: '#4a3020', shirt: '#ec4899', pants: '#2e2e3e', accent: '#f472b6' },
   endomarketing:{ skin: '#f0d0b8', hair: '#5a3a20', shirt: '#0ea5e9', pants: '#2a3a48', accent: '#38bdf8' },
   parceiro:     { skin: '#e0b090', hair: '#2a2a3a', shirt: '#6366f1', pants: '#2c2c3c', accent: '#818cf8' },
+  copywriter:   { skin: '#f0c8a0', hair: '#3a2a1a', shirt: '#0f766e', pants: '#2c2c3c', accent: '#5eead4' },
+  // Gestor de Projetos: mulher, cabelo preto longo, blazer roxo
+  gestor_projetos: { skin: '#f2caa8', hair: '#0a0a0f', shirt: '#7c3aed', pants: '#1e1b2e', accent: '#e879f9' },
 };
 
 /* Female palettes — slightly different hair/shirt for variety */
@@ -45,6 +48,9 @@ const FEMALE_OVERRIDES: Record<string, Partial<typeof PALETTES['admin']>> = {
   fotografo:    { hair: '#5a3828', shirt: '#d06090' },
   endomarketing:{ hair: '#6a4030', shirt: '#1095d0' },
   parceiro:     { hair: '#3a2a4a', shirt: '#7376f1' },
+  copywriter:   { hair: '#3a2432', shirt: '#0e8478' },
+  // Gestora de projetos mantém preto longo mesmo no override
+  gestor_projetos: { hair: '#0a0a0f', shirt: '#7c3aed' },
 };
 
 function getPalette(role: string, gender?: 'male' | 'female') {
@@ -431,6 +437,29 @@ function ActivityScene({ member, inCoffeeRoom }: { member: OfficeMember; inCoffe
     <div className="flex items-end gap-1">
       <PersonSprite role={role} gender={gender} isTyping />
       <Easel />
+    </div>
+  );
+
+  // Gestor(a) de Projetos trabalhando: anda com iPad e supervisa via computador
+  if (role === 'gestor_projetos' && activity === 'gestao') return (
+    <div className="relative flex flex-col items-center gap-0.5">
+      <div className="flex items-end gap-1">
+        <div className="relative">
+          <PersonSprite role={role} gender="female" isTyping />
+          {/* iPad na mão */}
+          <motion.div
+            animate={{ y: [0, -1, 0], rotate: [-2, 2, -2] }}
+            transition={{ duration: 2.5, repeat: Infinity }}
+            style={{ position: 'absolute', top: 16, right: -6 }}
+          >
+            <Tablet />
+          </motion.div>
+        </div>
+        <DeskWithMonitor screenColor="#3b0764" screenGlow="#c084fc" />
+      </div>
+      <span className="text-[7px] font-bold px-1 rounded" style={{ backgroundColor: '#7c3aed33', color: '#e9d5ff' }}>
+        💼 Gerenciando
+      </span>
     </div>
   );
 

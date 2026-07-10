@@ -18,6 +18,7 @@ import UserAvatar from '@/components/UserAvatar';
 import AgencyCapacityWidget from '@/components/AgencyCapacityWidget';
 import TeamPerformanceWidget from '@/components/TeamPerformanceWidget';
 import VirtualOffice from '@/components/VirtualOffice';
+import GestorWorkingToggle from '@/components/GestorWorkingToggle';
 import LoginLogWidget from '@/components/LoginLogWidget';
 import BirthdayCountdown from '@/components/BirthdayCountdown';
 import BonusCongratsBanner from '@/components/BonusCongratsBanner';
@@ -495,6 +496,9 @@ export default function Dashboard() {
           </div>
         </motion.div>
       )}
+
+      {/* GESTOR DE PROJETOS — toggle de trabalho */}
+      <GestorWorkingToggle />
 
       {/* VIRTUAL OFFICE */}
       <VirtualOffice />

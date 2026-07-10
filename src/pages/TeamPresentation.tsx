@@ -2,7 +2,18 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { supabase } from '@/lib/vpsDb';
 import { ROLE_LABELS, type UserRole } from '@/types';
-import { Sparkles, Heart, Rocket, Users } from 'lucide-react';
+
+/* ---------- Paleta Pulse Signature (locked) ---------- */
+const C = {
+  bg: '#0A0A0B',
+  surface: '#141416',
+  ink: '#F5F1EC',
+  orange: '#F26522',
+  orangeSoft: '#FFB380',
+} as const;
+
+const SERIF = "'Fraunces', 'Playfair Display', Georgia, serif";
+const SANS = "'Inter', system-ui, -apple-system, sans-serif";
 
 interface Member {
   id: string;
@@ -14,216 +25,363 @@ interface Member {
   avatarUrl?: string;
 }
 
-/** O que cada função da Pulse faz no projeto do cliente — linguagem de cliente, não interna. */
-const ROLE_CLIENT_DESCRIPTION: Record<UserRole, { headline: string; whatIDo: string; color: string; emoji: string }> = {
+/** O que cada função da Pulse faz no projeto do cliente. */
+const ROLE_INFO: Record<UserRole, { headline: string; whatIDo: string; label: string }> = {
   admin: {
-    headline: 'Estratégia e relacionamento com você',
+    label: 'Estrategista',
+    headline: 'Estratégia e relacionamento com você.',
     whatIDo: 'Sou o ponto de contato direto com você. Cuido da estratégia geral, alinhamentos, metas comerciais e garanto que sua marca receba a atenção que merece dentro da Pulse.',
-    color: 'from-primary/20 to-primary/5',
-    emoji: '🎯',
   },
   gestor_projetos: {
-    headline: 'Gestão do seu projeto na Pulse',
-    whatIDo: 'Sou responsável por conduzir o seu projeto dentro da equipe: acompanho prazos, organizo entregas, aciono cada especialista no momento certo e garanto que tudo saia como combinado.',
-    color: 'from-purple-500/20 to-purple-500/5',
-    emoji: '💼',
+    label: 'Gestão de Projetos',
+    headline: 'A guardiã da sua visão, transformando estratégia em execução impecável.',
+    whatIDo: 'Conduzo o seu projeto dentro da equipe: acompanho prazos, organizo entregas, aciono cada especialista no momento certo e garanto que tudo saia como combinado.',
   },
   copywriter: {
-    headline: 'A voz e as ideias da sua marca',
-    whatIDo: 'Sou quem escreve o que sua marca vai dizer nas redes: legendas, roteiros, campanhas e comunicação. Traduzo a essência do seu negócio em palavras que vendem e conectam.',
-    color: 'from-amber-500/20 to-amber-500/5',
-    emoji: '✍️',
+    label: 'Copywriter',
+    headline: 'Narrativas que convertem atenção em desejo absoluto.',
+    whatIDo: 'Escrevo o que sua marca vai dizer nas redes: legendas, roteiros, campanhas e comunicação. Traduzo a essência do seu negócio em palavras que vendem e conectam.',
   },
   social_media: {
-    headline: 'Sua marca viva no Instagram todos os dias',
+    label: 'Social Media',
+    headline: 'Sua marca viva no Instagram, todos os dias.',
     whatIDo: 'Cuido do planejamento e execução das postagens, calendário editorial, stories e engajamento. Meu foco é fazer sua marca crescer com consistência e presença estratégica.',
-    color: 'from-emerald-500/20 to-emerald-500/5',
-    emoji: '📱',
   },
   videomaker: {
-    headline: 'Gravações profissionais da sua marca',
-    whatIDo: 'Sou responsável pelas gravações: Reels, VSLs, institucional, bastidores. Vou até você (ou você vem ao estúdio) capturar o que sua marca tem de melhor com qualidade de cinema.',
-    color: 'from-red-500/20 to-red-500/5',
-    emoji: '🎬',
+    label: 'Videomaker',
+    headline: 'Captando a essência do seu negócio com olhar cinematográfico.',
+    whatIDo: 'Sou responsável pelas gravações: Reels, VSLs, institucional, bastidores. Capturo o que sua marca tem de melhor com qualidade de cinema.',
   },
   editor: {
-    headline: 'Vídeos editados com identidade Pulse',
-    whatIDo: 'Transformo o material gravado em vídeos prontos para as redes: cortes, ritmo, música, legendas e efeitos. Cada vídeo sai com energia, clareza e a linguagem certa para engajar.',
-    color: 'from-blue-500/20 to-blue-500/5',
-    emoji: '🎞️',
+    label: 'Editor',
+    headline: 'Vídeos com ritmo, energia e a linguagem certa para engajar.',
+    whatIDo: 'Transformo o material gravado em vídeos prontos para as redes: cortes, ritmo, música, legendas e efeitos que respiram a identidade Pulse.',
   },
   designer: {
-    headline: 'Identidade visual e artes que vendem',
-    whatIDo: 'Sou responsável pelas artes, feed, artes de campanha, catálogos e todo material visual da sua marca. Cuido para que cada peça respeite a identidade visual e passe profissionalismo.',
-    color: 'from-pink-500/20 to-pink-500/5',
-    emoji: '🎨',
+    label: 'Direção de Arte',
+    headline: 'Estética sofisticada que posiciona sua marca no topo do mercado visual.',
+    whatIDo: 'Cuido das artes, feed, campanhas, catálogos e todo material visual. Cada peça respeita sua identidade e transmite profissionalismo.',
   },
   fotografo: {
-    headline: 'Fotos profissionais da sua marca',
-    whatIDo: 'Cuido dos ensaios fotográficos: produto, ambiente, equipe e institucional. Fotos com iluminação e enquadramento profissionais para você usar em artes, site e redes.',
-    color: 'from-yellow-500/20 to-yellow-500/5',
-    emoji: '📷',
+    label: 'Fotografia',
+    headline: 'Fotos que dão status e presença à sua marca.',
+    whatIDo: 'Conduzo os ensaios fotográficos: produto, ambiente, equipe e institucional. Iluminação e enquadramento profissionais para artes, site e redes.',
   },
   endomarketing: {
-    headline: 'Comunicação interna da sua empresa',
-    whatIDo: 'Cuido do marketing dentro da sua empresa: comunicação com sua equipe, campanhas internas, engajamento de colaboradores e materiais internos que fortalecem sua cultura.',
-    color: 'from-cyan-500/20 to-cyan-500/5',
-    emoji: '📣',
+    label: 'Endomarketing',
+    headline: 'Comunicação que fortalece sua cultura por dentro.',
+    whatIDo: 'Cuido do marketing dentro da sua empresa: comunicação com equipe, campanhas internas, engajamento de colaboradores e materiais que unem seu time.',
   },
   parceiro: {
-    headline: 'Especialista parceiro Pulse',
-    whatIDo: 'Sou um parceiro especializado que atua junto à Pulse para reforçar áreas específicas do seu projeto quando necessário, sempre com o mesmo padrão de qualidade da agência.',
-    color: 'from-slate-500/20 to-slate-500/5',
-    emoji: '🤝',
+    label: 'Parceiro Pulse',
+    headline: 'Especialista parceiro reforçando áreas específicas do seu projeto.',
+    whatIDo: 'Atuo junto à Pulse para fortalecer o seu projeto em áreas específicas, sempre com o mesmo padrão de qualidade da agência.',
   },
 };
+
+/* ---------- Sub-componentes ---------- */
+
+function FeaturedMember({ m }: { m: Member }) {
+  const info = ROLE_INFO[m.role] || ROLE_INFO.parceiro;
+  const displayName = m.displayName || m.name;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-60px' }}
+      transition={{ duration: 0.8, ease: 'easeOut' }}
+      className="md:col-span-7 flex flex-col gap-10"
+    >
+      <div className="relative group">
+        <div
+          className="w-full aspect-[4/5] overflow-hidden grayscale group-hover:grayscale-0 transition-all duration-700"
+          style={{ backgroundColor: C.surface }}
+        >
+          {m.avatarUrl ? (
+            <img src={m.avatarUrl} alt={displayName} loading="lazy" className="w-full h-full object-cover" />
+          ) : (
+            <InitialsBlock name={displayName} large />
+          )}
+        </div>
+        <div
+          className="absolute -bottom-6 -right-6 md:-right-12 p-6 md:p-8 hidden md:block shadow-2xl"
+          style={{ backgroundColor: C.orange }}
+        >
+          <p style={{ fontFamily: SERIF, color: C.bg }} className="text-xl md:text-2xl italic leading-none">
+            {info.label}
+          </p>
+        </div>
+      </div>
+      <div className="max-w-xl">
+        <h2 style={{ fontFamily: SERIF }} className="text-4xl md:text-5xl mb-6 italic font-medium">
+          {displayName}
+        </h2>
+        <p style={{ color: C.orangeSoft, fontFamily: SANS }} className="text-xl md:text-2xl font-light leading-tight mb-6">
+          {info.headline}
+        </p>
+        <p
+          style={{ borderColor: `${C.orange}55`, fontFamily: SANS }}
+          className="opacity-60 text-sm leading-relaxed border-l pl-6"
+        >
+          {info.whatIDo}
+        </p>
+      </div>
+    </motion.div>
+  );
+}
+
+function SecondaryMember({ m }: { m: Member }) {
+  const info = ROLE_INFO[m.role] || ROLE_INFO.parceiro;
+  const displayName = m.displayName || m.name;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 40 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-60px' }}
+      transition={{ duration: 0.8, ease: 'easeOut', delay: 0.15 }}
+      className="md:col-span-5 md:pt-48"
+    >
+      <div className="flex flex-col">
+        <div
+          className="w-full aspect-[3/4] mb-10 overflow-hidden grayscale hover:grayscale-0 transition-all duration-700"
+          style={{ backgroundColor: C.surface }}
+        >
+          {m.avatarUrl ? (
+            <img src={m.avatarUrl} alt={displayName} loading="lazy" className="w-full h-full object-cover" />
+          ) : (
+            <InitialsBlock name={displayName} large />
+          )}
+        </div>
+        <div className="pr-4">
+          <span
+            style={{ color: C.orange, fontFamily: SANS }}
+            className="text-[10px] uppercase tracking-widest font-bold mb-3 block"
+          >
+            {info.label}
+          </span>
+          <h3 style={{ fontFamily: SERIF }} className="text-3xl md:text-4xl mb-4 italic">
+            {displayName}
+          </h3>
+          <p
+            style={{ color: C.orangeSoft, fontFamily: SANS }}
+            className="text-base md:text-lg font-light mb-4 italic leading-snug"
+          >
+            "{info.headline}"
+          </p>
+          <p style={{ fontFamily: SANS }} className="text-xs opacity-50 leading-relaxed max-w-xs">
+            {info.whatIDo}
+          </p>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function RoundMember({ m, mirror }: { m: Member; mirror?: boolean }) {
+  const info = ROLE_INFO[m.role] || ROLE_INFO.parceiro;
+  const displayName = m.displayName || m.name;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-40px' }}
+      transition={{ duration: 0.7, ease: 'easeOut' }}
+      className={`flex flex-col ${mirror ? 'md:flex-row-reverse md:text-right' : 'md:flex-row md:text-left'} items-center gap-8 text-center`}
+    >
+      <div
+        className="w-40 h-40 md:w-56 md:h-56 shrink-0 rounded-full overflow-hidden grayscale hover:grayscale-0 transition-all duration-700"
+        style={{ backgroundColor: C.surface }}
+      >
+        {m.avatarUrl ? (
+          <img src={m.avatarUrl} alt={displayName} loading="lazy" className="w-full h-full object-cover" />
+        ) : (
+          <InitialsBlock name={displayName} />
+        )}
+      </div>
+      <div className={mirror ? 'md:ml-auto' : 'md:mr-auto'}>
+        <span
+          style={{ color: C.orange, fontFamily: SANS }}
+          className="text-[10px] uppercase tracking-widest font-bold block mb-2"
+        >
+          {info.label}
+        </span>
+        <h3 style={{ fontFamily: SERIF }} className="text-2xl md:text-3xl mb-3">
+          {displayName}
+        </h3>
+        <p style={{ fontFamily: SANS }} className={`text-sm opacity-60 max-w-xs ${mirror ? 'ml-auto' : 'mr-auto'}`}>
+          {info.headline}
+        </p>
+      </div>
+    </motion.div>
+  );
+}
+
+function InitialsBlock({ name, large }: { name: string; large?: boolean }) {
+  const initials = (name || '')
+    .split(' ')
+    .map(n => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || '·';
+  return (
+    <div
+      className="w-full h-full flex items-center justify-center"
+      style={{ fontFamily: SERIF, color: C.orangeSoft, fontSize: large ? '5rem' : '2.25rem', fontWeight: 300 }}
+    >
+      {initials}
+    </div>
+  );
+}
+
+/* ---------- Página ---------- */
 
 export default function TeamPresentation() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Inject Google Fonts once (Fraunces + Inter)
+  useEffect(() => {
+    const id = 'pulse-team-fonts';
+    if (document.getElementById(id)) return;
+    const link = document.createElement('link');
+    link.id = id;
+    link.rel = 'stylesheet';
+    link.href =
+      'https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Inter:wght@300;400;500;600;700&display=swap';
+    document.head.appendChild(link);
+  }, []);
+
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from('profiles').select('*');
-      if (data) {
-        const mapped: Member[] = (data as any[])
-          .filter(p => p.role && p.role !== 'parceiro' || p.role === 'parceiro')
-          .map(p => ({
-            id: p.id,
-            name: p.name,
-            displayName: p.display_name,
-            role: p.role as UserRole,
-            jobTitle: p.job_title,
-            bio: p.bio,
-            avatarUrl: p.avatar_url,
-          }))
-          // ordena: admin/gestor primeiro, depois criativos
-          .sort((a, b) => {
-            const order: UserRole[] = ['admin', 'gestor_projetos', 'copywriter', 'social_media', 'videomaker', 'editor', 'designer', 'fotografo', 'endomarketing', 'parceiro'];
-            return order.indexOf(a.role) - order.indexOf(b.role);
-          });
-        setMembers(mapped);
+      try {
+        const { data } = await supabase.from('profiles').select('*');
+        if (data) {
+          const order: UserRole[] = [
+            'gestor_projetos',
+            'admin',
+            'copywriter',
+            'social_media',
+            'designer',
+            'videomaker',
+            'editor',
+            'fotografo',
+            'endomarketing',
+            'parceiro',
+          ];
+          const mapped: Member[] = (data as any[])
+            .filter(p => p.role && ROLE_INFO[p.role as UserRole])
+            .map(p => ({
+              id: p.id,
+              name: p.name,
+              displayName: p.display_name,
+              role: p.role as UserRole,
+              jobTitle: p.job_title,
+              bio: p.bio,
+              avatarUrl: p.avatar_url,
+            }))
+            .sort((a, b) => order.indexOf(a.role) - order.indexOf(b.role));
+          setMembers(mapped);
+        }
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     })();
   }, []);
 
+  const [featured, secondary, ...rest] = members;
+  // Emparelha o restante 2 a 2
+  const pairs: Member[][] = [];
+  for (let i = 0; i < rest.length; i += 2) pairs.push(rest.slice(i, i + 2));
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      {/* Hero */}
-      <section className="relative overflow-hidden pt-16 pb-14 sm:pt-24 sm:pb-20 px-4">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-primary/15 rounded-full blur-[140px] pointer-events-none" />
-        <div className="max-w-4xl mx-auto relative text-center space-y-5">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
-            <Sparkles size={14} className="text-primary" />
-            <span className="text-xs font-semibold text-primary uppercase tracking-wider">Equipe Pulse Growth</span>
+    <div
+      className="min-h-screen w-full"
+      style={{ backgroundColor: C.bg, color: C.ink, fontFamily: SANS }}
+    >
+      <div className="max-w-7xl mx-auto py-16 md:py-24 px-6 md:px-12">
+        {/* ---------- Agency Hero ---------- */}
+        <motion.header
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1, ease: 'easeOut' }}
+          className="mb-24 md:mb-40 flex flex-col items-center text-center"
+        >
+          <div className="inline-block mb-8">
+            <span
+              style={{ color: C.orange, borderColor: `${C.orange}4d` }}
+              className="uppercase tracking-[0.3em] text-[10px] font-bold px-4 py-1 border"
+            >
+              Pulse Growth Marketing
+            </span>
           </div>
-          <h1 className="font-display text-3xl sm:text-5xl md:text-6xl font-bold leading-tight text-foreground">
-            Conheça quem vai cuidar <br className="hidden sm:block" />
-            <span className="text-primary">do seu projeto</span>
+          <h1
+            style={{ fontFamily: SERIF }}
+            className="text-6xl md:text-9xl font-light leading-[0.85] tracking-tight"
+          >
+            Amor pelo seu <br />
+            <span style={{ color: C.orangeSoft }} className="italic font-medium drop-shadow-sm">
+              projeto
+            </span>
           </h1>
-          <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto">
-            Cada profissional da Pulse tem uma função clara no crescimento da sua marca.
-            Aqui você conhece a equipe que vai trabalhar por trás dos seus resultados.
-          </p>
-          <div className="flex items-center justify-center gap-2 pt-2 text-sm text-muted-foreground">
-            <Heart size={14} className="text-primary fill-primary" />
-            <span>Aqui temos amor pelo seu projeto</span>
+          <div
+            className="mt-16 w-px h-24"
+            style={{ background: `linear-gradient(to bottom, ${C.orange}, transparent)` }}
+          />
+        </motion.header>
+
+        {/* ---------- Estados ---------- */}
+        {loading ? (
+          <div className="text-center py-20" style={{ color: `${C.ink}66` }}>
+            Carregando equipe...
           </div>
-        </div>
-      </section>
-
-      {/* Members */}
-      <section className="pb-20 px-4">
-        <div className="max-w-6xl mx-auto">
-          {loading ? (
-            <div className="text-center text-muted-foreground py-20">Carregando equipe...</div>
-          ) : members.length === 0 ? (
-            <div className="text-center text-muted-foreground py-20">
-              <Users size={40} className="mx-auto opacity-40 mb-3" />
-              Nenhum membro cadastrado.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {members.map((m, idx) => {
-                const info = ROLE_CLIENT_DESCRIPTION[m.role] || ROLE_CLIENT_DESCRIPTION.parceiro;
-                const displayName = m.displayName || m.name;
-                const initials = displayName.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
-                return (
-                  <motion.div
-                    key={m.id}
-                    initial={{ opacity: 0, y: 24 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: '-40px' }}
-                    transition={{ delay: idx * 0.04, duration: 0.5 }}
-                    className={`relative overflow-hidden rounded-3xl border border-border/60 bg-card p-6 shadow-sm hover:shadow-xl transition-all`}
-                  >
-                    <div className={`absolute inset-0 bg-gradient-to-br ${info.color} opacity-60 pointer-events-none`} />
-                    <div className="relative">
-                      <div className="flex items-start gap-4">
-                        <div className="shrink-0">
-                          {m.avatarUrl ? (
-                            <img
-                              src={m.avatarUrl}
-                              alt={displayName}
-                              className="w-16 h-16 rounded-2xl object-cover border-2 border-background shadow-md"
-                            />
-                          ) : (
-                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-warning text-white flex items-center justify-center font-bold text-lg shadow-md">
-                              {initials || '👤'}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-lg">{info.emoji}</span>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-primary">
-                              {m.jobTitle || ROLE_LABELS[m.role]}
-                            </p>
-                          </div>
-                          <h3 className="font-display text-xl font-bold text-foreground leading-tight">
-                            {displayName}
-                          </h3>
-                          <p className="text-sm font-medium text-foreground/80 mt-1">
-                            {info.headline}
-                          </p>
-                        </div>
-                      </div>
-
-                      <p className="text-sm text-muted-foreground leading-relaxed mt-4">
-                        {info.whatIDo}
-                      </p>
-
-                      {m.bio && (
-                        <p className="text-xs text-muted-foreground/80 italic mt-3 pt-3 border-t border-border/50">
-                          "{m.bio}"
-                        </p>
-                      )}
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Closing */}
-      <section className="pb-20 px-4">
-        <div className="max-w-3xl mx-auto text-center p-8 sm:p-10 rounded-3xl bg-gradient-to-br from-primary/10 via-card to-warning/10 border border-primary/20">
-          <div className="w-14 h-14 rounded-full bg-primary text-primary-foreground flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <Rocket size={26} />
+        ) : members.length === 0 ? (
+          <div className="text-center py-20" style={{ color: `${C.ink}66` }}>
+            Nenhum membro cadastrado.
           </div>
-          <h2 className="font-display text-2xl sm:text-3xl font-bold text-foreground">
-            Um time inteiro trabalhando pela sua marca
-          </h2>
-          <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
-            Cada especialista tem uma função clara. Enquanto você foca em vender e atender seus clientes,
-            a Pulse cuida da sua presença digital do início ao fim.
+        ) : (
+          <>
+            {/* ---------- Grid Editorial ---------- */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-y-24 md:gap-y-32 md:gap-x-12">
+              {featured && <FeaturedMember m={featured} />}
+              {secondary && <SecondaryMember m={secondary} />}
+
+              {pairs.map((pair, i) => (
+                <div key={i} className="md:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-16 md:gap-20">
+                  {pair[0] && <RoundMember m={pair[0]} mirror />}
+                  {pair[1] && <RoundMember m={pair[1]} />}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ---------- Welcome Footer ---------- */}
+        <motion.footer
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.8, ease: 'easeOut' }}
+          className="mt-40 md:mt-60 pt-16 md:pt-24 border-t flex flex-col items-center"
+          style={{ borderColor: `${C.orange}1a` }}
+        >
+          <h4
+            style={{ fontFamily: SERIF }}
+            className="text-4xl md:text-7xl text-center mb-10 leading-tight font-light"
+          >
+            Seja muito <br />
+            <span style={{ color: C.orange }} className="italic font-medium">
+              bem-vindo
+            </span>{' '}
+            à casa.
+          </h4>
+          <p className="max-w-xl text-center text-base md:text-lg opacity-70 mb-16 leading-relaxed font-light px-4">
+            Esta é a equipe que cuidará de cada detalhe. Estamos prontos para pulsar junto com o seu crescimento.
           </p>
-          <p className="text-xs text-muted-foreground mt-6">Pulse Growth Marketing · Aqui temos amor pelo seu projeto 🧡</p>
-        </div>
-      </section>
+          <p className="text-[10px] uppercase tracking-[0.3em] opacity-40">
+            Pulse Growth Marketing · Aqui temos amor pelo seu projeto
+          </p>
+        </motion.footer>
+      </div>
     </div>
   );
 }

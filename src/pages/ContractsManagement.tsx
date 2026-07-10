@@ -35,7 +35,7 @@ const fmtDate = (s?: string | null) => {
 
 export default function ContractsManagement() {
   const navigate = useNavigate();
-  const { contracts, refresh } = useFinancialData();
+  const { contracts, refetch } = useFinancialData();
   const { clients } = useApp();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'todos' | 'vencendo' | 'vencidos' | 'ativos'>('todos');

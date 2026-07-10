@@ -98,6 +98,9 @@ export default function VirtualOffice() {
       if (p.role === 'gestor_projetos' && p.working_since && activeUserIds.has(p.id)) {
         act[p.id] = 'gestao';
       }
+      if (p.role === 'copywriter' && activeUserIds.has(p.id)) {
+        act[p.id] = 'copywriting';
+      }
     });
     recs?.forEach((r: any) => { if (r.videomaker_id) act[r.videomaker_id] = 'gravando'; });
     ct?.forEach((t: any) => {

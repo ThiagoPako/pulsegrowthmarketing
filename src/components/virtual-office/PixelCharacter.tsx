@@ -71,6 +71,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   alteracao: '🔧 Alteração',
   aprovacao: '✅ Aprovação',
   designing: '🎨 Criando arte',
+  copywriting: '✍️ Escrevendo copy',
   idle: '💤 Ocioso',
   paused: '⏸️ Pausado',
 };
@@ -459,6 +460,49 @@ function ActivityScene({ member, inCoffeeRoom }: { member: OfficeMember; inCoffe
       </div>
       <span className="text-[7px] font-bold px-1 rounded" style={{ backgroundColor: '#7c3aed33', color: '#e9d5ff' }}>
         💼 Gerenciando
+      </span>
+    </div>
+  );
+
+  // Copywriter escrevendo: pesquisando em livro + digitando no laptop, com bloco de notas flutuando
+  if (role === 'copywriter' && activity === 'copywriting') return (
+    <div className="relative flex flex-col items-center gap-0.5">
+      <div className="flex items-end gap-1">
+        {/* Livro de pesquisa aberto */}
+        <motion.div
+          animate={{ y: [0, -1, 0] }}
+          transition={{ duration: 2.2, repeat: Infinity }}
+          style={{ position: 'relative', width: 12, height: 10, marginBottom: 2 }}
+        >
+          <div style={{ position: 'absolute', inset: 0, backgroundColor: '#8b6f47', borderRadius: 1 }} />
+          <div style={{ position: 'absolute', top: 1, left: 1, width: 4, height: 8, backgroundColor: '#faf3e0' }}>
+            <div style={{ width: 3, height: 0.5, backgroundColor: '#3a2a1a', marginTop: 1, marginLeft: 0.5 }} />
+            <div style={{ width: 2.5, height: 0.5, backgroundColor: '#3a2a1a', marginTop: 1, marginLeft: 0.5 }} />
+            <div style={{ width: 3, height: 0.5, backgroundColor: '#3a2a1a', marginTop: 1, marginLeft: 0.5 }} />
+          </div>
+          <div style={{ position: 'absolute', top: 1, right: 1, width: 4, height: 8, backgroundColor: '#faf3e0' }}>
+            <div style={{ width: 3, height: 0.5, backgroundColor: '#3a2a1a', marginTop: 1, marginLeft: 0.5 }} />
+            <div style={{ width: 2.5, height: 0.5, backgroundColor: '#3a2a1a', marginTop: 1, marginLeft: 0.5 }} />
+          </div>
+        </motion.div>
+        <PersonSprite role={role} gender="female" isTyping />
+        <DeskWithMonitor screenColor="#1a2e1a" screenGlow="#5eead4" />
+      </div>
+      {/* Balão de texto/pensamento com "aa" */}
+      <motion.div
+        animate={{ opacity: [0.4, 1, 0.4] }}
+        transition={{ duration: 1.8, repeat: Infinity }}
+        style={{
+          position: 'absolute', top: -6, right: 2,
+          backgroundColor: '#fef3c7', color: '#78350f',
+          fontSize: 6, padding: '1px 3px', borderRadius: 2,
+          border: '1px solid #d97706',
+        }}
+      >
+        Aa
+      </motion.div>
+      <span className="text-[7px] font-bold px-1 rounded" style={{ backgroundColor: '#0f766e33', color: '#5eead4' }}>
+        ✍️ Escrevendo
       </span>
     </div>
   );

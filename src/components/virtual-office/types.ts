@@ -10,7 +10,7 @@ export interface OfficeMember {
   gender?: 'male' | 'female';
 }
 
-export type RoomId = 'admin' | 'studio' | 'editing' | 'atelier' | 'social' | 'coffee' | 'endomarketing' | 'photo' | 'projetos';
+export type RoomId = 'admin' | 'studio' | 'editing' | 'atelier' | 'social' | 'coffee' | 'endomarketing' | 'photo' | 'projetos' | 'copy';
 
 export interface RoomConfig {
   id: RoomId;
@@ -24,6 +24,7 @@ export interface RoomConfig {
 export const ROOMS: RoomConfig[] = [
   { id: 'admin', label: 'Administração', emoji: '🏛️', floorColor: '#2a2a2e', wallColor: '#1a1a1e', roles: ['admin'] },
   { id: 'projetos', label: 'Gestão de Projetos', emoji: '💼', floorColor: '#c8a2c8', wallColor: '#7a4a7a', roles: ['gestor_projetos'] },
+  { id: 'copy', label: 'Sala de Copy', emoji: '✍️', floorColor: '#b8a888', wallColor: '#6a5540', roles: ['copywriter'] },
   { id: 'studio', label: 'Estúdio', emoji: '🎬', floorColor: '#8b7355', wallColor: '#6b4423', roles: ['videomaker'] },
   { id: 'editing', label: 'Sala de Edição', emoji: '🖥️', floorColor: '#3d4f6a', wallColor: '#2a3a52', roles: ['editor'] },
   { id: 'atelier', label: 'Ateliê Criativo', emoji: '🎨', floorColor: '#7a5c8a', wallColor: '#5a3c6a', roles: ['designer'] },
@@ -38,5 +39,6 @@ export function shouldBeInCoffeeRoom(m: OfficeMember): boolean {
   if (!m.isOnline) return false;
   if (m.role === 'admin' || m.role === 'social_media') return false;
   if (m.role === 'gestor_projetos' && m.activity === 'gestao') return false;
+  if (m.role === 'copywriter' && m.activity === 'copywriting') return false;
   return !m.activity || m.activity === 'idle' || m.activity === 'paused';
 }

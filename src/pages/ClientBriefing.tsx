@@ -166,14 +166,8 @@ export default function ClientBriefing() {
   const [useRealPhotos, setUseRealPhotos] = useState('');
 
   // Comercial / Vendas
-  const [ticketMedio, setTicketMedio] = useState('');
-  const [faturamentoAtual, setFaturamentoAtual] = useState('');
-  const [metaFaturamento, setMetaFaturamento] = useState('');
   const [canaisAquisicao, setCanaisAquisicao] = useState<string[]>([]);
-  const [jaInvesteAds, setJaInvesteAds] = useState('');
-  const [orcamentoMkt, setOrcamentoMkt] = useState('');
-  const [ciclovenda, setCicloVenda] = useState('');
-  const [sazonalidade, setSazonalidade] = useState('');
+
 
   // Materiais opcionais (links)
   const [identidadeVisualLink, setIdentidadeVisualLink] = useState('');
@@ -253,14 +247,7 @@ export default function ClientBriefing() {
           setFacebookPassword(d.facebookPassword || '');
           setOtherAccesses(d.otherAccesses || '');
           setUseRealPhotos(d.useRealPhotos || '');
-          setTicketMedio(d.ticketMedio || '');
-          setFaturamentoAtual(d.faturamentoAtual || '');
-          setMetaFaturamento(d.metaFaturamento || '');
           setCanaisAquisicao(Array.isArray(d.canaisAquisicao) ? d.canaisAquisicao : []);
-          setJaInvesteAds(d.jaInvesteAds || '');
-          setOrcamentoMkt(d.orcamentoMkt || '');
-          setCicloVenda(d.ciclovenda || '');
-          setSazonalidade(d.sazonalidade || '');
           setIdentidadeVisualLink(d.identidadeVisualLink || '');
           setFotosEstudioLink(d.fotosEstudioLink || '');
           setAdditionalAttachments(Array.isArray(d.additionalAttachments) ? d.additionalAttachments : []);
@@ -301,7 +288,7 @@ export default function ClientBriefing() {
         socialClass, clientUsesSocial, idealClient, finalNotes,
         instagramLogin, instagramPassword, facebookLogin, facebookPassword, otherAccesses,
         useRealPhotos,
-        ticketMedio, faturamentoAtual, metaFaturamento, canaisAquisicao, jaInvesteAds, orcamentoMkt, ciclovenda, sazonalidade,
+        canaisAquisicao,
         identidadeVisualLink, fotosEstudioLink,
         additionalAttachments: additionalAttachments.filter(a => a.url && a.url.trim()),
         _completed: true, _submittedAt: new Date().toISOString(),
@@ -599,18 +586,6 @@ export default function ClientBriefing() {
         {/* ========== COMERCIAL / VENDAS ========== */}
         <SectionHeader title="💰 Vendas & Comercial" subtitle="Nos ajude a entender o momento comercial do seu negócio para gerar resultado de verdade." />
 
-        <SectionCard icon={DollarSign} title="Ticket médio atual (opcional)">
-          <Input value={ticketMedio} onChange={e => setTicketMedio(e.target.value)} placeholder="Ex: R$ 350 por venda" />
-        </SectionCard>
-
-        <SectionCard icon={TrendingUp} title="Faturamento médio mensal hoje (opcional)">
-          <Input value={faturamentoAtual} onChange={e => setFaturamentoAtual(e.target.value)} placeholder="Ex: R$ 40.000/mês" />
-        </SectionCard>
-
-        <SectionCard icon={Target} title="Qual sua meta de faturamento com o digital?">
-          <Textarea value={metaFaturamento} onChange={e => setMetaFaturamento(e.target.value)} rows={2} placeholder="Ex: dobrar o faturamento em 6 meses, atingir R$ 100k/mês..." />
-        </SectionCard>
-
         <SectionCard icon={Megaphone} title="Como seus clientes chegam até você hoje?">
           <CheckboxGroup
             options={[
@@ -627,31 +602,6 @@ export default function ClientBriefing() {
           />
         </SectionCard>
 
-        <SectionCard icon={DollarSign} title="Já investe em anúncios pagos (tráfego)?">
-          <RadioGroup
-            options={[
-              { id: 'sim_ativo', label: 'Sim, atualmente ativo' },
-              { id: 'ja_investi', label: 'Já investi, hoje não estou' },
-              { id: 'nao', label: 'Ainda não invisti' },
-            ]}
-            value={jaInvesteAds}
-            onChange={setJaInvesteAds}
-          />
-        </SectionCard>
-
-        <SectionCard icon={DollarSign} title="Orçamento mensal disponível para marketing/tráfego (opcional)">
-          <p className="text-xs text-muted-foreground">Isso nos ajuda a montar a estratégia certa para o seu momento.</p>
-          <Input value={orcamentoMkt} onChange={e => setOrcamentoMkt(e.target.value)} placeholder="Ex: R$ 500 / R$ 1.500 / R$ 3.000 por mês" />
-        </SectionCard>
-
-        <SectionCard icon={MessageSquare} title="Ciclo de venda (opcional)">
-          <p className="text-xs text-muted-foreground">Do primeiro contato até fechar, quanto tempo em média leva?</p>
-          <Input value={ciclovenda} onChange={e => setCicloVenda(e.target.value)} placeholder="Ex: imediato / alguns dias / semanas" />
-        </SectionCard>
-
-        <SectionCard icon={TrendingUp} title="Existem épocas do ano de maior movimento? (opcional)">
-          <Textarea value={sazonalidade} onChange={e => setSazonalidade(e.target.value)} rows={2} placeholder="Ex: Dia dos Namorados, Black Friday, alta safra..." />
-        </SectionCard>
 
         {/* ========== MATERIAIS OPCIONAIS ========== */}
         <SectionHeader title="🎨 Materiais que você já tem (opcional)" subtitle="Se já tiver, envie os links. Se não tiver, tudo bem — a gente ajuda a construir." />

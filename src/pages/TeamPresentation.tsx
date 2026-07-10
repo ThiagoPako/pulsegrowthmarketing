@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { supabase } from '@/lib/vpsDb';
 import { type UserRole } from '@/types';
+
 
 /* ---------- Paleta Pulse Signature (locked) ---------- */
 const C = {

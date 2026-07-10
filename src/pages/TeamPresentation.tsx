@@ -165,18 +165,24 @@ function InitialsBlock({ name }: { name: string }) {
  * Lista estática — evita loading lento/vazio na página pública.
  * Para adicionar/remover alguém, edite este array.
  */
+import thiagoAvatar from '@/assets/team/thiago.jpg.asset.json';
+import victorGAvatar from '@/assets/team/victor-g.png.asset.json';
+import fabielyAvatar from '@/assets/team/fabiely.png.asset.json';
+import victorAvatar from '@/assets/team/victor.png.asset.json';
+
 const STATIC_MEMBERS: Member[] = [
-  { id: 'thiago', name: 'Thiago', displayName: 'Thiago', role: 'admin' },
+  { id: 'thiago', name: 'Thiago', displayName: 'Thiago', role: 'admin', avatarUrl: thiagoAvatar.url },
   { id: 'naay', name: 'Naay', displayName: 'Naay', role: 'gestor_projetos' },
   { id: 'naraely', name: 'Naraely', displayName: 'Naraely', role: 'copywriter' },
   { id: 'rayssa', name: 'Rayssa', displayName: 'Rayssa', role: 'social_media' },
   { id: 'adriely', name: 'Adriely', displayName: 'Adriely', role: 'designer' },
-  { id: 'victor-g', name: 'Victor Gabriel', displayName: 'Victor Gabriel', role: 'videomaker' },
-  { id: 'fabiely', name: 'Fabiely', displayName: 'Fabiely', role: 'videomaker' },
-  { id: 'victor', name: 'Victor', displayName: 'Victor', role: 'videomaker' },
+  { id: 'victor-g', name: 'Victor Gabriel', displayName: 'Victor Gabriel', role: 'videomaker', avatarUrl: victorGAvatar.url },
+  { id: 'fabiely', name: 'Fabiely', displayName: 'Fabiely', role: 'videomaker', avatarUrl: fabielyAvatar.url },
+  { id: 'victor', name: 'Victor', displayName: 'Victor', role: 'videomaker', avatarUrl: victorAvatar.url },
   { id: 'iggor', name: 'Iggor', displayName: 'Iggor', role: 'editor' },
   { id: 'victor-o', name: 'Victor Oliveira', displayName: 'Victor Oliveira', role: 'editor' },
 ];
+
 
 export default function TeamPresentation() {
   const members = STATIC_MEMBERS;

@@ -523,9 +523,44 @@ function ActivityScene({ member, inCoffeeRoom }: { member: OfficeMember; inCoffe
   );
 
   if (role === 'admin') return (
-    <div className="flex items-end gap-1">
-      <PersonSprite role={role} gender={gender} isTyping />
-      <DeskWithMonitor screenColor="#1a2a3e" screenGlow="#3b82f6" />
+    <div className="relative flex flex-col items-center gap-0.5">
+      <div className="flex items-end gap-1">
+        <div className="relative">
+          <PersonSprite role={role} gender={gender} isTyping />
+          {/* Telefone na orelha */}
+          <motion.div
+            animate={{ rotate: [-4, 4, -4], y: [0, -1, 0] }}
+            transition={{ duration: 1.4, repeat: Infinity }}
+            style={{
+              position: 'absolute', top: 4, right: -3,
+              width: 5, height: 8, backgroundColor: '#1f2937',
+              borderRadius: 2, border: '1px solid #3b82f6',
+            }}
+          >
+            <div style={{ width: 3, height: 1, backgroundColor: '#3b82f6', margin: '1px auto 0' }} />
+          </motion.div>
+          {/* Ondas sonoras da ligação */}
+          <motion.div
+            animate={{ opacity: [0, 1, 0], scale: [0.6, 1.4, 1.8] }}
+            transition={{ duration: 1.2, repeat: Infinity }}
+            style={{
+              position: 'absolute', top: 2, right: -10,
+              fontSize: 8, color: '#3b82f6', fontWeight: 'bold',
+            }}
+          >
+            )))
+          </motion.div>
+        </div>
+        <DeskWithMonitor screenColor="#1a2a3e" screenGlow="#3b82f6" />
+      </div>
+      <motion.span
+        animate={{ opacity: [0.6, 1, 0.6] }}
+        transition={{ duration: 1.5, repeat: Infinity }}
+        className="text-[7px] font-bold px-1 rounded"
+        style={{ backgroundColor: '#3b82f633', color: '#93c5fd' }}
+      >
+        📞 Ligando
+      </motion.span>
     </div>
   );
 

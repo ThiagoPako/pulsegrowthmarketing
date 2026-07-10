@@ -496,6 +496,9 @@ export default function Dashboard() {
         </motion.div>
       )}
 
+      {/* GESTOR DE PROJETOS — toggle de trabalho */}
+      <GestorWorkingToggle />
+
       {/* VIRTUAL OFFICE */}
       <VirtualOffice />
 

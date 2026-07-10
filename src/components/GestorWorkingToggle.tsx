@@ -41,11 +41,26 @@ export default function GestorWorkingToggle() {
     if (!currentUser) return;
     setLoading(true);
     const nextValue = isWorking ? null : new Date().toISOString();
-    const { error } = await supabase.from('profiles').update({ working_since: nextValue } as any).eq('id', currentUser.id);
-    setLoading(false);
-    if (error) { toast.error('Falha ao atualizar status.'); return; }
-    setWorkingSince(nextValue);
-    toast.success(nextValue ? '💼 Expediente iniciado! Você está no escritório.' : '👋 Expediente encerrado.');
+    try {
+      const { error } = await supabase.from('profiles').update({ working_since: nextValue } as any).eq('id', currentUser.id);
+      if (error) {
+        console.error('[GestorWorkingToggle] update error:', error);
+        const msg = String(error?.message || error?.hint || '');
+        if (/working_since/i.test(msg) || /column/i.test(msg)) {
+          toast.error('Coluna working_since ausente no banco. Rode a migração na VPS.');
+        } else {
+          toast.error(`Falha ao atualizar: ${msg || 'erro desconhecido'}`);
+        }
+        return;
+      }
+      setWorkingSince(nextValue);
+      toast.success(nextValue ? '💼 Expediente iniciado! Você está no escritório.' : '👋 Expediente encerrado.');
+    } catch (e: any) {
+      console.error('[GestorWorkingToggle] exception:', e);
+      toast.error(`Erro: ${e?.message || 'falha ao conectar'}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

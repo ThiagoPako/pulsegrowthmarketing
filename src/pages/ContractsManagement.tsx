@@ -11,7 +11,9 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, RefreshCw, Search, FileSignature } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, RefreshCw, Search, FileSignature, Users, Building2 } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import InternalContractsTab from '@/components/contracts/InternalContractsTab';
 import { toast } from 'sonner';
 
 type ContractExt = FinancialContract & {
@@ -135,82 +137,95 @@ export default function ContractsManagement() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Contratos ativos</p><p className="text-2xl font-bold">{stats.total}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Saudáveis</p><p className="text-2xl font-bold text-primary">{stats.saudaveis}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Vencendo</p><p className="text-2xl font-bold text-amber-500">{stats.vencendo}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Vencidos</p><p className="text-2xl font-bold text-destructive">{stats.vencidos}</p></CardContent></Card>
-      </div>
+      <Tabs defaultValue="clientes" className="space-y-5">
+        <TabsList>
+          <TabsTrigger value="clientes" className="gap-2"><Building2 size={14} /> Clientes</TabsTrigger>
+          <TabsTrigger value="internos" className="gap-2"><Users size={14} /> Internos (Equipe)</TabsTrigger>
+        </TabsList>
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Buscar cliente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
-        </div>
-        <Select value={filter} onValueChange={(v: any) => setFilter(v)}>
-          <SelectTrigger className="w-full sm:w-56"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
-            <SelectItem value="ativos">Só saudáveis</SelectItem>
-            <SelectItem value="vencendo">Vencendo (≤45 dias)</SelectItem>
-            <SelectItem value="vencidos">Vencidos</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+        <TabsContent value="clientes" className="space-y-5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Contratos ativos</p><p className="text-2xl font-bold">{stats.total}</p></CardContent></Card>
+            <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Saudáveis</p><p className="text-2xl font-bold text-primary">{stats.saudaveis}</p></CardContent></Card>
+            <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Vencendo</p><p className="text-2xl font-bold text-amber-500">{stats.vencendo}</p></CardContent></Card>
+            <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Vencidos</p><p className="text-2xl font-bold text-destructive">{stats.vencidos}</p></CardContent></Card>
+          </div>
 
-      {filtered.length === 0 ? (
-        <Card><CardContent className="p-10 text-center text-muted-foreground">Nenhum contrato encontrado.</CardContent></Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(item => {
-            const style = severityStyle(item.severity);
-            const Icon = style.icon;
-            return (
-              <Card
-                key={item.c.id}
-                className={`cursor-pointer transition-all hover:shadow-md ring-1 ${style.ring}`}
-                onClick={() => openRenew(item)}
-              >
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-semibold truncate">{item.client?.companyName || 'Cliente removido'}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Início {fmtDate(item.c.contract_start_date)} · Fim {fmtDate(item.endDate)}
-                      </p>
-                    </div>
-                    <Badge variant={style.badge} className="shrink-0 gap-1"><Icon size={12} />{style.label}</Badge>
-                  </div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Buscar cliente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+            </div>
+            <Select value={filter} onValueChange={(v: any) => setFilter(v)}>
+              <SelectTrigger className="w-full sm:w-56"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="ativos">Só saudáveis</SelectItem>
+                <SelectItem value="vencendo">Vencendo (≤45 dias)</SelectItem>
+                <SelectItem value="vencidos">Vencidos</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-                  <div>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="text-muted-foreground">{item.durationMonths} meses</span>
-                      <span className={item.severity === 'expired' ? 'text-destructive font-medium' : 'text-muted-foreground'}>
-                        {item.remaining < 0 ? `${Math.abs(item.remaining)}d vencido` : `${item.remaining}d restantes`}
-                      </span>
-                    </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div className={`h-full ${style.bar} transition-all`} style={{ width: `${item.progress}%` }} />
-                    </div>
-                  </div>
+          {filtered.length === 0 ? (
+            <Card><CardContent className="p-10 text-center text-muted-foreground">Nenhum contrato encontrado.</CardContent></Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filtered.map(item => {
+                const style = severityStyle(item.severity);
+                const Icon = style.icon;
+                return (
+                  <Card
+                    key={item.c.id}
+                    className={`cursor-pointer transition-all hover:shadow-md ring-1 ${style.ring}`}
+                    onClick={() => openRenew(item)}
+                  >
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-semibold truncate">{item.client?.companyName || 'Cliente removido'}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Início {fmtDate(item.c.contract_start_date)} · Fim {fmtDate(item.endDate)}
+                          </p>
+                        </div>
+                        <Badge variant={style.badge} className="shrink-0 gap-1"><Icon size={12} />{style.label}</Badge>
+                      </div>
 
-                  <div className="flex items-center justify-between text-xs pt-1 border-t border-border/50">
-                    <span className="text-muted-foreground">
-                      R$ {Number(item.c.contract_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </span>
-                    {(item.c.renewal_count || 0) > 0 && (
-                      <span className="text-muted-foreground">Renovado {item.c.renewal_count}x</span>
-                    )}
-                    <Button size="sm" variant="ghost" className="h-7 gap-1" onClick={(e) => { e.stopPropagation(); openRenew(item); }}>
-                      <RefreshCw size={12} /> Renovar
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-muted-foreground">{item.durationMonths} meses</span>
+                          <span className={item.severity === 'expired' ? 'text-destructive font-medium' : 'text-muted-foreground'}>
+                            {item.remaining < 0 ? `${Math.abs(item.remaining)}d vencido` : `${item.remaining}d restantes`}
+                          </span>
+                        </div>
+                        <div className="h-2 rounded-full bg-muted overflow-hidden">
+                          <div className={`h-full ${style.bar} transition-all`} style={{ width: `${item.progress}%` }} />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs pt-1 border-t border-border/50">
+                        <span className="text-muted-foreground">
+                          R$ {Number(item.c.contract_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                        {(item.c.renewal_count || 0) > 0 && (
+                          <span className="text-muted-foreground">Renovado {item.c.renewal_count}x</span>
+                        )}
+                        <Button size="sm" variant="ghost" className="h-7 gap-1" onClick={(e) => { e.stopPropagation(); openRenew(item); }}>
+                          <RefreshCw size={12} /> Renovar
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="internos">
+          <InternalContractsTab />
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={renewOpen} onOpenChange={setRenewOpen}>
         <DialogContent>

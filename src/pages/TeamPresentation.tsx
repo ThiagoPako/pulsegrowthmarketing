@@ -81,9 +81,21 @@ const ROLE_INFO: Record<UserRole, { label: string; whatIDo: string }> = {
 
 /* ---------- Card único e igualitário ---------- */
 
+/** Overrides individuais — quando alguém acumula funções específicas. */
+const NAME_OVERRIDES: Array<{ match: RegExp; label: string; whatIDo: string }> = [
+  {
+    match: /thiago/i,
+    label: 'Estrategista · Gestor de Tráfego',
+    whatIDo:
+      'Sou o ponto de contato direto com você e também o especialista em tráfego pago da Pulse — Meta Ads e Google Ads. Cuido da estratégia geral do seu projeto, das campanhas que trazem clientes e garanto que cada real investido em anúncio volte em resultado.',
+  },
+];
+
 function MemberCard({ m, index }: { m: Member; index: number }) {
-  const info = ROLE_INFO[m.role] || ROLE_INFO.parceiro;
   const displayName = m.displayName || m.name;
+  const override = NAME_OVERRIDES.find(o => o.match.test(displayName));
+  const base = ROLE_INFO[m.role] || ROLE_INFO.parceiro;
+  const info = override ? { label: override.label, whatIDo: override.whatIDo } : base;
   return (
     <motion.article
       initial={{ opacity: 0, y: 28 }}

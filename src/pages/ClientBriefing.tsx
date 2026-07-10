@@ -372,15 +372,59 @@ export default function ClientBriefing() {
   );
 
   if (completed) return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
+    <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-warning/5 flex items-center justify-center px-4 py-10">
       <Sonner />
-      <div className="text-center space-y-4 max-w-md mx-auto px-6">
-        <div className="w-20 h-20 rounded-full bg-primary/15 flex items-center justify-center mx-auto">
-          <CheckCircle2 size={40} className="text-primary" />
+      <div className="w-full max-w-2xl mx-auto text-center space-y-6">
+        <div className="relative inline-block">
+          <div className="absolute inset-0 bg-primary/30 blur-3xl rounded-full" />
+          <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-primary to-warning flex items-center justify-center mx-auto shadow-2xl">
+            <Rocket size={44} className="text-white" />
+          </div>
         </div>
-        <h1 className="text-2xl font-bold">Briefing enviado! 🎉</h1>
-        <p className="text-muted-foreground">Obrigado por preencher as informações. Nossa equipe vai analisar e preparar a melhor estratégia para sua marca.</p>
-        <p className="text-xs text-muted-foreground mt-4">Aqui temos amor pelo seu projeto! 🧡</p>
+
+        <div className="space-y-3">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
+            <Sparkles size={14} className="text-primary" />
+            <span className="text-xs font-semibold text-primary uppercase tracking-wider">Bem-vindo(a) à Pulse</span>
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-display font-bold text-foreground">
+            É oficial: seu projeto começou! 🎉
+          </h1>
+          <p className="text-base text-muted-foreground max-w-lg mx-auto">
+            Obrigado por confiar na <strong className="text-primary">Pulse Growth Marketing</strong>, <strong>{client?.company_name}</strong>. Já recebemos seu briefing e nossa equipe está pronta pra transformar sua marca.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4">
+          {[
+            { n: '1', title: 'Análise', desc: 'Nossa equipe estuda seu briefing e o seu mercado' },
+            { n: '2', title: 'Estratégia', desc: 'Montamos linha editorial + calendário de conteúdo' },
+            { n: '3', title: 'Produção', desc: 'Damos início às gravações, artes e postagens' },
+          ].map(step => (
+            <div key={step.n} className="p-4 rounded-2xl bg-card border border-border/60 text-left">
+              <div className="w-8 h-8 rounded-full bg-primary/15 text-primary font-bold flex items-center justify-center text-sm mb-2">{step.n}</div>
+              <p className="font-semibold text-sm">{step.title}</p>
+              <p className="text-xs text-muted-foreground mt-1">{step.desc}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="p-4 rounded-xl bg-card border border-border/60 max-w-md mx-auto">
+          <div className="flex items-center justify-center gap-2 text-sm">
+            <Heart size={16} className="text-primary fill-primary" />
+            <span>Conheça quem vai cuidar do seu projeto</span>
+          </div>
+          <a
+            href="/equipe/apresentacao"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex mt-3 items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition"
+          >
+            <Users size={14} /> Ver Apresentação da Equipe Pulse
+          </a>
+        </div>
+
+        <p className="text-xs text-muted-foreground pt-2">Aqui temos amor pelo seu projeto! 🧡</p>
       </div>
     </div>
   );

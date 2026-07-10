@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, Building2, Users, Star, MessageSquare, Camera, AlertTriangle, Shield, Globe, Target, Megaphone, Eye, Lock, Upload, Link2, Plus, X, Paperclip } from 'lucide-react';
+import { CheckCircle2, Building2, Users, Star, MessageSquare, Camera, AlertTriangle, Shield, Globe, Target, Megaphone, Eye, Lock, Upload, Link2, Plus, X, Paperclip, DollarSign, TrendingUp, Rocket, Sparkles, Heart } from 'lucide-react';
 import { toast } from 'sonner';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 
@@ -162,8 +162,22 @@ export default function ClientBriefing() {
   const [facebookPassword, setFacebookPassword] = useState('');
   const [otherAccesses, setOtherAccesses] = useState('');
 
-  // Foto preferência
+  // Foto preferência (mantido para retrocompat — decisão é interna agora)
   const [useRealPhotos, setUseRealPhotos] = useState('');
+
+  // Comercial / Vendas
+  const [ticketMedio, setTicketMedio] = useState('');
+  const [faturamentoAtual, setFaturamentoAtual] = useState('');
+  const [metaFaturamento, setMetaFaturamento] = useState('');
+  const [canaisAquisicao, setCanaisAquisicao] = useState<string[]>([]);
+  const [jaInvesteAds, setJaInvesteAds] = useState('');
+  const [orcamentoMkt, setOrcamentoMkt] = useState('');
+  const [ciclovenda, setCicloVenda] = useState('');
+  const [sazonalidade, setSazonalidade] = useState('');
+
+  // Materiais opcionais (links)
+  const [identidadeVisualLink, setIdentidadeVisualLink] = useState('');
+  const [fotosEstudioLink, setFotosEstudioLink] = useState('');
 
   // Anexos / Links adicionais
   const [additionalAttachments, setAdditionalAttachments] = useState<{ label: string; url: string }[]>([]);
@@ -239,6 +253,16 @@ export default function ClientBriefing() {
           setFacebookPassword(d.facebookPassword || '');
           setOtherAccesses(d.otherAccesses || '');
           setUseRealPhotos(d.useRealPhotos || '');
+          setTicketMedio(d.ticketMedio || '');
+          setFaturamentoAtual(d.faturamentoAtual || '');
+          setMetaFaturamento(d.metaFaturamento || '');
+          setCanaisAquisicao(Array.isArray(d.canaisAquisicao) ? d.canaisAquisicao : []);
+          setJaInvesteAds(d.jaInvesteAds || '');
+          setOrcamentoMkt(d.orcamentoMkt || '');
+          setCicloVenda(d.ciclovenda || '');
+          setSazonalidade(d.sazonalidade || '');
+          setIdentidadeVisualLink(d.identidadeVisualLink || '');
+          setFotosEstudioLink(d.fotosEstudioLink || '');
           setAdditionalAttachments(Array.isArray(d.additionalAttachments) ? d.additionalAttachments : []);
           if (d._completed) setCompleted(true);
         }
@@ -277,6 +301,8 @@ export default function ClientBriefing() {
         socialClass, clientUsesSocial, idealClient, finalNotes,
         instagramLogin, instagramPassword, facebookLogin, facebookPassword, otherAccesses,
         useRealPhotos,
+        ticketMedio, faturamentoAtual, metaFaturamento, canaisAquisicao, jaInvesteAds, orcamentoMkt, ciclovenda, sazonalidade,
+        identidadeVisualLink, fotosEstudioLink,
         additionalAttachments: additionalAttachments.filter(a => a.url && a.url.trim()),
         _completed: true, _submittedAt: new Date().toISOString(),
         _clientId: lockedClientId, // 🔒 carimba o destino dentro do payload
@@ -346,15 +372,59 @@ export default function ClientBriefing() {
   );
 
   if (completed) return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
+    <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-warning/5 flex items-center justify-center px-4 py-10">
       <Sonner />
-      <div className="text-center space-y-4 max-w-md mx-auto px-6">
-        <div className="w-20 h-20 rounded-full bg-primary/15 flex items-center justify-center mx-auto">
-          <CheckCircle2 size={40} className="text-primary" />
+      <div className="w-full max-w-2xl mx-auto text-center space-y-6">
+        <div className="relative inline-block">
+          <div className="absolute inset-0 bg-primary/30 blur-3xl rounded-full" />
+          <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-primary to-warning flex items-center justify-center mx-auto shadow-2xl">
+            <Rocket size={44} className="text-white" />
+          </div>
         </div>
-        <h1 className="text-2xl font-bold">Briefing enviado! 🎉</h1>
-        <p className="text-muted-foreground">Obrigado por preencher as informações. Nossa equipe vai analisar e preparar a melhor estratégia para sua marca.</p>
-        <p className="text-xs text-muted-foreground mt-4">Aqui temos amor pelo seu projeto! 🧡</p>
+
+        <div className="space-y-3">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
+            <Sparkles size={14} className="text-primary" />
+            <span className="text-xs font-semibold text-primary uppercase tracking-wider">Bem-vindo(a) à Pulse</span>
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-display font-bold text-foreground">
+            É oficial: seu projeto começou! 🎉
+          </h1>
+          <p className="text-base text-muted-foreground max-w-lg mx-auto">
+            Obrigado por confiar na <strong className="text-primary">Pulse Growth Marketing</strong>, <strong>{client?.company_name}</strong>. Já recebemos seu briefing e nossa equipe está pronta pra transformar sua marca.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4">
+          {[
+            { n: '1', title: 'Análise', desc: 'Nossa equipe estuda seu briefing e o seu mercado' },
+            { n: '2', title: 'Estratégia', desc: 'Montamos linha editorial + calendário de conteúdo' },
+            { n: '3', title: 'Produção', desc: 'Damos início às gravações, artes e postagens' },
+          ].map(step => (
+            <div key={step.n} className="p-4 rounded-2xl bg-card border border-border/60 text-left">
+              <div className="w-8 h-8 rounded-full bg-primary/15 text-primary font-bold flex items-center justify-center text-sm mb-2">{step.n}</div>
+              <p className="font-semibold text-sm">{step.title}</p>
+              <p className="text-xs text-muted-foreground mt-1">{step.desc}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="p-4 rounded-xl bg-card border border-border/60 max-w-md mx-auto">
+          <div className="flex items-center justify-center gap-2 text-sm">
+            <Heart size={16} className="text-primary fill-primary" />
+            <span>Conheça quem vai cuidar do seu projeto</span>
+          </div>
+          <a
+            href="/equipe/apresentacao"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex mt-3 items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition"
+          >
+            <Users size={14} /> Ver Apresentação da Equipe Pulse
+          </a>
+        </div>
+
+        <p className="text-xs text-muted-foreground pt-2">Aqui temos amor pelo seu projeto! 🧡</p>
       </div>
     </div>
   );
@@ -397,8 +467,9 @@ export default function ClientBriefing() {
           <Textarea value={mainDifferential} onChange={e => setMainDifferential(e.target.value)} rows={2} placeholder="O que te diferencia?" />
         </SectionCard>
 
-        <SectionCard icon={Building2} title="Produtos/serviços que deseja trabalhar">
-          <Textarea value={productsServices} onChange={e => setProductsServices(e.target.value)} rows={2} placeholder="Liste os produtos e serviços principais" />
+        <SectionCard icon={Building2} title="Principais produtos/serviços (opcional)">
+          <p className="text-xs text-muted-foreground">Se quiser, liste os produtos e serviços principais. Se preferir, deixe em branco — vamos alinhar isso na reunião de estratégia.</p>
+          <Textarea value={productsServices} onChange={e => setProductsServices(e.target.value)} rows={2} placeholder="Liste os produtos e serviços principais (opcional)" />
         </SectionCard>
 
         <SectionCard icon={Target} title="Objetivos a curto, médio e longo prazo *">
@@ -525,32 +596,90 @@ export default function ClientBriefing() {
           <Textarea value={idealClient} onChange={e => setIdealClient(e.target.value)} rows={4} placeholder="Imagine o cliente que você sempre gostaria de receber..." />
         </SectionCard>
 
-        {/* ========== FOTOS ========== */}
-        <SectionHeader title="📸 Fotos para Artes" />
+        {/* ========== COMERCIAL / VENDAS ========== */}
+        <SectionHeader title="💰 Vendas & Comercial" subtitle="Nos ajude a entender o momento comercial do seu negócio para gerar resultado de verdade." />
 
-        <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
-          <Label className="flex items-center gap-2 text-sm font-semibold">
-            <Camera size={16} className="text-primary" /> As artes devem usar fotos reais?
-          </Label>
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => setUseRealPhotos('real')}
-              className={`p-3 rounded-xl border-2 text-center transition-all text-sm ${useRealPhotos === 'real' ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/40'}`}>
-              📸 Fotos reais da empresa/equipe
-            </button>
-            <button onClick={() => setUseRealPhotos('banco')}
-              className={`p-3 rounded-xl border-2 text-center transition-all text-sm ${useRealPhotos === 'banco' ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/40'}`}>
-              🖼️ Fotos de banco de imagem
-            </button>
-          </div>
-          {useRealPhotos === 'real' && (
-            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 flex gap-2 items-start">
-              <AlertTriangle size={16} className="text-amber-500 shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-700 dark:text-amber-400">
-                Se não houver fotos profissionais, será necessário agendar sessão. Isso pode gerar atraso e custo adicional.
-              </p>
-            </div>
-          )}
-        </div>
+        <SectionCard icon={DollarSign} title="Ticket médio atual (opcional)">
+          <Input value={ticketMedio} onChange={e => setTicketMedio(e.target.value)} placeholder="Ex: R$ 350 por venda" />
+        </SectionCard>
+
+        <SectionCard icon={TrendingUp} title="Faturamento médio mensal hoje (opcional)">
+          <Input value={faturamentoAtual} onChange={e => setFaturamentoAtual(e.target.value)} placeholder="Ex: R$ 40.000/mês" />
+        </SectionCard>
+
+        <SectionCard icon={Target} title="Qual sua meta de faturamento com o digital?">
+          <Textarea value={metaFaturamento} onChange={e => setMetaFaturamento(e.target.value)} rows={2} placeholder="Ex: dobrar o faturamento em 6 meses, atingir R$ 100k/mês..." />
+        </SectionCard>
+
+        <SectionCard icon={Megaphone} title="Como seus clientes chegam até você hoje?">
+          <CheckboxGroup
+            options={[
+              { id: 'indicacao', label: 'Indicação boca a boca' },
+              { id: 'instagram', label: 'Instagram / Redes sociais orgânicas' },
+              { id: 'ads', label: 'Anúncios pagos (Meta / Google)' },
+              { id: 'passagem', label: 'Passagem em frente à loja / ponto físico' },
+              { id: 'google', label: 'Pesquisa no Google' },
+              { id: 'parcerias', label: 'Parcerias / eventos' },
+              { id: 'nao_sei', label: 'Não sei / não meço isso hoje' },
+            ]}
+            selected={canaisAquisicao}
+            onChange={setCanaisAquisicao}
+          />
+        </SectionCard>
+
+        <SectionCard icon={DollarSign} title="Já investe em anúncios pagos (tráfego)?">
+          <RadioGroup
+            options={[
+              { id: 'sim_ativo', label: 'Sim, atualmente ativo' },
+              { id: 'ja_investi', label: 'Já investi, hoje não estou' },
+              { id: 'nao', label: 'Ainda não invisti' },
+            ]}
+            value={jaInvesteAds}
+            onChange={setJaInvesteAds}
+          />
+        </SectionCard>
+
+        <SectionCard icon={DollarSign} title="Orçamento mensal disponível para marketing/tráfego (opcional)">
+          <p className="text-xs text-muted-foreground">Isso nos ajuda a montar a estratégia certa para o seu momento.</p>
+          <Input value={orcamentoMkt} onChange={e => setOrcamentoMkt(e.target.value)} placeholder="Ex: R$ 500 / R$ 1.500 / R$ 3.000 por mês" />
+        </SectionCard>
+
+        <SectionCard icon={MessageSquare} title="Ciclo de venda (opcional)">
+          <p className="text-xs text-muted-foreground">Do primeiro contato até fechar, quanto tempo em média leva?</p>
+          <Input value={ciclovenda} onChange={e => setCicloVenda(e.target.value)} placeholder="Ex: imediato / alguns dias / semanas" />
+        </SectionCard>
+
+        <SectionCard icon={TrendingUp} title="Existem épocas do ano de maior movimento? (opcional)">
+          <Textarea value={sazonalidade} onChange={e => setSazonalidade(e.target.value)} rows={2} placeholder="Ex: Dia dos Namorados, Black Friday, alta safra..." />
+        </SectionCard>
+
+        {/* ========== MATERIAIS OPCIONAIS ========== */}
+        <SectionHeader title="🎨 Materiais que você já tem (opcional)" subtitle="Se já tiver, envie os links. Se não tiver, tudo bem — a gente ajuda a construir." />
+
+        <SectionCard icon={Upload} title="Identidade visual (logo, paleta, fontes) — opcional">
+          <p className="text-xs text-muted-foreground">
+            Cole aqui um link do Google Drive, Dropbox, WeTransfer ou WhatsApp Web com os arquivos da sua marca.
+          </p>
+          <Input
+            value={identidadeVisualLink}
+            onChange={e => setIdentidadeVisualLink(e.target.value)}
+            placeholder="https://drive.google.com/..."
+            type="url"
+          />
+        </SectionCard>
+
+        <SectionCard icon={Camera} title="Fotos profissionais já feitas em estúdio — opcional">
+          <p className="text-xs text-muted-foreground">
+            Se você já tem um ensaio profissional ou fotos de produto em estúdio, envie o link. Caso não tenha, deixe em branco — vamos decidir internamente como resolver.
+          </p>
+          <Input
+            value={fotosEstudioLink}
+            onChange={e => setFotosEstudioLink(e.target.value)}
+            placeholder="https://drive.google.com/... (opcional)"
+            type="url"
+          />
+        </SectionCard>
+
 
         {/* ========== CONSIDERAÇÕES FINAIS ========== */}
         <SectionHeader title="📝 Considerações Finais" />

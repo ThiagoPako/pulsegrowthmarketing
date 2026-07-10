@@ -70,7 +70,7 @@ export default function VirtualOffice() {
       supabase.from('active_recordings').select('videomaker_id'),
       supabase.from('content_tasks').select('assigned_to, edited_by, reviewing_by, kanban_column').in('kanban_column', ['edicao', 'revisao', 'alteracao', 'aprovacao']),
       supabase.from('design_tasks').select('assigned_to, kanban_column').in('kanban_column', ['em_andamento', 'revisao']),
-      supabase.from('profiles').select('id, role'),
+      supabase.from('profiles').select('id, role, working_since'),
     ]) as any;
 
     // Get current presence to check who actually has heartbeat
@@ -87,9 +87,13 @@ export default function VirtualOffice() {
       });
     });
 
-    // Social Media e Admin: considerar "gestão" SOMENTE se tiver heartbeat ativo
+    // Admin/Social: "gestão" quando tem heartbeat ativo.
+    // Gestor de Projetos: "gestão" apenas quando marcou explicitamente que está trabalhando (working_since != null) E tem heartbeat.
     profiles?.forEach((p: any) => {
       if ((p.role === 'social_media' || p.role === 'admin') && activeUserIds.has(p.id)) {
+        act[p.id] = 'gestao';
+      }
+      if (p.role === 'gestor_projetos' && p.working_since && activeUserIds.has(p.id)) {
         act[p.id] = 'gestao';
       }
     });

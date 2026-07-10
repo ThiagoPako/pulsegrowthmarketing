@@ -120,6 +120,94 @@ function RoomDecor({ id }: { id: string }) {
     </div>
   );
 
+  if (id === 'projetos') return (
+    <div className="absolute bottom-1 left-1 right-1 flex items-end justify-between pointer-events-none select-none opacity-45">
+      {/* Espelho camarim com lâmpadas */}
+      <div className="relative" style={{ width: 18, height: 26 }}>
+        {/* Moldura do espelho */}
+        <div style={{
+          width: 16, height: 18, backgroundColor: '#d4a5d4',
+          border: '2px solid #a06aa0', borderRadius: 3,
+          position: 'absolute', top: 0, left: 1,
+        }}>
+          {/* Reflexo */}
+          <div style={{
+            position: 'absolute', inset: 2,
+            background: 'linear-gradient(135deg, #f0e0f5 0%, #d0c0d5 100%)',
+            borderRadius: 2,
+          }} />
+        </div>
+        {/* Lâmpadas do camarim */}
+        {[0, 1, 2].map(i => (
+          <motion.div key={`top-${i}`}
+            animate={{ opacity: [0.7, 1, 0.7] }}
+            transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.3 }}
+            style={{
+              width: 3, height: 3, backgroundColor: '#fef3c7',
+              borderRadius: '50%', position: 'absolute',
+              top: -2, left: 2 + i * 5,
+              boxShadow: '0 0 4px #fde68a',
+            }}
+          />
+        ))}
+        {[0, 1].map(i => (
+          <motion.div key={`side-${i}`}
+            animate={{ opacity: [0.7, 1, 0.7] }}
+            transition={{ duration: 1.5, repeat: Infinity, delay: 0.5 + i * 0.4 }}
+            style={{
+              width: 3, height: 3, backgroundColor: '#fef3c7',
+              borderRadius: '50%', position: 'absolute',
+              top: 4 + i * 8, left: -2,
+              boxShadow: '0 0 4px #fde68a',
+            }}
+          />
+        ))}
+        {/* Penteadeira (mesa embaixo) */}
+        <div style={{
+          width: 18, height: 6, backgroundColor: '#8b5a8b',
+          borderRadius: '2px 2px 0 0',
+          position: 'absolute', bottom: 2, left: 0,
+          boxShadow: 'inset 0 -1px 0 #6a3a6a',
+        }}>
+          {/* Frascos de perfume */}
+          <div style={{ width: 2, height: 3, backgroundColor: '#ec4899', position: 'absolute', top: -3, left: 3, borderRadius: 1 }} />
+          <div style={{ width: 2, height: 4, backgroundColor: '#c084fc', position: 'absolute', top: -4, left: 7, borderRadius: 1 }} />
+          <div style={{ width: 2, height: 3, backgroundColor: '#fde047', position: 'absolute', top: -3, left: 11, borderRadius: 1 }} />
+        </div>
+        {/* Perninhas */}
+        <div style={{ width: 2, height: 2, backgroundColor: '#6a3a6a', position: 'absolute', bottom: 0, left: 1 }} />
+        <div style={{ width: 2, height: 2, backgroundColor: '#6a3a6a', position: 'absolute', bottom: 0, right: 1 }} />
+      </div>
+      {/* Quadro de gestão / kanban */}
+      <div style={{ width: 20, height: 16, backgroundColor: '#1f1235', border: '1px solid #4c1d95', borderRadius: 1, position: 'relative' }}>
+        {[0, 1, 2].map(col => (
+          <div key={col} style={{
+            position: 'absolute', top: 2, left: 2 + col * 6,
+            width: 4, height: 12, backgroundColor: '#2e1b4d', borderRadius: 1,
+          }}>
+            {[0, 1, 2].map(row => (
+              <motion.div key={row}
+                animate={{ opacity: [0.5, 0.9, 0.5] }}
+                transition={{ duration: 3, repeat: Infinity, delay: col * 0.4 + row * 0.2 }}
+                style={{
+                  width: 3, height: 1.5,
+                  backgroundColor: ['#f472b6', '#c084fc', '#a78bfa'][col],
+                  position: 'absolute', top: 1 + row * 3, left: 0.5, borderRadius: 0.5,
+                }}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+      {/* Planta decorativa */}
+      <div className="relative" style={{ width: 10, height: 14 }}>
+        <div style={{ width: 6, height: 5, backgroundColor: '#6b4423', borderRadius: '0 0 2px 2px', position: 'absolute', bottom: 0, left: 2 }} />
+        <motion.div animate={{ rotate: [-3, 3, -3] }} transition={{ duration: 3.5, repeat: Infinity }}
+          style={{ width: 8, height: 9, backgroundColor: '#22c55e', borderRadius: '50%', position: 'absolute', top: 0, left: 1, opacity: 0.8 }} />
+      </div>
+    </div>
+  );
+
   return null;
 }
 

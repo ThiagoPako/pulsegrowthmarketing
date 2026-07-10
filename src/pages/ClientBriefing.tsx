@@ -467,8 +467,9 @@ export default function ClientBriefing() {
           <Textarea value={mainDifferential} onChange={e => setMainDifferential(e.target.value)} rows={2} placeholder="O que te diferencia?" />
         </SectionCard>
 
-        <SectionCard icon={Building2} title="Produtos/serviços que deseja trabalhar">
-          <Textarea value={productsServices} onChange={e => setProductsServices(e.target.value)} rows={2} placeholder="Liste os produtos e serviços principais" />
+        <SectionCard icon={Building2} title="Principais produtos/serviços (opcional)">
+          <p className="text-xs text-muted-foreground">Se quiser, liste os produtos e serviços principais. Se preferir, deixe em branco — vamos alinhar isso na reunião de estratégia.</p>
+          <Textarea value={productsServices} onChange={e => setProductsServices(e.target.value)} rows={2} placeholder="Liste os produtos e serviços principais (opcional)" />
         </SectionCard>
 
         <SectionCard icon={Target} title="Objetivos a curto, médio e longo prazo *">

@@ -166,14 +166,8 @@ export default function ClientBriefing() {
   const [useRealPhotos, setUseRealPhotos] = useState('');
 
   // Comercial / Vendas
-  const [ticketMedio, setTicketMedio] = useState('');
-  const [faturamentoAtual, setFaturamentoAtual] = useState('');
-  const [metaFaturamento, setMetaFaturamento] = useState('');
   const [canaisAquisicao, setCanaisAquisicao] = useState<string[]>([]);
-  const [jaInvesteAds, setJaInvesteAds] = useState('');
-  const [orcamentoMkt, setOrcamentoMkt] = useState('');
-  const [ciclovenda, setCicloVenda] = useState('');
-  const [sazonalidade, setSazonalidade] = useState('');
+
 
   // Materiais opcionais (links)
   const [identidadeVisualLink, setIdentidadeVisualLink] = useState('');

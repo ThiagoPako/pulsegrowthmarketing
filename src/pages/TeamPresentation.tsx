@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { supabase } from '@/lib/vpsDb';
 import { type UserRole } from '@/types';
 
 
@@ -185,34 +184,68 @@ const STATIC_MEMBERS: Member[] = [
   { id: 'victor-o', name: 'Victor Oliveira', displayName: 'Victor Oliveira', role: 'editor' },
 ];
 
+interface PublicTeamProfile {
+  id: string;
+  name: string | null;
+  display_name?: string | null;
+  role?: UserRole | null;
+  avatar_url?: string | null;
+  bio?: string | null;
+  job_title?: string | null;
+}
+
+interface PublicTeamResponse {
+  members?: PublicTeamProfile[];
+}
+
+const PUBLIC_TEAM_ENDPOINT = 'https://agenciapulse.tech/api/public-team-presentation';
+
+function normalizeName(value: string | null | undefined): string {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function resolveAvatarUrl(value: string | null | undefined): string | undefined {
+  const avatar = String(value || '').trim();
+  if (!avatar) return undefined;
+  if (avatar.startsWith('data:') || avatar.startsWith('http') || avatar.startsWith('/__l5e/')) return avatar;
+  if (avatar.startsWith('/')) return `https://agenciapulse.tech${avatar}`;
+  return avatar;
+}
+
 
 export default function TeamPresentation() {
   const [members, setMembers] = useState<Member[]>(STATIC_MEMBERS);
 
-  // Merge avatars vindos do banco (mantém carregamento instantâneo com fallback estático)
+  // Merge avatars vindos do cadastro real da equipe na VPS, sem exigir login do cliente.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const { data } = await supabase
-          .from('profiles')
-          .select('name, display_name, avatar_url')
-          .not('avatar_url', 'is', null);
-        if (cancelled || !data) return;
-        const byName = new Map<string, string>(
-          data.flatMap((p: { name: string | null; display_name?: string | null; avatar_url: string | null }) => {
-            if (!p.avatar_url) return [];
+        const response = await fetch(PUBLIC_TEAM_ENDPOINT, { headers: { Accept: 'application/json' } });
+        if (!response.ok) return;
+        const payload = (await response.json()) as PublicTeamResponse;
+        if (cancelled || !payload.members?.length) return;
+
+        const byName = new Map<string, PublicTeamProfile>(
+          payload.members.flatMap(p => {
+            if (!resolveAvatarUrl(p.avatar_url)) return [];
             const names = [p.name, p.display_name]
               .filter(Boolean)
-              .map(n => String(n).trim().toLowerCase())
+              .map(n => normalizeName(n))
               .filter(Boolean);
-            return names.map(name => [name, p.avatar_url as string] as const);
+            return names.map(name => [name, p] as const);
           }),
         );
+
         setMembers(prev =>
           prev.map(m => {
-            const dbAvatar = byName.get(m.displayName?.trim().toLowerCase() || m.name.trim().toLowerCase());
-            return dbAvatar ? { ...m, avatarUrl: dbAvatar } : m;
+            const dbProfile = byName.get(normalizeName(m.displayName || m.name));
+            const avatarUrl = resolveAvatarUrl(dbProfile?.avatar_url);
+            return avatarUrl ? { ...m, avatarUrl } : m;
           }),
         );
       } catch {

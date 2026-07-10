@@ -288,7 +288,7 @@ export default function ClientBriefing() {
         socialClass, clientUsesSocial, idealClient, finalNotes,
         instagramLogin, instagramPassword, facebookLogin, facebookPassword, otherAccesses,
         useRealPhotos,
-        ticketMedio, faturamentoAtual, metaFaturamento, canaisAquisicao, jaInvesteAds, orcamentoMkt, ciclovenda, sazonalidade,
+        canaisAquisicao,
         identidadeVisualLink, fotosEstudioLink,
         additionalAttachments: additionalAttachments.filter(a => a.url && a.url.trim()),
         _completed: true, _submittedAt: new Date().toISOString(),

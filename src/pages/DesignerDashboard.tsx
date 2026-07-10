@@ -18,6 +18,7 @@ import ClientLogo from '@/components/ClientLogo';
 import DesignTaskDetailSheet from '@/components/designer/DesignTaskDetailSheet';
 import DesignTaskCreateDialog from '@/components/designer/DesignTaskCreateDialog';
 import DesignerTaskCard from '@/components/designer/DesignerTaskCard';
+import DesignerTutorial from '@/components/designer/DesignerTutorial';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, addDays, startOfWeek, isSameDay, differenceInHours, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';

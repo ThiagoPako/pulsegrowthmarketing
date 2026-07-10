@@ -517,6 +517,7 @@ export default function Team() {
             </DialogContent>
           </Dialog>
         )}
+        </div>
       </div>
 
       {/* Tabs */}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 import { type UserRole } from '@/types';
 
 
@@ -196,14 +196,17 @@ export default function TeamPresentation() {
       try {
         const { data } = await supabase
           .from('profiles')
-          .select('name, avatar_url')
+          .select('name, display_name, avatar_url')
           .not('avatar_url', 'is', null);
         if (cancelled || !data) return;
         const byName = new Map(
-          data.map((p: { name: string | null; avatar_url: string | null }) => [
-            (p.name || '').trim().toLowerCase(),
-            p.avatar_url,
-          ]),
+          data.flatMap((p: { name: string | null; display_name?: string | null; avatar_url: string | null }) => {
+            const names = [p.name, p.display_name]
+              .filter(Boolean)
+              .map(n => String(n).trim().toLowerCase())
+              .filter(Boolean);
+            return names.map(name => [name, p.avatar_url] as const);
+          }),
         );
         setMembers(prev =>
           prev.map(m => {

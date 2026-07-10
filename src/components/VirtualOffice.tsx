@@ -225,7 +225,7 @@ export default function VirtualOffice() {
   }, [enriched]);
 
   const onlineCount = enriched.filter(m => m.isOnline).length;
-  const activeRooms = ROOMS.filter(r => (roomAssign[r.id]?.length ?? 0) > 0);
+  const activeRooms = ROOMS;
   const convo = useMemo(() => {
     if (!currentUser || !chatTarget) return [];
     return chatMsgs[getConversationKey(currentUser.id, chatTarget.id)] || [];

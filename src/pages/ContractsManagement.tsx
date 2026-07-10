@@ -108,7 +108,7 @@ export default function ContractsManagement() {
       toast.success(`Contrato renovado até ${fmtDate(newEnd)}`);
       setRenewOpen(false);
       setSelected(null);
-      await refresh();
+      await refetch();
     } catch (err: any) {
       toast.error(err?.message || 'Erro ao renovar contrato');
     } finally {

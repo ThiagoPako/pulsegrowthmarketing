@@ -1,6 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { supabase } from '@/integrations/supabase/client';
 import { type UserRole } from '@/types';
+
 
 
 /* ---------- Paleta Pulse Signature (locked) ---------- */
@@ -185,7 +187,38 @@ const STATIC_MEMBERS: Member[] = [
 
 
 export default function TeamPresentation() {
-  const members = STATIC_MEMBERS;
+  const [members, setMembers] = useState<Member[]>(STATIC_MEMBERS);
+
+  // Merge avatars vindos do banco (mantém carregamento instantâneo com fallback estático)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('name, avatar_url')
+          .not('avatar_url', 'is', null);
+        if (cancelled || !data) return;
+        const byName = new Map(
+          data.map((p: { name: string | null; avatar_url: string | null }) => [
+            (p.name || '').trim().toLowerCase(),
+            p.avatar_url,
+          ]),
+        );
+        setMembers(prev =>
+          prev.map(m => {
+            const dbAvatar = byName.get(m.displayName?.trim().toLowerCase() || m.name.trim().toLowerCase());
+            return dbAvatar ? { ...m, avatarUrl: dbAvatar } : m;
+          }),
+        );
+      } catch {
+        /* keep static fallback */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Inject Google Fonts once (Fraunces + Inter)
   useEffect(() => {
@@ -198,6 +231,7 @@ export default function TeamPresentation() {
       'https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Inter:wght@300;400;500;600;700&display=swap';
     document.head.appendChild(link);
   }, []);
+
 
   return (
     <div className="min-h-screen w-full" style={{ backgroundColor: C.bg, color: C.ink, fontFamily: SANS }}>

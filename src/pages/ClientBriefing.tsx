@@ -596,32 +596,90 @@ export default function ClientBriefing() {
           <Textarea value={idealClient} onChange={e => setIdealClient(e.target.value)} rows={4} placeholder="Imagine o cliente que você sempre gostaria de receber..." />
         </SectionCard>
 
-        {/* ========== FOTOS ========== */}
-        <SectionHeader title="📸 Fotos para Artes" />
+        {/* ========== COMERCIAL / VENDAS ========== */}
+        <SectionHeader title="💰 Vendas & Comercial" subtitle="Nos ajude a entender o momento comercial do seu negócio para gerar resultado de verdade." />
 
-        <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
-          <Label className="flex items-center gap-2 text-sm font-semibold">
-            <Camera size={16} className="text-primary" /> As artes devem usar fotos reais?
-          </Label>
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => setUseRealPhotos('real')}
-              className={`p-3 rounded-xl border-2 text-center transition-all text-sm ${useRealPhotos === 'real' ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/40'}`}>
-              📸 Fotos reais da empresa/equipe
-            </button>
-            <button onClick={() => setUseRealPhotos('banco')}
-              className={`p-3 rounded-xl border-2 text-center transition-all text-sm ${useRealPhotos === 'banco' ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/40'}`}>
-              🖼️ Fotos de banco de imagem
-            </button>
-          </div>
-          {useRealPhotos === 'real' && (
-            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 flex gap-2 items-start">
-              <AlertTriangle size={16} className="text-amber-500 shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-700 dark:text-amber-400">
-                Se não houver fotos profissionais, será necessário agendar sessão. Isso pode gerar atraso e custo adicional.
-              </p>
-            </div>
-          )}
-        </div>
+        <SectionCard icon={DollarSign} title="Ticket médio atual (opcional)">
+          <Input value={ticketMedio} onChange={e => setTicketMedio(e.target.value)} placeholder="Ex: R$ 350 por venda" />
+        </SectionCard>
+
+        <SectionCard icon={TrendingUp} title="Faturamento médio mensal hoje (opcional)">
+          <Input value={faturamentoAtual} onChange={e => setFaturamentoAtual(e.target.value)} placeholder="Ex: R$ 40.000/mês" />
+        </SectionCard>
+
+        <SectionCard icon={Target} title="Qual sua meta de faturamento com o digital?">
+          <Textarea value={metaFaturamento} onChange={e => setMetaFaturamento(e.target.value)} rows={2} placeholder="Ex: dobrar o faturamento em 6 meses, atingir R$ 100k/mês..." />
+        </SectionCard>
+
+        <SectionCard icon={Megaphone} title="Como seus clientes chegam até você hoje?">
+          <CheckboxGroup
+            options={[
+              { id: 'indicacao', label: 'Indicação boca a boca' },
+              { id: 'instagram', label: 'Instagram / Redes sociais orgânicas' },
+              { id: 'ads', label: 'Anúncios pagos (Meta / Google)' },
+              { id: 'passagem', label: 'Passagem em frente à loja / ponto físico' },
+              { id: 'google', label: 'Pesquisa no Google' },
+              { id: 'parcerias', label: 'Parcerias / eventos' },
+              { id: 'nao_sei', label: 'Não sei / não meço isso hoje' },
+            ]}
+            selected={canaisAquisicao}
+            onChange={setCanaisAquisicao}
+          />
+        </SectionCard>
+
+        <SectionCard icon={DollarSign} title="Já investe em anúncios pagos (tráfego)?">
+          <RadioGroup
+            options={[
+              { id: 'sim_ativo', label: 'Sim, atualmente ativo' },
+              { id: 'ja_investi', label: 'Já investi, hoje não estou' },
+              { id: 'nao', label: 'Ainda não invisti' },
+            ]}
+            value={jaInvesteAds}
+            onChange={setJaInvesteAds}
+          />
+        </SectionCard>
+
+        <SectionCard icon={DollarSign} title="Orçamento mensal disponível para marketing/tráfego (opcional)">
+          <p className="text-xs text-muted-foreground">Isso nos ajuda a montar a estratégia certa para o seu momento.</p>
+          <Input value={orcamentoMkt} onChange={e => setOrcamentoMkt(e.target.value)} placeholder="Ex: R$ 500 / R$ 1.500 / R$ 3.000 por mês" />
+        </SectionCard>
+
+        <SectionCard icon={MessageSquare} title="Ciclo de venda (opcional)">
+          <p className="text-xs text-muted-foreground">Do primeiro contato até fechar, quanto tempo em média leva?</p>
+          <Input value={ciclovenda} onChange={e => setCicloVenda(e.target.value)} placeholder="Ex: imediato / alguns dias / semanas" />
+        </SectionCard>
+
+        <SectionCard icon={TrendingUp} title="Existem épocas do ano de maior movimento? (opcional)">
+          <Textarea value={sazonalidade} onChange={e => setSazonalidade(e.target.value)} rows={2} placeholder="Ex: Dia dos Namorados, Black Friday, alta safra..." />
+        </SectionCard>
+
+        {/* ========== MATERIAIS OPCIONAIS ========== */}
+        <SectionHeader title="🎨 Materiais que você já tem (opcional)" subtitle="Se já tiver, envie os links. Se não tiver, tudo bem — a gente ajuda a construir." />
+
+        <SectionCard icon={Upload} title="Identidade visual (logo, paleta, fontes) — opcional">
+          <p className="text-xs text-muted-foreground">
+            Cole aqui um link do Google Drive, Dropbox, WeTransfer ou WhatsApp Web com os arquivos da sua marca.
+          </p>
+          <Input
+            value={identidadeVisualLink}
+            onChange={e => setIdentidadeVisualLink(e.target.value)}
+            placeholder="https://drive.google.com/..."
+            type="url"
+          />
+        </SectionCard>
+
+        <SectionCard icon={Camera} title="Fotos profissionais já feitas em estúdio — opcional">
+          <p className="text-xs text-muted-foreground">
+            Se você já tem um ensaio profissional ou fotos de produto em estúdio, envie o link. Caso não tenha, deixe em branco — vamos decidir internamente como resolver.
+          </p>
+          <Input
+            value={fotosEstudioLink}
+            onChange={e => setFotosEstudioLink(e.target.value)}
+            placeholder="https://drive.google.com/... (opcional)"
+            type="url"
+          />
+        </SectionCard>
+
 
         {/* ========== CONSIDERAÇÕES FINAIS ========== */}
         <SectionHeader title="📝 Considerações Finais" />

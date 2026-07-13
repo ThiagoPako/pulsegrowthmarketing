@@ -2043,28 +2043,79 @@ export default function TvDashboard() {
             })()}
 
             {/* Videomakers — editando stories ao vivo */}
-            {visibility.show_posts && (
-              <div>
-                <SectionHeader
-                  icon={Camera}
-                  iconColor="#ec4899"
-                  title="Editando Stories — ao vivo"
-                  badge={storyEditingSessions.length > 0 ? `● ${storyEditingSessions.length} ativo(s)` : 'nenhum'}
-                />
-                {storyEditingSessions.length > 0 ? (
-                  <div className="space-y-2">
-                    {storyEditingSessions.map(s => (
-                      <StoryEditingLiveCard key={s.id} session={s} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
-                    <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
-                    <p className="text-[10px] text-white/20">Nenhum videomaker editando stories agora</p>
-                  </div>
-                )}
-              </div>
-            )}
+            {visibility.show_posts && (() => {
+              const nowMs = Date.now();
+              const delayCounts = storyEditingSessions.reduce(
+                (acc, s) => {
+                  const el = Math.floor((nowMs - new Date(s.startedAt).getTime()) / 1000);
+                  const d = getStoryDelay(el, s.storiesCount);
+                  acc[d] += 1;
+                  return acc;
+                },
+                { ok: 0, warn: 0, late: 0 } as Record<'ok' | 'warn' | 'late', number>,
+              );
+              const syncSec = lastSync ? Math.floor((nowMs - lastSync.getTime()) / 1000) : null;
+              const syncLabel = syncSec === null
+                ? '—'
+                : syncSec < 60 ? `${syncSec}s` : `${Math.floor(syncSec / 60)}min`;
+              const hasLate = delayCounts.late > 0;
+              const hasWarn = delayCounts.warn > 0;
+              return (
+                <div>
+                  <SectionHeader
+                    icon={Camera}
+                    iconColor={hasLate ? '#ef4444' : hasWarn ? '#eab308' : '#ec4899'}
+                    title="Editando Stories — ao vivo"
+                    badge={storyEditingSessions.length > 0 ? `● ${storyEditingSessions.length} ativo(s)` : 'nenhum'}
+                  >
+                    {hasLate && (
+                      <motion.span
+                        className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                        style={{ background: 'rgba(239,68,68,0.25)', color: '#fecaca' }}
+                        animate={{ opacity: [1, 0.5, 1] }}
+                        transition={{ duration: 1.2, repeat: Infinity }}
+                      >
+                        {delayCounts.late} ATRASADO(S)
+                      </motion.span>
+                    )}
+                    {!hasLate && hasWarn && (
+                      <span
+                        className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                        style={{ background: 'rgba(234,179,8,0.22)', color: '#fde68a' }}
+                      >
+                        {delayCounts.warn} LENTO(S)
+                      </span>
+                    )}
+                    <span className="text-[9px] font-mono text-white/30" title="Última sincronização">
+                      sync {syncLabel}
+                    </span>
+                    <button
+                      onClick={() => fetchData({ force: true })}
+                      disabled={isRefreshing}
+                      className="p-1 rounded hover:bg-white/10 transition-colors disabled:opacity-40"
+                      title="Forçar sincronização"
+                      aria-label="Forçar sincronização"
+                    >
+                      <RefreshCw
+                        className={`w-3 h-3 text-white/40 ${isRefreshing ? 'animate-spin' : ''}`}
+                      />
+                    </button>
+                  </SectionHeader>
+                  {storyEditingSessions.length > 0 ? (
+                    <div className="space-y-2">
+                      {storyEditingSessions.map(s => (
+                        <StoryEditingLiveCard key={s.id} session={s} />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                      <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                      <p className="text-[10px] text-white/20">Nenhum videomaker editando stories agora</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
 

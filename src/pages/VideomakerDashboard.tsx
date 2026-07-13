@@ -2106,107 +2106,172 @@ export default function VideomakerDashboard() {
         </div>
       </div>
 
-      {/* ── Upload Stories Section ── */}
-      <div className="glass-card p-3 sm:p-5">
-        <div className="flex items-center gap-2 mb-3 sm:mb-4">
+      {/* ── Edite seus Stories (Sessão com cronômetro) ── */}
+      <AnimatePresence mode="wait">
+        {!storySession ? (
           <motion.div
-            animate={{ scale: [1, 1.15, 1], rotate: [0, -5, 0] }}
-            transition={{ duration: 2, repeat: Infinity }}
+            key="idle"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="glass-card p-4 sm:p-6 border-2 border-pink-500/25 bg-gradient-to-br from-pink-500/[0.03] to-transparent"
           >
-            <Camera size={16} className="text-primary" />
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+              <motion.div
+                animate={{ scale: [1, 1.08, 1], rotate: [0, -3, 0] }}
+                transition={{ duration: 2.5, repeat: Infinity }}
+                className="w-12 h-12 rounded-2xl bg-pink-500/15 flex items-center justify-center shrink-0"
+              >
+                <Camera size={22} className="text-pink-500" />
+              </motion.div>
+              <div className="flex-1">
+                <h3 className="font-display font-semibold text-base flex items-center gap-2">
+                  Edite seus Stories
+                  {storiesUploaded > 0 && (
+                    <Badge className="bg-success/20 text-success border-success/30 text-[10px]">
+                      +{storiesUploaded * VM_SCORE.STORY_EDITADO} pts hoje
+                    </Badge>
+                  )}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Ao iniciar, o cronômetro roda e aparece no <strong>painel da TV</strong> como "editando stories". Cada story enviado gera um card 📱 <strong className="text-pink-500">rosa</strong> em Revisão.
+                </p>
+              </div>
+              <Button
+                onClick={handleStartStorySession}
+                size="lg"
+                className="w-full sm:w-auto gap-2 bg-pink-500 hover:bg-pink-600 text-white shadow-lg shadow-pink-500/25"
+              >
+                <Play size={16} /> Iniciar Edição de Stories
+              </Button>
+            </div>
           </motion.div>
-          <h3 className="font-display font-semibold text-sm">Subir Stories Editados</h3>
-          {storiesUploaded > 0 && (
-            <Badge className="bg-success/20 text-success border-success/30 text-[10px]">
-              +{storiesUploaded * VM_SCORE.STORY_EDITADO} pts hoje
-            </Badge>
-          )}
-        </div>
+        ) : (
+          <motion.div
+            key="active"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            className="rounded-2xl border-2 border-pink-500/50 bg-gradient-to-br from-pink-500/10 via-pink-500/5 to-transparent p-4 sm:p-5 ring-2 ring-pink-500/20"
+          >
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+              <motion.div
+                animate={{ scale: [1, 1.15, 1] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+                className="w-14 h-14 rounded-2xl bg-pink-500/20 flex items-center justify-center shrink-0"
+              >
+                <Camera size={26} className="text-pink-500" />
+              </motion.div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-display font-bold text-base">📱 Editando Stories</span>
+                  <Badge className="bg-pink-500/20 text-pink-600 border-pink-500/40 text-[10px]">
+                    <motion.span className="w-1.5 h-1.5 rounded-full bg-pink-500 mr-1 inline-block"
+                      animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
+                    AO VIVO
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-4 mt-1.5 text-sm">
+                  <span className="font-mono font-bold text-lg text-pink-600 tabular-nums">
+                    <Clock size={14} className="inline mr-1 -mt-0.5" />
+                    {`${String(Math.floor(storySessionElapsed / 3600)).padStart(2,'0')}:${String(Math.floor((storySessionElapsed % 3600) / 60)).padStart(2,'0')}:${String(storySessionElapsed % 60).padStart(2,'0')}`}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    <strong className="text-pink-600">{storySession.storiesCount}</strong> story(s) enviado(s)
+                  </span>
+                </div>
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <Button
+                  onClick={() => setStoryUploadDialogOpen(true)}
+                  className="flex-1 sm:flex-none gap-2 bg-pink-500 hover:bg-pink-600 text-white"
+                >
+                  <Upload size={14} /> Subir Stories
+                </Button>
+                <Button
+                  onClick={handleStopStorySession}
+                  variant="outline"
+                  className="gap-1 border-destructive/50 text-destructive hover:bg-destructive/10"
+                >
+                  <Square size={14} /> Encerrar
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-        <p className="text-xs text-muted-foreground mb-3">
-          Suba stories que você gravou e editou. Cada story gera <strong className="text-primary">+{VM_SCORE.STORY_EDITADO} pontos</strong> e cria uma tarefa automática para a equipe de Social Media agendar.
-        </p>
+      {/* ── Upload Stories Dialog (multi-file) ── */}
+      <Dialog open={storyUploadDialogOpen} onOpenChange={setStoryUploadDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload size={18} className="text-pink-500" /> Subir Stories para Revisão
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Cliente</label>
+              <Select value={storyClientId} onValueChange={setStoryClientId}>
+                <SelectTrigger><SelectValue placeholder="Selecione o cliente..." /></SelectTrigger>
+                <SelectContent>
+                  {clients.filter(c => c.companyName).sort((a, b) => a.companyName.localeCompare(b.companyName)).map(c => (
+                    <SelectItem key={c.id} value={c.id}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: `hsl(${c.color})` }} />
+                        {c.companyName}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* Client selection */}
-          <div>
-            <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Cliente</label>
-            <Select value={storyClientId} onValueChange={setStoryClientId}>
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder="Selecione o cliente..." />
-              </SelectTrigger>
-              <SelectContent>
-                {clients.filter(c => c.companyName).sort((a, b) => a.companyName.localeCompare(b.companyName)).map(c => (
-                  <SelectItem key={c.id} value={c.id}>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: `hsl(${c.color})` }} />
-                      {c.companyName}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Título base (opcional)</label>
+              <Input
+                value={storyTitle}
+                onChange={e => setStoryTitle(e.target.value)}
+                placeholder={`Story ${format(new Date(), 'dd/MM')}`}
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">Se enviar múltiplos, cada um recebe numeração (1/N, 2/N…)</p>
+            </div>
 
-          {/* Title */}
-          <div>
-            <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Título (opcional)</label>
-            <Input
-              value={storyTitle}
-              onChange={e => setStoryTitle(e.target.value)}
-              placeholder={`Story ${format(new Date(), 'dd/MM')}`}
-              className="h-9"
-            />
-          </div>
-
-          {/* Upload button */}
-          <div className="flex items-end">
-            <input
-              ref={storyFileRef}
-              type="file"
-              accept="video/*"
-              onChange={handleStoryUpload}
-              className="hidden"
-              id="story-upload-input"
-            />
-            <motion.div className="w-full" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+            <div className="rounded-xl border-2 border-dashed border-pink-500/30 bg-pink-500/[0.03] p-4 text-center">
+              <input
+                ref={storyMultiFileRef}
+                type="file"
+                accept="video/*,image/*"
+                multiple
+                onChange={handleStoryFilesUpload}
+                className="hidden"
+              />
+              <Camera size={28} className="mx-auto mb-2 text-pink-500/60" />
+              <p className="text-sm font-medium mb-1">Envie 1 ou vários stories de uma vez</p>
+              <p className="text-[11px] text-muted-foreground mb-3">Vídeo ou imagem · máx 500MB cada · cada arquivo vira um card de <strong className="text-pink-500">Story</strong> na Revisão</p>
               <Button
                 onClick={() => {
                   if (!storyClientId) { toast.error('Selecione um cliente primeiro'); return; }
-                  storyFileRef.current?.click();
+                  storyMultiFileRef.current?.click();
                 }}
                 disabled={storyUploading || !storyClientId}
-                className="w-full gap-2 h-9"
+                className="gap-2 bg-pink-500 hover:bg-pink-600 text-white"
               >
                 {storyUploading ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                    {storyUploadProgress}
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    {storyUploadProgress || 'Enviando...'}
                   </>
                 ) : (
-                  <>
-                    <Upload size={14} />
-                    Enviar Story
-                  </>
+                  <><Upload size={14} /> Selecionar arquivos</>
                 )}
               </Button>
-            </motion.div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
 
-        {storiesUploaded > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-3 p-2 rounded-lg bg-success/10 border border-success/20 flex items-center gap-2"
-          >
-            <Check size={14} className="text-success" />
-            <span className="text-xs text-success font-medium">
-              {storiesUploaded} story(s) enviado(s) hoje — tarefas criadas para agendamento
-            </span>
-          </motion.div>
-        )}
-      </div>
+
 
       {/* ── Finish Recording Dialog (Multi-step: 3 steps) ── */}
       <Dialog open={finishDialogOpen} onOpenChange={v => { if (!v) { setFinishDialogOpen(false); setFinishStep('scripts'); setDriveLinks({}); setSelectedEditorId('__auto__'); } }}>

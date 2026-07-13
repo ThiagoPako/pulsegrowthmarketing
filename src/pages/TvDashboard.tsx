@@ -1939,7 +1939,32 @@ export default function TvDashboard() {
                 </div>
               );
             })()}
+
+            {/* Videomakers — editando stories ao vivo */}
+            {visibility.show_posts && (
+              <div>
+                <SectionHeader
+                  icon={Camera}
+                  iconColor="#ec4899"
+                  title="Editando Stories — ao vivo"
+                  badge={storyEditingSessions.length > 0 ? `● ${storyEditingSessions.length} ativo(s)` : 'nenhum'}
+                />
+                {storyEditingSessions.length > 0 ? (
+                  <div className="space-y-2">
+                    {storyEditingSessions.map(s => (
+                      <StoryEditingLiveCard key={s.id} session={s} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                    <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                    <p className="text-[10px] text-white/20">Nenhum videomaker editando stories agora</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+
 
 
           {/* RIGHT COLUMN: Designer + Editing */}

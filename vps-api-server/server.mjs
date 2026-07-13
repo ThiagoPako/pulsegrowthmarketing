@@ -332,8 +332,18 @@ async function ensureStoryEditingSessionsTable() {
       if (!columns.has('updated_at')) alterClauses.push('ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT now()');
 
       if (alterClauses.length > 0) {
-        await pool.query(`ALTER TABLE story_editing_sessions ${alterClauses.join(', ')}`);
-        tableColumnsPromiseCache.delete('story_editing_sessions');
+        await pool.query(`ALTER TABLE story_editing_sessions ${alterClauses.join(', ')}`).then(() => {
+          tableColumnsPromiseCache.delete('story_editing_sessions');
+        }).catch((error) => {
+          // If the table was created manually as postgres, the API role may not
+          // own it. Existing required columns are enough to keep the timer alive;
+          // the VPS command below fixes ownership definitively.
+          if (error?.code === '42501' || /must be owner|permission denied/i.test(error?.message || '')) {
+            console.warn('[story_editing_sessions] Skipping optional column sync due to table ownership:', error.message);
+            return;
+          }
+          throw error;
+        });
       }
 
       const indexStatements = [

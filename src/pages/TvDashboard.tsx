@@ -7,7 +7,7 @@ import {
   XCircle, Rocket, Zap, TrendingUp, Music, Settings, Link as LinkIcon,
   Flame, Sparkles, AlertTriangle, Gift, Star, Send, Play, Pause,
   Eye, Scissors, FileVideo, Instagram, Facebook, Youtube, Globe, Save,
-  ClipboardList, PenTool, Share2
+  ClipboardList, PenTool, Share2, RefreshCw
 } from 'lucide-react';
 import { fetchAISeasonalAlerts, AISeasonalAlert } from '@/lib/seasonalDates';
 import { fetchLatestCommand, fetchTvSettings, TvRemoteCommand, VISIBILITY_KEYS, VisibilityKey } from '@/lib/tvRemote';

@@ -622,6 +622,78 @@ export default function InternalReports() {
             </CardContent>
           </Card>
 
+          {/* ── Sessões de Edição de Stories ── */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Film size={16} className="text-pink-500" /> Sessões de Edição de Stories
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="p-3 rounded-lg bg-secondary/50 border">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Sessões iniciadas</p>
+                  <p className="text-2xl font-bold">{storySessionStats.totalSessions}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-secondary/50 border">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Stories enviados</p>
+                  <p className="text-2xl font-bold">{storySessionStats.totalStories}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-pink-500/10 border border-pink-500/30">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Média por sessão</p>
+                  <p className="text-2xl font-bold text-pink-600 dark:text-pink-400">
+                    {storySessionStats.overallAvg.toFixed(1)}
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-secondary/50 border">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Videomakers ativos</p>
+                  <p className="text-2xl font-bold">{storySessionStats.perVm.length}</p>
+                </div>
+              </div>
+
+              {storySessionStats.perVm.length === 0 ? (
+                <p className="text-muted-foreground text-sm text-center py-6">
+                  Nenhuma sessão de edição de stories no período.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Videomaker</TableHead>
+                      <TableHead className="text-center">Sessões</TableHead>
+                      <TableHead className="text-center">Stories</TableHead>
+                      <TableHead className="text-center">Média / sessão</TableHead>
+                      <TableHead className="text-center">Duração média</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {storySessionStats.perVm.map(r => (
+                      <TableRow key={r.vm.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <UserAvatar user={r.vm} size="sm" />
+                            <span className="text-sm font-medium">{r.vm.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">{r.sessions}</TableCell>
+                        <TableCell className="text-center">{r.totalStories}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="secondary" className="font-semibold">
+                            {r.avgStories.toFixed(1)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center text-muted-foreground text-xs">
+                          {r.finishedCount > 0 ? `${r.avgDuration.toFixed(0)} min` : '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">

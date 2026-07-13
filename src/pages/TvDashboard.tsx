@@ -1487,17 +1487,36 @@ function SeasonalBanner({ slides }: { slides: SeasonalSlide[] }) {
 }
 
 /* Story Editing Live Card — mostra videomaker editando stories em tempo real */
-// Ritmo esperado: ~1 story a cada 5 min de edição.
-// Warning depois de 8 min sem entregar o próximo. Late a partir de 15 min.
+/**
+ * Classifica o ritmo de envio de stories numa sessão de edição ao vivo.
+ *
+ * Ritmo esperado: ~1 story a cada 5 min.
+ * Métrica única = "gap" (min) = quanto o vídeomaker está atrás do próximo
+ *   envio esperado. gap = elapsedMin - storiesCount * 5.
+ *
+ * - gap <= 0            → em dia ou adiantado
+ * - grace (elapsed<5m)  → sempre 'ok'
+ * - gap >= 15           → 'late'   (indicador vermelho pulsante)
+ * - gap >= 8            → 'warn'   (indicador amarelo)
+ * - resto               → 'ok'
+ */
+const STORY_INTERVAL_MIN = 5;
+const STORY_GRACE_MIN = 5;
+const STORY_WARN_GAP_MIN = 8;
+const STORY_LATE_GAP_MIN = 15;
+
 function getStoryDelay(elapsedSec: number, storiesCount: number): 'ok' | 'warn' | 'late' {
+  if (!Number.isFinite(elapsedSec) || elapsedSec < 0) return 'ok';
+  const rawCount = Number(storiesCount);
+  const safeCount = Number.isFinite(rawCount) ? Math.max(0, Math.floor(rawCount)) : 0;
   const elapsedMin = elapsedSec / 60;
-  const expected = Math.max(1, Math.floor(elapsedMin / 5));
-  const gapMin = elapsedMin - storiesCount * 5;
-  if (storiesCount >= expected) return 'ok';
-  if (gapMin >= 15) return 'late';
-  if (gapMin >= 8) return 'warn';
+  if (elapsedMin < STORY_GRACE_MIN) return 'ok';
+  const gapMin = elapsedMin - safeCount * STORY_INTERVAL_MIN;
+  if (gapMin >= STORY_LATE_GAP_MIN) return 'late';
+  if (gapMin >= STORY_WARN_GAP_MIN) return 'warn';
   return 'ok';
 }
+
 
 function StoryEditingLiveCard({ session }: { session: { id: string; videomakerName: string | null; videomakerAvatar: string | null; startedAt: string; storiesCount: number } }) {
   const [elapsed, setElapsed] = useState(0);
@@ -1517,7 +1536,7 @@ function StoryEditingLiveCard({ session }: { session: { id: string; videomakerNa
     warn: { border: 'rgba(234,179,8,0.55)',  bgFrom: 'rgba(234,179,8,0.18)',  bgTo: 'rgba(234,179,8,0.04)',  badgeBg: 'rgba(234,179,8,0.28)', badgeFg: '#fde68a', badgeLabel: '⚠ RITMO LENTO' },
     late: { border: 'rgba(239,68,68,0.7)',   bgFrom: 'rgba(239,68,68,0.22)',  bgTo: 'rgba(239,68,68,0.05)',  badgeBg: 'rgba(239,68,68,0.32)', badgeFg: '#fecaca', badgeLabel: '⏰ ATRASADO' },
   }[delay];
-  const gapMin = Math.max(0, Math.floor(elapsed / 60) - session.storiesCount * 5);
+  const gapMin = Math.max(0, Math.floor(elapsed / 60) - session.storiesCount * STORY_INTERVAL_MIN);
   return (
     <motion.div
       className="rounded-xl p-3 flex items-center gap-3 border"

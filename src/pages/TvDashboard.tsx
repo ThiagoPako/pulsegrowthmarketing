@@ -1487,6 +1487,18 @@ function SeasonalBanner({ slides }: { slides: SeasonalSlide[] }) {
 }
 
 /* Story Editing Live Card — mostra videomaker editando stories em tempo real */
+// Ritmo esperado: ~1 story a cada 5 min de edição.
+// Warning depois de 8 min sem entregar o próximo. Late a partir de 15 min.
+function getStoryDelay(elapsedSec: number, storiesCount: number): 'ok' | 'warn' | 'late' {
+  const elapsedMin = elapsedSec / 60;
+  const expected = Math.max(1, Math.floor(elapsedMin / 5));
+  const gapMin = elapsedMin - storiesCount * 5;
+  if (storiesCount >= expected) return 'ok';
+  if (gapMin >= 15) return 'late';
+  if (gapMin >= 8) return 'warn';
+  return 'ok';
+}
+
 function StoryEditingLiveCard({ session }: { session: { id: string; videomakerName: string | null; videomakerAvatar: string | null; startedAt: string; storiesCount: number } }) {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
@@ -1499,13 +1511,22 @@ function StoryEditingLiveCard({ session }: { session: { id: string; videomakerNa
   const mm = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
   const ss = String(elapsed % 60).padStart(2, '0');
   const name = session.videomakerName || 'Videomaker';
+  const delay = getStoryDelay(elapsed, session.storiesCount);
+  const delayCfg = {
+    ok:   { border: 'rgba(236,72,153,0.35)', bgFrom: 'rgba(236,72,153,0.14)', bgTo: 'rgba(236,72,153,0.04)', badgeBg: 'rgba(34,197,94,0.22)', badgeFg: '#86efac', badgeLabel: '● NO RITMO' },
+    warn: { border: 'rgba(234,179,8,0.55)',  bgFrom: 'rgba(234,179,8,0.18)',  bgTo: 'rgba(234,179,8,0.04)',  badgeBg: 'rgba(234,179,8,0.28)', badgeFg: '#fde68a', badgeLabel: '⚠ RITMO LENTO' },
+    late: { border: 'rgba(239,68,68,0.7)',   bgFrom: 'rgba(239,68,68,0.22)',  bgTo: 'rgba(239,68,68,0.05)',  badgeBg: 'rgba(239,68,68,0.32)', badgeFg: '#fecaca', badgeLabel: '⏰ ATRASADO' },
+  }[delay];
+  const gapMin = Math.max(0, Math.floor(elapsed / 60) - session.storiesCount * 5);
   return (
-    <div
+    <motion.div
       className="rounded-xl p-3 flex items-center gap-3 border"
       style={{
-        background: 'linear-gradient(135deg, rgba(236,72,153,0.14), rgba(236,72,153,0.04))',
-        borderColor: 'rgba(236,72,153,0.35)',
+        background: `linear-gradient(135deg, ${delayCfg.bgFrom}, ${delayCfg.bgTo})`,
+        borderColor: delayCfg.border,
       }}
+      animate={delay === 'late' ? { boxShadow: ['0 0 0 0 rgba(239,68,68,0)', '0 0 0 8px rgba(239,68,68,0.15)', '0 0 0 0 rgba(239,68,68,0)'] } : undefined}
+      transition={delay === 'late' ? { duration: 1.6, repeat: Infinity } : undefined}
     >
       <div className="relative shrink-0">
         <div className="w-10 h-10 rounded-full overflow-hidden bg-white/10 flex items-center justify-center">
@@ -1517,13 +1538,13 @@ function StoryEditingLiveCard({ session }: { session: { id: string; videomakerNa
         </div>
         <motion.span
           className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
-          style={{ background: '#ec4899', borderColor: '#0a0a0f' }}
+          style={{ background: delay === 'late' ? '#ef4444' : delay === 'warn' ? '#eab308' : '#ec4899', borderColor: '#0a0a0f' }}
           animate={{ scale: [1, 1.4, 1] }}
           transition={{ duration: 1.5, repeat: Infinity }}
         />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-[11px] font-bold text-white/90 truncate uppercase tracking-wide">{name}</span>
           <span
             className="text-[8px] px-1.5 py-0.5 rounded font-bold"
@@ -1531,17 +1552,28 @@ function StoryEditingLiveCard({ session }: { session: { id: string; videomakerNa
           >
             ● EDITANDO STORIES
           </span>
+          <span
+            className="text-[8px] px-1.5 py-0.5 rounded font-bold"
+            style={{ background: delayCfg.badgeBg, color: delayCfg.badgeFg }}
+          >
+            {delayCfg.badgeLabel}
+          </span>
         </div>
-        <div className="flex items-center gap-3 mt-0.5">
+        <div className="flex items-center gap-3 mt-0.5 flex-wrap">
           <span className="font-mono text-[11px] font-bold text-pink-300 tabular-nums">
             {hh}:{mm}:{ss}
           </span>
           <span className="text-[10px] text-white/50">
             <strong className="text-pink-200">{session.storiesCount}</strong> story(s) enviado(s)
           </span>
+          {delay !== 'ok' && (
+            <span className="text-[10px]" style={{ color: delayCfg.badgeFg }}>
+              +{gapMin}min sem novo envio
+            </span>
+          )}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 

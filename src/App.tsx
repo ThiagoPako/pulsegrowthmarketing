@@ -58,6 +58,11 @@ const DesignerReports = lazy(() => import("@/pages/DesignerReports"));
 const ClientArtPlaybook = lazy(() => import("@/pages/ClientArtPlaybook"));
 const OnboardingManagement = lazy(() => import("@/pages/OnboardingManagement"));
 const ClientBriefing = lazy(() => import("@/pages/ClientBriefing"));
+const GestaoLogin = lazy(() => import("@/pages/GestaoLogin"));
+const GestaoDashboard = lazy(() => import("@/pages/GestaoDashboard"));
+const GestaoCustos = lazy(() => import("@/pages/GestaoCustos"));
+const GestaoHistorico = lazy(() => import("@/pages/GestaoHistorico"));
+const RequireSocioGestor = lazy(() => import("@/components/gestao/RequireSocioGestor"));
 const ClientPortal = lazy(() => import("@/pages/ClientPortal"));
 const ContentManager = lazy(() => import("@/pages/ContentManager"));
 const ClientPortalLogin = lazy(() => import("@/pages/ClientPortalLogin"));
@@ -143,6 +148,10 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
+        <Route path="/gestao/login" element={<GestaoLogin />} />
+        <Route path="/gestao" element={<RequireSocioGestor><GestaoDashboard /></RequireSocioGestor>} />
+        <Route path="/gestao/custos" element={<RequireSocioGestor><GestaoCustos /></RequireSocioGestor>} />
+        <Route path="/gestao/historico" element={<RequireSocioGestor><GestaoHistorico /></RequireSocioGestor>} />
         <Route path="/dashboard" element={
           <ProtectedRoute>
             {currentUser?.role === 'videomaker' ? <VideomakerDashboard /> :

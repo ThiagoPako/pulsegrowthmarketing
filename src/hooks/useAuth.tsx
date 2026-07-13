@@ -17,7 +17,7 @@ async function logLoginEntry(userId: string) {
 }
 
 
-export type AppRole = 'admin' | 'videomaker' | 'social_media' | 'editor' | 'endomarketing' | 'parceiro' | 'fotografo' | 'designer' | 'copywriter' | 'gestor_projetos';
+export type AppRole = 'admin' | 'videomaker' | 'social_media' | 'editor' | 'endomarketing' | 'parceiro' | 'fotografo' | 'designer' | 'copywriter' | 'gestor_projetos' | 'socio_gestor';
 
 export interface Profile {
   id: string;

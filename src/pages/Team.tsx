@@ -28,7 +28,7 @@ import { CITY_LABELS, type CityCode } from '@/contexts/CityContext';
 const ALL_CITIES: CityCode[] = ['minacu', 'uruacu'];
 const VPS_API_BASE = 'https://agenciapulse.tech/api';
 
-const ROLES: UserRole[] = ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'fotografo', 'designer', 'copywriter', 'gestor_projetos'];
+const ROLES: UserRole[] = ['admin', 'socio_gestor', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'fotografo', 'designer', 'copywriter', 'gestor_projetos'];
 
 const PARTNER_FUNCTIONS = [
   { value: 'fotografo', label: 'Fotografia' },
@@ -412,6 +412,7 @@ export default function Team() {
     designer: 'bg-orange-100 text-orange-700',
     copywriter: 'bg-teal-100 text-teal-700',
     gestor_projetos: 'bg-blue-100 text-blue-700',
+    socio_gestor: 'bg-amber-100 text-amber-800 border border-amber-300',
   };
 
   const partnerUserIds = partners.map(p => p.user_id);

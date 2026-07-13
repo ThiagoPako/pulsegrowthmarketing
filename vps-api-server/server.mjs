@@ -300,34 +300,60 @@ ensureProposalTables().catch((error) => {
 
 async function ensureStoryEditingSessionsTable() {
   if (!storyEditingSessionsEnsuredPromise) {
-    storyEditingSessionsEnsuredPromise = pool.query(`
-      CREATE TABLE IF NOT EXISTS story_editing_sessions (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        videomaker_id UUID NOT NULL,
-        started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-        ended_at TIMESTAMPTZ,
-        stories_count INTEGER NOT NULL DEFAULT 0,
-        notes TEXT,
-        city TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    storyEditingSessionsEnsuredPromise = (async () => {
+      const { rows: tableRows } = await pool.query(
+        `SELECT 1
+           FROM information_schema.tables
+          WHERE table_schema = 'public'
+            AND table_name = 'story_editing_sessions'
+          LIMIT 1`
       );
 
-      ALTER TABLE story_editing_sessions
-        ADD COLUMN IF NOT EXISTS city TEXT,
-        ADD COLUMN IF NOT EXISTS notes TEXT,
-        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+      if (tableRows.length === 0) {
+        await pool.query(`
+          CREATE TABLE story_editing_sessions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            videomaker_id UUID NOT NULL,
+            started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            ended_at TIMESTAMPTZ,
+            stories_count INTEGER NOT NULL DEFAULT 0,
+            notes TEXT,
+            city TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )
+        `);
+      }
 
-      CREATE INDEX IF NOT EXISTS idx_story_sessions_videomaker
-        ON story_editing_sessions(videomaker_id);
+      const columns = await getExistingColumns('story_editing_sessions');
+      const alterClauses = [];
+      if (!columns.has('city')) alterClauses.push('ADD COLUMN city TEXT');
+      if (!columns.has('notes')) alterClauses.push('ADD COLUMN notes TEXT');
+      if (!columns.has('updated_at')) alterClauses.push('ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT now()');
 
-      CREATE INDEX IF NOT EXISTS idx_story_sessions_active
-        ON story_editing_sessions(videomaker_id)
-        WHERE ended_at IS NULL;
+      if (alterClauses.length > 0) {
+        await pool.query(`ALTER TABLE story_editing_sessions ${alterClauses.join(', ')}`);
+        tableColumnsPromiseCache.delete('story_editing_sessions');
+      }
 
-      CREATE INDEX IF NOT EXISTS idx_story_sessions_started
-        ON story_editing_sessions(started_at DESC);
-    `).catch((error) => {
+      const indexStatements = [
+        `CREATE INDEX IF NOT EXISTS idx_story_sessions_videomaker ON story_editing_sessions(videomaker_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_story_sessions_active ON story_editing_sessions(videomaker_id) WHERE ended_at IS NULL`,
+        `CREATE INDEX IF NOT EXISTS idx_story_sessions_started ON story_editing_sessions(started_at DESC)`,
+      ];
+
+      for (const statement of indexStatements) {
+        await pool.query(statement).catch((error) => {
+          // Indexes are performance-only. Do not block the story timer if the VPS
+          // table was manually created by postgres and the API user is not owner.
+          if (error?.code === '42501' || /must be owner|permission denied/i.test(error?.message || '')) {
+            console.warn('[story_editing_sessions] Skipping index creation due to table ownership:', error.message);
+            return;
+          }
+          throw error;
+        });
+      }
+    })().catch((error) => {
       storyEditingSessionsEnsuredPromise = null;
       throw error;
     });

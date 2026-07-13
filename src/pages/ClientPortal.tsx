@@ -487,6 +487,7 @@ export default function ClientPortal() {
     anuncio: 'Anúncios',
     arte: 'Artes & Design',
     otimizacao: '🚀 Conteúdos Otimizados',
+    story: '📱 Stories',
   };
 
   return (

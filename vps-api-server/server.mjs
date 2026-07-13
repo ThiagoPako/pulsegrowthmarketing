@@ -4743,6 +4743,38 @@ function sanitizeOrderColumn(column, fallbackTable) {
   return `${fallbackTable}.${sanitizeIdentifier(raw)}`;
 }
 
+function qualifyBaseSelectClause(selectClause, baseTable, joins = []) {
+  const raw = String(selectClause || '*').trim();
+  if (!raw || raw === '*') return `${baseTable}.*`;
+
+  const joinTables = new Set(
+    (Array.isArray(joins) ? joins : [])
+      .map((join) => sanitizeIdentifier(join?.table || ''))
+      .filter(Boolean)
+  );
+
+  return raw
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      if (part === '*') return `${baseTable}.*`;
+      if (part.includes('.') || part.includes('(') || part.includes(')')) return part;
+
+      const aliasMatch = part.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s+as\s+([a-zA-Z_][a-zA-Z0-9_]*)$/i);
+      if (aliasMatch) {
+        const column = sanitizeIdentifier(aliasMatch[1]);
+        const alias = sanitizeIdentifier(aliasMatch[2]);
+        if (joinTables.has(column)) return part;
+        return `${baseTable}.${column} AS ${alias}`;
+      }
+
+      const safeColumn = sanitizeIdentifier(part);
+      return safeColumn ? `${baseTable}.${safeColumn}` : part;
+    })
+    .join(', ');
+}
+
 function isCrmLeadManagementPayload(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
   const restrictedFields = new Set(['name', 'company', 'email', 'phone', 'contract_value']);
@@ -4785,7 +4817,10 @@ app.post('/api/db/query', async (req, res) => {
 
     switch (operation) {
       case 'select': {
-        let query = `SELECT ${select || '*'} FROM ${safeTable}`;
+        const selectClause = joins && Array.isArray(joins)
+          ? qualifyBaseSelectClause(select || '*', safeTable, joins)
+          : (select || '*');
+        let query = `SELECT ${selectClause} FROM ${safeTable}`;
         const params = [];
         let paramIdx = 1;
 

@@ -2135,7 +2135,7 @@ export default function VideomakerDashboard() {
                   )}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Ao iniciar, o cronômetro roda e aparece no <strong>painel da TV</strong> como "editando stories". Cada story enviado gera um card 📱 <strong className="text-pink-500">rosa</strong> em Revisão.
+                  Ao iniciar, o cronômetro roda. Cada story enviado gera um card 📱 <strong className="text-pink-500">rosa</strong> em Revisão.
                 </p>
               </div>
               <Button

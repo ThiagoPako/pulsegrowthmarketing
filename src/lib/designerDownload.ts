@@ -143,8 +143,9 @@ export async function downloadArtsAsPdf(
 
   const total = onlyImages.length;
 
-  for (let i = 0; i < total; i++) {
-    const art = onlyImages[i];
+  // Pre-carrega TODAS as imagens antes (evita race conditions e dedupe do jsPDF)
+  const loaded: Array<{ dataUrl: string; width: number; height: number; format: 'PNG' | 'JPEG'; title: string } | null> = [];
+  for (const art of onlyImages) {
     try {
       const blob = await fetchAsBlob(art.url);
       const dataUrl: string = await new Promise((resolve, reject) => {
@@ -153,41 +154,54 @@ export async function downloadArtsAsPdf(
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-
       const img = new window.Image();
       await new Promise((res, rej) => {
         img.onload = res;
         img.onerror = rej;
         img.src = dataUrl;
       });
-
-      if (i > 0) pdf.addPage();
-
-      drawPulseHeader(pdf, pageW, logo, i + 1, total, pdfName);
-
-      // Art title
-      pdf.setFontSize(10);
-      pdf.setTextColor(80, 80, 80);
-      pdf.text(sanitize(art.title), margin, headerH + 5);
-      pdf.setTextColor(0, 0, 0);
-
-      // Fit image
-      const topY = headerH + 8;
-      const maxW = pageW - margin * 2;
-      const maxH = pageH - topY - footerH;
-      const ratio = Math.min(maxW / img.width, maxH / img.height);
-      const w = img.width * ratio;
-      const h = img.height * ratio;
-      const x = (pageW - w) / 2;
-      const y = topY;
-
-      const fmt = (art.url.toLowerCase().includes('.png') ? 'PNG' : 'JPEG') as 'PNG' | 'JPEG';
-      pdf.addImage(dataUrl, fmt, x, y, w, h);
-
-      drawPulseFooter(pdf, pageW, pageH);
+      // Detecta formato pelo mime type real (não pela extensão da URL)
+      const mime = dataUrl.substring(5, dataUrl.indexOf(';')).toLowerCase();
+      const format: 'PNG' | 'JPEG' = mime.includes('png') ? 'PNG' : 'JPEG';
+      loaded.push({ dataUrl, width: img.width, height: img.height, format, title: art.title });
     } catch (err) {
-      console.error('Erro ao adicionar arte ao PDF:', err);
+      console.error('Erro ao carregar arte:', art.url, err);
+      loaded.push(null);
     }
+  }
+
+  const validItems = loaded.filter((x): x is NonNullable<typeof x> => x !== null);
+  const realTotal = validItems.length;
+  if (realTotal === 0) {
+    toast.error('Não foi possível carregar nenhuma imagem.');
+    return;
+  }
+
+  for (let i = 0; i < realTotal; i++) {
+    const item = validItems[i];
+    if (i > 0) pdf.addPage();
+
+    drawPulseHeader(pdf, pageW, logo, i + 1, realTotal, pdfName);
+
+    pdf.setFontSize(10);
+    pdf.setTextColor(80, 80, 80);
+    pdf.text(sanitize(item.title), margin, headerH + 5);
+    pdf.setTextColor(0, 0, 0);
+
+    const topY = headerH + 8;
+    const maxW = pageW - margin * 2;
+    const maxH = pageH - topY - footerH;
+    const ratio = Math.min(maxW / item.width, maxH / item.height);
+    const w = item.width * ratio;
+    const h = item.height * ratio;
+    const x = (pageW - w) / 2;
+    const y = topY;
+
+    // alias ÚNICO por arte + índice — evita dedupe interno do jsPDF que causa duplicação
+    const uniqueAlias = `art_${i}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    pdf.addImage(item.dataUrl, item.format, x, y, w, h, uniqueAlias, 'FAST');
+
+    drawPulseFooter(pdf, pageW, pageH);
   }
 
   pdf.save(`${sanitize(pdfName)}.pdf`);

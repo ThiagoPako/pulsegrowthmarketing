@@ -412,6 +412,7 @@ export default function Team() {
     designer: 'bg-orange-100 text-orange-700',
     copywriter: 'bg-teal-100 text-teal-700',
     gestor_projetos: 'bg-blue-100 text-blue-700',
+    socio_gestor: 'bg-amber-100 text-amber-800 border border-amber-300',
   };
 
   const partnerUserIds = partners.map(p => p.user_id);

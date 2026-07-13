@@ -77,16 +77,19 @@ export default function InternalReports() {
   const editors = useMemo(() => users.filter(u => u.role === 'editor'), [users]);
 
   const [editorTasks, setEditorTasks] = useState<EditorTask[]>([]);
+  const [storySessions, setStorySessions] = useState<any[]>([]);
 
   const fetchData = useCallback(async () => {
-    const [deliveries, tasks, wl] = await Promise.all([
+    const [deliveries, tasks, wl, ss] = await Promise.all([
       supabase.from('delivery_records').select('*').order('date', { ascending: false }),
       supabase.from('content_tasks').select('id, content_type, kanban_column, assigned_to, edited_by, editing_started_at, editing_priority, approved_at, updated_at, client_id'),
       supabase.from('recording_wait_logs').select('*'),
+      supabase.from('story_editing_sessions').select('*'),
     ]);
     if (deliveries.data) setRecords(deliveries.data as DeliveryRecord[]);
     if (tasks.data) setEditorTasks(tasks.data as EditorTask[]);
     if (wl.data) setWaitLogs(wl.data);
+    if (ss.data) setStorySessions(ss.data as any[]);
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);

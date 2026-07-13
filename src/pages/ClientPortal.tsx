@@ -436,9 +436,9 @@ export default function ClientPortal() {
     return months;
   }, [visibleContents]);
 
-  // All optimized content across seasons (dedicated tab)
+  // All optimized content across seasons (dedicated tab) — stories entram aqui também
   const optimizedContents = useMemo(
-    () => visibleContents.filter(c => c.content_type === 'otimizacao'),
+    () => visibleContents.filter(c => c.content_type === 'otimizacao' || c.content_type === 'story'),
     [visibleContents]
   );
 
@@ -487,6 +487,7 @@ export default function ClientPortal() {
     anuncio: 'Anúncios',
     arte: 'Artes & Design',
     otimizacao: '🚀 Conteúdos Otimizados',
+    story: '📱 Stories',
   };
 
   return (
@@ -802,7 +803,7 @@ export default function ClientPortal() {
               )}
 
               {Object.entries(contentByType)
-                .filter(([type]) => type !== 'otimizacao')
+                .filter(([type]) => type !== 'otimizacao' && type !== 'story')
                 .map(([type, items], idx) => (
                 <ContentRow
                   key={type}

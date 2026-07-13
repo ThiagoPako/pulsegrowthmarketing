@@ -1159,6 +1159,23 @@ CREATE TABLE IF NOT EXISTS recording_wait_logs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Table: story_editing_sessions
+CREATE TABLE IF NOT EXISTS story_editing_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  videomaker_id UUID NOT NULL,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  ended_at TIMESTAMPTZ,
+  stories_count INTEGER NOT NULL DEFAULT 0,
+  notes TEXT,
+  city TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_story_sessions_videomaker ON story_editing_sessions(videomaker_id);
+CREATE INDEX IF NOT EXISTS idx_story_sessions_active ON story_editing_sessions(videomaker_id) WHERE ended_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_story_sessions_started ON story_editing_sessions(started_at DESC);
+
 -- Table: fieldwork_activities
 CREATE TABLE IF NOT EXISTS fieldwork_activities (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

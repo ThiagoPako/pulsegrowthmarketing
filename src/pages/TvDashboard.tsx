@@ -1535,7 +1535,7 @@ function StoryEditingLiveCard({ session }: { session: { id: string; videomakerNa
     warn: { border: 'rgba(234,179,8,0.55)',  bgFrom: 'rgba(234,179,8,0.18)',  bgTo: 'rgba(234,179,8,0.04)',  badgeBg: 'rgba(234,179,8,0.28)', badgeFg: '#fde68a', badgeLabel: '⚠ RITMO LENTO' },
     late: { border: 'rgba(239,68,68,0.7)',   bgFrom: 'rgba(239,68,68,0.22)',  bgTo: 'rgba(239,68,68,0.05)',  badgeBg: 'rgba(239,68,68,0.32)', badgeFg: '#fecaca', badgeLabel: '⏰ ATRASADO' },
   }[delay];
-  const gapMin = Math.max(0, Math.floor(elapsed / 60) - session.storiesCount * 5);
+  const gapMin = Math.max(0, Math.floor(elapsed / 60) - session.storiesCount * STORY_INTERVAL_MIN);
   return (
     <motion.div
       className="rounded-xl p-3 flex items-center gap-3 border"

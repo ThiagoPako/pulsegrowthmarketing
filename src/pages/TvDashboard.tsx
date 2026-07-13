@@ -1521,6 +1521,7 @@ export default function TvDashboard() {
       setEditingPipeline(data.editingPipeline || []);
       setDesignPipeline(data.designPipeline || []);
       setActiveRecordingIds(data.activeRecordingIds || []);
+      setStoryEditingSessions(data.storyEditingSessions || []);
       setTodayPosts((data.todayPosts || []).filter((p: ScheduledPost) => (p.contentType || '').toLowerCase() === 'reels'));
       setWeekPosts((data.weekPosts || []).filter((p: ScheduledPost) => (p.contentType || '').toLowerCase() === 'reels'));
       if (Array.isArray(data.seasonalSlides) && data.seasonalSlides.length > 0) {

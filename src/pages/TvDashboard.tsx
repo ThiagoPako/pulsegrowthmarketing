@@ -1497,6 +1497,7 @@ export default function TvDashboard() {
   const [todayPosts, setTodayPosts] = useState<ScheduledPost[]>([]);
   const [weekPosts, setWeekPosts] = useState<ScheduledPost[]>([]);
   const [activeRecordingIds, setActiveRecordingIds] = useState<string[]>([]);
+  const [storyEditingSessions, setStoryEditingSessions] = useState<Array<{ id: string; videomakerId: string; videomakerName: string | null; videomakerAvatar: string | null; startedAt: string; storiesCount: number }>>([]);
   const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());
   const [playlistUrl, setPlaylistUrl] = useState('');

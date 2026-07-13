@@ -1285,12 +1285,13 @@ export default function VideomakerDashboard() {
 
   const handleStartStorySession = async () => {
     if (storySession) return;
+    if (!vmId) { toast.error('Usuário não identificado para iniciar edição de stories'); return; }
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const { error } = await supabase.from('story_editing_sessions').insert({
       id, videomaker_id: vmId, started_at: now, stories_count: 0,
     } as any);
-    if (error) { toast.error('Erro ao iniciar edição de stories'); console.error(error); return; }
+    if (error) { toast.error(`Erro ao iniciar edição de stories: ${error.message}`); console.error('Erro ao iniciar edição de stories:', error); return; }
     setStorySession({ id, startedAt: now, storiesCount: 0 });
     toast.success('⏱️ Edição de stories iniciada — cronômetro rodando!');
   };

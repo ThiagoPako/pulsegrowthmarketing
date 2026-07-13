@@ -85,6 +85,12 @@ export default function VideomakerDashboard() {
   const [storiesUploaded, setStoriesUploaded] = useState(0);
   const storyFileRef = useRef<HTMLInputElement>(null);
 
+  // Story editing session state (nova função)
+  const [storySession, setStorySession] = useState<{ id: string; startedAt: string; storiesCount: number } | null>(null);
+  const [storySessionElapsed, setStorySessionElapsed] = useState(0);
+  const [storyUploadDialogOpen, setStoryUploadDialogOpen] = useState(false);
+  const storyMultiFileRef = useRef<HTMLInputElement>(null);
+
   // ── Waiting for client state ──
   const [waitingRecordingId, setWaitingRecordingId] = useState<string | null>(null);
   const [waitingLogId, setWaitingLogId] = useState<string | null>(null);

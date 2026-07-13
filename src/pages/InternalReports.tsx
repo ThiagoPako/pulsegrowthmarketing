@@ -168,6 +168,43 @@ export default function InternalReports() {
     }));
   }, [ranking]);
 
+  // ── Story editing sessions stats ──
+  const storySessionStats = useMemo(() => {
+    const filteredSessions = storySessions.filter(s => {
+      if (!s.started_at) return false;
+      const d = String(s.started_at).slice(0, 10);
+      if (d < dateRange.start || d > dateRange.end) return false;
+      if (selectedVm !== 'all' && s.videomaker_id !== selectedVm) return false;
+      return true;
+    });
+    const perVm = videomakers.map(vm => {
+      const vmSessions = filteredSessions.filter(s => s.videomaker_id === vm.id);
+      const totalStories = vmSessions.reduce((a, s) => a + (Number(s.stories_count) || 0), 0);
+      const totalMinutes = vmSessions.reduce((a, s) => {
+        if (!s.started_at || !s.ended_at) return a;
+        const diff = (new Date(s.ended_at).getTime() - new Date(s.started_at).getTime()) / 60000;
+        return a + Math.max(0, diff);
+      }, 0);
+      const finishedCount = vmSessions.filter(s => s.ended_at).length;
+      const avgStories = vmSessions.length > 0 ? totalStories / vmSessions.length : 0;
+      const avgDuration = finishedCount > 0 ? totalMinutes / finishedCount : 0;
+      return {
+        vm,
+        sessions: vmSessions.length,
+        totalStories,
+        avgStories,
+        avgDuration,
+        finishedCount,
+      };
+    }).filter(r => r.sessions > 0).sort((a, b) => b.avgStories - a.avgStories);
+
+    const totalSessions = filteredSessions.length;
+    const totalStories = filteredSessions.reduce((a, s) => a + (Number(s.stories_count) || 0), 0);
+    const overallAvg = totalSessions > 0 ? totalStories / totalSessions : 0;
+    return { perVm, totalSessions, totalStories, overallAvg };
+  }, [storySessions, videomakers, dateRange, selectedVm]);
+
+
   // ── Weekly comparison (last 4 weeks) ──
   const weeklyTrend = useMemo(() => {
     const weeks: { label: string; start: string; end: string }[] = [];

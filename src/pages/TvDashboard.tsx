@@ -1507,7 +1507,8 @@ const STORY_LATE_GAP_MIN = 15;
 
 function getStoryDelay(elapsedSec: number, storiesCount: number): 'ok' | 'warn' | 'late' {
   if (!Number.isFinite(elapsedSec) || elapsedSec < 0) return 'ok';
-  const safeCount = Math.max(0, Math.floor(storiesCount || 0));
+  const rawCount = Number(storiesCount);
+  const safeCount = Number.isFinite(rawCount) ? Math.max(0, Math.floor(rawCount)) : 0;
   const elapsedMin = elapsedSec / 60;
   if (elapsedMin < STORY_GRACE_MIN) return 'ok';
   const gapMin = elapsedMin - safeCount * STORY_INTERVAL_MIN;

@@ -803,7 +803,7 @@ export default function ClientPortal() {
               )}
 
               {Object.entries(contentByType)
-                .filter(([type]) => type !== 'otimizacao')
+                .filter(([type]) => type !== 'otimizacao' && type !== 'story')
                 .map(([type, items], idx) => (
                 <ContentRow
                   key={type}

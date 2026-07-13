@@ -1600,12 +1600,19 @@ export default function TvDashboard() {
   });
   const [latestCommand, setLatestCommand] = useState<TvRemoteCommand | null>(null);
   const [alert, setAlert] = useState<{ message: string; tone: string } | null>(null);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const lastCommandIdRef = useRef<number>(0);
   const isFirstLoad = useRef(true);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (opts?: { force?: boolean }) => {
+    const force = !!opts?.force;
+    if (force) setIsRefreshing(true);
     try {
-      const res = await fetch(`${VPS}/tv-dashboard`);
+      const url = force
+        ? `${VPS}/tv-dashboard?_=${Date.now()}`
+        : `${VPS}/tv-dashboard`;
+      const res = await fetch(url, force ? { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } } : undefined);
       if (!res.ok) throw new Error('fail');
       const data = await res.json();
       setMembers(data.members || []);
@@ -1620,10 +1627,13 @@ export default function TvDashboard() {
         setSeasonalSlides(data.seasonalSlides);
       }
       setConnected(true);
+      setLastSync(new Date());
       isFirstLoad.current = false;
     } catch {
       isFirstLoad.current = false;
       setConnected(false);
+    } finally {
+      if (force) setTimeout(() => setIsRefreshing(false), 400);
     }
   }, []);
 

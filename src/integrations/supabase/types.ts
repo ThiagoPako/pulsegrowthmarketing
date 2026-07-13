@@ -4132,6 +4132,39 @@ export type Database = {
           },
         ]
       }
+      story_editing_sessions: {
+        Row: {
+          created_at: string
+          ended_at: string | null
+          id: string
+          notes: string | null
+          started_at: string
+          stories_count: number
+          updated_at: string
+          videomaker_id: string
+        }
+        Insert: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          notes?: string | null
+          started_at?: string
+          stories_count?: number
+          updated_at?: string
+          videomaker_id: string
+        }
+        Update: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          notes?: string | null
+          started_at?: string
+          stories_count?: number
+          updated_at?: string
+          videomaker_id?: string
+        }
+        Relationships: []
+      }
       task_comments: {
         Row: {
           content: string

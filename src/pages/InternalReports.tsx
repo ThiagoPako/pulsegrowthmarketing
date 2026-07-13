@@ -77,16 +77,19 @@ export default function InternalReports() {
   const editors = useMemo(() => users.filter(u => u.role === 'editor'), [users]);
 
   const [editorTasks, setEditorTasks] = useState<EditorTask[]>([]);
+  const [storySessions, setStorySessions] = useState<any[]>([]);
 
   const fetchData = useCallback(async () => {
-    const [deliveries, tasks, wl] = await Promise.all([
+    const [deliveries, tasks, wl, ss] = await Promise.all([
       supabase.from('delivery_records').select('*').order('date', { ascending: false }),
       supabase.from('content_tasks').select('id, content_type, kanban_column, assigned_to, edited_by, editing_started_at, editing_priority, approved_at, updated_at, client_id'),
       supabase.from('recording_wait_logs').select('*'),
+      supabase.from('story_editing_sessions').select('*'),
     ]);
     if (deliveries.data) setRecords(deliveries.data as DeliveryRecord[]);
     if (tasks.data) setEditorTasks(tasks.data as EditorTask[]);
     if (wl.data) setWaitLogs(wl.data);
+    if (ss.data) setStorySessions(ss.data as any[]);
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -164,6 +167,43 @@ export default function InternalReports() {
       Extras: r.extras,
     }));
   }, [ranking]);
+
+  // ── Story editing sessions stats ──
+  const storySessionStats = useMemo(() => {
+    const filteredSessions = storySessions.filter(s => {
+      if (!s.started_at) return false;
+      const d = String(s.started_at).slice(0, 10);
+      if (d < dateRange.start || d > dateRange.end) return false;
+      if (selectedVm !== 'all' && s.videomaker_id !== selectedVm) return false;
+      return true;
+    });
+    const perVm = videomakers.map(vm => {
+      const vmSessions = filteredSessions.filter(s => s.videomaker_id === vm.id);
+      const totalStories = vmSessions.reduce((a, s) => a + (Number(s.stories_count) || 0), 0);
+      const totalMinutes = vmSessions.reduce((a, s) => {
+        if (!s.started_at || !s.ended_at) return a;
+        const diff = (new Date(s.ended_at).getTime() - new Date(s.started_at).getTime()) / 60000;
+        return a + Math.max(0, diff);
+      }, 0);
+      const finishedCount = vmSessions.filter(s => s.ended_at).length;
+      const avgStories = vmSessions.length > 0 ? totalStories / vmSessions.length : 0;
+      const avgDuration = finishedCount > 0 ? totalMinutes / finishedCount : 0;
+      return {
+        vm,
+        sessions: vmSessions.length,
+        totalStories,
+        avgStories,
+        avgDuration,
+        finishedCount,
+      };
+    }).filter(r => r.sessions > 0).sort((a, b) => b.avgStories - a.avgStories);
+
+    const totalSessions = filteredSessions.length;
+    const totalStories = filteredSessions.reduce((a, s) => a + (Number(s.stories_count) || 0), 0);
+    const overallAvg = totalSessions > 0 ? totalStories / totalSessions : 0;
+    return { perVm, totalSessions, totalStories, overallAvg };
+  }, [storySessions, videomakers, dateRange, selectedVm]);
+
 
   // ── Weekly comparison (last 4 weeks) ──
   const weeklyTrend = useMemo(() => {
@@ -581,6 +621,78 @@ export default function InternalReports() {
               </ResponsiveContainer>
             </CardContent>
           </Card>
+
+          {/* ── Sessões de Edição de Stories ── */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Film size={16} className="text-pink-500" /> Sessões de Edição de Stories
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="p-3 rounded-lg bg-secondary/50 border">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Sessões iniciadas</p>
+                  <p className="text-2xl font-bold">{storySessionStats.totalSessions}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-secondary/50 border">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Stories enviados</p>
+                  <p className="text-2xl font-bold">{storySessionStats.totalStories}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-pink-500/10 border border-pink-500/30">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Média por sessão</p>
+                  <p className="text-2xl font-bold text-pink-600 dark:text-pink-400">
+                    {storySessionStats.overallAvg.toFixed(1)}
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-secondary/50 border">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Videomakers ativos</p>
+                  <p className="text-2xl font-bold">{storySessionStats.perVm.length}</p>
+                </div>
+              </div>
+
+              {storySessionStats.perVm.length === 0 ? (
+                <p className="text-muted-foreground text-sm text-center py-6">
+                  Nenhuma sessão de edição de stories no período.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Videomaker</TableHead>
+                      <TableHead className="text-center">Sessões</TableHead>
+                      <TableHead className="text-center">Stories</TableHead>
+                      <TableHead className="text-center">Média / sessão</TableHead>
+                      <TableHead className="text-center">Duração média</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {storySessionStats.perVm.map(r => (
+                      <TableRow key={r.vm.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <UserAvatar user={r.vm} size="sm" />
+                            <span className="text-sm font-medium">{r.vm.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">{r.sessions}</TableCell>
+                        <TableCell className="text-center">{r.totalStories}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="secondary" className="font-semibold">
+                            {r.avgStories.toFixed(1)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center text-muted-foreground text-xs">
+                          {r.finishedCount > 0 ? `${r.avgDuration.toFixed(0)} min` : '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
 
           <Card>
             <CardHeader className="pb-2">

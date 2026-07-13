@@ -1255,6 +1255,140 @@ export default function VideomakerDashboard() {
     }
   };
 
+  // ── Story Editing Session ──
+  const fetchActiveStorySession = useCallback(async () => {
+    if (!vmId) return;
+    const { data } = await supabase
+      .from('story_editing_sessions')
+      .select('id, started_at, stories_count')
+      .eq('videomaker_id', vmId)
+      .is('ended_at', null)
+      .order('started_at', { ascending: false })
+      .limit(1) as any;
+    if (data?.[0]) {
+      setStorySession({ id: data[0].id, startedAt: data[0].started_at, storiesCount: data[0].stories_count || 0 });
+    } else {
+      setStorySession(null);
+    }
+  }, [vmId]);
+
+  useEffect(() => { void fetchActiveStorySession(); }, [fetchActiveStorySession]);
+
+  // Session timer
+  useEffect(() => {
+    if (!storySession) { setStorySessionElapsed(0); return; }
+    const tick = () => setStorySessionElapsed(Math.floor((Date.now() - new Date(storySession.startedAt).getTime()) / 1000));
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, [storySession]);
+
+  const handleStartStorySession = async () => {
+    if (storySession) return;
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const { error } = await supabase.from('story_editing_sessions').insert({
+      id, videomaker_id: vmId, started_at: now, stories_count: 0,
+    } as any);
+    if (error) { toast.error('Erro ao iniciar edição de stories'); console.error(error); return; }
+    setStorySession({ id, startedAt: now, storiesCount: 0 });
+    toast.success('⏱️ Edição de stories iniciada — cronômetro rodando!');
+  };
+
+  const handleStopStorySession = async () => {
+    if (!storySession) return;
+    const now = new Date().toISOString();
+    await supabase.from('story_editing_sessions').update({ ended_at: now } as any).eq('id', storySession.id);
+    const mins = Math.floor(storySessionElapsed / 60);
+    toast.success(`✅ Sessão encerrada: ${mins}min · ${storySession.storiesCount} story(s) enviado(s)`);
+    setStorySession(null);
+  };
+
+  // Multi-file story upload (dentro de sessão ativa)
+  const handleStoryFilesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    if (!storyClientId) { toast.error('Selecione um cliente primeiro'); return; }
+    if (!storySession) { toast.error('Inicie uma sessão de edição primeiro'); return; }
+
+    setStoryUploading(true);
+    const client = clients.find(c => c.id === storyClientId);
+    const total = files.length;
+    let ok = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const maxSize = 500 * 1024 * 1024;
+      if (file.size > maxSize) { toast.error(`${file.name}: máx 500MB`); continue; }
+
+      setStoryUploadProgress(`Enviando ${i + 1}/${total}: ${file.name}`);
+      try {
+        const folder = `stories/${storyClientId}`;
+        const url = await uploadFileToVps(file, folder);
+        const baseTitle = storyTitle.trim() || `Story ${format(new Date(), 'dd/MM HH:mm')}`;
+        const title = total > 1 ? `${baseTitle} (${i + 1}/${total})` : baseTitle;
+
+        // Content task → vai para REVISÃO com content_type=story (cor rosa distintiva)
+        const taskId = crypto.randomUUID();
+        await supabase.from('content_tasks').insert({
+          id: taskId,
+          client_id: storyClientId,
+          title: `📱 ${title}`,
+          content_type: 'story',
+          kanban_column: 'revisao',
+          description: `Story editado pelo videomaker durante sessão de edição.\n\n📥 Download: ${url}`,
+          edited_video_link: url,
+          edited_video_type: 'upload',
+          created_by: vmId,
+        } as any);
+
+        // Portal
+        const now = new Date();
+        await supabase.from('client_portal_contents').insert({
+          client_id: storyClientId,
+          title: `📱 ${title}`,
+          content_type: 'story',
+          file_url: url,
+          status: 'pendente',
+          season_month: now.getMonth() + 1,
+          season_year: now.getFullYear(),
+          uploaded_by: vmId,
+        } as any);
+
+        ok++;
+      } catch (err: any) {
+        toast.error(`Erro em ${file.name}: ${err.message}`);
+      }
+    }
+
+    // Notify social media once
+    if (ok > 0) {
+      await supabase.rpc('notify_role', {
+        _role: 'social_media',
+        _title: `📱 ${ok} novo(s) Story(s) para revisar`,
+        _message: `${client?.companyName || 'Cliente'} — ${ok} story(s) editado(s) enviado(s) para revisão.`,
+        _type: 'story_upload',
+        _link: '/content-kanban',
+      });
+
+      // Update session counter
+      const newCount = storySession.storiesCount + ok;
+      await supabase.from('story_editing_sessions').update({ stories_count: newCount } as any).eq('id', storySession.id);
+      setStorySession(prev => prev ? { ...prev, storiesCount: newCount } : prev);
+      setStoriesUploaded(prev => prev + ok);
+      toast.success(`✅ ${ok}/${total} stories enviados para revisão! +${ok * VM_SCORE.STORY_EDITADO} pts`);
+    }
+
+    setStoryUploading(false);
+    setStoryUploadProgress('');
+    if (storyMultiFileRef.current) storyMultiFileRef.current.value = '';
+    setStoryUploadDialogOpen(false);
+    setStoryTitle('');
+  };
+
+
+
+
 
   const stats = useMemo(() => {
     const monthStart2 = startOfMonth(today);

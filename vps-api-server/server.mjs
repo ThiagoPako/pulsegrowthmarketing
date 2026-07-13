@@ -6862,7 +6862,30 @@ app.get('/api/tv-dashboard', async (req, res) => {
     // Build list of recording IDs that are actively being recorded
     const activeRecordingIds = (activeRecs || []).map(r => r?.recording_id).filter(Boolean);
 
-    res.json({ members, todaySchedule, editingPipeline, designPipeline, todayPosts, weekPosts, seasonalSlides, activeRecordingIds, updatedAt: new Date().toISOString() });
+    // Story editing sessions (videomakers editando stories agora)
+    let storyEditingSessions = [];
+    try {
+      const { rows } = await pool.query(`
+        SELECT ses.id, ses.videomaker_id, ses.started_at, ses.stories_count,
+               p.name AS videomaker_name, p.avatar_url AS videomaker_avatar
+        FROM story_editing_sessions ses
+        LEFT JOIN profiles p ON p.id = ses.videomaker_id
+        WHERE ses.ended_at IS NULL
+        ORDER BY ses.started_at ASC
+      `);
+      storyEditingSessions = rows.map(r => ({
+        id: r.id,
+        videomakerId: r.videomaker_id,
+        videomakerName: r.videomaker_name,
+        videomakerAvatar: r.videomaker_avatar,
+        startedAt: r.started_at,
+        storiesCount: r.stories_count || 0,
+      }));
+    } catch (error) {
+      console.warn('[tv-dashboard] Failed to load story_editing_sessions:', error?.message || error);
+    }
+
+    res.json({ members, todaySchedule, editingPipeline, designPipeline, todayPosts, weekPosts, seasonalSlides, activeRecordingIds, storyEditingSessions, updatedAt: new Date().toISOString() });
   } catch (err) {
     console.error('[tv-dashboard] Error at stage:', stage, err);
     res.json({ members: [], todaySchedule: [], editingPipeline: [], designPipeline: [], todayPosts: [], weekPosts: [], seasonalSlides: [], activeRecordingIds: [], updatedAt: new Date().toISOString(), error: 'fallback' });

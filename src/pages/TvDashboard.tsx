@@ -1486,6 +1486,66 @@ function SeasonalBanner({ slides }: { slides: SeasonalSlide[] }) {
   );
 }
 
+/* Story Editing Live Card — mostra videomaker editando stories em tempo real */
+function StoryEditingLiveCard({ session }: { session: { id: string; videomakerName: string | null; videomakerAvatar: string | null; startedAt: string; storiesCount: number } }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const tick = () => setElapsed(Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1000));
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, [session.startedAt]);
+  const hh = String(Math.floor(elapsed / 3600)).padStart(2, '0');
+  const mm = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
+  const ss = String(elapsed % 60).padStart(2, '0');
+  const name = session.videomakerName || 'Videomaker';
+  return (
+    <div
+      className="rounded-xl p-3 flex items-center gap-3 border"
+      style={{
+        background: 'linear-gradient(135deg, rgba(236,72,153,0.14), rgba(236,72,153,0.04))',
+        borderColor: 'rgba(236,72,153,0.35)',
+      }}
+    >
+      <div className="relative shrink-0">
+        <div className="w-10 h-10 rounded-full overflow-hidden bg-white/10 flex items-center justify-center">
+          {session.videomakerAvatar ? (
+            <img src={session.videomakerAvatar} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <Camera className="w-4 h-4 text-white/40" />
+          )}
+        </div>
+        <motion.span
+          className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
+          style={{ background: '#ec4899', borderColor: '#0a0a0f' }}
+          animate={{ scale: [1, 1.4, 1] }}
+          transition={{ duration: 1.5, repeat: Infinity }}
+        />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-bold text-white/90 truncate uppercase tracking-wide">{name}</span>
+          <span
+            className="text-[8px] px-1.5 py-0.5 rounded font-bold"
+            style={{ background: 'rgba(236,72,153,0.25)', color: '#f9a8d4' }}
+          >
+            ● EDITANDO STORIES
+          </span>
+        </div>
+        <div className="flex items-center gap-3 mt-0.5">
+          <span className="font-mono text-[11px] font-bold text-pink-300 tabular-nums">
+            {hh}:{mm}:{ss}
+          </span>
+          <span className="text-[10px] text-white/50">
+            <strong className="text-pink-200">{session.storiesCount}</strong> story(s) enviado(s)
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 /* ═══════════════════════════════════════════════════════════
    MAIN TV DASHBOARD
    ═══════════════════════════════════════════════════════════ */
@@ -1497,6 +1557,7 @@ export default function TvDashboard() {
   const [todayPosts, setTodayPosts] = useState<ScheduledPost[]>([]);
   const [weekPosts, setWeekPosts] = useState<ScheduledPost[]>([]);
   const [activeRecordingIds, setActiveRecordingIds] = useState<string[]>([]);
+  const [storyEditingSessions, setStoryEditingSessions] = useState<Array<{ id: string; videomakerId: string; videomakerName: string | null; videomakerAvatar: string | null; startedAt: string; storiesCount: number }>>([]);
   const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());
   const [playlistUrl, setPlaylistUrl] = useState('');
@@ -1520,6 +1581,7 @@ export default function TvDashboard() {
       setEditingPipeline(data.editingPipeline || []);
       setDesignPipeline(data.designPipeline || []);
       setActiveRecordingIds(data.activeRecordingIds || []);
+      setStoryEditingSessions(data.storyEditingSessions || []);
       setTodayPosts((data.todayPosts || []).filter((p: ScheduledPost) => (p.contentType || '').toLowerCase() === 'reels'));
       setWeekPosts((data.weekPosts || []).filter((p: ScheduledPost) => (p.contentType || '').toLowerCase() === 'reels'));
       if (Array.isArray(data.seasonalSlides) && data.seasonalSlides.length > 0) {
@@ -1937,7 +1999,32 @@ export default function TvDashboard() {
                 </div>
               );
             })()}
+
+            {/* Videomakers — editando stories ao vivo */}
+            {visibility.show_posts && (
+              <div>
+                <SectionHeader
+                  icon={Camera}
+                  iconColor="#ec4899"
+                  title="Editando Stories — ao vivo"
+                  badge={storyEditingSessions.length > 0 ? `● ${storyEditingSessions.length} ativo(s)` : 'nenhum'}
+                />
+                {storyEditingSessions.length > 0 ? (
+                  <div className="space-y-2">
+                    {storyEditingSessions.map(s => (
+                      <StoryEditingLiveCard key={s.id} session={s} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                    <Camera className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                    <p className="text-[10px] text-white/20">Nenhum videomaker editando stories agora</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+
 
 
           {/* RIGHT COLUMN: Designer + Editing */}

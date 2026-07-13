@@ -202,8 +202,22 @@ export default function InternalReports() {
     const totalSessions = filteredSessions.length;
     const totalStories = filteredSessions.reduce((a, s) => a + (Number(s.stories_count) || 0), 0);
     const overallAvg = totalSessions > 0 ? totalStories / totalSessions : 0;
-    return { perVm, totalSessions, totalStories, overallAvg };
+    return { perVm, totalSessions, totalStories, overallAvg, filteredSessions };
   }, [storySessions, videomakers, dateRange, selectedVm]);
+
+  const [detailVm, setDetailVm] = useState<string | null>(null);
+  const detailSessions = useMemo(() => {
+    if (!detailVm) return [];
+    const list = detailVm === 'all'
+      ? storySessionStats.filteredSessions
+      : storySessionStats.filteredSessions.filter(s => s.videomaker_id === detailVm);
+    return [...list].sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)));
+  }, [detailVm, storySessionStats.filteredSessions]);
+  const detailVmName = useMemo(() => {
+    if (!detailVm || detailVm === 'all') return 'Todos os videomakers';
+    return videomakers.find(v => v.id === detailVm)?.name || 'Videomaker';
+  }, [detailVm, videomakers]);
+
 
 
   // ── Weekly comparison (last 4 weeks) ──

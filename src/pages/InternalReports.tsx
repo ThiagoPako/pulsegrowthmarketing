@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Download, Trophy, TrendingUp, Film, Users, BarChart3, Award, Target, Scissors, Palette } from 'lucide-react';
+import { Download, Trophy, TrendingUp, Film, Users, BarChart3, Award, Target, Scissors, Palette, Eye } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import DesignerReports from './DesignerReports';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import UserAvatar from '@/components/UserAvatar';
@@ -201,8 +202,22 @@ export default function InternalReports() {
     const totalSessions = filteredSessions.length;
     const totalStories = filteredSessions.reduce((a, s) => a + (Number(s.stories_count) || 0), 0);
     const overallAvg = totalSessions > 0 ? totalStories / totalSessions : 0;
-    return { perVm, totalSessions, totalStories, overallAvg };
+    return { perVm, totalSessions, totalStories, overallAvg, filteredSessions };
   }, [storySessions, videomakers, dateRange, selectedVm]);
+
+  const [detailVm, setDetailVm] = useState<string | null>(null);
+  const detailSessions = useMemo(() => {
+    if (!detailVm) return [];
+    const list = detailVm === 'all'
+      ? storySessionStats.filteredSessions
+      : storySessionStats.filteredSessions.filter(s => s.videomaker_id === detailVm);
+    return [...list].sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)));
+  }, [detailVm, storySessionStats.filteredSessions]);
+  const detailVmName = useMemo(() => {
+    if (!detailVm || detailVm === 'all') return 'Todos os videomakers';
+    return videomakers.find(v => v.id === detailVm)?.name || 'Videomaker';
+  }, [detailVm, videomakers]);
+
 
 
   // ── Weekly comparison (last 4 weeks) ──
@@ -624,10 +639,15 @@ export default function InternalReports() {
 
           {/* ── Sessões de Edição de Stories ── */}
           <Card>
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <Film size={16} className="text-pink-500" /> Sessões de Edição de Stories
               </CardTitle>
+              {storySessionStats.totalSessions > 0 && (
+                <Button variant="outline" size="sm" className="gap-1.5 h-7" onClick={() => setDetailVm('all')}>
+                  <Eye size={13} /> Ver todas
+                </Button>
+              )}
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -664,6 +684,7 @@ export default function InternalReports() {
                       <TableHead className="text-center">Stories</TableHead>
                       <TableHead className="text-center">Média / sessão</TableHead>
                       <TableHead className="text-center">Duração média</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -685,6 +706,11 @@ export default function InternalReports() {
                         <TableCell className="text-center text-muted-foreground text-xs">
                           {r.finishedCount > 0 ? `${r.avgDuration.toFixed(0)} min` : '—'}
                         </TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="sm" className="h-7 gap-1.5" onClick={() => setDetailVm(r.vm.id)}>
+                            <Eye size={13} /> Detalhes
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -692,6 +718,78 @@ export default function InternalReports() {
               )}
             </CardContent>
           </Card>
+
+          {/* Modal de detalhes das sessões */}
+          <Dialog open={!!detailVm} onOpenChange={(open) => !open && setDetailVm(null)}>
+            <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Film size={18} className="text-pink-500" />
+                  Sessões de Stories — {detailVmName}
+                </DialogTitle>
+                <DialogDescription>
+                  Período: {dateRange.start} a {dateRange.end} · {detailSessions.length} sessão(ões)
+                </DialogDescription>
+              </DialogHeader>
+              <div className="overflow-auto flex-1">
+                {detailSessions.length === 0 ? (
+                  <p className="text-muted-foreground text-sm text-center py-8">
+                    Nenhuma sessão encontrada.
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-background z-10">
+                      <TableRow>
+                        {detailVm === 'all' && <TableHead>Videomaker</TableHead>}
+                        <TableHead>Início</TableHead>
+                        <TableHead>Fim</TableHead>
+                        <TableHead className="text-center">Duração</TableHead>
+                        <TableHead className="text-center">Stories</TableHead>
+                        <TableHead>Notas</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {detailSessions.map(s => {
+                        const start = s.started_at ? new Date(s.started_at) : null;
+                        const end = s.ended_at ? new Date(s.ended_at) : null;
+                        const durMin = start && end ? Math.max(0, (end.getTime() - start.getTime()) / 60000) : null;
+                        const vm = videomakers.find(v => v.id === s.videomaker_id);
+                        return (
+                          <TableRow key={s.id}>
+                            {detailVm === 'all' && (
+                              <TableCell className="text-sm">{vm?.name || '—'}</TableCell>
+                            )}
+                            <TableCell className="text-xs whitespace-nowrap">
+                              {start ? format(start, 'dd/MM/yy HH:mm', { locale: ptBR }) : '—'}
+                            </TableCell>
+                            <TableCell className="text-xs whitespace-nowrap">
+                              {end ? format(end, 'dd/MM/yy HH:mm', { locale: ptBR }) : (
+                                <Badge variant="outline" className="text-[10px] border-green-500/50 text-green-600">
+                                  em andamento
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center text-xs">
+                              {durMin !== null ? `${durMin.toFixed(0)} min` : '—'}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="secondary" className="font-semibold">
+                                {Number(s.stories_count) || 0}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground max-w-xs">
+                              {s.notes || <span className="opacity-50">—</span>}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+
 
 
           <Card>

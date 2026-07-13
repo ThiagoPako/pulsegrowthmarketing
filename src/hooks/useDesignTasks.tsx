@@ -121,9 +121,11 @@ export function useDesignTasks() {
           .from('design_tasks')
           .select(`${LIST_COLS}, clients(company_name, color, logo_url, whatsapp, responsible_person, editorial), profiles!design_tasks_assigned_to_fkey(name, display_name, avatar_url)`)
           .gte('created_at', recentSince)
-          .or(`kanban_column.neq.postado,updated_at.gte.${postadoSince}`)
           .order('created_at', { ascending: false })
           .limit(300);
+
+        const filterPostado = (arr: any[]) =>
+          (arr || []).filter((t: any) => t.kanban_column !== 'postado' || (t.updated_at && t.updated_at >= postadoSince));
 
         if (error) {
           console.warn('Error fetching design tasks with relations, retrying simple query:', error);
@@ -140,11 +142,11 @@ export function useDesignTasks() {
             throw fallback.error;
           }
 
-          const list = (fallback.data || []) as unknown as DesignTask[];
+          const list = filterPostado(fallback.data) as unknown as DesignTask[];
           writeLocalTasks(activeCity, list);
           return list;
         }
-        const list = (data || []) as unknown as DesignTask[];
+        const list = filterPostado(data) as unknown as DesignTask[];
         writeLocalTasks(activeCity, list);
         return list;
       } catch (err) {

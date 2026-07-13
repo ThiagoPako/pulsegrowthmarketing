@@ -78,6 +78,11 @@ const ROLE_INFO: Record<UserRole, { label: string; whatIDo: string }> = {
     whatIDo:
       'Atuo junto à Pulse para fortalecer o seu projeto em áreas específicas, sempre com o mesmo padrão de qualidade da agência.',
   },
+  socio_gestor: {
+    label: 'Sócio Gestor',
+    whatIDo:
+      'Cuido da gestão executiva da agência: acompanho margens, custos, contratos e o desempenho global da operação.',
+  },
 };
 
 /* ---------- Card único e igualitário ---------- */

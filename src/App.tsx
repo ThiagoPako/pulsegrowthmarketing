@@ -148,6 +148,10 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
+        <Route path="/gestao/login" element={<GestaoLogin />} />
+        <Route path="/gestao" element={<RequireSocioGestor><GestaoDashboard /></RequireSocioGestor>} />
+        <Route path="/gestao/custos" element={<RequireSocioGestor><GestaoCustos /></RequireSocioGestor>} />
+        <Route path="/gestao/historico" element={<RequireSocioGestor><GestaoHistorico /></RequireSocioGestor>} />
         <Route path="/dashboard" element={
           <ProtectedRoute>
             {currentUser?.role === 'videomaker' ? <VideomakerDashboard /> :

@@ -100,6 +100,7 @@ const CLIENT_PORTAL_BASE_FIELDS = [
 
 let clientsArtRequestsLimitColumnPromise;
 let proposalTablesEnsuredPromise;
+let storyEditingSessionsEnsuredPromise;
 const tableJsonColumnsPromiseCache = new Map();
 const SCHEMA_CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -295,6 +296,48 @@ async function ensureProposalTables() {
 
 ensureProposalTables().catch((error) => {
   console.error('Failed to ensure proposal tables:', error);
+});
+
+async function ensureStoryEditingSessionsTable() {
+  if (!storyEditingSessionsEnsuredPromise) {
+    storyEditingSessionsEnsuredPromise = pool.query(`
+      CREATE TABLE IF NOT EXISTS story_editing_sessions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        videomaker_id UUID NOT NULL,
+        started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        ended_at TIMESTAMPTZ,
+        stories_count INTEGER NOT NULL DEFAULT 0,
+        notes TEXT,
+        city TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
+      ALTER TABLE story_editing_sessions
+        ADD COLUMN IF NOT EXISTS city TEXT,
+        ADD COLUMN IF NOT EXISTS notes TEXT,
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+      CREATE INDEX IF NOT EXISTS idx_story_sessions_videomaker
+        ON story_editing_sessions(videomaker_id);
+
+      CREATE INDEX IF NOT EXISTS idx_story_sessions_active
+        ON story_editing_sessions(videomaker_id)
+        WHERE ended_at IS NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_story_sessions_started
+        ON story_editing_sessions(started_at DESC);
+    `).catch((error) => {
+      storyEditingSessionsEnsuredPromise = null;
+      throw error;
+    });
+  }
+
+  return storyEditingSessionsEnsuredPromise;
+}
+
+ensureStoryEditingSessionsTable().catch((error) => {
+  console.error('Failed to ensure story editing sessions table:', error);
 });
 
 // ─── JWT Config ─────────────────────────────────────────────
@@ -4507,6 +4550,7 @@ const ALLOWED_TABLES = [
   'training_tracks','training_modules','training_lessons','user_training_progress',
   'user_permissions','login_logs',
   'campaigns','campaign_slots',
+  'story_editing_sessions',
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -4535,6 +4579,7 @@ const TABLES_WITH_CITY = new Set([
   'company_settings','whatsapp_config','payment_config',
   'crm_leads','crm_notes','goals','notifications',
   'plans',
+  'story_editing_sessions',
 ]);
 
 // Cache de quais tabelas realmente possuem a coluna `city` no schema atual.
@@ -4688,6 +4733,10 @@ app.post('/api/db/query', async (req, res) => {
 
     if (safeTable === 'commercial_proposals' || safeTable === 'proposal_comments') {
       await ensureProposalTables();
+    }
+
+    if (safeTable === 'story_editing_sessions') {
+      await ensureStoryEditingSessionsTable();
     }
 
     // Multi-city: resolve cidade ativa e prepara flag de scoping

@@ -948,6 +948,7 @@ export default function Copy() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

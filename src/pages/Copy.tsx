@@ -215,7 +215,7 @@ export default function Copy() {
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{task.content_type}</span>
             </div>
             <h4 className="text-sm font-semibold text-foreground line-clamp-2">{task.title}</h4>
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">{client?.name || task.prospect_name || 'Sem cliente'}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">{client?.companyName || task.prospect_name || 'Sem cliente'}</p>
           </div>
         </div>
         <Button
@@ -250,7 +250,7 @@ export default function Copy() {
                 <Badge className="mb-1 gap-1"><Clock size={10} /> Em execução</Badge>
                 <h2 className="text-xl font-bold text-foreground truncate">{activeTask.title}</h2>
                 <p className="text-sm text-muted-foreground truncate">
-                  {clientById(activeTask.client_id)?.name || activeTask.prospect_name || 'Sem cliente'} · {activeTask.content_type}
+                  {clientById(activeTask.client_id)?.companyName || activeTask.prospect_name || 'Sem cliente'} · {activeTask.content_type}
                 </p>
               </div>
             </div>

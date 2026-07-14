@@ -795,6 +795,79 @@ export default function Copy() {
         </TabsContent>
       </Tabs>
 
+      {/* ── Dialog: gerar tarefas para cliente específico ── */}
+      <Dialog open={singleGenOpen} onOpenChange={setSingleGenOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Target size={18} className="text-primary" /> Gerar tarefas para cliente
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label>Cliente *</Label>
+              <Select value={singleGenForm.clientId} onValueChange={(v) => setSingleGenForm(f => ({ ...f, clientId: v }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione o cliente..." /></SelectTrigger>
+                <SelectContent>
+                  {clients
+                    .filter(c => ((c as any).status || 'ativo') !== 'cancelado')
+                    .sort((a, b) => a.companyName.localeCompare(b.companyName))
+                    .map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="flex items-center gap-1.5"><CalendarDays size={12} /> Data / semana de referência *</Label>
+              <Input
+                type="date"
+                value={singleGenForm.weekDate}
+                onChange={e => setSingleGenForm(f => ({ ...f, weekDate: e.target.value }))}
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">A semana será calculada a partir da data escolhida (ex.: S2 · nov 2025).</p>
+            </div>
+
+            {singleGenDeficit && (
+              <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Déficit atual</p>
+                  <Badge className={singleGenDeficit.total > 0 ? 'bg-orange-500 text-white' : 'bg-emerald-500 text-white'}>
+                    {singleGenDeficit.total > 0 ? `${singleGenDeficit.total} a criar` : 'Sem déficit ✅'}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {singleGenDeficit.breakdown.map(b => (
+                    <div key={b.key} className="rounded-lg border border-border bg-card p-2 text-center">
+                      <p className="text-[10px] uppercase text-muted-foreground font-semibold">{b.label}</p>
+                      <p className="text-lg font-bold text-foreground tabular-nums">{b.deficit}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        meta {b.target} · tem {b.have}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!singleGenForm.clientId && (
+              <p className="text-xs text-muted-foreground text-center py-2">
+                Selecione um cliente para ver o déficit por formato.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSingleGenOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={generateForClient}
+              disabled={singleGenBusy || !singleGenDeficit || singleGenDeficit.total === 0}
+              className="gap-1.5"
+            >
+              <Sparkles size={14} />
+              {singleGenBusy ? 'Gerando...' : singleGenDeficit ? `Gerar ${singleGenDeficit.total} tarefa(s)` : 'Gerar tarefas'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ── Dialog: novo pedido ── */}
       <Dialog open={requestDialogOpen} onOpenChange={setRequestDialogOpen}>
         <DialogContent className="max-w-lg">

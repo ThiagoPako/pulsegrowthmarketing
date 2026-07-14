@@ -65,7 +65,7 @@ interface PartnerInfo {
 
 export default function Team() {
   const { currentUser } = useApp();
-  const canManageTeam = canManageTeam || currentUser?.role === 'gestor_projetos';
+  const canManageTeam = currentUser?.role === 'admin' || currentUser?.role === 'gestor_projetos';
   const { signUp, session } = useAuth();
   const [open, setOpen] = useState(false);
   const [members, setMembers] = useState<TeamMember[]>([]);

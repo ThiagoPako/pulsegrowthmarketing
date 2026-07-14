@@ -676,9 +676,14 @@ export default function Copy() {
               Clientes com maior demanda
               <Badge variant="outline" className="text-[10px]">baseado em pendentes vs estoque</Badge>
             </h2>
-            <Button size="sm" variant="outline" onClick={() => autoGenerateTasks(false)} className="gap-1.5 border-orange-500/40 text-orange-600 hover:bg-orange-500/10">
-              <Sparkles size={12} /> Gerar tarefas automaticamente
-            </Button>
+            <div className="flex gap-2 flex-wrap">
+              <Button size="sm" variant="outline" onClick={() => setSingleGenOpen(true)} className="gap-1.5 border-primary/40 text-primary hover:bg-primary/10">
+                <Target size={12} /> Gerar para cliente específico
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => autoGenerateTasks(false)} className="gap-1.5 border-orange-500/40 text-orange-600 hover:bg-orange-500/10">
+                <Sparkles size={12} /> Gerar tarefas automaticamente
+              </Button>
+            </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {highDemand.map(d => (

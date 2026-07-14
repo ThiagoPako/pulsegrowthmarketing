@@ -345,6 +345,80 @@ export default function Copy() {
     broadcastChange();
   };
 
+  // ── AUTO-GERAÇÃO DE TAREFAS DE ROTEIRO ──
+  // Para cada cliente ativo com weeklyReels > 0, se (estoque + pendentes) < weeklyReels,
+  // cria placeholders de roteiro em content_tasks (kanban_column='ideias') para o copy pegar.
+  const autoGenerateTasks = async (silent = false) => {
+    const stockByClient = new Map<string, number>();
+    scripts.forEach(s => {
+      if (!s.recorded && s.clientId) {
+        stockByClient.set(s.clientId, (stockByClient.get(s.clientId) || 0) + 1);
+      }
+    });
+    const pendingByClient = new Map<string, number>();
+    tasks.forEach(t => {
+      if (t.client_id && t.content_type === 'reels') {
+        pendingByClient.set(t.client_id, (pendingByClient.get(t.client_id) || 0) + 1);
+      }
+    });
+
+    const rows: any[] = [];
+    for (const c of clients) {
+      const status = (c as any).status || 'ativo';
+      if (status === 'cancelado') continue;
+      const target = Math.max(0, Number(c.weeklyReels || 0));
+      if (target <= 0) continue;
+      const have = (stockByClient.get(c.id) || 0) + (pendingByClient.get(c.id) || 0);
+      const deficit = target - have;
+      if (deficit <= 0) continue;
+      for (let i = 0; i < deficit; i++) {
+        rows.push({
+          client_id: c.id,
+          title: `Novo Roteiro Reels — ${c.companyName}`,
+          content_type: 'reels',
+          kanban_column: 'ideias',
+          description: '🤖 Gerado automaticamente pela demanda semanal do cliente',
+          created_by: user?.id ?? null,
+        });
+      }
+    }
+
+    if (rows.length === 0) {
+      if (!silent) toast.info('Nenhum cliente com déficit no momento ✅');
+      return 0;
+    }
+
+    // Inserir em lotes de 20
+    let inserted = 0;
+    for (let i = 0; i < rows.length; i += 20) {
+      const batch = rows.slice(i, i + 20);
+      const { error } = await supabase.from('content_tasks').insert(batch as any);
+      if (error) {
+        console.error('[auto-gerar] erro:', error);
+        if (!silent) toast.error('Erro ao gerar tarefas: ' + error.message);
+        break;
+      }
+      inserted += batch.length;
+    }
+
+    if (inserted > 0) {
+      if (!silent) toast.success(`✨ ${inserted} tarefa(s) de roteiro criada(s) automaticamente`);
+      broadcastChange();
+      loadAll(true);
+    }
+    return inserted;
+  };
+
+  // Auto-executa 1x por dia por usuário
+  useEffect(() => {
+    if (loading || !user || clients.length === 0) return;
+    const flagKey = `copy_autogen_${user.id}_${new Date().toISOString().slice(0, 10)}`;
+    if (localStorage.getItem(flagKey)) return;
+    localStorage.setItem(flagKey, '1');
+    autoGenerateTasks(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, user?.id, clients.length]);
+
   const elapsedMs = activeSession ? now - activeSession.startedAt : 0;
 
   // ── UI Components ──
@@ -504,6 +578,9 @@ export default function Copy() {
               Clientes com maior demanda
               <Badge variant="outline" className="text-[10px]">baseado em pendentes vs estoque</Badge>
             </h2>
+            <Button size="sm" variant="outline" onClick={() => autoGenerateTasks(false)} className="gap-1.5 border-orange-500/40 text-orange-600 hover:bg-orange-500/10">
+              <Sparkles size={12} /> Gerar tarefas automaticamente
+            </Button>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {highDemand.map(d => (

@@ -162,7 +162,7 @@ export default function Copy() {
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
     toast.success(`Executando: ${task.title}`);
-    broadcastChange();
+    broadcastChange('task_change');
     loadTasks(true);
   };
 
@@ -170,7 +170,7 @@ export default function Copy() {
     if (!confirm('Cancelar execução? O tempo será descartado.')) return;
     setActiveSession(null);
     if (sessionKey) localStorage.removeItem(sessionKey);
-    broadcastChange();
+    broadcastChange('task_change');
   };
 
   const openFinalize = () => {
@@ -239,7 +239,7 @@ export default function Copy() {
       if (sessionKey) localStorage.removeItem(sessionKey);
       setFinalizing(null);
       loadTasks(true);
-      broadcastChange();
+      broadcastChange('task_change');
     } catch (e) {
       console.error(e);
       toast.error('Erro ao salvar roteiro');

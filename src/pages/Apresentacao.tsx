@@ -33,13 +33,13 @@ export default function Apresentacao() {
     window.open(`${baseRoute}/${key}?${qs.toString()}`, '_blank', 'noopener,noreferrer');
   };
 
-  const copyPublicLink = async (planKey?: string) => {
+  const copyPublicLink = async (city: CityCode, planKey?: string) => {
     const url = planKey
-      ? `${window.location.origin}/p/planos/${planKey}?city=${presentationCity}`
-      : `${window.location.origin}/p/planos?city=${presentationCity}`;
+      ? `${window.location.origin}/p/planos/${planKey}?city=${city}`
+      : `${window.location.origin}/p/planos?city=${city}`;
     try {
       await navigator.clipboard.writeText(url);
-      toast.success('Link público copiado!', { description: url });
+      toast.success(`Link ${CITY_LABELS[city]} copiado!`, { description: url });
     } catch {
       toast.error('Copie manualmente: ' + url);
     }
@@ -61,10 +61,15 @@ export default function Apresentacao() {
               <Tag className="h-4 w-4 md:mr-1" />
               <span className="hidden md:inline">Promoções</span>
             </Button>
-            <Button variant="default" size="sm" onClick={() => copyPublicLink()} className="backdrop-blur shadow-lg h-8 px-2 md:px-3" aria-label="Copiar link público">
-              <Link2 className="h-4 w-4 md:mr-1" />
-              <span className="hidden md:inline">Copiar link público</span>
-            </Button>
+            <div className="flex items-center gap-1 backdrop-blur bg-background/80 rounded-md border border-border p-0.5">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 hidden md:inline">Link:</span>
+              <Button variant="default" size="sm" onClick={() => copyPublicLink('uruacu')} className="h-7 px-2 text-xs" aria-label="Copiar link Uruaçu">
+                <Link2 className="h-3.5 w-3.5 mr-1" /> Uruaçu
+              </Button>
+              <Button variant="default" size="sm" onClick={() => copyPublicLink('minacu')} className="h-7 px-2 text-xs" aria-label="Copiar link Minaçu">
+                <Link2 className="h-3.5 w-3.5 mr-1" /> Minaçu
+              </Button>
+            </div>
           </>
         )}
         <Button variant="outline" size="sm" onClick={() => isPublic ? window.close() : navigate(-1)} className="backdrop-blur bg-background/80 h-8 px-2 md:px-3" aria-label={isPublic ? 'Fechar' : 'Sair'}>

@@ -15,7 +15,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Pause, CheckCircle2, Flame, FileText, Clock, User as UserIcon,
   PenLine, Sparkles, PlusCircle, AlertTriangle, TrendingUp, Package,
-  Send, Trash2, ListChecks
+  Send, Trash2, ListChecks, Target, CalendarDays
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import type { Script, ScriptVideoType, ScriptContentFormat } from '@/types';

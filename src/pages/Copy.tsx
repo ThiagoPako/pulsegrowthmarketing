@@ -346,40 +346,57 @@ export default function Copy() {
   };
 
   // ── AUTO-GERAÇÃO DE TAREFAS DE ROTEIRO ──
-  // Para cada cliente ativo com weeklyReels > 0, se (estoque + pendentes) < weeklyReels,
-  // cria placeholders de roteiro em content_tasks (kanban_column='ideias') para o copy pegar.
+  // Para cada cliente ativo, calcula déficit por formato (reels / criativo / story)
+  // comparando demanda semanal com (estoque de roteiros + pendentes) do mesmo formato.
+  // Cria placeholders em content_tasks (kanban_column='ideias') para cada déficit.
   const autoGenerateTasks = async (silent = false) => {
-    const stockByClient = new Map<string, number>();
+    type Fmt = 'reels' | 'criativo' | 'story';
+    const FORMATS: { key: Fmt; label: string; weeklyField: 'weeklyReels' | 'weeklyCreatives' | 'weeklyStories' }[] = [
+      { key: 'reels', label: 'Reels', weeklyField: 'weeklyReels' },
+      { key: 'criativo', label: 'Criativo', weeklyField: 'weeklyCreatives' },
+      { key: 'story', label: 'Story', weeklyField: 'weeklyStories' },
+    ];
+
+    // Estoque por (clienteId, formato)
+    const stockKey = (cid: string, f: Fmt) => `${cid}::${f}`;
+    const stockByCF = new Map<string, number>();
     scripts.forEach(s => {
-      if (!s.recorded && s.clientId) {
-        stockByClient.set(s.clientId, (stockByClient.get(s.clientId) || 0) + 1);
-      }
+      if (s.recorded || !s.clientId) return;
+      const f = (s.contentFormat || 'reels') as Fmt;
+      if (!['reels', 'criativo', 'story'].includes(f)) return;
+      stockByCF.set(stockKey(s.clientId, f), (stockByCF.get(stockKey(s.clientId, f)) || 0) + 1);
     });
-    const pendingByClient = new Map<string, number>();
+
+    // Pendentes por (clienteId, formato) — content_tasks em 'ideias' sem script
+    const pendingByCF = new Map<string, number>();
     tasks.forEach(t => {
-      if (t.client_id && t.content_type === 'reels') {
-        pendingByClient.set(t.client_id, (pendingByClient.get(t.client_id) || 0) + 1);
-      }
+      if (!t.client_id) return;
+      const f = t.content_type as Fmt;
+      if (!['reels', 'criativo', 'story'].includes(f)) return;
+      pendingByCF.set(stockKey(t.client_id, f), (pendingByCF.get(stockKey(t.client_id, f)) || 0) + 1);
     });
 
     const rows: any[] = [];
     for (const c of clients) {
       const status = (c as any).status || 'ativo';
       if (status === 'cancelado') continue;
-      const target = Math.max(0, Number(c.weeklyReels || 0));
-      if (target <= 0) continue;
-      const have = (stockByClient.get(c.id) || 0) + (pendingByClient.get(c.id) || 0);
-      const deficit = target - have;
-      if (deficit <= 0) continue;
-      for (let i = 0; i < deficit; i++) {
-        rows.push({
-          client_id: c.id,
-          title: `Novo Roteiro Reels — ${c.companyName}`,
-          content_type: 'reels',
-          kanban_column: 'ideias',
-          description: '🤖 Gerado automaticamente pela demanda semanal do cliente',
-          created_by: user?.id ?? null,
-        });
+      for (const fmt of FORMATS) {
+        const target = Math.max(0, Number((c as any)[fmt.weeklyField] || 0));
+        if (target <= 0) continue;
+        const k = stockKey(c.id, fmt.key);
+        const have = (stockByCF.get(k) || 0) + (pendingByCF.get(k) || 0);
+        const deficit = target - have;
+        if (deficit <= 0) continue;
+        for (let i = 0; i < deficit; i++) {
+          rows.push({
+            client_id: c.id,
+            title: `Novo Roteiro ${fmt.label} — ${c.companyName}`,
+            content_type: fmt.key,
+            kanban_column: 'ideias',
+            description: `🤖 Gerado automaticamente pela demanda semanal (${fmt.label}) do cliente`,
+            created_by: user?.id ?? null,
+          });
+        }
       }
     }
 

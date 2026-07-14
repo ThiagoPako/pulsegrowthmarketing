@@ -76,8 +76,8 @@ export default function Copy() {
     return () => clearInterval(id);
   }, [activeSession]);
 
-  const loadTasks = async () => {
-    setLoading(true);
+  const loadTasks = async (silent = false) => {
+    if (!silent) setLoading(true);
     const { data, error } = await supabase
       .from('content_tasks')
       .select('id, client_id, title, content_type, editing_priority, created_at, prospect_name')
@@ -85,15 +85,57 @@ export default function Copy() {
       .is('script_id', null)
       .order('created_at', { ascending: false });
     if (error) {
-      console.error(error);
-      toast.error('Erro ao carregar tarefas');
+      if (!silent) {
+        console.error(error);
+        toast.error('Erro ao carregar tarefas');
+      }
     } else {
       setTasks((data as any) || []);
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
-  useEffect(() => { loadTasks(); }, []);
+  // Initial load + realtime sync (polling + focus + cross-tab broadcast + WS best-effort)
+  useEffect(() => {
+    loadTasks();
+
+    // Poll every 5s for cross-user updates
+    const pollId = setInterval(() => loadTasks(true), 5000);
+
+    // Refresh on window focus / tab visibility
+    const onFocus = () => loadTasks(true);
+    const onVisibility = () => { if (document.visibilityState === 'visible') loadTasks(true); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    // Cross-tab (same browser) instant sync
+    const bc = 'BroadcastChannel' in window ? new BroadcastChannel('copy_tasks_sync') : null;
+    if (bc) bc.onmessage = () => loadTasks(true);
+
+    // Best-effort WS realtime from VPS
+    const channel = supabase
+      .channel('copy_content_tasks')
+      .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'content_tasks' }, () => loadTasks(true))
+      .subscribe();
+
+    return () => {
+      clearInterval(pollId);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+      bc?.close();
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const broadcastChange = () => {
+    try {
+      if ('BroadcastChannel' in window) {
+        const bc = new BroadcastChannel('copy_tasks_sync');
+        bc.postMessage({ t: Date.now() });
+        bc.close();
+      }
+    } catch { /* ignore */ }
+  };
 
   const clientById = useMemo(() => {
     const map = new Map(clients.map(c => [c.id, c]));
@@ -113,12 +155,15 @@ export default function Copy() {
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
     toast.success(`Executando: ${task.title}`);
+    broadcastChange();
+    loadTasks(true);
   };
 
   const cancelSession = () => {
     if (!confirm('Cancelar execução? O tempo será descartado.')) return;
     setActiveSession(null);
     if (sessionKey) localStorage.removeItem(sessionKey);
+    broadcastChange();
   };
 
   const openFinalize = () => {
@@ -186,7 +231,8 @@ export default function Copy() {
       setActiveSession(null);
       if (sessionKey) localStorage.removeItem(sessionKey);
       setFinalizing(null);
-      loadTasks();
+      loadTasks(true);
+      broadcastChange();
     } catch (e) {
       console.error(e);
       toast.error('Erro ao salvar roteiro');

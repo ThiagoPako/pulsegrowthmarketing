@@ -65,7 +65,7 @@ interface PartnerInfo {
 
 export default function Team() {
   const { currentUser } = useApp();
-  const canManageTeam = currentUser?.role === 'admin' || currentUser?.role === 'gestor_projetos';
+  const canManageTeam = canManageTeam || currentUser?.role === 'gestor_projetos';
   const { signUp, session } = useAuth();
   const [open, setOpen] = useState(false);
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -438,7 +438,7 @@ export default function Team() {
           >
             <Users size={16} /> Apresentação para Cliente
           </Button>
-        {currentUser?.role === 'admin' && (
+        {canManageTeam && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button onClick={() => { setForm({ name: '', email: '', password: '', role: 'videomaker', cities: ['minacu'], primaryCity: 'minacu' }); setPartnerForm({ companyName: '', serviceFunction: '', fixedRate: 0, phone: '', notes: '' }); }}>
@@ -532,7 +532,7 @@ export default function Team() {
             <Handshake size={14} /> Parceiros ({partnerMembers.length})
           </Button>
         </div>
-        {tab === 'parceiros' && currentUser?.role === 'admin' && (
+        {tab === 'parceiros' && canManageTeam && (
           <Dialog open={partnerOpen} onOpenChange={setPartnerOpen}>
             <DialogTrigger asChild>
               <Button size="sm" variant="outline" onClick={() => { setPartnerCreateForm({ name: '', email: '', password: '', serviceFunction: 'fotografo', companyName: '', fixedRate: 0, phone: '', notes: '' }); }}>
@@ -681,7 +681,7 @@ export default function Team() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  {currentUser?.role === 'admin' && u.id !== currentUser?.id ? (
+                  {canManageTeam && u.id !== currentUser?.id ? (
                     <Select value={u.role} onValueChange={v => handleChangeRole(u, v as UserRole)}>
                       <SelectTrigger className="h-7 w-auto min-w-[130px] text-xs">
                         <div className="flex items-center gap-1.5">
@@ -700,7 +700,7 @@ export default function Team() {
                   ) : (
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${roleColors[u.role]}`}>{ROLE_LABELS[u.role]}</span>
                   )}
-                  {currentUser?.role === 'admin' && u.id !== currentUser?.id && (
+                  {canManageTeam && u.id !== currentUser?.id && (
                     <Popover>
                       <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
                         <button
@@ -732,7 +732,7 @@ export default function Team() {
                       </PopoverContent>
                     </Popover>
                   )}
-                  {currentUser?.role === 'admin' && (
+                  {canManageTeam && (
                     <>
                       {/* Salary input */}
                       <div className="relative group/salary" onClick={(e) => e.stopPropagation()}>
@@ -838,7 +838,7 @@ export default function Team() {
                           <p className="text-[10px] text-muted-foreground">por serviço</p>
                         </div>
                       )}
-                      {currentUser?.role === 'admin' && (
+                      {canManageTeam && (
                         <>
                           <Button variant="ghost" size="icon" className="h-8 w-8" title="Redefinir senha" onClick={() => { setResetTarget(u); setResetOpen(true); }}>
                             <KeyRound size={16} />

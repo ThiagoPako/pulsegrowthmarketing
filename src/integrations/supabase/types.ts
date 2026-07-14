@@ -3791,6 +3791,83 @@ export type Database = {
         }
         Relationships: []
       }
+      script_requests: {
+        Row: {
+          client_id: string | null
+          content_format: string
+          created_at: string
+          fulfilled_at: string | null
+          fulfilled_script_id: string | null
+          id: string
+          notes: string | null
+          priority: string
+          requested_by: string | null
+          requested_by_name: string | null
+          status: string
+          topic: string
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          content_format?: string
+          created_at?: string
+          fulfilled_at?: string | null
+          fulfilled_script_id?: string | null
+          id?: string
+          notes?: string | null
+          priority?: string
+          requested_by?: string | null
+          requested_by_name?: string | null
+          status?: string
+          topic: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          content_format?: string
+          created_at?: string
+          fulfilled_at?: string | null
+          fulfilled_script_id?: string | null
+          id?: string
+          notes?: string | null
+          priority?: string
+          requested_by?: string | null
+          requested_by_name?: string | null
+          status?: string
+          topic?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "script_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "script_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_public_logos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "script_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "script_requests_fulfilled_script_id_fkey"
+            columns: ["fulfilled_script_id"]
+            isOneToOne: false
+            referencedRelation: "scripts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scripts: {
         Row: {
           caption: string | null

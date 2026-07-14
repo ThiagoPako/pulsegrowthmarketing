@@ -33,13 +33,13 @@ export default function Apresentacao() {
     window.open(`${baseRoute}/${key}?${qs.toString()}`, '_blank', 'noopener,noreferrer');
   };
 
-  const copyPublicLink = async (planKey?: string) => {
+  const copyPublicLink = async (city: CityCode, planKey?: string) => {
     const url = planKey
-      ? `${window.location.origin}/p/planos/${planKey}?city=${presentationCity}`
-      : `${window.location.origin}/p/planos?city=${presentationCity}`;
+      ? `${window.location.origin}/p/planos/${planKey}?city=${city}`
+      : `${window.location.origin}/p/planos?city=${city}`;
     try {
       await navigator.clipboard.writeText(url);
-      toast.success('Link público copiado!', { description: url });
+      toast.success(`Link ${CITY_LABELS[city]} copiado!`, { description: url });
     } catch {
       toast.error('Copie manualmente: ' + url);
     }

@@ -231,7 +231,8 @@ export default function Copy() {
       setActiveSession(null);
       if (sessionKey) localStorage.removeItem(sessionKey);
       setFinalizing(null);
-      loadTasks();
+      loadTasks(true);
+      broadcastChange();
     } catch (e) {
       console.error(e);
       toast.error('Erro ao salvar roteiro');

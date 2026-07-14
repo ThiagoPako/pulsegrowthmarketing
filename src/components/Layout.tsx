@@ -89,6 +89,7 @@ const navCategories: NavCategory[] = [
     color: 'cyan',
     items: [
       { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media', 'gestor_projetos'] },
+      { path: '/copy', label: 'Copy', icon: FileText, roles: ['admin', 'social_media', 'copywriter', 'gestor_projetos'] },
       { path: '/roteiros', label: 'Roteiros', icon: FileText, roles: ['admin', 'social_media', 'videomaker', 'copywriter', 'gestor_projetos'] },
       { path: '/campanhas', label: 'Campanhas', icon: Megaphone, roles: ['admin', 'social_media', 'copywriter', 'gestor_projetos'] },
       { path: '/designer', label: 'Designer', icon: Palette, roles: ['admin', 'social_media', 'fotografo', 'designer', 'gestor_projetos'] },

@@ -517,7 +517,6 @@ export default function Copy() {
     }
   };
 
-  const elapsedMs = activeSession ? now - activeSession.startedAt : 0;
 
   // ── FILA UNIFICADA DE ROTEIROS A FAZER ──
   // Ordem: pedidos alta prioridade → tarefas urgentes → pedidos normais → tarefas normais.

@@ -444,6 +444,79 @@ export default function Copy() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, user?.id, clients.length]);
 
+  // ── DÉFICIT DE UM CLIENTE ESPECÍFICO ──
+  const computeClientDeficit = (clientId: string) => {
+    const c = clients.find(x => x.id === clientId);
+    if (!c) return null;
+    const formats = [
+      { key: 'reels' as const, label: 'Reels', target: Number(c.weeklyReels || 0) },
+      { key: 'criativo' as const, label: 'Criativo', target: Number(c.weeklyCreatives || 0) },
+      { key: 'story' as const, label: 'Story', target: Number(c.weeklyStories || 0) },
+    ];
+    const breakdown = formats.map(f => {
+      const stock = scripts.filter(s => !s.recorded && s.clientId === clientId && (s.contentFormat || 'reels') === f.key).length;
+      const pending = tasks.filter(t => t.client_id === clientId && t.content_type === f.key).length;
+      const have = stock + pending;
+      const deficit = Math.max(0, f.target - have);
+      return { ...f, stock, pending, have, deficit };
+    });
+    const total = breakdown.reduce((sum, b) => sum + b.deficit, 0);
+    return { client: c, breakdown, total };
+  };
+
+  const singleGenDeficit = useMemo(
+    () => singleGenForm.clientId ? computeClientDeficit(singleGenForm.clientId) : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [singleGenForm.clientId, clients, scripts, tasks]
+  );
+
+  const generateForClient = async () => {
+    if (!singleGenDeficit || singleGenDeficit.total === 0) {
+      toast.info('Este cliente não tem déficit no momento ✅');
+      return;
+    }
+    setSingleGenBusy(true);
+    // Rótulo da semana a partir da data escolhida
+    const d = new Date(singleGenForm.weekDate + 'T00:00:00');
+    const weekOfMonth = Math.ceil(d.getDate() / 7);
+    const monthLabel = d.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+    const weekLabel = `S${weekOfMonth} · ${monthLabel}`;
+
+    const rows: any[] = [];
+    for (const b of singleGenDeficit.breakdown) {
+      for (let i = 0; i < b.deficit; i++) {
+        rows.push({
+          client_id: singleGenDeficit.client.id,
+          title: `Novo Roteiro ${b.label} — ${singleGenDeficit.client.companyName} (${weekLabel})`,
+          content_type: b.key,
+          kanban_column: 'ideias',
+          description: `🎯 Gerado manualmente para ${singleGenDeficit.client.companyName} — semana ${weekLabel} (${b.label})`,
+          created_by: user?.id ?? null,
+        });
+      }
+    }
+
+    let inserted = 0;
+    for (let i = 0; i < rows.length; i += 20) {
+      const batch = rows.slice(i, i + 20);
+      const { error } = await supabase.from('content_tasks').insert(batch as any);
+      if (error) {
+        console.error('[gerar-cliente] erro:', error);
+        toast.error('Erro ao gerar tarefas: ' + error.message);
+        break;
+      }
+      inserted += batch.length;
+    }
+
+    setSingleGenBusy(false);
+    if (inserted > 0) {
+      toast.success(`✨ ${inserted} tarefa(s) criada(s) para ${singleGenDeficit.client.companyName} (${weekLabel})`);
+      broadcastChange();
+      loadAll(true);
+      setSingleGenOpen(false);
+    }
+  };
+
   const elapsedMs = activeSession ? now - activeSession.startedAt : 0;
 
   // ── UI Components ──

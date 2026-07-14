@@ -76,6 +76,14 @@ export default function Copy() {
     priority: 'alta' as 'alta' | 'normal',
   });
 
+  // Diálogo de geração pontual (por cliente + semana)
+  const [singleGenOpen, setSingleGenOpen] = useState(false);
+  const [singleGenForm, setSingleGenForm] = useState({
+    clientId: '',
+    weekDate: new Date().toISOString().slice(0, 10), // YYYY-MM-DD (data de referência da semana)
+  });
+  const [singleGenBusy, setSingleGenBusy] = useState(false);
+
   const [form, setForm] = useState({
     title: '',
     videoType: 'vendas' as ScriptVideoType,

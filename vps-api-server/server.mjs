@@ -7442,6 +7442,97 @@ wss.on('connection', (ws) => {
   ws.on('error', () => { wsClients.delete(ws); });
 });
 
+// ─── Generic Realtime Channel Relay (WebSocket) ─────────
+// Client (src/lib/vpsDb.ts ChannelBuilder) connects to /realtime,
+// sends { type:'subscribe', channel, token, events } then
+// { type:'broadcast', channel, event, payload }.
+// Server relays broadcast frames to every other socket subscribed to that channel.
+
+const realtimeWss = new WebSocketServer({ server, path: '/realtime' });
+// channel name -> Set<ws>
+const realtimeChannels = new Map();
+
+function subscribeSocketToChannel(ws, channel) {
+  if (!channel || typeof channel !== 'string') return;
+  if (!ws._pulseChannels) ws._pulseChannels = new Set();
+  ws._pulseChannels.add(channel);
+  let set = realtimeChannels.get(channel);
+  if (!set) { set = new Set(); realtimeChannels.set(channel, set); }
+  set.add(ws);
+}
+
+function unsubscribeSocketFromAll(ws) {
+  const chans = ws._pulseChannels;
+  if (!chans) return;
+  for (const channel of chans) {
+    const set = realtimeChannels.get(channel);
+    if (!set) continue;
+    set.delete(ws);
+    if (set.size === 0) realtimeChannels.delete(channel);
+  }
+  ws._pulseChannels = null;
+}
+
+function relayBroadcast(channel, event, payload, senderWs) {
+  const set = realtimeChannels.get(channel);
+  if (!set || set.size === 0) return 0;
+  const msg = JSON.stringify({ type: 'broadcast', channel, event, payload: payload ?? null });
+  let delivered = 0;
+  for (const client of set) {
+    if (client === senderWs) continue;
+    try {
+      if (client.readyState === 1) { client.send(msg); delivered++; }
+    } catch { /* ignore */ }
+  }
+  return delivered;
+}
+
+realtimeWss.on('connection', (ws) => {
+  ws._pulseChannels = new Set();
+
+  ws.on('message', (raw) => {
+    let data;
+    try { data = JSON.parse(raw.toString()); } catch { return; }
+    if (!data || typeof data !== 'object') return;
+
+    if (data.type === 'subscribe' && typeof data.channel === 'string') {
+      subscribeSocketToChannel(ws, data.channel);
+      try { ws.send(JSON.stringify({ type: 'subscribed', channel: data.channel })); } catch { /* ignore */ }
+      return;
+    }
+
+    if (data.type === 'unsubscribe' && typeof data.channel === 'string') {
+      const set = realtimeChannels.get(data.channel);
+      if (set) {
+        set.delete(ws);
+        if (set.size === 0) realtimeChannels.delete(data.channel);
+      }
+      ws._pulseChannels?.delete(data.channel);
+      return;
+    }
+
+    if (data.type === 'broadcast' && typeof data.channel === 'string' && typeof data.event === 'string') {
+      // Ensure sender is subscribed so they receive future broadcasts too
+      if (!ws._pulseChannels?.has(data.channel)) subscribeSocketToChannel(ws, data.channel);
+      relayBroadcast(data.channel, data.event, data.payload, ws);
+      return;
+    }
+
+    if (data.type === 'ping') {
+      try { ws.send(JSON.stringify({ type: 'pong', t: Date.now() })); } catch { /* ignore */ }
+    }
+  });
+
+  ws.on('close', () => { unsubscribeSocketFromAll(ws); });
+  ws.on('error', () => { unsubscribeSocketFromAll(ws); });
+});
+
+// Server-side helper to emit into a realtime channel (usable from any HTTP route)
+function emitRealtime(channel, event, payload) {
+  return relayBroadcast(channel, event, payload, null);
+}
+globalThis.emitRealtime = emitRealtime;
+
 // Clean stale presence every 30s
 setInterval(() => {
   const before = presenceState.size;

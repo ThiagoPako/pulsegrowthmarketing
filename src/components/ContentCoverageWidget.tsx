@@ -51,7 +51,7 @@ export default function ContentCoverageWidget() {
         const p = tasks.filter(x => x.client_id === c.id && x.content_type === f.key).length;
         stock += s; pending += p;
         const have = s + p;
-        if (have < t) deficitClients.push({ name: c.name, deficit: t - have });
+        if (have < t) deficitClients.push({ name: (c as any).companyName || (c as any).name || 'Cliente', deficit: t - have });
       });
       const have = stock + pending;
       const pct = target > 0 ? Math.round((have / target) * 100) : 100;

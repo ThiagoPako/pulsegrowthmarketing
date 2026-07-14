@@ -105,6 +105,7 @@ const OptimizationFormatsGuide = lazy(() => import("@/pages/OptimizationFormatsG
 const CampaignPlaybook = lazy(() => import("@/pages/CampaignPlaybook"));
 const TeamOrgChart = lazy(() => import("@/pages/TeamOrgChart"));
 const TeamPresentation = lazy(() => import("@/pages/TeamPresentation"));
+const Copy = lazy(() => import("@/pages/Copy"));
 
 
 const queryClient = new QueryClient({
@@ -168,6 +169,7 @@ function AppRoutes() {
         <Route path="/equipe" element={<ProtectedRoute><Team /></ProtectedRoute>} />
         <Route path="/equipe/apresentacao" element={<TeamPresentation />} />
         <Route path="/roteiros" element={<ProtectedRoute><Scripts /></ProtectedRoute>} />
+        <Route path="/copy" element={<ProtectedRoute><Copy /></ProtectedRoute>} />
         <Route path="/metas" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
         <Route path="/configuracoes" element={<ProtectedRoute><CompanySettings /></ProtectedRoute>} />
         <Route path="/endomarketing" element={<ProtectedRoute><EndomarketingDashboard /></ProtectedRoute>} />

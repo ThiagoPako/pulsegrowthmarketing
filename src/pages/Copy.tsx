@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
@@ -95,14 +95,14 @@ export default function Copy() {
     if (!silent) setLoading(false);
   };
 
-  // Initial load + realtime sync (polling + focus + cross-tab broadcast + WS best-effort)
+  // Persistent channel ref for broadcasting sub-second updates cross-user
+  const channelRef = React.useRef<any>(null);
+
+  // Initial load + realtime sync (WS broadcast — no polling)
   useEffect(() => {
     loadTasks();
 
-    // Poll every 5s for cross-user updates
-    const pollId = setInterval(() => loadTasks(true), 5000);
-
-    // Refresh on window focus / tab visibility
+    // Refresh on window focus / tab visibility (safety net after sleep/network drops)
     const onFocus = () => loadTasks(true);
     const onVisibility = () => { if (document.visibilityState === 'visible') loadTasks(true); };
     window.addEventListener('focus', onFocus);
@@ -112,26 +112,33 @@ export default function Copy() {
     const bc = 'BroadcastChannel' in window ? new BroadcastChannel('copy_tasks_sync') : null;
     if (bc) bc.onmessage = () => loadTasks(true);
 
-    // Best-effort WS realtime from VPS
+    // WS realtime — cross-user sub-second updates via broadcast on shared channel
     const channel = supabase
       .channel('copy_content_tasks')
+      .on('broadcast' as any, { event: 'copy_task_change' }, () => loadTasks(true))
       .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'content_tasks' }, () => loadTasks(true))
       .subscribe();
+    channelRef.current = channel;
 
     return () => {
-      clearInterval(pollId);
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisibility);
       bc?.close();
       supabase.removeChannel(channel);
+      channelRef.current = null;
     };
   }, []);
 
-  const broadcastChange = () => {
+  const broadcastChange = (reason: string) => {
+    // 1) Cross-user via WS broadcast (sub-second)
+    try {
+      channelRef.current?.send?.({ event: 'copy_task_change', payload: { reason, t: Date.now() } });
+    } catch { /* ignore */ }
+    // 2) Cross-tab same-browser via BroadcastChannel
     try {
       if ('BroadcastChannel' in window) {
         const bc = new BroadcastChannel('copy_tasks_sync');
-        bc.postMessage({ t: Date.now() });
+        bc.postMessage({ t: Date.now(), reason });
         bc.close();
       }
     } catch { /* ignore */ }
@@ -155,7 +162,7 @@ export default function Copy() {
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
     toast.success(`Executando: ${task.title}`);
-    broadcastChange();
+    broadcastChange('task_change');
     loadTasks(true);
   };
 
@@ -163,7 +170,7 @@ export default function Copy() {
     if (!confirm('Cancelar execução? O tempo será descartado.')) return;
     setActiveSession(null);
     if (sessionKey) localStorage.removeItem(sessionKey);
-    broadcastChange();
+    broadcastChange('task_change');
   };
 
   const openFinalize = () => {
@@ -232,7 +239,7 @@ export default function Copy() {
       if (sessionKey) localStorage.removeItem(sessionKey);
       setFinalizing(null);
       loadTasks(true);
-      broadcastChange();
+      broadcastChange('task_change');
     } catch (e) {
       console.error(e);
       toast.error('Erro ao salvar roteiro');

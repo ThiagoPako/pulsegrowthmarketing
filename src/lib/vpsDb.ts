@@ -503,6 +503,31 @@ class ChannelBuilder {
       this._socket = null;
     }
   }
+
+  /**
+   * Send a broadcast message on this channel.
+   * Server relays to all other subscribers of the same channel name.
+   * Returns 'ok' if the frame was written, 'queued' if the socket is still connecting.
+   */
+  send(payload: { type?: string; event: string; payload?: any }): 'ok' | 'queued' | 'error' {
+    const msg = JSON.stringify({
+      type: 'broadcast',
+      channel: this._name,
+      event: payload.event,
+      payload: payload.payload ?? null,
+    });
+    if (!this._socket) return 'error';
+    if (this._socket.readyState === WebSocket.OPEN) {
+      try { this._socket.send(msg); return 'ok'; } catch { return 'error'; }
+    }
+    if (this._socket.readyState === WebSocket.CONNECTING) {
+      const sock = this._socket;
+      const onOpen = () => { try { sock.send(msg); } catch { /* ignore */ } sock.removeEventListener('open', onOpen); };
+      sock.addEventListener('open', onOpen);
+      return 'queued';
+    }
+    return 'error';
+  }
 }
 
 /**

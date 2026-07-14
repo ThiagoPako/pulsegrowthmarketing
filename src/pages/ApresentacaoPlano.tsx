@@ -168,8 +168,15 @@ export default function ApresentacaoPlano() {
     ? PRESENTATION_ORDER[currentIndex + 1]
     : null;
 
-  const goPrevPlan = () => { if (prevKey) navigate(`${baseRoute}/${prevKey}`); };
-  const goNextPlan = () => { if (nextKey) navigate(`${baseRoute}/${nextKey}`); };
+  const buildPlanUrl = (key: string) => {
+    const qs = new URLSearchParams();
+    if (queryCity) qs.set('city', queryCity);
+    if (promoIdParam) qs.set('promo', promoIdParam);
+    const q = qs.toString();
+    return `${baseRoute}/${key}${q ? `?${q}` : ''}`;
+  };
+  const goPrevPlan = () => { if (prevKey) navigate(buildPlanUrl(prevKey)); };
+  const goNextPlan = () => { if (nextKey) navigate(buildPlanUrl(nextKey)); };
   const totalStages = getTotalStages(!!promo);
   const nextStage = () => setStage((s) => Math.min(s + 1, totalStages - 1));
   const prevStage = () => setStage((s) => Math.max(s - 1, 0));

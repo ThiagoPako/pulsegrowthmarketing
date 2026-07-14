@@ -687,10 +687,11 @@ export default function Scripts() {
 
       const appendBlock = (block: HTMLElement, forceBreakInside = false) => {
         const clone = block.cloneNode(true) as HTMLElement;
-        clone.style.textAlign = 'justify';
-        clone.style.wordBreak = 'keep-all';
-        clone.style.overflowWrap = 'break-word';
+        clone.style.textAlign = 'left';
+        clone.style.wordBreak = 'normal';
+        clone.style.overflowWrap = 'anywhere';
         clone.style.hyphens = 'none';
+        clone.style.maxWidth = '100%';
         currentPage.appendChild(clone);
 
         const usedHeight = getUsedHeight(currentPage);

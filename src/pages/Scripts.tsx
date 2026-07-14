@@ -683,29 +683,98 @@ export default function Scripts() {
         return last.offsetTop + last.offsetHeight;
       };
 
-      const safeMaxHeight = pdfHeightPx - 24; // safe bottom margin to avoid clipping
+      const safeTopMargin = 24;
+      const safeBottomMargin = 40;
+      const safeMaxHeight = pdfHeightPx - safeBottomMargin; // safe bottom margin to avoid clipping
 
-      const appendBlock = (block: HTMLElement, forceBreakInside = false) => {
+      // Apply pagination CSS to any block: prevent word breaks mid-word and
+      // avoid breaking a block across pages when possible.
+      const applyPaginationStyles = (el: HTMLElement) => {
+        el.style.textAlign = 'left';
+        el.style.wordBreak = 'normal';
+        el.style.overflowWrap = 'break-word'; // only break tokens longer than the line
+        el.style.hyphens = 'none';
+        (el.style as any).webkitHyphens = 'none';
+        el.style.maxWidth = '100%';
+        el.style.boxSizing = 'border-box';
+        el.style.breakInside = 'avoid';
+        el.style.pageBreakInside = 'avoid';
+        // Ensure every descendant text container inherits the same rules
+        el.querySelectorAll<HTMLElement>('*').forEach((child) => {
+          child.style.wordBreak = 'normal';
+          child.style.overflowWrap = 'break-word';
+          child.style.hyphens = 'none';
+          (child.style as any).webkitHyphens = 'none';
+          if (!child.style.textAlign) child.style.textAlign = 'left';
+        });
+      };
+
+      // Split a block whose height exceeds a full page into multiple blocks,
+      // breaking only at paragraph/child boundaries — never mid-word.
+      const splitOversizedBlock = (block: HTMLElement, maxHeight: number): HTMLElement[] => {
+        const children = Array.from(block.children) as HTMLElement[];
+        if (children.length <= 1) return [block];
+
+        const shell = () => {
+          const s = block.cloneNode(false) as HTMLElement;
+          applyPaginationStyles(s);
+          return s;
+        };
+
+        const parts: HTMLElement[] = [];
+        let current = shell();
+        const probe = document.createElement('div');
+        probe.style.cssText = `position:fixed;left:-20000px;top:0;width:${pdfWidthPx}px;visibility:hidden;`;
+        document.body.appendChild(probe);
+
+        try {
+          for (const child of children) {
+            current.appendChild(child.cloneNode(true));
+            probe.innerHTML = '';
+            probe.appendChild(current.cloneNode(true));
+            if (probe.firstElementChild && (probe.firstElementChild as HTMLElement).offsetHeight > maxHeight) {
+              // remove last child, push current, start a new part with that child
+              current.removeChild(current.lastChild as Node);
+              if (current.childElementCount > 0) parts.push(current);
+              current = shell();
+              current.appendChild(child.cloneNode(true));
+            }
+          }
+          if (current.childElementCount > 0) parts.push(current);
+        } finally {
+          document.body.removeChild(probe);
+        }
+        return parts.length ? parts : [block];
+      };
+
+      const appendBlock = (block: HTMLElement, _forceBreakInside = false) => {
         const clone = block.cloneNode(true) as HTMLElement;
-        clone.style.textAlign = 'left';
-        clone.style.wordBreak = 'normal';
-        clone.style.overflowWrap = 'anywhere';
-        clone.style.hyphens = 'none';
-        clone.style.maxWidth = '100%';
+        applyPaginationStyles(clone);
         currentPage.appendChild(clone);
 
         const usedHeight = getUsedHeight(currentPage);
 
         if (usedHeight > safeMaxHeight) {
-          if (currentPage.childElementCount > 1) {
-            // Move block to new page
-            currentPage.removeChild(clone);
+          currentPage.removeChild(clone);
+          // Try placing block on a fresh page first
+          if (currentPage.childElementCount > 0) {
             currentPage = createPage();
-            currentPage.appendChild(clone);
-            // Check again - if single block still overflows, it's too tall (accept it)
           }
-          // If it's the only child and still overflows, we accept it
-          // (block is taller than a full page - rare but possible)
+          currentPage.appendChild(clone);
+          if (getUsedHeight(currentPage) > safeMaxHeight) {
+            // Block alone still overflows — split by paragraph boundaries
+            currentPage.removeChild(clone);
+            const availableHeight = pdfHeightPx - safeTopMargin - safeBottomMargin;
+            const parts = splitOversizedBlock(clone, availableHeight);
+            for (const part of parts) {
+              currentPage.appendChild(part);
+              if (getUsedHeight(currentPage) > safeMaxHeight) {
+                currentPage.removeChild(part);
+                currentPage = createPage();
+                currentPage.appendChild(part);
+              }
+            }
+          }
         }
       };
 

@@ -155,12 +155,15 @@ export default function Copy() {
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
     toast.success(`Executando: ${task.title}`);
+    broadcastChange();
+    loadTasks(true);
   };
 
   const cancelSession = () => {
     if (!confirm('Cancelar execução? O tempo será descartado.')) return;
     setActiveSession(null);
     if (sessionKey) localStorage.removeItem(sessionKey);
+    broadcastChange();
   };
 
   const openFinalize = () => {

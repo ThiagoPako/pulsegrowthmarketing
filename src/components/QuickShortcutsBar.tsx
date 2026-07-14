@@ -5,12 +5,13 @@ import { cn } from '@/lib/utils';
 import { CATEGORY_TINT, getTintForPath } from '@/lib/navTint';
 import {
   LayoutDashboard, Kanban, Calendar, Palette, Scissors, Share2,
-  Building2, DollarSign, MessageSquare, BarChart3, FileText, Megaphone,
+  Building2, DollarSign, MessageSquare, BarChart3, FileText, Megaphone, PenLine,
 } from 'lucide-react';
 
 const SHORTCUTS = [
   { path: '/dashboard', label: 'Início', icon: LayoutDashboard, roles: ['admin', 'videomaker', 'social_media', 'editor', 'endomarketing', 'parceiro', 'designer', 'fotografo'] },
   { path: '/conteudo', label: 'Conteúdo', icon: Kanban, roles: ['admin', 'social_media', 'videomaker', 'editor'] },
+  { path: '/copy', label: 'Copy', icon: PenLine, roles: ['admin', 'social_media'] },
   { path: '/agenda', label: 'Agenda', icon: Calendar, roles: ['admin', 'videomaker', 'social_media'] },
   { path: '/designer', label: 'Designer', icon: Palette, roles: ['admin', 'social_media', 'fotografo', 'designer'] },
   { path: '/edicao/kanban', label: 'Edição', icon: Scissors, roles: ['admin', 'editor', 'social_media', 'videomaker'] },

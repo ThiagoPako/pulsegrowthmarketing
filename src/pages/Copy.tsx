@@ -279,7 +279,7 @@ export default function Copy() {
         contentFormat: form.contentFormat,
         content: contentHtml,
         recorded: false,
-        priority: finalizing.request?.priority === 'alta' ? 'urgente' : 'normal',
+        priority: finalizing.request?.priority === 'alta' ? 'urgent' : 'normal',
         createdAt: nowIso,
         updatedAt: nowIso,
         isEndomarketing: false,

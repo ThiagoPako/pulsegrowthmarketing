@@ -15,7 +15,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Pause, CheckCircle2, Flame, FileText, Clock, User as UserIcon,
   PenLine, Sparkles, PlusCircle, AlertTriangle, TrendingUp, Package,
-  Send, Trash2, ListChecks
+  Send, Trash2, ListChecks, Target, CalendarDays
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import type { Script, ScriptVideoType, ScriptContentFormat } from '@/types';
@@ -75,6 +75,14 @@ export default function Copy() {
     contentFormat: 'reels' as ScriptContentFormat,
     priority: 'alta' as 'alta' | 'normal',
   });
+
+  // Diálogo de geração pontual (por cliente + semana)
+  const [singleGenOpen, setSingleGenOpen] = useState(false);
+  const [singleGenForm, setSingleGenForm] = useState({
+    clientId: '',
+    weekDate: new Date().toISOString().slice(0, 10), // YYYY-MM-DD (data de referência da semana)
+  });
+  const [singleGenBusy, setSingleGenBusy] = useState(false);
 
   const [form, setForm] = useState({
     title: '',
@@ -436,6 +444,79 @@ export default function Copy() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, user?.id, clients.length]);
 
+  // ── DÉFICIT DE UM CLIENTE ESPECÍFICO ──
+  const computeClientDeficit = (clientId: string) => {
+    const c = clients.find(x => x.id === clientId);
+    if (!c) return null;
+    const formats = [
+      { key: 'reels' as const, label: 'Reels', target: Number(c.weeklyReels || 0) },
+      { key: 'criativo' as const, label: 'Criativo', target: Number(c.weeklyCreatives || 0) },
+      { key: 'story' as const, label: 'Story', target: Number(c.weeklyStories || 0) },
+    ];
+    const breakdown = formats.map(f => {
+      const stock = scripts.filter(s => !s.recorded && s.clientId === clientId && (s.contentFormat || 'reels') === f.key).length;
+      const pending = tasks.filter(t => t.client_id === clientId && t.content_type === f.key).length;
+      const have = stock + pending;
+      const deficit = Math.max(0, f.target - have);
+      return { ...f, stock, pending, have, deficit };
+    });
+    const total = breakdown.reduce((sum, b) => sum + b.deficit, 0);
+    return { client: c, breakdown, total };
+  };
+
+  const singleGenDeficit = useMemo(
+    () => singleGenForm.clientId ? computeClientDeficit(singleGenForm.clientId) : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [singleGenForm.clientId, clients, scripts, tasks]
+  );
+
+  const generateForClient = async () => {
+    if (!singleGenDeficit || singleGenDeficit.total === 0) {
+      toast.info('Este cliente não tem déficit no momento ✅');
+      return;
+    }
+    setSingleGenBusy(true);
+    // Rótulo da semana a partir da data escolhida
+    const d = new Date(singleGenForm.weekDate + 'T00:00:00');
+    const weekOfMonth = Math.ceil(d.getDate() / 7);
+    const monthLabel = d.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+    const weekLabel = `S${weekOfMonth} · ${monthLabel}`;
+
+    const rows: any[] = [];
+    for (const b of singleGenDeficit.breakdown) {
+      for (let i = 0; i < b.deficit; i++) {
+        rows.push({
+          client_id: singleGenDeficit.client.id,
+          title: `Novo Roteiro ${b.label} — ${singleGenDeficit.client.companyName} (${weekLabel})`,
+          content_type: b.key,
+          kanban_column: 'ideias',
+          description: `🎯 Gerado manualmente para ${singleGenDeficit.client.companyName} — semana ${weekLabel} (${b.label})`,
+          created_by: user?.id ?? null,
+        });
+      }
+    }
+
+    let inserted = 0;
+    for (let i = 0; i < rows.length; i += 20) {
+      const batch = rows.slice(i, i + 20);
+      const { error } = await supabase.from('content_tasks').insert(batch as any);
+      if (error) {
+        console.error('[gerar-cliente] erro:', error);
+        toast.error('Erro ao gerar tarefas: ' + error.message);
+        break;
+      }
+      inserted += batch.length;
+    }
+
+    setSingleGenBusy(false);
+    if (inserted > 0) {
+      toast.success(`✨ ${inserted} tarefa(s) criada(s) para ${singleGenDeficit.client.companyName} (${weekLabel})`);
+      broadcastChange();
+      loadAll(true);
+      setSingleGenOpen(false);
+    }
+  };
+
   const elapsedMs = activeSession ? now - activeSession.startedAt : 0;
 
   // ── UI Components ──
@@ -595,9 +676,14 @@ export default function Copy() {
               Clientes com maior demanda
               <Badge variant="outline" className="text-[10px]">baseado em pendentes vs estoque</Badge>
             </h2>
-            <Button size="sm" variant="outline" onClick={() => autoGenerateTasks(false)} className="gap-1.5 border-orange-500/40 text-orange-600 hover:bg-orange-500/10">
-              <Sparkles size={12} /> Gerar tarefas automaticamente
-            </Button>
+            <div className="flex gap-2 flex-wrap">
+              <Button size="sm" variant="outline" onClick={() => setSingleGenOpen(true)} className="gap-1.5 border-primary/40 text-primary hover:bg-primary/10">
+                <Target size={12} /> Gerar para cliente específico
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => autoGenerateTasks(false)} className="gap-1.5 border-orange-500/40 text-orange-600 hover:bg-orange-500/10">
+                <Sparkles size={12} /> Gerar tarefas automaticamente
+              </Button>
+            </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {highDemand.map(d => (
@@ -708,6 +794,79 @@ export default function Copy() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* ── Dialog: gerar tarefas para cliente específico ── */}
+      <Dialog open={singleGenOpen} onOpenChange={setSingleGenOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Target size={18} className="text-primary" /> Gerar tarefas para cliente
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label>Cliente *</Label>
+              <Select value={singleGenForm.clientId} onValueChange={(v) => setSingleGenForm(f => ({ ...f, clientId: v }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione o cliente..." /></SelectTrigger>
+                <SelectContent>
+                  {clients
+                    .filter(c => ((c as any).status || 'ativo') !== 'cancelado')
+                    .sort((a, b) => a.companyName.localeCompare(b.companyName))
+                    .map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="flex items-center gap-1.5"><CalendarDays size={12} /> Data / semana de referência *</Label>
+              <Input
+                type="date"
+                value={singleGenForm.weekDate}
+                onChange={e => setSingleGenForm(f => ({ ...f, weekDate: e.target.value }))}
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">A semana será calculada a partir da data escolhida (ex.: S2 · nov 2025).</p>
+            </div>
+
+            {singleGenDeficit && (
+              <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Déficit atual</p>
+                  <Badge className={singleGenDeficit.total > 0 ? 'bg-orange-500 text-white' : 'bg-emerald-500 text-white'}>
+                    {singleGenDeficit.total > 0 ? `${singleGenDeficit.total} a criar` : 'Sem déficit ✅'}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {singleGenDeficit.breakdown.map(b => (
+                    <div key={b.key} className="rounded-lg border border-border bg-card p-2 text-center">
+                      <p className="text-[10px] uppercase text-muted-foreground font-semibold">{b.label}</p>
+                      <p className="text-lg font-bold text-foreground tabular-nums">{b.deficit}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        meta {b.target} · tem {b.have}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!singleGenForm.clientId && (
+              <p className="text-xs text-muted-foreground text-center py-2">
+                Selecione um cliente para ver o déficit por formato.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSingleGenOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={generateForClient}
+              disabled={singleGenBusy || !singleGenDeficit || singleGenDeficit.total === 0}
+              className="gap-1.5"
+            >
+              <Sparkles size={14} />
+              {singleGenBusy ? 'Gerando...' : singleGenDeficit ? `Gerar ${singleGenDeficit.total} tarefa(s)` : 'Gerar tarefas'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Dialog: novo pedido ── */}
       <Dialog open={requestDialogOpen} onOpenChange={setRequestDialogOpen}>

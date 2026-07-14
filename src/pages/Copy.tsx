@@ -519,281 +519,254 @@ export default function Copy() {
 
   const elapsedMs = activeSession ? now - activeSession.startedAt : 0;
 
-  // ── UI Components ──
-  const TaskCard = ({ task, urgent }: { task: PendingTask; urgent?: boolean }) => {
-    const client = clientById(task.client_id);
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-        className={`group relative rounded-xl border p-3 transition-all hover:shadow-md ${urgent ? 'border-destructive/40 bg-destructive/5' : 'border-border bg-card'}`}
-      >
-        <div className="flex items-start gap-3">
-          {client ? <ClientLogo client={client as any} size="sm" /> : (
-            <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
-              <FileText size={16} className="text-muted-foreground" />
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              {urgent && <Badge variant="destructive" className="h-5 gap-1"><Flame size={10} /> Urgente</Badge>}
-              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{task.content_type}</span>
-            </div>
-            <h4 className="text-sm font-semibold text-foreground line-clamp-2">{task.title}</h4>
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">{client?.companyName || task.prospect_name || 'Sem cliente'}</p>
-          </div>
-        </div>
-        <Button size="sm" className="w-full mt-3 gap-1.5" variant={urgent ? 'destructive' : 'default'}
-          onClick={() => startTask(task)} disabled={isBusy}>
-          <Play size={12} /> Iniciar
-        </Button>
-      </motion.div>
-    );
-  };
+  // ── FILA UNIFICADA DE ROTEIROS A FAZER ──
+  // Ordem: pedidos alta prioridade → tarefas urgentes → pedidos normais → tarefas normais.
+  type QueueItem =
+    | { kind: 'request'; id: string; priority: 'alta' | 'normal'; req: ScriptRequest }
+    | { kind: 'task'; id: string; urgent: boolean; task: PendingTask };
 
-  const RequestCard = ({ req }: { req: ScriptRequest }) => {
-    const client = clientById(req.client_id);
-    const isPriority = req.priority === 'alta';
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-        className={`group relative rounded-xl border-2 p-3 transition-all hover:shadow-md ${isPriority ? 'border-amber-500/50 bg-gradient-to-br from-amber-500/10 to-transparent' : 'border-border bg-card'}`}
-      >
-        <div className="flex items-start gap-3">
-          {client ? <ClientLogo client={client as any} size="sm" /> : (
-            <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
-              <Sparkles size={16} className="text-muted-foreground" />
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              {isPriority && <Badge className="h-5 gap-1 bg-amber-500 hover:bg-amber-500 text-white"><Sparkles size={10} /> Prioridade</Badge>}
-              <Badge variant="outline" className="h-5 text-[10px]">{SCRIPT_CONTENT_FORMAT_LABELS[req.content_format as ScriptContentFormat] || req.content_format}</Badge>
-            </div>
-            <h4 className="text-sm font-semibold text-foreground line-clamp-2">{req.topic}</h4>
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">{client?.companyName || 'Sem cliente'}</p>
-            {req.notes && <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2 italic">"{req.notes}"</p>}
-            {req.requested_by_name && <p className="text-[10px] text-muted-foreground mt-1">📨 {req.requested_by_name}</p>}
-          </div>
-        </div>
-        <div className="flex gap-2 mt-3">
-          <Button size="sm" className={`flex-1 gap-1.5 ${isPriority ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}`}
-            onClick={() => startRequest(req)} disabled={isBusy}>
-            <Play size={12} /> Iniciar
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => cancelRequest(req.id)} title="Cancelar pedido">
-            <Trash2 size={12} />
-          </Button>
-        </div>
-      </motion.div>
-    );
-  };
+  const queue: QueueItem[] = useMemo(() => {
+    const q: QueueItem[] = [];
+    priorityRequests.forEach(r => q.push({ kind: 'request', id: r.id, priority: 'alta', req: r }));
+    urgentTasks.forEach(t => q.push({ kind: 'task', id: t.id, urgent: true, task: t }));
+    normalRequests.forEach(r => q.push({ kind: 'request', id: r.id, priority: 'normal', req: r }));
+    todoTasks.forEach(t => q.push({ kind: 'task', id: t.id, urgent: false, task: t }));
+    return q;
+  }, [priorityRequests, urgentTasks, normalRequests, todoTasks]);
 
+  const elapsedMs = activeSession ? now - activeSession.startedAt : 0;
+
+  // ── UI Components (aesthetic: Pulse Academy — dark netflix-style) ──
   const highDemand = clientDemand.filter(d => d.score > 0).slice(0, 6);
 
-  return (
-    <div className="p-4 sm:p-6 max-w-[1600px] mx-auto space-y-6">
-      {/* ── Header ── */}
-      <header className="glass-card p-5 border-2 border-primary/20 bg-gradient-to-br from-primary/5 via-primary/[0.02] to-transparent">
-        <div className="flex flex-col md:flex-row md:items-center gap-4">
-          <motion.div
-            animate={{ scale: [1, 1.06, 1], rotate: [0, -3, 0] }}
-            transition={{ duration: 3, repeat: Infinity }}
-            className="w-14 h-14 rounded-2xl bg-primary/15 flex items-center justify-center shrink-0"
-          >
-            <PenLine size={26} className="text-primary" />
-          </motion.div>
-          <div className="flex-1">
-            <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground">Copy</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Área do copywriter — apenas 1 execução ativa por vez, igual videomaker</p>
+  const QueueRow = ({ item, index }: { item: QueueItem; index: number }) => {
+    const isReq = item.kind === 'request';
+    const client = isReq ? clientById(item.req.client_id) : clientById(item.task.client_id);
+    const title = isReq ? item.req.topic : item.task.title;
+    const format = isReq ? item.req.content_format : item.task.content_type;
+    const isHigh = isReq ? item.priority === 'alta' : item.urgent;
+    const tagLabel = isReq ? (item.priority === 'alta' ? 'Prioridade Social' : 'Pedido Social') : (item.urgent ? 'Urgente' : 'Backlog');
+    const tagColor = isHigh ? 'bg-red-600 text-white' : 'bg-white/10 text-white/70';
+    const onStart = () => isReq ? startRequest(item.req) : startTask(item.task);
+    const onCancel = isReq ? () => cancelRequest(item.req.id) : undefined;
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+        className={`group flex items-center gap-3 p-2.5 rounded-lg border transition-all ${
+          isHigh
+            ? 'bg-red-600/[0.06] border-red-600/25 hover:border-red-600/50'
+            : 'bg-zinc-900/40 border-white/5 hover:border-white/20'
+        }`}
+      >
+        <div className="w-8 h-8 rounded-md bg-black/60 border border-white/10 flex items-center justify-center shrink-0">
+          <span className="text-[10px] font-black italic tracking-tight text-white/70 tabular-nums">
+            {String(index + 1).padStart(2, '0')}
+          </span>
+        </div>
+        <div className="w-10 h-10 rounded-md overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
+          {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={14} className="text-white/30" />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+            <span className={`text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm ${tagColor}`}>{tagLabel}</span>
+            <span className="text-[8px] font-black uppercase tracking-[0.2em] text-white/40">{format}</span>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={() => setRequestDialogOpen(true)} className="gap-1.5" variant="outline">
-              <PlusCircle size={14} /> Solicitar roteiro
+          <p className="text-[12px] font-black uppercase tracking-tight text-white/95 truncate">{title}</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40 truncate">
+            {client?.companyName || (isReq ? 'Sem cliente' : (item.task.prospect_name || 'Sem cliente'))}
+            {isReq && item.req.requested_by_name ? ` · ${item.req.requested_by_name}` : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Button
+            size="sm"
+            onClick={onStart}
+            disabled={isBusy}
+            className={`h-8 px-3 gap-1.5 font-black uppercase italic tracking-widest text-[10px] ${
+              isHigh ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-white text-black hover:bg-zinc-200'
+            }`}
+          >
+            <Play size={11} className="fill-current" /> Iniciar
+          </Button>
+          {onCancel && (
+            <Button size="sm" variant="ghost" onClick={onCancel} className="h-8 w-8 p-0 text-white/40 hover:text-red-500 hover:bg-red-500/10">
+              <Trash2 size={12} />
+            </Button>
+          )}
+        </div>
+      </motion.div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-[#0a0a0a] text-white">
+      <div className="max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-10 py-5 sm:py-8 space-y-6">
+        {/* ── HEADER Pulse Copy ── */}
+        <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 border-b border-white/10 pb-5">
+          <div className="flex items-center gap-4">
+            <motion.div
+              animate={{ scale: [1, 1.05, 1], rotate: [0, -2, 0] }}
+              transition={{ duration: 3, repeat: Infinity }}
+              className="w-12 h-12 rounded-xl bg-red-600/15 border border-red-600/30 flex items-center justify-center shrink-0"
+            >
+              <PenLine size={22} className="text-red-500" />
+            </motion.div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.35em] text-red-600 mb-1">Copywriter Hub</p>
+              <h1 className="text-2xl sm:text-4xl font-black italic uppercase tracking-tighter leading-none">
+                Pulse <span className="text-red-600">Copy</span>
+              </h1>
+              <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-500 mt-1.5">
+                Uma execução ativa por vez · Fila priorizada · Pedidos do social em destaque
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={() => setSingleGenOpen(true)} className="bg-white/10 hover:bg-white/20 text-white gap-1.5 h-9 px-4 font-black uppercase italic tracking-widest text-[10px] border border-white/10">
+              <Target size={12} /> Gerar por cliente
+            </Button>
+            <Button onClick={() => autoGenerateTasks(false)} className="bg-white/10 hover:bg-white/20 text-white gap-1.5 h-9 px-4 font-black uppercase italic tracking-widest text-[10px] border border-white/10">
+              <Sparkles size={12} /> Auto-gerar
+            </Button>
+            <Button onClick={() => setRequestDialogOpen(true)} className="bg-red-600 hover:bg-red-700 text-white gap-1.5 h-9 px-4 font-black uppercase italic tracking-widest text-[10px]">
+              <PlusCircle size={12} /> Novo pedido
             </Button>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* ── SPOTLIGHT: execução ao vivo ── */}
-      <AnimatePresence>
-        {(activeTask || activeRequest) && (
-          <motion.div
-            key="active"
-            initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }}
-            className="rounded-2xl border-2 border-primary bg-gradient-to-br from-primary/15 via-primary/5 to-transparent p-5 ring-2 ring-primary/20 shadow-xl"
-          >
-            <div className="flex flex-col md:flex-row md:items-center gap-4">
-              <motion.div
-                animate={{ scale: [1, 1.15, 1] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-                className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center shrink-0"
-              >
-                <PenLine size={30} className="text-primary" />
-              </motion.div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <Badge className="bg-primary/20 text-primary border-primary/40 text-[10px] gap-1">
-                    <motion.span className="w-1.5 h-1.5 rounded-full bg-primary inline-block"
-                      animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
-                    AO VIVO
-                  </Badge>
-                  {activeRequest && <Badge className="bg-amber-500 text-white text-[10px] gap-1"><Sparkles size={10} /> Pedido do social</Badge>}
-                </div>
-                <h2 className="font-display text-xl font-bold text-foreground truncate">
-                  {activeTask?.title || activeRequest?.topic}
-                </h2>
-                <p className="text-sm text-muted-foreground truncate">
-                  {(clientById(activeTask?.client_id || activeRequest?.client_id)?.companyName)
-                    || activeTask?.prospect_name || 'Sem cliente'}
-                </p>
+        {/* ── SPOTLIGHT: execução ao vivo ── */}
+        <AnimatePresence>
+          {(activeTask || activeRequest) && (
+            <motion.div
+              key="active"
+              initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+              className="relative overflow-hidden rounded-2xl border border-red-600/40 bg-gradient-to-br from-red-600/15 via-red-600/5 to-transparent p-5 shadow-[0_0_40px_rgba(220,38,38,0.15)]"
+            >
+              <div className="absolute top-3 left-4 flex items-center gap-2">
+                <motion.span className="w-2 h-2 rounded-full bg-red-500 inline-block"
+                  animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.2, repeat: Infinity }} />
+                <span className="text-[9px] font-black uppercase tracking-[0.35em] text-red-500">Ao Vivo</span>
+                {activeRequest && (
+                  <span className="text-[9px] font-black uppercase tracking-[0.25em] text-amber-400 border border-amber-500/40 px-1.5 py-0.5 rounded-sm">
+                    Pedido Social
+                  </span>
+                )}
               </div>
-              <div className="flex items-center gap-4">
-                <div className="text-center">
-                  <div className="text-4xl font-mono font-bold text-primary tabular-nums">
-                    <Clock size={16} className="inline mr-1 -mt-1" />
-                    {formatDuration(elapsedMs)}
+              <div className="flex flex-col md:flex-row md:items-center gap-5 pt-6">
+                <motion.div
+                  animate={{ scale: [1, 1.1, 1] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                  className="w-16 h-16 rounded-2xl bg-red-600/20 border border-red-600/40 flex items-center justify-center shrink-0"
+                >
+                  <PenLine size={28} className="text-red-500" />
+                </motion.div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-xl sm:text-2xl font-black italic uppercase tracking-tighter truncate">
+                    {activeTask?.title || activeRequest?.topic}
+                  </h2>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/50 truncate mt-1">
+                    {(clientById(activeTask?.client_id || activeRequest?.client_id)?.companyName)
+                      || activeTask?.prospect_name || 'Sem cliente'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-center">
+                    <div className="text-4xl font-mono font-black text-white tabular-nums leading-none">
+                      {formatDuration(elapsedMs)}
+                    </div>
+                    <div className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40 mt-1.5">Tempo</div>
                   </div>
-                  <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">tempo</div>
+                  <div className="flex flex-col gap-2">
+                    <Button onClick={openFinalize} className="bg-white text-black hover:bg-zinc-200 gap-1.5 h-9 font-black uppercase italic tracking-widest text-[10px]">
+                      <CheckCircle2 size={12} /> Finalizar
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={cancelSession} className="text-red-400 hover:text-red-300 hover:bg-red-500/10 gap-1.5 h-8 font-black uppercase italic tracking-widest text-[10px]">
+                      <Pause size={11} /> Cancelar
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <Button onClick={openFinalize} className="gap-1.5"><CheckCircle2 size={14} /> Finalizar</Button>
-                  <Button variant="outline" size="sm" onClick={cancelSession} className="gap-1.5 border-destructive/50 text-destructive hover:bg-destructive/10">
-                    <Pause size={12} /> Cancelar
-                  </Button>
-                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── FILA DE ROTEIROS (unificada) ── */}
+        <section className="rounded-2xl border border-white/5 bg-gradient-to-b from-zinc-900/60 to-zinc-900/20 p-4 sm:p-5">
+          <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-red-600/25 to-red-600/5 border border-red-600/30 flex items-center justify-center">
+                <ListChecks size={18} className="text-red-500" />
+              </div>
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.35em] text-red-600 mb-0.5">Fila de Produção</p>
+                <h2 className="text-lg sm:text-xl font-black italic uppercase tracking-tighter">Roteiros a fazer</h2>
               </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── DEMANDA POR CLIENTE ── */}
-      {highDemand.length > 0 && (
-        <section className="glass-card p-4 sm:p-5 border-2 border-orange-500/25 bg-gradient-to-br from-orange-500/[0.04] to-transparent">
-          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-            <h2 className="font-display font-semibold text-base flex items-center gap-2">
-              <TrendingUp size={18} className="text-orange-500" />
-              Clientes com maior demanda
-              <Badge variant="outline" className="text-[10px]">baseado em pendentes vs estoque</Badge>
-            </h2>
-            <div className="flex gap-2 flex-wrap">
-              <Button size="sm" variant="outline" onClick={() => setSingleGenOpen(true)} className="gap-1.5 border-primary/40 text-primary hover:bg-primary/10">
-                <Target size={12} /> Gerar para cliente específico
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => autoGenerateTasks(false)} className="gap-1.5 border-orange-500/40 text-orange-600 hover:bg-orange-500/10">
-                <Sparkles size={12} /> Gerar tarefas automaticamente
-              </Button>
+            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-600 inline-block" /> Prioridade {priorityRequests.length + urgentTasks.length}</span>
+              <span className="text-zinc-700">·</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-white/40 inline-block" /> Backlog {normalRequests.length + todoTasks.length}</span>
+              <span className="text-zinc-700">·</span>
+              <span className="text-white">{queue.length} totais</span>
             </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {highDemand.map(d => (
-              <div key={d.clientId} className="rounded-xl border border-orange-500/30 bg-card p-3 flex flex-col items-center text-center gap-2">
-                <ClientLogo client={d.client as any} size="sm" />
-                <div className="min-w-0 w-full">
-                  <p className="text-xs font-semibold text-foreground truncate">{d.client?.companyName}</p>
-                  <div className="flex items-center justify-center gap-2 mt-1 text-[10px]">
-                    <span className="flex items-center gap-0.5 text-destructive font-bold" title="Reels pendentes">
-                      <AlertTriangle size={10} />{d.pending}
-                    </span>
-                    <span className="text-muted-foreground">/</span>
-                    <span className="flex items-center gap-0.5 text-emerald-600 font-bold" title="Estoque de roteiros">
-                      <Package size={10} />{d.stock}
-                    </span>
-                  </div>
-                  <Badge className={`mt-1.5 text-[9px] ${d.score >= 3 ? 'bg-destructive text-destructive-foreground' : d.score >= 1 ? 'bg-amber-500 text-white' : 'bg-muted'}`}>
-                    déficit {d.score}
-                  </Badge>
-                </div>
-              </div>
-            ))}
-          </div>
+
+          {loading ? (
+            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-white/40 text-center py-10">Carregando fila…</p>
+          ) : queue.length === 0 ? (
+            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-emerald-500/80 text-center py-10">
+              ✅ Fila vazia — nada pendente
+            </p>
+          ) : (
+            <div className="space-y-1.5 max-h-[560px] overflow-y-auto pr-1">
+              {queue.map((item, idx) => <QueueRow key={`${item.kind}-${item.id}`} item={item} index={idx} />)}
+            </div>
+          )}
         </section>
-      )}
 
-      {/* ── TABS: Pedidos vs Backlog ── */}
-      <Tabs defaultValue="requests" className="w-full">
-        <TabsList>
-          <TabsTrigger value="requests" className="gap-2">
-            <Sparkles size={14} /> Pedidos do Social
-            {requests.length > 0 && <Badge variant="secondary" className="h-4 text-[10px]">{requests.length}</Badge>}
-          </TabsTrigger>
-          <TabsTrigger value="backlog" className="gap-2">
-            <ListChecks size={14} /> Backlog
-            {tasks.length > 0 && <Badge variant="secondary" className="h-4 text-[10px]">{tasks.length}</Badge>}
-          </TabsTrigger>
-        </TabsList>
+        {/* ── DEMANDA POR CLIENTE ── */}
+        {highDemand.length > 0 && (
+          <section className="rounded-2xl border border-white/5 bg-gradient-to-b from-zinc-900/60 to-zinc-900/20 p-4 sm:p-5">
+            <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-orange-500/25 to-orange-500/5 border border-orange-500/30 flex items-center justify-center">
+                  <TrendingUp size={18} className="text-orange-400" />
+                </div>
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[0.35em] text-orange-500 mb-0.5">Sinal de demanda</p>
+                  <h2 className="text-lg sm:text-xl font-black italic uppercase tracking-tighter">Clientes precisando</h2>
+                </div>
+              </div>
+              <span className="text-[9px] font-black uppercase tracking-[0.25em] text-zinc-500">pendentes vs estoque</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {highDemand.map(d => (
+                <div key={d.clientId} className="rounded-xl border border-orange-500/20 bg-black/40 p-3 flex flex-col items-center text-center gap-2 hover:border-orange-500/50 transition-colors">
+                  <ClientLogo client={d.client as any} size="sm" />
+                  <div className="min-w-0 w-full">
+                    <p className="text-[11px] font-black uppercase tracking-tight text-white/90 truncate">{d.client?.companyName}</p>
+                    <div className="flex items-center justify-center gap-2 mt-1 text-[10px]">
+                      <span className="flex items-center gap-0.5 text-red-500 font-black tabular-nums" title="Pendentes">
+                        <AlertTriangle size={10} />{d.pending}
+                      </span>
+                      <span className="text-zinc-700">/</span>
+                      <span className="flex items-center gap-0.5 text-emerald-500 font-black tabular-nums" title="Estoque">
+                        <Package size={10} />{d.stock}
+                      </span>
+                    </div>
+                    <span className={`inline-block mt-1.5 text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm ${
+                      d.score >= 3 ? 'bg-red-600 text-white' : d.score >= 1 ? 'bg-amber-500 text-black' : 'bg-white/10 text-white/60'
+                    }`}>
+                      Déficit {d.score}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
-        <TabsContent value="requests" className="mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Prioridade */}
-            <section className="rounded-2xl border-2 border-amber-500/40 bg-gradient-to-br from-amber-500/5 to-transparent p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-display font-semibold text-foreground flex items-center gap-2">
-                  <Sparkles size={16} className="text-amber-500" /> Prioridade
-                </h3>
-                <Badge className="bg-amber-500 text-white">{priorityRequests.length}</Badge>
-              </div>
-              <div className="space-y-2 max-h-[calc(100vh-460px)] overflow-y-auto pr-1">
-                {priorityRequests.length === 0 && (
-                  <p className="text-xs text-muted-foreground text-center py-6">Nenhum pedido prioritário</p>
-                )}
-                {priorityRequests.map(r => <RequestCard key={r.id} req={r} />)}
-              </div>
-            </section>
-
-            {/* Pedidos normais */}
-            <section className="rounded-2xl border border-border bg-card/40 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-display font-semibold text-foreground flex items-center gap-2">
-                  <Send size={16} className="text-primary" /> Pedidos gerais
-                </h3>
-                <Badge variant="secondary">{normalRequests.length}</Badge>
-              </div>
-              <div className="space-y-2 max-h-[calc(100vh-460px)] overflow-y-auto pr-1">
-                {normalRequests.length === 0 && (
-                  <p className="text-xs text-muted-foreground text-center py-6">Nenhum pedido geral</p>
-                )}
-                {normalRequests.map(r => <RequestCard key={r.id} req={r} />)}
-              </div>
-            </section>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="backlog" className="mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <section className="rounded-2xl border-2 border-destructive/30 bg-destructive/5 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-display font-semibold text-foreground flex items-center gap-2">
-                  <Flame size={16} className="text-destructive" /> Urgentes
-                </h3>
-                <Badge variant="destructive">{urgentTasks.length}</Badge>
-              </div>
-              <div className="space-y-2 max-h-[calc(100vh-460px)] overflow-y-auto pr-1">
-                {urgentTasks.length === 0 && !loading && (
-                  <p className="text-xs text-muted-foreground text-center py-6">Nenhuma tarefa urgente</p>
-                )}
-                {urgentTasks.map(t => <TaskCard key={t.id} task={t} urgent />)}
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-border bg-card/40 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-display font-semibold text-foreground flex items-center gap-2">
-                  <FileText size={16} className="text-primary" /> Roteiros a fazer
-                </h3>
-                <Badge variant="secondary">{todoTasks.length}</Badge>
-              </div>
-              <div className="space-y-2 max-h-[calc(100vh-460px)] overflow-y-auto pr-1">
-                {loading && <p className="text-xs text-muted-foreground text-center py-6">Carregando...</p>}
-                {!loading && todoTasks.length === 0 && (
-                  <p className="text-xs text-muted-foreground text-center py-6">Fila vazia — bom trabalho!</p>
-                )}
-                {todoTasks.map(t => <TaskCard key={t.id} task={t} />)}
-              </div>
-            </section>
-          </div>
-        </TabsContent>
-      </Tabs>
 
       {/* ── Dialog: gerar tarefas para cliente específico ── */}
       <Dialog open={singleGenOpen} onOpenChange={setSingleGenOpen}>

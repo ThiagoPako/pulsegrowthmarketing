@@ -724,7 +724,6 @@ export default function Copy() {
             </span>
             <span className={`text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm ${tagColor}`}>{tagLabel}</span>
           </div>
-          </div>
           <p className="text-[12px] font-black uppercase tracking-tight text-white/95 truncate">{title}</p>
           <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40 truncate">
             {client?.companyName || (isReq ? 'Sem cliente' : (item.task.prospect_name || 'Sem cliente'))}

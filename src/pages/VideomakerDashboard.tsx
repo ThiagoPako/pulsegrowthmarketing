@@ -2168,43 +2168,56 @@ export default function VideomakerDashboard() {
         </div>
       </div>
 
-      {/* ── Edite seus Stories (Sessão com cronômetro) ── */}
+      {/* ── Edite seus Stories (Sessão cinematográfica) ── */}
       <AnimatePresence mode="wait">
         {!storySession ? (
           <motion.div
             key="idle"
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="glass-card p-4 sm:p-6 border-2 border-pink-500/25 bg-gradient-to-br from-pink-500/[0.03] to-transparent"
+            className="relative overflow-hidden rounded-3xl border border-white/5 bg-gradient-to-br from-zinc-900/80 via-zinc-900/40 to-pink-950/20 backdrop-blur-sm p-5 sm:p-7 shadow-[0_0_40px_rgba(236,72,153,0.05)]"
           >
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+            {/* Decorative aura */}
+            <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-pink-500/10 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-24 -left-16 h-56 w-56 rounded-full bg-fuchsia-500/10 blur-3xl" />
+
+            <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5">
               <motion.div
-                animate={{ scale: [1, 1.08, 1], rotate: [0, -3, 0] }}
-                transition={{ duration: 2.5, repeat: Infinity }}
-                className="w-12 h-12 rounded-2xl bg-pink-500/15 flex items-center justify-center shrink-0"
+                animate={{ scale: [1, 1.06, 1], rotate: [0, -4, 0] }}
+                transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                className="h-14 w-14 rounded-2xl bg-gradient-to-br from-pink-500/30 to-fuchsia-500/10 border border-pink-500/30 flex items-center justify-center shrink-0 shadow-lg shadow-pink-500/20"
               >
-                <Camera size={22} className="text-pink-500" />
+                <Film size={26} className="text-pink-400" />
               </motion.div>
+
               <div className="flex-1">
-                <h3 className="font-display font-semibold text-base flex items-center gap-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <Sparkles size={12} className="text-pink-400" />
+                  <span className="text-[10px] font-black uppercase italic tracking-[0.2em] text-pink-400/90">
+                    Sessão de Edição
+                  </span>
+                </div>
+                <h3 className="font-display font-black text-lg sm:text-xl leading-tight flex items-center gap-2 flex-wrap">
                   Edite seus Stories
                   {storiesUploaded > 0 && (
-                    <Badge className="bg-success/20 text-success border-success/30 text-[10px]">
+                    <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px] font-bold">
                       +{storiesUploaded * VM_SCORE.STORY_EDITADO} pts hoje
                     </Badge>
                   )}
                 </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Ao iniciar, o cronômetro roda. Cada story enviado gera um card 📱 <strong className="text-pink-500">rosa</strong> em Revisão.
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1 leading-relaxed">
+                  Cronômetro roda ao iniciar. Cada story enviado gera um card{' '}
+                  <strong className="text-pink-400">📱 rosa</strong> em Revisão.
                 </p>
               </div>
+
               <Button
                 onClick={handleStartStorySession}
                 size="lg"
-                className="w-full sm:w-auto gap-2 bg-pink-500 hover:bg-pink-600 text-white shadow-lg shadow-pink-500/25"
+                className="w-full sm:w-auto gap-2 bg-gradient-to-r from-pink-500 via-fuchsia-500 to-pink-600 hover:from-pink-600 hover:via-fuchsia-600 hover:to-pink-700 text-white font-black uppercase italic tracking-widest text-xs h-11 px-6 shadow-[0_0_25px_rgba(236,72,153,0.35)] border border-white/10"
               >
-                <Play size={16} /> Iniciar Edição de Stories
+                <Play size={16} className="fill-current" /> Iniciar Edição
               </Button>
             </div>
           </motion.div>
@@ -2214,54 +2227,186 @@ export default function VideomakerDashboard() {
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.98 }}
-            className="rounded-2xl border-2 border-pink-500/50 bg-gradient-to-br from-pink-500/10 via-pink-500/5 to-transparent p-4 sm:p-5 ring-2 ring-pink-500/20"
+            className={`relative overflow-hidden rounded-3xl border p-5 sm:p-6 shadow-[0_0_40px_rgba(236,72,153,0.15)] backdrop-blur-sm ${
+              storyPausedAt
+                ? 'border-amber-500/40 bg-gradient-to-br from-zinc-900/80 via-amber-950/20 to-zinc-900/40'
+                : 'border-pink-500/40 bg-gradient-to-br from-zinc-900/80 via-pink-950/30 to-fuchsia-950/20'
+            }`}
           >
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-              <motion.div
-                animate={{ scale: [1, 1.15, 1] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-                className="w-14 h-14 rounded-2xl bg-pink-500/20 flex items-center justify-center shrink-0"
-              >
-                <Camera size={26} className="text-pink-500" />
-              </motion.div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-display font-bold text-base">📱 Editando Stories</span>
-                  <Badge className="bg-pink-500/20 text-pink-600 border-pink-500/40 text-[10px]">
-                    <motion.span className="w-1.5 h-1.5 rounded-full bg-pink-500 mr-1 inline-block"
-                      animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
-                    AO VIVO
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-4 mt-1.5 text-sm">
-                  <span className="font-mono font-bold text-lg text-pink-600 tabular-nums">
-                    <Clock size={14} className="inline mr-1 -mt-0.5" />
-                    {`${String(Math.floor(storySessionElapsed / 3600)).padStart(2,'0')}:${String(Math.floor((storySessionElapsed % 3600) / 60)).padStart(2,'0')}:${String(storySessionElapsed % 60).padStart(2,'0')}`}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    <strong className="text-pink-600">{storySession.storiesCount}</strong> story(s) enviado(s)
-                  </span>
+            {/* Ambient glow */}
+            <motion.div
+              className={`pointer-events-none absolute -top-32 -right-24 h-72 w-72 rounded-full blur-3xl ${
+                storyPausedAt ? 'bg-amber-500/15' : 'bg-pink-500/20'
+              }`}
+              animate={{ scale: [1, 1.15, 1], opacity: [0.7, 1, 0.7] }}
+              transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <div className="pointer-events-none absolute -bottom-24 -left-20 h-64 w-64 rounded-full bg-fuchsia-500/10 blur-3xl" />
+
+            {/* Floating particles */}
+            <div className="pointer-events-none absolute inset-0 overflow-hidden">
+              {[...Array(4)].map((_, i) => (
+                <motion.div
+                  key={i}
+                  className={`absolute w-1 h-1 rounded-full ${storyPausedAt ? 'bg-amber-400/40' : 'bg-pink-400/50'}`}
+                  initial={{ x: `${15 + i * 22}%`, y: '110%', opacity: 0 }}
+                  animate={{ y: ['110%', '-10%'], opacity: [0, 0.8, 0] }}
+                  transition={{ duration: 4 + i * 0.6, repeat: Infinity, delay: i * 0.8, ease: 'linear' }}
+                />
+              ))}
+            </div>
+
+            <div className="relative flex flex-col lg:flex-row items-start lg:items-center gap-5">
+              {/* Icon + Status */}
+              <div className="flex items-center gap-4">
+                <motion.div
+                  animate={storyPausedAt ? { scale: 1 } : { scale: [1, 1.12, 1] }}
+                  transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                  className={`relative h-16 w-16 rounded-2xl flex items-center justify-center shrink-0 border shadow-xl ${
+                    storyPausedAt
+                      ? 'bg-gradient-to-br from-amber-500/30 to-amber-500/5 border-amber-500/40 shadow-amber-500/20'
+                      : 'bg-gradient-to-br from-pink-500/30 to-fuchsia-500/10 border-pink-500/40 shadow-pink-500/30'
+                  }`}
+                >
+                  {storyPausedAt ? (
+                    <Pause size={28} className="text-amber-400 fill-amber-400" />
+                  ) : (
+                    <Film size={28} className="text-pink-400" />
+                  )}
+                  {!storyPausedAt && (
+                    <motion.span
+                      className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-red-500 border-2 border-zinc-900"
+                      animate={{ opacity: [1, 0.3, 1], scale: [1, 1.2, 1] }}
+                      transition={{ duration: 1.4, repeat: Infinity }}
+                    />
+                  )}
+                </motion.div>
+
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="text-[10px] font-black uppercase italic tracking-[0.2em] text-pink-400/90">
+                      {storyPausedAt ? '⏸ Sessão Pausada' : '🎬 Sessão Ao Vivo'}
+                    </span>
+                    {!storyPausedAt && (
+                      <Badge className="bg-red-500/20 text-red-400 border-red-500/40 text-[10px] font-bold gap-1">
+                        <motion.span
+                          className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"
+                          animate={{ opacity: [1, 0.3, 1] }}
+                          transition={{ duration: 1.2, repeat: Infinity }}
+                        />
+                        REC
+                      </Badge>
+                    )}
+                  </div>
+                  <h3 className="font-display font-black text-xl leading-tight">
+                    Editando Stories
+                  </h3>
                 </div>
               </div>
-              <div className="flex gap-2 w-full sm:w-auto">
+
+              {/* Metrics */}
+              <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3 w-full">
+                <div className={`rounded-xl border p-3 ${storyPausedAt ? 'border-amber-500/20 bg-amber-500/5' : 'border-pink-500/20 bg-pink-500/5'}`}>
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                    <Clock size={11} /> Tempo Ativo
+                  </div>
+                  <motion.div
+                    className={`font-mono font-black text-xl tabular-nums leading-none ${storyPausedAt ? 'text-amber-400' : 'text-pink-400'}`}
+                    animate={storyPausedAt ? {} : { opacity: [1, 0.7, 1] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  >
+                    {`${String(Math.floor(storySessionElapsed / 3600)).padStart(2,'0')}:${String(Math.floor((storySessionElapsed % 3600) / 60)).padStart(2,'0')}:${String(storySessionElapsed % 60).padStart(2,'0')}`}
+                  </motion.div>
+                </div>
+
+                <div className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/5 p-3">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                    <Upload size={11} /> Enviados
+                  </div>
+                  <div className="font-mono font-black text-xl tabular-nums leading-none text-fuchsia-400">
+                    {String(storySession.storiesCount).padStart(2, '0')}
+                  </div>
+                </div>
+
+                <div className="col-span-2 sm:col-span-1 rounded-xl border border-white/5 bg-white/[0.02] p-3">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                    <Pause size={11} /> Em Pausa
+                  </div>
+                  <div className="font-mono font-black text-xl tabular-nums leading-none text-muted-foreground">
+                    {(() => {
+                      const total = storyTotalPausedSec + storyPauseElapsed;
+                      const m = Math.floor(total / 60);
+                      const s = total % 60;
+                      return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
                 <Button
                   onClick={() => setStoryUploadDialogOpen(true)}
-                  className="flex-1 sm:flex-none gap-2 bg-pink-500 hover:bg-pink-600 text-white"
+                  disabled={!!storyPausedAt}
+                  className="gap-2 bg-gradient-to-r from-pink-500 to-fuchsia-500 hover:from-pink-600 hover:to-fuchsia-600 text-white font-bold shadow-lg shadow-pink-500/25 border border-white/10 disabled:opacity-40 disabled:cursor-not-allowed h-10"
                 >
                   <Upload size={14} /> Subir Stories
                 </Button>
+
+                {storyPausedAt ? (
+                  <Button
+                    onClick={handleResumeStorySession}
+                    className="gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-lg shadow-emerald-500/25 h-10"
+                  >
+                    <Play size={14} className="fill-current" /> Retomar
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handlePauseStorySession}
+                    variant="outline"
+                    className="gap-2 border-amber-500/50 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 font-bold h-10"
+                  >
+                    <Pause size={14} className="fill-current" /> Pausar
+                  </Button>
+                )}
+
                 <Button
                   onClick={handleStopStorySession}
                   variant="outline"
-                  className="gap-1 border-destructive/50 text-destructive hover:bg-destructive/10"
+                  className="gap-2 border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive font-bold h-10"
                 >
-                  <Square size={14} /> Encerrar
+                  <Square size={14} className="fill-current" /> Encerrar
                 </Button>
               </div>
             </div>
+
+            {/* Pause banner */}
+            <AnimatePresence>
+              {storyPausedAt && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="relative mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 flex items-center gap-3"
+                >
+                  <motion.div
+                    animate={{ rotate: [0, 10, -10, 0] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  >
+                    <Zap size={18} className="text-amber-400" />
+                  </motion.div>
+                  <div className="flex-1 text-xs">
+                    <p className="font-bold text-amber-400">Sessão pausada</p>
+                    <p className="text-muted-foreground">O cronômetro está congelado. Clique em <strong className="text-emerald-400">Retomar</strong> quando estiver pronto para continuar.</p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>
+
+
 
       {/* ── Upload Stories Dialog (multi-file) ── */}
       <Dialog open={storyUploadDialogOpen} onOpenChange={setStoryUploadDialogOpen}>

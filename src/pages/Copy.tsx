@@ -1105,14 +1105,23 @@ export default function Copy() {
                                     ))}
                                     {clientBoxes.length > 0 && (() => {
                                       const boxesDropId = `${gk}::${fmt}::boxes`;
-                                      const sorted = sortClientBoxes(gk, fmt, clientBoxes);
+                                      const allSorted = sortClientBoxes(gk, fmt, clientBoxes);
+                                      const activeKey = Array.from(expandedBoxes).find(k =>
+                                        k.startsWith('story::') && allSorted.some(b => `story::${b.clientId}::${b.batchIndex}` === k)
+                                      );
+                                      const sorted = activeKey
+                                        ? allSorted.filter(b => `story::${b.clientId}::${b.batchIndex}` === activeKey)
+                                        : allSorted;
+                                      const gridCls = activeKey
+                                        ? 'grid grid-cols-1 gap-2'
+                                        : 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2';
                                       return (
                                         <Droppable droppableId={boxesDropId}>
                                           {(provided) => (
                                             <div
                                               ref={provided.innerRef}
                                               {...provided.droppableProps}
-                                              className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2"
+                                              className={gridCls}
                                             >
                                               {sorted.map((b, bIdx) => {
                                                 const client = clientById(b.clientId);

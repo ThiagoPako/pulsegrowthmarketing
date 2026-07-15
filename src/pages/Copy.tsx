@@ -562,6 +562,52 @@ export default function Copy() {
 
   const GROUP_ORDER: GroupKey[] = ['priority_social', 'urgent_task', 'normal_social', 'backlog_task'];
 
+  type FormatKey = 'reels' | 'criativo' | 'story' | 'outros';
+  const FORMAT_META: Record<FormatKey, {
+    label: string; icon: any; accent: string; badge: string; ring: string; text: string;
+  }> = {
+    reels: {
+      label: 'Reels',
+      icon: Video,
+      accent: 'from-violet-600/20 to-violet-600/[0.03] border-violet-500/30',
+      badge: 'bg-violet-500 text-white',
+      ring: 'bg-violet-500',
+      text: 'text-violet-300',
+    },
+    criativo: {
+      label: 'Criativo',
+      icon: ImageIcon,
+      accent: 'from-cyan-500/20 to-cyan-500/[0.03] border-cyan-500/30',
+      badge: 'bg-cyan-500 text-black',
+      ring: 'bg-cyan-500',
+      text: 'text-cyan-300',
+    },
+    story: {
+      label: 'Story',
+      icon: Camera,
+      accent: 'from-fuchsia-500/20 to-fuchsia-500/[0.03] border-fuchsia-500/30',
+      badge: 'bg-fuchsia-500 text-white',
+      ring: 'bg-fuchsia-500',
+      text: 'text-fuchsia-300',
+    },
+    outros: {
+      label: 'Outros',
+      icon: FileText,
+      accent: 'from-white/8 to-white/[0.02] border-white/10',
+      badge: 'bg-white/15 text-white/80',
+      ring: 'bg-white/40',
+      text: 'text-white/60',
+    },
+  };
+  const FORMAT_ORDER: FormatKey[] = ['reels', 'criativo', 'story', 'outros'];
+  const normalizeFormat = (f: string | null | undefined): FormatKey => {
+    const v = (f || '').toLowerCase();
+    if (v === 'reels' || v === 'criativo' || v === 'story') return v;
+    return 'outros';
+  };
+  const formatOf = (it: QueueItem): FormatKey =>
+    normalizeFormat(it.kind === 'request' ? it.req.content_format : it.task.content_type);
+
   const groups: Record<GroupKey, QueueItem[]> = useMemo(() => {
     const g: Record<GroupKey, QueueItem[]> = {
       priority_social: priorityRequests.map(r => ({ kind: 'request' as const, id: r.id, priority: 'alta' as const, req: r })),

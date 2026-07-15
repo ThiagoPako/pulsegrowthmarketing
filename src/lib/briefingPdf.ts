@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { parseEditorial } from './editorialFormatter';
 
 // Mapeia as chaves usadas no formulário (ClientBriefing.tsx) para rótulos amigáveis
 const FIELD_LABELS: Record<string, string> = {

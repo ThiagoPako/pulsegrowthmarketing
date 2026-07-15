@@ -519,65 +519,108 @@ export default function Copy() {
   };
 
 
-  // ── FILA UNIFICADA DE ROTEIROS A FAZER ──
-  // Ordem: pedidos alta prioridade → tarefas urgentes → pedidos normais → tarefas normais.
+  // ── FILA AGRUPADA POR CATEGORIA ──
   type QueueItem =
     | { kind: 'request'; id: string; priority: 'alta' | 'normal'; req: ScriptRequest }
     | { kind: 'task'; id: string; urgent: boolean; task: PendingTask };
 
-  const queue: QueueItem[] = useMemo(() => {
-    const q: QueueItem[] = [];
-    priorityRequests.forEach(r => q.push({ kind: 'request', id: r.id, priority: 'alta', req: r }));
-    urgentTasks.forEach(t => q.push({ kind: 'task', id: t.id, urgent: true, task: t }));
-    normalRequests.forEach(r => q.push({ kind: 'request', id: r.id, priority: 'normal', req: r }));
-    todoTasks.forEach(t => q.push({ kind: 'task', id: t.id, urgent: false, task: t }));
-    return q;
+  type GroupKey = 'priority_social' | 'urgent_task' | 'normal_social' | 'backlog_task';
+
+  const GROUP_META: Record<GroupKey, {
+    label: string; sub: string; accent: string; badge: string; dot: string;
+  }> = {
+    priority_social: {
+      label: 'Prioridade Social',
+      sub: 'Pedidos alta prioridade do social media',
+      accent: 'from-red-600/25 to-red-600/5 border-red-600/40',
+      badge: 'bg-red-600 text-white',
+      dot: 'bg-red-600',
+    },
+    urgent_task: {
+      label: 'Urgentes',
+      sub: 'Tarefas marcadas como prioritárias',
+      accent: 'from-orange-500/25 to-orange-500/5 border-orange-500/40',
+      badge: 'bg-orange-500 text-black',
+      dot: 'bg-orange-500',
+    },
+    normal_social: {
+      label: 'Pedidos Social',
+      sub: 'Pedidos normais do social media',
+      accent: 'from-amber-500/20 to-amber-500/5 border-amber-500/30',
+      badge: 'bg-amber-500/80 text-black',
+      dot: 'bg-amber-500',
+    },
+    backlog_task: {
+      label: 'Backlog',
+      sub: 'Demanda automática e roteiros gerais',
+      accent: 'from-white/10 to-white/[0.02] border-white/10',
+      badge: 'bg-white/15 text-white/80',
+      dot: 'bg-white/50',
+    },
+  };
+
+  const GROUP_ORDER: GroupKey[] = ['priority_social', 'urgent_task', 'normal_social', 'backlog_task'];
+
+  const groups: Record<GroupKey, QueueItem[]> = useMemo(() => {
+    const g: Record<GroupKey, QueueItem[]> = {
+      priority_social: priorityRequests.map(r => ({ kind: 'request' as const, id: r.id, priority: 'alta' as const, req: r })),
+      urgent_task: urgentTasks.map(t => ({ kind: 'task' as const, id: t.id, urgent: true, task: t })),
+      normal_social: normalRequests.map(r => ({ kind: 'request' as const, id: r.id, priority: 'normal' as const, req: r })),
+      backlog_task: todoTasks.map(t => ({ kind: 'task' as const, id: t.id, urgent: false, task: t })),
+    };
+    return g;
   }, [priorityRequests, urgentTasks, normalRequests, todoTasks]);
 
-  // ── ORDEM MANUAL (drag & drop) ──
-  const orderKey = user ? `copy_queue_order_${user.id}` : null;
-  const [customOrder, setCustomOrder] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return [];
-    try {
-      const raw = user ? localStorage.getItem(`copy_queue_order_${user.id}`) : null;
-      return raw ? JSON.parse(raw) : [];
-    } catch { return []; }
-  });
+  // ── ORDEM MANUAL POR GRUPO (drag & drop) ──
+  const orderKey = user ? `copy_queue_group_order_${user.id}` : null;
+  const [customOrder, setCustomOrder] = useState<Record<string, string[]>>({});
   useEffect(() => {
     if (!orderKey) return;
     try {
       const raw = localStorage.getItem(orderKey);
-      setCustomOrder(raw ? JSON.parse(raw) : []);
+      setCustomOrder(raw ? JSON.parse(raw) : {});
     } catch { /* ignore */ }
   }, [orderKey]);
 
   const keyOf = (it: QueueItem) => `${it.kind}-${it.id}`;
 
-  const orderedQueue: QueueItem[] = useMemo(() => {
-    if (customOrder.length === 0) return queue;
-    const map = new Map(queue.map(it => [keyOf(it), it]));
-    const seen = new Set<string>();
-    const first: QueueItem[] = [];
-    for (const k of customOrder) {
-      const it = map.get(k);
-      if (it) { first.push(it); seen.add(k); }
+  const orderedGroups: Record<GroupKey, QueueItem[]> = useMemo(() => {
+    const out = {} as Record<GroupKey, QueueItem[]>;
+    for (const gk of GROUP_ORDER) {
+      const items = groups[gk];
+      const order = customOrder[gk] || [];
+      if (order.length === 0) { out[gk] = items; continue; }
+      const map = new Map(items.map(it => [keyOf(it), it]));
+      const seen = new Set<string>();
+      const first: QueueItem[] = [];
+      for (const k of order) {
+        const it = map.get(k);
+        if (it) { first.push(it); seen.add(k); }
+      }
+      out[gk] = [...first, ...items.filter(it => !seen.has(keyOf(it)))];
     }
-    const rest = queue.filter(it => !seen.has(keyOf(it)));
-    return [...first, ...rest];
-  }, [queue, customOrder]);
+    return out;
+  }, [groups, customOrder]);
+
+  const totalQueue = GROUP_ORDER.reduce((n, k) => n + orderedGroups[k].length, 0);
 
   const onDragEnd = (result: DropResult) => {
     if (!result.destination) return;
+    const gk = result.source.droppableId as GroupKey;
+    if (result.destination.droppableId !== gk) return; // sem cross-group
     if (result.destination.index === result.source.index) return;
-    const items = [...orderedQueue];
+    const items = [...orderedGroups[gk]];
     const [moved] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, moved);
     const newOrder = items.map(keyOf);
-    setCustomOrder(newOrder);
+    const next = { ...customOrder, [gk]: newOrder };
+    setCustomOrder(next);
     if (orderKey) {
-      try { localStorage.setItem(orderKey, JSON.stringify(newOrder)); } catch { /* ignore */ }
+      try { localStorage.setItem(orderKey, JSON.stringify(next)); } catch { /* ignore */ }
     }
   };
+
+
 
 
   const elapsedMs = activeSession ? now - activeSession.startedAt : 0;
@@ -762,45 +805,64 @@ export default function Copy() {
               <span className="text-zinc-700">·</span>
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-white/40 inline-block" /> Backlog {normalRequests.length + todoTasks.length}</span>
               <span className="text-zinc-700">·</span>
-              <span className="text-white">{queue.length} totais</span>
+              <span className="text-white">{totalQueue} totais</span>
             </div>
           </div>
 
           {loading ? (
             <p className="text-[11px] font-black uppercase tracking-[0.3em] text-white/40 text-center py-10">Carregando fila…</p>
-          ) : queue.length === 0 ? (
+          ) : totalQueue === 0 ? (
             <p className="text-[11px] font-black uppercase tracking-[0.3em] text-emerald-500/80 text-center py-10">
               ✅ Fila vazia — nada pendente
             </p>
           ) : (
             <DragDropContext onDragEnd={onDragEnd}>
-              <Droppable droppableId="copy-queue">
-                {(provided) => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className="space-y-1.5 max-h-[560px] overflow-y-auto pr-1"
-                  >
-                    {orderedQueue.map((item, idx) => (
-                      <Draggable key={`${item.kind}-${item.id}`} draggableId={`${item.kind}-${item.id}`} index={idx}>
-                        {(prov, snapshot) => (
-                          <div
-                            ref={prov.innerRef}
-                            {...prov.draggableProps}
-                            style={{
-                              ...prov.draggableProps.style,
-                              opacity: snapshot.isDragging ? 0.85 : 1,
-                            }}
-                          >
-                            <QueueRow item={item} index={idx} dragHandleProps={prov.dragHandleProps} />
+              <div className="space-y-5 max-h-[640px] overflow-y-auto pr-1">
+                {GROUP_ORDER.map(gk => {
+                  const items = orderedGroups[gk];
+                  if (items.length === 0) return null;
+                  const meta = GROUP_META[gk];
+                  return (
+                    <div key={gk} className={`rounded-xl border bg-gradient-to-b ${meta.accent} p-3`}>
+                      <div className="flex items-center justify-between mb-2.5 px-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${meta.dot} inline-block`} />
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-white/95 leading-none">{meta.label}</p>
+                            <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/40 mt-0.5">{meta.sub}</p>
+                          </div>
+                        </div>
+                        <span className={`text-[9px] font-black uppercase tracking-[0.25em] px-2 py-0.5 rounded-sm ${meta.badge}`}>
+                          {items.length}
+                        </span>
+                      </div>
+                      <Droppable droppableId={gk}>
+                        {(provided) => (
+                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                            {items.map((item, idx) => (
+                              <Draggable key={`${item.kind}-${item.id}`} draggableId={`${item.kind}-${item.id}`} index={idx}>
+                                {(prov, snapshot) => (
+                                  <div
+                                    ref={prov.innerRef}
+                                    {...prov.draggableProps}
+                                    style={{
+                                      ...prov.draggableProps.style,
+                                      opacity: snapshot.isDragging ? 0.85 : 1,
+                                    }}
+                                  >
+                                    <QueueRow item={item} index={idx} dragHandleProps={prov.dragHandleProps} />
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))}
+                            {provided.placeholder}
                           </div>
                         )}
-                      </Draggable>
-                    ))}
-                    {provided.placeholder}
-                  </div>
-                )}
-              </Droppable>
+                      </Droppable>
+                    </div>
+                  );
+                })}
+              </div>
             </DragDropContext>
           )}
         </section>

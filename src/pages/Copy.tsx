@@ -743,11 +743,61 @@ export default function Copy() {
 
   const totalQueue = GROUP_ORDER.reduce((n, k) => n + orderedGroups[k].length, 0);
 
+  const sortClientBoxes = <T extends { clientId: string }>(gk: GroupKey, fmt: FormatKey, boxes: T[]): T[] => {
+    const order = customOrder[`${gk}::${fmt}::boxes`] || [];
+    if (order.length === 0) return boxes;
+    const map = new Map(boxes.map(b => [b.clientId, b]));
+    const seen = new Set<string>();
+    const first: T[] = [];
+    for (const cid of order) {
+      const it = map.get(cid);
+      if (it) { first.push(it); seen.add(cid); }
+    }
+    return [...first, ...boxes.filter(b => !seen.has(b.clientId))];
+  };
+
   const onDragEnd = (result: DropResult) => {
     if (!result.destination) return;
-    const dropId = result.source.droppableId; // format: `${gk}::${fmt}`
-    if (result.destination.droppableId !== dropId) return; // sem cross-container
+    const dropId = result.source.droppableId;
+    if (result.destination.droppableId !== dropId) return;
     if (result.destination.index === result.source.index) return;
+
+    // Caixinhas de cliente: `${gk}::${fmt}::boxes` — reordena por clientId.
+    if (dropId.endsWith('::boxes')) {
+      const [gkStr, fmtStr] = dropId.split('::');
+      const gk = gkStr as GroupKey;
+      const fmt = fmtStr as FormatKey;
+      const items = orderedGroups[gk].filter(it => formatOf(it) === fmt && it.kind === 'task') as Extract<QueueItem, { kind: 'task' }>[];
+      const byClient = new Map<string, Extract<QueueItem, { kind: 'task' }>[]>();
+      for (const it of items) {
+        const cid = it.task.client_id || '__no_client__';
+        if (!byClient.has(cid)) byClient.set(cid, []);
+        byClient.get(cid)!.push(it);
+      }
+      let boxes: { clientId: string }[];
+      if (fmt === 'story') {
+        boxes = [];
+        for (const [cid, ts] of byClient) {
+          for (let i = 0; i < ts.length; i += 5) boxes.push({ clientId: cid });
+        }
+      } else {
+        boxes = Array.from(byClient.keys()).map(cid => ({ clientId: cid }));
+      }
+      const sorted = sortClientBoxes(gk, fmt, boxes);
+      const arr = [...sorted];
+      const [moved] = arr.splice(result.source.index, 1);
+      arr.splice(result.destination.index, 0, moved);
+      // Ordem única por clientId (mantém primeira ocorrência para story em lotes)
+      const newOrder: string[] = [];
+      const seen = new Set<string>();
+      for (const b of arr) { if (!seen.has(b.clientId)) { newOrder.push(b.clientId); seen.add(b.clientId); } }
+      const next = { ...customOrder, [dropId]: newOrder };
+      setCustomOrder(next);
+      if (orderKey) { try { localStorage.setItem(orderKey, JSON.stringify(next)); } catch { /* ignore */ } }
+      return;
+    }
+
+    // Linhas normais: `${gk}::${fmt}`
     const [gkStr, fmtStr] = dropId.split('::');
     const gk = gkStr as GroupKey;
     const fmt = fmtStr as FormatKey;
@@ -1045,46 +1095,73 @@ export default function Copy() {
                                     {reqItems.map((item, idx) => (
                                       <QueueRow key={`${item.kind}-${item.id}`} item={item} index={idx} />
                                     ))}
-                                    {clientBoxes.length > 0 && (
-                                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                                        {clientBoxes.map((b, bIdx) => {
-                                          const client = clientById(b.clientId);
-                                          const isFull = b.tasks.length === 5;
-                                          return (
-                                            <button
-                                              key={`storybox-${bIdx}-${b.clientId}-${b.batchIndex}`}
-                                              type="button"
-                                              onClick={() => openStoryBatch(b.tasks)}
-                                              disabled={isBusy}
-                                              className={`group relative rounded-lg border p-2.5 text-left overflow-hidden transition-all
-                                                ${isFull
-                                                  ? 'border-fuchsia-500/40 bg-gradient-to-br from-fuchsia-600/15 via-fuchsia-500/5 to-transparent hover:border-fuchsia-400 hover:shadow-[0_0_0_1px_rgba(217,70,239,0.4)]'
-                                                  : 'border-dashed border-fuchsia-500/25 bg-fuchsia-500/[0.03] hover:border-fuchsia-400/60'}
-                                                disabled:opacity-40 disabled:cursor-not-allowed`}
-                                              title={`${client?.companyName || 'Sem cliente'} — ${b.tasks.length}/5 stories`}
+                                    {clientBoxes.length > 0 && (() => {
+                                      const boxesDropId = `${gk}::${fmt}::boxes`;
+                                      const sorted = sortClientBoxes(gk, fmt, clientBoxes);
+                                      return (
+                                        <Droppable droppableId={boxesDropId}>
+                                          {(provided) => (
+                                            <div
+                                              ref={provided.innerRef}
+                                              {...provided.droppableProps}
+                                              className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2"
                                             >
-                                              <span className={`absolute left-0 top-0 bottom-0 w-1 ${isFull ? 'bg-fuchsia-500' : 'bg-fuchsia-500/40'}`} aria-hidden />
-                                              <div className="flex items-center gap-2 pl-1.5">
-                                                <div className="w-10 h-10 rounded-md overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
-                                                  {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={14} className="text-white/30" />}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                  <p className="text-[11px] font-black uppercase tracking-tight text-white/95 truncate leading-tight">
-                                                    {client?.companyName || 'Sem cliente'}
-                                                  </p>
-                                                  <div className="flex items-center gap-1 mt-1">
-                                                    <Camera size={9} className="text-fuchsia-300" />
-                                                    <span className={`text-[9px] font-black tabular-nums tracking-wider ${isFull ? 'text-fuchsia-300' : 'text-fuchsia-200/70'}`}>
-                                                      {b.tasks.length}/5 STORY
-                                                    </span>
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
+                                              {sorted.map((b, bIdx) => {
+                                                const client = clientById(b.clientId);
+                                                const isFull = b.tasks.length === 5;
+                                                const draggableId = `storybox-${b.clientId}-${b.batchIndex}`;
+                                                return (
+                                                  <Draggable key={draggableId} draggableId={draggableId} index={bIdx}>
+                                                    {(prov, snapshot) => (
+                                                      <div
+                                                        ref={prov.innerRef}
+                                                        {...prov.draggableProps}
+                                                        {...prov.dragHandleProps}
+                                                        style={{
+                                                          ...prov.draggableProps.style,
+                                                          opacity: snapshot.isDragging ? 0.85 : 1,
+                                                        }}
+                                                      >
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => openStoryBatch(b.tasks)}
+                                                          disabled={isBusy}
+                                                          className={`w-full group relative rounded-lg border p-2.5 text-left overflow-hidden transition-all cursor-grab active:cursor-grabbing
+                                                            ${isFull
+                                                              ? 'border-fuchsia-500/40 bg-gradient-to-br from-fuchsia-600/15 via-fuchsia-500/5 to-transparent hover:border-fuchsia-400 hover:shadow-[0_0_0_1px_rgba(217,70,239,0.4)]'
+                                                              : 'border-dashed border-fuchsia-500/25 bg-fuchsia-500/[0.03] hover:border-fuchsia-400/60'}
+                                                            disabled:opacity-40 disabled:cursor-not-allowed`}
+                                                          title={`${client?.companyName || 'Sem cliente'} — ${b.tasks.length}/5 stories`}
+                                                        >
+                                                          <span className={`absolute left-0 top-0 bottom-0 w-1 ${isFull ? 'bg-fuchsia-500' : 'bg-fuchsia-500/40'}`} aria-hidden />
+                                                          <div className="flex items-center gap-2 pl-1.5">
+                                                            <div className="w-10 h-10 rounded-md overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
+                                                              {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={14} className="text-white/30" />}
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                              <p className="text-[11px] font-black uppercase tracking-tight text-white/95 truncate leading-tight">
+                                                                {client?.companyName || 'Sem cliente'}
+                                                              </p>
+                                                              <div className="flex items-center gap-1 mt-1">
+                                                                <Camera size={9} className="text-fuchsia-300" />
+                                                                <span className={`text-[9px] font-black tabular-nums tracking-wider ${isFull ? 'text-fuchsia-300' : 'text-fuchsia-200/70'}`}>
+                                                                  {b.tasks.length}/5 STORY
+                                                                </span>
+                                                              </div>
+                                                            </div>
+                                                          </div>
+                                                        </button>
+                                                      </div>
+                                                    )}
+                                                  </Draggable>
+                                                );
+                                              })}
+                                              {provided.placeholder}
+                                            </div>
+                                          )}
+                                        </Droppable>
+                                      );
+                                    })()}
                                   </div>
                                 );
                               })() : (() => {
@@ -1134,44 +1211,71 @@ export default function Copy() {
                                         )}
                                       </Droppable>
                                     )}
-                                    {clientBoxes.length > 0 && (
-                                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                                        {clientBoxes.map((b) => {
-                                          const client = clientById(b.clientId);
-                                          const count = b.tasks.length;
-                                          return (
-                                            <button
-                                              key={`${fmt}box-${b.clientId}`}
-                                              type="button"
-                                              onClick={() => openSingleTask(b.tasks[0])}
-                                              disabled={isBusy}
-                                              className={`group relative rounded-lg border p-2.5 text-left overflow-hidden transition-all ${accent.border} bg-gradient-to-br ${accent.bg} ${accent.hoverBorder} ${accent.shadow} disabled:opacity-40 disabled:cursor-not-allowed`}
-                                              title={`${client?.companyName || 'Sem cliente'} — ${count} ${fmtLabel}`}
+                                    {clientBoxes.length > 0 && (() => {
+                                      const boxesDropId = `${gk}::${fmt}::boxes`;
+                                      const sorted = sortClientBoxes(gk, fmt, clientBoxes);
+                                      return (
+                                        <Droppable droppableId={boxesDropId}>
+                                          {(provided) => (
+                                            <div
+                                              ref={provided.innerRef}
+                                              {...provided.droppableProps}
+                                              className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2"
                                             >
-                                              <span className={`absolute left-0 top-0 bottom-0 w-1 ${accent.bar}`} aria-hidden />
-                                              <div className="flex items-center gap-2 pl-1.5">
-                                                <div className="w-10 h-10 rounded-md overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
-                                                  {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={14} className="text-white/30" />}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                  <p className="text-[11px] font-black uppercase tracking-tight text-white/95 truncate leading-tight">
-                                                    {client?.companyName || 'Sem cliente'}
-                                                  </p>
-                                                  <div className="flex items-center gap-1 mt-1">
-                                                    {fmt === 'reels'
-                                                      ? <Video size={9} className={accent.icon} />
-                                                      : <ImageIcon size={9} className={accent.icon} />}
-                                                    <span className={`text-[9px] font-black tabular-nums tracking-wider ${accent.count}`}>
-                                                      {count} {fmtLabel}
-                                                    </span>
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
+                                              {sorted.map((b, bIdx) => {
+                                                const client = clientById(b.clientId);
+                                                const count = b.tasks.length;
+                                                const draggableId = `${fmt}box-${b.clientId}`;
+                                                return (
+                                                  <Draggable key={draggableId} draggableId={draggableId} index={bIdx}>
+                                                    {(prov, snapshot) => (
+                                                      <div
+                                                        ref={prov.innerRef}
+                                                        {...prov.draggableProps}
+                                                        {...prov.dragHandleProps}
+                                                        style={{
+                                                          ...prov.draggableProps.style,
+                                                          opacity: snapshot.isDragging ? 0.85 : 1,
+                                                        }}
+                                                      >
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => openSingleTask(b.tasks[0])}
+                                                          disabled={isBusy}
+                                                          className={`w-full group relative rounded-lg border p-2.5 text-left overflow-hidden transition-all cursor-grab active:cursor-grabbing ${accent.border} bg-gradient-to-br ${accent.bg} ${accent.hoverBorder} ${accent.shadow} disabled:opacity-40 disabled:cursor-not-allowed`}
+                                                          title={`${client?.companyName || 'Sem cliente'} — ${count} ${fmtLabel}`}
+                                                        >
+                                                          <span className={`absolute left-0 top-0 bottom-0 w-1 ${accent.bar}`} aria-hidden />
+                                                          <div className="flex items-center gap-2 pl-1.5">
+                                                            <div className="w-10 h-10 rounded-md overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
+                                                              {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={14} className="text-white/30" />}
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                              <p className="text-[11px] font-black uppercase tracking-tight text-white/95 truncate leading-tight">
+                                                                {client?.companyName || 'Sem cliente'}
+                                                              </p>
+                                                              <div className="flex items-center gap-1 mt-1">
+                                                                {fmt === 'reels'
+                                                                  ? <Video size={9} className={accent.icon} />
+                                                                  : <ImageIcon size={9} className={accent.icon} />}
+                                                                <span className={`text-[9px] font-black tabular-nums tracking-wider ${accent.count}`}>
+                                                                  {count} {fmtLabel}
+                                                                </span>
+                                                              </div>
+                                                            </div>
+                                                          </div>
+                                                        </button>
+                                                      </div>
+                                                    )}
+                                                  </Draggable>
+                                                );
+                                              })}
+                                              {provided.placeholder}
+                                            </div>
+                                          )}
+                                        </Droppable>
+                                      );
+                                    })()}
                                   </div>
                                 );
                               })()}

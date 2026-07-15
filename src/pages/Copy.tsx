@@ -856,7 +856,7 @@ export default function Copy() {
 
         {/* ── SPOTLIGHT: execução ao vivo ── */}
         <AnimatePresence>
-          {(activeTask || activeRequest) && (
+          {(activeTask || activeRequest || activeBatch.length > 0) && (
             <motion.div
               key="active"
               initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
@@ -871,6 +871,11 @@ export default function Copy() {
                     Pedido Social
                   </span>
                 )}
+                {activeBatch.length > 0 && (
+                  <span className="text-[9px] font-black uppercase tracking-[0.25em] text-fuchsia-300 border border-fuchsia-500/40 px-1.5 py-0.5 rounded-sm">
+                    Lote {activeBatch.length}× Story
+                  </span>
+                )}
               </div>
               <div className="flex flex-col md:flex-row md:items-center gap-5 pt-6">
                 <motion.div
@@ -882,10 +887,12 @@ export default function Copy() {
                 </motion.div>
                 <div className="flex-1 min-w-0">
                   <h2 className="text-xl sm:text-2xl font-black italic uppercase tracking-tighter truncate">
-                    {activeTask?.title || activeRequest?.topic}
+                    {activeBatch.length > 0
+                      ? `Lote de ${activeBatch.length} Stories`
+                      : (activeTask?.title || activeRequest?.topic)}
                   </h2>
                   <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/50 truncate mt-1">
-                    {(clientById(activeTask?.client_id || activeRequest?.client_id)?.companyName)
+                    {(clientById(activeTask?.client_id || activeRequest?.client_id || activeBatch[0]?.client_id)?.companyName)
                       || activeTask?.prospect_name || 'Sem cliente'}
                   </p>
                 </div>

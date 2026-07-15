@@ -619,6 +619,14 @@ export default function Clients() {
     if (clientType === 'sem_contrato' && !proposalId) {
       toast.error('Selecione uma proposta para Pacotes de Serviços'); return;
     }
+    if (!planTargetsValidation.ok && planTargetsValidation.level === 'error') {
+      toast.error(planTargetsValidation.message);
+      return;
+    }
+    if (!planTargetsValidation.ok && planTargetsValidation.level === 'warn') {
+      const proceed = window.confirm(`${planTargetsValidation.message}\n\nDeseja salvar mesmo assim?`);
+      if (!proceed) return;
+    }
 
     setSaving(true);
     try {

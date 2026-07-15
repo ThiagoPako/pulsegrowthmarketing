@@ -209,12 +209,18 @@ export default function Copy() {
 
   const activeTask = activeSession?.taskId ? tasks.find(t => t.id === activeSession.taskId) : null;
   const activeRequest = activeSession?.requestId ? requests.find(r => r.id === activeSession.requestId) : null;
+  const activeBatchIds = activeSession?.batchTaskIds || [];
+  const activeBatch = activeBatchIds.length > 0 ? tasks.filter(t => activeBatchIds.includes(t.id)) : [];
   const isBusy = !!activeSession;
+  const excludedTaskIds = new Set<string>([
+    ...(activeSession?.taskId ? [activeSession.taskId] : []),
+    ...activeBatchIds,
+  ]);
 
   const priorityRequests = requests.filter(r => r.priority === 'alta' && r.status !== 'in_progress' && r.id !== activeSession?.requestId);
   const normalRequests = requests.filter(r => r.priority === 'normal' && r.status !== 'in_progress' && r.id !== activeSession?.requestId);
-  const urgentTasks = tasks.filter(t => t.editing_priority && t.id !== activeSession?.taskId);
-  const todoTasks = tasks.filter(t => !t.editing_priority && t.id !== activeSession?.taskId);
+  const urgentTasks = tasks.filter(t => t.editing_priority && !excludedTaskIds.has(t.id));
+  const todoTasks = tasks.filter(t => !t.editing_priority && !excludedTaskIds.has(t.id));
 
   const startTask = (task: PendingTask) => {
     if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }

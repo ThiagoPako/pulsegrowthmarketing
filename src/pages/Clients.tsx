@@ -372,6 +372,7 @@ export default function Clients() {
       setForm(emptyClient());
       setLogoPreview(null);
       setPlanId(null);
+      setSpecialPlan(false);
       setContractStartDate('');
       setAutoRenewal(false);
       setContractDurationMonths(12);

@@ -65,9 +65,10 @@ export default function Copy() {
   const [tasks, setTasks] = useState<PendingTask[]>([]);
   const [requests, setRequests] = useState<ScriptRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeSession, setActiveSession] = useState<{ taskId?: string; requestId?: string; startedAt: number } | null>(null);
+  const [activeSession, setActiveSession] = useState<{ taskId?: string; requestId?: string; batchTaskIds?: string[]; startedAt: number } | null>(null);
   const [now, setNow] = useState(Date.now());
-  const [finalizing, setFinalizing] = useState<{ task?: PendingTask; request?: ScriptRequest } | null>(null);
+  const [finalizing, setFinalizing] = useState<{ task?: PendingTask; request?: ScriptRequest; batch?: PendingTask[] } | null>(null);
+  const [batchForms, setBatchForms] = useState<{ title: string; content: string; caption: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
   const [requestForm, setRequestForm] = useState({
@@ -208,12 +209,18 @@ export default function Copy() {
 
   const activeTask = activeSession?.taskId ? tasks.find(t => t.id === activeSession.taskId) : null;
   const activeRequest = activeSession?.requestId ? requests.find(r => r.id === activeSession.requestId) : null;
+  const activeBatchIds = activeSession?.batchTaskIds || [];
+  const activeBatch = activeBatchIds.length > 0 ? tasks.filter(t => activeBatchIds.includes(t.id)) : [];
   const isBusy = !!activeSession;
+  const excludedTaskIds = new Set<string>([
+    ...(activeSession?.taskId ? [activeSession.taskId] : []),
+    ...activeBatchIds,
+  ]);
 
   const priorityRequests = requests.filter(r => r.priority === 'alta' && r.status !== 'in_progress' && r.id !== activeSession?.requestId);
   const normalRequests = requests.filter(r => r.priority === 'normal' && r.status !== 'in_progress' && r.id !== activeSession?.requestId);
-  const urgentTasks = tasks.filter(t => t.editing_priority && t.id !== activeSession?.taskId);
-  const todoTasks = tasks.filter(t => !t.editing_priority && t.id !== activeSession?.taskId);
+  const urgentTasks = tasks.filter(t => t.editing_priority && !excludedTaskIds.has(t.id));
+  const todoTasks = tasks.filter(t => !t.editing_priority && !excludedTaskIds.has(t.id));
 
   const startTask = (task: PendingTask) => {
     if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }
@@ -221,6 +228,16 @@ export default function Copy() {
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
     toast.success(`Executando: ${task.title}`);
+    broadcastChange();
+  };
+
+  const startBatch = (batchTasks: PendingTask[]) => {
+    if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }
+    if (batchTasks.length === 0) return;
+    const session = { batchTaskIds: batchTasks.map(t => t.id), startedAt: Date.now() };
+    setActiveSession(session);
+    if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
+    toast.success(`Executando lote de ${batchTasks.length} stories`);
     broadcastChange();
   };
 
@@ -247,7 +264,10 @@ export default function Copy() {
   };
 
   const openFinalize = () => {
-    if (activeTask) {
+    if (activeBatch.length > 0) {
+      setBatchForms(activeBatch.map(t => ({ title: t.title, content: '', caption: '' })));
+      setFinalizing({ batch: activeBatch });
+    } else if (activeTask) {
       setForm({
         title: activeTask.title,
         videoType: 'vendas',
@@ -268,14 +288,60 @@ export default function Copy() {
 
   const saveScript = async () => {
     if (!finalizing || !activeSession) return;
-    if (!form.content.trim()) { toast.error('Escreva o conteúdo do roteiro'); return; }
-    const clientId = finalizing.task?.client_id || finalizing.request?.client_id;
-    if (!clientId) { toast.error('Sem cliente vinculado'); return; }
     setSaving(true);
     try {
       const durationMs = Date.now() - activeSession.startedAt;
       const durationLabel = formatDuration(durationMs);
       const nowIso = new Date().toISOString();
+
+      // ── LOTE DE STORIES ──
+      if (finalizing.batch && finalizing.batch.length > 0) {
+        const filled = batchForms
+          .map((f, i) => ({ f, task: finalizing.batch![i] }))
+          .filter(x => x.f.content.trim());
+        if (filled.length === 0) { toast.error('Escreva pelo menos um roteiro'); setSaving(false); return; }
+        for (const { f, task } of filled) {
+          if (!task.client_id) continue;
+          const scriptId = crypto.randomUUID();
+          const contentHtml = f.content.trim().startsWith('<')
+            ? f.content
+            : f.content.split(/\n{2,}/).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+          const script: Script = {
+            id: scriptId,
+            clientId: task.client_id,
+            title: f.title.trim() || task.title,
+            videoType: 'vendas',
+            contentFormat: 'story',
+            content: contentHtml,
+            recorded: false,
+            priority: 'normal',
+            createdAt: nowIso,
+            updatedAt: nowIso,
+            isEndomarketing: false,
+            caption: f.caption || undefined,
+            createdBy: user?.id,
+          };
+          await addScript(script);
+          if (f.caption) {
+            await supabase.from('scripts').update({ caption: f.caption } as any).eq('id', scriptId);
+          }
+          await supabase.from('content_tasks').update({
+            script_id: scriptId, updated_at: nowIso,
+          } as any).eq('id', task.id);
+        }
+        toast.success(`${filled.length} stories criadas em ${durationLabel}`);
+        setActiveSession(null);
+        if (sessionKey) localStorage.removeItem(sessionKey);
+        setFinalizing(null);
+        setBatchForms([]);
+        loadAll(true);
+        broadcastChange();
+        return;
+      }
+
+      if (!form.content.trim()) { toast.error('Escreva o conteúdo do roteiro'); setSaving(false); return; }
+      const clientId = finalizing.task?.client_id || finalizing.request?.client_id;
+      if (!clientId) { toast.error('Sem cliente vinculado'); setSaving(false); return; }
       const scriptId = crypto.randomUUID();
       const contentHtml = form.content.trim().startsWith('<')
         ? form.content
@@ -790,7 +856,7 @@ export default function Copy() {
 
         {/* ── SPOTLIGHT: execução ao vivo ── */}
         <AnimatePresence>
-          {(activeTask || activeRequest) && (
+          {(activeTask || activeRequest || activeBatch.length > 0) && (
             <motion.div
               key="active"
               initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
@@ -805,6 +871,11 @@ export default function Copy() {
                     Pedido Social
                   </span>
                 )}
+                {activeBatch.length > 0 && (
+                  <span className="text-[9px] font-black uppercase tracking-[0.25em] text-fuchsia-300 border border-fuchsia-500/40 px-1.5 py-0.5 rounded-sm">
+                    Lote {activeBatch.length}× Story
+                  </span>
+                )}
               </div>
               <div className="flex flex-col md:flex-row md:items-center gap-5 pt-6">
                 <motion.div
@@ -816,10 +887,12 @@ export default function Copy() {
                 </motion.div>
                 <div className="flex-1 min-w-0">
                   <h2 className="text-xl sm:text-2xl font-black italic uppercase tracking-tighter truncate">
-                    {activeTask?.title || activeRequest?.topic}
+                    {activeBatch.length > 0
+                      ? `Lote de ${activeBatch.length} Stories`
+                      : (activeTask?.title || activeRequest?.topic)}
                   </h2>
                   <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/50 truncate mt-1">
-                    {(clientById(activeTask?.client_id || activeRequest?.client_id)?.companyName)
+                    {(clientById(activeTask?.client_id || activeRequest?.client_id || activeBatch[0]?.client_id)?.companyName)
                       || activeTask?.prospect_name || 'Sem cliente'}
                   </p>
                 </div>
@@ -924,29 +997,99 @@ export default function Copy() {
                                   {subItems.length}
                                 </span>
                               </div>
-                              <Droppable droppableId={dropId}>
-                                {(provided) => (
-                                  <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                                    {subItems.map((item, idx) => (
-                                      <Draggable key={`${item.kind}-${item.id}`} draggableId={`${item.kind}-${item.id}`} index={idx}>
-                                        {(prov, snapshot) => (
-                                          <div
-                                            ref={prov.innerRef}
-                                            {...prov.draggableProps}
-                                            style={{
-                                              ...prov.draggableProps.style,
-                                              opacity: snapshot.isDragging ? 0.85 : 1,
-                                            }}
-                                          >
-                                            <QueueRow item={item} index={idx} dragHandleProps={prov.dragHandleProps} />
-                                          </div>
-                                        )}
-                                      </Draggable>
+                              {fmt === 'story' ? (() => {
+                                // Requests permanecem individuais; tasks são agrupadas em lotes de 5 por cliente.
+                                const reqItems = subItems.filter(it => it.kind === 'request');
+                                const taskItems = subItems.filter(it => it.kind === 'task') as Extract<QueueItem, { kind: 'task' }>[];
+                                const byClient = new Map<string, PendingTask[]>();
+                                for (const it of taskItems) {
+                                  const cid = it.task.client_id || '__no_client__';
+                                  if (!byClient.has(cid)) byClient.set(cid, []);
+                                  byClient.get(cid)!.push(it.task);
+                                }
+                                const batches: { clientId: string; tasks: PendingTask[] }[] = [];
+                                for (const [cid, ts] of byClient) {
+                                  for (let i = 0; i < ts.length; i += 5) {
+                                    batches.push({ clientId: cid, tasks: ts.slice(i, i + 5) });
+                                  }
+                                }
+                                return (
+                                  <div className="space-y-1.5">
+                                    {reqItems.map((item, idx) => (
+                                      <QueueRow key={`${item.kind}-${item.id}`} item={item} index={idx} />
                                     ))}
-                                    {provided.placeholder}
+                                    {batches.map((b, bIdx) => {
+                                      const client = clientById(b.clientId);
+                                      return (
+                                        <div
+                                          key={`batch-${bIdx}-${b.clientId}`}
+                                          className={`relative rounded-lg border border-fuchsia-500/30 bg-gradient-to-br from-fuchsia-600/10 via-fuchsia-500/5 to-transparent p-2.5 overflow-hidden`}
+                                        >
+                                          <span className="absolute left-0 top-0 bottom-0 w-1 bg-fuchsia-500" aria-hidden />
+                                          <div className="flex items-center gap-3 mb-2 pl-2">
+                                            <div className="w-10 h-10 rounded-md overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
+                                              {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={14} className="text-white/30" />}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                              <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                                                <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm bg-fuchsia-500 text-white">
+                                                  <Camera size={9} /> Lote {b.tasks.length}× Story
+                                                </span>
+                                              </div>
+                                              <p className="text-[12px] font-black uppercase tracking-tight text-white/95 truncate">
+                                                {client?.companyName || 'Sem cliente'}
+                                              </p>
+                                              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40 truncate">
+                                                {b.tasks.length} roteiros de story em um lote
+                                              </p>
+                                            </div>
+                                            <Button
+                                              size="sm"
+                                              onClick={() => startBatch(b.tasks)}
+                                              disabled={isBusy}
+                                              className="h-8 px-3 gap-1.5 font-black uppercase italic tracking-widest text-[10px] bg-fuchsia-500 hover:bg-fuchsia-600 text-white"
+                                            >
+                                              <Play size={11} className="fill-current" /> Iniciar Lote
+                                            </Button>
+                                          </div>
+                                          <ol className="pl-2 space-y-0.5">
+                                            {b.tasks.map((t, i) => (
+                                              <li key={t.id} className="flex items-center gap-2 text-[10px] text-white/50">
+                                                <span className="tabular-nums font-black text-white/40 w-4">{String(i + 1).padStart(2, '0')}</span>
+                                                <span className="truncate">{t.title}</span>
+                                              </li>
+                                            ))}
+                                          </ol>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
-                                )}
-                              </Droppable>
+                                );
+                              })() : (
+                                <Droppable droppableId={dropId}>
+                                  {(provided) => (
+                                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                                      {subItems.map((item, idx) => (
+                                        <Draggable key={`${item.kind}-${item.id}`} draggableId={`${item.kind}-${item.id}`} index={idx}>
+                                          {(prov, snapshot) => (
+                                            <div
+                                              ref={prov.innerRef}
+                                              {...prov.draggableProps}
+                                              style={{
+                                                ...prov.draggableProps.style,
+                                                opacity: snapshot.isDragging ? 0.85 : 1,
+                                              }}
+                                            >
+                                              <QueueRow item={item} index={idx} dragHandleProps={prov.dragHandleProps} />
+                                            </div>
+                                          )}
+                                        </Draggable>
+                                      ))}
+                                      {provided.placeholder}
+                                    </div>
+                                  )}
+                                </Droppable>
+                              )}
                             </div>
                           );
                         })}
@@ -1139,41 +1282,86 @@ export default function Copy() {
               <Badge variant="secondary" className="ml-auto font-mono">{formatDuration(elapsedMs)}</Badge>
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-2">
-            <div>
-              <Label>Título</Label>
-              <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+          {finalizing?.batch ? (
+            <div className="space-y-4 py-2">
+              <p className="text-xs text-muted-foreground">
+                Lote de <b>{finalizing.batch.length} stories</b> — preencha cada roteiro abaixo. Deixe em branco para pular.
+              </p>
+              {finalizing.batch.map((t, i) => {
+                const bf = batchForms[i] || { title: t.title, content: '', caption: '' };
+                const updateBf = (patch: Partial<typeof bf>) => {
+                  setBatchForms(prev => {
+                    const next = [...prev];
+                    next[i] = { ...bf, ...patch };
+                    return next;
+                  });
+                };
+                return (
+                  <div key={t.id} className="rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/[0.03] p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-black uppercase tracking-[0.25em] px-1.5 py-0.5 rounded-sm bg-fuchsia-500 text-white">
+                        Story {String(i + 1).padStart(2, '0')}
+                      </span>
+                      <Input
+                        className="h-8 text-sm flex-1"
+                        value={bf.title}
+                        onChange={e => updateBf({ title: e.target.value })}
+                        placeholder="Título"
+                      />
+                    </div>
+                    <Textarea
+                      rows={4}
+                      value={bf.content}
+                      onChange={e => updateBf({ content: e.target.value })}
+                      placeholder={`Roteiro do story ${i + 1}...`}
+                    />
+                    <Input
+                      value={bf.caption}
+                      onChange={e => updateBf({ caption: e.target.value })}
+                      placeholder="Legenda (opcional)"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                );
+              })}
             </div>
-            <div className="grid grid-cols-2 gap-3">
+          ) : (
+            <div className="space-y-3 py-2">
               <div>
-                <Label>Tipo de vídeo</Label>
-                <Select value={form.videoType} onValueChange={(v) => setForm(f => ({ ...f, videoType: v as ScriptVideoType }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {VIDEO_TYPES.map(v => <SelectItem key={v} value={v}>{SCRIPT_VIDEO_TYPE_LABELS[v]}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label>Título</Label>
+                <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Tipo de vídeo</Label>
+                  <Select value={form.videoType} onValueChange={(v) => setForm(f => ({ ...f, videoType: v as ScriptVideoType }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {VIDEO_TYPES.map(v => <SelectItem key={v} value={v}>{SCRIPT_VIDEO_TYPE_LABELS[v]}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Formato</Label>
+                  <Select value={form.contentFormat} onValueChange={(v) => setForm(f => ({ ...f, contentFormat: v as ScriptContentFormat }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CONTENT_FORMATS.map(v => <SelectItem key={v} value={v}>{SCRIPT_CONTENT_FORMAT_LABELS[v]}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div>
-                <Label>Formato</Label>
-                <Select value={form.contentFormat} onValueChange={(v) => setForm(f => ({ ...f, contentFormat: v as ScriptContentFormat }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CONTENT_FORMATS.map(v => <SelectItem key={v} value={v}>{SCRIPT_CONTENT_FORMAT_LABELS[v]}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label>Roteiro</Label>
+                <Textarea rows={10} value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
+                  placeholder="Escreva o roteiro aqui..." />
+              </div>
+              <div>
+                <Label>Legenda (opcional)</Label>
+                <Textarea rows={3} value={form.caption} onChange={e => setForm(f => ({ ...f, caption: e.target.value }))} />
               </div>
             </div>
-            <div>
-              <Label>Roteiro</Label>
-              <Textarea rows={10} value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
-                placeholder="Escreva o roteiro aqui..." />
-            </div>
-            <div>
-              <Label>Legenda (opcional)</Label>
-              <Textarea rows={3} value={form.caption} onChange={e => setForm(f => ({ ...f, caption: e.target.value }))} />
-            </div>
-          </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setFinalizing(null)}>Cancelar</Button>
             <Button onClick={saveScript} disabled={saving} className="gap-1.5">

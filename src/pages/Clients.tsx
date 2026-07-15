@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { generateClientCardPdf } from '@/lib/clientCardPdf';
 import { generateBriefingPdf } from '@/lib/briefingPdf';
+import { parseEditorial } from '@/lib/editorialFormatter';
 import { NICHE_OPTIONS, getSeasonalAlerts } from '@/lib/seasonalDates';
 import { DAY_LABELS, CONTENT_TYPE_LABELS, CLIENT_COLORS } from '@/types';
 import type { Client, DayOfWeek, ContentType } from '@/types';

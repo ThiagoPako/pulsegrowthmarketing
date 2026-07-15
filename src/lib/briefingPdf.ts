@@ -163,6 +163,28 @@ export async function generateBriefingPdf(opts: {
     y += 9;
   };
 
+  // Banner grande no topo de uma nova página (uma seção por página)
+  const startSectionPage = (title: string, subtitle?: string, isFirst = false) => {
+    if (!isFirst) doc.addPage();
+    y = 0;
+    // Faixa colorida
+    doc.setFillColor(25, 25, 35);
+    doc.rect(0, 0, pageWidth, 22, 'F');
+    doc.setFillColor(220, 60, 40);
+    doc.rect(0, 22, pageWidth, 2, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(title, margin, 13);
+    if (subtitle) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(200, 200, 210);
+      doc.text(subtitle, pageWidth - margin, 13, { align: 'right' });
+    }
+    y = 34;
+  };
+
   const writeField = (label: string, value: string) => {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
@@ -182,6 +204,7 @@ export async function generateBriefingPdf(opts: {
   };
 
   let foundAny = false;
+  let sectionsRendered = 0;
 
   for (const section of SECTIONS) {
     const items = section.keys
@@ -189,9 +212,9 @@ export async function generateBriefingPdf(opts: {
       .filter(it => it.value !== '—');
     if (items.length === 0) continue;
     foundAny = true;
-    writeSectionTitle(section.title);
+    startSectionPage(section.title, `${items.length} ${items.length === 1 ? 'resposta' : 'respostas'}`);
+    sectionsRendered++;
     for (const it of items) writeField(it.label, it.value);
-    y += 2;
   }
 
   // Quaisquer chaves não mapeadas

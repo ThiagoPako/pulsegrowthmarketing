@@ -2455,12 +2455,10 @@ export default function Clients() {
       {/* Briefing Dialog */}
       <Dialog open={!!briefingClient} onOpenChange={o => !o && setBriefingClient(null)}>
         <DialogContent className="max-w-5xl max-h-[90vh] p-0 bg-[#0a0a0a] border-white/10 overflow-hidden">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileTextIcon size={18} className="text-primary" />
-              Briefing — {briefingClient?.companyName}
-            </DialogTitle>
+          <DialogHeader className="sr-only">
+            <DialogTitle>Briefing — {briefingClient?.companyName}</DialogTitle>
           </DialogHeader>
+
           {briefingClient && <ClientBriefingView client={briefingClient} />}
         </DialogContent>
       </Dialog>

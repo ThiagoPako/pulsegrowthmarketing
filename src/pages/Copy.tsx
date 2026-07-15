@@ -1008,10 +1008,14 @@ export default function Copy() {
                                   byClient.get(cid)!.push(it.task);
                                 }
                                 const batches: { clientId: string; tasks: PendingTask[] }[] = [];
+                                const pending: { clientId: string; tasks: PendingTask[] }[] = [];
                                 for (const [cid, ts] of byClient) {
-                                  for (let i = 0; i < ts.length; i += 5) {
+                                  let i = 0;
+                                  for (; i + 5 <= ts.length; i += 5) {
                                     batches.push({ clientId: cid, tasks: ts.slice(i, i + 5) });
                                   }
+                                  const rest = ts.slice(i);
+                                  if (rest.length > 0) pending.push({ clientId: cid, tasks: rest });
                                 }
                                 return (
                                   <div className="space-y-1.5">
@@ -1060,6 +1064,36 @@ export default function Copy() {
                                               </li>
                                             ))}
                                           </ol>
+                                        </div>
+                                      );
+                                    })}
+                                    {pending.map((p, pIdx) => {
+                                      const client = clientById(p.clientId);
+                                      const missing = 5 - p.tasks.length;
+                                      return (
+                                        <div
+                                          key={`pending-${pIdx}-${p.clientId}`}
+                                          className="relative rounded-lg border border-dashed border-fuchsia-500/25 bg-fuchsia-500/[0.02] p-2.5 overflow-hidden opacity-70"
+                                        >
+                                          <span className="absolute left-0 top-0 bottom-0 w-1 bg-fuchsia-500/40" aria-hidden />
+                                          <div className="flex items-center gap-3 pl-2">
+                                            <div className="w-10 h-10 rounded-md overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
+                                              {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={14} className="text-white/30" />}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                              <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                                                <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm bg-fuchsia-500/20 text-fuchsia-200 border border-fuchsia-500/30">
+                                                  <Camera size={9} /> Aguardando {p.tasks.length}/5
+                                                </span>
+                                              </div>
+                                              <p className="text-[12px] font-black uppercase tracking-tight text-white/80 truncate">
+                                                {client?.companyName || 'Sem cliente'}
+                                              </p>
+                                              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40 truncate">
+                                                Faltam {missing} story{missing > 1 ? 's' : ''} para fechar o lote
+                                              </p>
+                                            </div>
+                                          </div>
                                         </div>
                                       );
                                     })}

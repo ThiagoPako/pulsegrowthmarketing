@@ -266,7 +266,7 @@ export async function generateBriefingPdf(opts: {
   if (editorial && String(editorial).trim()) {
     const blocks = parseEditorial(editorial);
     if (blocks.length > 0) {
-      writeSectionTitle('📝 Linha editorial');
+      startSectionPage('📝 Linha Editorial', `${blocks.length} ${blocks.length === 1 ? 'bloco' : 'blocos'}`);
 
       for (const b of blocks) {
         if (b.heading) {

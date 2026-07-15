@@ -713,6 +713,14 @@ export default function Copy() {
   // ── ORDEM MANUAL POR GRUPO (drag & drop) ──
   const orderKey = user ? `copy_queue_group_order_${user.id}` : null;
   const [customOrder, setCustomOrder] = useState<Record<string, string[]>>({});
+  const [expandedBoxes, setExpandedBoxes] = useState<Set<string>>(new Set());
+  const toggleBox = (key: string) => {
+    setExpandedBoxes(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
   useEffect(() => {
     if (!orderKey) return;
     try {
@@ -1122,35 +1130,68 @@ export default function Copy() {
                                                           opacity: snapshot.isDragging ? 0.85 : 1,
                                                         }}
                                                       >
-                                                        <button
-                                                          type="button"
-                                                          onClick={() => openStoryBatch(b.tasks)}
-                                                          disabled={isBusy}
-                                                          className={`w-full group relative rounded-lg border p-2.5 text-left overflow-hidden transition-all cursor-grab active:cursor-grabbing
-                                                            ${isFull
-                                                              ? 'border-fuchsia-500/40 bg-gradient-to-br from-fuchsia-600/15 via-fuchsia-500/5 to-transparent hover:border-fuchsia-400 hover:shadow-[0_0_0_1px_rgba(217,70,239,0.4)]'
-                                                              : 'border-dashed border-fuchsia-500/25 bg-fuchsia-500/[0.03] hover:border-fuchsia-400/60'}
-                                                            disabled:opacity-40 disabled:cursor-not-allowed`}
-                                                          title={`${client?.companyName || 'Sem cliente'} — ${b.tasks.length}/5 stories`}
-                                                        >
-                                                          <span className={`absolute left-0 top-0 bottom-0 w-1 ${isFull ? 'bg-fuchsia-500' : 'bg-fuchsia-500/40'}`} aria-hidden />
-                                                          <div className="flex items-center gap-2 pl-1.5">
-                                                            <div className="w-10 h-10 rounded-md overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
-                                                              {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={14} className="text-white/30" />}
+                                                        {(() => {
+                                                          const boxKey = `story::${b.clientId}::${b.batchIndex}`;
+                                                          const expanded = expandedBoxes.has(boxKey);
+                                                          return (
+                                                            <div className="flex flex-col">
+                                                              <button
+                                                                type="button"
+                                                                onClick={() => toggleBox(boxKey)}
+                                                                className={`w-full group relative rounded-lg border p-2.5 text-left overflow-hidden transition-all cursor-grab active:cursor-grabbing
+                                                                  ${isFull
+                                                                    ? 'border-fuchsia-500/40 bg-gradient-to-br from-fuchsia-600/15 via-fuchsia-500/5 to-transparent hover:border-fuchsia-400 hover:shadow-[0_0_0_1px_rgba(217,70,239,0.4)]'
+                                                                    : 'border-dashed border-fuchsia-500/25 bg-fuchsia-500/[0.03] hover:border-fuchsia-400/60'}
+                                                                  ${expanded ? 'ring-1 ring-fuchsia-400/60' : ''}`}
+                                                                title={`${client?.companyName || 'Sem cliente'} — ${b.tasks.length}/5 stories`}
+                                                              >
+                                                                <span className={`absolute left-0 top-0 bottom-0 w-1 ${isFull ? 'bg-fuchsia-500' : 'bg-fuchsia-500/40'}`} aria-hidden />
+                                                                <div className="flex items-center gap-2 pl-1.5">
+                                                                  <div className="w-10 h-10 rounded-md overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
+                                                                    {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={14} className="text-white/30" />}
+                                                                  </div>
+                                                                  <div className="flex-1 min-w-0">
+                                                                    <p className="text-[11px] font-black uppercase tracking-tight text-white/95 truncate leading-tight">
+                                                                      {client?.companyName || 'Sem cliente'}
+                                                                    </p>
+                                                                    <div className="flex items-center gap-1 mt-1">
+                                                                      <Camera size={9} className="text-fuchsia-300" />
+                                                                      <span className={`text-[9px] font-black tabular-nums tracking-wider ${isFull ? 'text-fuchsia-300' : 'text-fuchsia-200/70'}`}>
+                                                                        {b.tasks.length}/5 STORY
+                                                                      </span>
+                                                                    </div>
+                                                                  </div>
+                                                                </div>
+                                                              </button>
+                                                              {expanded && (
+                                                                <div className="mt-2 space-y-1.5 pl-1">
+                                                                  {isFull && (
+                                                                    <Button
+                                                                      size="sm"
+                                                                      onClick={() => openStoryBatch(b.tasks)}
+                                                                      disabled={isBusy}
+                                                                      className="w-full h-8 gap-1.5 font-black uppercase italic tracking-widest text-[10px] bg-fuchsia-600 hover:bg-fuchsia-700 text-white"
+                                                                    >
+                                                                      <Play size={11} className="fill-current" /> Iniciar lote (5)
+                                                                    </Button>
+                                                                  )}
+                                                                  {b.tasks.map((t, tIdx) => (
+                                                                    <QueueRow
+                                                                      key={`sb-row-${t.id}`}
+                                                                      item={{ kind: 'task', id: t.id, task: t, urgent: t.editing_priority } as QueueItem}
+                                                                      index={tIdx}
+                                                                    />
+                                                                  ))}
+                                                                  {!isFull && (
+                                                                    <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-fuchsia-200/50 px-1">
+                                                                      Aguardando {5 - b.tasks.length} para fechar lote
+                                                                    </p>
+                                                                  )}
+                                                                </div>
+                                                              )}
                                                             </div>
-                                                            <div className="flex-1 min-w-0">
-                                                              <p className="text-[11px] font-black uppercase tracking-tight text-white/95 truncate leading-tight">
-                                                                {client?.companyName || 'Sem cliente'}
-                                                              </p>
-                                                              <div className="flex items-center gap-1 mt-1">
-                                                                <Camera size={9} className="text-fuchsia-300" />
-                                                                <span className={`text-[9px] font-black tabular-nums tracking-wider ${isFull ? 'text-fuchsia-300' : 'text-fuchsia-200/70'}`}>
-                                                                  {b.tasks.length}/5 STORY
-                                                                </span>
-                                                              </div>
-                                                            </div>
-                                                          </div>
-                                                        </button>
+                                                          );
+                                                        })()}
                                                       </div>
                                                     )}
                                                   </Draggable>
@@ -1238,33 +1279,51 @@ export default function Copy() {
                                                           opacity: snapshot.isDragging ? 0.85 : 1,
                                                         }}
                                                       >
-                                                        <button
-                                                          type="button"
-                                                          onClick={() => openSingleTask(b.tasks[0])}
-                                                          disabled={isBusy}
-                                                          className={`w-full group relative rounded-lg border p-2.5 text-left overflow-hidden transition-all cursor-grab active:cursor-grabbing ${accent.border} bg-gradient-to-br ${accent.bg} ${accent.hoverBorder} ${accent.shadow} disabled:opacity-40 disabled:cursor-not-allowed`}
-                                                          title={`${client?.companyName || 'Sem cliente'} — ${count} ${fmtLabel}`}
-                                                        >
-                                                          <span className={`absolute left-0 top-0 bottom-0 w-1 ${accent.bar}`} aria-hidden />
-                                                          <div className="flex items-center gap-2 pl-1.5">
-                                                            <div className="w-10 h-10 rounded-md overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
-                                                              {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={14} className="text-white/30" />}
+                                                        {(() => {
+                                                          const boxKey = `${fmt}::${b.clientId}`;
+                                                          const expanded = expandedBoxes.has(boxKey);
+                                                          return (
+                                                            <div className="flex flex-col">
+                                                              <button
+                                                                type="button"
+                                                                onClick={() => toggleBox(boxKey)}
+                                                                className={`w-full group relative rounded-lg border p-2.5 text-left overflow-hidden transition-all cursor-grab active:cursor-grabbing ${accent.border} bg-gradient-to-br ${accent.bg} ${accent.hoverBorder} ${accent.shadow} ${expanded ? 'ring-1 ring-white/30' : ''}`}
+                                                                title={`${client?.companyName || 'Sem cliente'} — ${count} ${fmtLabel}`}
+                                                              >
+                                                                <span className={`absolute left-0 top-0 bottom-0 w-1 ${accent.bar}`} aria-hidden />
+                                                                <div className="flex items-center gap-2 pl-1.5">
+                                                                  <div className="w-10 h-10 rounded-md overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
+                                                                    {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={14} className="text-white/30" />}
+                                                                  </div>
+                                                                  <div className="flex-1 min-w-0">
+                                                                    <p className="text-[11px] font-black uppercase tracking-tight text-white/95 truncate leading-tight">
+                                                                      {client?.companyName || 'Sem cliente'}
+                                                                    </p>
+                                                                    <div className="flex items-center gap-1 mt-1">
+                                                                      {fmt === 'reels'
+                                                                        ? <Video size={9} className={accent.icon} />
+                                                                        : <ImageIcon size={9} className={accent.icon} />}
+                                                                      <span className={`text-[9px] font-black tabular-nums tracking-wider ${accent.count}`}>
+                                                                        {count} {fmtLabel}
+                                                                      </span>
+                                                                    </div>
+                                                                  </div>
+                                                                </div>
+                                                              </button>
+                                                              {expanded && (
+                                                                <div className="mt-2 space-y-1.5 pl-1">
+                                                                  {b.tasks.map((t, tIdx) => (
+                                                                    <QueueRow
+                                                                      key={`${fmt}-row-${t.id}`}
+                                                                      item={{ kind: 'task', id: t.id, task: t, urgent: t.editing_priority } as QueueItem}
+                                                                      index={tIdx}
+                                                                    />
+                                                                  ))}
+                                                                </div>
+                                                              )}
                                                             </div>
-                                                            <div className="flex-1 min-w-0">
-                                                              <p className="text-[11px] font-black uppercase tracking-tight text-white/95 truncate leading-tight">
-                                                                {client?.companyName || 'Sem cliente'}
-                                                              </p>
-                                                              <div className="flex items-center gap-1 mt-1">
-                                                                {fmt === 'reels'
-                                                                  ? <Video size={9} className={accent.icon} />
-                                                                  : <ImageIcon size={9} className={accent.icon} />}
-                                                                <span className={`text-[9px] font-black tabular-nums tracking-wider ${accent.count}`}>
-                                                                  {count} {fmtLabel}
-                                                                </span>
-                                                              </div>
-                                                            </div>
-                                                          </div>
-                                                        </button>
+                                                          );
+                                                        })()}
                                                       </div>
                                                     )}
                                                   </Draggable>

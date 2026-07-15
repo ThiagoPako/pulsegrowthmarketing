@@ -129,6 +129,7 @@ export default function Clients() {
   const [autoRenewal, setAutoRenewal] = useState(false);
   const [contractDurationMonths, setContractDurationMonths] = useState(12);
   const [showMetrics, setShowMetrics] = useState(true);
+  const [specialPlan, setSpecialPlan] = useState(false);
   
   // Financial contract state
   const [contractValue, setContractValue] = useState(0);
@@ -334,6 +335,8 @@ export default function Clients() {
       supabase.from('clients').select('plan_id, contract_start_date, auto_renewal, contract_duration_months, client_type, proposal_id').eq('id', client.id).single().then(({ data }) => {
         if (data) {
           setPlanId((data as any).plan_id || null);
+          // If no plan but weekly targets exist, treat as special plan
+          setSpecialPlan(!((data as any).plan_id) && ((client.weeklyReels || 0) + (client.weeklyCreatives || 0) + (client.weeklyStories || 0) > 0));
           setContractStartDate((data as any).contract_start_date || '');
           setAutoRenewal((data as any).auto_renewal || false);
           setContractDurationMonths((data as any).contract_duration_months || 12);
@@ -369,6 +372,7 @@ export default function Clients() {
       setForm(emptyClient());
       setLogoPreview(null);
       setPlanId(null);
+      setSpecialPlan(false);
       setContractStartDate('');
       setAutoRenewal(false);
       setContractDurationMonths(12);
@@ -1832,27 +1836,34 @@ export default function Clients() {
   const renderStep3 = () => (
     <div className="space-y-5">
       <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
-        <p className="text-sm font-semibold flex items-center gap-2">
-          <Target size={16} className="text-primary" /> Metas de Entrega Semanal
-        </p>
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold flex items-center gap-2">
+            <Target size={16} className="text-primary" /> Metas de Entrega Semanal
+          </p>
+          {planId && !specialPlan && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+              Definido pelo plano
+            </span>
+          )}
+        </div>
         <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-600 space-y-1">
-          <p className="font-semibold">⚠️ Preencha as metas manualmente</p>
+          <p className="font-semibold">⚠️ Como funciona</p>
           <p className="text-muted-foreground">
-            As metas de entrega semanal devem ser definidas de acordo com o combinado com o cliente. Deixe em 0 para configurar depois.
+            Selecione um plano abaixo para preencher automaticamente, ou ative <strong>Plano Especial</strong> para definir metas personalizadas combinadas com o cliente.
           </p>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="space-y-1">
             <Label>Meta Reels/Sem.</Label>
-            <Input type="number" min={0} value={form.weeklyReels ?? 0} onChange={e => setForm({ ...form, weeklyReels: Number(e.target.value) })} />
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={form.weeklyReels ?? 0} onChange={e => setForm({ ...form, weeklyReels: Number(e.target.value) })} />
           </div>
           <div className="space-y-1">
             <Label>Meta Criativos/Sem.</Label>
-            <Input type="number" min={0} value={form.weeklyCreatives ?? 0} onChange={e => setForm({ ...form, weeklyCreatives: Number(e.target.value) })} />
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={form.weeklyCreatives ?? 0} onChange={e => setForm({ ...form, weeklyCreatives: Number(e.target.value) })} />
           </div>
           <div className="space-y-1">
             <Label>Meta Stories/Sem.</Label>
-            <Input type="number" min={0} value={form.weeklyStories ?? 0} onChange={e => setForm({ ...form, weeklyStories: Number(e.target.value) })} />
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={form.weeklyStories ?? 0} onChange={e => setForm({ ...form, weeklyStories: Number(e.target.value) })} />
           </div>
           <div className="space-y-1">
             <Label>Limite Artes/Mês</Label>
@@ -1867,16 +1878,30 @@ export default function Clients() {
           </div>
           <div className="space-y-1">
             <Label>Meta Total/Sem.</Label>
-            <Input type="number" min={0} value={form.weeklyGoal ?? 0} onChange={e => setForm({ ...form, weeklyGoal: Number(e.target.value) })} />
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={form.weeklyGoal ?? 0} onChange={e => setForm({ ...form, weeklyGoal: Number(e.target.value) })} />
           </div>
         </div>
       </div>
 
       {/* Plan selection */}
       <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
-        <p className="text-sm font-semibold flex items-center gap-2">
-          <Package size={16} className="text-primary" /> Plano Contratado
-        </p>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <p className="text-sm font-semibold flex items-center gap-2">
+            <Package size={16} className="text-primary" /> Plano Contratado
+          </p>
+          <div className="flex items-center gap-2">
+            <Switch checked={specialPlan} onCheckedChange={(v) => {
+              setSpecialPlan(v);
+              if (v) setPlanId(null);
+            }} />
+            <Label className="text-xs cursor-pointer">Plano Especial (metas personalizadas)</Label>
+          </div>
+        </div>
+        {specialPlan ? (
+          <div className="p-3 rounded-lg bg-violet-500/10 border border-violet-500/20 text-xs text-violet-700 dark:text-violet-300">
+            🎯 <strong>Plano Especial ativo.</strong> Preencha as metas semanais acima manualmente conforme o combinado com o cliente.
+          </div>
+        ) : (
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label>Plano</Label>
@@ -1885,9 +1910,20 @@ export default function Clients() {
                 setPlanId(newPlanId);
                 if (newPlanId) {
                   const selectedPlan = plans.find(p => p.id === newPlanId);
-                if (selectedPlan) {
+                  if (selectedPlan) {
                     const monthlyRecordings = selectedPlan.recording_sessions || 4;
-                    setForm(prev => ({ ...prev, monthlyRecordings, acceptsExtra: selectedPlan.accepts_extra_content }));
+                    const wReels = Math.ceil((selectedPlan.reels_qty || 0) / 4);
+                    const wCreatives = Math.ceil((selectedPlan.creatives_qty || 0) / 4);
+                    const wStories = Math.ceil((selectedPlan.stories_qty || 0) / 4);
+                    setForm(prev => ({
+                      ...prev,
+                      monthlyRecordings,
+                      acceptsExtra: selectedPlan.accepts_extra_content,
+                      weeklyReels: wReels,
+                      weeklyCreatives: wCreatives,
+                      weeklyStories: wStories,
+                      weeklyGoal: wReels + wCreatives + wStories,
+                    }));
                   }
                 }
               }}>
@@ -1903,6 +1939,7 @@ export default function Clients() {
             <Input type="date" value={contractStartDate} onChange={e => setContractStartDate(e.target.value)} />
           </div>
         </div>
+        )}
         <div className="space-y-1">
           <Label>Duração do Contrato</Label>
           <Select value={String(contractDurationMonths)} onValueChange={v => setContractDurationMonths(Number(v))}>

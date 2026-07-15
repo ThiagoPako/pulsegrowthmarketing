@@ -990,29 +990,99 @@ export default function Copy() {
                                   {subItems.length}
                                 </span>
                               </div>
-                              <Droppable droppableId={dropId}>
-                                {(provided) => (
-                                  <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                                    {subItems.map((item, idx) => (
-                                      <Draggable key={`${item.kind}-${item.id}`} draggableId={`${item.kind}-${item.id}`} index={idx}>
-                                        {(prov, snapshot) => (
-                                          <div
-                                            ref={prov.innerRef}
-                                            {...prov.draggableProps}
-                                            style={{
-                                              ...prov.draggableProps.style,
-                                              opacity: snapshot.isDragging ? 0.85 : 1,
-                                            }}
-                                          >
-                                            <QueueRow item={item} index={idx} dragHandleProps={prov.dragHandleProps} />
-                                          </div>
-                                        )}
-                                      </Draggable>
+                              {fmt === 'story' ? (() => {
+                                // Requests permanecem individuais; tasks são agrupadas em lotes de 5 por cliente.
+                                const reqItems = subItems.filter(it => it.kind === 'request');
+                                const taskItems = subItems.filter(it => it.kind === 'task') as Extract<QueueItem, { kind: 'task' }>[];
+                                const byClient = new Map<string, PendingTask[]>();
+                                for (const it of taskItems) {
+                                  const cid = it.task.client_id || '__no_client__';
+                                  if (!byClient.has(cid)) byClient.set(cid, []);
+                                  byClient.get(cid)!.push(it.task);
+                                }
+                                const batches: { clientId: string; tasks: PendingTask[] }[] = [];
+                                for (const [cid, ts] of byClient) {
+                                  for (let i = 0; i < ts.length; i += 5) {
+                                    batches.push({ clientId: cid, tasks: ts.slice(i, i + 5) });
+                                  }
+                                }
+                                return (
+                                  <div className="space-y-1.5">
+                                    {reqItems.map((item, idx) => (
+                                      <QueueRow key={`${item.kind}-${item.id}`} item={item} index={idx} />
                                     ))}
-                                    {provided.placeholder}
+                                    {batches.map((b, bIdx) => {
+                                      const client = clientById(b.clientId);
+                                      return (
+                                        <div
+                                          key={`batch-${bIdx}-${b.clientId}`}
+                                          className={`relative rounded-lg border border-fuchsia-500/30 bg-gradient-to-br from-fuchsia-600/10 via-fuchsia-500/5 to-transparent p-2.5 overflow-hidden`}
+                                        >
+                                          <span className="absolute left-0 top-0 bottom-0 w-1 bg-fuchsia-500" aria-hidden />
+                                          <div className="flex items-center gap-3 mb-2 pl-2">
+                                            <div className="w-10 h-10 rounded-md overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
+                                              {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={14} className="text-white/30" />}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                              <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                                                <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm bg-fuchsia-500 text-white">
+                                                  <Camera size={9} /> Lote {b.tasks.length}× Story
+                                                </span>
+                                              </div>
+                                              <p className="text-[12px] font-black uppercase tracking-tight text-white/95 truncate">
+                                                {client?.companyName || 'Sem cliente'}
+                                              </p>
+                                              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40 truncate">
+                                                {b.tasks.length} roteiros de story em um lote
+                                              </p>
+                                            </div>
+                                            <Button
+                                              size="sm"
+                                              onClick={() => startBatch(b.tasks)}
+                                              disabled={isBusy}
+                                              className="h-8 px-3 gap-1.5 font-black uppercase italic tracking-widest text-[10px] bg-fuchsia-500 hover:bg-fuchsia-600 text-white"
+                                            >
+                                              <Play size={11} className="fill-current" /> Iniciar Lote
+                                            </Button>
+                                          </div>
+                                          <ol className="pl-2 space-y-0.5">
+                                            {b.tasks.map((t, i) => (
+                                              <li key={t.id} className="flex items-center gap-2 text-[10px] text-white/50">
+                                                <span className="tabular-nums font-black text-white/40 w-4">{String(i + 1).padStart(2, '0')}</span>
+                                                <span className="truncate">{t.title}</span>
+                                              </li>
+                                            ))}
+                                          </ol>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
-                                )}
-                              </Droppable>
+                                );
+                              })() : (
+                                <Droppable droppableId={dropId}>
+                                  {(provided) => (
+                                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                                      {subItems.map((item, idx) => (
+                                        <Draggable key={`${item.kind}-${item.id}`} draggableId={`${item.kind}-${item.id}`} index={idx}>
+                                          {(prov, snapshot) => (
+                                            <div
+                                              ref={prov.innerRef}
+                                              {...prov.draggableProps}
+                                              style={{
+                                                ...prov.draggableProps.style,
+                                                opacity: snapshot.isDragging ? 0.85 : 1,
+                                              }}
+                                            >
+                                              <QueueRow item={item} index={idx} dragHandleProps={prov.dragHandleProps} />
+                                            </div>
+                                          )}
+                                        </Draggable>
+                                      ))}
+                                      {provided.placeholder}
+                                    </div>
+                                  )}
+                                </Droppable>
+                              )}
                             </div>
                           );
                         })}

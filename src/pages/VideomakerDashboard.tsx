@@ -17,7 +17,7 @@ import {
   Play, Square, FileText, Check, Clock, Video, Users as UsersIcon,
   TrendingUp, BarChart3, Undo2, AlertTriangle, Star, Eye, ChevronLeft, Download, Link, ArrowRight,
   ThumbsDown, Pencil, MessageCircle, Send, UserCheck, Rocket, Hourglass, RefreshCw, Upload, Camera,
-  Scissors, PlusCircle, ExternalLink
+  Scissors, PlusCircle, ExternalLink, Pause, Sparkles, Film, Zap
 } from 'lucide-react';
 import LiveRecordingCard from '@/components/videomaker/LiveRecordingCard';
 import FieldworkButton from '@/components/videomaker/FieldworkButton';

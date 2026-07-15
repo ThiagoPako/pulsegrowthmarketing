@@ -335,6 +335,8 @@ export default function Clients() {
       supabase.from('clients').select('plan_id, contract_start_date, auto_renewal, contract_duration_months, client_type, proposal_id').eq('id', client.id).single().then(({ data }) => {
         if (data) {
           setPlanId((data as any).plan_id || null);
+          // If no plan but weekly targets exist, treat as special plan
+          setSpecialPlan(!((data as any).plan_id) && ((client.weeklyReels || 0) + (client.weeklyCreatives || 0) + (client.weeklyStories || 0) > 0));
           setContractStartDate((data as any).contract_start_date || '');
           setAutoRenewal((data as any).auto_renewal || false);
           setContractDurationMonths((data as any).contract_duration_months || 12);

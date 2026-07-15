@@ -1277,14 +1277,63 @@ export default function VideomakerDashboard() {
 
   useEffect(() => { void fetchActiveStorySession(); }, [fetchActiveStorySession]);
 
-  // Session timer
+  // Restore pause state from localStorage when session becomes active
+  useEffect(() => {
+    if (!storySession) {
+      setStoryPausedAt(null); setStoryTotalPausedSec(0); setStoryPauseElapsed(0);
+      return;
+    }
+    const raw = localStorage.getItem(`storyPause:${storySession.id}`);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as { pausedAt: number | null; totalPausedSec: number };
+        setStoryPausedAt(parsed.pausedAt ?? null);
+        setStoryTotalPausedSec(parsed.totalPausedSec ?? 0);
+      } catch {}
+    }
+  }, [storySession?.id]);
+
+  // Persist pause state
+  useEffect(() => {
+    if (!storySession) return;
+    localStorage.setItem(
+      `storyPause:${storySession.id}`,
+      JSON.stringify({ pausedAt: storyPausedAt, totalPausedSec: storyTotalPausedSec })
+    );
+  }, [storySession?.id, storyPausedAt, storyTotalPausedSec]);
+
+  // Session timer (subtracts total paused + current pause window)
   useEffect(() => {
     if (!storySession) { setStorySessionElapsed(0); return; }
-    const tick = () => setStorySessionElapsed(Math.floor((Date.now() - new Date(storySession.startedAt).getTime()) / 1000));
+    const startMs = new Date(storySession.startedAt).getTime();
+    const tick = () => {
+      const now = Date.now();
+      const currentPause = storyPausedAt ? Math.floor((now - storyPausedAt) / 1000) : 0;
+      setStoryPauseElapsed(currentPause);
+      const raw = Math.floor((now - startMs) / 1000);
+      setStorySessionElapsed(Math.max(0, raw - storyTotalPausedSec - currentPause));
+    };
     tick();
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
-  }, [storySession]);
+  }, [storySession, storyPausedAt, storyTotalPausedSec]);
+
+  const handlePauseStorySession = () => {
+    if (!storySession || storyPausedAt) return;
+    setStoryPausedAt(Date.now());
+    toast.info('⏸️ Edição pausada — o cronômetro parou.');
+  };
+
+  const handleResumeStorySession = () => {
+    if (!storySession || !storyPausedAt) return;
+    const pausedSec = Math.floor((Date.now() - storyPausedAt) / 1000);
+    setStoryTotalPausedSec(prev => prev + pausedSec);
+    setStoryPausedAt(null);
+    setStoryPauseElapsed(0);
+    const mins = Math.floor(pausedSec / 60);
+    const secs = pausedSec % 60;
+    toast.success(`▶️ Retomado! Pausa de ${mins > 0 ? `${mins}m` : ''}${secs}s registrada.`);
+  };
 
   const handleStartStorySession = async () => {
     if (storySession) return;
@@ -1301,12 +1350,21 @@ export default function VideomakerDashboard() {
 
   const handleStopStorySession = async () => {
     if (!storySession) return;
+    // Auto-resume if paused so accumulated time is counted correctly
+    if (storyPausedAt) {
+      const pausedSec = Math.floor((Date.now() - storyPausedAt) / 1000);
+      setStoryTotalPausedSec(prev => prev + pausedSec);
+      setStoryPausedAt(null);
+    }
     const now = new Date().toISOString();
     await supabase.from('story_editing_sessions').update({ ended_at: now } as any).eq('id', storySession.id);
     const mins = Math.floor(storySessionElapsed / 60);
-    toast.success(`✅ Sessão encerrada: ${mins}min · ${storySession.storiesCount} story(s) enviado(s)`);
+    const pauseInfo = storyTotalPausedSec > 60 ? ` (${Math.floor(storyTotalPausedSec / 60)}min em pausa)` : '';
+    toast.success(`✅ Sessão encerrada: ${mins}min · ${storySession.storiesCount} story(s) enviado(s)${pauseInfo}`);
+    localStorage.removeItem(`storyPause:${storySession.id}`);
     setStorySession(null);
   };
+
 
   // Multi-file story upload (dentro de sessão ativa)
   const handleStoryFilesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

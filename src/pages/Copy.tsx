@@ -1075,9 +1075,11 @@ export default function Copy() {
                                             <div
                                               ref={prov.innerRef}
                                               {...prov.draggableProps}
+                                              {...prov.dragHandleProps}
                                               style={{
                                                 ...prov.draggableProps.style,
                                                 opacity: snapshot.isDragging ? 0.85 : 1,
+                                                cursor: snapshot.isDragging ? 'grabbing' : 'grab',
                                               }}
                                             >
                                               <QueueRow item={item} index={idx} dragHandleProps={prov.dragHandleProps} />

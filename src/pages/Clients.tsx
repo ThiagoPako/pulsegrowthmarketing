@@ -141,6 +141,50 @@ export default function Clients() {
   const [existingSocialAccounts, setExistingSocialAccounts] = useState<any[]>([]);
   const [hasMetaApi, setHasMetaApi] = useState(false);
 
+  // ============ Validação de coerência das metas x plano ============
+  // Regras:
+  // 1. Sem plano e sem "Plano Especial" → metas semanais DEVEM ser 0 (senão gera copy sem base).
+  // 2. Plano padrão selecionado → metas DEVEM refletir o plano (reels/4, creatives/4, stories/4).
+  // 3. Plano Especial → pelo menos uma meta > 0 (senão o toggle é inútil e não gera demanda).
+  const planTargetsValidation = useMemo(() => {
+    const wReels = form.weeklyReels ?? 0;
+    const wCre = form.weeklyCreatives ?? 0;
+    const wSto = form.weeklyStories ?? 0;
+    const wGoal = form.weeklyGoal ?? 0;
+    const total = wReels + wCre + wSto;
+
+    if (specialPlan) {
+      if (total === 0) {
+        return { ok: false, level: 'error' as const, message: 'Plano Especial ativo mas todas as metas estão em 0. Defina ao menos 1 entrega semanal (reels, criativos ou stories) — caso contrário nenhuma demanda de copy será gerada.' };
+      }
+      if (wGoal !== total) {
+        return { ok: false, level: 'warn' as const, message: `Meta Total (${wGoal}) diferente da soma das metas (${total}). Isso pode gerar demandas incoerentes no módulo Copy.` };
+      }
+      return { ok: true as const };
+    }
+
+    if (!planId) {
+      if (total > 0) {
+        return { ok: false, level: 'error' as const, message: 'Sem plano selecionado, mas há metas semanais preenchidas. Selecione um plano OU ative "Plano Especial" para justificar essas metas.' };
+      }
+      return { ok: true as const };
+    }
+
+    const plan = plans.find(p => p.id === planId);
+    if (!plan) return { ok: true as const };
+    const expectedReels = Math.ceil((plan.reels_qty || 0) / 4);
+    const expectedCre = Math.ceil((plan.creatives_qty || 0) / 4);
+    const expectedSto = Math.ceil((plan.stories_qty || 0) / 4);
+    if (wReels !== expectedReels || wCre !== expectedCre || wSto !== expectedSto) {
+      return {
+        ok: false,
+        level: 'error' as const,
+        message: `Metas divergem do plano "${plan.name}" (esperado ${expectedReels} reels, ${expectedCre} criativos, ${expectedSto} stories/sem.). Reselecione o plano ou ative "Plano Especial" para editar manualmente.`,
+      };
+    }
+    return { ok: true as const };
+  }, [specialPlan, planId, plans, form.weeklyReels, form.weeklyCreatives, form.weeklyStories, form.weeklyGoal]);
+
   useEffect(() => {
     supabase.from('plans').select('id, name, status, reels_qty, creatives_qty, stories_qty, recording_sessions, accepts_extra_content').eq('status', 'ativo').then(({ data }) => {
       if (data) setPlans(data as any[]);

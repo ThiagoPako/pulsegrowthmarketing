@@ -241,6 +241,17 @@ export default function Copy() {
     broadcastChange();
   };
 
+  const openStoryBatch = (batchTasks: PendingTask[]) => {
+    if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }
+    if (batchTasks.length === 0) return;
+    const session = { batchTaskIds: batchTasks.map(t => t.id), startedAt: Date.now() };
+    setActiveSession(session);
+    if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
+    setBatchForms(batchTasks.map(t => ({ title: t.title, content: '', caption: '' })));
+    setFinalizing({ batch: batchTasks });
+    broadcastChange();
+  };
+
   const startRequest = async (req: ScriptRequest) => {
     if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }
     const session = { requestId: req.id, startedAt: Date.now() };

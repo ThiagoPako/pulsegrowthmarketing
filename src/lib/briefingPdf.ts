@@ -232,7 +232,7 @@ export async function generateBriefingPdf(opts: {
   // Anexos / Links adicionais (rótulo + URL clicável)
   const attachments = Array.isArray(data.additionalAttachments) ? data.additionalAttachments : [];
   if (attachments.length) {
-    writeSectionTitle('📎 Anexos e links adicionais');
+    startSectionPage('📎 Anexos e links adicionais');
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     for (const att of attachments) {

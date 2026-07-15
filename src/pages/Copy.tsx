@@ -241,6 +241,17 @@ export default function Copy() {
     broadcastChange();
   };
 
+  const openStoryBatch = (batchTasks: PendingTask[]) => {
+    if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }
+    if (batchTasks.length === 0) return;
+    const session = { batchTaskIds: batchTasks.map(t => t.id), startedAt: Date.now() };
+    setActiveSession(session);
+    if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
+    setBatchForms(batchTasks.map(t => ({ title: t.title, content: '', caption: '' })));
+    setFinalizing({ batch: batchTasks });
+    broadcastChange();
+  };
+
   const startRequest = async (req: ScriptRequest) => {
     if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }
     const session = { requestId: req.id, startedAt: Date.now() };
@@ -1007,106 +1018,58 @@ export default function Copy() {
                                   if (!byClient.has(cid)) byClient.set(cid, []);
                                   byClient.get(cid)!.push(it.task);
                                 }
-                                const batches: { clientId: string; tasks: PendingTask[] }[] = [];
-                                const pending: { clientId: string; tasks: PendingTask[] }[] = [];
+                                const clientBoxes: { clientId: string; tasks: PendingTask[]; batchIndex: number }[] = [];
                                 for (const [cid, ts] of byClient) {
-                                  let i = 0;
-                                  for (; i + 5 <= ts.length; i += 5) {
-                                    batches.push({ clientId: cid, tasks: ts.slice(i, i + 5) });
+                                  let batchIndex = 0;
+                                  for (let i = 0; i < ts.length; i += 5) {
+                                    clientBoxes.push({ clientId: cid, tasks: ts.slice(i, i + 5), batchIndex: batchIndex++ });
                                   }
-                                  const rest = ts.slice(i);
-                                  if (rest.length > 0) pending.push({ clientId: cid, tasks: rest });
                                 }
                                 return (
-                                  <div className="space-y-1.5">
+                                  <div className="space-y-2">
                                     {reqItems.map((item, idx) => (
                                       <QueueRow key={`${item.kind}-${item.id}`} item={item} index={idx} />
                                     ))}
-                                    {batches.map((b, bIdx) => {
-                                      const client = clientById(b.clientId);
-                                      return (
-                                        <div
-                                          key={`batch-${bIdx}-${b.clientId}`}
-                                          className={`relative rounded-lg border border-fuchsia-500/30 bg-gradient-to-br from-fuchsia-600/10 via-fuchsia-500/5 to-transparent p-2.5 overflow-hidden`}
-                                        >
-                                          <span className="absolute left-0 top-0 bottom-0 w-1 bg-fuchsia-500" aria-hidden />
-                                          <div className="flex items-center gap-3 mb-2 pl-2">
-                                            <div className="w-10 h-10 rounded-md overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
-                                              {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={14} className="text-white/30" />}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                              <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                                                <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm bg-fuchsia-500 text-white">
-                                                  <Camera size={9} /> Lote {b.tasks.length}× Story
-                                                </span>
-                                              </div>
-                                              <p className="text-[12px] font-black uppercase tracking-tight text-white/95 truncate">
-                                                {client?.companyName || 'Sem cliente'}
-                                              </p>
-                                              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40 truncate">
-                                                {b.tasks.length} roteiros de story em um lote
-                                              </p>
-                                            </div>
-                                            <Button
-                                              size="sm"
-                                              onClick={() => startBatch(b.tasks)}
+                                    {clientBoxes.length > 0 && (
+                                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                                        {clientBoxes.map((b, bIdx) => {
+                                          const client = clientById(b.clientId);
+                                          const isFull = b.tasks.length === 5;
+                                          return (
+                                            <button
+                                              key={`storybox-${bIdx}-${b.clientId}-${b.batchIndex}`}
+                                              type="button"
+                                              onClick={() => openStoryBatch(b.tasks)}
                                               disabled={isBusy}
-                                              className="h-8 px-3 gap-1.5 font-black uppercase italic tracking-widest text-[10px] bg-fuchsia-500 hover:bg-fuchsia-600 text-white"
+                                              className={`group relative rounded-lg border p-2.5 text-left overflow-hidden transition-all
+                                                ${isFull
+                                                  ? 'border-fuchsia-500/40 bg-gradient-to-br from-fuchsia-600/15 via-fuchsia-500/5 to-transparent hover:border-fuchsia-400 hover:shadow-[0_0_0_1px_rgba(217,70,239,0.4)]'
+                                                  : 'border-dashed border-fuchsia-500/25 bg-fuchsia-500/[0.03] hover:border-fuchsia-400/60'}
+                                                disabled:opacity-40 disabled:cursor-not-allowed`}
+                                              title={`${client?.companyName || 'Sem cliente'} — ${b.tasks.length}/5 stories`}
                                             >
-                                              <Play size={11} className="fill-current" /> Iniciar Lote
-                                            </Button>
-                                          </div>
-                                          <ol className="pl-2 space-y-0.5">
-                                            {b.tasks.map((t, i) => (
-                                              <li key={t.id} className="flex items-center gap-2 text-[10px] text-white/50">
-                                                <span className="tabular-nums font-black text-white/40 w-4">{String(i + 1).padStart(2, '0')}</span>
-                                                <span className="truncate">{t.title}</span>
-                                              </li>
-                                            ))}
-                                          </ol>
-                                        </div>
-                                      );
-                                    })}
-                                    {pending.length > 0 && (() => {
-                                      const totalPending = pending.reduce((acc, p) => acc + p.tasks.length, 0);
-                                      return (
-                                        <div className="relative rounded-lg border border-dashed border-fuchsia-500/25 bg-fuchsia-500/[0.02] p-3 overflow-hidden">
-                                          <span className="absolute left-0 top-0 bottom-0 w-1 bg-fuchsia-500/40" aria-hidden />
-                                          <div className="pl-2">
-                                            <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                              <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm bg-fuchsia-500/20 text-fuchsia-200 border border-fuchsia-500/30">
-                                                <Camera size={9} /> Aguardando fechar lote
-                                              </span>
-                                              <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/50">
-                                                {totalPending} story{totalPending > 1 ? 's' : ''} em {pending.length} cliente{pending.length > 1 ? 's' : ''}
-                                              </span>
-                                            </div>
-                                            <div className="flex flex-wrap gap-1.5">
-                                              {pending.map((p, pIdx) => {
-                                                const client = clientById(p.clientId);
-                                                return (
-                                                  <div
-                                                    key={`pending-${pIdx}-${p.clientId}`}
-                                                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/30 border border-white/5"
-                                                    title={`Faltam ${5 - p.tasks.length} para fechar lote`}
-                                                  >
-                                                    <div className="w-4 h-4 rounded-sm overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
-                                                      {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={8} className="text-white/30" />}
-                                                    </div>
-                                                    <span className="text-[10px] font-bold uppercase tracking-wide text-white/70 truncate max-w-[140px]">
-                                                      {client?.companyName || 'Sem cliente'}
-                                                    </span>
-                                                    <span className="text-[9px] font-black tabular-nums text-fuchsia-300">
-                                                      {p.tasks.length}/5
+                                              <span className={`absolute left-0 top-0 bottom-0 w-1 ${isFull ? 'bg-fuchsia-500' : 'bg-fuchsia-500/40'}`} aria-hidden />
+                                              <div className="flex items-center gap-2 pl-1.5">
+                                                <div className="w-10 h-10 rounded-md overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
+                                                  {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={14} className="text-white/30" />}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                  <p className="text-[11px] font-black uppercase tracking-tight text-white/95 truncate leading-tight">
+                                                    {client?.companyName || 'Sem cliente'}
+                                                  </p>
+                                                  <div className="flex items-center gap-1 mt-1">
+                                                    <Camera size={9} className="text-fuchsia-300" />
+                                                    <span className={`text-[9px] font-black tabular-nums tracking-wider ${isFull ? 'text-fuchsia-300' : 'text-fuchsia-200/70'}`}>
+                                                      {b.tasks.length}/5 STORY
                                                     </span>
                                                   </div>
-                                                );
-                                              })}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      );
-                                    })()}
+                                                </div>
+                                              </div>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               })() : (

@@ -231,6 +231,16 @@ export default function Copy() {
     broadcastChange();
   };
 
+  const startBatch = (batchTasks: PendingTask[]) => {
+    if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }
+    if (batchTasks.length === 0) return;
+    const session = { batchTaskIds: batchTasks.map(t => t.id), startedAt: Date.now() };
+    setActiveSession(session);
+    if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
+    toast.success(`Executando lote de ${batchTasks.length} stories`);
+    broadcastChange();
+  };
+
   const startRequest = async (req: ScriptRequest) => {
     if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }
     const session = { requestId: req.id, startedAt: Date.now() };

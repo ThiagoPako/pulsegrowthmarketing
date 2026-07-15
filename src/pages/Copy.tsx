@@ -1282,41 +1282,86 @@ export default function Copy() {
               <Badge variant="secondary" className="ml-auto font-mono">{formatDuration(elapsedMs)}</Badge>
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-2">
-            <div>
-              <Label>Título</Label>
-              <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+          {finalizing?.batch ? (
+            <div className="space-y-4 py-2">
+              <p className="text-xs text-muted-foreground">
+                Lote de <b>{finalizing.batch.length} stories</b> — preencha cada roteiro abaixo. Deixe em branco para pular.
+              </p>
+              {finalizing.batch.map((t, i) => {
+                const bf = batchForms[i] || { title: t.title, content: '', caption: '' };
+                const updateBf = (patch: Partial<typeof bf>) => {
+                  setBatchForms(prev => {
+                    const next = [...prev];
+                    next[i] = { ...bf, ...patch };
+                    return next;
+                  });
+                };
+                return (
+                  <div key={t.id} className="rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/[0.03] p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-black uppercase tracking-[0.25em] px-1.5 py-0.5 rounded-sm bg-fuchsia-500 text-white">
+                        Story {String(i + 1).padStart(2, '0')}
+                      </span>
+                      <Input
+                        className="h-8 text-sm flex-1"
+                        value={bf.title}
+                        onChange={e => updateBf({ title: e.target.value })}
+                        placeholder="Título"
+                      />
+                    </div>
+                    <Textarea
+                      rows={4}
+                      value={bf.content}
+                      onChange={e => updateBf({ content: e.target.value })}
+                      placeholder={`Roteiro do story ${i + 1}...`}
+                    />
+                    <Input
+                      value={bf.caption}
+                      onChange={e => updateBf({ caption: e.target.value })}
+                      placeholder="Legenda (opcional)"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                );
+              })}
             </div>
-            <div className="grid grid-cols-2 gap-3">
+          ) : (
+            <div className="space-y-3 py-2">
               <div>
-                <Label>Tipo de vídeo</Label>
-                <Select value={form.videoType} onValueChange={(v) => setForm(f => ({ ...f, videoType: v as ScriptVideoType }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {VIDEO_TYPES.map(v => <SelectItem key={v} value={v}>{SCRIPT_VIDEO_TYPE_LABELS[v]}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label>Título</Label>
+                <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Tipo de vídeo</Label>
+                  <Select value={form.videoType} onValueChange={(v) => setForm(f => ({ ...f, videoType: v as ScriptVideoType }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {VIDEO_TYPES.map(v => <SelectItem key={v} value={v}>{SCRIPT_VIDEO_TYPE_LABELS[v]}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Formato</Label>
+                  <Select value={form.contentFormat} onValueChange={(v) => setForm(f => ({ ...f, contentFormat: v as ScriptContentFormat }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CONTENT_FORMATS.map(v => <SelectItem key={v} value={v}>{SCRIPT_CONTENT_FORMAT_LABELS[v]}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div>
-                <Label>Formato</Label>
-                <Select value={form.contentFormat} onValueChange={(v) => setForm(f => ({ ...f, contentFormat: v as ScriptContentFormat }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CONTENT_FORMATS.map(v => <SelectItem key={v} value={v}>{SCRIPT_CONTENT_FORMAT_LABELS[v]}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label>Roteiro</Label>
+                <Textarea rows={10} value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
+                  placeholder="Escreva o roteiro aqui..." />
+              </div>
+              <div>
+                <Label>Legenda (opcional)</Label>
+                <Textarea rows={3} value={form.caption} onChange={e => setForm(f => ({ ...f, caption: e.target.value }))} />
               </div>
             </div>
-            <div>
-              <Label>Roteiro</Label>
-              <Textarea rows={10} value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
-                placeholder="Escreva o roteiro aqui..." />
-            </div>
-            <div>
-              <Label>Legenda (opcional)</Label>
-              <Textarea rows={3} value={form.caption} onChange={e => setForm(f => ({ ...f, caption: e.target.value }))} />
-            </div>
-          </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setFinalizing(null)}>Cancelar</Button>
             <Button onClick={saveScript} disabled={saving} className="gap-1.5">

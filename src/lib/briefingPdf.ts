@@ -46,33 +46,45 @@ const FIELD_LABELS: Record<string, string> = {
   facebookPassword: 'Facebook — senha',
   otherAccesses: 'Outros acessos',
   useRealPhotos: 'Usar fotos reais?',
+  // legado / alternativos
+  business_description: 'Descrição do negócio',
+  target_audience: 'Público-alvo',
+  differentials: 'Diferenciais',
+  tone_of_voice: 'Tom de voz',
+  goals: 'Objetivos',
+  visual_references: 'Referências visuais',
+  brand_colors: 'Cores da marca',
+  avoid: 'Evitar',
+  additional_notes: 'Observações adicionais',
+  products_services: 'Produtos / Serviços',
+  social_media_links: 'Redes sociais',
 };
 
-// Ordem de exibição agrupada por seção
+// Ordem de exibição agrupada por seção — cada seção inicia em nova página
 const SECTIONS: { title: string; keys: string[] }[] = [
   {
-    title: '📍 Sobre o negócio',
-    keys: ['ownerName', 'niche', 'mainDifferential', 'productsServices', 'businessGoals', 'attendanceType', 'targetCities', 'hasVisualIdentity', 'hasSite'],
+    title: '🏢 Identidade do Negócio',
+    keys: ['ownerName', 'niche', 'mainDifferential', 'productsServices', 'products_services', 'focusProducts', 'businessGoals', 'goals', 'attendanceType', 'targetCities', 'business_description', 'differentials'],
   },
   {
-    title: '🔍 Concorrentes e referências',
-    keys: ['competitors', 'digitalReferences', 'nicheReferences', 'dislikedCommunication'],
+    title: '🎯 Público-Alvo',
+    keys: ['idealClient', 'target_audience', 'ageRangesTarget', 'ageRangesBuyer', 'educationLevel', 'socialClass', 'clientUsesSocial', 'isAuthority'],
   },
   {
-    title: '📱 Redes sociais',
-    keys: ['socialObjectives', 'digitalDifficulty', 'socialLinks', 'importantTopics', 'comfortOnCamera', 'focusProducts', 'businessDifficulty', 'desiredRecognition', 'undesiredRecognition', 'contentReferences', 'keywords'],
+    title: '📣 Comunicação & Voz',
+    keys: ['socialObjectives', 'importantTopics', 'keywords', 'tone_of_voice', 'dislikedCommunication', 'desiredRecognition', 'undesiredRecognition', 'avoid'],
   },
   {
-    title: '🎯 Público-alvo',
-    keys: ['ageRangesTarget', 'ageRangesBuyer', 'isAuthority', 'educationLevel', 'socialClass', 'clientUsesSocial', 'idealClient'],
+    title: '🎨 Marca & Visual',
+    keys: ['hasVisualIdentity', 'brand_colors', 'useRealPhotos', 'comfortOnCamera', 'hasSite', 'socialLinks', 'social_media_links'],
   },
   {
-    title: '🖼️ Preferências visuais',
-    keys: ['useRealPhotos'],
+    title: '💡 Referências',
+    keys: ['digitalReferences', 'nicheReferences', 'contentReferences', 'visual_references', 'competitors'],
   },
   {
-    title: '✍️ Considerações finais',
-    keys: ['finalNotes'],
+    title: '⚡ Desafios & Considerações Finais',
+    keys: ['digitalDifficulty', 'businessDifficulty', 'finalNotes', 'additional_notes'],
   },
   {
     title: '🔐 Acessos',
@@ -163,6 +175,28 @@ export async function generateBriefingPdf(opts: {
     y += 9;
   };
 
+  // Banner grande no topo de uma nova página (uma seção por página)
+  const startSectionPage = (title: string, subtitle?: string, isFirst = false) => {
+    if (!isFirst) doc.addPage();
+    y = 0;
+    // Faixa colorida
+    doc.setFillColor(25, 25, 35);
+    doc.rect(0, 0, pageWidth, 22, 'F');
+    doc.setFillColor(220, 60, 40);
+    doc.rect(0, 22, pageWidth, 2, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(title, margin, 13);
+    if (subtitle) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(200, 200, 210);
+      doc.text(subtitle, pageWidth - margin, 13, { align: 'right' });
+    }
+    y = 34;
+  };
+
   const writeField = (label: string, value: string) => {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
@@ -182,6 +216,7 @@ export async function generateBriefingPdf(opts: {
   };
 
   let foundAny = false;
+  let sectionsRendered = 0;
 
   for (const section of SECTIONS) {
     const items = section.keys
@@ -189,16 +224,16 @@ export async function generateBriefingPdf(opts: {
       .filter(it => it.value !== '—');
     if (items.length === 0) continue;
     foundAny = true;
-    writeSectionTitle(section.title);
+    startSectionPage(section.title, `${items.length} ${items.length === 1 ? 'resposta' : 'respostas'}`);
+    sectionsRendered++;
     for (const it of items) writeField(it.label, it.value);
-    y += 2;
   }
 
   // Quaisquer chaves não mapeadas
   const knownKeys = new Set(SECTIONS.flatMap(s => s.keys));
   const extraKeys = Object.keys(data).filter(k => !knownKeys.has(k) && !k.startsWith('_') && k !== 'additionalAttachments');
   if (extraKeys.length) {
-    writeSectionTitle('📎 Outros campos');
+    startSectionPage('📎 Outros campos');
     for (const k of extraKeys) {
       const val = formatValue(data[k]);
       if (val === '—') continue;
@@ -209,7 +244,7 @@ export async function generateBriefingPdf(opts: {
   // Anexos / Links adicionais (rótulo + URL clicável)
   const attachments = Array.isArray(data.additionalAttachments) ? data.additionalAttachments : [];
   if (attachments.length) {
-    writeSectionTitle('📎 Anexos e links adicionais');
+    startSectionPage('📎 Anexos e links adicionais');
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     for (const att of attachments) {
@@ -243,7 +278,7 @@ export async function generateBriefingPdf(opts: {
   if (editorial && String(editorial).trim()) {
     const blocks = parseEditorial(editorial);
     if (blocks.length > 0) {
-      writeSectionTitle('📝 Linha editorial');
+      startSectionPage('📝 Linha Editorial', `${blocks.length} ${blocks.length === 1 ? 'bloco' : 'blocos'}`);
 
       for (const b of blocks) {
         if (b.heading) {

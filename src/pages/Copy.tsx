@@ -653,14 +653,18 @@ export default function Copy() {
 
   const onDragEnd = (result: DropResult) => {
     if (!result.destination) return;
-    const gk = result.source.droppableId as GroupKey;
-    if (result.destination.droppableId !== gk) return; // sem cross-group
+    const dropId = result.source.droppableId; // format: `${gk}::${fmt}`
+    if (result.destination.droppableId !== dropId) return; // sem cross-container
     if (result.destination.index === result.source.index) return;
-    const items = [...orderedGroups[gk]];
+    const [gkStr, fmtStr] = dropId.split('::');
+    const gk = gkStr as GroupKey;
+    const fmt = fmtStr as FormatKey;
+    const subItems = orderedGroups[gk].filter(it => formatOf(it) === fmt);
+    const items = [...subItems];
     const [moved] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, moved);
     const newOrder = items.map(keyOf);
-    const next = { ...customOrder, [gk]: newOrder };
+    const next = { ...customOrder, [dropId]: newOrder };
     setCustomOrder(next);
     if (orderKey) {
       try { localStorage.setItem(orderKey, JSON.stringify(next)); } catch { /* ignore */ }

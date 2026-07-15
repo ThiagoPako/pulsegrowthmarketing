@@ -1067,9 +1067,6 @@ export default function Copy() {
                                         </div>
                                       );
                                     })}
-                                  </div>
-                                );
-                                    })}
                                     {pending.map((p, pIdx) => {
                                       const client = clientById(p.clientId);
                                       const missing = 5 - p.tasks.length;

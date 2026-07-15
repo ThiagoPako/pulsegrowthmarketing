@@ -1279,33 +1279,51 @@ export default function Copy() {
                                                           opacity: snapshot.isDragging ? 0.85 : 1,
                                                         }}
                                                       >
-                                                        <button
-                                                          type="button"
-                                                          onClick={() => openSingleTask(b.tasks[0])}
-                                                          disabled={isBusy}
-                                                          className={`w-full group relative rounded-lg border p-2.5 text-left overflow-hidden transition-all cursor-grab active:cursor-grabbing ${accent.border} bg-gradient-to-br ${accent.bg} ${accent.hoverBorder} ${accent.shadow} disabled:opacity-40 disabled:cursor-not-allowed`}
-                                                          title={`${client?.companyName || 'Sem cliente'} — ${count} ${fmtLabel}`}
-                                                        >
-                                                          <span className={`absolute left-0 top-0 bottom-0 w-1 ${accent.bar}`} aria-hidden />
-                                                          <div className="flex items-center gap-2 pl-1.5">
-                                                            <div className="w-10 h-10 rounded-md overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
-                                                              {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={14} className="text-white/30" />}
+                                                        {(() => {
+                                                          const boxKey = `${fmt}::${b.clientId}`;
+                                                          const expanded = expandedBoxes.has(boxKey);
+                                                          return (
+                                                            <div className="flex flex-col">
+                                                              <button
+                                                                type="button"
+                                                                onClick={() => toggleBox(boxKey)}
+                                                                className={`w-full group relative rounded-lg border p-2.5 text-left overflow-hidden transition-all cursor-grab active:cursor-grabbing ${accent.border} bg-gradient-to-br ${accent.bg} ${accent.hoverBorder} ${accent.shadow} ${expanded ? 'ring-1 ring-white/30' : ''}`}
+                                                                title={`${client?.companyName || 'Sem cliente'} — ${count} ${fmtLabel}`}
+                                                              >
+                                                                <span className={`absolute left-0 top-0 bottom-0 w-1 ${accent.bar}`} aria-hidden />
+                                                                <div className="flex items-center gap-2 pl-1.5">
+                                                                  <div className="w-10 h-10 rounded-md overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
+                                                                    {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={14} className="text-white/30" />}
+                                                                  </div>
+                                                                  <div className="flex-1 min-w-0">
+                                                                    <p className="text-[11px] font-black uppercase tracking-tight text-white/95 truncate leading-tight">
+                                                                      {client?.companyName || 'Sem cliente'}
+                                                                    </p>
+                                                                    <div className="flex items-center gap-1 mt-1">
+                                                                      {fmt === 'reels'
+                                                                        ? <Video size={9} className={accent.icon} />
+                                                                        : <ImageIcon size={9} className={accent.icon} />}
+                                                                      <span className={`text-[9px] font-black tabular-nums tracking-wider ${accent.count}`}>
+                                                                        {count} {fmtLabel}
+                                                                      </span>
+                                                                    </div>
+                                                                  </div>
+                                                                </div>
+                                                              </button>
+                                                              {expanded && (
+                                                                <div className="mt-2 space-y-1.5 pl-1">
+                                                                  {b.tasks.map((t, tIdx) => (
+                                                                    <QueueRow
+                                                                      key={`${fmt}-row-${t.id}`}
+                                                                      item={{ kind: 'task', id: t.id, task: t, urgent: t.editing_priority } as QueueItem}
+                                                                      index={tIdx}
+                                                                    />
+                                                                  ))}
+                                                                </div>
+                                                              )}
                                                             </div>
-                                                            <div className="flex-1 min-w-0">
-                                                              <p className="text-[11px] font-black uppercase tracking-tight text-white/95 truncate leading-tight">
-                                                                {client?.companyName || 'Sem cliente'}
-                                                              </p>
-                                                              <div className="flex items-center gap-1 mt-1">
-                                                                {fmt === 'reels'
-                                                                  ? <Video size={9} className={accent.icon} />
-                                                                  : <ImageIcon size={9} className={accent.icon} />}
-                                                                <span className={`text-[9px] font-black tabular-nums tracking-wider ${accent.count}`}>
-                                                                  {count} {fmtLabel}
-                                                                </span>
-                                                              </div>
-                                                            </div>
-                                                          </div>
-                                                        </button>
+                                                          );
+                                                        })()}
                                                       </div>
                                                     )}
                                                   </Draggable>

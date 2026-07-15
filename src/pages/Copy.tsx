@@ -585,7 +585,7 @@ export default function Copy() {
   // ── UI Components (aesthetic: Pulse Academy — dark netflix-style) ──
   const highDemand = clientDemand.filter(d => d.score > 0).slice(0, 6);
 
-  const QueueRow = ({ item, index }: { item: QueueItem; index: number }) => {
+  const QueueRow = ({ item, index, dragHandleProps }: { item: QueueItem; index: number; dragHandleProps?: any }) => {
     const isReq = item.kind === 'request';
     const client = isReq ? clientById(item.req.client_id) : clientById(item.task.client_id);
     const title = isReq ? item.req.topic : item.task.title;
@@ -597,14 +597,21 @@ export default function Copy() {
     const onCancel = isReq ? () => cancelRequest(item.req.id) : undefined;
 
     return (
-      <motion.div
-        initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+      <div
         className={`group flex items-center gap-3 p-2.5 rounded-lg border transition-all ${
           isHigh
             ? 'bg-red-600/[0.06] border-red-600/25 hover:border-red-600/50'
             : 'bg-zinc-900/40 border-white/5 hover:border-white/20'
         }`}
       >
+        <button
+          {...(dragHandleProps || {})}
+          className="text-white/25 hover:text-white/70 cursor-grab active:cursor-grabbing shrink-0 p-1 -ml-1"
+          title="Arrastar para reordenar"
+          aria-label="Arrastar para reordenar"
+        >
+          <GripVertical size={14} />
+        </button>
         <div className="w-8 h-8 rounded-md bg-black/60 border border-white/10 flex items-center justify-center shrink-0">
           <span className="text-[10px] font-black italic tracking-tight text-white/70 tabular-nums">
             {String(index + 1).padStart(2, '0')}
@@ -641,9 +648,10 @@ export default function Copy() {
             </Button>
           )}
         </div>
-      </motion.div>
+      </div>
     );
   };
+
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">

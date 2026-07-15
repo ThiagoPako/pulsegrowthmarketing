@@ -1933,7 +1933,23 @@ export default function Clients() {
             <Input type="number" min={0} disabled={!!planId && !specialPlan} value={form.weeklyGoal ?? 0} onChange={e => setForm({ ...form, weeklyGoal: Number(e.target.value) })} />
           </div>
         </div>
+        {!planTargetsValidation.ok && (
+          <div className={`p-3 rounded-lg border text-xs flex gap-2 items-start ${
+            planTargetsValidation.level === 'error'
+              ? 'bg-destructive/10 border-destructive/30 text-destructive'
+              : 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400'
+          }`}>
+            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">
+                {planTargetsValidation.level === 'error' ? 'Configuração incoerente — bloqueia salvamento' : 'Atenção'}
+              </p>
+              <p>{planTargetsValidation.message}</p>
+            </div>
+          </div>
+        )}
       </div>
+
 
       {/* Plan selection */}
       <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">

@@ -88,6 +88,9 @@ export default function VideomakerDashboard() {
   // Story editing session state (nova função)
   const [storySession, setStorySession] = useState<{ id: string; startedAt: string; storiesCount: number } | null>(null);
   const [storySessionElapsed, setStorySessionElapsed] = useState(0);
+  const [storyPausedAt, setStoryPausedAt] = useState<number | null>(null);
+  const [storyTotalPausedSec, setStoryTotalPausedSec] = useState(0);
+  const [storyPauseElapsed, setStoryPauseElapsed] = useState(0);
   const [storyUploadDialogOpen, setStoryUploadDialogOpen] = useState(false);
   const storyMultiFileRef = useRef<HTMLInputElement>(null);
 

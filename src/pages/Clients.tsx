@@ -1960,7 +1960,14 @@ export default function Clients() {
           <div className="flex items-center gap-2">
             <Switch checked={specialPlan} onCheckedChange={(v) => {
               setSpecialPlan(v);
-              if (v) setPlanId(null);
+              if (v) {
+                // Ativando Plano Especial: mantém metas atuais como ponto de partida, remove plano padrão
+                setPlanId(null);
+              } else if (!planId) {
+                // Desativando sem plano definido: zera metas para evitar geração de copy sem base contratual
+                setForm(prev => ({ ...prev, weeklyReels: 0, weeklyCreatives: 0, weeklyStories: 0, weeklyGoal: 0 }));
+                toast.info('Metas semanais zeradas — selecione um plano para gerar demandas de copy.');
+              }
             }} />
             <Label className="text-xs cursor-pointer">Plano Especial (metas personalizadas)</Label>
           </div>

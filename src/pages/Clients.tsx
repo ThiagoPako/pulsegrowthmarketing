@@ -2773,20 +2773,59 @@ function ClientBriefingView({ client }: { client: Client }) {
           ) : (
             <>
               {/* Editorial */}
-              {editorial && (
-                <section>
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="h-8 w-1 rounded bg-gradient-to-b from-red-600 to-orange-500" />
-                    <div>
-                      <p className="text-[9px] font-black uppercase tracking-[0.3em] text-red-500">Fonte de verdade</p>
-                      <h3 className="text-lg font-black italic uppercase tracking-tighter">Linha Editorial</h3>
+              {editorial && (() => {
+                const blocks = parseEditorial(editorial);
+                if (blocks.length === 0) return null;
+                return (
+                  <section>
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="h-8 w-1 rounded bg-gradient-to-b from-red-600 to-orange-500" />
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-[0.3em] text-red-500">Fonte de verdade</p>
+                        <h3 className="text-lg font-black italic uppercase tracking-tighter">Linha Editorial</h3>
+                      </div>
                     </div>
-                  </div>
-                  <div className="rounded-2xl border border-red-600/20 bg-gradient-to-br from-red-600/10 via-red-600/5 to-transparent p-5 sm:p-6">
-                    <div className="prose prose-sm prose-invert max-w-none text-white/85 leading-relaxed" dangerouslySetInnerHTML={{ __html: editorial }} />
-                  </div>
-                </section>
-              )}
+                    <div className="space-y-4">
+                      {blocks.map((b, i) => (
+                        <div
+                          key={i}
+                          className={cn(
+                            'rounded-2xl border p-5 sm:p-6 transition-colors',
+                            b.level === 1
+                              ? 'border-red-600/25 bg-gradient-to-br from-red-600/10 via-red-600/5 to-transparent'
+                              : 'border-orange-500/25 bg-gradient-to-br from-orange-500/10 via-orange-500/5 to-transparent ml-0 sm:ml-6'
+                          )}
+                        >
+                          {b.heading && (
+                            <div className="flex items-center gap-2 mb-3">
+                              {b.level === 2 && <span className="h-1 w-6 rounded bg-orange-400/60" />}
+                              <h4 className={cn(
+                                'font-black italic uppercase tracking-tight',
+                                b.level === 1 ? 'text-base sm:text-lg text-white' : 'text-sm text-orange-200'
+                              )}>
+                                {b.heading}
+                              </h4>
+                            </div>
+                          )}
+                          {b.paragraphs.map((p, j) => (
+                            <p key={j} className="text-sm text-white/85 leading-relaxed mb-2 last:mb-0">{p}</p>
+                          ))}
+                          {b.bullets && b.bullets.length > 0 && (
+                            <ul className="mt-3 space-y-1.5">
+                              {b.bullets.map((it, k) => (
+                                <li key={k} className="flex gap-2 text-sm text-white/85 leading-relaxed">
+                                  <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-orange-400" />
+                                  <span>{it}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                );
+              })()}
 
               {/* Sections */}
               {SECTIONS.map((sec) => {

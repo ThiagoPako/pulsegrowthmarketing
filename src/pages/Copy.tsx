@@ -892,29 +892,65 @@ export default function Copy() {
                           {items.length}
                         </span>
                       </div>
-                      <Droppable droppableId={gk}>
-                        {(provided) => (
-                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                            {items.map((item, idx) => (
-                              <Draggable key={`${item.kind}-${item.id}`} draggableId={`${item.kind}-${item.id}`} index={idx}>
-                                {(prov, snapshot) => (
-                                  <div
-                                    ref={prov.innerRef}
-                                    {...prov.draggableProps}
-                                    style={{
-                                      ...prov.draggableProps.style,
-                                      opacity: snapshot.isDragging ? 0.85 : 1,
-                                    }}
-                                  >
-                                    <QueueRow item={item} index={idx} dragHandleProps={prov.dragHandleProps} />
+                      <div className="space-y-3">
+                        {FORMAT_ORDER.map(fmt => {
+                          const rawSub = items.filter(it => formatOf(it) === fmt);
+                          if (rawSub.length === 0) return null;
+                          const dropId = `${gk}::${fmt}`;
+                          const order = customOrder[dropId] || [];
+                          let subItems = rawSub;
+                          if (order.length > 0) {
+                            const map = new Map(rawSub.map(it => [keyOf(it), it]));
+                            const seen = new Set<string>();
+                            const first: QueueItem[] = [];
+                            for (const k of order) {
+                              const it = map.get(k);
+                              if (it) { first.push(it); seen.add(k); }
+                            }
+                            subItems = [...first, ...rawSub.filter(it => !seen.has(keyOf(it)))];
+                          }
+                          const fMeta = FORMAT_META[fmt];
+                          const FIcon = fMeta.icon;
+                          return (
+                            <div key={dropId} className={`rounded-lg border bg-gradient-to-b ${fMeta.accent} p-2.5`}>
+                              <div className="flex items-center justify-between mb-2 px-0.5">
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-6 h-6 rounded-md ${fMeta.badge} flex items-center justify-center`}>
+                                    <FIcon size={12} />
+                                  </div>
+                                  <p className={`text-[10px] font-black uppercase tracking-[0.22em] ${fMeta.text}`}>{fMeta.label}</p>
+                                </div>
+                                <span className={`text-[9px] font-black uppercase tracking-[0.25em] px-1.5 py-0.5 rounded-sm ${fMeta.badge}`}>
+                                  {subItems.length}
+                                </span>
+                              </div>
+                              <Droppable droppableId={dropId}>
+                                {(provided) => (
+                                  <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                                    {subItems.map((item, idx) => (
+                                      <Draggable key={`${item.kind}-${item.id}`} draggableId={`${item.kind}-${item.id}`} index={idx}>
+                                        {(prov, snapshot) => (
+                                          <div
+                                            ref={prov.innerRef}
+                                            {...prov.draggableProps}
+                                            style={{
+                                              ...prov.draggableProps.style,
+                                              opacity: snapshot.isDragging ? 0.85 : 1,
+                                            }}
+                                          >
+                                            <QueueRow item={item} index={idx} dragHandleProps={prov.dragHandleProps} />
+                                          </div>
+                                        )}
+                                      </Draggable>
+                                    ))}
+                                    {provided.placeholder}
                                   </div>
                                 )}
-                              </Draggable>
-                            ))}
-                            {provided.placeholder}
-                          </div>
-                        )}
-                      </Droppable>
+                              </Droppable>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })}

@@ -743,11 +743,61 @@ export default function Copy() {
 
   const totalQueue = GROUP_ORDER.reduce((n, k) => n + orderedGroups[k].length, 0);
 
+  const sortClientBoxes = <T extends { clientId: string }>(gk: GroupKey, fmt: FormatKey, boxes: T[]): T[] => {
+    const order = customOrder[`${gk}::${fmt}::boxes`] || [];
+    if (order.length === 0) return boxes;
+    const map = new Map(boxes.map(b => [b.clientId, b]));
+    const seen = new Set<string>();
+    const first: T[] = [];
+    for (const cid of order) {
+      const it = map.get(cid);
+      if (it) { first.push(it); seen.add(cid); }
+    }
+    return [...first, ...boxes.filter(b => !seen.has(b.clientId))];
+  };
+
   const onDragEnd = (result: DropResult) => {
     if (!result.destination) return;
-    const dropId = result.source.droppableId; // format: `${gk}::${fmt}`
-    if (result.destination.droppableId !== dropId) return; // sem cross-container
+    const dropId = result.source.droppableId;
+    if (result.destination.droppableId !== dropId) return;
     if (result.destination.index === result.source.index) return;
+
+    // Caixinhas de cliente: `${gk}::${fmt}::boxes` — reordena por clientId.
+    if (dropId.endsWith('::boxes')) {
+      const [gkStr, fmtStr] = dropId.split('::');
+      const gk = gkStr as GroupKey;
+      const fmt = fmtStr as FormatKey;
+      const items = orderedGroups[gk].filter(it => formatOf(it) === fmt && it.kind === 'task') as Extract<QueueItem, { kind: 'task' }>[];
+      const byClient = new Map<string, Extract<QueueItem, { kind: 'task' }>[]>();
+      for (const it of items) {
+        const cid = it.task.client_id || '__no_client__';
+        if (!byClient.has(cid)) byClient.set(cid, []);
+        byClient.get(cid)!.push(it);
+      }
+      let boxes: { clientId: string }[];
+      if (fmt === 'story') {
+        boxes = [];
+        for (const [cid, ts] of byClient) {
+          for (let i = 0; i < ts.length; i += 5) boxes.push({ clientId: cid });
+        }
+      } else {
+        boxes = Array.from(byClient.keys()).map(cid => ({ clientId: cid }));
+      }
+      const sorted = sortClientBoxes(gk, fmt, boxes);
+      const arr = [...sorted];
+      const [moved] = arr.splice(result.source.index, 1);
+      arr.splice(result.destination.index, 0, moved);
+      // Ordem única por clientId (mantém primeira ocorrência para story em lotes)
+      const newOrder: string[] = [];
+      const seen = new Set<string>();
+      for (const b of arr) { if (!seen.has(b.clientId)) { newOrder.push(b.clientId); seen.add(b.clientId); } }
+      const next = { ...customOrder, [dropId]: newOrder };
+      setCustomOrder(next);
+      if (orderKey) { try { localStorage.setItem(orderKey, JSON.stringify(next)); } catch { /* ignore */ } }
+      return;
+    }
+
+    // Linhas normais: `${gk}::${fmt}`
     const [gkStr, fmtStr] = dropId.split('::');
     const gk = gkStr as GroupKey;
     const fmt = fmtStr as FormatKey;

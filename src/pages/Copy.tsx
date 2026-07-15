@@ -65,9 +65,10 @@ export default function Copy() {
   const [tasks, setTasks] = useState<PendingTask[]>([]);
   const [requests, setRequests] = useState<ScriptRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeSession, setActiveSession] = useState<{ taskId?: string; requestId?: string; startedAt: number } | null>(null);
+  const [activeSession, setActiveSession] = useState<{ taskId?: string; requestId?: string; batchTaskIds?: string[]; startedAt: number } | null>(null);
   const [now, setNow] = useState(Date.now());
-  const [finalizing, setFinalizing] = useState<{ task?: PendingTask; request?: ScriptRequest } | null>(null);
+  const [finalizing, setFinalizing] = useState<{ task?: PendingTask; request?: ScriptRequest; batch?: PendingTask[] } | null>(null);
+  const [batchForms, setBatchForms] = useState<{ title: string; content: string; caption: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
   const [requestForm, setRequestForm] = useState({

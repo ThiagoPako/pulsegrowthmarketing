@@ -48,31 +48,31 @@ const FIELD_LABELS: Record<string, string> = {
   useRealPhotos: 'Usar fotos reais?',
 };
 
-// Ordem de exibição agrupada por seção
+// Ordem de exibição agrupada por seção — cada seção inicia em nova página
 const SECTIONS: { title: string; keys: string[] }[] = [
   {
-    title: '📍 Sobre o negócio',
-    keys: ['ownerName', 'niche', 'mainDifferential', 'productsServices', 'businessGoals', 'attendanceType', 'targetCities', 'hasVisualIdentity', 'hasSite'],
+    title: '🏢 Identidade do Negócio',
+    keys: ['ownerName', 'niche', 'mainDifferential', 'productsServices', 'products_services', 'focusProducts', 'businessGoals', 'goals', 'attendanceType', 'targetCities', 'business_description', 'differentials'],
   },
   {
-    title: '🔍 Concorrentes e referências',
-    keys: ['competitors', 'digitalReferences', 'nicheReferences', 'dislikedCommunication'],
+    title: '🎯 Público-Alvo',
+    keys: ['idealClient', 'target_audience', 'ageRangesTarget', 'ageRangesBuyer', 'educationLevel', 'socialClass', 'clientUsesSocial', 'isAuthority'],
   },
   {
-    title: '📱 Redes sociais',
-    keys: ['socialObjectives', 'digitalDifficulty', 'socialLinks', 'importantTopics', 'comfortOnCamera', 'focusProducts', 'businessDifficulty', 'desiredRecognition', 'undesiredRecognition', 'contentReferences', 'keywords'],
+    title: '📣 Comunicação & Voz',
+    keys: ['socialObjectives', 'importantTopics', 'keywords', 'tone_of_voice', 'dislikedCommunication', 'desiredRecognition', 'undesiredRecognition', 'avoid'],
   },
   {
-    title: '🎯 Público-alvo',
-    keys: ['ageRangesTarget', 'ageRangesBuyer', 'isAuthority', 'educationLevel', 'socialClass', 'clientUsesSocial', 'idealClient'],
+    title: '🎨 Marca & Visual',
+    keys: ['hasVisualIdentity', 'brand_colors', 'useRealPhotos', 'comfortOnCamera', 'hasSite', 'socialLinks', 'social_media_links'],
   },
   {
-    title: '🖼️ Preferências visuais',
-    keys: ['useRealPhotos'],
+    title: '💡 Referências',
+    keys: ['digitalReferences', 'nicheReferences', 'contentReferences', 'visual_references', 'competitors'],
   },
   {
-    title: '✍️ Considerações finais',
-    keys: ['finalNotes'],
+    title: '⚡ Desafios & Considerações Finais',
+    keys: ['digitalDifficulty', 'businessDifficulty', 'finalNotes', 'additional_notes'],
   },
   {
     title: '🔐 Acessos',

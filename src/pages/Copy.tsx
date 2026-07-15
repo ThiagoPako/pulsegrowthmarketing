@@ -683,7 +683,9 @@ export default function Copy() {
     const isReq = item.kind === 'request';
     const client = isReq ? clientById(item.req.client_id) : clientById(item.task.client_id);
     const title = isReq ? item.req.topic : item.task.title;
-    const format = isReq ? item.req.content_format : item.task.content_type;
+    const fmtKey = formatOf(item);
+    const fmtMeta = FORMAT_META[fmtKey];
+    const FmtIcon = fmtMeta.icon;
     const isHigh = isReq ? item.priority === 'alta' : item.urgent;
     const tagLabel = isReq ? (item.priority === 'alta' ? 'Prioridade Social' : 'Pedido Social') : (item.urgent ? 'Urgente' : 'Backlog');
     const tagColor = isHigh ? 'bg-red-600 text-white' : 'bg-white/10 text-white/70';
@@ -692,15 +694,16 @@ export default function Copy() {
 
     return (
       <div
-        className={`group flex items-center gap-3 p-2.5 rounded-lg border transition-all ${
+        className={`group relative flex items-center gap-3 p-2.5 rounded-lg border transition-all overflow-hidden ${
           isHigh
             ? 'bg-red-600/[0.06] border-red-600/25 hover:border-red-600/50'
             : 'bg-zinc-900/40 border-white/5 hover:border-white/20'
         }`}
       >
+        <span className={`absolute left-0 top-0 bottom-0 w-1 ${fmtMeta.ring}`} aria-hidden />
         <button
           {...(dragHandleProps || {})}
-          className="text-white/25 hover:text-white/70 cursor-grab active:cursor-grabbing shrink-0 p-1 -ml-1"
+          className="text-white/25 hover:text-white/70 cursor-grab active:cursor-grabbing shrink-0 p-1 -ml-1 ml-1"
           title="Arrastar para reordenar"
           aria-label="Arrastar para reordenar"
         >
@@ -716,8 +719,11 @@ export default function Copy() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+            <span className={`inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm ${fmtMeta.badge}`}>
+              <FmtIcon size={9} /> {fmtMeta.label}
+            </span>
             <span className={`text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm ${tagColor}`}>{tagLabel}</span>
-            <span className="text-[8px] font-black uppercase tracking-[0.2em] text-white/40">{format}</span>
+          </div>
           </div>
           <p className="text-[12px] font-black uppercase tracking-tight text-white/95 truncate">{title}</p>
           <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40 truncate">

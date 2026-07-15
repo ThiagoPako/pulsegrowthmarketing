@@ -46,6 +46,18 @@ const FIELD_LABELS: Record<string, string> = {
   facebookPassword: 'Facebook — senha',
   otherAccesses: 'Outros acessos',
   useRealPhotos: 'Usar fotos reais?',
+  // legado / alternativos
+  business_description: 'Descrição do negócio',
+  target_audience: 'Público-alvo',
+  differentials: 'Diferenciais',
+  tone_of_voice: 'Tom de voz',
+  goals: 'Objetivos',
+  visual_references: 'Referências visuais',
+  brand_colors: 'Cores da marca',
+  avoid: 'Evitar',
+  additional_notes: 'Observações adicionais',
+  products_services: 'Produtos / Serviços',
+  social_media_links: 'Redes sociais',
 };
 
 // Ordem de exibição agrupada por seção — cada seção inicia em nova página

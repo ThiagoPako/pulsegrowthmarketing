@@ -1,5 +1,7 @@
 import jsPDF from 'jspdf';
 import { parseEditorial } from './editorialFormatter';
+import pulseHeader from '@/assets/pulse_header.png';
+import pulseLogo from '@/assets/pulse_logo.png';
 
 // Mapeia as chaves usadas no formulário (ClientBriefing.tsx) para rótulos amigáveis
 const FIELD_LABELS: Record<string, string> = {
@@ -54,46 +56,51 @@ const FIELD_LABELS: Record<string, string> = {
   social_media_links: 'Redes sociais',
 };
 
-// Ordem de exibição agrupada por seção — sem emojis (helvetica não renderiza)
-const SECTIONS: { title: string; number: string; keys: string[] }[] = [
+const SECTIONS: { title: string; number: string; keys: string[]; subtitle: string }[] = [
   {
-    title: 'Identidade do Negócio',
     number: '01',
+    title: 'Identidade do Negócio',
+    subtitle: 'Quem é o cliente, o que oferece e onde atua',
     keys: ['ownerName', 'niche', 'mainDifferential', 'productsServices', 'products_services', 'focusProducts', 'businessGoals', 'goals', 'attendanceType', 'targetCities', 'business_description', 'differentials'],
   },
   {
-    title: 'Público-Alvo',
     number: '02',
+    title: 'Público-Alvo',
+    subtitle: 'Perfil de quem consome e de quem decide a compra',
     keys: ['idealClient', 'target_audience', 'ageRangesTarget', 'ageRangesBuyer', 'educationLevel', 'socialClass', 'clientUsesSocial', 'isAuthority'],
   },
   {
-    title: 'Comunicação & Voz',
     number: '03',
+    title: 'Comunicação & Voz',
+    subtitle: 'Tom, temas e posicionamento nas redes',
     keys: ['socialObjectives', 'importantTopics', 'keywords', 'tone_of_voice', 'dislikedCommunication', 'desiredRecognition', 'undesiredRecognition', 'avoid'],
   },
   {
-    title: 'Marca & Visual',
     number: '04',
+    title: 'Marca & Visual',
+    subtitle: 'Identidade visual, canais e presença atual',
     keys: ['hasVisualIdentity', 'brand_colors', 'useRealPhotos', 'comfortOnCamera', 'hasSite', 'socialLinks', 'social_media_links'],
   },
   {
-    title: 'Referências',
     number: '05',
+    title: 'Referências',
+    subtitle: 'Inspirações digitais e concorrência',
     keys: ['digitalReferences', 'nicheReferences', 'contentReferences', 'visual_references', 'competitors'],
   },
   {
-    title: 'Desafios & Considerações',
     number: '06',
+    title: 'Desafios & Considerações',
+    subtitle: 'Dores atuais e observações do cliente',
     keys: ['digitalDifficulty', 'businessDifficulty', 'finalNotes', 'additional_notes'],
   },
   {
-    title: 'Acessos',
     number: '07',
+    title: 'Acessos',
+    subtitle: 'Credenciais e permissões',
     keys: ['instagramLogin', 'instagramPassword', 'facebookLogin', 'facebookPassword', 'otherAccesses'],
   },
 ];
 
-// Remove qualquer caractere que a fonte helvetica core não renderiza (emojis, símbolos raros)
 function sanitize(s: string): string {
   if (!s) return '';
   return s
@@ -109,6 +116,28 @@ function formatValue(v: any): string {
   return String(v);
 }
 
+async function loadImageAsDataUrl(src: string): Promise<{ dataUrl: string; width: number; height: number } | null> {
+  try {
+    const res = await fetch(src);
+    const blob = await res.blob();
+    const dataUrl: string = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+    const img = new window.Image();
+    await new Promise((res2, rej) => {
+      img.onload = res2;
+      img.onerror = rej;
+      img.src = dataUrl;
+    });
+    return { dataUrl, width: img.width, height: img.height };
+  } catch {
+    return null;
+  }
+}
+
 export async function generateBriefingPdf(opts: {
   companyName: string;
   responsiblePerson?: string;
@@ -121,205 +150,376 @@ export async function generateBriefingPdf(opts: {
   const { companyName, responsiblePerson, niche, city, briefingData, editorial, submittedAt } = opts;
   const data = briefingData && typeof briefingData === 'object' ? briefingData : {};
 
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 18;
+  const margin = 20;
   const contentWidth = pageWidth - margin * 2;
   let y = 0;
 
-  // Cores (Pulse Academy)
-  const DARK: [number, number, number] = [17, 17, 27];
-  const ACCENT: [number, number, number] = [230, 88, 42]; // orange
-  const MUTED: [number, number, number] = [120, 120, 130];
-  const TEXT: [number, number, number] = [30, 30, 38];
-  const SOFT: [number, number, number] = [252, 244, 240];
+  // Paleta Pulse
+  const DARK: [number, number, number] = [13, 15, 25];
+  const DARK_2: [number, number, number] = [22, 25, 40];
+  const ACCENT: [number, number, number] = [235, 90, 45];
+  const ACCENT_SOFT: [number, number, number] = [252, 240, 234];
+  const MUTED: [number, number, number] = [130, 132, 145];
+  const TEXT: [number, number, number] = [28, 30, 40];
+  const BORDER: [number, number, number] = [230, 232, 240];
 
-  // ============ CAPA ============
+  // Carrega logos
+  const headerLogo = await loadImageAsDataUrl(pulseHeader);
+  const markLogo = await loadImageAsDataUrl(pulseLogo);
+
+  // ================= CAPA =================
   doc.setFillColor(...DARK);
   doc.rect(0, 0, pageWidth, pageHeight, 'F');
+
+  // Grid decorativo sutil
+  doc.setDrawColor(30, 34, 52);
+  doc.setLineWidth(0.1);
+  for (let gx = 0; gx < pageWidth; gx += 15) doc.line(gx, 0, gx, pageHeight);
+
   // Faixa lateral accent
   doc.setFillColor(...ACCENT);
-  doc.rect(0, 0, 6, pageHeight, 'F');
+  doc.rect(0, 0, 8, pageHeight, 'F');
 
-  // Etiqueta topo
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.setTextColor(...ACCENT);
-  doc.text('PULSE GROWTH MARKETING', margin, 30);
-  doc.setTextColor(200, 200, 210);
-  doc.setFont('helvetica', 'normal');
-  doc.text('BRIEFING ESTRATÉGICO', margin, 36);
-
-  // Título principal
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(30);
-  const titleLines = doc.splitTextToSize(sanitize(companyName), contentWidth);
-  doc.text(titleLines, margin, 90);
-
-  // Subtítulo
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(12);
-  doc.setTextColor(180, 180, 195);
-  const subLines: string[] = [];
-  if (niche) subLines.push(`Nicho · ${niche}`);
-  if (city) subLines.push(`Cidade · ${city}`);
-  if (responsiblePerson) subLines.push(`Responsável · ${responsiblePerson}`);
-  let ys = 90 + titleLines.length * 12 + 6;
-  for (const l of subLines) {
-    doc.text(l, margin, ys);
-    ys += 6;
+  // Logo Pulse (header horizontal) — grande no topo
+  if (headerLogo) {
+    const logoH = 22;
+    const logoW = (headerLogo.width / headerLogo.height) * logoH;
+    try { doc.addImage(headerLogo.dataUrl, 'PNG', margin, 32, logoW, logoH); } catch {}
+  } else {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(20);
+    doc.setTextColor(255, 255, 255);
+    doc.text('PULSE', margin, 46);
   }
 
-  // Bloco inferior
-  doc.setDrawColor(...ACCENT);
-  doc.setLineWidth(0.6);
-  doc.line(margin, pageHeight - 40, margin + 40, pageHeight - 40);
+  // Etiqueta
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
+  doc.setFontSize(8);
   doc.setTextColor(...ACCENT);
-  doc.text('DOCUMENTO CONFIDENCIAL', margin, pageHeight - 30);
+  doc.text('BRIEFING ESTRATÉGICO', margin, 68);
+  doc.setDrawColor(...ACCENT);
+  doc.setLineWidth(0.4);
+  doc.line(margin, 71, margin + 45, 71);
+
+  // Linha decorativa central
+  doc.setDrawColor(60, 65, 90);
+  doc.setLineWidth(0.2);
+  doc.line(margin, 90, pageWidth - margin, 90);
+
+  // Título gigante do cliente
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(34);
+  doc.setTextColor(255, 255, 255);
+  const titleLines = doc.splitTextToSize(sanitize(companyName), contentWidth - 10);
+  let ty = 118;
+  for (const l of titleLines) {
+    doc.text(l, margin, ty);
+    ty += 13;
+  }
+
+  // Descrição
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(180, 180, 195);
+  doc.setFontSize(11);
+  doc.setTextColor(170, 174, 195);
+  const descLines = doc.splitTextToSize(
+    'Este documento reúne todas as informações estratégicas coletadas junto ao cliente para orientar o planejamento de conteúdo, produção criativa e execução da Pulse Growth Marketing.',
+    contentWidth - 20
+  );
+  ty += 4;
+  for (const l of descLines) {
+    doc.text(l, margin, ty);
+    ty += 5.5;
+  }
+
+  // Cards de metadados (3 colunas)
+  const metaY = pageHeight - 92;
+  const metaItems: Array<[string, string]> = [];
+  if (niche) metaItems.push(['NICHO', niche]);
+  if (city) metaItems.push(['CIDADE', city]);
+  if (responsiblePerson) metaItems.push(['RESPONSÁVEL', responsiblePerson]);
   if (submittedAt) {
     const d = new Date(submittedAt);
-    if (!isNaN(d.getTime())) doc.text(`Enviado em ${d.toLocaleDateString('pt-BR')}`, margin, pageHeight - 24);
+    if (!isNaN(d.getTime())) metaItems.push(['ENVIADO EM', d.toLocaleDateString('pt-BR')]);
   }
-  doc.text('pulsegrowthmarketing.com', pageWidth - margin, pageHeight - 24, { align: 'right' });
+  const colW = (contentWidth - 12) / Math.max(metaItems.length, 1);
+  metaItems.forEach((it, i) => {
+    const cx = margin + i * (colW + 4);
+    doc.setFillColor(...DARK_2);
+    doc.rect(cx, metaY, colW, 22, 'F');
+    doc.setFillColor(...ACCENT);
+    doc.rect(cx, metaY, colW, 1.2, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(...ACCENT);
+    doc.text(it[0], cx + 4, metaY + 8);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(255, 255, 255);
+    const vLines = doc.splitTextToSize(sanitize(it[1]), colW - 8);
+    doc.text(vLines[0] || '', cx + 4, metaY + 16);
+  });
 
-  // ============ Helpers ============
-  const ensureSpace = (h: number) => {
-    if (y + h > pageHeight - 20) {
-      doc.addPage();
-      y = 28;
+  // Rodapé da capa
+  doc.setDrawColor(...ACCENT);
+  doc.setLineWidth(0.5);
+  doc.line(margin, pageHeight - 32, margin + 35, pageHeight - 32);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(...ACCENT);
+  doc.text('DOCUMENTO CONFIDENCIAL', margin, pageHeight - 24);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(170, 174, 195);
+  doc.text('Uso interno · Pulse Growth Marketing', margin, pageHeight - 18);
+  doc.text('pulsegrowthmarketing.com', pageWidth - margin, pageHeight - 18, { align: 'right' });
+
+  // ================= SUMÁRIO =================
+  const buildSummary = () => {
+    const sectionsWithData = SECTIONS.filter(s =>
+      s.keys.some(k => formatValue(data[k]) !== '—')
+    );
+    doc.addPage();
+    // Header topo
+    if (markLogo) {
+      const h = 8;
+      const w = (markLogo.width / markLogo.height) * h;
+      try { doc.addImage(markLogo.dataUrl, 'PNG', margin, 14, w, h); } catch {}
+    }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...MUTED);
+    doc.text('PULSE GROWTH MARKETING', pageWidth - margin, 20, { align: 'right' });
+
+    doc.setDrawColor(...BORDER);
+    doc.setLineWidth(0.3);
+    doc.line(margin, 28, pageWidth - margin, 28);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(28);
+    doc.setTextColor(...TEXT);
+    doc.text('Sumário', margin, 50);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    doc.setTextColor(...MUTED);
+    doc.text('Guia de leitura das seções deste briefing.', margin, 58);
+
+    let sy = 78;
+    let pageEst = 3; // começa após capa+sumario
+    for (const s of sectionsWithData) {
+      const count = s.keys.filter(k => formatValue(data[k]) !== '—').length;
+      // Número
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(22);
+      doc.setTextColor(...ACCENT);
+      doc.text(s.number, margin, sy);
+      // Título
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.setTextColor(...TEXT);
+      doc.text(s.title, margin + 16, sy - 3);
+      // Subtitle
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(...MUTED);
+      doc.text(s.subtitle, margin + 16, sy + 2);
+      // dots + página
+      doc.setFontSize(9);
+      doc.setTextColor(...MUTED);
+      doc.text(`${count} ${count === 1 ? 'resposta' : 'respostas'}   ·   pág. ${String(pageEst).padStart(2, '0')}`, pageWidth - margin, sy, { align: 'right' });
+      // divider
+      doc.setDrawColor(...BORDER);
+      doc.line(margin, sy + 6, pageWidth - margin, sy + 6);
+      sy += 15;
+      pageEst++;
+    }
+
+    // Editorial no sumário
+    if (editorial && String(editorial).trim()) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(22);
+      doc.setTextColor(...ACCENT);
+      doc.text('★', margin, sy);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.setTextColor(...TEXT);
+      doc.text('Linha Editorial', margin + 16, sy - 3);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(...MUTED);
+      doc.text('Plano estratégico e direcionamento de conteúdo', margin + 16, sy + 2);
     }
   };
 
-  const startSectionPage = (number: string, title: string, subtitle?: string) => {
-    doc.addPage();
-    y = 0;
-    // Header dark
-    doc.setFillColor(...DARK);
-    doc.rect(0, 0, pageWidth, 46, 'F');
-    doc.setFillColor(...ACCENT);
-    doc.rect(0, 46, pageWidth, 1.2, 'F');
-
-    // Número gigante à esquerda
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(38);
-    doc.setTextColor(...ACCENT);
-    doc.text(number, margin, 32);
-
-    // Título ao lado
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(18);
-    doc.setTextColor(255, 255, 255);
-    doc.text(sanitize(title), margin + 22, 26);
-    if (subtitle) {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(180, 180, 195);
-      doc.text(sanitize(subtitle), margin + 22, 34);
+  // ================= HELPERS =================
+  const ensureSpace = (h: number) => {
+    if (y + h > pageHeight - 22) {
+      doc.addPage();
+      drawContentPageHeader();
+      y = 40;
     }
-    y = 60;
+  };
+
+  let currentSectionLabel = '';
+
+  const drawContentPageHeader = () => {
+    // Marca pequena no topo direito
+    if (markLogo) {
+      const h = 6;
+      const w = (markLogo.width / markLogo.height) * h;
+      try { doc.addImage(markLogo.dataUrl, 'PNG', margin, 14, w, h); } catch {}
+    }
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...MUTED);
+    doc.text(currentSectionLabel || 'PULSE GROWTH MARKETING', pageWidth - margin, 18, { align: 'right' });
+    doc.setDrawColor(...BORDER);
+    doc.setLineWidth(0.2);
+    doc.line(margin, 24, pageWidth - margin, 24);
+  };
+
+  const startSectionPage = (number: string, title: string, subtitle: string, count: number) => {
+    doc.addPage();
+    currentSectionLabel = `${number} · ${title.toUpperCase()}`;
+    y = 0;
+    // Hero header dark
+    doc.setFillColor(...DARK);
+    doc.rect(0, 0, pageWidth, 62, 'F');
+    doc.setFillColor(...ACCENT);
+    doc.rect(0, 62, pageWidth, 1.2, 'F');
+
+    // Logo mark topo direito
+    if (markLogo) {
+      const h = 9;
+      const w = (markLogo.width / markLogo.height) * h;
+      try { doc.addImage(markLogo.dataUrl, 'PNG', pageWidth - margin - w, 16, w, h); } catch {}
+    }
+
+    // Número gigante
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(44);
+    doc.setTextColor(...ACCENT);
+    doc.text(number, margin, 44);
+
+    // Título
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(20);
+    doc.setTextColor(255, 255, 255);
+    doc.text(sanitize(title), margin + 28, 36);
+
+    // Subtítulo
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(170, 174, 195);
+    doc.text(sanitize(subtitle), margin + 28, 44);
+
+    // Contador
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...ACCENT);
+    doc.text(`${count} ${count === 1 ? 'RESPOSTA' : 'RESPOSTAS'}`, margin + 28, 52);
+
+    y = 78;
   };
 
   const writeField = (label: string, value: string) => {
     label = sanitize(label);
     value = sanitize(value) || '—';
 
-    // Label como chip
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
+    doc.setFontSize(7.5);
     const labelText = label.toUpperCase();
-    const labelLines = doc.splitTextToSize(labelText, contentWidth);
+    const labelLines = doc.splitTextToSize(labelText, contentWidth - 6);
 
-    // Valor
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10.5);
-    const valueLines = doc.splitTextToSize(value, contentWidth - 4);
+    doc.setFontSize(11);
+    const valueLines = doc.splitTextToSize(value, contentWidth - 6);
 
-    const blockH = labelLines.length * 3.8 + 2 + valueLines.length * 5.2 + 6;
-    ensureSpace(blockH);
+    const blockH = labelLines.length * 3.6 + 3 + valueLines.length * 5.6 + 8;
+    ensureSpace(blockH + 2);
 
-    // Barra accent vertical
-    doc.setDrawColor(...ACCENT);
-    doc.setLineWidth(1.5);
-    doc.line(margin, y - 2, margin, y + blockH - 8);
-    doc.setLineWidth(0.2);
+    // Card sutil
+    doc.setFillColor(250, 250, 253);
+    doc.rect(margin, y - 3, contentWidth, blockH, 'F');
+    // Barra accent
+    doc.setFillColor(...ACCENT);
+    doc.rect(margin, y - 3, 2, blockH, 'F');
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
+    doc.setFontSize(7.5);
     doc.setTextColor(...ACCENT);
-    doc.text(labelLines, margin + 4, y);
-    y += labelLines.length * 3.8 + 2;
+    doc.text(labelLines, margin + 6, y + 1);
+    let cy = y + 1 + labelLines.length * 3.6 + 3;
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10.5);
+    doc.setFontSize(11);
     doc.setTextColor(...TEXT);
-    doc.text(valueLines, margin + 4, y + 3);
-    y += valueLines.length * 5.2 + 8;
+    doc.text(valueLines, margin + 6, cy + 2);
+
+    y += blockH + 3;
   };
 
-  // ============ SEÇÕES ============
-  let foundAny = false;
+  // ================= EXECUÇÃO =================
+  buildSummary();
 
+  let foundAny = false;
   for (const section of SECTIONS) {
     const items = section.keys
       .map(k => ({ key: k, label: FIELD_LABELS[k] || k, value: formatValue(data[k]) }))
       .filter(it => it.value !== '—');
     if (items.length === 0) continue;
     foundAny = true;
-    startSectionPage(section.number, section.title, `${items.length} ${items.length === 1 ? 'resposta' : 'respostas'}`);
+    startSectionPage(section.number, section.title, section.subtitle, items.length);
     for (const it of items) writeField(it.label, it.value);
   }
 
-  // Chaves extras não mapeadas
+  // Extras
   const knownKeys = new Set(SECTIONS.flatMap(s => s.keys));
   const extraKeys = Object.keys(data).filter(k => !knownKeys.has(k) && !k.startsWith('_') && k !== 'additionalAttachments');
   if (extraKeys.length) {
-    startSectionPage('08', 'Outros campos');
-    for (const k of extraKeys) {
-      const val = formatValue(data[k]);
-      if (val === '—') continue;
-      writeField(FIELD_LABELS[k] || k.replace(/_/g, ' '), val);
+    const validExtras = extraKeys.filter(k => formatValue(data[k]) !== '—');
+    if (validExtras.length) {
+      startSectionPage('08', 'Outros Campos', 'Respostas adicionais não categorizadas', validExtras.length);
+      for (const k of validExtras) writeField(FIELD_LABELS[k] || k.replace(/_/g, ' '), formatValue(data[k]));
     }
   }
 
   // Anexos
   const attachments = Array.isArray(data.additionalAttachments) ? data.additionalAttachments : [];
-  if (attachments.length) {
-    startSectionPage('09', 'Anexos & Links', `${attachments.length} ${attachments.length === 1 ? 'item' : 'itens'}`);
-    for (const att of attachments) {
+  const validAtt = attachments.filter((a: any) => (a?.url || '').toString().trim());
+  if (validAtt.length) {
+    startSectionPage('09', 'Anexos & Links', 'Materiais e referências adicionais', validAtt.length);
+    for (const att of validAtt) {
       const label = sanitize((att?.label || '').toString().trim()) || 'Link';
       const url = (att?.url || '').toString().trim();
-      if (!url) continue;
+      const linkH = 20;
+      ensureSpace(linkH + 4);
+      doc.setFillColor(250, 250, 253);
+      doc.rect(margin, y - 3, contentWidth, linkH, 'F');
+      doc.setFillColor(...ACCENT);
+      doc.rect(margin, y - 3, 2, linkH, 'F');
 
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
+      doc.setFontSize(10);
       doc.setTextColor(...TEXT);
-      const labelLines = doc.splitTextToSize(label, contentWidth);
-      ensureSpace(labelLines.length * 4.5 + 8);
-      doc.text(labelLines, margin, y);
-      y += labelLines.length * 4.5 + 1;
+      doc.text(label, margin + 6, y + 3);
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       doc.setTextColor(40, 90, 200);
-      const urlLines = doc.splitTextToSize(url, contentWidth);
-      ensureSpace(urlLines.length * 4 + 3);
-      doc.textWithLink(urlLines.join('\n'), margin, y, { url });
-      y += urlLines.length * 4 + 6;
+      const urlLines = doc.splitTextToSize(url, contentWidth - 12);
+      doc.textWithLink(urlLines[0], margin + 6, y + 11, { url });
+      y += linkH + 3;
     }
   }
 
-  // Linha editorial
+  // Editorial
   if (editorial && String(editorial).trim()) {
     const blocks = parseEditorial(editorial);
     if (blocks.length > 0) {
-      startSectionPage('10', 'Linha Editorial', `${blocks.length} ${blocks.length === 1 ? 'bloco' : 'blocos'}`);
+      startSectionPage('10', 'Linha Editorial', 'Plano estratégico e direcionamento de conteúdo', blocks.length);
 
       for (const b of blocks) {
         if (b.heading) {
@@ -327,48 +527,48 @@ export async function generateBriefingPdf(opts: {
           const headText = sanitize(b.heading);
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(isMain ? 12 : 10.5);
-          const hLines = doc.splitTextToSize(headText, contentWidth - 8);
-          const hBoxH = hLines.length * (isMain ? 5.5 : 5) + 4;
+          const hLines = doc.splitTextToSize(headText, contentWidth - 10);
+          const hBoxH = hLines.length * (isMain ? 5.8 : 5.2) + 4;
           ensureSpace(hBoxH + 6);
-          y += 4;
+          y += 3;
 
           if (isMain) {
-            doc.setFillColor(...SOFT);
-            doc.rect(margin, y - 4, contentWidth, hBoxH, 'F');
+            doc.setFillColor(...ACCENT_SOFT);
+            doc.rect(margin, y - 3, contentWidth, hBoxH, 'F');
             doc.setFillColor(...ACCENT);
-            doc.rect(margin, y - 4, 2.5, hBoxH, 'F');
+            doc.rect(margin, y - 3, 2.5, hBoxH, 'F');
           }
           doc.setTextColor(...(isMain ? ACCENT : [180, 80, 40] as [number, number, number]));
-          doc.text(hLines, margin + (isMain ? 6 : 4), y + 1);
-          y += hBoxH + 2;
+          doc.text(hLines, margin + (isMain ? 7 : 5), y + 1);
+          y += hBoxH + 3;
         }
 
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(10);
+        doc.setFontSize(10.5);
         doc.setTextColor(...TEXT);
         for (const p of b.paragraphs) {
           const lines = doc.splitTextToSize(sanitize(p), contentWidth - (b.level === 2 ? 6 : 0));
           for (const ln of lines) {
-            ensureSpace(5.2);
+            ensureSpace(5.5);
             doc.text(ln, margin + (b.level === 2 ? 6 : 0), y);
-            y += 5.2;
+            y += 5.5;
           }
-          y += 2;
+          y += 2.5;
         }
 
         if (b.bullets && b.bullets.length) {
           for (const it of b.bullets) {
-            const lines = doc.splitTextToSize(sanitize(it), contentWidth - 10);
-            ensureSpace(lines.length * 5 + 1);
+            const lines = doc.splitTextToSize(sanitize(it), contentWidth - 12);
+            ensureSpace(lines.length * 5.3 + 1.5);
             doc.setFillColor(...ACCENT);
-            doc.circle(margin + 3, y - 1.4, 0.9, 'F');
+            doc.circle(margin + 3, y - 1.4, 1, 'F');
             doc.setTextColor(...TEXT);
-            doc.text(lines, margin + 7, y);
-            y += lines.length * 5 + 1;
+            doc.text(lines, margin + 8, y);
+            y += lines.length * 5.3 + 1.5;
           }
           y += 2;
         }
-        y += 2;
+        y += 3;
       }
     }
   }
@@ -378,15 +578,18 @@ export async function generateBriefingPdf(opts: {
     doc.setFont('helvetica', 'italic');
     doc.setFontSize(11);
     doc.setTextColor(...MUTED);
-    doc.text('Nenhuma resposta de briefing registrada para este cliente.', margin, 40);
+    doc.text('Nenhuma resposta de briefing registrada para este cliente.', margin, 60);
   }
 
   // Rodapé com numeração (exceto capa)
   const pageCount = doc.getNumberOfPages();
   for (let i = 2; i <= pageCount; i++) {
     doc.setPage(i);
+    doc.setDrawColor(...BORDER);
+    doc.setLineWidth(0.2);
+    doc.line(margin, pageHeight - 14, pageWidth - margin, pageHeight - 14);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
+    doc.setFontSize(7.5);
     doc.setTextColor(...MUTED);
     doc.text(`Pulse Growth Marketing  ·  Briefing  ·  ${sanitize(companyName)}`, margin, pageHeight - 8);
     doc.text(`${String(i - 1).padStart(2, '0')} / ${String(pageCount - 1).padStart(2, '0')}`, pageWidth - margin, pageHeight - 8, { align: 'right' });

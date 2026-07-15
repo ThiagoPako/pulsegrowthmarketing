@@ -252,6 +252,21 @@ export default function Copy() {
     broadcastChange();
   };
 
+  const openSingleTask = (task: PendingTask) => {
+    if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }
+    const session = { taskId: task.id, startedAt: Date.now() };
+    setActiveSession(session);
+    if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
+    setForm({
+      title: task.title,
+      videoType: 'vendas',
+      contentFormat: (['reels', 'story', 'criativo'].includes(task.content_type) ? task.content_type : 'reels') as ScriptContentFormat,
+      content: '', caption: '',
+    });
+    setFinalizing({ task });
+    broadcastChange();
+  };
+
   const startRequest = async (req: ScriptRequest) => {
     if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }
     const session = { requestId: req.id, startedAt: Date.now() };
@@ -1072,33 +1087,94 @@ export default function Copy() {
                                     )}
                                   </div>
                                 );
-                              })() : (
-                                <Droppable droppableId={dropId}>
-                                  {(provided) => (
-                                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                                      {subItems.map((item, idx) => (
-                                        <Draggable key={`${item.kind}-${item.id}`} draggableId={`${item.kind}-${item.id}`} index={idx}>
-                                          {(prov, snapshot) => (
-                                            <div
-                                              ref={prov.innerRef}
-                                              {...prov.draggableProps}
-                                              {...prov.dragHandleProps}
-                                              style={{
-                                                ...prov.draggableProps.style,
-                                                opacity: snapshot.isDragging ? 0.85 : 1,
-                                                cursor: snapshot.isDragging ? 'grabbing' : 'grab',
-                                              }}
+                              })() : (() => {
+                                // Reels / Criativo: requests como linhas + tasks agrupadas em caixinhas por cliente.
+                                const reqItems = subItems.filter(it => it.kind === 'request');
+                                const taskItems = subItems.filter(it => it.kind === 'task') as Extract<QueueItem, { kind: 'task' }>[];
+                                const byClient = new Map<string, PendingTask[]>();
+                                for (const it of taskItems) {
+                                  const cid = it.task.client_id || '__no_client__';
+                                  if (!byClient.has(cid)) byClient.set(cid, []);
+                                  byClient.get(cid)!.push(it.task);
+                                }
+                                const clientBoxes = Array.from(byClient.entries()).map(([clientId, ts]) => ({
+                                  clientId,
+                                  tasks: ts.slice().sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+                                }));
+                                const accent = fmt === 'reels'
+                                  ? { border: 'border-violet-500/40', hoverBorder: 'hover:border-violet-400', bg: 'from-violet-600/15 via-violet-500/5 to-transparent', bar: 'bg-violet-500', icon: 'text-violet-300', count: 'text-violet-300', shadow: 'hover:shadow-[0_0_0_1px_rgba(139,92,246,0.4)]' }
+                                  : { border: 'border-cyan-500/40', hoverBorder: 'hover:border-cyan-400', bg: 'from-cyan-600/15 via-cyan-500/5 to-transparent', bar: 'bg-cyan-500', icon: 'text-cyan-300', count: 'text-cyan-300', shadow: 'hover:shadow-[0_0_0_1px_rgba(34,211,238,0.4)]' };
+                                const fmtLabel = fmt === 'reels' ? 'REELS' : 'CRIAT.';
+                                return (
+                                  <div className="space-y-2">
+                                    {reqItems.length > 0 && (
+                                      <Droppable droppableId={dropId}>
+                                        {(provided) => (
+                                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                                            {reqItems.map((item, idx) => (
+                                              <Draggable key={`${item.kind}-${item.id}`} draggableId={`${item.kind}-${item.id}`} index={idx}>
+                                                {(prov, snapshot) => (
+                                                  <div
+                                                    ref={prov.innerRef}
+                                                    {...prov.draggableProps}
+                                                    {...prov.dragHandleProps}
+                                                    style={{
+                                                      ...prov.draggableProps.style,
+                                                      opacity: snapshot.isDragging ? 0.85 : 1,
+                                                      cursor: snapshot.isDragging ? 'grabbing' : 'grab',
+                                                    }}
+                                                  >
+                                                    <QueueRow item={item} index={idx} dragHandleProps={prov.dragHandleProps} />
+                                                  </div>
+                                                )}
+                                              </Draggable>
+                                            ))}
+                                            {provided.placeholder}
+                                          </div>
+                                        )}
+                                      </Droppable>
+                                    )}
+                                    {clientBoxes.length > 0 && (
+                                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                                        {clientBoxes.map((b) => {
+                                          const client = clientById(b.clientId);
+                                          const count = b.tasks.length;
+                                          return (
+                                            <button
+                                              key={`${fmt}box-${b.clientId}`}
+                                              type="button"
+                                              onClick={() => openSingleTask(b.tasks[0])}
+                                              disabled={isBusy}
+                                              className={`group relative rounded-lg border p-2.5 text-left overflow-hidden transition-all ${accent.border} bg-gradient-to-br ${accent.bg} ${accent.hoverBorder} ${accent.shadow} disabled:opacity-40 disabled:cursor-not-allowed`}
+                                              title={`${client?.companyName || 'Sem cliente'} — ${count} ${fmtLabel}`}
                                             >
-                                              <QueueRow item={item} index={idx} dragHandleProps={prov.dragHandleProps} />
-                                            </div>
-                                          )}
-                                        </Draggable>
-                                      ))}
-                                      {provided.placeholder}
-                                    </div>
-                                  )}
-                                </Droppable>
-                              )}
+                                              <span className={`absolute left-0 top-0 bottom-0 w-1 ${accent.bar}`} aria-hidden />
+                                              <div className="flex items-center gap-2 pl-1.5">
+                                                <div className="w-10 h-10 rounded-md overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
+                                                  {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={14} className="text-white/30" />}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                  <p className="text-[11px] font-black uppercase tracking-tight text-white/95 truncate leading-tight">
+                                                    {client?.companyName || 'Sem cliente'}
+                                                  </p>
+                                                  <div className="flex items-center gap-1 mt-1">
+                                                    {fmt === 'reels'
+                                                      ? <Video size={9} className={accent.icon} />
+                                                      : <ImageIcon size={9} className={accent.icon} />}
+                                                    <span className={`text-[9px] font-black tabular-nums tracking-wider ${accent.count}`}>
+                                                      {count} {fmtLabel}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           );
                         })}

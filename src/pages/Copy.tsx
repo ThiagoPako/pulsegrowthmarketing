@@ -713,6 +713,14 @@ export default function Copy() {
   // ── ORDEM MANUAL POR GRUPO (drag & drop) ──
   const orderKey = user ? `copy_queue_group_order_${user.id}` : null;
   const [customOrder, setCustomOrder] = useState<Record<string, string[]>>({});
+  const [expandedBoxes, setExpandedBoxes] = useState<Set<string>>(new Set());
+  const toggleBox = (key: string) => {
+    setExpandedBoxes(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
   useEffect(() => {
     if (!orderKey) return;
     try {

@@ -1008,10 +1008,14 @@ export default function Copy() {
                                   byClient.get(cid)!.push(it.task);
                                 }
                                 const batches: { clientId: string; tasks: PendingTask[] }[] = [];
+                                const pending: { clientId: string; tasks: PendingTask[] }[] = [];
                                 for (const [cid, ts] of byClient) {
-                                  for (let i = 0; i < ts.length; i += 5) {
+                                  let i = 0;
+                                  for (; i + 5 <= ts.length; i += 5) {
                                     batches.push({ clientId: cid, tasks: ts.slice(i, i + 5) });
                                   }
+                                  const rest = ts.slice(i);
+                                  if (rest.length > 0) pending.push({ clientId: cid, tasks: rest });
                                 }
                                 return (
                                   <div className="space-y-1.5">

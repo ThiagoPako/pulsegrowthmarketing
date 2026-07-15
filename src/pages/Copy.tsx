@@ -264,7 +264,10 @@ export default function Copy() {
   };
 
   const openFinalize = () => {
-    if (activeTask) {
+    if (activeBatch.length > 0) {
+      setBatchForms(activeBatch.map(t => ({ title: t.title, content: '', caption: '' })));
+      setFinalizing({ batch: activeBatch });
+    } else if (activeTask) {
       setForm({
         title: activeTask.title,
         videoType: 'vendas',
@@ -285,14 +288,60 @@ export default function Copy() {
 
   const saveScript = async () => {
     if (!finalizing || !activeSession) return;
-    if (!form.content.trim()) { toast.error('Escreva o conteúdo do roteiro'); return; }
-    const clientId = finalizing.task?.client_id || finalizing.request?.client_id;
-    if (!clientId) { toast.error('Sem cliente vinculado'); return; }
     setSaving(true);
     try {
       const durationMs = Date.now() - activeSession.startedAt;
       const durationLabel = formatDuration(durationMs);
       const nowIso = new Date().toISOString();
+
+      // ── LOTE DE STORIES ──
+      if (finalizing.batch && finalizing.batch.length > 0) {
+        const filled = batchForms
+          .map((f, i) => ({ f, task: finalizing.batch![i] }))
+          .filter(x => x.f.content.trim());
+        if (filled.length === 0) { toast.error('Escreva pelo menos um roteiro'); setSaving(false); return; }
+        for (const { f, task } of filled) {
+          if (!task.client_id) continue;
+          const scriptId = crypto.randomUUID();
+          const contentHtml = f.content.trim().startsWith('<')
+            ? f.content
+            : f.content.split(/\n{2,}/).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+          const script: Script = {
+            id: scriptId,
+            clientId: task.client_id,
+            title: f.title.trim() || task.title,
+            videoType: 'vendas',
+            contentFormat: 'story',
+            content: contentHtml,
+            recorded: false,
+            priority: 'normal',
+            createdAt: nowIso,
+            updatedAt: nowIso,
+            isEndomarketing: false,
+            caption: f.caption || undefined,
+            createdBy: user?.id,
+          };
+          await addScript(script);
+          if (f.caption) {
+            await supabase.from('scripts').update({ caption: f.caption } as any).eq('id', scriptId);
+          }
+          await supabase.from('content_tasks').update({
+            script_id: scriptId, updated_at: nowIso,
+          } as any).eq('id', task.id);
+        }
+        toast.success(`${filled.length} stories criadas em ${durationLabel}`);
+        setActiveSession(null);
+        if (sessionKey) localStorage.removeItem(sessionKey);
+        setFinalizing(null);
+        setBatchForms([]);
+        loadAll(true);
+        broadcastChange();
+        return;
+      }
+
+      if (!form.content.trim()) { toast.error('Escreva o conteúdo do roteiro'); setSaving(false); return; }
+      const clientId = finalizing.task?.client_id || finalizing.request?.client_id;
+      if (!clientId) { toast.error('Sem cliente vinculado'); setSaving(false); return; }
       const scriptId = crypto.randomUUID();
       const contentHtml = form.content.trim().startsWith('<')
         ? form.content

@@ -534,6 +534,52 @@ export default function Copy() {
     return q;
   }, [priorityRequests, urgentTasks, normalRequests, todoTasks]);
 
+  // ── ORDEM MANUAL (drag & drop) ──
+  const orderKey = user ? `copy_queue_order_${user.id}` : null;
+  const [customOrder, setCustomOrder] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = user ? localStorage.getItem(`copy_queue_order_${user.id}`) : null;
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+  useEffect(() => {
+    if (!orderKey) return;
+    try {
+      const raw = localStorage.getItem(orderKey);
+      setCustomOrder(raw ? JSON.parse(raw) : []);
+    } catch { /* ignore */ }
+  }, [orderKey]);
+
+  const keyOf = (it: QueueItem) => `${it.kind}-${it.id}`;
+
+  const orderedQueue: QueueItem[] = useMemo(() => {
+    if (customOrder.length === 0) return queue;
+    const map = new Map(queue.map(it => [keyOf(it), it]));
+    const seen = new Set<string>();
+    const first: QueueItem[] = [];
+    for (const k of customOrder) {
+      const it = map.get(k);
+      if (it) { first.push(it); seen.add(k); }
+    }
+    const rest = queue.filter(it => !seen.has(keyOf(it)));
+    return [...first, ...rest];
+  }, [queue, customOrder]);
+
+  const onDragEnd = (result: DropResult) => {
+    if (!result.destination) return;
+    if (result.destination.index === result.source.index) return;
+    const items = [...orderedQueue];
+    const [moved] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, moved);
+    const newOrder = items.map(keyOf);
+    setCustomOrder(newOrder);
+    if (orderKey) {
+      try { localStorage.setItem(orderKey, JSON.stringify(newOrder)); } catch { /* ignore */ }
+    }
+  };
+
+
   const elapsedMs = activeSession ? now - activeSession.startedAt : 0;
 
   // ── UI Components (aesthetic: Pulse Academy — dark netflix-style) ──

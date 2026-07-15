@@ -773,9 +773,35 @@ export default function Copy() {
               ✅ Fila vazia — nada pendente
             </p>
           ) : (
-            <div className="space-y-1.5 max-h-[560px] overflow-y-auto pr-1">
-              {queue.map((item, idx) => <QueueRow key={`${item.kind}-${item.id}`} item={item} index={idx} />)}
-            </div>
+            <DragDropContext onDragEnd={onDragEnd}>
+              <Droppable droppableId="copy-queue">
+                {(provided) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className="space-y-1.5 max-h-[560px] overflow-y-auto pr-1"
+                  >
+                    {orderedQueue.map((item, idx) => (
+                      <Draggable key={`${item.kind}-${item.id}`} draggableId={`${item.kind}-${item.id}`} index={idx}>
+                        {(prov, snapshot) => (
+                          <div
+                            ref={prov.innerRef}
+                            {...prov.draggableProps}
+                            style={{
+                              ...prov.draggableProps.style,
+                              opacity: snapshot.isDragging ? 0.85 : 1,
+                            }}
+                          >
+                            <QueueRow item={item} index={idx} dragHandleProps={prov.dragHandleProps} />
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
           )}
         </section>
 

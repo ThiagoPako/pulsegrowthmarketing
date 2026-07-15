@@ -12,8 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink, Database, FileText as FileTextIcon, MonitorPlay, Loader2, UserMinus } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink, Database, FileText as FileTextIcon, MonitorPlay, Loader2, UserMinus, Sparkles, Palette, Users as UsersIcon, Megaphone, Lightbulb, Camera, Award, Layers } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/vpsDb';
 import { uploadFileToVps } from '@/services/vpsApi';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
@@ -2454,13 +2455,11 @@ export default function Clients() {
 
       {/* Briefing Dialog */}
       <Dialog open={!!briefingClient} onOpenChange={o => !o && setBriefingClient(null)}>
-        <DialogContent className="max-w-2xl max-h-[85vh]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileTextIcon size={18} className="text-primary" />
-              Briefing — {briefingClient?.companyName}
-            </DialogTitle>
+        <DialogContent className="max-w-5xl max-h-[90vh] p-0 bg-[#0a0a0a] border-white/10 overflow-hidden">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Briefing — {briefingClient?.companyName}</DialogTitle>
           </DialogHeader>
+
           {briefingClient && <ClientBriefingView client={briefingClient} />}
         </DialogContent>
       </Dialog>
@@ -2629,92 +2628,78 @@ function ChecklistManager({ clientId, proposalId, onGenerate, generating }: { cl
   );
 }
 
-/* ==================== Briefing Viewer for Designer ==================== */
+/* ==================== Briefing Viewer for Designer (Pulse Academy style) ==================== */
 function ClientBriefingView({ client }: { client: Client }) {
   const briefing = (client as any).briefingData || {};
   const editorial = (client as any).editorial || '';
   const niche = client.niche;
   const [historyOpen, setHistoryOpen] = useState(false);
   const currentVersion = briefing?._version;
+  const submittedAt = briefing?._submittedAt;
   const nicheLabel = NICHE_OPTIONS.find(n => n.value === niche)?.label || niche || '—';
+  const driveIV = (client as any).driveIdentidadeVisual;
 
-  const briefingFields: { label: string; value: string }[] = [
-    { label: 'Empresa', value: client.companyName },
-    { label: 'Responsável', value: client.responsiblePerson },
-    { label: 'Nicho', value: nicheLabel },
-    { label: 'Cidade', value: (client as any).city || '—' },
+  const fmt = (v: any): string => {
+    if (v == null || v === '') return '';
+    if (Array.isArray(v)) return v.filter(x => x != null && x !== '').join(', ');
+    if (typeof v === 'boolean') return v ? 'Sim' : 'Não';
+    return String(v);
+  };
+  const has = (k: string) => {
+    const v = briefing[k];
+    if (v == null || v === '') return false;
+    if (Array.isArray(v) && v.length === 0) return false;
+    return true;
+  };
+
+  const LABELS: Record<string, string> = {
+    ownerName: 'Responsável', mainDifferential: 'Principal Diferencial',
+    productsServices: 'Produtos / Serviços', focusProducts: 'Produtos em Foco',
+    businessGoals: 'Objetivos do Negócio', attendanceType: 'Forma de Atendimento',
+    targetCities: 'Cidades-alvo', hasVisualIdentity: 'Possui Identidade Visual?',
+    hasSite: 'Site', useRealPhotos: 'Usar Fotos Reais?', comfortOnCamera: 'Conforto na Câmera',
+    socialLinks: 'Links das Redes', idealClient: 'Cliente Ideal',
+    ageRangesTarget: 'Faixa Etária do Público', ageRangesBuyer: 'Faixa Etária de Quem Compra',
+    educationLevel: 'Escolaridade', socialClass: 'Classe Social',
+    clientUsesSocial: 'Cliente Usa Redes?', isAuthority: 'É Autoridade?',
+    socialObjectives: 'Objetivos nas Redes', importantTopics: 'Assuntos Importantes',
+    keywords: 'Palavras-chave', dislikedCommunication: 'Comunicação que Não Gosta',
+    desiredRecognition: 'Reconhecimento Desejado', undesiredRecognition: 'Reconhecimento Indesejado',
+    digitalReferences: 'Referências Digitais', nicheReferences: 'Referências do Nicho',
+    contentReferences: 'Referências de Conteúdo', competitors: 'Concorrentes',
+    digitalDifficulty: 'Dificuldade no Digital', businessDifficulty: 'Dificuldade no Negócio',
+    finalNotes: 'Considerações Finais',
+    // legado
+    business_description: 'Descrição do Negócio', target_audience: 'Público-Alvo',
+    differentials: 'Diferenciais', tone_of_voice: 'Tom de Voz', goals: 'Objetivos',
+    visual_references: 'Referências Visuais', brand_colors: 'Cores da Marca',
+    avoid: 'Evitar', additional_notes: 'Observações',
+    products_services: 'Produtos/Serviços', social_media_links: 'Redes Sociais',
+  };
+
+  type Sec = { key: string; title: string; accent: string; icon: any; fields: string[] };
+  const SECTIONS: Sec[] = [
+    { key: 'identidade', title: 'Identidade do Negócio', accent: 'from-red-600 to-orange-500', icon: Building2,
+      fields: ['ownerName','mainDifferential','businessGoals','goals','productsServices','products_services','focusProducts','attendanceType','targetCities','business_description','differentials'] },
+    { key: 'publico', title: 'Público-Alvo', accent: 'from-fuchsia-500 to-pink-500', icon: UsersIcon,
+      fields: ['idealClient','target_audience','ageRangesTarget','ageRangesBuyer','educationLevel','socialClass','clientUsesSocial','isAuthority'] },
+    { key: 'comunicacao', title: 'Comunicação & Voz', accent: 'from-amber-500 to-yellow-500', icon: Megaphone,
+      fields: ['socialObjectives','importantTopics','keywords','tone_of_voice','dislikedCommunication','desiredRecognition','undesiredRecognition','avoid'] },
+    { key: 'visual', title: 'Marca & Visual', accent: 'from-violet-500 to-indigo-500', icon: Palette,
+      fields: ['hasVisualIdentity','brand_colors','useRealPhotos','comfortOnCamera','hasSite','socialLinks','social_media_links'] },
+    { key: 'refs', title: 'Referências', accent: 'from-cyan-500 to-sky-500', icon: Lightbulb,
+      fields: ['digitalReferences','nicheReferences','contentReferences','visual_references','competitors'] },
+    { key: 'desafios', title: 'Desafios & Notas Finais', accent: 'from-emerald-500 to-teal-500', icon: Award,
+      fields: ['digitalDifficulty','businessDifficulty','finalNotes','additional_notes'] },
   ];
 
-  // Extract briefing_data fields (suporta tanto snake_case legado quanto camelCase do form atual)
-  const briefingDataFields: { label: string; value: string }[] = [];
-  if (briefing && typeof briefing === 'object') {
-    const fieldMap: Record<string, string> = {
-      // legado snake_case
-      business_description: 'Descrição do Negócio',
-      target_audience: 'Público-Alvo',
-      differentials: 'Diferenciais',
-      tone_of_voice: 'Tom de Voz',
-      competitors: 'Concorrentes',
-      goals: 'Objetivos',
-      visual_references: 'Referências Visuais',
-      brand_colors: 'Cores da Marca',
-      avoid: 'Evitar',
-      additional_notes: 'Observações',
-      products_services: 'Produtos/Serviços',
-      social_media_links: 'Redes Sociais',
-      // camelCase do formulário atual (ClientBriefing.tsx)
-      ownerName: 'Responsável',
-      niche: 'Nicho',
-      mainDifferential: 'Principal Diferencial',
-      productsServices: 'Produtos / Serviços',
-      businessGoals: 'Objetivos do Negócio',
-      attendanceType: 'Forma de Atendimento',
-      targetCities: 'Cidades-alvo',
-      hasVisualIdentity: 'Possui Identidade Visual?',
-      hasSite: 'Site',
-      digitalReferences: 'Referências Digitais',
-      nicheReferences: 'Referências do Nicho',
-      dislikedCommunication: 'Comunicação que Não Gosta',
-      socialObjectives: 'Objetivos nas Redes',
-      digitalDifficulty: 'Dificuldade no Digital',
-      socialLinks: 'Links das Redes',
-      importantTopics: 'Assuntos Importantes',
-      comfortOnCamera: 'Conforto na Câmera',
-      focusProducts: 'Produtos em Foco',
-      businessDifficulty: 'Dificuldade no Negócio',
-      desiredRecognition: 'Reconhecimento Desejado',
-      undesiredRecognition: 'Reconhecimento Indesejado',
-      contentReferences: 'Referências de Conteúdo',
-      keywords: 'Palavras-chave',
-      ageRangesTarget: 'Faixa Etária do Público',
-      ageRangesBuyer: 'Faixa Etária de Quem Compra',
-      isAuthority: 'É Autoridade?',
-      educationLevel: 'Escolaridade',
-      socialClass: 'Classe Social',
-      clientUsesSocial: 'Cliente Usa Redes?',
-      idealClient: 'Cliente Ideal',
-      finalNotes: 'Considerações Finais',
-      useRealPhotos: 'Usar Fotos Reais?',
-    };
-    const fmt = (v: any): string => {
-      if (Array.isArray(v)) return v.join(', ');
-      if (typeof v === 'boolean') return v ? 'Sim' : 'Não';
-      return String(v);
-    };
-    for (const [key, label] of Object.entries(fieldMap)) {
-      const v = briefing[key];
-      if (v != null && v !== '' && !(Array.isArray(v) && v.length === 0)) {
-        briefingDataFields.push({ label, value: fmt(v) });
-      }
-    }
-    // Also capture any other keys not in the map
-    for (const [key, val] of Object.entries(briefing)) {
-      if (key.startsWith('_')) continue;
-      if (!fieldMap[key] && val && (typeof val === 'string' ? val.trim() : true)) {
-        briefingDataFields.push({ label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), value: fmt(val) });
-      }
-    }
-  }
+  const mappedKeys = new Set(SECTIONS.flatMap(s => s.fields));
+  const extras = Object.entries(briefing)
+    .filter(([k, v]) => !k.startsWith('_') && !mappedKeys.has(k) && !['niche','city'].includes(k) && v != null && v !== '' && !(Array.isArray(v) && v.length === 0))
+    .map(([k, v]) => ({ label: LABELS[k] || k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), value: fmt(v) }));
+
+  const totalFilled = SECTIONS.reduce((n, s) => n + s.fields.filter(has).length, 0) + extras.length;
+  const hasBriefing = totalFilled > 0;
 
   const handleDownloadPdf = async () => {
     try {
@@ -2725,115 +2710,150 @@ function ClientBriefingView({ client }: { client: Client }) {
         city: (client as any).city,
         briefingData: briefing,
         editorial,
-        submittedAt: briefing?._submittedAt,
+        submittedAt,
       });
-    } catch (e) {
+    } catch {
       toast.error('Erro ao gerar PDF do briefing');
     }
   };
 
-  const driveIV = (client as any).driveIdentidadeVisual;
-
   return (
-    <ScrollArea className="max-h-[65vh]">
-      <div className="space-y-4 pr-2">
-        {/* Action bar */}
-        <div className="flex items-center justify-between gap-2 pb-1">
-          <p className="text-xs text-muted-foreground">
-            {briefingDataFields.length > 0
-              ? `${briefingDataFields.length} respostas registradas${currentVersion ? ` · v${currentVersion}` : ''}`
-              : 'Briefing ainda não preenchido'}
-          </p>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => setHistoryOpen(true)} className="gap-1.5">
-              <FileTextIcon size={14} /> Histórico
-            </Button>
-            <Button size="sm" variant="outline" onClick={handleDownloadPdf} className="gap-1.5">
-              <Printer size={14} /> Baixar PDF
-            </Button>
+    <div className="bg-[#0a0a0a] text-white max-h-[90vh] overflow-hidden flex flex-col">
+      {/* ── HERO ── */}
+      <div className="relative shrink-0 overflow-hidden border-b border-white/10">
+        <div className="absolute inset-0 bg-gradient-to-br from-red-600/20 via-fuchsia-600/10 to-transparent" />
+        <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-red-600/20 blur-3xl" />
+        <div className="absolute -bottom-32 -left-24 w-96 h-96 rounded-full bg-fuchsia-600/10 blur-3xl" />
+        <div className="relative px-6 sm:px-10 py-6 sm:py-8">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-[10px] font-black uppercase tracking-[0.35em] text-red-500">Pulse</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.35em] text-white/70">Briefing</span>
+            {currentVersion && (
+              <Badge className="bg-white/10 text-white border-white/10 text-[9px] font-black uppercase tracking-widest px-2 py-0">v{currentVersion}</Badge>
+            )}
           </div>
-        </div>
-
-        <BriefingVersionsDialog
-          open={historyOpen}
-          onOpenChange={setHistoryOpen}
-          clientId={client.id}
-          companyName={client.companyName}
-        />
-
-        {/* Basic info */}
-        <div className="grid grid-cols-2 gap-3">
-          {briefingFields.map(f => (
-            <div key={f.label} className="rounded-lg border border-border p-3">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{f.label}</p>
-              <p className="text-sm font-medium mt-0.5">{f.value || '—'}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Drive Identidade Visual */}
-        {driveIV && (
-          <div className="rounded-lg border border-border p-3">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Drive de Identidade Visual</p>
-            <a href={driveIV} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1.5">
-              <ExternalLink size={12} /> Abrir Drive
-            </a>
+          <h1 className="text-2xl sm:text-4xl font-black italic uppercase tracking-tighter leading-[0.95]">
+            {client.companyName}
+          </h1>
+          <div className="mt-3 flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.2em] text-white/60">
+            {client.responsiblePerson && (<span className="flex items-center gap-1.5"><User size={11} />{client.responsiblePerson}</span>)}
+            {nicheLabel !== '—' && (<><span className="text-white/20">·</span><span className="flex items-center gap-1.5"><Layers size={11} />{nicheLabel}</span></>)}
+            {(client as any).city && (<><span className="text-white/20">·</span><span className="flex items-center gap-1.5"><Globe size={11} />{(client as any).city}</span></>)}
+            <span className="text-white/20">·</span>
+            <span className="flex items-center gap-1.5"><Sparkles size={11} className="text-emerald-400" />{totalFilled} respostas</span>
           </div>
-        )}
-
-        {/* Editorial line */}
-        {editorial && (
-          <div className="rounded-lg border border-accent bg-accent/10 p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                <FileTextIcon size={10} /> Linha Editorial
-              </p>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-[11px] gap-1"
-                onClick={() => {
-                  const safeName = (client.companyName || 'cliente').replace(/[^a-z0-9-_]+/gi, '_');
-                  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Editorial - ${client.companyName}</title><style>body{font-family:system-ui,-apple-system,sans-serif;max-width:820px;margin:2rem auto;padding:0 1.5rem;line-height:1.6;color:#111}h1{border-bottom:2px solid #eee;padding-bottom:.5rem}</style></head><body><h1>Linha Editorial — ${client.companyName}</h1>${editorial}</body></html>`;
-                  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `editorial-${safeName}.html`;
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  URL.revokeObjectURL(url);
-                }}
-              >
-                <ExternalLink size={11} /> Baixar Editorial
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Button size="sm" onClick={handleDownloadPdf} className="bg-white text-black hover:bg-gray-200 font-black uppercase tracking-widest text-[10px] h-8 gap-1.5">
+              <Printer size={12} /> Baixar PDF
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setHistoryOpen(true)} className="bg-white/10 hover:bg-white/20 text-white font-black uppercase tracking-widest text-[10px] h-8 gap-1.5 border border-white/10">
+              <FileTextIcon size={12} /> Histórico
+            </Button>
+            {driveIV && (
+              <Button size="sm" asChild variant="ghost" className="bg-violet-500/20 hover:bg-violet-500/30 text-violet-200 font-black uppercase tracking-widest text-[10px] h-8 gap-1.5 border border-violet-500/20">
+                <a href={driveIV} target="_blank" rel="noopener noreferrer"><Palette size={12} /> Identidade Visual</a>
               </Button>
-            </div>
-            <div className="text-sm leading-relaxed prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: editorial }} />
+            )}
           </div>
-        )}
-
-        {/* Briefing data */}
-        {briefingDataFields.length > 0 ? (
-          <div className="space-y-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Dados do Briefing</p>
-            {briefingDataFields.map(f => (
-              <div key={f.label} className="rounded-lg border border-border p-3">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{f.label}</p>
-                <p className="text-sm mt-1 whitespace-pre-line">{f.value}</p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          !editorial && (
-            <div className="text-center py-8 text-muted-foreground">
-              <FileTextIcon size={32} className="mx-auto mb-2 opacity-30" />
-              <p className="text-sm">Nenhum briefing preenchido para este cliente</p>
-              <p className="text-xs mt-1">O briefing é preenchido durante o onboarding do cliente</p>
-            </div>
-          )
-        )}
+        </div>
       </div>
-    </ScrollArea>
+
+      <BriefingVersionsDialog open={historyOpen} onOpenChange={setHistoryOpen} clientId={client.id} companyName={client.companyName} />
+
+      {/* ── BODY ── */}
+      <ScrollArea className="flex-1">
+        <div className="px-6 sm:px-10 py-6 sm:py-8 space-y-8">
+          {!hasBriefing && !editorial ? (
+            <div className="text-center py-20 border border-dashed border-white/10 rounded-2xl">
+              <FileTextIcon size={40} className="mx-auto mb-3 opacity-20" />
+              <p className="text-sm font-bold uppercase tracking-widest text-white/60">Briefing ainda não preenchido</p>
+              <p className="text-xs mt-2 text-white/40">Envie o link do briefing para o cliente responder.</p>
+            </div>
+          ) : (
+            <>
+              {/* Editorial */}
+              {editorial && (
+                <section>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="h-8 w-1 rounded bg-gradient-to-b from-red-600 to-orange-500" />
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-[0.3em] text-red-500">Fonte de verdade</p>
+                      <h3 className="text-lg font-black italic uppercase tracking-tighter">Linha Editorial</h3>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-red-600/20 bg-gradient-to-br from-red-600/10 via-red-600/5 to-transparent p-5 sm:p-6">
+                    <div className="prose prose-sm prose-invert max-w-none text-white/85 leading-relaxed" dangerouslySetInnerHTML={{ __html: editorial }} />
+                  </div>
+                </section>
+              )}
+
+              {/* Sections */}
+              {SECTIONS.map((sec) => {
+                const items = sec.fields.filter(has).map(k => ({ key: k, label: LABELS[k] || k, value: fmt(briefing[k]) }));
+                if (items.length === 0) return null;
+                const Icon = sec.icon;
+                return (
+                  <section key={sec.key}>
+                    <div className="flex items-center justify-between gap-3 mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`h-8 w-1 rounded bg-gradient-to-b ${sec.accent}`} />
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40">{items.length} {items.length === 1 ? 'resposta' : 'respostas'}</p>
+                          <h3 className="text-lg font-black italic uppercase tracking-tighter flex items-center gap-2">
+                            <Icon size={16} className="text-white/70" /> {sec.title}
+                          </h3>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {items.map(it => {
+                        const isLong = it.value.length > 120;
+                        return (
+                          <div
+                            key={it.key}
+                            className={cn(
+                              'group relative rounded-xl border border-white/5 bg-gradient-to-b from-zinc-900/80 to-zinc-900/20 p-4 transition-all hover:border-white/20 hover:shadow-[0_0_25px_rgba(255,255,255,0.03)]',
+                              isLong && 'md:col-span-2'
+                            )}
+                          >
+                            <div className={`absolute left-0 top-0 h-full w-[2px] rounded-l bg-gradient-to-b ${sec.accent} opacity-40 group-hover:opacity-100 transition-opacity`} />
+                            <p className="text-[9px] font-black uppercase tracking-[0.25em] text-white/40 mb-1.5">{it.label}</p>
+                            <p className="text-sm text-white/90 whitespace-pre-line leading-relaxed">{it.value}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+
+              {/* Extras não mapeados */}
+              {extras.length > 0 && (
+                <section>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="h-8 w-1 rounded bg-gradient-to-b from-zinc-500 to-zinc-700" />
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40">{extras.length} campos</p>
+                      <h3 className="text-lg font-black italic uppercase tracking-tighter flex items-center gap-2">
+                        <Info size={16} className="text-white/70" /> Outras Informações
+                      </h3>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {extras.map((it, i) => (
+                      <div key={i} className="rounded-xl border border-white/5 bg-zinc-900/40 p-4">
+                        <p className="text-[9px] font-black uppercase tracking-[0.25em] text-white/40 mb-1.5">{it.label}</p>
+                        <p className="text-sm text-white/90 whitespace-pre-line leading-relaxed">{it.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
   );
 }
+

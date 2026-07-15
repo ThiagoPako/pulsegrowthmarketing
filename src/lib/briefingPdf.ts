@@ -239,18 +239,55 @@ export async function generateBriefingPdf(opts: {
     y += 2;
   }
 
-  // Linha editorial (texto livre)
+  // Linha editorial (parseada em blocos)
   if (editorial && String(editorial).trim()) {
-    writeSectionTitle('📝 Linha editorial gerada');
-    const plain = String(editorial).replace(/<[^>]+>/g, '').replace(/\*\*/g, '').replace(/##\s?/g, '');
-    const lines = doc.splitTextToSize(plain, contentWidth);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(20, 20, 20);
-    for (const ln of lines) {
-      ensureSpace(5);
-      doc.text(ln, margin, y);
-      y += 5;
+    const blocks = parseEditorial(editorial);
+    if (blocks.length > 0) {
+      writeSectionTitle('📝 Linha editorial');
+
+      for (const b of blocks) {
+        if (b.heading) {
+          const isMain = b.level === 1;
+          ensureSpace(isMain ? 12 : 10);
+          y += isMain ? 3 : 1;
+          if (isMain) {
+            doc.setFillColor(255, 240, 235);
+            doc.rect(margin, y - 4, contentWidth, 7, 'F');
+          }
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(isMain ? 11 : 10);
+          doc.setTextColor(isMain ? 180 : 200, isMain ? 60 : 100, 40);
+          doc.text(b.heading, margin + (isMain ? 2 : 4), y + 1);
+          y += isMain ? 8 : 6;
+        }
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(30, 30, 30);
+        for (const p of b.paragraphs) {
+          const lines = doc.splitTextToSize(p, contentWidth - (b.level === 2 ? 4 : 0));
+          for (const ln of lines) {
+            ensureSpace(5);
+            doc.text(ln, margin + (b.level === 2 ? 4 : 0), y);
+            y += 5;
+          }
+          y += 2;
+        }
+
+        if (b.bullets && b.bullets.length) {
+          for (const it of b.bullets) {
+            const lines = doc.splitTextToSize(it, contentWidth - 8);
+            ensureSpace(lines.length * 5 + 1);
+            doc.setFillColor(220, 90, 40);
+            doc.circle(margin + 2, y - 1.5, 0.8, 'F');
+            doc.setTextColor(30, 30, 30);
+            doc.text(lines, margin + 6, y);
+            y += lines.length * 5 + 1;
+          }
+          y += 2;
+        }
+        y += 2;
+      }
     }
   }
 

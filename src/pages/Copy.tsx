@@ -15,8 +15,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Pause, CheckCircle2, Flame, FileText, Clock, User as UserIcon,
   PenLine, Sparkles, PlusCircle, AlertTriangle, TrendingUp, Package,
-  Send, Trash2, ListChecks, Target, CalendarDays
+  Send, Trash2, ListChecks, Target, CalendarDays, GripVertical
 } from 'lucide-react';
+import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import ClientLogo from '@/components/ClientLogo';
 import type { Script, ScriptVideoType, ScriptContentFormat } from '@/types';
 import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_CONTENT_FORMAT_LABELS } from '@/types';
@@ -533,12 +534,58 @@ export default function Copy() {
     return q;
   }, [priorityRequests, urgentTasks, normalRequests, todoTasks]);
 
+  // ── ORDEM MANUAL (drag & drop) ──
+  const orderKey = user ? `copy_queue_order_${user.id}` : null;
+  const [customOrder, setCustomOrder] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = user ? localStorage.getItem(`copy_queue_order_${user.id}`) : null;
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+  useEffect(() => {
+    if (!orderKey) return;
+    try {
+      const raw = localStorage.getItem(orderKey);
+      setCustomOrder(raw ? JSON.parse(raw) : []);
+    } catch { /* ignore */ }
+  }, [orderKey]);
+
+  const keyOf = (it: QueueItem) => `${it.kind}-${it.id}`;
+
+  const orderedQueue: QueueItem[] = useMemo(() => {
+    if (customOrder.length === 0) return queue;
+    const map = new Map(queue.map(it => [keyOf(it), it]));
+    const seen = new Set<string>();
+    const first: QueueItem[] = [];
+    for (const k of customOrder) {
+      const it = map.get(k);
+      if (it) { first.push(it); seen.add(k); }
+    }
+    const rest = queue.filter(it => !seen.has(keyOf(it)));
+    return [...first, ...rest];
+  }, [queue, customOrder]);
+
+  const onDragEnd = (result: DropResult) => {
+    if (!result.destination) return;
+    if (result.destination.index === result.source.index) return;
+    const items = [...orderedQueue];
+    const [moved] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, moved);
+    const newOrder = items.map(keyOf);
+    setCustomOrder(newOrder);
+    if (orderKey) {
+      try { localStorage.setItem(orderKey, JSON.stringify(newOrder)); } catch { /* ignore */ }
+    }
+  };
+
+
   const elapsedMs = activeSession ? now - activeSession.startedAt : 0;
 
   // ── UI Components (aesthetic: Pulse Academy — dark netflix-style) ──
   const highDemand = clientDemand.filter(d => d.score > 0).slice(0, 6);
 
-  const QueueRow = ({ item, index }: { item: QueueItem; index: number }) => {
+  const QueueRow = ({ item, index, dragHandleProps }: { item: QueueItem; index: number; dragHandleProps?: any }) => {
     const isReq = item.kind === 'request';
     const client = isReq ? clientById(item.req.client_id) : clientById(item.task.client_id);
     const title = isReq ? item.req.topic : item.task.title;
@@ -550,14 +597,21 @@ export default function Copy() {
     const onCancel = isReq ? () => cancelRequest(item.req.id) : undefined;
 
     return (
-      <motion.div
-        initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+      <div
         className={`group flex items-center gap-3 p-2.5 rounded-lg border transition-all ${
           isHigh
             ? 'bg-red-600/[0.06] border-red-600/25 hover:border-red-600/50'
             : 'bg-zinc-900/40 border-white/5 hover:border-white/20'
         }`}
       >
+        <button
+          {...(dragHandleProps || {})}
+          className="text-white/25 hover:text-white/70 cursor-grab active:cursor-grabbing shrink-0 p-1 -ml-1"
+          title="Arrastar para reordenar"
+          aria-label="Arrastar para reordenar"
+        >
+          <GripVertical size={14} />
+        </button>
         <div className="w-8 h-8 rounded-md bg-black/60 border border-white/10 flex items-center justify-center shrink-0">
           <span className="text-[10px] font-black italic tracking-tight text-white/70 tabular-nums">
             {String(index + 1).padStart(2, '0')}
@@ -594,9 +648,10 @@ export default function Copy() {
             </Button>
           )}
         </div>
-      </motion.div>
+      </div>
     );
   };
+
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
@@ -718,9 +773,35 @@ export default function Copy() {
               ✅ Fila vazia — nada pendente
             </p>
           ) : (
-            <div className="space-y-1.5 max-h-[560px] overflow-y-auto pr-1">
-              {queue.map((item, idx) => <QueueRow key={`${item.kind}-${item.id}`} item={item} index={idx} />)}
-            </div>
+            <DragDropContext onDragEnd={onDragEnd}>
+              <Droppable droppableId="copy-queue">
+                {(provided) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className="space-y-1.5 max-h-[560px] overflow-y-auto pr-1"
+                  >
+                    {orderedQueue.map((item, idx) => (
+                      <Draggable key={`${item.kind}-${item.id}`} draggableId={`${item.kind}-${item.id}`} index={idx}>
+                        {(prov, snapshot) => (
+                          <div
+                            ref={prov.innerRef}
+                            {...prov.draggableProps}
+                            style={{
+                              ...prov.draggableProps.style,
+                              opacity: snapshot.isDragging ? 0.85 : 1,
+                            }}
+                          >
+                            <QueueRow item={item} index={idx} dragHandleProps={prov.dragHandleProps} />
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
           )}
         </section>
 

@@ -1134,7 +1134,7 @@ export default function Copy() {
                                                           const boxKey = `story::${b.clientId}::${b.batchIndex}`;
                                                           const expanded = expandedBoxes.has(boxKey);
                                                           return (
-                                                            <>
+                                                            <div className="flex flex-col">
                                                               <button
                                                                 type="button"
                                                                 onClick={() => toggleBox(boxKey)}
@@ -1163,7 +1163,33 @@ export default function Copy() {
                                                                   </div>
                                                                 </div>
                                                               </button>
-                                                            </>
+                                                              {expanded && (
+                                                                <div className="mt-2 space-y-1.5 pl-1">
+                                                                  {isFull && (
+                                                                    <Button
+                                                                      size="sm"
+                                                                      onClick={() => openStoryBatch(b.tasks)}
+                                                                      disabled={isBusy}
+                                                                      className="w-full h-8 gap-1.5 font-black uppercase italic tracking-widest text-[10px] bg-fuchsia-600 hover:bg-fuchsia-700 text-white"
+                                                                    >
+                                                                      <Play size={11} className="fill-current" /> Iniciar lote (5)
+                                                                    </Button>
+                                                                  )}
+                                                                  {b.tasks.map((t, tIdx) => (
+                                                                    <QueueRow
+                                                                      key={`sb-row-${t.id}`}
+                                                                      item={{ kind: 'task', id: t.id, task: t, urgent: t.editing_priority } as QueueItem}
+                                                                      index={tIdx}
+                                                                    />
+                                                                  ))}
+                                                                  {!isFull && (
+                                                                    <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-fuchsia-200/50 px-1">
+                                                                      Aguardando {5 - b.tasks.length} para fechar lote
+                                                                    </p>
+                                                                  )}
+                                                                </div>
+                                                              )}
+                                                            </div>
                                                           );
                                                         })()}
                                                       </div>

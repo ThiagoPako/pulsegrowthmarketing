@@ -805,45 +805,64 @@ export default function Copy() {
               <span className="text-zinc-700">·</span>
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-white/40 inline-block" /> Backlog {normalRequests.length + todoTasks.length}</span>
               <span className="text-zinc-700">·</span>
-              <span className="text-white">{queue.length} totais</span>
+              <span className="text-white">{totalQueue} totais</span>
             </div>
           </div>
 
           {loading ? (
             <p className="text-[11px] font-black uppercase tracking-[0.3em] text-white/40 text-center py-10">Carregando fila…</p>
-          ) : queue.length === 0 ? (
+          ) : totalQueue === 0 ? (
             <p className="text-[11px] font-black uppercase tracking-[0.3em] text-emerald-500/80 text-center py-10">
               ✅ Fila vazia — nada pendente
             </p>
           ) : (
             <DragDropContext onDragEnd={onDragEnd}>
-              <Droppable droppableId="copy-queue">
-                {(provided) => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className="space-y-1.5 max-h-[560px] overflow-y-auto pr-1"
-                  >
-                    {orderedQueue.map((item, idx) => (
-                      <Draggable key={`${item.kind}-${item.id}`} draggableId={`${item.kind}-${item.id}`} index={idx}>
-                        {(prov, snapshot) => (
-                          <div
-                            ref={prov.innerRef}
-                            {...prov.draggableProps}
-                            style={{
-                              ...prov.draggableProps.style,
-                              opacity: snapshot.isDragging ? 0.85 : 1,
-                            }}
-                          >
-                            <QueueRow item={item} index={idx} dragHandleProps={prov.dragHandleProps} />
+              <div className="space-y-5 max-h-[640px] overflow-y-auto pr-1">
+                {GROUP_ORDER.map(gk => {
+                  const items = orderedGroups[gk];
+                  if (items.length === 0) return null;
+                  const meta = GROUP_META[gk];
+                  return (
+                    <div key={gk} className={`rounded-xl border bg-gradient-to-b ${meta.accent} p-3`}>
+                      <div className="flex items-center justify-between mb-2.5 px-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${meta.dot} inline-block`} />
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-white/95 leading-none">{meta.label}</p>
+                            <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/40 mt-0.5">{meta.sub}</p>
+                          </div>
+                        </div>
+                        <span className={`text-[9px] font-black uppercase tracking-[0.25em] px-2 py-0.5 rounded-sm ${meta.badge}`}>
+                          {items.length}
+                        </span>
+                      </div>
+                      <Droppable droppableId={gk}>
+                        {(provided) => (
+                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                            {items.map((item, idx) => (
+                              <Draggable key={`${item.kind}-${item.id}`} draggableId={`${item.kind}-${item.id}`} index={idx}>
+                                {(prov, snapshot) => (
+                                  <div
+                                    ref={prov.innerRef}
+                                    {...prov.draggableProps}
+                                    style={{
+                                      ...prov.draggableProps.style,
+                                      opacity: snapshot.isDragging ? 0.85 : 1,
+                                    }}
+                                  >
+                                    <QueueRow item={item} index={idx} dragHandleProps={prov.dragHandleProps} />
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))}
+                            {provided.placeholder}
                           </div>
                         )}
-                      </Draggable>
-                    ))}
-                    {provided.placeholder}
-                  </div>
-                )}
-              </Droppable>
+                      </Droppable>
+                    </div>
+                  );
+                })}
+              </div>
             </DragDropContext>
           )}
         </section>

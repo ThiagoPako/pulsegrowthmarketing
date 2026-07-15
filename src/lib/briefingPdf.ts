@@ -221,7 +221,7 @@ export async function generateBriefingPdf(opts: {
   const knownKeys = new Set(SECTIONS.flatMap(s => s.keys));
   const extraKeys = Object.keys(data).filter(k => !knownKeys.has(k) && !k.startsWith('_') && k !== 'additionalAttachments');
   if (extraKeys.length) {
-    writeSectionTitle('📎 Outros campos');
+    startSectionPage('📎 Outros campos');
     for (const k of extraKeys) {
       const val = formatValue(data[k]);
       if (val === '—') continue;

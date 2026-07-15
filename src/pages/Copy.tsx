@@ -1095,46 +1095,73 @@ export default function Copy() {
                                     {reqItems.map((item, idx) => (
                                       <QueueRow key={`${item.kind}-${item.id}`} item={item} index={idx} />
                                     ))}
-                                    {clientBoxes.length > 0 && (
-                                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                                        {clientBoxes.map((b, bIdx) => {
-                                          const client = clientById(b.clientId);
-                                          const isFull = b.tasks.length === 5;
-                                          return (
-                                            <button
-                                              key={`storybox-${bIdx}-${b.clientId}-${b.batchIndex}`}
-                                              type="button"
-                                              onClick={() => openStoryBatch(b.tasks)}
-                                              disabled={isBusy}
-                                              className={`group relative rounded-lg border p-2.5 text-left overflow-hidden transition-all
-                                                ${isFull
-                                                  ? 'border-fuchsia-500/40 bg-gradient-to-br from-fuchsia-600/15 via-fuchsia-500/5 to-transparent hover:border-fuchsia-400 hover:shadow-[0_0_0_1px_rgba(217,70,239,0.4)]'
-                                                  : 'border-dashed border-fuchsia-500/25 bg-fuchsia-500/[0.03] hover:border-fuchsia-400/60'}
-                                                disabled:opacity-40 disabled:cursor-not-allowed`}
-                                              title={`${client?.companyName || 'Sem cliente'} — ${b.tasks.length}/5 stories`}
+                                    {clientBoxes.length > 0 && (() => {
+                                      const boxesDropId = `${gk}::${fmt}::boxes`;
+                                      const sorted = sortClientBoxes(gk, fmt, clientBoxes);
+                                      return (
+                                        <Droppable droppableId={boxesDropId}>
+                                          {(provided) => (
+                                            <div
+                                              ref={provided.innerRef}
+                                              {...provided.droppableProps}
+                                              className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2"
                                             >
-                                              <span className={`absolute left-0 top-0 bottom-0 w-1 ${isFull ? 'bg-fuchsia-500' : 'bg-fuchsia-500/40'}`} aria-hidden />
-                                              <div className="flex items-center gap-2 pl-1.5">
-                                                <div className="w-10 h-10 rounded-md overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
-                                                  {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={14} className="text-white/30" />}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                  <p className="text-[11px] font-black uppercase tracking-tight text-white/95 truncate leading-tight">
-                                                    {client?.companyName || 'Sem cliente'}
-                                                  </p>
-                                                  <div className="flex items-center gap-1 mt-1">
-                                                    <Camera size={9} className="text-fuchsia-300" />
-                                                    <span className={`text-[9px] font-black tabular-nums tracking-wider ${isFull ? 'text-fuchsia-300' : 'text-fuchsia-200/70'}`}>
-                                                      {b.tasks.length}/5 STORY
-                                                    </span>
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
+                                              {sorted.map((b, bIdx) => {
+                                                const client = clientById(b.clientId);
+                                                const isFull = b.tasks.length === 5;
+                                                const draggableId = `storybox-${b.clientId}-${b.batchIndex}`;
+                                                return (
+                                                  <Draggable key={draggableId} draggableId={draggableId} index={bIdx}>
+                                                    {(prov, snapshot) => (
+                                                      <div
+                                                        ref={prov.innerRef}
+                                                        {...prov.draggableProps}
+                                                        {...prov.dragHandleProps}
+                                                        style={{
+                                                          ...prov.draggableProps.style,
+                                                          opacity: snapshot.isDragging ? 0.85 : 1,
+                                                        }}
+                                                      >
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => openStoryBatch(b.tasks)}
+                                                          disabled={isBusy}
+                                                          className={`w-full group relative rounded-lg border p-2.5 text-left overflow-hidden transition-all cursor-grab active:cursor-grabbing
+                                                            ${isFull
+                                                              ? 'border-fuchsia-500/40 bg-gradient-to-br from-fuchsia-600/15 via-fuchsia-500/5 to-transparent hover:border-fuchsia-400 hover:shadow-[0_0_0_1px_rgba(217,70,239,0.4)]'
+                                                              : 'border-dashed border-fuchsia-500/25 bg-fuchsia-500/[0.03] hover:border-fuchsia-400/60'}
+                                                            disabled:opacity-40 disabled:cursor-not-allowed`}
+                                                          title={`${client?.companyName || 'Sem cliente'} — ${b.tasks.length}/5 stories`}
+                                                        >
+                                                          <span className={`absolute left-0 top-0 bottom-0 w-1 ${isFull ? 'bg-fuchsia-500' : 'bg-fuchsia-500/40'}`} aria-hidden />
+                                                          <div className="flex items-center gap-2 pl-1.5">
+                                                            <div className="w-10 h-10 rounded-md overflow-hidden shrink-0 border border-white/5 bg-zinc-950 flex items-center justify-center">
+                                                              {client ? <ClientLogo client={client as any} size="sm" /> : <FileText size={14} className="text-white/30" />}
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                              <p className="text-[11px] font-black uppercase tracking-tight text-white/95 truncate leading-tight">
+                                                                {client?.companyName || 'Sem cliente'}
+                                                              </p>
+                                                              <div className="flex items-center gap-1 mt-1">
+                                                                <Camera size={9} className="text-fuchsia-300" />
+                                                                <span className={`text-[9px] font-black tabular-nums tracking-wider ${isFull ? 'text-fuchsia-300' : 'text-fuchsia-200/70'}`}>
+                                                                  {b.tasks.length}/5 STORY
+                                                                </span>
+                                                              </div>
+                                                            </div>
+                                                          </div>
+                                                        </button>
+                                                      </div>
+                                                    )}
+                                                  </Draggable>
+                                                );
+                                              })}
+                                              {provided.placeholder}
+                                            </div>
+                                          )}
+                                        </Droppable>
+                                      );
+                                    })()}
                                   </div>
                                 );
                               })() : (() => {

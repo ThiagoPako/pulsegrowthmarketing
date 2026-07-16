@@ -1740,72 +1740,158 @@ export default function Copy() {
       </Dialog>
 
       {/* ── Dialog: novo pedido ── */}
-      <Dialog open={requestDialogOpen} onOpenChange={setRequestDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Sparkles size={18} className="text-amber-500" /> Solicitar roteiro</DialogTitle>
+      <Dialog open={requestDialogOpen} onOpenChange={(open) => { setRequestDialogOpen(open); if (!open) setRequestStep(1); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles size={18} className="text-amber-500" /> Solicitar roteiro
+              <Badge variant="secondary" className="ml-auto font-mono text-[10px]">Etapa {requestStep}/4</Badge>
+            </DialogTitle>
+            {/* Progresso */}
+            <div className="flex gap-1.5 pt-3">
+              {[1, 2, 3, 4].map(s => (
+                <div key={s} className={`h-1 flex-1 rounded-full transition-colors ${s <= requestStep ? 'bg-primary' : 'bg-muted'}`} />
+              ))}
+            </div>
+            <div className="flex justify-between text-[10px] uppercase tracking-wider text-muted-foreground font-semibold pt-1">
+              <span className={requestStep === 1 ? 'text-primary' : ''}>Cliente</span>
+              <span className={requestStep === 2 ? 'text-primary' : ''}>Tema</span>
+              <span className={requestStep === 3 ? 'text-primary' : ''}>Detalhes</span>
+              <span className={requestStep === 4 ? 'text-primary' : ''}>Revisar</span>
+            </div>
           </DialogHeader>
-          <div className="space-y-3 py-2">
-            <div>
-              <Label>Cliente *</Label>
-              <Select value={requestForm.clientId} onValueChange={(v) => setRequestForm(f => ({ ...f, clientId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Selecione o cliente..." /></SelectTrigger>
-                <SelectContent>
-                  {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Tema *</Label>
-              <Input value={requestForm.topic} onChange={e => setRequestForm(f => ({ ...f, topic: e.target.value }))}
-                placeholder="Ex: Reels sobre promoção de fim de ano" />
-            </div>
-            <div>
-              <Label>Observações</Label>
-              <Textarea rows={3} value={requestForm.notes} onChange={e => setRequestForm(f => ({ ...f, notes: e.target.value }))}
-                placeholder="Ângulo desejado, referências, CTA..." />
-            </div>
-            <div>
-              <Label>Link de referência (opcional)</Label>
-              <Input
-                value={requestForm.referenceLink}
-                onChange={e => setRequestForm(f => ({ ...f, referenceLink: e.target.value }))}
-                placeholder="YouTube, TikTok, Instagram, Vimeo, Drive ou .mp4"
-              />
-              {requestForm.referenceLink.trim() && (
-                <div className="mt-2">
-                  <ReferenceEmbed url={requestForm.referenceLink.trim()} />
+
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+            {requestStep === 1 && (
+              <>
+                <div>
+                  <Label>Cliente *</Label>
+                  <Select value={requestForm.clientId} onValueChange={(v) => setRequestForm(f => ({ ...f, clientId: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione o cliente..." /></SelectTrigger>
+                    <SelectContent>
+                      {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground mt-1.5">Para qual cliente é este roteiro?</p>
                 </div>
+                <div>
+                  <Label>Formato *</Label>
+                  <Select value={requestForm.contentFormat} onValueChange={(v) => setRequestForm(f => ({ ...f, contentFormat: v as ScriptContentFormat }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CONTENT_FORMATS.map(v => <SelectItem key={v} value={v}>{SCRIPT_CONTENT_FORMAT_LABELS[v]}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
+            {requestStep === 2 && (
+              <>
+                <div>
+                  <Label>Tema *</Label>
+                  <Input
+                    autoFocus
+                    value={requestForm.topic}
+                    onChange={e => setRequestForm(f => ({ ...f, topic: e.target.value }))}
+                    placeholder="Ex: Reels sobre promoção de fim de ano"
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1.5">Título curto e direto do roteiro.</p>
+                </div>
+                <div>
+                  <Label>Prioridade</Label>
+                  <Select value={requestForm.priority} onValueChange={(v) => setRequestForm(f => ({ ...f, priority: v as 'alta' | 'normal' }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="alta">🔥 Alta prioridade</SelectItem>
+                      <SelectItem value="normal">Normal</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
+            {requestStep === 3 && (
+              <>
+                <div>
+                  <Label>Observações</Label>
+                  <Textarea rows={4} value={requestForm.notes} onChange={e => setRequestForm(f => ({ ...f, notes: e.target.value }))}
+                    placeholder="Ângulo desejado, referências, CTA, ganchos..." />
+                </div>
+                <div>
+                  <Label>Link de referência (opcional)</Label>
+                  <Input
+                    value={requestForm.referenceLink}
+                    onChange={e => setRequestForm(f => ({ ...f, referenceLink: e.target.value }))}
+                    placeholder="YouTube, TikTok, Instagram, Vimeo, Drive ou .mp4"
+                  />
+                  {requestForm.referenceLink.trim() && (
+                    <div className="mt-2 max-w-[260px]">
+                      <ReferenceEmbed url={requestForm.referenceLink.trim()} />
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {requestStep === 4 && (() => {
+              const c = clients.find(cl => cl.id === requestForm.clientId);
+              return (
+                <div className="space-y-3">
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">Revise o pedido</p>
+                  <div className="rounded-lg border p-3 space-y-2 bg-muted/30">
+                    <div className="flex justify-between gap-3 text-sm"><span className="text-muted-foreground">Cliente</span><span className="font-semibold text-right">{c?.companyName || '—'}</span></div>
+                    <div className="flex justify-between gap-3 text-sm"><span className="text-muted-foreground">Formato</span><span className="font-semibold">{SCRIPT_CONTENT_FORMAT_LABELS[requestForm.contentFormat]}</span></div>
+                    <div className="flex justify-between gap-3 text-sm"><span className="text-muted-foreground">Prioridade</span><span className="font-semibold">{requestForm.priority === 'alta' ? '🔥 Alta' : 'Normal'}</span></div>
+                    <div className="pt-2 border-t">
+                      <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Tema</p>
+                      <p className="text-sm font-semibold break-words">{requestForm.topic || '—'}</p>
+                    </div>
+                    {requestForm.notes.trim() && (
+                      <div className="pt-2 border-t">
+                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Observações</p>
+                        <p className="text-sm whitespace-pre-wrap break-words">{requestForm.notes}</p>
+                      </div>
+                    )}
+                    {requestForm.referenceLink.trim() && (
+                      <div className="pt-2 border-t">
+                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Referência</p>
+                        <a href={requestForm.referenceLink} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline break-all">{requestForm.referenceLink}</a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          <DialogFooter className="px-6 py-3 border-t shrink-0 gap-2 sm:justify-between">
+            <div>
+              {requestStep > 1 && (
+                <Button variant="outline" onClick={() => setRequestStep(s => s - 1)}>Voltar</Button>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Formato</Label>
-                <Select value={requestForm.contentFormat} onValueChange={(v) => setRequestForm(f => ({ ...f, contentFormat: v as ScriptContentFormat }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CONTENT_FORMATS.map(v => <SelectItem key={v} value={v}>{SCRIPT_CONTENT_FORMAT_LABELS[v]}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Prioridade</Label>
-                <Select value={requestForm.priority} onValueChange={(v) => setRequestForm(f => ({ ...f, priority: v as 'alta' | 'normal' }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="alta">🔥 Alta prioridade</SelectItem>
-                    <SelectItem value="normal">Normal</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={() => { setRequestDialogOpen(false); setRequestStep(1); }}>Cancelar</Button>
+              {requestStep < 4 ? (
+                <Button
+                  onClick={() => {
+                    if (requestStep === 1 && !requestForm.clientId) { toast.error('Selecione o cliente'); return; }
+                    if (requestStep === 2 && !requestForm.topic.trim()) { toast.error('Descreva o tema'); return; }
+                    setRequestStep(s => s + 1);
+                  }}
+                  className="gap-1.5"
+                >
+                  Avançar
+                </Button>
+              ) : (
+                <Button onClick={createRequest} className="gap-1.5"><Send size={14} /> Enviar pedido</Button>
+              )}
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRequestDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={createRequest} className="gap-1.5"><Send size={14} /> Enviar pedido</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
 
       {/* ── Dialog: finalizar roteiro ── */}
       <Dialog open={!!finalizing} onOpenChange={(open) => !open && setFinalizing(null)}>

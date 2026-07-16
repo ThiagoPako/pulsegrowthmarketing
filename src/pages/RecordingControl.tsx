@@ -690,6 +690,8 @@ export default function RecordingControl() {
           : [];
         const steps: WizardStep[] = wizard.mode === 'avulso'
           ? ['mode', 'script', 'confirm']
+          : wizard.mode === 'story'
+          ? ['mode', 'confirm']
           : ['mode', 'client', 'script', 'confirm'];
         const isStory = wizard.mode === 'story';
         const currentIdx = steps.indexOf(wizard.step);

@@ -929,15 +929,29 @@ export default function Copy() {
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
+          {isReq && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setPreviewRequest(item.req)}
+              className="h-8 w-8 p-0 text-white/60 hover:text-white hover:bg-white/10 border border-white/10"
+              title="Pré-visualizar pedido"
+            >
+              <Eye size={13} />
+            </Button>
+          )}
           <Button
             size="sm"
             onClick={onStart}
-            disabled={isBusy}
+            disabled={isBusy || (isReq && !item.req.approved_at)}
             className={`h-8 px-3 gap-1.5 font-black uppercase italic tracking-widest text-[10px] ${
-              isHigh ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-white text-black hover:bg-zinc-200'
+              isReq && !item.req.approved_at
+                ? 'bg-white/10 text-white/40 cursor-not-allowed'
+                : isHigh ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-white text-black hover:bg-zinc-200'
             }`}
+            title={isReq && !item.req.approved_at ? 'Aguardando aprovação do responsável' : 'Iniciar execução'}
           >
-            <Play size={11} className="fill-current" /> Iniciar
+            {isReq && !item.req.approved_at ? <Lock size={11} /> : <Play size={11} className="fill-current" />} Iniciar
           </Button>
           {onCancel && (
             <Button size="sm" variant="ghost" onClick={onCancel} className="h-8 w-8 p-0 text-white/40 hover:text-red-500 hover:bg-red-500/10">

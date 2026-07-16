@@ -527,6 +527,7 @@ export default function Copy() {
       client_id: requestForm.clientId,
       topic: requestForm.topic.trim(),
       notes: requestForm.notes.trim() || null,
+      reference_link: requestForm.referenceLink.trim() || null,
       content_format: requestForm.contentFormat,
       priority: requestForm.priority,
       requested_by: user?.id,
@@ -535,7 +536,7 @@ export default function Copy() {
     if (error) { console.error(error); toast.error('Erro ao criar pedido'); return; }
     toast.success('Pedido de roteiro criado');
     setRequestDialogOpen(false);
-    setRequestForm({ clientId: '', topic: '', notes: '', contentFormat: 'reels', priority: 'alta' });
+    setRequestForm({ clientId: '', topic: '', notes: '', referenceLink: '', contentFormat: 'reels', priority: 'alta' });
     loadAll(true);
     broadcastChange();
   };

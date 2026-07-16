@@ -877,6 +877,32 @@ async function getLocalAuthUserById(userId) {
   }
 }
 
+async function mergeWithLocalAuth(profile, localAuthLookup) {
+  const localAuth = await localAuthLookup().catch((error) => {
+    console.error('Local auth merge lookup failed:', error?.message || error);
+    return null;
+  });
+
+  if (!profile) return localAuth;
+  if (!localAuth) return profile;
+
+  return {
+    ...localAuth,
+    ...profile,
+    id: profile.id || localAuth.id,
+    name: profile.name || localAuth.name,
+    email: profile.email || localAuth.email,
+    role: profile.role || localAuth.role,
+    avatar_url: profile.avatar_url || localAuth.avatar_url,
+    display_name: profile.display_name || localAuth.display_name,
+    job_title: profile.job_title || localAuth.job_title,
+    monthly_salary: profile.monthly_salary ?? localAuth.monthly_salary,
+    password_hash: profile.password_hash || localAuth.password_hash,
+    profile_password_hash: profile.profile_password_hash || profile.password_hash || localAuth.profile_password_hash,
+    auth_password_hash: profile.auth_password_hash || localAuth.auth_password_hash || localAuth.password_hash,
+  };
+}
+
 async function hasProfilesPasswordHashColumn() {
   if (!profilesPasswordHashColumnPromise) {
     profilesPasswordHashColumnPromise = pool.query(`
@@ -939,7 +965,7 @@ async function getAuthProfileByEmail(email) {
          LIMIT 1`,
         [normalizedEmail]
       );
-      return rows[0] || await getLocalAuthUserByEmail(normalizedEmail);
+      return mergeWithLocalAuth(rows[0] || null, () => getLocalAuthUserByEmail(normalizedEmail));
     } catch (error) {
       console.error('Profile auth lookup failed, using local auth table:', error?.message || error);
       return getLocalAuthUserByEmail(normalizedEmail);
@@ -970,7 +996,7 @@ async function getAuthProfileByEmail(email) {
       [normalizedEmail]
     );
 
-    return rows[0] || await getLocalAuthUserByEmail(normalizedEmail);
+    return mergeWithLocalAuth(rows[0] || null, () => getLocalAuthUserByEmail(normalizedEmail));
   } catch (error) {
     console.error('Auth support lookup failed, falling back to profiles only:', error?.message || error);
     try {
@@ -981,7 +1007,7 @@ async function getAuthProfileByEmail(email) {
          LIMIT 1`,
         [normalizedEmail]
       );
-      return rows[0] || await getLocalAuthUserByEmail(normalizedEmail);
+      return mergeWithLocalAuth(rows[0] || null, () => getLocalAuthUserByEmail(normalizedEmail));
     } catch (profileFallbackError) {
       console.error('Profiles fallback lookup failed, using local auth table:', profileFallbackError?.message || profileFallbackError);
       return getLocalAuthUserByEmail(normalizedEmail);
@@ -1018,7 +1044,7 @@ async function getAuthProfileById(userId) {
           LIMIT 1`,
         [userId]
       );
-      return rows[0] || await getLocalAuthUserById(userId);
+      return mergeWithLocalAuth(rows[0] || null, () => getLocalAuthUserById(userId));
     } catch (error) {
       console.error('Profile auth lookup by id failed, using auth_users fallback:', error?.message || error);
     }
@@ -1041,7 +1067,7 @@ async function getAuthProfileById(userId) {
           LIMIT 1`,
         [userId]
       );
-      return rows[0] || await getLocalAuthUserById(userId);
+      return mergeWithLocalAuth(rows[0] || null, () => getLocalAuthUserById(userId));
     }
 
     await ensureAuthSupportTables();
@@ -1066,7 +1092,7 @@ async function getAuthProfileById(userId) {
       [userId]
     );
 
-    return rows[0] || null;
+    return mergeWithLocalAuth(rows[0] || null, () => getLocalAuthUserById(userId));
   } catch (error) {
     console.error('Auth support lookup by id failed, falling back to profiles only:', error?.message || error);
     if (!hasProfilesTable || !profileColumns.has('id')) return null;
@@ -1085,7 +1111,7 @@ async function getAuthProfileById(userId) {
        LIMIT 1`,
       [userId]
     );
-    return rows[0] || null;
+    return mergeWithLocalAuth(rows[0] || null, () => getLocalAuthUserById(userId));
   }
 }
 

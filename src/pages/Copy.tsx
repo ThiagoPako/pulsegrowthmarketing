@@ -73,6 +73,8 @@ export default function Copy() {
   const [batchForms, setBatchForms] = useState<{ title: string; content: string; caption: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
+  const [previewRequest, setPreviewRequest] = useState<ScriptRequest | null>(null);
+  const canApprove = ['admin', 'gestor_projetos', 'socio_gestor', 'copywriter'].includes(user?.role || '');
   const [requestForm, setRequestForm] = useState({
     clientId: '',
     topic: '',

@@ -536,6 +536,39 @@ ensureScriptRequestsTable().catch((error) => {
   console.error('Failed to ensure script requests table:', error);
 });
 
+let manualVideoTasksEnsuredPromise = null;
+async function ensureManualVideoTasksTable() {
+  if (!manualVideoTasksEnsuredPromise) {
+    manualVideoTasksEnsuredPromise = (async () => {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS manual_video_tasks (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          videomaker_id UUID,
+          client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+          prospect_name TEXT,
+          title TEXT NOT NULL,
+          script TEXT,
+          material_link TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'concluido',
+          city TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_manual_video_tasks_vm ON manual_video_tasks(videomaker_id)`).catch(() => {});
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_manual_video_tasks_created ON manual_video_tasks(created_at DESC)`).catch(() => {});
+    })().catch((error) => {
+      manualVideoTasksEnsuredPromise = null;
+      throw error;
+    });
+  }
+  return manualVideoTasksEnsuredPromise;
+}
+
+ensureManualVideoTasksTable().catch((error) => {
+  console.error('Failed to ensure manual_video_tasks table:', error);
+});
+
 // ─── JWT Config ─────────────────────────────────────────────
 const JWT_SECRET = process.env.JWT_SECRET || 'CHANGE_ME_IN_PRODUCTION';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30d';

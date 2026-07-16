@@ -328,7 +328,6 @@ async function main() {
       backedUp,
       adminEmail: ADMIN_EMAIL,
       adminPasswordUpdated: true,
-      temporaryPasswordAppliedForUsersWithoutHash: createdWithTemp > 0,
       resetAllUserPasswords: RESET_ALL_USER_PASSWORDS,
       schemaChangesAllowed: ALLOW_SCHEMA_CHANGES,
       ...result,

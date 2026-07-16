@@ -199,6 +199,40 @@ export default function Clients() {
     });
   }, []);
 
+  // Sincronização automática: sempre que planId mudar (e não estiver em Plano Especial),
+  // recalcula as metas mensais a partir do plano contratado.
+  useEffect(() => {
+    if (specialPlan) return;
+    if (!planId) return;
+    const selectedPlan = plans.find(p => p.id === planId);
+    if (!selectedPlan) return;
+    const wReels = Math.ceil((selectedPlan.reels_qty || 0) / 4);
+    const wCreatives = Math.ceil((selectedPlan.creatives_qty || 0) / 4);
+    const wStories = Math.ceil((selectedPlan.stories_qty || 0) / 4);
+    const monthlyRecordings = selectedPlan.recording_sessions || 4;
+    setForm(prev => {
+      if (
+        prev.weeklyReels === wReels &&
+        prev.weeklyCreatives === wCreatives &&
+        prev.weeklyStories === wStories &&
+        prev.weeklyGoal === wReels + wCreatives + wStories &&
+        prev.monthlyRecordings === monthlyRecordings &&
+        prev.acceptsExtra === selectedPlan.accepts_extra_content
+      ) return prev;
+      return {
+        ...prev,
+        weeklyReels: wReels,
+        weeklyCreatives: wCreatives,
+        weeklyStories: wStories,
+        weeklyGoal: wReels + wCreatives + wStories,
+        monthlyRecordings,
+        acceptsExtra: selectedPlan.accepts_extra_content,
+      };
+    });
+  }, [planId, specialPlan, plans]);
+
+
+
   const videomakers = users.filter(u => u.role === 'videomaker');
 
   // Fallback: when client.videomaker is empty (legacy/missing assignment),

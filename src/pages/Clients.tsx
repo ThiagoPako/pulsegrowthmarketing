@@ -1887,37 +1887,56 @@ export default function Clients() {
   );
   };
 
-  const renderStep3 = () => (
+  const renderStep3 = () => {
+    // Entregas exibidas e editadas como MENSAL. Persistência continua em campos semanais (weekly = ceil(monthly/4)).
+    const monthlyReels = (form.weeklyReels ?? 0) * 4;
+    const monthlyCreatives = (form.weeklyCreatives ?? 0) * 4;
+    const monthlyStories = (form.weeklyStories ?? 0) * 4;
+    const monthlyTotal = (form.weeklyGoal ?? 0) * 4;
+    const setMonthly = (patch: Partial<{ reels: number; creatives: number; stories: number; total: number }>) => {
+      setForm(prev => {
+        const next = { ...prev };
+        if (patch.reels !== undefined) next.weeklyReels = Math.ceil(Math.max(0, patch.reels) / 4);
+        if (patch.creatives !== undefined) next.weeklyCreatives = Math.ceil(Math.max(0, patch.creatives) / 4);
+        if (patch.stories !== undefined) next.weeklyStories = Math.ceil(Math.max(0, patch.stories) / 4);
+        if (patch.total !== undefined) next.weeklyGoal = Math.ceil(Math.max(0, patch.total) / 4);
+        return next;
+      });
+    };
+    const planLabel = planId && !specialPlan
+      ? (plans.find(p => p.id === planId)?.name || 'plano')
+      : null;
+    return (
     <div className="space-y-5">
       <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold flex items-center gap-2">
-            <Target size={16} className="text-primary" /> Metas de Entrega Semanal
+            <Target size={16} className="text-primary" /> Metas de Entrega Mensal
           </p>
-          {planId && !specialPlan && (
+          {planLabel && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-              Definido pelo plano
+              Definido pelo plano · {planLabel}
             </span>
           )}
         </div>
         <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-600 space-y-1">
           <p className="font-semibold">⚠️ Como funciona</p>
           <p className="text-muted-foreground">
-            Selecione um plano abaixo para preencher automaticamente, ou ative <strong>Plano Especial</strong> para definir metas personalizadas combinadas com o cliente.
+            Selecione um plano abaixo para preencher automaticamente as entregas mensais, ou ative <strong>Plano Especial</strong> para editar manualmente a meta mensal deste cliente.
           </p>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="space-y-1">
-            <Label>Meta Reels/Sem.</Label>
-            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={form.weeklyReels ?? 0} onChange={e => setForm({ ...form, weeklyReels: Number(e.target.value) })} />
+            <Label>Reels/Mês</Label>
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyReels} onChange={e => setMonthly({ reels: Number(e.target.value) })} />
           </div>
           <div className="space-y-1">
-            <Label>Meta Criativos/Sem.</Label>
-            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={form.weeklyCreatives ?? 0} onChange={e => setForm({ ...form, weeklyCreatives: Number(e.target.value) })} />
+            <Label>Criativos/Mês</Label>
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyCreatives} onChange={e => setMonthly({ creatives: Number(e.target.value) })} />
           </div>
           <div className="space-y-1">
-            <Label>Meta Stories/Sem.</Label>
-            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={form.weeklyStories ?? 0} onChange={e => setForm({ ...form, weeklyStories: Number(e.target.value) })} />
+            <Label>Stories/Mês</Label>
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyStories} onChange={e => setMonthly({ stories: Number(e.target.value) })} />
           </div>
           <div className="space-y-1">
             <Label>Limite Artes/Mês</Label>
@@ -1931,8 +1950,8 @@ export default function Clients() {
             <p className="text-[10px] text-muted-foreground">Vazio = sem limite de solicitações</p>
           </div>
           <div className="space-y-1">
-            <Label>Meta Total/Sem.</Label>
-            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={form.weeklyGoal ?? 0} onChange={e => setForm({ ...form, weeklyGoal: Number(e.target.value) })} />
+            <Label>Meta Total/Mês</Label>
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyTotal} onChange={e => setMonthly({ total: Number(e.target.value) })} />
           </div>
         </div>
         {!planTargetsValidation.ok && (

@@ -1737,6 +1737,20 @@ export default function Copy() {
                   </div>
                 </div>
 
+                {(previewRequest.requested_by || previewRequest.requested_by_name) && (() => {
+                  const reqUser = users.find(u => u.id === previewRequest.requested_by);
+                  const name = reqUser?.name || previewRequest.requested_by_name || 'Social Media';
+                  return (
+                    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 flex items-center gap-3">
+                      <UserAvatar user={{ name, avatarUrl: reqUser?.avatarUrl }} size="md" />
+                      <div className="min-w-0">
+                        <p className="text-[9px] font-black uppercase tracking-[0.25em] text-white/40">Solicitado por</p>
+                        <p className="text-sm font-bold text-white truncate">{name}</p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-[0.3em] text-red-500 mb-1.5">Tema do Roteiro</p>
                   <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4">

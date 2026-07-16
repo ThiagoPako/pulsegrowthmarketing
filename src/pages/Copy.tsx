@@ -647,6 +647,7 @@ export default function Copy() {
     }
     toast.success('Pedido de roteiro criado');
     setRequestDialogOpen(false);
+    setRequestStep(1);
     setRequestForm({ clientId: '', topic: '', notes: '', referenceLink: '', contentFormat: 'reels', priority: 'alta' });
     loadAll(true);
     broadcastChange();

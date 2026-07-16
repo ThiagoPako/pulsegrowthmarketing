@@ -492,9 +492,9 @@ export default function Schedule() {
 
   const handleCancelWithoutBackup = async () => {
     if (!cancellingRec) return;
-    cancelRecording(cancellingRec.id);
-    // Send cancellation message
+    const recId = cancellingRec.id;
     const client = clients.find(c => c.id === cancellingRec.clientId);
+    cancelRecording(recId);
     if (client?.whatsapp) {
       await sendRecordingCancelledNotification(client.whatsapp, client.companyName, client.id);
       toast.info('Mensagem de cancelamento enviada ao cliente');
@@ -502,7 +502,14 @@ export default function Schedule() {
     toast.warning('Gravação cancelada sem substituição');
     setBackupOpen(false);
     setCancellingRec(null);
+    // Open reschedule-link dialog so team can send link to client
+    setRescheduleLink({
+      url: `${window.location.origin}/reagendar/${recId}`,
+      clientName: client?.companyName || 'Cliente',
+      whatsapp: client?.whatsapp || '',
+    });
   };
+
 
   const handleSelectBackup = async (backupClient: Client) => {
     if (!cancellingRec) return;

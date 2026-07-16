@@ -1995,7 +1995,7 @@ export default function Clients() {
         </div>
         {specialPlan ? (
           <div className="p-3 rounded-lg bg-violet-500/10 border border-violet-500/20 text-xs text-violet-700 dark:text-violet-300">
-            🎯 <strong>Plano Especial ativo.</strong> Preencha as metas semanais acima manualmente conforme o combinado com o cliente.
+            🎯 <strong>Plano Especial ativo.</strong> Edite as metas mensais acima manualmente conforme o combinado com o cliente.
           </div>
         ) : (
         <div className="grid grid-cols-2 gap-3">

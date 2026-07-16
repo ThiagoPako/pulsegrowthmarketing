@@ -788,7 +788,7 @@ export default function RecordingControl() {
           } catch {}
 
           setSaving(false);
-          toast.success('Tarefa fixada na agenda do videomaker');
+          toast.success(isStory ? 'Slot de produção de story reservado' : 'Tarefa fixada na agenda do videomaker');
           setWizard(w => ({ ...w, open: false }));
           setTimeout(() => refetchData(), 300);
         };

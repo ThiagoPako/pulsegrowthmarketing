@@ -2246,13 +2246,36 @@ export default function Schedule() {
                 </p>
               )}
 
-              <div className="flex gap-2 justify-end pt-2 border-t border-border">
-                <Button variant="outline" onClick={() => { setBackupOpen(false); setCancellingRec(null); }}>
-                  Voltar
+              <div className="flex flex-col gap-2 pt-2 border-t border-border">
+                <Button
+                  className="w-full bg-primary hover:bg-primary/90"
+                  onClick={async () => {
+                    if (!cancellingRec) return;
+                    const recId = cancellingRec.id;
+                    const client = clients.find(c => c.id === cancellingRec.clientId);
+                    cancelRecording(recId);
+                    if (client?.whatsapp) {
+                      await sendRecordingCancelledNotification(client.whatsapp, client.companyName, client.id);
+                    }
+                    setBackupOpen(false);
+                    setCancellingRec(null);
+                    setRescheduleLink({
+                      url: `${window.location.origin}/reagendar/${recId}`,
+                      clientName: client?.companyName || 'Cliente',
+                      whatsapp: client?.whatsapp || '',
+                    });
+                  }}
+                >
+                  <Link size={14} className="mr-2" /> Cancelar e gerar link de reagendamento
                 </Button>
-                <Button variant="destructive" onClick={handleCancelWithoutBackup}>
-                  <XCircle size={14} className="mr-1" /> Cancelar sem Backup
-                </Button>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => { setBackupOpen(false); setCancellingRec(null); }}>
+                    Voltar
+                  </Button>
+                  <Button variant="destructive" onClick={handleCancelWithoutBackup}>
+                    <XCircle size={14} className="mr-1" /> Cancelar sem Backup
+                  </Button>
+                </div>
               </div>
             </div>
           )}

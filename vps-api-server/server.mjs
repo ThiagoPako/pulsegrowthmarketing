@@ -112,6 +112,7 @@ let clientsArtRequestsLimitColumnPromise;
 let proposalTablesEnsuredPromise;
 let storyEditingSessionsEnsuredPromise;
 let scriptRequestsEnsuredPromise;
+let copyActiveSessionsEnsuredPromise;
 const tableJsonColumnsPromiseCache = new Map();
 const SCHEMA_CACHE_TTL_MS = 5 * 60 * 1000;
 

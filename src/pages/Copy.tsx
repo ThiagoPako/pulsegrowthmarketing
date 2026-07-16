@@ -1905,13 +1905,14 @@ export default function Copy() {
 
       {/* ── PRÉ-VISUALIZAÇÃO / APROVAÇÃO DO PEDIDO ── */}
       <Dialog open={!!previewRequest} onOpenChange={(open) => !open && setPreviewRequest(null)}>
-        <DialogContent className="max-w-2xl bg-[#0a0a0a] border-white/10 text-white">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl bg-[#0a0a0a] border-white/10 text-white max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b border-white/10 shrink-0">
             <DialogTitle className="flex items-center gap-2 text-white">
               <Eye size={18} className="text-red-500" />
               <span className="font-black uppercase italic tracking-tight">Prévia do Pedido de Roteiro</span>
             </DialogTitle>
           </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4">
           {previewRequest && (() => {
             const c = clientById(previewRequest.client_id);
             const fmt = (['reels', 'story', 'criativo'].includes(previewRequest.content_format) ? previewRequest.content_format : 'reels') as ScriptContentFormat;

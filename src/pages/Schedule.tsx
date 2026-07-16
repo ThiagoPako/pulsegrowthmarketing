@@ -294,13 +294,17 @@ export default function Schedule() {
     return filteredRecordings.filter(r => r.date === dateStr).sort((a, b) => a.startTime.localeCompare(b.startTime));
   };
 
+  const isStorySessionRec = (rec?: Recording) =>
+    !!rec?.prospectName && /Produção de Story/i.test(rec.prospectName);
   const getClientName = (id: string, rec?: Recording) => {
+    if (isStorySessionRec(rec)) return '🎬 Produção de Story';
     if (rec?.prospectName) return `📹 ${rec.prospectName}`;
     return clients.find(c => c.id === id)?.companyName || '—';
   };
   const getVideomaker = (id: string) => users.find(u => u.id === id);
   const getVideomakerName = (id: string) => getVideomaker(id)?.name || '—';
   const getClientColor = (id: string, rec?: Recording) => {
+    if (isStorySessionRec(rec)) return '271 91% 65%';
     if (rec?.prospectName) return '200 80% 55%';
     return clients.find(c => c.id === id)?.color || '220 10% 50%';
   };

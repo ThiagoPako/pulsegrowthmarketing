@@ -1859,6 +1859,15 @@ export default function Copy() {
                   </div>
                 </div>
 
+                {previewRequest.reference_link && (
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-[0.3em] text-cyan-400 mb-1.5">Vídeo de Referência</p>
+                    <ReferenceEmbed url={previewRequest.reference_link} />
+                  </div>
+                )}
+
+
+
                 <p className="text-[10px] text-white/40 uppercase tracking-widest">
                   Criado em {new Date(previewRequest.created_at).toLocaleString('pt-BR')}
                 </p>

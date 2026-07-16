@@ -2204,6 +2204,30 @@ export default function TvDashboard() {
                 </div>
               );
             })()}
+
+            {/* Copywriters — escrevendo roteiros ao vivo */}
+            {visibility.show_pipeline && (
+              <div>
+                <SectionHeader
+                  icon={PenTool}
+                  iconColor={copyActiveSessions.length > 0 ? '#ef4444' : '#eab308'}
+                  title="Copy — ao vivo"
+                  badge={copyActiveSessions.length > 0 ? `● ${copyActiveSessions.length} escrevendo` : 'ociosa'}
+                />
+                {copyActiveSessions.length > 0 ? (
+                  <div className="space-y-2">
+                    {copyActiveSessions.map(s => (
+                      <CopyLiveCard key={s.id} session={s} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-white/8 p-3 text-center" style={{ background: 'rgba(255,255,255,0.015)' }}>
+                    <PenTool className="w-6 h-6 mx-auto mb-1.5 text-white/15" />
+                    <p className="text-[10px] text-white/20">Nenhum copywriter executando roteiro agora</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
 

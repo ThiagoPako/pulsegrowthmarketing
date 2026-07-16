@@ -912,7 +912,7 @@ export default function RecordingControl() {
                             <Plus size={12} /> Novo roteiro
                           </Button>
                         </div>
-                        {wizard.mode === 'client' ? (
+                        {wizard.mode !== 'avulso' ? (
                           clientScripts.length === 0 ? (
                             <div className="text-xs text-muted-foreground p-3 rounded-lg border border-dashed">
                               Nenhum roteiro disponível para este cliente. Crie um novo ou avance sem roteiro.

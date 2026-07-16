@@ -44,11 +44,82 @@ interface ScriptRequest {
   priority: 'alta' | 'normal';
   requested_by: string | null;
   requested_by_name: string | null;
+  reference_link: string | null;
   fulfilled_script_id: string | null;
   fulfilled_at: string | null;
   approved_at: string | null;
   approved_by_name: string | null;
   created_at: string;
+}
+
+/** Detecta e monta embed inline para YouTube, Vimeo, TikTok, Instagram, Drive e vídeo direto. */
+function ReferenceEmbed({ url }: { url: string }) {
+  if (!url) return null;
+  let src = '';
+  let kind: 'iframe' | 'video' | 'link' = 'link';
+  try {
+    const u = new URL(url.trim());
+    const host = u.hostname.replace(/^www\./, '');
+
+    // YouTube
+    if (host.includes('youtube.com') || host === 'youtu.be') {
+      let id = '';
+      if (host === 'youtu.be') id = u.pathname.slice(1);
+      else if (u.pathname.startsWith('/shorts/')) id = u.pathname.split('/')[2] || '';
+      else if (u.pathname.startsWith('/embed/')) id = u.pathname.split('/')[2] || '';
+      else id = u.searchParams.get('v') || '';
+      if (id) { src = `https://www.youtube.com/embed/${id}`; kind = 'iframe'; }
+    }
+    // Vimeo
+    else if (host.includes('vimeo.com')) {
+      const id = u.pathname.split('/').filter(Boolean)[0];
+      if (id) { src = `https://player.vimeo.com/video/${id}`; kind = 'iframe'; }
+    }
+    // TikTok
+    else if (host.includes('tiktok.com')) {
+      const m = u.pathname.match(/\/video\/(\d+)/);
+      if (m) { src = `https://www.tiktok.com/embed/v2/${m[1]}`; kind = 'iframe'; }
+    }
+    // Instagram
+    else if (host.includes('instagram.com')) {
+      const clean = url.split('?')[0].replace(/\/$/, '');
+      src = `${clean}/embed`;
+      kind = 'iframe';
+    }
+    // Google Drive
+    else if (host.includes('drive.google.com')) {
+      const m = u.pathname.match(/\/file\/d\/([^/]+)/);
+      if (m) { src = `https://drive.google.com/file/d/${m[1]}/preview`; kind = 'iframe'; }
+    }
+    // Vídeo direto
+    else if (/\.(mp4|webm|ogg|mov)(\?|$)/i.test(u.pathname)) {
+      src = url; kind = 'video';
+    }
+  } catch { /* link inválido cai como link simples */ }
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-black overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/[0.03]">
+        <span className="text-[9px] font-black uppercase tracking-[0.3em] text-cyan-400">Referência</span>
+        <a href={url} target="_blank" rel="noopener noreferrer"
+          className="text-[10px] font-bold text-white/70 hover:text-white underline underline-offset-2 truncate max-w-[60%]">
+          Abrir original ↗
+        </a>
+      </div>
+      {kind === 'iframe' ? (
+        <div className="relative w-full" style={{ aspectRatio: '9 / 16', maxHeight: 480 }}>
+          <iframe src={src} className="absolute inset-0 w-full h-full" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen loading="lazy" />
+        </div>
+      ) : kind === 'video' ? (
+        <video src={src} controls className="w-full max-h-[480px] bg-black" />
+      ) : (
+        <div className="p-4 text-sm text-white/60 break-all">
+          <a href={url} target="_blank" rel="noopener noreferrer" className="underline text-cyan-400">{url}</a>
+          <p className="text-[10px] text-white/40 mt-1">Prévia inline não disponível para este link — abre em nova aba.</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 const VIDEO_TYPES: ScriptVideoType[] = ['vendas', 'institucional', 'reconhecimento', 'educacional', 'bastidores', 'depoimento', 'lancamento', 'evento'];
@@ -81,6 +152,7 @@ export default function Copy() {
     clientId: '',
     topic: '',
     notes: '',
+    referenceLink: '',
     contentFormat: 'reels' as ScriptContentFormat,
     priority: 'alta' as 'alta' | 'normal',
   });
@@ -455,6 +527,7 @@ export default function Copy() {
       client_id: requestForm.clientId,
       topic: requestForm.topic.trim(),
       notes: requestForm.notes.trim() || null,
+      reference_link: requestForm.referenceLink.trim() || null,
       content_format: requestForm.contentFormat,
       priority: requestForm.priority,
       requested_by: user?.id,
@@ -463,7 +536,7 @@ export default function Copy() {
     if (error) { console.error(error); toast.error('Erro ao criar pedido'); return; }
     toast.success('Pedido de roteiro criado');
     setRequestDialogOpen(false);
-    setRequestForm({ clientId: '', topic: '', notes: '', contentFormat: 'reels', priority: 'alta' });
+    setRequestForm({ clientId: '', topic: '', notes: '', referenceLink: '', contentFormat: 'reels', priority: 'alta' });
     loadAll(true);
     broadcastChange();
   };
@@ -1577,6 +1650,19 @@ export default function Copy() {
               <Textarea rows={3} value={requestForm.notes} onChange={e => setRequestForm(f => ({ ...f, notes: e.target.value }))}
                 placeholder="Ângulo desejado, referências, CTA..." />
             </div>
+            <div>
+              <Label>Link de referência (opcional)</Label>
+              <Input
+                value={requestForm.referenceLink}
+                onChange={e => setRequestForm(f => ({ ...f, referenceLink: e.target.value }))}
+                placeholder="YouTube, TikTok, Instagram, Vimeo, Drive ou .mp4"
+              />
+              {requestForm.referenceLink.trim() && (
+                <div className="mt-2">
+                  <ReferenceEmbed url={requestForm.referenceLink.trim()} />
+                </div>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Formato</Label>
@@ -1772,6 +1858,15 @@ export default function Copy() {
                     )}
                   </div>
                 </div>
+
+                {previewRequest.reference_link && (
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-[0.3em] text-cyan-400 mb-1.5">Vídeo de Referência</p>
+                    <ReferenceEmbed url={previewRequest.reference_link} />
+                  </div>
+                )}
+
+
 
                 <p className="text-[10px] text-white/40 uppercase tracking-widest">
                   Criado em {new Date(previewRequest.created_at).toLocaleString('pt-BR')}

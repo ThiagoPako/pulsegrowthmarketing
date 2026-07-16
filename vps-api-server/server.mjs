@@ -396,6 +396,7 @@ async function ensureScriptRequestsTable() {
           city TEXT,
           approved_at TIMESTAMPTZ,
           approved_by_name TEXT,
+          reference_link TEXT,
           created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )
@@ -415,6 +416,7 @@ async function ensureScriptRequestsTable() {
       if (!columns.has('updated_at')) alterClauses.push('ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT now()');
       if (!columns.has('approved_at')) alterClauses.push('ADD COLUMN approved_at TIMESTAMPTZ');
       if (!columns.has('approved_by_name')) alterClauses.push('ADD COLUMN approved_by_name TEXT');
+      if (!columns.has('reference_link')) alterClauses.push('ADD COLUMN reference_link TEXT');
 
       if (alterClauses.length > 0) {
         await pool.query(`ALTER TABLE script_requests ${alterClauses.join(', ')}`).then(() => {

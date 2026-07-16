@@ -873,12 +873,19 @@ export default function Copy() {
               <FmtIcon size={9} /> {fmtMeta.label}
             </span>
             <span className={`text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm ${tagColor}`}>{tagLabel}</span>
+            {isReq && <span className="text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm bg-amber-500/15 text-amber-300 border border-amber-500/30">Briefing Social</span>}
           </div>
-          <p className="text-[12px] font-black uppercase tracking-tight text-white/95 truncate">{title}</p>
+          <p className="text-[12px] font-black uppercase tracking-tight text-white/95 truncate" title={title}>{title}</p>
           <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40 truncate">
             {client?.companyName || (isReq ? 'Sem cliente' : (item.task.prospect_name || 'Sem cliente'))}
             {isReq && item.req.requested_by_name ? ` · ${item.req.requested_by_name}` : ''}
           </p>
+          {isReq && item.req.notes && (
+            <div className="mt-1.5 rounded-md border-l-2 border-amber-500/60 bg-amber-500/[0.06] px-2 py-1.5">
+              <p className="text-[8px] font-black uppercase tracking-[0.25em] text-amber-400/80 mb-0.5">Observações do Social</p>
+              <p className="text-[11px] text-white/80 leading-snug whitespace-pre-wrap break-words">{item.req.notes}</p>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <Button
@@ -997,6 +1004,12 @@ export default function Copy() {
                   </div>
                 </div>
               </div>
+              {activeRequest && activeRequest.notes && (
+                <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-4 py-3">
+                  <p className="text-[9px] font-black uppercase tracking-[0.35em] text-amber-400 mb-1.5">Briefing do Social · Observações</p>
+                  <p className="text-[13px] text-white/90 leading-relaxed whitespace-pre-wrap break-words">{activeRequest.notes}</p>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

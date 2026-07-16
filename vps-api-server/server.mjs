@@ -5099,12 +5099,18 @@ app.post('/api/db/query', async (req, res) => {
         const items = Array.isArray(data) ? data : [data];
         const allResults = [];
         const jsonColumns = await getTableJsonColumns(safeTable);
+        const existingColumns = safeTable === 'script_requests'
+          ? await getExistingColumns(safeTable)
+          : null;
         for (const item of items) {
           // Multi-city: força city para a cidade ativa (ignora qualquer valor enviado pelo cliente)
           const itemScoped = scopeCity
             ? { ...item, city: assertValidCity(activeCity) }
             : (item && item.city !== undefined ? { ...item, city: assertValidCity(item.city) } : item);
-          const entries = Object.entries(itemScoped).map(([key, value]) => [sanitizeIdentifier(key), value]);
+          const entries = Object.entries(itemScoped)
+            .map(([key, value]) => [sanitizeIdentifier(key), value])
+            .filter(([key]) => !existingColumns || existingColumns.has(key));
+          if (entries.length === 0) continue;
           const keys = entries.map(([key]) => key);
           const values = entries.map(([key, value]) => serializeValueForColumn(key, value, jsonColumns));
           const placeholders = values.map((_, i) => `$${i + 1}`);
@@ -5166,7 +5172,16 @@ app.post('/api/db/query', async (req, res) => {
         const scopedData = scopeCity
           ? { ...data, city: assertValidCity(activeCity) }
           : (data && data.city !== undefined ? { ...data, city: assertValidCity(data.city) } : data);
-        const entries = Object.entries(scopedData).map(([key, value]) => [sanitizeIdentifier(key), value]);
+        const existingColumns = safeTable === 'script_requests'
+          ? await getExistingColumns(safeTable)
+          : null;
+        const entries = Object.entries(scopedData)
+          .map(([key, value]) => [sanitizeIdentifier(key), value])
+          .filter(([key]) => !existingColumns || existingColumns.has(key));
+        if (entries.length === 0) {
+          result = { data: [], error: null };
+          break;
+        }
         const keys = entries.map(([key]) => key);
         const values = entries.map(([key, value]) => serializeValueForColumn(key, value, jsonColumns));
         let paramIdx = 1;

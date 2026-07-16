@@ -589,7 +589,11 @@ export default function Copy() {
       requested_by: user?.id,
       requested_by_name: users.find(u => u.id === user?.id)?.name || (user as any)?.user_metadata?.name || (user as any)?.name || 'Social Media',
     } as any);
-    if (error) { console.error(error); toast.error('Erro ao criar pedido'); return; }
+    if (error) {
+      console.error(error);
+      toast.error(error.message || 'Erro ao criar pedido');
+      return;
+    }
     toast.success('Pedido de roteiro criado');
     setRequestDialogOpen(false);
     setRequestForm({ clientId: '', topic: '', notes: '', referenceLink: '', contentFormat: 'reels', priority: 'alta' });

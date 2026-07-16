@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronLeft, ChevronRight, Calendar, Users, GripVertical,
   Clock, Video, AlertTriangle, ArrowLeftRight, Check, Loader2, CalendarDays,
-  Coffee, HelpCircle, Rocket, Plus, Trash2, X, FileText, Sparkles, User as UserIcon, ArrowRight, ArrowLeft, Pin
+  Coffee, HelpCircle, Rocket, Plus, Trash2, X, FileText, Sparkles, User as UserIcon, ArrowRight, ArrowLeft, Pin, Clapperboard
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 

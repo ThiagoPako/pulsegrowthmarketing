@@ -1,10 +1,16 @@
-import 'dotenv/config';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
 import pg from 'pg';
 import bcrypt from 'bcrypt';
 
 const { Pool } = pg;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
+dotenv.config({ path: path.join(__dirname, '.env'), override: true });
 
 const ADMIN_EMAIL = 'admin@pulse.com';
 const ADMIN_PASSWORD = 'Pulse@2026!';
@@ -25,12 +31,6 @@ const VALID_ROLES = new Set([
   'socio_gestor',
 ]);
 
-function requireEnv(name, fallback) {
-  const value = process.env[name] || fallback;
-  if (!value) throw new Error(`Variável obrigatória ausente: ${name}`);
-  return value;
-}
-
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
 }
@@ -45,6 +45,7 @@ function isPresentHash(value) {
 }
 
 const pgConnectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+const pgPassword = process.env.PG_PASSWORD ?? process.env.PGPASSWORD ?? process.env.DB_PASSWORD;
 const pool = pgConnectionString
   ? new Pool({ connectionString: pgConnectionString })
   : new Pool({
@@ -52,7 +53,7 @@ const pool = pgConnectionString
       port: Number(process.env.PG_PORT || process.env.PGPORT || 5432),
       database: process.env.PG_DATABASE || process.env.PGDATABASE || process.env.DB_NAME || 'pulse_db',
       user: process.env.PG_USER || process.env.PGUSER || process.env.DB_USER || 'pulse_user',
-      password: requireEnv('PG_PASSWORD', process.env.PGPASSWORD || process.env.DB_PASSWORD),
+      ...(typeof pgPassword === 'string' && pgPassword.length > 0 ? { password: pgPassword } : {}),
     });
 
 async function tableExists(client, tableName) {

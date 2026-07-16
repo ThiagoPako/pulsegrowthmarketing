@@ -2323,8 +2323,9 @@ export default function Clients() {
                     )}
                     {!isDesignerOnly && (
                       <>
-                        {(c.weeklyReels ?? 0) > 0 && <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">{c.weeklyReels} reels</Badge>}
-                        {(c.weeklyCreatives ?? 0) > 0 && <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">{c.weeklyCreatives} criativos</Badge>}
+                        {(c.weeklyReels ?? 0) > 0 && <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">{(c.weeklyReels ?? 0) * 4} reels/mês</Badge>}
+                        {(c.weeklyCreatives ?? 0) > 0 && <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">{(c.weeklyCreatives ?? 0) * 4} criativos/mês</Badge>}
+                        {(c.weeklyStories ?? 0) > 0 && <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">{(c.weeklyStories ?? 0) * 4} stories/mês</Badge>}
                         {c.acceptsExtra && <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">Extra{c.extraClientAppears ? ' · Aparece' : ''}</Badge>}
                         {c.fullShiftRecording && <Badge className="text-[10px] px-1.5 py-0.5 bg-amber-500/20 text-amber-600 border-amber-500/30">⏱️ Turno {c.preferredShift === 'tarde' ? 'Tarde' : 'Manhã'}</Badge>}
                       </>

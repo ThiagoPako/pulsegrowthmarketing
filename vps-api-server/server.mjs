@@ -8108,6 +8108,179 @@ app.get('/api/gestao/history', async (req, res) => {
   }
 });
 
+// ─── Public reschedule (link enviado ao cliente após cancelamento manual) ───
+let publicReschedTableReady = null;
+async function ensurePublicReschedTable() {
+  if (publicReschedTableReady) return publicReschedTableReady;
+  publicReschedTableReady = (async () => {
+    try {
+      await pool.query(`
+        ALTER TABLE recordings
+          ADD COLUMN IF NOT EXISTS rescheduled_to_id uuid REFERENCES recordings(id) ON DELETE SET NULL
+      `);
+    } catch (e) { console.warn('ensurePublicReschedTable:', e?.message || e); }
+  })();
+  return publicReschedTableReady;
+}
+
+const DAY_MAP_PR = { domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6 };
+
+function computeVmSlots(existingRecs, settings, duration) {
+  const buffer = 30;
+  const occupied = existingRecs.map(r => {
+    const [h, m] = r.start_time.split(':').map(Number);
+    return { start: h * 60 + m, end: h * 60 + m + duration };
+  });
+  const slots = [];
+  const step = duration + buffer;
+  const gen = (startStr, endStr) => {
+    const [sh, sm] = startStr.split(':').map(Number);
+    const [eh, em] = endStr.split(':').map(Number);
+    let cursor = sh * 60 + sm;
+    const endMin = eh * 60 + em;
+    while (cursor + duration <= endMin) {
+      const conflict = occupied.some(o => cursor < o.end + buffer && cursor + duration + buffer > o.start);
+      if (!conflict) slots.push(`${String(Math.floor(cursor / 60)).padStart(2, '0')}:${String(cursor % 60).padStart(2, '0')}`);
+      cursor += step;
+    }
+  };
+  gen(settings?.shift_a_start || '08:30', settings?.shift_a_end || '12:00');
+  gen(settings?.shift_b_start || '14:30', settings?.shift_b_end || '18:00');
+  return slots;
+}
+
+app.post('/api/public-reschedule', async (req, res) => {
+  try {
+    await ensurePublicReschedTable();
+    const { action, token, date, time } = req.body || {};
+    if (!token) return res.status(400).json({ error: 'token requerido' });
+
+    const { rows: [rec] } = await pool.query(
+      `SELECT r.id, r.client_id, r.videomaker_id, r.date::text, r.start_time, r.status, r.type, r.rescheduled_to_id,
+              c.company_name, c.color, c.logo_url, c.fixed_day, c.fixed_time, c.whatsapp,
+              p.name AS videomaker_name
+         FROM recordings r
+         JOIN clients c ON c.id = r.client_id
+         LEFT JOIN profiles p ON p.id = r.videomaker_id
+        WHERE r.id = $1`,
+      [token]
+    );
+    if (!rec) return res.status(404).json({ error: 'Link inválido ou expirado' });
+    if (rec.status !== 'cancelada') return res.status(400).json({ error: 'Esta gravação não está cancelada.' });
+
+    // If already rescheduled, return that info (idempotent)
+    let alreadyBooked = null;
+    if (rec.rescheduled_to_id) {
+      const { rows: [nr] } = await pool.query(
+        `SELECT id, date::text, start_time FROM recordings WHERE id = $1`, [rec.rescheduled_to_id]
+      );
+      if (nr) alreadyBooked = { id: nr.id, date: nr.date, start_time: nr.start_time };
+    }
+
+    const { rows: [settings] } = await pool.query('SELECT * FROM company_settings LIMIT 1');
+    const rawDur = settings?.recording_duration || 2;
+    const duration = rawDur > 10 ? rawDur : rawDur * 60;
+
+    if (action === 'info' || !action) {
+      // Build next 14 days of slots for this videomaker (current + next week)
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const days = [];
+      for (let i = 0; i < 14; i++) {
+        const d = new Date(today); d.setDate(d.getDate() + i);
+        const dateStr = d.toISOString().split('T')[0];
+        const { rows: existing } = await pool.query(
+          `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,
+          [rec.videomaker_id, dateStr]
+        );
+        const slots = computeVmSlots(existing, settings, duration);
+        days.push({ date: dateStr, weekday: d.getDay(), slots });
+      }
+
+      // Next fixed occurrence (7-14 days from cancelled date)
+      const fixedDayNum = DAY_MAP_PR[rec.fixed_day] ?? null;
+      let nextFixed = null;
+      if (fixedDayNum !== null) {
+        const startFrom = new Date(); startFrom.setHours(0, 0, 0, 0); startFrom.setDate(startFrom.getDate() + 1);
+        for (let i = 0; i < 21; i++) {
+          const d = new Date(startFrom); d.setDate(d.getDate() + i);
+          if (d.getDay() === fixedDayNum) { nextFixed = { date: d.toISOString().split('T')[0], time: rec.fixed_time || '08:30' }; break; }
+        }
+      }
+
+      return res.json({
+        client: { id: rec.client_id, company_name: rec.company_name, color: rec.color, logo_url: rec.logo_url },
+        videomaker: { id: rec.videomaker_id, name: rec.videomaker_name || 'Videomaker' },
+        cancelled: { date: rec.date, start_time: rec.start_time },
+        fixed: { day: rec.fixed_day, time: rec.fixed_time },
+        next_fixed: nextFixed,
+        days,
+        already_booked: alreadyBooked,
+      });
+    }
+
+    if (alreadyBooked) return res.status(409).json({ error: 'Este link já foi usado para reagendar.', already_booked: alreadyBooked });
+
+    async function createBackup(newDate, newTime) {
+      // Conflict recheck
+      const { rows: existing } = await pool.query(
+        `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,
+        [rec.videomaker_id, newDate]
+      );
+      const buffer = 30;
+      const [nh, nm] = newTime.split(':').map(Number);
+      const ns = nh * 60 + nm; const ne = ns + duration + buffer;
+      const conflict = existing.some(c => { const [ch, cm] = c.start_time.split(':').map(Number); const cs = ch * 60 + cm; return ns < cs + duration + buffer && ne > cs; });
+      if (conflict) { const err = new Error('Horário não está mais disponível.'); err.status = 409; throw err; }
+
+      const { rows: [newRec] } = await pool.query(
+        `INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status)
+         VALUES ($1, $2, $3, $4, 'backup', 'agendada', 'confirmada')
+         RETURNING id, date::text, start_time`,
+        [rec.client_id, rec.videomaker_id, newDate, newTime]
+      );
+      await pool.query(`UPDATE recordings SET rescheduled_to_id = $1 WHERE id = $2`, [newRec.id, rec.id]);
+
+      // Notify team
+      const msg = `${rec.company_name} reagendou (via link) para ${newDate} ${newTime}`;
+      const { rows: notifUsers } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media', 'videomaker')`);
+      for (const u of notifUsers) {
+        await pool.query(
+          `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
+          [u.user_id, 'Reagendamento por link', msg, 'info', '/agenda']
+        );
+      }
+      return newRec;
+    }
+
+    if (action === 'book') {
+      if (!date || !time) return res.status(400).json({ error: 'date e time requeridos' });
+      const nr = await createBackup(date, time);
+      return res.json({ success: true, booked: nr });
+    }
+
+    if (action === 'keep_next_week') {
+      // Find next fixed_day occurrence (skip if it's the cancelled date)
+      const fixedDayNum = DAY_MAP_PR[rec.fixed_day];
+      if (fixedDayNum === undefined) return res.status(400).json({ error: 'Cliente sem dia fixo configurado.' });
+      const startFrom = new Date(); startFrom.setHours(0, 0, 0, 0); startFrom.setDate(startFrom.getDate() + 1);
+      let target = null;
+      for (let i = 0; i < 21; i++) {
+        const d = new Date(startFrom); d.setDate(d.getDate() + i);
+        if (d.getDay() === fixedDayNum) { target = d.toISOString().split('T')[0]; break; }
+      }
+      if (!target) return res.status(400).json({ error: 'Não foi possível calcular a próxima data fixa.' });
+      const nr = await createBackup(target, rec.fixed_time || '08:30');
+      return res.json({ success: true, booked: nr });
+    }
+
+    return res.status(400).json({ error: 'Ação inválida' });
+  } catch (e) {
+    console.error('[public-reschedule]', e);
+    return res.status(e.status || 500).json({ error: e.message || 'Erro' });
+  }
+});
+
+
 // ─── Start ──────────────────────────────────────────────────
 
 server.listen(PORT, () => {

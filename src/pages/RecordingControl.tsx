@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronLeft, ChevronRight, Calendar, Users, GripVertical,
   Clock, Video, AlertTriangle, ArrowLeftRight, Check, Loader2, CalendarDays,
-  Coffee, HelpCircle, Rocket, Plus, Trash2, X, FileText, Sparkles, User as UserIcon, ArrowRight, ArrowLeft, Pin
+  Coffee, HelpCircle, Rocket, Plus, Trash2, X, FileText, Sparkles, User as UserIcon, ArrowRight, ArrowLeft, Pin, Clapperboard
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -58,7 +58,7 @@ export default function RecordingControl() {
   type WizardStep = 'mode' | 'client' | 'script' | 'confirm';
   const [wizard, setWizard] = useState<{
     open: boolean; step: WizardStep; vmId: string; time: string; date: string;
-    mode: 'client' | 'avulso' | null;
+    mode: 'client' | 'avulso' | 'story' | null;
     clientId: string;
     prospectName: string;
     type: RecordingType;
@@ -691,6 +691,7 @@ export default function RecordingControl() {
         const steps: WizardStep[] = wizard.mode === 'avulso'
           ? ['mode', 'script', 'confirm']
           : ['mode', 'client', 'script', 'confirm'];
+        const isStory = wizard.mode === 'story';
         const currentIdx = steps.indexOf(wizard.step);
 
         const closeWizard = () => setWizard(w => ({ ...w, open: false }));
@@ -705,7 +706,7 @@ export default function RecordingControl() {
 
         const handleCreateScript = async () => {
           if (!wizard.newScriptTitle.trim()) { toast.error('Informe o título do roteiro'); return; }
-          if (wizard.mode === 'client' && !wizard.clientId) { toast.error('Selecione um cliente antes'); return; }
+          if (wizard.mode !== 'avulso' && !wizard.clientId) { toast.error('Selecione um cliente antes'); return; }
           setCreatingScriptSaving(true);
           const nowIso = new Date().toISOString();
           const newScript: Script = {
@@ -739,7 +740,7 @@ export default function RecordingControl() {
         };
 
         const handleFinalize = async () => {
-          if (wizard.mode === 'client' && !wizard.clientId) { toast.error('Selecione um cliente'); return; }
+          if (wizard.mode !== 'avulso' && !wizard.clientId) { toast.error('Selecione um cliente'); return; }
           if (wizard.mode === 'avulso' && !wizard.prospectName.trim()) { toast.error('Informe o nome do prospect'); return; }
           const conflict = hasConflict(wizard.vmId, wizard.date, wizard.time, undefined, wizard.type, wizard.mode === 'avulso' ? undefined : wizard.clientId, { skipClientDayCheck: true });
           if (conflict.hasConflict) { toast.error(conflict.message || 'Conflito de horário'); return; }
@@ -771,9 +772,10 @@ export default function RecordingControl() {
           // Notify videomaker (best effort)
           try {
             const clientLabel = wizard.mode === 'avulso' ? wizard.prospectName.trim() : (selectedClient?.companyName || 'Cliente');
+            const kindLabel = isStory ? '📱 Produção de Story' : '🎬 Nova tarefa de gravação';
             await (supabase as any).from('notifications').insert({
               user_id: wizard.vmId,
-              title: '🎬 Nova tarefa de gravação',
+              title: kindLabel,
               message: `${clientLabel} • ${format(new Date(wizard.date + 'T12:00:00'), "dd/MM", { locale: ptBR })} às ${wizard.time}${wizard.scriptId ? ' • roteiro anexado' : ''}`,
               type: 'info',
               link: '/videomaker',
@@ -798,7 +800,8 @@ export default function RecordingControl() {
             <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <Pin size={18} className="text-primary" /> Fixar tarefa de gravação
+                  {isStory ? <Clapperboard size={18} className="text-primary" /> : <Pin size={18} className="text-primary" />}
+                  {isStory ? 'Produção de Story' : 'Fixar tarefa de gravação'}
                 </DialogTitle>
                 <DialogDescription>
                   {vm?.displayName || vm?.name || 'Videomaker'} • {dateLbl} • {wizard.time}
@@ -830,23 +833,32 @@ export default function RecordingControl() {
               <div className="min-h-[220px] py-2">
                 {wizard.step === 'mode' && (
                   <div className="space-y-3">
-                    <p className="text-xs text-muted-foreground">Esta tarefa é para um cliente fixo ou um conteúdo avulso/prospect?</p>
-                    <div className="grid grid-cols-2 gap-3">
+                    <p className="text-xs text-muted-foreground">Que tipo de conteúdo esse slot vai produzir?</p>
+                    <div className="grid grid-cols-3 gap-3">
                       <button
                         type="button"
-                        onClick={() => setWizard(w => ({ ...w, mode: 'client', type: 'extra' }))}
-                        className={`p-5 rounded-xl border-2 text-left transition-all ${wizard.mode === 'client' ? 'border-primary bg-primary/10' : 'border-border hover:border-muted-foreground/40'}`}
+                        onClick={() => setWizard(w => ({ ...w, mode: 'client', type: 'extra', newScriptFormat: 'reels' }))}
+                        className={`p-4 rounded-xl border-2 text-left transition-all ${wizard.mode === 'client' ? 'border-primary bg-primary/10' : 'border-border hover:border-muted-foreground/40'}`}
                       >
-                        <UserIcon size={22} className={wizard.mode === 'client' ? 'text-primary' : 'text-muted-foreground'} />
+                        <UserIcon size={20} className={wizard.mode === 'client' ? 'text-primary' : 'text-muted-foreground'} />
                         <p className="text-sm font-bold mt-2">Cliente Fixo</p>
                         <p className="text-[11px] text-muted-foreground mt-1">Contrato ativo</p>
                       </button>
                       <button
                         type="button"
-                        onClick={() => setWizard(w => ({ ...w, mode: 'avulso', type: 'avulso', clientId: '' }))}
-                        className={`p-5 rounded-xl border-2 text-left transition-all ${wizard.mode === 'avulso' ? 'border-primary bg-primary/10' : 'border-border hover:border-muted-foreground/40'}`}
+                        onClick={() => setWizard(w => ({ ...w, mode: 'story', type: 'extra', newScriptFormat: 'story' }))}
+                        className={`p-4 rounded-xl border-2 text-left transition-all ${wizard.mode === 'story' ? 'border-primary bg-primary/10' : 'border-border hover:border-muted-foreground/40'}`}
                       >
-                        <Sparkles size={22} className={wizard.mode === 'avulso' ? 'text-primary' : 'text-muted-foreground'} />
+                        <Clapperboard size={20} className={wizard.mode === 'story' ? 'text-primary' : 'text-muted-foreground'} />
+                        <p className="text-sm font-bold mt-2">Produção de Story</p>
+                        <p className="text-[11px] text-muted-foreground mt-1">Sessão de stories</p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setWizard(w => ({ ...w, mode: 'avulso', type: 'avulso', clientId: '', newScriptFormat: 'reels' }))}
+                        className={`p-4 rounded-xl border-2 text-left transition-all ${wizard.mode === 'avulso' ? 'border-primary bg-primary/10' : 'border-border hover:border-muted-foreground/40'}`}
+                      >
+                        <Sparkles size={20} className={wizard.mode === 'avulso' ? 'text-primary' : 'text-muted-foreground'} />
                         <p className="text-sm font-bold mt-2">Conteúdo Avulso</p>
                         <p className="text-[11px] text-muted-foreground mt-1">Prospect / one-shot</p>
                       </button>
@@ -901,7 +913,7 @@ export default function RecordingControl() {
                             <Plus size={12} /> Novo roteiro
                           </Button>
                         </div>
-                        {wizard.mode === 'client' ? (
+                        {wizard.mode !== 'avulso' ? (
                           clientScripts.length === 0 ? (
                             <div className="text-xs text-muted-foreground p-3 rounded-lg border border-dashed">
                               Nenhum roteiro disponível para este cliente. Crie um novo ou avance sem roteiro.
@@ -987,7 +999,12 @@ export default function RecordingControl() {
                       <div className="flex justify-between"><span className="text-muted-foreground text-xs">Videomaker</span><span className="font-semibold">{vm?.displayName || vm?.name}</span></div>
                       <div className="flex justify-between"><span className="text-muted-foreground text-xs">Data / horário</span><span className="font-semibold">{dateLbl} • {wizard.time}</span></div>
                       <div className="flex justify-between"><span className="text-muted-foreground text-xs">Cliente</span><span className="font-semibold">{wizard.mode === 'avulso' ? (wizard.prospectName || '—') : (selectedClient?.companyName || '—')}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground text-xs">Tipo</span><Badge variant="outline">{TYPE_LABELS[wizard.type]}</Badge></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground text-xs">Tipo</span>
+                        <div className="flex items-center gap-1.5">
+                          {isStory && <Badge className="bg-primary/15 text-primary border-primary/30">Story</Badge>}
+                          <Badge variant="outline">{TYPE_LABELS[wizard.type]}</Badge>
+                        </div>
+                      </div>
                       <div className="flex justify-between items-center">
                         <span className="text-muted-foreground text-xs">Roteiro</span>
                         {wizard.scriptId ? (

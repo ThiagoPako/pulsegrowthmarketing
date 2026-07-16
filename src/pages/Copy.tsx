@@ -44,6 +44,8 @@ interface ScriptRequest {
   requested_by_name: string | null;
   fulfilled_script_id: string | null;
   fulfilled_at: string | null;
+  approved_at: string | null;
+  approved_by_name: string | null;
   created_at: string;
 }
 

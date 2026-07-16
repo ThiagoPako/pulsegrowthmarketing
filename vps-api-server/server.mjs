@@ -415,7 +415,6 @@ async function ensureScriptRequestsTable() {
       if (alterClauses.length > 0) {
         await pool.query(`ALTER TABLE script_requests ${alterClauses.join(', ')}`).then(() => {
           tableColumnsPromiseCache.delete('script_requests');
-          _cityColumnCache.delete('script_requests');
         }).catch((error) => {
           if (error?.code === '42501' || /must be owner|permission denied/i.test(error?.message || '')) {
             console.warn('[script_requests] Skipping optional column sync due to table ownership:', error.message);

@@ -273,11 +273,6 @@ export default function Copy() {
 
   const startRequest = async (req: ScriptRequest) => {
     if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }
-    if (!req.approved_at) {
-      toast.error('Pedido aguardando aprovação do responsável');
-      setPreviewRequest(req);
-      return;
-    }
     const session = { requestId: req.id, startedAt: Date.now() };
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
@@ -905,16 +900,6 @@ export default function Copy() {
             </span>
             <span className={`text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm ${tagColor}`}>{tagLabel}</span>
             {isReq && <span className="text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm bg-amber-500/15 text-amber-300 border border-amber-500/30">Briefing Social</span>}
-            {isReq && !item.req.approved_at && (
-              <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm bg-yellow-500/15 text-yellow-300 border border-yellow-500/40">
-                <Lock size={9} /> Aguarda aprovação
-              </span>
-            )}
-            {isReq && item.req.approved_at && (
-              <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
-                <ShieldCheck size={9} /> Aprovado
-              </span>
-            )}
           </div>
           <p className="text-[12px] font-black uppercase tracking-tight text-white/95 truncate" title={title}>{title}</p>
           <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40 truncate">
@@ -943,15 +928,13 @@ export default function Copy() {
           <Button
             size="sm"
             onClick={onStart}
-            disabled={isBusy || (isReq && !item.req.approved_at)}
+            disabled={isBusy}
             className={`h-8 px-3 gap-1.5 font-black uppercase italic tracking-widest text-[10px] ${
-              isReq && !item.req.approved_at
-                ? 'bg-white/10 text-white/40 cursor-not-allowed'
-                : isHigh ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-white text-black hover:bg-zinc-200'
+              isHigh ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-white text-black hover:bg-zinc-200'
             }`}
-            title={isReq && !item.req.approved_at ? 'Aguardando aprovação do responsável' : 'Iniciar execução'}
+            title="Iniciar execução"
           >
-            {isReq && !item.req.approved_at ? <Lock size={11} /> : <Play size={11} className="fill-current" />} Iniciar
+            <Play size={11} className="fill-current" /> Iniciar
           </Button>
           {onCancel && (
             <Button size="sm" variant="ghost" onClick={onCancel} className="h-8 w-8 p-0 text-white/40 hover:text-red-500 hover:bg-red-500/10">
@@ -1722,15 +1705,6 @@ export default function Copy() {
             return (
               <div className="space-y-4">
                 <div className="flex items-center gap-2 flex-wrap">
-                  {previewRequest.approved_at ? (
-                    <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-sm bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
-                      <ShieldCheck size={12} /> Aprovado por {previewRequest.approved_by_name || '—'}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-sm bg-yellow-500/15 text-yellow-300 border border-yellow-500/40">
-                      <Lock size={12} /> Aguardando validação do responsável
-                    </span>
-                  )}
                   <span className={`inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-sm ${fmtMeta.badge}`}>
                     <FmtIcon size={12} /> {fmtMeta.label}
                   </span>
@@ -1782,27 +1756,22 @@ export default function Copy() {
             <Button variant="outline" onClick={() => setPreviewRequest(null)} className="border-white/20 text-white hover:bg-white/10">
               Fechar
             </Button>
-            {previewRequest && !previewRequest.approved_at && canApprove && (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={() => rejectRequest(previewRequest)}
-                  className="border-red-500/40 text-red-400 hover:bg-red-500/10 gap-1.5"
-                >
-                  <Trash2 size={14} /> Rejeitar
-                </Button>
-                <Button
-                  onClick={() => approveRequest(previewRequest)}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 font-black uppercase italic tracking-widest text-[11px]"
-                >
-                  <ShieldCheck size={14} /> Aprovar e liberar
-                </Button>
-              </>
+            {previewRequest && previewRequest.status === 'pending' && (
+              <Button
+                onClick={() => { const r = previewRequest; setPreviewRequest(null); startRequest(r); }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 font-black uppercase italic tracking-widest text-[11px]"
+              >
+                <Play size={14} className="fill-current" /> Iniciar agora
+              </Button>
             )}
-            {previewRequest && !previewRequest.approved_at && !canApprove && (
-              <span className="text-[11px] text-white/50 italic self-center">
-                Somente o responsável (Gestor/Admin/Copy) pode aprovar este pedido.
-              </span>
+            {previewRequest && previewRequest.status === 'pending' && canApprove && (
+              <Button
+                variant="outline"
+                onClick={() => rejectRequest(previewRequest)}
+                className="border-red-500/40 text-red-400 hover:bg-red-500/10 gap-1.5"
+              >
+                <Trash2 size={14} /> Cancelar pedido
+              </Button>
             )}
           </DialogFooter>
         </DialogContent>

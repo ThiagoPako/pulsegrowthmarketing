@@ -690,6 +690,8 @@ export default function RecordingControl() {
           : [];
         const steps: WizardStep[] = wizard.mode === 'avulso'
           ? ['mode', 'script', 'confirm']
+          : wizard.mode === 'story'
+          ? ['mode', 'confirm']
           : ['mode', 'client', 'script', 'confirm'];
         const isStory = wizard.mode === 'story';
         const currentIdx = steps.indexOf(wizard.step);
@@ -740,21 +742,24 @@ export default function RecordingControl() {
         };
 
         const handleFinalize = async () => {
-          if (wizard.mode !== 'avulso' && !wizard.clientId) { toast.error('Selecione um cliente'); return; }
+          if (wizard.mode === 'client' && !wizard.clientId) { toast.error('Selecione um cliente'); return; }
           if (wizard.mode === 'avulso' && !wizard.prospectName.trim()) { toast.error('Informe o nome do prospect'); return; }
-          const conflict = hasConflict(wizard.vmId, wizard.date, wizard.time, undefined, wizard.type, wizard.mode === 'avulso' ? undefined : wizard.clientId, { skipClientDayCheck: true });
+          const isStoryMode = wizard.mode === 'story';
+          const effectiveClientId = wizard.mode === 'client' ? wizard.clientId : undefined;
+          const conflict = hasConflict(wizard.vmId, wizard.date, wizard.time, undefined, isStoryMode ? 'avulso' : wizard.type, effectiveClientId, { skipClientDayCheck: true });
           if (conflict.hasConflict) { toast.error(conflict.message || 'Conflito de horário'); return; }
           setSaving(true);
           const recId = crypto.randomUUID();
           const rec: Recording = {
             id: recId,
-            clientId: wizard.mode === 'avulso' ? '' : wizard.clientId,
+            clientId: wizard.mode === 'client' ? wizard.clientId : '',
             videomakerId: wizard.vmId,
             date: wizard.date,
             startTime: wizard.time,
-            type: wizard.type,
+            type: isStoryMode ? 'avulso' : wizard.type,
             status: 'agendada',
             ...(wizard.mode === 'avulso' ? { prospectName: wizard.prospectName.trim() } : {}),
+            ...(isStoryMode ? { prospectName: '📱 Produção de Story (interno)' } : {}),
           };
           const ok = await addRecording(rec, { skipClientDayCheck: true });
           if (!ok) { setSaving(false); toast.error('Erro ao agendar'); return; }
@@ -771,19 +776,19 @@ export default function RecordingControl() {
 
           // Notify videomaker (best effort)
           try {
-            const clientLabel = wizard.mode === 'avulso' ? wizard.prospectName.trim() : (selectedClient?.companyName || 'Cliente');
-            const kindLabel = isStory ? '📱 Produção de Story' : '🎬 Nova tarefa de gravação';
+            const clientLabel = isStory ? 'Sessão interna na agência' : (wizard.mode === 'avulso' ? wizard.prospectName.trim() : (selectedClient?.companyName || 'Cliente'));
+            const kindLabel = isStory ? '📱 Produção de Story (interno)' : '🎬 Nova tarefa de gravação';
             await (supabase as any).from('notifications').insert({
               user_id: wizard.vmId,
               title: kindLabel,
-              message: `${clientLabel} • ${format(new Date(wizard.date + 'T12:00:00'), "dd/MM", { locale: ptBR })} às ${wizard.time}${wizard.scriptId ? ' • roteiro anexado' : ''}`,
+              message: `${clientLabel} • ${format(new Date(wizard.date + 'T12:00:00'), "dd/MM", { locale: ptBR })} às ${wizard.time}${wizard.scriptId && !isStory ? ' • roteiro anexado' : ''}`,
               type: 'info',
               link: '/videomaker',
             });
           } catch {}
 
           setSaving(false);
-          toast.success('Tarefa fixada na agenda do videomaker');
+          toast.success(isStory ? 'Slot de produção de story reservado' : 'Tarefa fixada na agenda do videomaker');
           setWizard(w => ({ ...w, open: false }));
           setTimeout(() => refetchData(), 300);
         };
@@ -851,7 +856,7 @@ export default function RecordingControl() {
                       >
                         <Clapperboard size={20} className={wizard.mode === 'story' ? 'text-primary' : 'text-muted-foreground'} />
                         <p className="text-sm font-bold mt-2">Produção de Story</p>
-                        <p className="text-[11px] text-muted-foreground mt-1">Sessão de stories</p>
+                        <p className="text-[11px] text-muted-foreground mt-1">Bloqueio interno na agência</p>
                       </button>
                       <button
                         type="button"
@@ -998,7 +1003,7 @@ export default function RecordingControl() {
                     <div className="p-3 rounded-lg bg-muted/40 border space-y-2">
                       <div className="flex justify-between"><span className="text-muted-foreground text-xs">Videomaker</span><span className="font-semibold">{vm?.displayName || vm?.name}</span></div>
                       <div className="flex justify-between"><span className="text-muted-foreground text-xs">Data / horário</span><span className="font-semibold">{dateLbl} • {wizard.time}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground text-xs">Cliente</span><span className="font-semibold">{wizard.mode === 'avulso' ? (wizard.prospectName || '—') : (selectedClient?.companyName || '—')}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground text-xs">{isStory ? 'Sessão' : 'Cliente'}</span><span className="font-semibold">{isStory ? 'Produção interna na agência' : (wizard.mode === 'avulso' ? (wizard.prospectName || '—') : (selectedClient?.companyName || '—'))}</span></div>
                       <div className="flex justify-between"><span className="text-muted-foreground text-xs">Tipo</span>
                         <div className="flex items-center gap-1.5">
                           {isStory && <Badge className="bg-primary/15 text-primary border-primary/30">Story</Badge>}

@@ -4800,7 +4800,7 @@ const TABLES_WITH_CITY = new Set([
   'company_settings','whatsapp_config','payment_config',
   'crm_leads','crm_notes','goals','notifications',
   'plans',
-  'story_editing_sessions','script_requests',
+  'story_editing_sessions','script_requests','manual_video_tasks',
 ]);
 
 // Cache de quais tabelas realmente possuem a coluna `city` no schema atual.

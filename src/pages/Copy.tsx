@@ -273,11 +273,6 @@ export default function Copy() {
 
   const startRequest = async (req: ScriptRequest) => {
     if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }
-    if (!req.approved_at) {
-      toast.error('Pedido aguardando aprovação do responsável');
-      setPreviewRequest(req);
-      return;
-    }
     const session = { requestId: req.id, startedAt: Date.now() };
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));

@@ -706,7 +706,7 @@ export default function RecordingControl() {
 
         const handleCreateScript = async () => {
           if (!wizard.newScriptTitle.trim()) { toast.error('Informe o título do roteiro'); return; }
-          if (wizard.mode === 'client' && !wizard.clientId) { toast.error('Selecione um cliente antes'); return; }
+          if (wizard.mode !== 'avulso' && !wizard.clientId) { toast.error('Selecione um cliente antes'); return; }
           setCreatingScriptSaving(true);
           const nowIso = new Date().toISOString();
           const newScript: Script = {

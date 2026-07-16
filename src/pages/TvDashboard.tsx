@@ -1609,6 +1609,7 @@ export default function TvDashboard() {
   const [weekPosts, setWeekPosts] = useState<ScheduledPost[]>([]);
   const [activeRecordingIds, setActiveRecordingIds] = useState<string[]>([]);
   const [storyEditingSessions, setStoryEditingSessions] = useState<Array<{ id: string; videomakerId: string; videomakerName: string | null; videomakerAvatar: string | null; startedAt: string; storiesCount: number }>>([]);
+  const [copyActiveSessions, setCopyActiveSessions] = useState<Array<{ id: string; copywriterId: string; copywriterName: string; copywriterAvatar: string | null; topic: string | null; contentFormat: string | null; clientName: string | null; clientLogo: string | null; clientColor: string | null; batchSize: number; startedAt: string; requestId: string | null; taskId: string | null }>>([]);
   const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());
   const [playlistUrl, setPlaylistUrl] = useState('');

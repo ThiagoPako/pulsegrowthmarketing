@@ -203,6 +203,7 @@ export default function Copy() {
   const [batchForms, setBatchForms] = useState<{ title: string; content: string; caption: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
+  const [requestStep, setRequestStep] = useState(1);
   const [previewRequest, setPreviewRequest] = useState<ScriptRequest | null>(null);
   const [sentDialogOpen, setSentDialogOpen] = useState(false);
   const [sentScope, setSentScope] = useState<'mine' | 'all'>('mine');

@@ -152,6 +152,7 @@ export default function Copy() {
     clientId: '',
     topic: '',
     notes: '',
+    referenceLink: '',
     contentFormat: 'reels' as ScriptContentFormat,
     priority: 'alta' as 'alta' | 'normal',
   });

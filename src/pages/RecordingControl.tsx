@@ -58,7 +58,7 @@ export default function RecordingControl() {
   type WizardStep = 'mode' | 'client' | 'script' | 'confirm';
   const [wizard, setWizard] = useState<{
     open: boolean; step: WizardStep; vmId: string; time: string; date: string;
-    mode: 'client' | 'avulso' | null;
+    mode: 'client' | 'avulso' | 'story' | null;
     clientId: string;
     prospectName: string;
     type: RecordingType;

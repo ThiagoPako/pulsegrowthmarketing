@@ -273,6 +273,11 @@ export default function Copy() {
 
   const startRequest = async (req: ScriptRequest) => {
     if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }
+    if (!req.approved_at) {
+      toast.error('Pedido aguardando aprovação do responsável');
+      setPreviewRequest(req);
+      return;
+    }
     const session = { requestId: req.id, startedAt: Date.now() };
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
@@ -280,6 +285,28 @@ export default function Copy() {
     toast.success(`Executando pedido: ${req.topic}`);
     broadcastChange();
     loadAll(true);
+  };
+
+  const approveRequest = async (req: ScriptRequest) => {
+    const approverName = ((user as any)?.name) || ((user as any)?.user_metadata?.name) || user?.email || 'Responsável';
+    const { error } = await supabase.from('script_requests').update({
+      approved_at: new Date().toISOString(),
+      approved_by_name: approverName,
+    } as any).eq('id', req.id);
+    if (error) { console.error(error); toast.error('Erro ao aprovar pedido'); return; }
+    toast.success('Pedido aprovado — liberado para execução');
+    setPreviewRequest(null);
+    loadAll(true);
+    broadcastChange();
+  };
+
+  const rejectRequest = async (req: ScriptRequest) => {
+    if (!confirm('Rejeitar este pedido? Ele será cancelado.')) return;
+    await supabase.from('script_requests').update({ status: 'cancelled' } as any).eq('id', req.id);
+    toast.success('Pedido rejeitado');
+    setPreviewRequest(null);
+    loadAll(true);
+    broadcastChange();
   };
 
   const cancelSession = async () => {

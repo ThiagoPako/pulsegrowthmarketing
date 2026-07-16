@@ -64,7 +64,7 @@ function formatDuration(ms: number) {
 
 export default function Copy() {
   const { user } = useAuth();
-  const { clients, scripts, addScript } = useApp();
+  const { clients, scripts, addScript, users } = useApp();
   const [tasks, setTasks] = useState<PendingTask[]>([]);
   const [requests, setRequests] = useState<ScriptRequest[]>([]);
   const [loading, setLoading] = useState(true);

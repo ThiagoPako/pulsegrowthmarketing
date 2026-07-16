@@ -333,8 +333,18 @@ export function useSupabaseData() {
 
     if (rRes.data && !rRes.error) {
       const allRecordings = (Array.isArray(rRes.data) ? rRes.data : []).map(rowToRecording);
-      // Filter out recordings for canceled clients unless they are not 'agendada' (keep history)
-      setRecordings(shouldFilterByActiveClients ? allRecordings.filter(r => activeClientIds.has(r.clientId) || r.status !== 'agendada') : allRecordings);
+      // Filter out recordings for canceled clients unless they are not 'agendada' (keep history).
+      // Preserve avulso/story sessions (no clientId, or type 'avulso') which are internal agency slots.
+      setRecordings(
+        shouldFilterByActiveClients
+          ? allRecordings.filter(r =>
+              !r.clientId ||
+              r.type === 'avulso' ||
+              activeClientIds.has(r.clientId) ||
+              r.status !== 'agendada'
+            )
+          : allRecordings
+      );
     }
     if (tRes.data && !tRes.error) {
       const allTasks = (Array.isArray(tRes.data) ? tRes.data : []).map(rowToTask);

@@ -1003,7 +1003,7 @@ export default function RecordingControl() {
                     <div className="p-3 rounded-lg bg-muted/40 border space-y-2">
                       <div className="flex justify-between"><span className="text-muted-foreground text-xs">Videomaker</span><span className="font-semibold">{vm?.displayName || vm?.name}</span></div>
                       <div className="flex justify-between"><span className="text-muted-foreground text-xs">Data / horário</span><span className="font-semibold">{dateLbl} • {wizard.time}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground text-xs">Cliente</span><span className="font-semibold">{wizard.mode === 'avulso' ? (wizard.prospectName || '—') : (selectedClient?.companyName || '—')}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground text-xs">{isStory ? 'Sessão' : 'Cliente'}</span><span className="font-semibold">{isStory ? 'Produção interna na agência' : (wizard.mode === 'avulso' ? (wizard.prospectName || '—') : (selectedClient?.companyName || '—'))}</span></div>
                       <div className="flex justify-between"><span className="text-muted-foreground text-xs">Tipo</span>
                         <div className="flex items-center gap-1.5">
                           {isStory && <Badge className="bg-primary/15 text-primary border-primary/30">Story</Badge>}

@@ -906,8 +906,17 @@ export default function Copy() {
           <p className="text-[12px] font-black uppercase tracking-tight text-white/95 truncate" title={title}>{title}</p>
           <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40 truncate">
             {client?.companyName || (isReq ? 'Sem cliente' : (item.task.prospect_name || 'Sem cliente'))}
-            {isReq && item.req.requested_by_name ? ` · ${item.req.requested_by_name}` : ''}
           </p>
+          {isReq && (item.req.requested_by || item.req.requested_by_name) && (() => {
+            const reqUser = users.find(u => u.id === item.req.requested_by);
+            const name = reqUser?.name || item.req.requested_by_name || 'Social Media';
+            return (
+              <div className="mt-1 flex items-center gap-1.5">
+                <UserAvatar user={{ name, avatarUrl: reqUser?.avatarUrl }} size="sm" className="!w-5 !h-5 !text-[8px]" />
+                <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/60 truncate">{name}</span>
+              </div>
+            );
+          })()}
           {isReq && item.req.notes && (
             <div className="mt-1.5 rounded-md border-l-2 border-amber-500/60 bg-amber-500/[0.06] px-2 py-1.5">
               <p className="text-[8px] font-black uppercase tracking-[0.25em] text-amber-400/80 mb-0.5">Observações do Social</p>

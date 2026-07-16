@@ -181,7 +181,7 @@ export default function Clients() {
       return {
         ok: false,
         level: 'error' as const,
-        message: `Metas divergem do plano "${plan.name}" (esperado ${expectedReels} reels, ${expectedCre} criativos, ${expectedSto} stories/sem.). Reselecione o plano ou ative "Plano Especial" para editar manualmente.`,
+        message: `Metas divergem do plano "${plan.name}" (esperado ${plan.reels_qty || 0} reels, ${plan.creatives_qty || 0} criativos, ${plan.stories_qty || 0} stories/mês). Reselecione o plano ou ative "Plano Especial" para editar manualmente.`,
       };
     }
     return { ok: true as const };

@@ -691,6 +691,7 @@ export default function RecordingControl() {
         const steps: WizardStep[] = wizard.mode === 'avulso'
           ? ['mode', 'script', 'confirm']
           : ['mode', 'client', 'script', 'confirm'];
+        const isStory = wizard.mode === 'story';
         const currentIdx = steps.indexOf(wizard.step);
 
         const closeWizard = () => setWizard(w => ({ ...w, open: false }));

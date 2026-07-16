@@ -740,7 +740,7 @@ export default function RecordingControl() {
         };
 
         const handleFinalize = async () => {
-          if (wizard.mode === 'client' && !wizard.clientId) { toast.error('Selecione um cliente'); return; }
+          if (wizard.mode !== 'avulso' && !wizard.clientId) { toast.error('Selecione um cliente'); return; }
           if (wizard.mode === 'avulso' && !wizard.prospectName.trim()) { toast.error('Informe o nome do prospect'); return; }
           const conflict = hasConflict(wizard.vmId, wizard.date, wizard.time, undefined, wizard.type, wizard.mode === 'avulso' ? undefined : wizard.clientId, { skipClientDayCheck: true });
           if (conflict.hasConflict) { toast.error(conflict.message || 'Conflito de horário'); return; }

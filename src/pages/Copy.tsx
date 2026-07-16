@@ -203,6 +203,9 @@ export default function Copy() {
   const [saving, setSaving] = useState(false);
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
   const [previewRequest, setPreviewRequest] = useState<ScriptRequest | null>(null);
+  const [sentDialogOpen, setSentDialogOpen] = useState(false);
+  const [sentScope, setSentScope] = useState<'mine' | 'all'>('mine');
+  const [previewScript, setPreviewScript] = useState<Script | null>(null);
   const canApprove = ['admin', 'gestor_projetos', 'socio_gestor', 'copywriter'].includes(((user as any)?.role) || '');
   const [requestForm, setRequestForm] = useState({
     clientId: '',
@@ -231,6 +234,44 @@ export default function Copy() {
 
   const sessionKey = user ? `copy_active_session_${user.id}` : null;
   const channelRef = useRef<any>(null);
+
+  // ── Sincroniza sessão ativa da copy com o banco (para o painel de TV) ──
+  const writeCopyLive = async (payload: {
+    taskId?: string;
+    requestId?: string;
+    batchTaskIds?: string[];
+    clientId?: string | null;
+    topic?: string | null;
+    contentFormat?: string | null;
+  }) => {
+    if (!user?.id) return;
+    try {
+      const copywriterName =
+        users.find(u => u.id === user.id)?.name ||
+        (user as any)?.user_metadata?.name ||
+        (user as any)?.name ||
+        (user as any)?.email ||
+        'Copywriter';
+      await supabase.from('copy_active_sessions').delete().eq('copywriter_id', user.id);
+      await supabase.from('copy_active_sessions').insert({
+        copywriter_id: user.id,
+        copywriter_name: copywriterName,
+        task_id: payload.taskId || null,
+        request_id: payload.requestId || null,
+        client_id: payload.clientId || null,
+        topic: payload.topic || null,
+        content_format: payload.contentFormat || null,
+        batch_size: payload.batchTaskIds?.length || 0,
+        started_at: new Date().toISOString(),
+      } as any);
+    } catch (e) { console.warn('writeCopyLive fail', e); }
+  };
+
+  const clearCopyLive = async () => {
+    if (!user?.id) return;
+    try { await supabase.from('copy_active_sessions').delete().eq('copywriter_id', user.id); }
+    catch (e) { console.warn('clearCopyLive fail', e); }
+  };
 
   useEffect(() => {
     if (!sessionKey) return;
@@ -361,6 +402,7 @@ export default function Copy() {
     const session = { taskId: task.id, startedAt: Date.now() };
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
+    writeCopyLive({ taskId: task.id, clientId: task.client_id, topic: task.title, contentFormat: task.content_type });
     toast.success(`Executando: ${task.title}`);
     broadcastChange();
   };
@@ -371,6 +413,7 @@ export default function Copy() {
     const session = { batchTaskIds: batchTasks.map(t => t.id), startedAt: Date.now() };
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
+    writeCopyLive({ batchTaskIds: session.batchTaskIds, clientId: batchTasks[0]?.client_id, topic: `Lote de ${batchTasks.length} stories`, contentFormat: 'story' });
     toast.success(`Executando lote de ${batchTasks.length} stories`);
     broadcastChange();
   };
@@ -381,6 +424,7 @@ export default function Copy() {
     const session = { batchTaskIds: batchTasks.map(t => t.id), startedAt: Date.now() };
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
+    writeCopyLive({ batchTaskIds: session.batchTaskIds, clientId: batchTasks[0]?.client_id, topic: `Lote de ${batchTasks.length} stories`, contentFormat: 'story' });
     setBatchForms(batchTasks.map(t => ({ title: t.title, content: '', caption: '' })));
     setFinalizing({ batch: batchTasks });
     broadcastChange();
@@ -391,6 +435,7 @@ export default function Copy() {
     const session = { taskId: task.id, startedAt: Date.now() };
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
+    writeCopyLive({ taskId: task.id, clientId: task.client_id, topic: task.title, contentFormat: task.content_type });
     setForm({
       title: task.title,
       videoType: 'vendas',
@@ -407,6 +452,7 @@ export default function Copy() {
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
     await supabase.from('script_requests').update({ status: 'in_progress' } as any).eq('id', req.id);
+    writeCopyLive({ requestId: req.id, clientId: req.client_id, topic: req.topic, contentFormat: req.content_format });
     toast.success(`Executando pedido: ${req.topic}`);
     broadcastChange();
     loadAll(true);
@@ -441,6 +487,7 @@ export default function Copy() {
     }
     setActiveSession(null);
     if (sessionKey) localStorage.removeItem(sessionKey);
+    await clearCopyLive();
     broadcastChange();
     loadAll(true);
   };
@@ -514,6 +561,7 @@ export default function Copy() {
         toast.success(`${filled.length} stories criadas em ${durationLabel}`);
         setActiveSession(null);
         if (sessionKey) localStorage.removeItem(sessionKey);
+        await clearCopyLive();
         setFinalizing(null);
         setBatchForms([]);
         loadAll(true);
@@ -565,6 +613,7 @@ export default function Copy() {
       toast.success(`Roteiro criado em ${durationLabel}`);
       setActiveSession(null);
       if (sessionKey) localStorage.removeItem(sessionKey);
+      await clearCopyLive();
       setFinalizing(null);
       loadAll(true);
       broadcastChange();
@@ -1120,6 +1169,9 @@ export default function Copy() {
             </Button>
             <Button onClick={() => autoGenerateTasks(false)} className="bg-white/10 hover:bg-white/20 text-white gap-1.5 h-9 px-4 font-black uppercase italic tracking-widest text-[10px] border border-white/10">
               <Sparkles size={12} /> Auto-gerar
+            </Button>
+            <Button onClick={() => setSentDialogOpen(true)} className="bg-white/10 hover:bg-white/20 text-white gap-1.5 h-9 px-4 font-black uppercase italic tracking-widest text-[10px] border border-white/10">
+              <FileText size={12} /> Roteiros enviados
             </Button>
             <Button onClick={() => setRequestDialogOpen(true)} className="bg-red-600 hover:bg-red-700 text-white gap-1.5 h-9 px-4 font-black uppercase italic tracking-widest text-[10px]">
               <PlusCircle size={12} /> Novo pedido
@@ -1956,6 +2008,116 @@ export default function Copy() {
               </Button>
             )}
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── DIALOG: Roteiros enviados pela Copy ── */}
+      <Dialog open={sentDialogOpen} onOpenChange={setSentDialogOpen}>
+        <DialogContent className="bg-[#0a0a0a] border border-white/10 text-white max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="font-black italic uppercase tracking-tighter text-2xl flex items-center gap-2">
+              <FileText size={20} className="text-red-500" /> Roteiros enviados
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center gap-2 border-b border-white/10 pb-2">
+            <button
+              onClick={() => setSentScope('mine')}
+              className={`text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1.5 rounded ${sentScope === 'mine' ? 'bg-red-600 text-white' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}
+            >
+              Meus envios
+            </button>
+            <button
+              onClick={() => setSentScope('all')}
+              className={`text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1.5 rounded ${sentScope === 'all' ? 'bg-red-600 text-white' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}
+            >
+              Toda a equipe
+            </button>
+            <span className="ml-auto text-[10px] uppercase tracking-widest text-white/40">
+              {(() => {
+                const list = scripts.filter(s => sentScope === 'mine' ? s.createdBy === user?.id : true);
+                return `${list.length} roteiro(s)`;
+              })()}
+            </span>
+          </div>
+          <div className="flex-1 overflow-y-auto space-y-2 pt-3 pr-1">
+            {(() => {
+              const list = scripts
+                .filter(s => sentScope === 'mine' ? s.createdBy === user?.id : true)
+                .slice()
+                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                .slice(0, 100);
+              if (list.length === 0) {
+                return (
+                  <div className="text-center py-12 text-white/30 text-sm">
+                    Nenhum roteiro enviado ainda.
+                  </div>
+                );
+              }
+              return list.map(s => {
+                const client = clients.find(c => c.id === s.clientId);
+                const author = users.find(u => u.id === (s as any).createdBy)?.name || '—';
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setPreviewScript(s)}
+                    className="w-full text-left p-3 rounded-lg border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] hover:border-red-600/40 transition-all"
+                  >
+                    <div className="flex items-start gap-3">
+                      {client && <ClientLogo client={client as any} size="sm" />}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-bold text-white truncate">{s.title}</span>
+                          <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-white/10 text-white/70">
+                            {SCRIPT_CONTENT_FORMAT_LABELS[s.contentFormat] || s.contentFormat}
+                          </span>
+                          {s.priority === 'urgent' && (
+                            <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-600 text-white">
+                              Urgente
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-white/50 mt-1 truncate">
+                          {client?.companyName || 'Sem cliente'} · por {author} · {new Date(s.createdAt).toLocaleString('pt-BR')}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              });
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── DIALOG: Preview de roteiro ── */}
+      <Dialog open={!!previewScript} onOpenChange={(o) => { if (!o) setPreviewScript(null); }}>
+        <DialogContent className="bg-[#0a0a0a] border border-white/10 text-white max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+          {previewScript && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="font-black italic uppercase tracking-tighter text-2xl">
+                  {previewScript.title}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="flex items-center gap-3 text-[10px] uppercase tracking-widest text-white/50 border-b border-white/10 pb-2">
+                <span>{SCRIPT_CONTENT_FORMAT_LABELS[previewScript.contentFormat] || previewScript.contentFormat}</span>
+                <span>·</span>
+                <span>{clients.find(c => c.id === previewScript.clientId)?.companyName || 'Sem cliente'}</span>
+                <span>·</span>
+                <span>{new Date(previewScript.createdAt).toLocaleString('pt-BR')}</span>
+              </div>
+              <div
+                className="flex-1 overflow-y-auto prose prose-invert prose-sm max-w-none py-3"
+                dangerouslySetInnerHTML={{ __html: previewScript.content || '<p class="text-white/40">Sem conteúdo</p>' }}
+              />
+              {previewScript.caption && (
+                <div className="border-t border-white/10 pt-3">
+                  <p className="text-[10px] uppercase tracking-widest text-white/40 mb-1">Legenda</p>
+                  <p className="text-sm text-white/80 whitespace-pre-wrap">{previewScript.caption}</p>
+                </div>
+              )}
+            </>
+          )}
         </DialogContent>
       </Dialog>
       </div>

@@ -112,6 +112,7 @@ let clientsArtRequestsLimitColumnPromise;
 let proposalTablesEnsuredPromise;
 let storyEditingSessionsEnsuredPromise;
 let scriptRequestsEnsuredPromise;
+let copyActiveSessionsEnsuredPromise;
 const tableJsonColumnsPromiseCache = new Map();
 const SCHEMA_CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -385,6 +386,72 @@ async function ensureStoryEditingSessionsTable() {
 
 ensureStoryEditingSessionsTable().catch((error) => {
   console.error('Failed to ensure story editing sessions table:', error);
+});
+
+async function ensureCopyActiveSessionsTable() {
+  if (!copyActiveSessionsEnsuredPromise) {
+    copyActiveSessionsEnsuredPromise = (async () => {
+      const { rows: tableRows } = await pool.query(
+        `SELECT 1 FROM information_schema.tables
+          WHERE table_schema='public' AND table_name='copy_active_sessions' LIMIT 1`
+      );
+      if (tableRows.length === 0) {
+        await pool.query(`
+          CREATE TABLE copy_active_sessions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            copywriter_id UUID NOT NULL,
+            copywriter_name TEXT,
+            task_id UUID,
+            request_id UUID,
+            client_id UUID,
+            topic TEXT,
+            content_format TEXT,
+            batch_size INTEGER NOT NULL DEFAULT 0,
+            started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            city TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )
+        `);
+      }
+      const columns = await getExistingColumns('copy_active_sessions');
+      const alter = [];
+      if (!columns.has('copywriter_name')) alter.push('ADD COLUMN copywriter_name TEXT');
+      if (!columns.has('task_id')) alter.push('ADD COLUMN task_id UUID');
+      if (!columns.has('request_id')) alter.push('ADD COLUMN request_id UUID');
+      if (!columns.has('client_id')) alter.push('ADD COLUMN client_id UUID');
+      if (!columns.has('topic')) alter.push('ADD COLUMN topic TEXT');
+      if (!columns.has('content_format')) alter.push('ADD COLUMN content_format TEXT');
+      if (!columns.has('batch_size')) alter.push('ADD COLUMN batch_size INTEGER NOT NULL DEFAULT 0');
+      if (!columns.has('city')) alter.push('ADD COLUMN city TEXT');
+      if (!columns.has('updated_at')) alter.push('ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT now()');
+      if (alter.length > 0) {
+        await pool.query(`ALTER TABLE copy_active_sessions ${alter.join(', ')}`).then(() => {
+          tableColumnsPromiseCache.delete('copy_active_sessions');
+        }).catch((error) => {
+          if (error?.code === '42501' || /must be owner|permission denied/i.test(error?.message || '')) {
+            console.warn('[copy_active_sessions] Skipping column sync due to ownership:', error.message);
+            return;
+          }
+          throw error;
+        });
+      }
+      await pool.query(
+        `CREATE INDEX IF NOT EXISTS idx_copy_sessions_copywriter ON copy_active_sessions(copywriter_id)`
+      ).catch(() => {});
+      await pool.query(
+        `CREATE UNIQUE INDEX IF NOT EXISTS uniq_copy_sessions_active ON copy_active_sessions(copywriter_id)`
+      ).catch(() => {});
+    })().catch((error) => {
+      copyActiveSessionsEnsuredPromise = null;
+      throw error;
+    });
+  }
+  return copyActiveSessionsEnsuredPromise;
+}
+
+ensureCopyActiveSessionsTable().catch((error) => {
+  console.error('Failed to ensure copy active sessions table:', error);
 });
 
 async function ensureScriptRequestsTable() {
@@ -7142,7 +7209,41 @@ app.get('/api/tv-dashboard', async (req, res) => {
       console.warn('[tv-dashboard] Failed to load story_editing_sessions:', error?.message || error);
     }
 
-    res.json({ members, todaySchedule, editingPipeline, designPipeline, todayPosts, weekPosts, seasonalSlides, activeRecordingIds, storyEditingSessions, updatedAt: new Date().toISOString() });
+    // Copy sessions (copywriters executando roteiros agora)
+    let copyActiveSessions = [];
+    try {
+      await ensureCopyActiveSessionsTable();
+      const { rows } = await pool.query(`
+        SELECT s.id, s.copywriter_id, s.copywriter_name, s.task_id, s.request_id,
+               s.client_id, s.topic, s.content_format, s.batch_size, s.started_at,
+               p.name AS profile_name, p.avatar_url AS copywriter_avatar,
+               c.name AS client_name, c.logo_url AS client_logo, c.brand_color AS client_color
+        FROM copy_active_sessions s
+        LEFT JOIN profiles p ON p.id = s.copywriter_id
+        LEFT JOIN clients c ON c.id = s.client_id
+        ORDER BY s.started_at ASC
+      `);
+      copyActiveSessions = rows.map(r => ({
+        id: r.id,
+        copywriterId: r.copywriter_id,
+        copywriterName: r.copywriter_name || r.profile_name || 'Copywriter',
+        copywriterAvatar: r.copywriter_avatar,
+        taskId: r.task_id,
+        requestId: r.request_id,
+        clientId: r.client_id,
+        clientName: r.client_name,
+        clientLogo: r.client_logo,
+        clientColor: r.client_color,
+        topic: r.topic,
+        contentFormat: r.content_format,
+        batchSize: r.batch_size || 0,
+        startedAt: r.started_at,
+      }));
+    } catch (error) {
+      console.warn('[tv-dashboard] Failed to load copy_active_sessions:', error?.message || error);
+    }
+
+    res.json({ members, todaySchedule, editingPipeline, designPipeline, todayPosts, weekPosts, seasonalSlides, activeRecordingIds, storyEditingSessions, copyActiveSessions, updatedAt: new Date().toISOString() });
   } catch (err) {
     console.error('[tv-dashboard] Error at stage:', stage, err);
     res.json({ members: [], todaySchedule: [], editingPipeline: [], designPipeline: [], todayPosts: [], weekPosts: [], seasonalSlides: [], activeRecordingIds: [], updatedAt: new Date().toISOString(), error: 'fallback' });

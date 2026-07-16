@@ -53,49 +53,98 @@ interface ScriptRequest {
 }
 
 /** Detecta e monta embed inline para YouTube, Vimeo, TikTok, Instagram, Drive e vídeo direto. */
-function ReferenceEmbed({ url }: { url: string }) {
-  if (!url) return null;
-  let src = '';
-  let kind: 'iframe' | 'video' | 'link' = 'link';
+function resolveEmbed(rawUrl: string): { src: string; kind: 'iframe' | 'video' | 'link'; aspect?: string } {
+  const fallback = { src: '', kind: 'link' as const };
+  if (!rawUrl) return fallback;
   try {
-    const u = new URL(url.trim());
-    const host = u.hostname.replace(/^www\./, '');
+    const url = rawUrl.trim();
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, '').toLowerCase();
+    const path = u.pathname;
 
-    // YouTube
-    if (host.includes('youtube.com') || host === 'youtu.be') {
+    // YouTube (watch, shorts, youtu.be, embed, live) — preserve start time
+    if (host.includes('youtube.com') || host.includes('youtube-nocookie.com') || host === 'youtu.be') {
       let id = '';
-      if (host === 'youtu.be') id = u.pathname.slice(1);
-      else if (u.pathname.startsWith('/shorts/')) id = u.pathname.split('/')[2] || '';
-      else if (u.pathname.startsWith('/embed/')) id = u.pathname.split('/')[2] || '';
+      if (host === 'youtu.be') id = path.slice(1).split('/')[0];
+      else if (path.startsWith('/shorts/')) id = path.split('/')[2] || '';
+      else if (path.startsWith('/embed/')) id = path.split('/')[2] || '';
+      else if (path.startsWith('/live/')) id = path.split('/')[2] || '';
       else id = u.searchParams.get('v') || '';
-      if (id) { src = `https://www.youtube.com/embed/${id}`; kind = 'iframe'; }
+      id = id.split('?')[0].split('&')[0];
+      if (id) {
+        const t = u.searchParams.get('t') || u.searchParams.get('start');
+        const startSec = t ? parseInt(String(t).replace(/[^0-9]/g, ''), 10) : 0;
+        const q = startSec ? `?start=${startSec}` : '';
+        return { src: `https://www.youtube.com/embed/${id}${q}`, kind: 'iframe', aspect: path.startsWith('/shorts/') ? '9 / 16' : '16 / 9' };
+      }
     }
     // Vimeo
-    else if (host.includes('vimeo.com')) {
-      const id = u.pathname.split('/').filter(Boolean)[0];
-      if (id) { src = `https://player.vimeo.com/video/${id}`; kind = 'iframe'; }
+    if (host.includes('vimeo.com')) {
+      const parts = path.split('/').filter(Boolean);
+      const id = parts.find((p) => /^\d+$/.test(p));
+      if (id) return { src: `https://player.vimeo.com/video/${id}`, kind: 'iframe', aspect: '16 / 9' };
     }
     // TikTok
-    else if (host.includes('tiktok.com')) {
-      const m = u.pathname.match(/\/video\/(\d+)/);
-      if (m) { src = `https://www.tiktok.com/embed/v2/${m[1]}`; kind = 'iframe'; }
+    if (host.includes('tiktok.com')) {
+      const m = path.match(/\/video\/(\d+)/);
+      if (m) return { src: `https://www.tiktok.com/embed/v2/${m[1]}`, kind: 'iframe', aspect: '9 / 16' };
+      // short link vm.tiktok.com/xxxx — sem ID numérico, cai como link
     }
-    // Instagram
-    else if (host.includes('instagram.com')) {
-      const clean = url.split('?')[0].replace(/\/$/, '');
-      src = `${clean}/embed`;
-      kind = 'iframe';
+    // Instagram (reel, p, tv)
+    if (host.includes('instagram.com')) {
+      const m = path.match(/\/(reel|reels|p|tv)\/([^/]+)/);
+      if (m) return { src: `https://www.instagram.com/${m[1] === 'reels' ? 'reel' : m[1]}/${m[2]}/embed`, kind: 'iframe', aspect: '9 / 16' };
+    }
+    // Facebook (watch, reel, video, share)
+    if (host.includes('facebook.com') || host === 'fb.watch' || host.includes('fb.com')) {
+      const encoded = encodeURIComponent(url);
+      return { src: `https://www.facebook.com/plugins/video.php?href=${encoded}&show_text=false&autoplay=false`, kind: 'iframe', aspect: path.includes('/reel/') ? '9 / 16' : '16 / 9' };
+    }
+    // CapCut (share/template) — CapCut não expõe embed oficial, mas /player funciona para vários shares
+    if (host.includes('capcut.com')) {
+      const m = path.match(/\/([a-zA-Z0-9_-]+)\/?$/);
+      if (m) return { src: `https://www.capcut.com/embed/${m[1]}`, kind: 'iframe', aspect: '9 / 16' };
+    }
+    // Kwai
+    if (host.includes('kwai.com') || host.includes('kwai-video.com')) {
+      const m = path.match(/\/@[^/]+\/video\/([^/?]+)/) || path.match(/\/video\/([^/?]+)/);
+      if (m) return { src: `https://www.kwai.com/embed/video/${m[1]}`, kind: 'iframe', aspect: '9 / 16' };
+    }
+    // Twitter / X — usa oEmbed via publish.twitter (iframe suportado)
+    if (host === 'twitter.com' || host === 'x.com' || host === 'mobile.twitter.com') {
+      return { src: `https://platform.twitter.com/embed/Tweet.html?id=${path.split('/status/')[1]?.split('/')[0] || ''}`, kind: 'iframe', aspect: '4 / 5' };
+    }
+    // Dailymotion
+    if (host.includes('dailymotion.com') || host === 'dai.ly') {
+      const id = host === 'dai.ly' ? path.slice(1) : (path.match(/\/video\/([^_/?]+)/)?.[1] || '');
+      if (id) return { src: `https://www.dailymotion.com/embed/video/${id}`, kind: 'iframe', aspect: '16 / 9' };
+    }
+    // Streamable
+    if (host.includes('streamable.com')) {
+      const id = path.split('/').filter(Boolean)[0];
+      if (id) return { src: `https://streamable.com/e/${id}`, kind: 'iframe', aspect: '16 / 9' };
+    }
+    // Loom
+    if (host.includes('loom.com')) {
+      const m = path.match(/\/share\/([^/?]+)/) || path.match(/\/embed\/([^/?]+)/);
+      if (m) return { src: `https://www.loom.com/embed/${m[1]}`, kind: 'iframe', aspect: '16 / 9' };
     }
     // Google Drive
-    else if (host.includes('drive.google.com')) {
-      const m = u.pathname.match(/\/file\/d\/([^/]+)/);
-      if (m) { src = `https://drive.google.com/file/d/${m[1]}/preview`; kind = 'iframe'; }
+    if (host.includes('drive.google.com')) {
+      const m = path.match(/\/file\/d\/([^/]+)/) || [null, u.searchParams.get('id') || ''];
+      if (m[1]) return { src: `https://drive.google.com/file/d/${m[1]}/preview`, kind: 'iframe', aspect: '16 / 9' };
     }
     // Vídeo direto
-    else if (/\.(mp4|webm|ogg|mov)(\?|$)/i.test(u.pathname)) {
-      src = url; kind = 'video';
+    if (/\.(mp4|webm|ogg|mov|m4v)(\?|$)/i.test(path)) {
+      return { src: url, kind: 'video' };
     }
-  } catch { /* link inválido cai como link simples */ }
+  } catch { /* fallback */ }
+  return fallback;
+}
+
+function ReferenceEmbed({ url }: { url: string }) {
+  if (!url) return null;
+  const { src, kind, aspect } = resolveEmbed(url);
 
   return (
     <div className="rounded-lg border border-white/10 bg-black overflow-hidden">
@@ -107,11 +156,18 @@ function ReferenceEmbed({ url }: { url: string }) {
         </a>
       </div>
       {kind === 'iframe' ? (
-        <div className="relative w-full" style={{ aspectRatio: '9 / 16', maxHeight: 480 }}>
-          <iframe src={src} className="absolute inset-0 w-full h-full" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen loading="lazy" />
+        <div className="relative w-full" style={{ aspectRatio: aspect || '9 / 16', maxHeight: 560 }}>
+          <iframe
+            src={src}
+            className="absolute inset-0 w-full h-full"
+            allow="autoplay; encrypted-media; picture-in-picture; fullscreen; clipboard-write"
+            allowFullScreen
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
         </div>
       ) : kind === 'video' ? (
-        <video src={src} controls className="w-full max-h-[480px] bg-black" />
+        <video src={src} controls playsInline className="w-full max-h-[560px] bg-black" />
       ) : (
         <div className="p-4 text-sm text-white/60 break-all">
           <a href={url} target="_blank" rel="noopener noreferrer" className="underline text-cyan-400">{url}</a>

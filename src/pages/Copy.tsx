@@ -2012,82 +2012,15 @@ export default function Copy() {
       </Dialog>
 
       {/* ── DIALOG: Roteiros enviados pela Copy ── */}
-      <Dialog open={sentDialogOpen} onOpenChange={setSentDialogOpen}>
-        <DialogContent className="bg-[#0a0a0a] border border-white/10 text-white max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="font-black italic uppercase tracking-tighter text-2xl flex items-center gap-2">
-              <FileText size={20} className="text-red-500" /> Roteiros enviados
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex items-center gap-2 border-b border-white/10 pb-2">
-            <button
-              onClick={() => setSentScope('mine')}
-              className={`text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1.5 rounded ${sentScope === 'mine' ? 'bg-red-600 text-white' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}
-            >
-              Meus envios
-            </button>
-            <button
-              onClick={() => setSentScope('all')}
-              className={`text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1.5 rounded ${sentScope === 'all' ? 'bg-red-600 text-white' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}
-            >
-              Toda a equipe
-            </button>
-            <span className="ml-auto text-[10px] uppercase tracking-widest text-white/40">
-              {(() => {
-                const list = scripts.filter(s => sentScope === 'mine' ? s.createdBy === user?.id : true);
-                return `${list.length} roteiro(s)`;
-              })()}
-            </span>
-          </div>
-          <div className="flex-1 overflow-y-auto space-y-2 pt-3 pr-1">
-            {(() => {
-              const list = scripts
-                .filter(s => sentScope === 'mine' ? s.createdBy === user?.id : true)
-                .slice()
-                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-                .slice(0, 100);
-              if (list.length === 0) {
-                return (
-                  <div className="text-center py-12 text-white/30 text-sm">
-                    Nenhum roteiro enviado ainda.
-                  </div>
-                );
-              }
-              return list.map(s => {
-                const client = clients.find(c => c.id === s.clientId);
-                const author = users.find(u => u.id === (s as any).createdBy)?.name || '—';
-                return (
-                  <button
-                    key={s.id}
-                    onClick={() => setPreviewScript(s)}
-                    className="w-full text-left p-3 rounded-lg border border-white/10 bg-white/[0.02] hover:bg-white/[0.06] hover:border-red-600/40 transition-all"
-                  >
-                    <div className="flex items-start gap-3">
-                      {client && <ClientLogo client={client as any} size="sm" />}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-bold text-white truncate">{s.title}</span>
-                          <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-white/10 text-white/70">
-                            {SCRIPT_CONTENT_FORMAT_LABELS[s.contentFormat] || s.contentFormat}
-                          </span>
-                          {s.priority === 'urgent' && (
-                            <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-600 text-white">
-                              Urgente
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-white/50 mt-1 truncate">
-                          {client?.companyName || 'Sem cliente'} · por {author} · {new Date(s.createdAt).toLocaleString('pt-BR')}
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                );
-              });
-            })()}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <SentScriptsDialog
+        open={sentDialogOpen}
+        onOpenChange={setSentDialogOpen}
+        scripts={scripts}
+        clients={clients}
+        users={users}
+        currentUserId={user?.id}
+        onSelect={(s) => setPreviewScript(s)}
+      />
 
       {/* ── DIALOG: Preview de roteiro ── */}
       <Dialog open={!!previewScript} onOpenChange={(o) => { if (!o) setPreviewScript(null); }}>

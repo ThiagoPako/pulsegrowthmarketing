@@ -10,6 +10,7 @@ const ADMIN_EMAIL = 'admin@pulse.com';
 const ADMIN_PASSWORD = 'Pulse@2026!';
 const TEMP_PASSWORD = 'Pulse@2026!';
 const RESET_ALL_USER_PASSWORDS = process.env.RESET_ALL_USER_PASSWORDS === 'true';
+const ALLOW_SCHEMA_CHANGES = process.env.REPAIR_AUTH_ALLOW_SCHEMA_CHANGES === 'true';
 const VALID_ROLES = new Set([
   'admin',
   'videomaker',
@@ -43,13 +44,16 @@ function isPresentHash(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-const pool = new Pool({
-  host: process.env.PG_HOST || process.env.PGHOST || '127.0.0.1',
-  port: Number(process.env.PG_PORT || process.env.PGPORT || 5432),
-  database: process.env.PG_DATABASE || process.env.PGDATABASE || 'pulse_db',
-  user: process.env.PG_USER || process.env.PGUSER || 'pulse_user',
-  password: requireEnv('PG_PASSWORD', process.env.PGPASSWORD),
-});
+const pgConnectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+const pool = pgConnectionString
+  ? new Pool({ connectionString: pgConnectionString })
+  : new Pool({
+      host: process.env.PG_HOST || process.env.PGHOST || '127.0.0.1',
+      port: Number(process.env.PG_PORT || process.env.PGPORT || 5432),
+      database: process.env.PG_DATABASE || process.env.PGDATABASE || process.env.DB_NAME || 'pulse_db',
+      user: process.env.PG_USER || process.env.PGUSER || process.env.DB_USER || 'pulse_user',
+      password: requireEnv('PG_PASSWORD', process.env.PGPASSWORD || process.env.DB_PASSWORD),
+    });
 
 async function tableExists(client, tableName) {
   const { rows } = await client.query('SELECT to_regclass($1) IS NOT NULL AS exists', [`public.${tableName}`]);
@@ -78,6 +82,32 @@ async function backupTable(client, backupDir, tableName) {
 }
 
 async function ensureAuthTables(client) {
+  if (!ALLOW_SCHEMA_CHANGES) {
+    for (const tableName of ['profiles', 'auth_users', 'user_roles']) {
+      if (!(await tableExists(client, tableName))) {
+        throw new Error(`Tabela obrigatória ausente: ${tableName}. Reparo abortado para não alterar schema.`);
+      }
+    }
+
+    const requiredColumns = [
+      ['profiles', 'id'],
+      ['profiles', 'email'],
+      ['auth_users', 'id'],
+      ['auth_users', 'email'],
+      ['auth_users', 'password_hash'],
+      ['user_roles', 'user_id'],
+      ['user_roles', 'role'],
+    ];
+
+    for (const [tableName, columnName] of requiredColumns) {
+      if (!(await columnExists(client, tableName, columnName))) {
+        throw new Error(`Coluna obrigatória ausente: ${tableName}.${columnName}. Reparo abortado para não alterar schema.`);
+      }
+    }
+
+    return;
+  }
+
   await client.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
   await client.query(`
     CREATE TABLE IF NOT EXISTS auth_users (
@@ -110,16 +140,32 @@ async function ensureAdminProfile(client, passwordHash) {
   const normalizedEmail = normalizeEmail(ADMIN_EMAIL);
   const { rows } = await client.query('SELECT id FROM profiles WHERE lower(email) = lower($1) LIMIT 1', [normalizedEmail]);
   let userId = rows[0]?.id;
+  const hasRole = await columnExists(client, 'profiles', 'role');
+  const hasName = await columnExists(client, 'profiles', 'name');
 
   if (!userId) {
+    if (!ALLOW_SCHEMA_CHANGES) {
+      throw new Error(`Perfil admin não encontrado (${ADMIN_EMAIL}). Reparo abortado para não criar registros novos sem confirmação.`);
+    }
+
+    const columns = ['id', 'email'];
+    const values = ['gen_random_uuid()', '$1'];
+    if (hasName) {
+      columns.push('name');
+      values.push(`'Admin'`);
+    }
+    if (hasRole) {
+      columns.push('role');
+      values.push(`'admin'`);
+    }
     const inserted = await client.query(
-      `INSERT INTO profiles (id, name, email, role)
-       VALUES (gen_random_uuid(), 'Admin', $1, 'admin')
+      `INSERT INTO profiles (${columns.join(', ')})
+       VALUES (${values.join(', ')})
        RETURNING id`,
       [normalizedEmail],
     );
     userId = inserted.rows[0].id;
-  } else {
+  } else if (hasRole) {
     await client.query('UPDATE profiles SET role = $1 WHERE id = $2', ['admin', userId]);
   }
 
@@ -233,6 +279,15 @@ async function repairProfiles(client) {
 
   const adminHash = await bcrypt.hash(ADMIN_PASSWORD, 12);
   const adminId = await ensureAdminProfile(client, adminHash);
+  const { rows: [adminAuth] } = await client.query(
+    'SELECT password_hash FROM auth_users WHERE id = $1 OR lower(email) = lower($2) LIMIT 1',
+    [adminId, ADMIN_EMAIL],
+  );
+  const adminPasswordVerified = Boolean(adminAuth?.password_hash && await bcrypt.compare(ADMIN_PASSWORD, adminAuth.password_hash));
+
+  if (!adminPasswordVerified) {
+    throw new Error('Hash do admin não confere após o reparo. Nenhuma senha foi exibida.');
+  }
 
   const { rows: counts } = await client.query(`
     SELECT
@@ -271,9 +326,10 @@ async function main() {
       backupDir,
       backedUp,
       adminEmail: ADMIN_EMAIL,
-      adminPassword: ADMIN_PASSWORD,
-      temporaryPasswordForUsersWithoutHash: TEMP_PASSWORD,
+      adminPasswordUpdated: true,
+      temporaryPasswordAppliedForUsersWithoutHash: createdWithTemp > 0,
       resetAllUserPasswords: RESET_ALL_USER_PASSWORDS,
+      schemaChangesAllowed: ALLOW_SCHEMA_CHANGES,
       ...result,
     }, null, 2));
   } finally {

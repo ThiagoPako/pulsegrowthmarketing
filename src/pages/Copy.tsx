@@ -1756,27 +1756,22 @@ export default function Copy() {
             <Button variant="outline" onClick={() => setPreviewRequest(null)} className="border-white/20 text-white hover:bg-white/10">
               Fechar
             </Button>
-            {previewRequest && !previewRequest.approved_at && canApprove && (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={() => rejectRequest(previewRequest)}
-                  className="border-red-500/40 text-red-400 hover:bg-red-500/10 gap-1.5"
-                >
-                  <Trash2 size={14} /> Rejeitar
-                </Button>
-                <Button
-                  onClick={() => approveRequest(previewRequest)}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 font-black uppercase italic tracking-widest text-[11px]"
-                >
-                  <ShieldCheck size={14} /> Aprovar e liberar
-                </Button>
-              </>
+            {previewRequest && previewRequest.status === 'pending' && (
+              <Button
+                onClick={() => { const r = previewRequest; setPreviewRequest(null); startRequest(r); }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 font-black uppercase italic tracking-widest text-[11px]"
+              >
+                <Play size={14} className="fill-current" /> Iniciar agora
+              </Button>
             )}
-            {previewRequest && !previewRequest.approved_at && !canApprove && (
-              <span className="text-[11px] text-white/50 italic self-center">
-                Somente o responsável (Gestor/Admin/Copy) pode aprovar este pedido.
-              </span>
+            {previewRequest && previewRequest.status === 'pending' && canApprove && (
+              <Button
+                variant="outline"
+                onClick={() => rejectRequest(previewRequest)}
+                className="border-red-500/40 text-red-400 hover:bg-red-500/10 gap-1.5"
+              >
+                <Trash2 size={14} /> Cancelar pedido
+              </Button>
             )}
           </DialogFooter>
         </DialogContent>

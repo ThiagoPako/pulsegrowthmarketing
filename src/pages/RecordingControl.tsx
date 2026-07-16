@@ -1112,19 +1112,22 @@ function RecordingCard({
       {/* Client info */}
       <div>
         <div className="flex items-center gap-2 mb-2">
-          {client && (
+          {isStorySession ? (
+            <div className="h-7 w-7 rounded-lg bg-violet-500/20 ring-1 ring-violet-500/40 flex items-center justify-center shrink-0">
+              <Clapperboard size={14} className="text-violet-500 drop-shadow-[0_0_4px_rgba(139,92,246,0.6)]" />
+            </div>
+          ) : client ? (
             <ClientLogo
               client={{ companyName: client.companyName, color: client.color, logoUrl: client.logoUrl }}
               size="sm"
             />
-
-          )}
+          ) : null}
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-bold truncate leading-tight">
-              {recording.prospectName || client?.companyName || 'Cliente'}
+            <p className={`text-[11px] font-bold truncate leading-tight ${isStorySession ? 'text-violet-600 dark:text-violet-300' : ''}`}>
+              {isStorySession ? 'Produção de Story' : (recording.prospectName || client?.companyName || 'Cliente')}
             </p>
             <p className="text-[9px] text-muted-foreground truncate opacity-70">
-              {client?.responsiblePerson}
+              {isStorySession ? 'Sessão interna na agência' : client?.responsiblePerson}
             </p>
           </div>
         </div>
@@ -1132,8 +1135,8 @@ function RecordingCard({
 
       {/* Bottom info */}
       <div className="flex items-center justify-between mt-auto">
-        <Badge variant="outline" className="text-[8px] h-4 px-1 leading-none font-medium bg-muted/30">
-          {TYPE_LABELS[recording.type] || recording.type}
+        <Badge variant="outline" className={`text-[8px] h-4 px-1 leading-none font-medium ${isStorySession ? 'bg-violet-500/15 text-violet-600 dark:text-violet-300 border-violet-500/40' : 'bg-muted/30'}`}>
+          {isStorySession ? 'STORY' : (TYPE_LABELS[recording.type] || recording.type)}
         </Badge>
         <div className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${status.bg} ${status.text}`}>
           {status.label}

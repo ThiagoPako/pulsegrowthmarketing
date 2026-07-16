@@ -1004,6 +1004,12 @@ export default function Copy() {
                   </div>
                 </div>
               </div>
+              {activeRequest && activeRequest.notes && (
+                <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-4 py-3">
+                  <p className="text-[9px] font-black uppercase tracking-[0.35em] text-amber-400 mb-1.5">Briefing do Social · Observações</p>
+                  <p className="text-[13px] text-white/90 leading-relaxed whitespace-pre-wrap break-words">{activeRequest.notes}</p>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

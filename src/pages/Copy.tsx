@@ -1731,9 +1731,6 @@ export default function Copy() {
                   <div className="min-w-0">
                     <p className="text-[9px] font-black uppercase tracking-[0.25em] text-white/40">Cliente</p>
                     <p className="text-sm font-bold text-white truncate">{c?.companyName || 'Sem cliente'}</p>
-                    {previewRequest.requested_by_name && (
-                      <p className="text-[10px] text-white/50 uppercase tracking-widest">Solicitado por {previewRequest.requested_by_name}</p>
-                    )}
                   </div>
                 </div>
 

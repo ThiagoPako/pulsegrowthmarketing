@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import ClientLogo from '@/components/ClientLogo';
+import UserAvatar from '@/components/UserAvatar';
 import type { Script, ScriptVideoType, ScriptContentFormat } from '@/types';
 import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_CONTENT_FORMAT_LABELS } from '@/types';
 
@@ -41,6 +42,7 @@ interface ScriptRequest {
   content_format: string;
   status: 'pending' | 'in_progress' | 'done' | 'cancelled';
   priority: 'alta' | 'normal';
+  requested_by: string | null;
   requested_by_name: string | null;
   fulfilled_script_id: string | null;
   fulfilled_at: string | null;
@@ -63,7 +65,7 @@ function formatDuration(ms: number) {
 
 export default function Copy() {
   const { user } = useAuth();
-  const { clients, scripts, addScript } = useApp();
+  const { clients, scripts, addScript, users } = useApp();
   const [tasks, setTasks] = useState<PendingTask[]>([]);
   const [requests, setRequests] = useState<ScriptRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -456,7 +458,7 @@ export default function Copy() {
       content_format: requestForm.contentFormat,
       priority: requestForm.priority,
       requested_by: user?.id,
-      requested_by_name: (user as any)?.user_metadata?.name || user?.email || 'Social Media',
+      requested_by_name: users.find(u => u.id === user?.id)?.name || (user as any)?.user_metadata?.name || (user as any)?.name || 'Social Media',
     } as any);
     if (error) { console.error(error); toast.error('Erro ao criar pedido'); return; }
     toast.success('Pedido de roteiro criado');
@@ -904,8 +906,17 @@ export default function Copy() {
           <p className="text-[12px] font-black uppercase tracking-tight text-white/95 truncate" title={title}>{title}</p>
           <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40 truncate">
             {client?.companyName || (isReq ? 'Sem cliente' : (item.task.prospect_name || 'Sem cliente'))}
-            {isReq && item.req.requested_by_name ? ` · ${item.req.requested_by_name}` : ''}
           </p>
+          {isReq && (item.req.requested_by || item.req.requested_by_name) && (() => {
+            const reqUser = users.find(u => u.id === item.req.requested_by);
+            const name = reqUser?.name || item.req.requested_by_name || 'Social Media';
+            return (
+              <div className="mt-1 flex items-center gap-1.5">
+                <UserAvatar user={{ name, avatarUrl: reqUser?.avatarUrl }} size="sm" className="!w-5 !h-5 !text-[8px]" />
+                <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/60 truncate">{name}</span>
+              </div>
+            );
+          })()}
           {isReq && item.req.notes && (
             <div className="mt-1.5 rounded-md border-l-2 border-amber-500/60 bg-amber-500/[0.06] px-2 py-1.5">
               <p className="text-[8px] font-black uppercase tracking-[0.25em] text-amber-400/80 mb-0.5">Observações do Social</p>
@@ -1720,11 +1731,22 @@ export default function Copy() {
                   <div className="min-w-0">
                     <p className="text-[9px] font-black uppercase tracking-[0.25em] text-white/40">Cliente</p>
                     <p className="text-sm font-bold text-white truncate">{c?.companyName || 'Sem cliente'}</p>
-                    {previewRequest.requested_by_name && (
-                      <p className="text-[10px] text-white/50 uppercase tracking-widest">Solicitado por {previewRequest.requested_by_name}</p>
-                    )}
                   </div>
                 </div>
+
+                {(previewRequest.requested_by || previewRequest.requested_by_name) && (() => {
+                  const reqUser = users.find(u => u.id === previewRequest.requested_by);
+                  const name = reqUser?.name || previewRequest.requested_by_name || 'Social Media';
+                  return (
+                    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 flex items-center gap-3">
+                      <UserAvatar user={{ name, avatarUrl: reqUser?.avatarUrl }} size="md" />
+                      <div className="min-w-0">
+                        <p className="text-[9px] font-black uppercase tracking-[0.25em] text-white/40">Solicitado por</p>
+                        <p className="text-sm font-bold text-white truncate">{name}</p>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-[0.3em] text-red-500 mb-1.5">Tema do Roteiro</p>

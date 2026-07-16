@@ -1650,6 +1650,19 @@ export default function Copy() {
               <Textarea rows={3} value={requestForm.notes} onChange={e => setRequestForm(f => ({ ...f, notes: e.target.value }))}
                 placeholder="Ângulo desejado, referências, CTA..." />
             </div>
+            <div>
+              <Label>Link de referência (opcional)</Label>
+              <Input
+                value={requestForm.referenceLink}
+                onChange={e => setRequestForm(f => ({ ...f, referenceLink: e.target.value }))}
+                placeholder="YouTube, TikTok, Instagram, Vimeo, Drive ou .mp4"
+              />
+              {requestForm.referenceLink.trim() && (
+                <div className="mt-2">
+                  <ReferenceEmbed url={requestForm.referenceLink.trim()} />
+                </div>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Formato</Label>

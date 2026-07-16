@@ -558,6 +558,7 @@ export default function Copy() {
         toast.success(`${filled.length} stories criadas em ${durationLabel}`);
         setActiveSession(null);
         if (sessionKey) localStorage.removeItem(sessionKey);
+        await clearCopyLive();
         setFinalizing(null);
         setBatchForms([]);
         loadAll(true);

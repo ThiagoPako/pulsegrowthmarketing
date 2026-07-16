@@ -1170,6 +1170,9 @@ export default function Copy() {
             <Button onClick={() => autoGenerateTasks(false)} className="bg-white/10 hover:bg-white/20 text-white gap-1.5 h-9 px-4 font-black uppercase italic tracking-widest text-[10px] border border-white/10">
               <Sparkles size={12} /> Auto-gerar
             </Button>
+            <Button onClick={() => setSentDialogOpen(true)} className="bg-white/10 hover:bg-white/20 text-white gap-1.5 h-9 px-4 font-black uppercase italic tracking-widest text-[10px] border border-white/10">
+              <FileText size={12} /> Roteiros enviados
+            </Button>
             <Button onClick={() => setRequestDialogOpen(true)} className="bg-red-600 hover:bg-red-700 text-white gap-1.5 h-9 px-4 font-black uppercase italic tracking-widest text-[10px]">
               <PlusCircle size={12} /> Novo pedido
             </Button>

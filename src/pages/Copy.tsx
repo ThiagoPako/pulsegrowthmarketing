@@ -928,15 +928,13 @@ export default function Copy() {
           <Button
             size="sm"
             onClick={onStart}
-            disabled={isBusy || (isReq && !item.req.approved_at)}
+            disabled={isBusy}
             className={`h-8 px-3 gap-1.5 font-black uppercase italic tracking-widest text-[10px] ${
-              isReq && !item.req.approved_at
-                ? 'bg-white/10 text-white/40 cursor-not-allowed'
-                : isHigh ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-white text-black hover:bg-zinc-200'
+              isHigh ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-white text-black hover:bg-zinc-200'
             }`}
-            title={isReq && !item.req.approved_at ? 'Aguardando aprovação do responsável' : 'Iniciar execução'}
+            title="Iniciar execução"
           >
-            {isReq && !item.req.approved_at ? <Lock size={11} /> : <Play size={11} className="fill-current" />} Iniciar
+            <Play size={11} className="fill-current" /> Iniciar
           </Button>
           {onCancel && (
             <Button size="sm" variant="ghost" onClick={onCancel} className="h-8 w-8 p-0 text-white/40 hover:text-red-500 hover:bg-red-500/10">

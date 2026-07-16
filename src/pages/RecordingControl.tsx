@@ -563,22 +563,29 @@ export default function RecordingControl() {
                               const client = getClient(rec.clientId);
                               const vm = users.find(u => u.id === rec.videomakerId);
                               const status = STATUS_COLORS[rec.status] || STATUS_COLORS.agendada;
+                              const isStorySession = !!rec.prospectName && /Produção de Story/i.test(rec.prospectName);
                               return (
                                 <div
                                   key={rec.id}
                                   draggable={rec.status !== 'concluida'}
                                   onDragStart={e => handleDragStart(e, rec)}
-                                  className={`group relative p-1.5 rounded-lg border text-[10px] cursor-grab active:cursor-grabbing hover:border-primary/40 hover:shadow-md transition-all ${
+                                  className={`group relative p-1.5 rounded-lg border text-[10px] cursor-grab active:cursor-grabbing hover:shadow-md transition-all ${
                                     draggedRecording?.id === rec.id ? 'opacity-50' : ''
-                                  } bg-background`}
+                                  } ${isStorySession
+                                    ? 'border-violet-500/50 bg-gradient-to-br from-violet-500/15 to-purple-500/10 ring-1 ring-violet-500/30 hover:border-violet-500/70 hover:shadow-[0_0_14px_-4px_rgba(139,92,246,0.6)]'
+                                    : 'bg-background hover:border-primary/40'}`}
                                 >
                                   <div className="flex items-center gap-1.5">
-                                    {client && (
+                                    {isStorySession ? (
+                                      <div className="h-5 w-5 rounded-md bg-violet-500/20 ring-1 ring-violet-500/40 flex items-center justify-center shrink-0">
+                                        <Clapperboard size={10} className="text-violet-500" />
+                                      </div>
+                                    ) : client ? (
                                       <ClientLogo client={{ companyName: client.companyName, color: client.color, logoUrl: client.logoUrl }} size="sm" />
-                                    )}
+                                    ) : null}
                                     <div className="flex-1 min-w-0">
-                                      <p className="font-bold truncate leading-tight">
-                                        {rec.prospectName || client?.companyName || 'Cliente'}
+                                      <p className={`font-bold truncate leading-tight ${isStorySession ? 'text-violet-600 dark:text-violet-300' : ''}`}>
+                                        {isStorySession ? 'Produção de Story' : (rec.prospectName || client?.companyName || 'Cliente')}
                                       </p>
                                       <p className="text-muted-foreground truncate opacity-70">
                                         {vm?.displayName || vm?.name || 'Sem VM'}
@@ -603,7 +610,9 @@ export default function RecordingControl() {
                                     </button>
                                   </div>
                                   <div className="flex items-center justify-between mt-1">
-                                    <Badge variant="outline" className="text-[8px] h-3.5 px-1 leading-none">{TYPE_LABELS[rec.type] || rec.type}</Badge>
+                                    <Badge variant="outline" className={`text-[8px] h-3.5 px-1 leading-none ${isStorySession ? 'bg-violet-500/15 text-violet-600 dark:text-violet-300 border-violet-500/40' : ''}`}>
+                                      {isStorySession ? 'STORY' : (TYPE_LABELS[rec.type] || rec.type)}
+                                    </Badge>
                                     <span className={`text-[7px] px-1 py-0.5 rounded font-bold uppercase ${status.bg} ${status.text}`}>{status.label}</span>
                                   </div>
                                 </div>
@@ -1069,6 +1078,7 @@ function RecordingCard({
 }) {
   const status = STATUS_COLORS[recording.status] || STATUS_COLORS.agendada;
   const isCompleted = recording.status === 'concluida';
+  const isStorySession = !!recording.prospectName && /Produção de Story/i.test(recording.prospectName);
 
   return (
     <motion.div
@@ -1083,7 +1093,9 @@ function RecordingCard({
           ? 'border-primary/50 bg-primary/5 ring-2 ring-primary/20 shadow-lg'
           : isCompleted
             ? 'border-border/50 bg-muted/30 opacity-70 cursor-default'
-            : 'border-border bg-background hover:border-primary/40 hover:shadow-xl hover:-translate-y-0.5'
+            : isStorySession
+              ? 'border-violet-500/50 bg-gradient-to-br from-violet-500/15 to-purple-500/10 ring-1 ring-violet-500/30 hover:border-violet-500/70 hover:shadow-[0_0_20px_-4px_rgba(139,92,246,0.6)]'
+              : 'border-border bg-background hover:border-primary/40 hover:shadow-xl hover:-translate-y-0.5'
       }`}
     >
       {/* Delete button */}
@@ -1109,19 +1121,22 @@ function RecordingCard({
       {/* Client info */}
       <div>
         <div className="flex items-center gap-2 mb-2">
-          {client && (
+          {isStorySession ? (
+            <div className="h-7 w-7 rounded-lg bg-violet-500/20 ring-1 ring-violet-500/40 flex items-center justify-center shrink-0">
+              <Clapperboard size={14} className="text-violet-500 drop-shadow-[0_0_4px_rgba(139,92,246,0.6)]" />
+            </div>
+          ) : client ? (
             <ClientLogo
               client={{ companyName: client.companyName, color: client.color, logoUrl: client.logoUrl }}
               size="sm"
             />
-
-          )}
+          ) : null}
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-bold truncate leading-tight">
-              {recording.prospectName || client?.companyName || 'Cliente'}
+            <p className={`text-[11px] font-bold truncate leading-tight ${isStorySession ? 'text-violet-600 dark:text-violet-300' : ''}`}>
+              {isStorySession ? 'Produção de Story' : (recording.prospectName || client?.companyName || 'Cliente')}
             </p>
             <p className="text-[9px] text-muted-foreground truncate opacity-70">
-              {client?.responsiblePerson}
+              {isStorySession ? 'Sessão interna na agência' : client?.responsiblePerson}
             </p>
           </div>
         </div>
@@ -1129,8 +1144,8 @@ function RecordingCard({
 
       {/* Bottom info */}
       <div className="flex items-center justify-between mt-auto">
-        <Badge variant="outline" className="text-[8px] h-4 px-1 leading-none font-medium bg-muted/30">
-          {TYPE_LABELS[recording.type] || recording.type}
+        <Badge variant="outline" className={`text-[8px] h-4 px-1 leading-none font-medium ${isStorySession ? 'bg-violet-500/15 text-violet-600 dark:text-violet-300 border-violet-500/40' : 'bg-muted/30'}`}>
+          {isStorySession ? 'STORY' : (TYPE_LABELS[recording.type] || recording.type)}
         </Badge>
         <div className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${status.bg} ${status.text}`}>
           {status.label}

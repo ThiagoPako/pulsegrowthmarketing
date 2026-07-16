@@ -19,6 +19,9 @@ const VALID_ROLES = new Set([
   'parceiro',
   'fotografo',
   'designer',
+  'copywriter',
+  'gestor_projetos',
+  'socio_gestor',
 ]);
 
 function requireEnv(name, fallback) {

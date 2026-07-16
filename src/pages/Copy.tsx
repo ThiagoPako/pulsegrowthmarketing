@@ -458,7 +458,7 @@ export default function Copy() {
       content_format: requestForm.contentFormat,
       priority: requestForm.priority,
       requested_by: user?.id,
-      requested_by_name: (user as any)?.user_metadata?.name || user?.email || 'Social Media',
+      requested_by_name: users.find(u => u.id === user?.id)?.name || (user as any)?.user_metadata?.name || (user as any)?.name || 'Social Media',
     } as any);
     if (error) { console.error(error); toast.error('Erro ao criar pedido'); return; }
     toast.success('Pedido de roteiro criado');

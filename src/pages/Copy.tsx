@@ -1705,15 +1705,6 @@ export default function Copy() {
             return (
               <div className="space-y-4">
                 <div className="flex items-center gap-2 flex-wrap">
-                  {previewRequest.approved_at ? (
-                    <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-sm bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
-                      <ShieldCheck size={12} /> Aprovado por {previewRequest.approved_by_name || '—'}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-sm bg-yellow-500/15 text-yellow-300 border border-yellow-500/40">
-                      <Lock size={12} /> Aguardando validação do responsável
-                    </span>
-                  )}
                   <span className={`inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-sm ${fmtMeta.badge}`}>
                     <FmtIcon size={12} /> {fmtMeta.label}
                   </span>

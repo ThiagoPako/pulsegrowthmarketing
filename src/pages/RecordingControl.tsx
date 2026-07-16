@@ -742,21 +742,24 @@ export default function RecordingControl() {
         };
 
         const handleFinalize = async () => {
-          if (wizard.mode !== 'avulso' && !wizard.clientId) { toast.error('Selecione um cliente'); return; }
+          if (wizard.mode === 'client' && !wizard.clientId) { toast.error('Selecione um cliente'); return; }
           if (wizard.mode === 'avulso' && !wizard.prospectName.trim()) { toast.error('Informe o nome do prospect'); return; }
-          const conflict = hasConflict(wizard.vmId, wizard.date, wizard.time, undefined, wizard.type, wizard.mode === 'avulso' ? undefined : wizard.clientId, { skipClientDayCheck: true });
+          const isStoryMode = wizard.mode === 'story';
+          const effectiveClientId = wizard.mode === 'client' ? wizard.clientId : undefined;
+          const conflict = hasConflict(wizard.vmId, wizard.date, wizard.time, undefined, isStoryMode ? 'avulso' : wizard.type, effectiveClientId, { skipClientDayCheck: true });
           if (conflict.hasConflict) { toast.error(conflict.message || 'Conflito de horário'); return; }
           setSaving(true);
           const recId = crypto.randomUUID();
           const rec: Recording = {
             id: recId,
-            clientId: wizard.mode === 'avulso' ? '' : wizard.clientId,
+            clientId: wizard.mode === 'client' ? wizard.clientId : '',
             videomakerId: wizard.vmId,
             date: wizard.date,
             startTime: wizard.time,
-            type: wizard.type,
+            type: isStoryMode ? 'avulso' : wizard.type,
             status: 'agendada',
             ...(wizard.mode === 'avulso' ? { prospectName: wizard.prospectName.trim() } : {}),
+            ...(isStoryMode ? { prospectName: '📱 Produção de Story (interno)' } : {}),
           };
           const ok = await addRecording(rec, { skipClientDayCheck: true });
           if (!ok) { setSaving(false); toast.error('Erro ao agendar'); return; }

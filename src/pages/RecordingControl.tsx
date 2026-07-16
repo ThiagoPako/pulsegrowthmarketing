@@ -832,23 +832,32 @@ export default function RecordingControl() {
               <div className="min-h-[220px] py-2">
                 {wizard.step === 'mode' && (
                   <div className="space-y-3">
-                    <p className="text-xs text-muted-foreground">Esta tarefa é para um cliente fixo ou um conteúdo avulso/prospect?</p>
-                    <div className="grid grid-cols-2 gap-3">
+                    <p className="text-xs text-muted-foreground">Que tipo de conteúdo esse slot vai produzir?</p>
+                    <div className="grid grid-cols-3 gap-3">
                       <button
                         type="button"
-                        onClick={() => setWizard(w => ({ ...w, mode: 'client', type: 'extra' }))}
-                        className={`p-5 rounded-xl border-2 text-left transition-all ${wizard.mode === 'client' ? 'border-primary bg-primary/10' : 'border-border hover:border-muted-foreground/40'}`}
+                        onClick={() => setWizard(w => ({ ...w, mode: 'client', type: 'extra', newScriptFormat: 'reels' }))}
+                        className={`p-4 rounded-xl border-2 text-left transition-all ${wizard.mode === 'client' ? 'border-primary bg-primary/10' : 'border-border hover:border-muted-foreground/40'}`}
                       >
-                        <UserIcon size={22} className={wizard.mode === 'client' ? 'text-primary' : 'text-muted-foreground'} />
+                        <UserIcon size={20} className={wizard.mode === 'client' ? 'text-primary' : 'text-muted-foreground'} />
                         <p className="text-sm font-bold mt-2">Cliente Fixo</p>
                         <p className="text-[11px] text-muted-foreground mt-1">Contrato ativo</p>
                       </button>
                       <button
                         type="button"
-                        onClick={() => setWizard(w => ({ ...w, mode: 'avulso', type: 'avulso', clientId: '' }))}
-                        className={`p-5 rounded-xl border-2 text-left transition-all ${wizard.mode === 'avulso' ? 'border-primary bg-primary/10' : 'border-border hover:border-muted-foreground/40'}`}
+                        onClick={() => setWizard(w => ({ ...w, mode: 'story', type: 'extra', newScriptFormat: 'story' }))}
+                        className={`p-4 rounded-xl border-2 text-left transition-all ${wizard.mode === 'story' ? 'border-primary bg-primary/10' : 'border-border hover:border-muted-foreground/40'}`}
                       >
-                        <Sparkles size={22} className={wizard.mode === 'avulso' ? 'text-primary' : 'text-muted-foreground'} />
+                        <Clapperboard size={20} className={wizard.mode === 'story' ? 'text-primary' : 'text-muted-foreground'} />
+                        <p className="text-sm font-bold mt-2">Produção de Story</p>
+                        <p className="text-[11px] text-muted-foreground mt-1">Sessão de stories</p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setWizard(w => ({ ...w, mode: 'avulso', type: 'avulso', clientId: '', newScriptFormat: 'reels' }))}
+                        className={`p-4 rounded-xl border-2 text-left transition-all ${wizard.mode === 'avulso' ? 'border-primary bg-primary/10' : 'border-border hover:border-muted-foreground/40'}`}
+                      >
+                        <Sparkles size={20} className={wizard.mode === 'avulso' ? 'text-primary' : 'text-muted-foreground'} />
                         <p className="text-sm font-bold mt-2">Conteúdo Avulso</p>
                         <p className="text-[11px] text-muted-foreground mt-1">Prospect / one-shot</p>
                       </button>

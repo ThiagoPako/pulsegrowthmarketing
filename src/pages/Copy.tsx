@@ -610,6 +610,7 @@ export default function Copy() {
       toast.success(`Roteiro criado em ${durationLabel}`);
       setActiveSession(null);
       if (sessionKey) localStorage.removeItem(sessionKey);
+      await clearCopyLive();
       setFinalizing(null);
       loadAll(true);
       broadcastChange();

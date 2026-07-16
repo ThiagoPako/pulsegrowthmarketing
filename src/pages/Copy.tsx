@@ -1704,6 +1704,109 @@ export default function Copy() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── PRÉ-VISUALIZAÇÃO / APROVAÇÃO DO PEDIDO ── */}
+      <Dialog open={!!previewRequest} onOpenChange={(open) => !open && setPreviewRequest(null)}>
+        <DialogContent className="max-w-2xl bg-[#0a0a0a] border-white/10 text-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <Eye size={18} className="text-red-500" />
+              <span className="font-black uppercase italic tracking-tight">Prévia do Pedido de Roteiro</span>
+            </DialogTitle>
+          </DialogHeader>
+          {previewRequest && (() => {
+            const c = clientById(previewRequest.client_id);
+            const fmt = (['reels', 'story', 'criativo'].includes(previewRequest.content_format) ? previewRequest.content_format : 'reels') as ScriptContentFormat;
+            const fmtMeta = FORMAT_META[fmt];
+            const FmtIcon = fmtMeta.icon;
+            return (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {previewRequest.approved_at ? (
+                    <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-sm bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
+                      <ShieldCheck size={12} /> Aprovado por {previewRequest.approved_by_name || '—'}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-sm bg-yellow-500/15 text-yellow-300 border border-yellow-500/40">
+                      <Lock size={12} /> Aguardando validação do responsável
+                    </span>
+                  )}
+                  <span className={`inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-sm ${fmtMeta.badge}`}>
+                    <FmtIcon size={12} /> {fmtMeta.label}
+                  </span>
+                  <span className={`text-[10px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-sm ${previewRequest.priority === 'alta' ? 'bg-red-600 text-white' : 'bg-white/10 text-white/70'}`}>
+                    {previewRequest.priority === 'alta' ? 'Prioridade Alta' : 'Prioridade Normal'}
+                  </span>
+                </div>
+
+                <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-md overflow-hidden border border-white/10 bg-zinc-950 flex items-center justify-center shrink-0">
+                    {c ? <ClientLogo client={c as any} size="sm" /> : <FileText size={16} className="text-white/30" />}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-black uppercase tracking-[0.25em] text-white/40">Cliente</p>
+                    <p className="text-sm font-bold text-white truncate">{c?.companyName || 'Sem cliente'}</p>
+                    {previewRequest.requested_by_name && (
+                      <p className="text-[10px] text-white/50 uppercase tracking-widest">Solicitado por {previewRequest.requested_by_name}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[0.3em] text-red-500 mb-1.5">Tema do Roteiro</p>
+                  <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
+                    <p className="text-lg font-black italic uppercase tracking-tight text-white leading-tight whitespace-pre-wrap break-words">
+                      {previewRequest.topic}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[0.3em] text-amber-400 mb-1.5">Observações do Social</p>
+                  <div className="rounded-lg border-l-4 border-amber-500/60 bg-amber-500/[0.05] p-4 min-h-[80px]">
+                    {previewRequest.notes ? (
+                      <p className="text-sm text-white/90 leading-relaxed whitespace-pre-wrap break-words">{previewRequest.notes}</p>
+                    ) : (
+                      <p className="text-sm text-white/40 italic">Sem observações adicionais.</p>
+                    )}
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                  Criado em {new Date(previewRequest.created_at).toLocaleString('pt-BR')}
+                </p>
+              </div>
+            );
+          })()}
+          <DialogFooter className="gap-2 flex-wrap">
+            <Button variant="outline" onClick={() => setPreviewRequest(null)} className="border-white/20 text-white hover:bg-white/10">
+              Fechar
+            </Button>
+            {previewRequest && !previewRequest.approved_at && canApprove && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => rejectRequest(previewRequest)}
+                  className="border-red-500/40 text-red-400 hover:bg-red-500/10 gap-1.5"
+                >
+                  <Trash2 size={14} /> Rejeitar
+                </Button>
+                <Button
+                  onClick={() => approveRequest(previewRequest)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 font-black uppercase italic tracking-widest text-[11px]"
+                >
+                  <ShieldCheck size={14} /> Aprovar e liberar
+                </Button>
+              </>
+            )}
+            {previewRequest && !previewRequest.approved_at && !canApprove && (
+              <span className="text-[11px] text-white/50 italic self-center">
+                Somente o responsável (Gestor/Admin/Copy) pode aprovar este pedido.
+              </span>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       </div>
     </div>
   );

@@ -1518,12 +1518,6 @@ export default function VideomakerDashboard() {
           </Button>
         </div>
 
-        <Button 
-          onClick={() => setManualVideosOpen(true)}
-          className="bg-primary hover:bg-primary/90 gap-2 h-9 text-xs font-bold shadow-lg shadow-primary/20"
-        >
-          <PlusCircle size={16} /> Gravação Independente
-        </Button>
       </div>
 
       {/* Manual Video Modal */}

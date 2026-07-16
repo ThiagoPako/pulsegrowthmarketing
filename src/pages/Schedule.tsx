@@ -145,6 +145,7 @@ export default function Schedule() {
   const [regenLoading, setRegenLoading] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
   const [cancellingRec, setCancellingRec] = useState<Recording | null>(null);
+  const [rescheduleLink, setRescheduleLink] = useState<{ url: string; clientName: string; whatsapp: string } | null>(null);
 
   // Event recordings state
   const [eventRecordings, setEventRecordings] = useState<EventRecording[]>([]);

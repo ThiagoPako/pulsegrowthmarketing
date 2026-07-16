@@ -396,6 +396,7 @@ async function ensureScriptRequestsTable() {
           city TEXT,
           approved_at TIMESTAMPTZ,
           approved_by_name TEXT,
+          reference_link TEXT,
           created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )

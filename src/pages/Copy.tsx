@@ -1047,6 +1047,11 @@ export default function Copy() {
                     <Button onClick={openFinalize} className="bg-white text-black hover:bg-zinc-200 gap-1.5 h-9 font-black uppercase italic tracking-widest text-[10px]">
                       <CheckCircle2 size={12} /> Finalizar
                     </Button>
+                    {activeRequest && (
+                      <Button variant="outline" size="sm" onClick={() => setPreviewRequest(activeRequest)} className="border-white/20 bg-white/5 text-white hover:bg-white/10 gap-1.5 h-8 font-black uppercase italic tracking-widest text-[10px]">
+                        <Eye size={11} /> Ver roteiro
+                      </Button>
+                    )}
                     <Button variant="ghost" size="sm" onClick={cancelSession} className="text-red-400 hover:text-red-300 hover:bg-red-500/10 gap-1.5 h-8 font-black uppercase italic tracking-widest text-[10px]">
                       <Pause size={11} /> Cancelar
                     </Button>

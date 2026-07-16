@@ -776,12 +776,12 @@ export default function RecordingControl() {
 
           // Notify videomaker (best effort)
           try {
-            const clientLabel = wizard.mode === 'avulso' ? wizard.prospectName.trim() : (selectedClient?.companyName || 'Cliente');
-            const kindLabel = isStory ? '📱 Produção de Story' : '🎬 Nova tarefa de gravação';
+            const clientLabel = isStory ? 'Sessão interna na agência' : (wizard.mode === 'avulso' ? wizard.prospectName.trim() : (selectedClient?.companyName || 'Cliente'));
+            const kindLabel = isStory ? '📱 Produção de Story (interno)' : '🎬 Nova tarefa de gravação';
             await (supabase as any).from('notifications').insert({
               user_id: wizard.vmId,
               title: kindLabel,
-              message: `${clientLabel} • ${format(new Date(wizard.date + 'T12:00:00'), "dd/MM", { locale: ptBR })} às ${wizard.time}${wizard.scriptId ? ' • roteiro anexado' : ''}`,
+              message: `${clientLabel} • ${format(new Date(wizard.date + 'T12:00:00'), "dd/MM", { locale: ptBR })} às ${wizard.time}${wizard.scriptId && !isStory ? ' • roteiro anexado' : ''}`,
               type: 'info',
               link: '/videomaker',
             });

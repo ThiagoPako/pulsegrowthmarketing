@@ -157,17 +157,17 @@ export default function Clients() {
 
     if (specialPlan) {
       if (total === 0) {
-        return { ok: false, level: 'error' as const, message: 'Plano Especial ativo mas todas as metas estão em 0. Defina ao menos 1 entrega semanal (reels, criativos ou stories) — caso contrário nenhuma demanda de copy será gerada.' };
+        return { ok: false, level: 'error' as const, message: 'Plano Especial ativo mas todas as metas estão em 0. Defina ao menos 1 entrega mensal (reels, criativos ou stories) — caso contrário nenhuma demanda de copy será gerada.' };
       }
       if (wGoal !== total) {
-        return { ok: false, level: 'warn' as const, message: `Meta Total (${wGoal}) diferente da soma das metas (${total}). Isso pode gerar demandas incoerentes no módulo Copy.` };
+        return { ok: false, level: 'warn' as const, message: `Meta Total (${wGoal * 4}/mês) diferente da soma das metas (${total * 4}/mês). Isso pode gerar demandas incoerentes no módulo Copy.` };
       }
       return { ok: true as const };
     }
 
     if (!planId) {
       if (total > 0) {
-        return { ok: false, level: 'error' as const, message: 'Sem plano selecionado, mas há metas semanais preenchidas. Selecione um plano OU ative "Plano Especial" para justificar essas metas.' };
+        return { ok: false, level: 'error' as const, message: 'Sem plano selecionado, mas há metas mensais preenchidas. Selecione um plano OU ative "Plano Especial" para justificar essas metas.' };
       }
       return { ok: true as const };
     }
@@ -181,7 +181,7 @@ export default function Clients() {
       return {
         ok: false,
         level: 'error' as const,
-        message: `Metas divergem do plano "${plan.name}" (esperado ${expectedReels} reels, ${expectedCre} criativos, ${expectedSto} stories/sem.). Reselecione o plano ou ative "Plano Especial" para editar manualmente.`,
+        message: `Metas divergem do plano "${plan.name}" (esperado ${plan.reels_qty || 0} reels, ${plan.creatives_qty || 0} criativos, ${plan.stories_qty || 0} stories/mês). Reselecione o plano ou ative "Plano Especial" para editar manualmente.`,
       };
     }
     return { ok: true as const };
@@ -1887,37 +1887,56 @@ export default function Clients() {
   );
   };
 
-  const renderStep3 = () => (
+  const renderStep3 = () => {
+    // Entregas exibidas e editadas como MENSAL. Persistência continua em campos semanais (weekly = ceil(monthly/4)).
+    const monthlyReels = (form.weeklyReels ?? 0) * 4;
+    const monthlyCreatives = (form.weeklyCreatives ?? 0) * 4;
+    const monthlyStories = (form.weeklyStories ?? 0) * 4;
+    const monthlyTotal = (form.weeklyGoal ?? 0) * 4;
+    const setMonthly = (patch: Partial<{ reels: number; creatives: number; stories: number; total: number }>) => {
+      setForm(prev => {
+        const next = { ...prev };
+        if (patch.reels !== undefined) next.weeklyReels = Math.ceil(Math.max(0, patch.reels) / 4);
+        if (patch.creatives !== undefined) next.weeklyCreatives = Math.ceil(Math.max(0, patch.creatives) / 4);
+        if (patch.stories !== undefined) next.weeklyStories = Math.ceil(Math.max(0, patch.stories) / 4);
+        if (patch.total !== undefined) next.weeklyGoal = Math.ceil(Math.max(0, patch.total) / 4);
+        return next;
+      });
+    };
+    const planLabel = planId && !specialPlan
+      ? (plans.find(p => p.id === planId)?.name || 'plano')
+      : null;
+    return (
     <div className="space-y-5">
       <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold flex items-center gap-2">
-            <Target size={16} className="text-primary" /> Metas de Entrega Semanal
+            <Target size={16} className="text-primary" /> Metas de Entrega Mensal
           </p>
-          {planId && !specialPlan && (
+          {planLabel && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-              Definido pelo plano
+              Definido pelo plano · {planLabel}
             </span>
           )}
         </div>
         <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-600 space-y-1">
           <p className="font-semibold">⚠️ Como funciona</p>
           <p className="text-muted-foreground">
-            Selecione um plano abaixo para preencher automaticamente, ou ative <strong>Plano Especial</strong> para definir metas personalizadas combinadas com o cliente.
+            Selecione um plano abaixo para preencher automaticamente as entregas mensais, ou ative <strong>Plano Especial</strong> para editar manualmente a meta mensal deste cliente.
           </p>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="space-y-1">
-            <Label>Meta Reels/Sem.</Label>
-            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={form.weeklyReels ?? 0} onChange={e => setForm({ ...form, weeklyReels: Number(e.target.value) })} />
+            <Label>Reels/Mês</Label>
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyReels} onChange={e => setMonthly({ reels: Number(e.target.value) })} />
           </div>
           <div className="space-y-1">
-            <Label>Meta Criativos/Sem.</Label>
-            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={form.weeklyCreatives ?? 0} onChange={e => setForm({ ...form, weeklyCreatives: Number(e.target.value) })} />
+            <Label>Criativos/Mês</Label>
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyCreatives} onChange={e => setMonthly({ creatives: Number(e.target.value) })} />
           </div>
           <div className="space-y-1">
-            <Label>Meta Stories/Sem.</Label>
-            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={form.weeklyStories ?? 0} onChange={e => setForm({ ...form, weeklyStories: Number(e.target.value) })} />
+            <Label>Stories/Mês</Label>
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyStories} onChange={e => setMonthly({ stories: Number(e.target.value) })} />
           </div>
           <div className="space-y-1">
             <Label>Limite Artes/Mês</Label>
@@ -1931,8 +1950,8 @@ export default function Clients() {
             <p className="text-[10px] text-muted-foreground">Vazio = sem limite de solicitações</p>
           </div>
           <div className="space-y-1">
-            <Label>Meta Total/Sem.</Label>
-            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={form.weeklyGoal ?? 0} onChange={e => setForm({ ...form, weeklyGoal: Number(e.target.value) })} />
+            <Label>Meta Total/Mês</Label>
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyTotal} onChange={e => setMonthly({ total: Number(e.target.value) })} />
           </div>
         </div>
         {!planTargetsValidation.ok && (
@@ -1968,7 +1987,7 @@ export default function Clients() {
               } else if (!planId) {
                 // Desativando sem plano definido: zera metas para evitar geração de copy sem base contratual
                 setForm(prev => ({ ...prev, weeklyReels: 0, weeklyCreatives: 0, weeklyStories: 0, weeklyGoal: 0 }));
-                toast.info('Metas semanais zeradas — selecione um plano para gerar demandas de copy.');
+                toast.info('Metas mensais zeradas — selecione um plano para gerar demandas de copy.');
               }
             }} />
             <Label className="text-xs cursor-pointer">Plano Especial (metas personalizadas)</Label>
@@ -1976,7 +1995,7 @@ export default function Clients() {
         </div>
         {specialPlan ? (
           <div className="p-3 rounded-lg bg-violet-500/10 border border-violet-500/20 text-xs text-violet-700 dark:text-violet-300">
-            🎯 <strong>Plano Especial ativo.</strong> Preencha as metas semanais acima manualmente conforme o combinado com o cliente.
+            🎯 <strong>Plano Especial ativo.</strong> Edite as metas mensais acima manualmente conforme o combinado com o cliente.
           </div>
         ) : (
         <div className="grid grid-cols-2 gap-3">
@@ -2036,6 +2055,9 @@ export default function Clients() {
 
      </div>
    );
+   };
+
+
 
   const renderStep4 = () => (
     <div className="space-y-5">
@@ -2301,8 +2323,9 @@ export default function Clients() {
                     )}
                     {!isDesignerOnly && (
                       <>
-                        {(c.weeklyReels ?? 0) > 0 && <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">{c.weeklyReels} reels</Badge>}
-                        {(c.weeklyCreatives ?? 0) > 0 && <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">{c.weeklyCreatives} criativos</Badge>}
+                        {(c.weeklyReels ?? 0) > 0 && <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">{(c.weeklyReels ?? 0) * 4} reels/mês</Badge>}
+                        {(c.weeklyCreatives ?? 0) > 0 && <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">{(c.weeklyCreatives ?? 0) * 4} criativos/mês</Badge>}
+                        {(c.weeklyStories ?? 0) > 0 && <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">{(c.weeklyStories ?? 0) * 4} stories/mês</Badge>}
                         {c.acceptsExtra && <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">Extra{c.extraClientAppears ? ' · Aparece' : ''}</Badge>}
                         {c.fullShiftRecording && <Badge className="text-[10px] px-1.5 py-0.5 bg-amber-500/20 text-amber-600 border-amber-500/30">⏱️ Turno {c.preferredShift === 'tarde' ? 'Tarde' : 'Manhã'}</Badge>}
                       </>

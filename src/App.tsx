@@ -254,7 +254,7 @@ function AppRoutes() {
         <Route path="/campanhas" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
         <Route path="/campanhas/:id" element={<ProtectedRoute><CampaignDetail /></ProtectedRoute>} />
         <Route path="/r/:slug" element={<ShortLinkRedirect />} />
-        <Route path="/regulamentos" element={<ProtectedRoute><Regulations /></ProtectedRoute>} />
+        <Route path="/reagendar/:token" element={<Suspense fallback={<PageLoader />}><PublicReschedule /></Suspense>} />
         <Route path="/regulamento/:slug" element={<RegulationRedirect />} />
 
         <Route path="/tv" element={<Suspense fallback={<PageLoader />}><TvDashboard /></Suspense>} />

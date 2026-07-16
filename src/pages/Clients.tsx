@@ -2055,6 +2055,9 @@ export default function Clients() {
 
      </div>
    );
+   };
+
+
 
   const renderStep4 = () => (
     <div className="space-y-5">

@@ -101,6 +101,7 @@ const CLIENT_PORTAL_BASE_FIELDS = [
 let clientsArtRequestsLimitColumnPromise;
 let proposalTablesEnsuredPromise;
 let storyEditingSessionsEnsuredPromise;
+let scriptRequestsEnsuredPromise;
 const tableJsonColumnsPromiseCache = new Map();
 const SCHEMA_CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -374,6 +375,83 @@ async function ensureStoryEditingSessionsTable() {
 
 ensureStoryEditingSessionsTable().catch((error) => {
   console.error('Failed to ensure story editing sessions table:', error);
+});
+
+async function ensureScriptRequestsTable() {
+  if (!scriptRequestsEnsuredPromise) {
+    scriptRequestsEnsuredPromise = (async () => {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS script_requests (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+          topic TEXT NOT NULL,
+          notes TEXT,
+          content_format TEXT NOT NULL DEFAULT 'reels',
+          status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','in_progress','done','cancelled')),
+          priority TEXT NOT NULL DEFAULT 'alta' CHECK (priority IN ('alta','normal')),
+          requested_by UUID,
+          requested_by_name TEXT,
+          fulfilled_script_id UUID REFERENCES scripts(id) ON DELETE SET NULL,
+          fulfilled_at TIMESTAMPTZ,
+          city TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+
+      const columns = await getExistingColumns('script_requests');
+      const alterClauses = [];
+      if (!columns.has('notes')) alterClauses.push('ADD COLUMN notes TEXT');
+      if (!columns.has('content_format')) alterClauses.push(`ADD COLUMN content_format TEXT NOT NULL DEFAULT 'reels'`);
+      if (!columns.has('status')) alterClauses.push(`ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'`);
+      if (!columns.has('priority')) alterClauses.push(`ADD COLUMN priority TEXT NOT NULL DEFAULT 'alta'`);
+      if (!columns.has('requested_by')) alterClauses.push('ADD COLUMN requested_by UUID');
+      if (!columns.has('requested_by_name')) alterClauses.push('ADD COLUMN requested_by_name TEXT');
+      if (!columns.has('fulfilled_script_id')) alterClauses.push('ADD COLUMN fulfilled_script_id UUID REFERENCES scripts(id) ON DELETE SET NULL');
+      if (!columns.has('fulfilled_at')) alterClauses.push('ADD COLUMN fulfilled_at TIMESTAMPTZ');
+      if (!columns.has('city')) alterClauses.push('ADD COLUMN city TEXT');
+      if (!columns.has('updated_at')) alterClauses.push('ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT now()');
+
+      if (alterClauses.length > 0) {
+        await pool.query(`ALTER TABLE script_requests ${alterClauses.join(', ')}`).then(() => {
+          tableColumnsPromiseCache.delete('script_requests');
+          _cityColumnCache.delete('script_requests');
+        }).catch((error) => {
+          if (error?.code === '42501' || /must be owner|permission denied/i.test(error?.message || '')) {
+            console.warn('[script_requests] Skipping optional column sync due to table ownership:', error.message);
+            return;
+          }
+          throw error;
+        });
+      }
+
+      const indexStatements = [
+        `CREATE INDEX IF NOT EXISTS idx_script_requests_status ON script_requests(status)`,
+        `CREATE INDEX IF NOT EXISTS idx_script_requests_client_id ON script_requests(client_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_script_requests_created_at ON script_requests(created_at DESC)`,
+        `CREATE INDEX IF NOT EXISTS idx_script_requests_city ON script_requests(city)`,
+      ];
+
+      for (const statement of indexStatements) {
+        await pool.query(statement).catch((error) => {
+          if (error?.code === '42501' || /must be owner|permission denied/i.test(error?.message || '')) {
+            console.warn('[script_requests] Skipping index creation due to table ownership:', error.message);
+            return;
+          }
+          throw error;
+        });
+      }
+    })().catch((error) => {
+      scriptRequestsEnsuredPromise = null;
+      throw error;
+    });
+  }
+
+  return scriptRequestsEnsuredPromise;
+}
+
+ensureScriptRequestsTable().catch((error) => {
+  console.error('Failed to ensure script requests table:', error);
 });
 
 // ─── JWT Config ─────────────────────────────────────────────
@@ -4586,7 +4664,7 @@ const ALLOWED_TABLES = [
   'training_tracks','training_modules','training_lessons','user_training_progress',
   'user_permissions','login_logs',
   'campaigns','campaign_slots',
-  'story_editing_sessions',
+  'story_editing_sessions','script_requests',
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -4615,7 +4693,7 @@ const TABLES_WITH_CITY = new Set([
   'company_settings','whatsapp_config','payment_config',
   'crm_leads','crm_notes','goals','notifications',
   'plans',
-  'story_editing_sessions',
+  'story_editing_sessions','script_requests',
 ]);
 
 // Cache de quais tabelas realmente possuem a coluna `city` no schema atual.
@@ -4805,6 +4883,10 @@ app.post('/api/db/query', async (req, res) => {
 
     if (safeTable === 'story_editing_sessions') {
       await ensureStoryEditingSessionsTable();
+    }
+
+    if (safeTable === 'script_requests') {
+      await ensureScriptRequestsTable();
     }
 
     // Multi-city: resolve cidade ativa e prepara flag de scoping

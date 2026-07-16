@@ -7209,7 +7209,41 @@ app.get('/api/tv-dashboard', async (req, res) => {
       console.warn('[tv-dashboard] Failed to load story_editing_sessions:', error?.message || error);
     }
 
-    res.json({ members, todaySchedule, editingPipeline, designPipeline, todayPosts, weekPosts, seasonalSlides, activeRecordingIds, storyEditingSessions, updatedAt: new Date().toISOString() });
+    // Copy sessions (copywriters executando roteiros agora)
+    let copyActiveSessions = [];
+    try {
+      await ensureCopyActiveSessionsTable();
+      const { rows } = await pool.query(`
+        SELECT s.id, s.copywriter_id, s.copywriter_name, s.task_id, s.request_id,
+               s.client_id, s.topic, s.content_format, s.batch_size, s.started_at,
+               p.name AS profile_name, p.avatar_url AS copywriter_avatar,
+               c.name AS client_name, c.logo_url AS client_logo, c.brand_color AS client_color
+        FROM copy_active_sessions s
+        LEFT JOIN profiles p ON p.id = s.copywriter_id
+        LEFT JOIN clients c ON c.id = s.client_id
+        ORDER BY s.started_at ASC
+      `);
+      copyActiveSessions = rows.map(r => ({
+        id: r.id,
+        copywriterId: r.copywriter_id,
+        copywriterName: r.copywriter_name || r.profile_name || 'Copywriter',
+        copywriterAvatar: r.copywriter_avatar,
+        taskId: r.task_id,
+        requestId: r.request_id,
+        clientId: r.client_id,
+        clientName: r.client_name,
+        clientLogo: r.client_logo,
+        clientColor: r.client_color,
+        topic: r.topic,
+        contentFormat: r.content_format,
+        batchSize: r.batch_size || 0,
+        startedAt: r.started_at,
+      }));
+    } catch (error) {
+      console.warn('[tv-dashboard] Failed to load copy_active_sessions:', error?.message || error);
+    }
+
+    res.json({ members, todaySchedule, editingPipeline, designPipeline, todayPosts, weekPosts, seasonalSlides, activeRecordingIds, storyEditingSessions, copyActiveSessions, updatedAt: new Date().toISOString() });
   } catch (err) {
     console.error('[tv-dashboard] Error at stage:', stage, err);
     res.json({ members: [], todaySchedule: [], editingPipeline: [], designPipeline: [], todayPosts: [], weekPosts: [], seasonalSlides: [], activeRecordingIds: [], updatedAt: new Date().toISOString(), error: 'fallback' });

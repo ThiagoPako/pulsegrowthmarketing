@@ -905,6 +905,16 @@ export default function Copy() {
             </span>
             <span className={`text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm ${tagColor}`}>{tagLabel}</span>
             {isReq && <span className="text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm bg-amber-500/15 text-amber-300 border border-amber-500/30">Briefing Social</span>}
+            {isReq && !item.req.approved_at && (
+              <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm bg-yellow-500/15 text-yellow-300 border border-yellow-500/40">
+                <Lock size={9} /> Aguarda aprovação
+              </span>
+            )}
+            {isReq && item.req.approved_at && (
+              <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
+                <ShieldCheck size={9} /> Aprovado
+              </span>
+            )}
           </div>
           <p className="text-[12px] font-black uppercase tracking-tight text-white/95 truncate" title={title}>{title}</p>
           <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40 truncate">

@@ -16,7 +16,7 @@ import {
   Play, Pause, CheckCircle2, Flame, FileText, Clock, User as UserIcon,
   PenLine, Sparkles, PlusCircle, AlertTriangle, TrendingUp, Package,
   Send, Trash2, ListChecks, Target, CalendarDays, GripVertical,
-  Video, Camera, Image as ImageIcon
+  Video, Camera, Image as ImageIcon, Eye, ShieldCheck, Lock
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import ClientLogo from '@/components/ClientLogo';

@@ -1976,7 +1976,9 @@ export default function Copy() {
                 {previewRequest.reference_link && (
                   <div>
                     <p className="text-[9px] font-black uppercase tracking-[0.3em] text-cyan-400 mb-1.5">Vídeo de Referência</p>
-                    <ReferenceEmbed url={previewRequest.reference_link} />
+                    <div className="max-w-[280px]">
+                      <ReferenceEmbed url={previewRequest.reference_link} />
+                    </div>
                   </div>
                 )}
 
@@ -1988,7 +1990,8 @@ export default function Copy() {
               </div>
             );
           })()}
-          <DialogFooter className="gap-2 flex-wrap">
+          </div>
+          <DialogFooter className="gap-2 flex-wrap px-6 py-4 border-t border-white/10 shrink-0 bg-[#0a0a0a]">
             <Button variant="outline" onClick={() => setPreviewRequest(null)} className="border-white/20 text-white hover:bg-white/10">
               Fechar
             </Button>
@@ -2012,6 +2015,7 @@ export default function Copy() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
 
       {/* ── DIALOG: Roteiros enviados pela Copy ── */}
       <SentScriptsDialog

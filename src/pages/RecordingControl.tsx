@@ -799,7 +799,8 @@ export default function RecordingControl() {
             <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <Pin size={18} className="text-primary" /> Fixar tarefa de gravação
+                  {isStory ? <Clapperboard size={18} className="text-primary" /> : <Pin size={18} className="text-primary" />}
+                  {isStory ? 'Produção de Story' : 'Fixar tarefa de gravação'}
                 </DialogTitle>
                 <DialogDescription>
                   {vm?.displayName || vm?.name || 'Videomaker'} • {dateLbl} • {wizard.time}

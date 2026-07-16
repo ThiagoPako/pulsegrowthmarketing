@@ -388,6 +388,72 @@ ensureStoryEditingSessionsTable().catch((error) => {
   console.error('Failed to ensure story editing sessions table:', error);
 });
 
+async function ensureCopyActiveSessionsTable() {
+  if (!copyActiveSessionsEnsuredPromise) {
+    copyActiveSessionsEnsuredPromise = (async () => {
+      const { rows: tableRows } = await pool.query(
+        `SELECT 1 FROM information_schema.tables
+          WHERE table_schema='public' AND table_name='copy_active_sessions' LIMIT 1`
+      );
+      if (tableRows.length === 0) {
+        await pool.query(`
+          CREATE TABLE copy_active_sessions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            copywriter_id UUID NOT NULL,
+            copywriter_name TEXT,
+            task_id UUID,
+            request_id UUID,
+            client_id UUID,
+            topic TEXT,
+            content_format TEXT,
+            batch_size INTEGER NOT NULL DEFAULT 0,
+            started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            city TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )
+        `);
+      }
+      const columns = await getExistingColumns('copy_active_sessions');
+      const alter = [];
+      if (!columns.has('copywriter_name')) alter.push('ADD COLUMN copywriter_name TEXT');
+      if (!columns.has('task_id')) alter.push('ADD COLUMN task_id UUID');
+      if (!columns.has('request_id')) alter.push('ADD COLUMN request_id UUID');
+      if (!columns.has('client_id')) alter.push('ADD COLUMN client_id UUID');
+      if (!columns.has('topic')) alter.push('ADD COLUMN topic TEXT');
+      if (!columns.has('content_format')) alter.push('ADD COLUMN content_format TEXT');
+      if (!columns.has('batch_size')) alter.push('ADD COLUMN batch_size INTEGER NOT NULL DEFAULT 0');
+      if (!columns.has('city')) alter.push('ADD COLUMN city TEXT');
+      if (!columns.has('updated_at')) alter.push('ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT now()');
+      if (alter.length > 0) {
+        await pool.query(`ALTER TABLE copy_active_sessions ${alter.join(', ')}`).then(() => {
+          tableColumnsPromiseCache.delete('copy_active_sessions');
+        }).catch((error) => {
+          if (error?.code === '42501' || /must be owner|permission denied/i.test(error?.message || '')) {
+            console.warn('[copy_active_sessions] Skipping column sync due to ownership:', error.message);
+            return;
+          }
+          throw error;
+        });
+      }
+      await pool.query(
+        `CREATE INDEX IF NOT EXISTS idx_copy_sessions_copywriter ON copy_active_sessions(copywriter_id)`
+      ).catch(() => {});
+      await pool.query(
+        `CREATE UNIQUE INDEX IF NOT EXISTS uniq_copy_sessions_active ON copy_active_sessions(copywriter_id)`
+      ).catch(() => {});
+    })().catch((error) => {
+      copyActiveSessionsEnsuredPromise = null;
+      throw error;
+    });
+  }
+  return copyActiveSessionsEnsuredPromise;
+}
+
+ensureCopyActiveSessionsTable().catch((error) => {
+  console.error('Failed to ensure copy active sessions table:', error);
+});
+
 async function ensureScriptRequestsTable() {
   if (!scriptRequestsEnsuredPromise) {
     scriptRequestsEnsuredPromise = (async () => {

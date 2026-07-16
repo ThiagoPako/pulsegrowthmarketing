@@ -1987,7 +1987,7 @@ export default function Clients() {
               } else if (!planId) {
                 // Desativando sem plano definido: zera metas para evitar geração de copy sem base contratual
                 setForm(prev => ({ ...prev, weeklyReels: 0, weeklyCreatives: 0, weeklyStories: 0, weeklyGoal: 0 }));
-                toast.info('Metas semanais zeradas — selecione um plano para gerar demandas de copy.');
+                toast.info('Metas mensais zeradas — selecione um plano para gerar demandas de copy.');
               }
             }} />
             <Label className="text-xs cursor-pointer">Plano Especial (metas personalizadas)</Label>

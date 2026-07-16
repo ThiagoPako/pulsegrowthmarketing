@@ -394,6 +394,8 @@ async function ensureScriptRequestsTable() {
           fulfilled_script_id UUID REFERENCES scripts(id) ON DELETE SET NULL,
           fulfilled_at TIMESTAMPTZ,
           city TEXT,
+          approved_at TIMESTAMPTZ,
+          approved_by_name TEXT,
           created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )

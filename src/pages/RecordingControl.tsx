@@ -1069,6 +1069,7 @@ function RecordingCard({
 }) {
   const status = STATUS_COLORS[recording.status] || STATUS_COLORS.agendada;
   const isCompleted = recording.status === 'concluida';
+  const isStorySession = !!recording.prospectName && /Produção de Story/i.test(recording.prospectName);
 
   return (
     <motion.div
@@ -1083,7 +1084,9 @@ function RecordingCard({
           ? 'border-primary/50 bg-primary/5 ring-2 ring-primary/20 shadow-lg'
           : isCompleted
             ? 'border-border/50 bg-muted/30 opacity-70 cursor-default'
-            : 'border-border bg-background hover:border-primary/40 hover:shadow-xl hover:-translate-y-0.5'
+            : isStorySession
+              ? 'border-violet-500/50 bg-gradient-to-br from-violet-500/15 to-purple-500/10 ring-1 ring-violet-500/30 hover:border-violet-500/70 hover:shadow-[0_0_20px_-4px_rgba(139,92,246,0.6)]'
+              : 'border-border bg-background hover:border-primary/40 hover:shadow-xl hover:-translate-y-0.5'
       }`}
     >
       {/* Delete button */}

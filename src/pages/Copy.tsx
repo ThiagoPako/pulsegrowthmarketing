@@ -399,6 +399,7 @@ export default function Copy() {
     const session = { taskId: task.id, startedAt: Date.now() };
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
+    writeCopyLive({ taskId: task.id, clientId: task.client_id, topic: task.title, contentFormat: task.content_type });
     toast.success(`Executando: ${task.title}`);
     broadcastChange();
   };
@@ -409,6 +410,7 @@ export default function Copy() {
     const session = { batchTaskIds: batchTasks.map(t => t.id), startedAt: Date.now() };
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
+    writeCopyLive({ batchTaskIds: session.batchTaskIds, clientId: batchTasks[0]?.client_id, topic: `Lote de ${batchTasks.length} stories`, contentFormat: 'story' });
     toast.success(`Executando lote de ${batchTasks.length} stories`);
     broadcastChange();
   };
@@ -419,6 +421,7 @@ export default function Copy() {
     const session = { batchTaskIds: batchTasks.map(t => t.id), startedAt: Date.now() };
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
+    writeCopyLive({ batchTaskIds: session.batchTaskIds, clientId: batchTasks[0]?.client_id, topic: `Lote de ${batchTasks.length} stories`, contentFormat: 'story' });
     setBatchForms(batchTasks.map(t => ({ title: t.title, content: '', caption: '' })));
     setFinalizing({ batch: batchTasks });
     broadcastChange();
@@ -429,6 +432,7 @@ export default function Copy() {
     const session = { taskId: task.id, startedAt: Date.now() };
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
+    writeCopyLive({ taskId: task.id, clientId: task.client_id, topic: task.title, contentFormat: task.content_type });
     setForm({
       title: task.title,
       videoType: 'vendas',
@@ -445,6 +449,7 @@ export default function Copy() {
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
     await supabase.from('script_requests').update({ status: 'in_progress' } as any).eq('id', req.id);
+    writeCopyLive({ requestId: req.id, clientId: req.client_id, topic: req.topic, contentFormat: req.content_format });
     toast.success(`Executando pedido: ${req.topic}`);
     broadcastChange();
     loadAll(true);
@@ -479,6 +484,7 @@ export default function Copy() {
     }
     setActiveSession(null);
     if (sessionKey) localStorage.removeItem(sessionKey);
+    await clearCopyLive();
     broadcastChange();
     loadAll(true);
   };

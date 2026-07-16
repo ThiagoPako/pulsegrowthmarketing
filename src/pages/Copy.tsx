@@ -232,6 +232,44 @@ export default function Copy() {
   const sessionKey = user ? `copy_active_session_${user.id}` : null;
   const channelRef = useRef<any>(null);
 
+  // ── Sincroniza sessão ativa da copy com o banco (para o painel de TV) ──
+  const writeCopyLive = async (payload: {
+    taskId?: string;
+    requestId?: string;
+    batchTaskIds?: string[];
+    clientId?: string | null;
+    topic?: string | null;
+    contentFormat?: string | null;
+  }) => {
+    if (!user?.id) return;
+    try {
+      const copywriterName =
+        users.find(u => u.id === user.id)?.name ||
+        (user as any)?.user_metadata?.name ||
+        (user as any)?.name ||
+        (user as any)?.email ||
+        'Copywriter';
+      await supabase.from('copy_active_sessions').delete().eq('copywriter_id', user.id);
+      await supabase.from('copy_active_sessions').insert({
+        copywriter_id: user.id,
+        copywriter_name: copywriterName,
+        task_id: payload.taskId || null,
+        request_id: payload.requestId || null,
+        client_id: payload.clientId || null,
+        topic: payload.topic || null,
+        content_format: payload.contentFormat || null,
+        batch_size: payload.batchTaskIds?.length || 0,
+        started_at: new Date().toISOString(),
+      } as any);
+    } catch (e) { console.warn('writeCopyLive fail', e); }
+  };
+
+  const clearCopyLive = async () => {
+    if (!user?.id) return;
+    try { await supabase.from('copy_active_sessions').delete().eq('copywriter_id', user.id); }
+    catch (e) { console.warn('clearCopyLive fail', e); }
+  };
+
   useEffect(() => {
     if (!sessionKey) return;
     const raw = localStorage.getItem(sessionKey);

@@ -41,6 +41,7 @@ interface ScriptRequest {
   content_format: string;
   status: 'pending' | 'in_progress' | 'done' | 'cancelled';
   priority: 'alta' | 'normal';
+  requested_by: string | null;
   requested_by_name: string | null;
   fulfilled_script_id: string | null;
   fulfilled_at: string | null;

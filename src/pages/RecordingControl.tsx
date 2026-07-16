@@ -856,7 +856,7 @@ export default function RecordingControl() {
                       >
                         <Clapperboard size={20} className={wizard.mode === 'story' ? 'text-primary' : 'text-muted-foreground'} />
                         <p className="text-sm font-bold mt-2">Produção de Story</p>
-                        <p className="text-[11px] text-muted-foreground mt-1">Sessão de stories</p>
+                        <p className="text-[11px] text-muted-foreground mt-1">Bloqueio interno na agência</p>
                       </button>
                       <button
                         type="button"

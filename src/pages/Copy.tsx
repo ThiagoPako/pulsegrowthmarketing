@@ -16,7 +16,7 @@ import {
   Play, Pause, CheckCircle2, Flame, FileText, Clock, User as UserIcon,
   PenLine, Sparkles, PlusCircle, AlertTriangle, TrendingUp, Package,
   Send, Trash2, ListChecks, Target, CalendarDays, GripVertical,
-  Video, Camera, Image as ImageIcon
+  Video, Camera, Image as ImageIcon, Eye, ShieldCheck, Lock
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import ClientLogo from '@/components/ClientLogo';
@@ -44,6 +44,8 @@ interface ScriptRequest {
   requested_by_name: string | null;
   fulfilled_script_id: string | null;
   fulfilled_at: string | null;
+  approved_at: string | null;
+  approved_by_name: string | null;
   created_at: string;
 }
 
@@ -71,6 +73,8 @@ export default function Copy() {
   const [batchForms, setBatchForms] = useState<{ title: string; content: string; caption: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
+  const [previewRequest, setPreviewRequest] = useState<ScriptRequest | null>(null);
+  const canApprove = ['admin', 'gestor_projetos', 'socio_gestor', 'copywriter'].includes(((user as any)?.role) || '');
   const [requestForm, setRequestForm] = useState({
     clientId: '',
     topic: '',
@@ -269,6 +273,11 @@ export default function Copy() {
 
   const startRequest = async (req: ScriptRequest) => {
     if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }
+    if (!req.approved_at) {
+      toast.error('Pedido aguardando aprovação do responsável');
+      setPreviewRequest(req);
+      return;
+    }
     const session = { requestId: req.id, startedAt: Date.now() };
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
@@ -276,6 +285,28 @@ export default function Copy() {
     toast.success(`Executando pedido: ${req.topic}`);
     broadcastChange();
     loadAll(true);
+  };
+
+  const approveRequest = async (req: ScriptRequest) => {
+    const approverName = ((user as any)?.name) || ((user as any)?.user_metadata?.name) || user?.email || 'Responsável';
+    const { error } = await supabase.from('script_requests').update({
+      approved_at: new Date().toISOString(),
+      approved_by_name: approverName,
+    } as any).eq('id', req.id);
+    if (error) { console.error(error); toast.error('Erro ao aprovar pedido'); return; }
+    toast.success('Pedido aprovado — liberado para execução');
+    setPreviewRequest(null);
+    loadAll(true);
+    broadcastChange();
+  };
+
+  const rejectRequest = async (req: ScriptRequest) => {
+    if (!confirm('Rejeitar este pedido? Ele será cancelado.')) return;
+    await supabase.from('script_requests').update({ status: 'cancelled' } as any).eq('id', req.id);
+    toast.success('Pedido rejeitado');
+    setPreviewRequest(null);
+    loadAll(true);
+    broadcastChange();
   };
 
   const cancelSession = async () => {
@@ -874,6 +905,16 @@ export default function Copy() {
             </span>
             <span className={`text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm ${tagColor}`}>{tagLabel}</span>
             {isReq && <span className="text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm bg-amber-500/15 text-amber-300 border border-amber-500/30">Briefing Social</span>}
+            {isReq && !item.req.approved_at && (
+              <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm bg-yellow-500/15 text-yellow-300 border border-yellow-500/40">
+                <Lock size={9} /> Aguarda aprovação
+              </span>
+            )}
+            {isReq && item.req.approved_at && (
+              <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
+                <ShieldCheck size={9} /> Aprovado
+              </span>
+            )}
           </div>
           <p className="text-[12px] font-black uppercase tracking-tight text-white/95 truncate" title={title}>{title}</p>
           <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40 truncate">
@@ -888,15 +929,29 @@ export default function Copy() {
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
+          {isReq && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setPreviewRequest(item.req)}
+              className="h-8 w-8 p-0 text-white/60 hover:text-white hover:bg-white/10 border border-white/10"
+              title="Pré-visualizar pedido"
+            >
+              <Eye size={13} />
+            </Button>
+          )}
           <Button
             size="sm"
             onClick={onStart}
-            disabled={isBusy}
+            disabled={isBusy || (isReq && !item.req.approved_at)}
             className={`h-8 px-3 gap-1.5 font-black uppercase italic tracking-widest text-[10px] ${
-              isHigh ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-white text-black hover:bg-zinc-200'
+              isReq && !item.req.approved_at
+                ? 'bg-white/10 text-white/40 cursor-not-allowed'
+                : isHigh ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-white text-black hover:bg-zinc-200'
             }`}
+            title={isReq && !item.req.approved_at ? 'Aguardando aprovação do responsável' : 'Iniciar execução'}
           >
-            <Play size={11} className="fill-current" /> Iniciar
+            {isReq && !item.req.approved_at ? <Lock size={11} /> : <Play size={11} className="fill-current" />} Iniciar
           </Button>
           {onCancel && (
             <Button size="sm" variant="ghost" onClick={onCancel} className="h-8 w-8 p-0 text-white/40 hover:text-red-500 hover:bg-red-500/10">
@@ -1646,6 +1701,109 @@ export default function Copy() {
             <Button onClick={saveScript} disabled={saving} className="gap-1.5">
               <CheckCircle2 size={14} /> {saving ? 'Salvando...' : 'Salvar roteiro'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── PRÉ-VISUALIZAÇÃO / APROVAÇÃO DO PEDIDO ── */}
+      <Dialog open={!!previewRequest} onOpenChange={(open) => !open && setPreviewRequest(null)}>
+        <DialogContent className="max-w-2xl bg-[#0a0a0a] border-white/10 text-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <Eye size={18} className="text-red-500" />
+              <span className="font-black uppercase italic tracking-tight">Prévia do Pedido de Roteiro</span>
+            </DialogTitle>
+          </DialogHeader>
+          {previewRequest && (() => {
+            const c = clientById(previewRequest.client_id);
+            const fmt = (['reels', 'story', 'criativo'].includes(previewRequest.content_format) ? previewRequest.content_format : 'reels') as ScriptContentFormat;
+            const fmtMeta = FORMAT_META[fmt];
+            const FmtIcon = fmtMeta.icon;
+            return (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {previewRequest.approved_at ? (
+                    <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-sm bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
+                      <ShieldCheck size={12} /> Aprovado por {previewRequest.approved_by_name || '—'}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-sm bg-yellow-500/15 text-yellow-300 border border-yellow-500/40">
+                      <Lock size={12} /> Aguardando validação do responsável
+                    </span>
+                  )}
+                  <span className={`inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-sm ${fmtMeta.badge}`}>
+                    <FmtIcon size={12} /> {fmtMeta.label}
+                  </span>
+                  <span className={`text-[10px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-sm ${previewRequest.priority === 'alta' ? 'bg-red-600 text-white' : 'bg-white/10 text-white/70'}`}>
+                    {previewRequest.priority === 'alta' ? 'Prioridade Alta' : 'Prioridade Normal'}
+                  </span>
+                </div>
+
+                <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-md overflow-hidden border border-white/10 bg-zinc-950 flex items-center justify-center shrink-0">
+                    {c ? <ClientLogo client={c as any} size="sm" /> : <FileText size={16} className="text-white/30" />}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-black uppercase tracking-[0.25em] text-white/40">Cliente</p>
+                    <p className="text-sm font-bold text-white truncate">{c?.companyName || 'Sem cliente'}</p>
+                    {previewRequest.requested_by_name && (
+                      <p className="text-[10px] text-white/50 uppercase tracking-widest">Solicitado por {previewRequest.requested_by_name}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[0.3em] text-red-500 mb-1.5">Tema do Roteiro</p>
+                  <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
+                    <p className="text-lg font-black italic uppercase tracking-tight text-white leading-tight whitespace-pre-wrap break-words">
+                      {previewRequest.topic}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[0.3em] text-amber-400 mb-1.5">Observações do Social</p>
+                  <div className="rounded-lg border-l-4 border-amber-500/60 bg-amber-500/[0.05] p-4 min-h-[80px]">
+                    {previewRequest.notes ? (
+                      <p className="text-sm text-white/90 leading-relaxed whitespace-pre-wrap break-words">{previewRequest.notes}</p>
+                    ) : (
+                      <p className="text-sm text-white/40 italic">Sem observações adicionais.</p>
+                    )}
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                  Criado em {new Date(previewRequest.created_at).toLocaleString('pt-BR')}
+                </p>
+              </div>
+            );
+          })()}
+          <DialogFooter className="gap-2 flex-wrap">
+            <Button variant="outline" onClick={() => setPreviewRequest(null)} className="border-white/20 text-white hover:bg-white/10">
+              Fechar
+            </Button>
+            {previewRequest && !previewRequest.approved_at && canApprove && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => rejectRequest(previewRequest)}
+                  className="border-red-500/40 text-red-400 hover:bg-red-500/10 gap-1.5"
+                >
+                  <Trash2 size={14} /> Rejeitar
+                </Button>
+                <Button
+                  onClick={() => approveRequest(previewRequest)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 font-black uppercase italic tracking-widest text-[11px]"
+                >
+                  <ShieldCheck size={14} /> Aprovar e liberar
+                </Button>
+              </>
+            )}
+            {previewRequest && !previewRequest.approved_at && !canApprove && (
+              <span className="text-[11px] text-white/50 italic self-center">
+                Somente o responsável (Gestor/Admin/Copy) pode aprovar este pedido.
+              </span>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -2259,6 +2259,46 @@ export default function Schedule() {
         </DialogContent>
       </Dialog>
 
+      {/* Reschedule link dialog (opens after cancel-without-backup) */}
+      <Dialog open={!!rescheduleLink} onOpenChange={(o) => { if (!o) setRescheduleLink(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link size={18} className="text-primary" /> Link de reagendamento
+            </DialogTitle>
+          </DialogHeader>
+          {rescheduleLink && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Envie este link para <strong>{rescheduleLink.clientName}</strong>. Ele poderá escolher um novo horário na agenda do videomaker responsável.
+              </p>
+              <div className="flex gap-2">
+                <Input readOnly value={rescheduleLink.url} className="text-xs font-mono" onFocus={(e) => e.currentTarget.select()} />
+                <Button onClick={() => { navigator.clipboard.writeText(rescheduleLink.url); toast.success('Link copiado!'); }}>
+                  Copiar
+                </Button>
+              </div>
+              {rescheduleLink.whatsapp && (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    const msg = encodeURIComponent(`Olá ${rescheduleLink.clientName}! Sua gravação foi cancelada. Escolha um novo horário aqui: ${rescheduleLink.url}`);
+                    const phone = rescheduleLink.whatsapp.replace(/\D/g, '');
+                    window.open(`https://wa.me/${phone}?text=${msg}`, '_blank');
+                  }}
+                >
+                  <MessageCircle size={14} className="mr-2" /> Enviar via WhatsApp
+                </Button>
+              )}
+              <div className="flex justify-end">
+                <Button variant="ghost" onClick={() => setRescheduleLink(null)}>Fechar</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Start Recording — Script Selection Dialog */}
       <Dialog open={startRecOpen} onOpenChange={(open) => { if (!open) { setStartRecOpen(false); setStartRecordingState(null); } }}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">

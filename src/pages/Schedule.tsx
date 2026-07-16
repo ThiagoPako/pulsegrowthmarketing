@@ -145,6 +145,7 @@ export default function Schedule() {
   const [regenLoading, setRegenLoading] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
   const [cancellingRec, setCancellingRec] = useState<Recording | null>(null);
+  const [rescheduleLink, setRescheduleLink] = useState<{ url: string; clientName: string; whatsapp: string } | null>(null);
 
   // Event recordings state
   const [eventRecordings, setEventRecordings] = useState<EventRecording[]>([]);
@@ -492,9 +493,9 @@ export default function Schedule() {
 
   const handleCancelWithoutBackup = async () => {
     if (!cancellingRec) return;
-    cancelRecording(cancellingRec.id);
-    // Send cancellation message
+    const recId = cancellingRec.id;
     const client = clients.find(c => c.id === cancellingRec.clientId);
+    cancelRecording(recId);
     if (client?.whatsapp) {
       await sendRecordingCancelledNotification(client.whatsapp, client.companyName, client.id);
       toast.info('Mensagem de cancelamento enviada ao cliente');
@@ -502,7 +503,14 @@ export default function Schedule() {
     toast.warning('Gravação cancelada sem substituição');
     setBackupOpen(false);
     setCancellingRec(null);
+    // Open reschedule-link dialog so team can send link to client
+    setRescheduleLink({
+      url: `${window.location.origin}/reagendar/${recId}`,
+      clientName: client?.companyName || 'Cliente',
+      whatsapp: client?.whatsapp || '',
+    });
   };
+
 
   const handleSelectBackup = async (backupClient: Client) => {
     if (!cancellingRec) return;
@@ -2245,6 +2253,46 @@ export default function Schedule() {
                 <Button variant="destructive" onClick={handleCancelWithoutBackup}>
                   <XCircle size={14} className="mr-1" /> Cancelar sem Backup
                 </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Reschedule link dialog (opens after cancel-without-backup) */}
+      <Dialog open={!!rescheduleLink} onOpenChange={(o) => { if (!o) setRescheduleLink(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link size={18} className="text-primary" /> Link de reagendamento
+            </DialogTitle>
+          </DialogHeader>
+          {rescheduleLink && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Envie este link para <strong>{rescheduleLink.clientName}</strong>. Ele poderá escolher um novo horário na agenda do videomaker responsável.
+              </p>
+              <div className="flex gap-2">
+                <Input readOnly value={rescheduleLink.url} className="text-xs font-mono" onFocus={(e) => e.currentTarget.select()} />
+                <Button onClick={() => { navigator.clipboard.writeText(rescheduleLink.url); toast.success('Link copiado!'); }}>
+                  Copiar
+                </Button>
+              </div>
+              {rescheduleLink.whatsapp && (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    const msg = encodeURIComponent(`Olá ${rescheduleLink.clientName}! Sua gravação foi cancelada. Escolha um novo horário aqui: ${rescheduleLink.url}`);
+                    const phone = rescheduleLink.whatsapp.replace(/\D/g, '');
+                    window.open(`https://wa.me/${phone}?text=${msg}`, '_blank');
+                  }}
+                >
+                  <MessageCircle size={14} className="mr-2" /> Enviar via WhatsApp
+                </Button>
+              )}
+              <div className="flex justify-end">
+                <Button variant="ghost" onClick={() => setRescheduleLink(null)}>Fechar</Button>
               </div>
             </div>
           )}

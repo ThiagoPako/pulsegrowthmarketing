@@ -10,7 +10,9 @@
  * Runs on port 3002 (upload-server uses 3001)
  */
 
-import 'dotenv/config';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
@@ -18,6 +20,14 @@ import pg from 'pg';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// PM2 can start this file from either the repository root or vps-api-server/.
+// Load both locations explicitly so auth always reads the intended VPS DB vars.
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
+dotenv.config({ path: path.join(__dirname, '.env'), override: true });
 
 // Keep DATE columns as YYYY-MM-DD strings. Converting them to JS Date objects
 // shifts calendar-only values one day back in Brazilian timezones when JSON-serialized.
@@ -3795,7 +3805,6 @@ app.post('/api/portal-recordings', async (req, res) => {
 import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
-import path from 'path';
 import { Readable } from 'stream';
 
 const execFileAsync = promisify(execFile);

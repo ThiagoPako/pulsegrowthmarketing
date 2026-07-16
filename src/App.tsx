@@ -95,6 +95,7 @@ const TrainingManager = lazy(() => import("@/pages/TrainingManager"));
 const CRM = lazy(() => import("@/pages/CRM"));
 const LinkShortener = lazy(() => import("@/pages/LinkShortener"));
 const ShortLinkRedirect = lazy(() => import("@/pages/ShortLinkRedirect"));
+const PublicReschedule = lazy(() => import("@/pages/PublicReschedule"));
 const Regulations = lazy(() => import("@/pages/Regulations"));
 const RegulationRedirect = lazy(() => import("@/pages/RegulationRedirect"));
 const Training = lazy(() => import("@/pages/Training"));

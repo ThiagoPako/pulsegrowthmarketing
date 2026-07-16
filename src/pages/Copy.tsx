@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import ClientLogo from '@/components/ClientLogo';
+import UserAvatar from '@/components/UserAvatar';
 import type { Script, ScriptVideoType, ScriptContentFormat } from '@/types';
 import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_CONTENT_FORMAT_LABELS } from '@/types';
 

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/vpsDb';
 import { useCity } from '@/contexts/CityContext';
+import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { toast } from 'sonner';
 
 export type DesignTaskColumn = 'nova_tarefa' | 'executando' | 'fila_baixa_prioridade' | 'em_analise' | 'enviar_cliente' | 'aprovado' | 'ajustes' | 'postado';
@@ -118,6 +119,23 @@ export function useDesignTasks() {
     queryFn: async () => {
       const filterPostado = (arr: any[]) =>
         (arr || []).filter((t: any) => t.kanban_column !== 'postado' || (t.updated_at && t.updated_at >= postadoSince));
+
+      // Caminho rápido na VPS: endpoint dedicado com SQL único + joins prontos + filtro de cidade.
+      // Remove a latência do endpoint genérico /db/query e evita cascata de tentativas no carregamento inicial.
+      try {
+        const fast = await invokeVpsFunction('design-tasks/fast', {
+          limit: 600,
+          postado_days: POSTADO_WINDOW_DAYS,
+        }, 'GET');
+
+        if (!fast.error && Array.isArray(fast.data)) {
+          const list = filterPostado(fast.data) as unknown as DesignTask[];
+          writeLocalTasks(activeCity, list);
+          return list;
+        }
+      } catch {
+        // Se a VPS ainda não estiver com o endpoint novo, cai no caminho compatível abaixo.
+      }
 
       // Estratégia em cascata: tenta com joins → sem joins → sem filtro de data.
       // Em qualquer nível que retornar linhas, usamos.
@@ -238,7 +256,13 @@ export function useDesignTasks() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (updated) => {
+      if (updated?.id) {
+        queryClient.setQueryData<DesignTask[]>(['design-tasks', activeCity], (prev) => {
+          if (!prev) return prev;
+          return prev.map((task) => task.id === updated.id ? { ...task, ...updated } as DesignTask : task);
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ['design-tasks'] });
     },
     onError: (e: any) => toast.error(e.message),

@@ -115,7 +115,9 @@ export default function ClientPortal() {
   const [resolvedVideoUrl, setResolvedVideoUrl] = useState<string | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoLoadError, setVideoLoadError] = useState<string | null>(null);
-  const [videoQuality, setVideoQuality] = useState<VideoQuality>('480p');
+  // Default 'original' → stream direto do nginx via Range requests (start-play em <1s).
+  // O modo 480p ainda existe como opt-in (transcoding on-demand no proxy é caro).
+  const [videoQuality, setVideoQuality] = useState<VideoQuality>('original');
   const commentsEndRef = useRef<HTMLDivElement>(null);
   const [portalVideoState, setPortalVideoState] = useState({ hasNews: false, hasWelcome: false, isNewClient: false });
 

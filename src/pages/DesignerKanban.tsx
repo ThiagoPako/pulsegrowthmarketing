@@ -131,7 +131,17 @@ export default function DesignerKanban() {
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [filterClient, setFilterClient] = useState<string>('all');
-  const [columnLimits, setColumnLimits] = useState<Record<string, number>>({ aprovado: 10, fila_baixa_prioridade: 10, ajustes: 10 });
+  // Paginação padrão em TODAS as colunas — evita renderizar 100+ cards de uma vez.
+  const [columnLimits, setColumnLimits] = useState<Record<string, number>>({
+    nova_tarefa: 15,
+    executando: 15,
+    fila_baixa_prioridade: 10,
+    ajustes: 10,
+    em_analise: 15,
+    enviar_cliente: 15,
+    aprovado: 10,
+    postado: 10,
+  });
   const [copyPreviewTask, setCopyPreviewTask] = useState<DesignTask | null>(null);
   // Prompt para justificativa quando iniciar demanda com outra em execução
   const [pausePrompt, setPausePrompt] = useState<null | {
@@ -559,41 +569,25 @@ export default function DesignerKanban() {
               const isAprovado = col.key === 'aprovado';
               const hiddenCount = isPaginated ? Math.max(0, allColTasks.length - colTasks.length) : 0;
               return (
-                <motion.div
+                <div
                   key={col.key}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: colIdx * 0.07, duration: 0.35 }}
                   className={`min-w-[270px] w-[270px] flex-shrink-0 rounded-xl transition-all duration-200 flex flex-col ${
-                    dragOverColumn === col.key ? 'ring-2 ring-primary/40 bg-primary/5 scale-[1.01]' : ''
+                    dragOverColumn === col.key ? 'ring-2 ring-primary/40 bg-primary/5' : ''
                   }`}
                   onDragOver={e => handleDragOver(e, col.key)}
                   onDragLeave={handleDragLeave}
                   onDrop={e => handleDrop(e, col.key)}
                 >
-                  {/* Column header */}
-                  <motion.div
+                  {/* Column header (sem animações contínuas — economiza CPU) */}
+                  <div
                     className={`relative overflow-hidden rounded-xl p-3 mb-3 bg-gradient-to-r ${cfg.gradient} border border-border/50 shrink-0`}
-                    whileHover={{ scale: 1.01 }}
-                    transition={{ type: 'spring', stiffness: 400 }}
                   >
-                    <div className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
-                      <div className="absolute inset-0 -translate-x-full animate-[shimmer_3s_infinite] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                    </div>
                     <div className="flex items-center gap-2 relative z-10">
-                      <motion.span
-                        className="text-foreground/80"
-                        animate={{ rotate: [0, -6, 6, 0] }}
-                        transition={{ duration: 2, repeat: Infinity, repeatDelay: 5, ease: 'easeInOut' }}
-                      >
+                      <span className="text-foreground/80">
                         {cfg.icon}
-                      </motion.span>
+                      </span>
                       <span className="text-xs font-bold uppercase tracking-wider text-foreground/90">{col.label}</span>
-                      <motion.div
-                        key={colTasks.length}
-                        initial={{ scale: 1.4 }}
-                        animate={{ scale: 1 }}
-                        transition={{ type: 'spring', stiffness: 500 }}
+                      <div
                         className="ml-auto flex items-center gap-1"
                       >
                         <Badge variant="secondary" className="text-[10px] h-5">{allColTasks.length}</Badge>
@@ -650,57 +644,44 @@ export default function DesignerKanban() {
                             </DropdownMenuContent>
                           </DropdownMenu>
                         )}
-                      </motion.div>
+                      </div>
                     </div>
-                  </motion.div>
+                  </div>
 
-                  {/* Cards - scrollable */}
+                  {/* Cards - scrollable. Sem AnimatePresence/layout — enormes ganhos de perf com muitos cards. */}
                   <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 space-y-2 min-h-[100px] px-1 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-                    <AnimatePresence mode="popLayout">
-                      {colTasks.map((task, i) => (
-                        <motion.div
-                          key={task.id}
-                          layout
-                          initial={{ opacity: 0, scale: 0.92, y: 12 }}
-                          animate={{ opacity: 1, scale: 1, y: 0 }}
-                          exit={{ opacity: 0, scale: 0.9, y: -8 }}
-                          transition={{ delay: i * 0.03, type: 'spring', stiffness: 400, damping: 25 }}
-                          onDragOver={e => handleDragOver(e, col.key, task.id)}
-                        >
-                          <TaskCard
-                            task={task}
-                            queueIndex={col.key === 'nova_tarefa' || col.key === 'executando' ? i + 1 : null}
-                            columnKey={col.key}
-                            isDragging={draggingTaskId === task.id}
-                            onClick={() => setCopyPreviewTask(task)}
-                            onOpenDetail={() => setSelectedTaskId(task.id)}
-                            onDelete={async () => {
-                              if (window.confirm(`Excluir "${task.title}"? Esta ação não pode ser desfeita.`)) {
-                                await deleteTask.mutateAsync(task.id);
-                              }
-                            }}
-                            canDelete={canDelete}
-                            onQuickStart={(col.key === 'nova_tarefa' || col.key === 'fila_baixa_prioridade') ? () => handleQuickStart(task) : undefined}
-                            onReturnToQueue={col.key === 'executando' ? () => handleReturnToQueue(task) : undefined}
-                            onPause={col.key === 'executando' && task.timer_running ? () => handlePauseTask(task) : undefined}
-                            onResume={col.key === 'executando' && !task.timer_running ? () => handleResumeTask(task) : undefined}
-                            onDragStart={e => handleDragStart(e, task)}
-                            onDragEnd={handleDragEnd}
-                          />
-                        </motion.div>
-                      ))}
-                    </AnimatePresence>
-                    {colTasks.length === 0 && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="flex flex-col items-center justify-center py-8 text-muted-foreground/40"
+                    {colTasks.map((task, i) => (
+                      <div
+                        key={task.id}
+                        onDragOver={e => handleDragOver(e, col.key, task.id)}
                       >
-                        <motion.div animate={{ y: [0, -4, 0] }} transition={{ duration: 2, repeat: Infinity }}>
-                          {cfg.icon}
-                        </motion.div>
+                        <TaskCard
+                          task={task}
+                          queueIndex={col.key === 'nova_tarefa' || col.key === 'executando' ? i + 1 : null}
+                          columnKey={col.key}
+                          isDragging={draggingTaskId === task.id}
+                          onClick={() => setCopyPreviewTask(task)}
+                          onOpenDetail={() => setSelectedTaskId(task.id)}
+                          onDelete={async () => {
+                            if (window.confirm(`Excluir "${task.title}"? Esta ação não pode ser desfeita.`)) {
+                              await deleteTask.mutateAsync(task.id);
+                            }
+                          }}
+                          canDelete={canDelete}
+                          onQuickStart={(col.key === 'nova_tarefa' || col.key === 'fila_baixa_prioridade') ? () => handleQuickStart(task) : undefined}
+                          onReturnToQueue={col.key === 'executando' ? () => handleReturnToQueue(task) : undefined}
+                          onPause={col.key === 'executando' && task.timer_running ? () => handlePauseTask(task) : undefined}
+                          onResume={col.key === 'executando' && !task.timer_running ? () => handleResumeTask(task) : undefined}
+                          onDragStart={e => handleDragStart(e, task)}
+                          onDragEnd={handleDragEnd}
+                        />
+                      </div>
+                    ))}
+                    {colTasks.length === 0 && (
+                      <div className="flex flex-col items-center justify-center py-8 text-muted-foreground/40">
+                        <div>{cfg.icon}</div>
                         <span className="text-[10px] mt-2">Nenhuma tarefa</span>
-                      </motion.div>
+                      </div>
                     )}
                     {isPaginated && hiddenCount > 0 && (
                       <Button
@@ -713,7 +694,7 @@ export default function DesignerKanban() {
                       </Button>
                     )}
                   </div>
-                </motion.div>
+                </div>
               );
             })}
           </div>

@@ -124,9 +124,12 @@ export function useDesignTasks() {
       // Remove a latência do endpoint genérico /db/query e evita cascata de tentativas no carregamento inicial.
       try {
         const fast = await invokeVpsFunction('design-tasks/fast', {
-          limit: 600,
-          postado_days: POSTADO_WINDOW_DAYS,
-        }, 'GET');
+          method: 'GET',
+          body: {
+            limit: 600,
+            postado_days: POSTADO_WINDOW_DAYS,
+          },
+        });
 
         if (!fast.error && Array.isArray(fast.data)) {
           const list = filterPostado(fast.data) as unknown as DesignTask[];

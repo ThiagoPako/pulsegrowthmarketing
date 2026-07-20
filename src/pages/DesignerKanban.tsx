@@ -569,41 +569,25 @@ export default function DesignerKanban() {
               const isAprovado = col.key === 'aprovado';
               const hiddenCount = isPaginated ? Math.max(0, allColTasks.length - colTasks.length) : 0;
               return (
-                <motion.div
+                <div
                   key={col.key}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: colIdx * 0.07, duration: 0.35 }}
                   className={`min-w-[270px] w-[270px] flex-shrink-0 rounded-xl transition-all duration-200 flex flex-col ${
-                    dragOverColumn === col.key ? 'ring-2 ring-primary/40 bg-primary/5 scale-[1.01]' : ''
+                    dragOverColumn === col.key ? 'ring-2 ring-primary/40 bg-primary/5' : ''
                   }`}
                   onDragOver={e => handleDragOver(e, col.key)}
                   onDragLeave={handleDragLeave}
                   onDrop={e => handleDrop(e, col.key)}
                 >
-                  {/* Column header */}
-                  <motion.div
+                  {/* Column header (sem animações contínuas — economiza CPU) */}
+                  <div
                     className={`relative overflow-hidden rounded-xl p-3 mb-3 bg-gradient-to-r ${cfg.gradient} border border-border/50 shrink-0`}
-                    whileHover={{ scale: 1.01 }}
-                    transition={{ type: 'spring', stiffness: 400 }}
                   >
-                    <div className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
-                      <div className="absolute inset-0 -translate-x-full animate-[shimmer_3s_infinite] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                    </div>
                     <div className="flex items-center gap-2 relative z-10">
-                      <motion.span
-                        className="text-foreground/80"
-                        animate={{ rotate: [0, -6, 6, 0] }}
-                        transition={{ duration: 2, repeat: Infinity, repeatDelay: 5, ease: 'easeInOut' }}
-                      >
+                      <span className="text-foreground/80">
                         {cfg.icon}
-                      </motion.span>
+                      </span>
                       <span className="text-xs font-bold uppercase tracking-wider text-foreground/90">{col.label}</span>
-                      <motion.div
-                        key={colTasks.length}
-                        initial={{ scale: 1.4 }}
-                        animate={{ scale: 1 }}
-                        transition={{ type: 'spring', stiffness: 500 }}
+                      <div
                         className="ml-auto flex items-center gap-1"
                       >
                         <Badge variant="secondary" className="text-[10px] h-5">{allColTasks.length}</Badge>

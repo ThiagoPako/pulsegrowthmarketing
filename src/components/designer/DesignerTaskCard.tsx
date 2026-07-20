@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useDesignTasks, DesignTask } from '@/hooks/useDesignTasks';
+import { DesignTask } from '@/hooks/useDesignTasks';
 import { useAuth } from '@/hooks/useAuth';
 import { uploadFileToVps } from '@/services/vpsApi';
 import ClientLogo from '@/components/ClientLogo';
@@ -42,6 +42,8 @@ interface Props {
   task: DesignTask;
   index: number;
   onOpenDetail: (id: string) => void;
+  updateTask: { mutateAsync: (payload: any) => Promise<any> };
+  addHistory: { mutateAsync: (payload: any) => Promise<any> };
 }
 
 function getDesignDeadlineStatus(task: DesignTask) {
@@ -60,8 +62,7 @@ function getDesignDeadlineStatus(task: DesignTask) {
   return { label: `${days} dia${days > 1 ? 's' : ''}`, variant: 'default' as const, progress };
 }
 
-export default function DesignerTaskCard({ task, index, onOpenDetail }: Props) {
-  const { updateTask, addHistory, deleteTask } = useDesignTasks();
+export default function DesignerTaskCard({ task, index, onOpenDetail, updateTask, addHistory }: Props) {
   const { user } = useAuth();
   const [elapsed, setElapsed] = useState(0);
   const [uploading, setUploading] = useState(false);

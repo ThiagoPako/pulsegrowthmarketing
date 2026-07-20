@@ -5385,6 +5385,138 @@ app.post('/api/db/query', async (req, res) => {
 // CRUD ROUTES — Phase 4: Direct DB access (replaces Supabase SDK)
 // ═══════════════════════════════════════════════════════════════
 
+// ─── Designer fast feed ──────────────────────────────────────
+// Endpoint especializado para o Kanban/Painel da designer.
+// Evita o endpoint genérico /db/query, que precisa montar SELECT + JOINs
+// dinamicamente e ficou pesado para a primeira renderização dos cards.
+app.get('/api/design-tasks/fast', async (req, res) => {
+  try {
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'design_tasks');
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit || '600'), 10) || 600, 50), 1000);
+    const postadoDays = Math.min(Math.max(parseInt(String(req.query.postado_days || '21'), 10) || 21, 1), 120);
+    const postadoSince = new Date(Date.now() - postadoDays * 24 * 60 * 60 * 1000).toISOString();
+
+    const params = [postadoSince];
+    let paramIdx = 2;
+    const where = [
+      `(dt.kanban_column IS DISTINCT FROM 'postado' OR dt.updated_at >= $1)`,
+    ];
+
+    if (scopeCity) {
+      where.push(cityVisibilityExpression('dt.city', `$${paramIdx}`));
+      params.push(activeCity);
+      paramIdx++;
+    }
+
+    params.push(limit);
+
+    const { rows } = await pool.query(
+      `SELECT
+          dt.id,
+          dt.client_id,
+          dt.prospect_name,
+          dt.title,
+          dt.description,
+          dt.format_type,
+          dt.kanban_column,
+          dt.priority,
+          dt.copy_text,
+          COALESCE(dt.references_links, ARRAY[]::text[]) AS references_links,
+          COALESCE(dt.reference_images, ARRAY[]::text[]) AS reference_images,
+          dt.attachment_url,
+          COALESCE(dt.attachment_urls, ARRAY[]::text[]) AS attachment_urls,
+          dt.editable_file_url,
+          dt.observations,
+          dt.created_by,
+          dt.assigned_to,
+          dt.started_at,
+          dt.completed_at,
+          dt.sent_to_client_at,
+          dt.client_approved_at,
+          COALESCE(dt.auto_approved, false) AS auto_approved,
+          COALESCE(dt.time_spent_seconds, 0) AS time_spent_seconds,
+          COALESCE(dt.timer_running, false) AS timer_running,
+          dt.timer_started_at,
+          COALESCE(dt.version, 1) AS version,
+          dt.mockup_url,
+          dt.due_date,
+          COALESCE(dt.position, 999999999) AS position,
+          dt.created_at,
+          dt.updated_at,
+          c.company_name AS clients_company_name,
+          c.color AS clients_color,
+          c.logo_url AS clients_logo_url,
+          c.whatsapp AS clients_whatsapp,
+          c.responsible_person AS clients_responsible_person,
+          p.name AS profiles_name,
+          p.display_name AS profiles_display_name,
+          p.avatar_url AS profiles_avatar_url
+       FROM design_tasks dt
+       LEFT JOIN clients c ON c.id = dt.client_id
+       LEFT JOIN profiles p ON p.id = dt.assigned_to
+       WHERE ${where.join(' AND ')}
+       ORDER BY
+          CASE WHEN dt.kanban_column = 'postado' THEN 1 ELSE 0 END ASC,
+          dt.position ASC NULLS LAST,
+          dt.created_at DESC
+       LIMIT $${paramIdx}`,
+      params
+    );
+
+    const data = rows.map((row) => ({
+      id: row.id,
+      client_id: row.client_id,
+      prospect_name: row.prospect_name,
+      title: row.title,
+      description: row.description,
+      format_type: row.format_type,
+      kanban_column: row.kanban_column,
+      priority: row.priority,
+      copy_text: row.copy_text,
+      references_links: row.references_links || [],
+      reference_images: row.reference_images || [],
+      attachment_url: row.attachment_url,
+      attachment_urls: row.attachment_urls || [],
+      editable_file_url: row.editable_file_url,
+      observations: row.observations,
+      created_by: row.created_by,
+      assigned_to: row.assigned_to,
+      started_at: row.started_at,
+      completed_at: row.completed_at,
+      sent_to_client_at: row.sent_to_client_at,
+      client_approved_at: row.client_approved_at,
+      auto_approved: row.auto_approved,
+      time_spent_seconds: row.time_spent_seconds,
+      timer_running: row.timer_running,
+      timer_started_at: row.timer_started_at,
+      version: row.version,
+      mockup_url: row.mockup_url,
+      due_date: row.due_date,
+      position: row.position,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      clients: row.clients_company_name ? {
+        company_name: row.clients_company_name,
+        color: row.clients_color || '217 91% 60%',
+        logo_url: row.clients_logo_url,
+        whatsapp: row.clients_whatsapp || '',
+        responsible_person: row.clients_responsible_person || '',
+      } : null,
+      profiles: row.profiles_name ? {
+        name: row.profiles_name,
+        display_name: row.profiles_display_name,
+        avatar_url: row.profiles_avatar_url,
+      } : null,
+    }));
+
+    res.set('Cache-Control', 'private, max-age=10');
+    res.json(data);
+  } catch (e) {
+    console.error('GET /api/design-tasks/fast error:', e);
+    res.status(e.message === 'Unauthorized' ? 401 : 500).json({ error: e.message });
+  }
+});
+
 // ─── Clients ────────────────────────────────────────────────
 app.get('/api/clients', async (req, res) => {
   try {

@@ -131,7 +131,17 @@ export default function DesignerKanban() {
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [filterClient, setFilterClient] = useState<string>('all');
-  const [columnLimits, setColumnLimits] = useState<Record<string, number>>({ aprovado: 10, fila_baixa_prioridade: 10, ajustes: 10 });
+  // Paginação padrão em TODAS as colunas — evita renderizar 100+ cards de uma vez.
+  const [columnLimits, setColumnLimits] = useState<Record<string, number>>({
+    nova_tarefa: 15,
+    executando: 15,
+    fila_baixa_prioridade: 10,
+    ajustes: 10,
+    em_analise: 15,
+    enviar_cliente: 15,
+    aprovado: 10,
+    postado: 10,
+  });
   const [copyPreviewTask, setCopyPreviewTask] = useState<DesignTask | null>(null);
   // Prompt para justificativa quando iniciar demanda com outra em execução
   const [pausePrompt, setPausePrompt] = useState<null | {

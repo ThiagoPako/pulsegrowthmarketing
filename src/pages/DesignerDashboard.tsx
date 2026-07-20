@@ -1017,7 +1017,14 @@ export default function DesignerDashboard() {
                             hasActive={!!activeTask && activeTask.id !== task.id}
                           />
                         ) : (
-                          <DesignerTaskCard key={task.id} task={task} index={i} onOpenDetail={setSelectedTaskId} />
+                          <DesignerTaskCard
+                            key={task.id}
+                            task={task}
+                            index={i}
+                            onOpenDetail={setSelectedTaskId}
+                            updateTask={updateTask}
+                            addHistory={addHistory}
+                          />
                         )
                       ))}
                     </AnimatePresence>

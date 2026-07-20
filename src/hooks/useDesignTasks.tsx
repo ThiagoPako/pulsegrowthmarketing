@@ -177,15 +177,20 @@ export function useDesignTasks() {
       writeLocalTasks(activeCity, list);
       return list;
     },
-    enabled: !cityLoading,
+    // Não bloqueia esperando cityLoading — mostra cache local imediato e refetcha quando a cidade resolver (queryKey muda).
+    enabled: true,
     initialData: () => readLocalTasks(activeCity),
     initialDataUpdatedAt: () => readLocalUpdatedAt(activeCity),
     placeholderData: (prev) => prev,
-    staleTime: 60_000,
+    // Cache considerado fresco por 30s — evita refetch redundante em navegações rápidas.
+    staleTime: 30_000,
     gcTime: 30 * 60_000,
     refetchInterval: 60_000,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
+    refetchOnReconnect: false,
+    structuralSharing: true,
+    notifyOnChangeProps: ['data', 'error'],
   });
 
 

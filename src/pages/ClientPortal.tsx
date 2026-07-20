@@ -1085,7 +1085,7 @@ export default function ClientPortal() {
                           ref={videoRef}
                           src={resolvedVideoUrl}
                           playsInline
-                          preload="auto"
+                          preload="metadata"
                           className="w-full aspect-video object-contain bg-black"
                           onPlay={() => setIsPlaying(true)}
                           onPause={() => setIsPlaying(false)}

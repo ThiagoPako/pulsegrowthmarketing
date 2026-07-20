@@ -116,43 +116,66 @@ export function useDesignTasks() {
   const tasksQuery = useQuery({
     queryKey: ['design-tasks', activeCity],
     queryFn: async () => {
-      try {
-        const { data, error } = await supabase
+      const filterPostado = (arr: any[]) =>
+        (arr || []).filter((t: any) => t.kanban_column !== 'postado' || (t.updated_at && t.updated_at >= postadoSince));
+
+      // Estratégia em cascata: tenta com joins → sem joins → sem filtro de data.
+      // Em qualquer nível que retornar linhas, usamos.
+      const tryQuery = async (label: string, build: () => any) => {
+        try {
+          const { data, error } = await build();
+          if (error) {
+            console.warn(`[design-tasks] ${label} falhou:`, error?.message || error);
+            return null;
+          }
+          console.log(`[design-tasks] ${label} ok — ${(data || []).length} linhas`);
+          return data || [];
+        } catch (e: any) {
+          console.warn(`[design-tasks] ${label} exceção:`, e?.message || e);
+          return null;
+        }
+      };
+
+      // 1) Com joins completos
+      let data = await tryQuery('join completo', () =>
+        supabase
           .from('design_tasks')
-          .select(`${LIST_COLS}, clients(company_name, color, logo_url, whatsapp, responsible_person, editorial), profiles!design_tasks_assigned_to_fkey(name, display_name, avatar_url)`)
+          .select(`${LIST_COLS}, clients(company_name, color, logo_url, whatsapp, responsible_person), profiles!design_tasks_assigned_to_fkey(name, display_name, avatar_url)`)
           .gte('created_at', recentSince)
           .order('created_at', { ascending: false })
-          .limit(300);
+          .limit(300)
+      );
 
-        const filterPostado = (arr: any[]) =>
-          (arr || []).filter((t: any) => t.kanban_column !== 'postado' || (t.updated_at && t.updated_at >= postadoSince));
-
-        if (error) {
-          console.warn('Error fetching design tasks with relations, retrying simple query:', error);
-
-          const fallback = await supabase
+      // 2) Sem joins
+      if (!data) {
+        data = await tryQuery('sem joins', () =>
+          supabase
             .from('design_tasks')
             .select(LIST_COLS)
             .gte('created_at', recentSince)
             .order('created_at', { ascending: false })
-            .limit(300);
-
-          if (fallback.error) {
-            console.error('Error fetching design tasks:', fallback.error);
-            throw fallback.error;
-          }
-
-          const list = filterPostado(fallback.data) as unknown as DesignTask[];
-          writeLocalTasks(activeCity, list);
-          return list;
-        }
-        const list = filterPostado(data) as unknown as DesignTask[];
-        writeLocalTasks(activeCity, list);
-        return list;
-      } catch (err) {
-        console.error('Exception in tasksQuery:', err);
-        throw err;
+            .limit(300)
+        );
       }
+
+      // 3) Sem filtro de data (fallback máximo)
+      if (!data) {
+        data = await tryQuery('sem filtros', () =>
+          supabase
+            .from('design_tasks')
+            .select(LIST_COLS)
+            .order('created_at', { ascending: false })
+            .limit(300)
+        );
+      }
+
+      if (!data) {
+        throw new Error('Falha ao carregar design_tasks em todas as tentativas — verifique o backend da VPS.');
+      }
+
+      const list = filterPostado(data) as unknown as DesignTask[];
+      writeLocalTasks(activeCity, list);
+      return list;
     },
     enabled: !cityLoading,
     initialData: () => readLocalTasks(activeCity),

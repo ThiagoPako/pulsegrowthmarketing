@@ -1005,29 +1005,28 @@ export default function DesignerDashboard() {
                   <div className="py-8 text-center text-[11px] text-muted-foreground italic">Nada por aqui 🌸</div>
                 ) : (
                   <div className="max-h-[380px] overflow-y-auto pr-1 space-y-2" style={{ scrollbarWidth: 'thin' }}>
-                    <AnimatePresence mode="popLayout">
-                      {s.items.map((task, i) => (
-                        s.key === 'baixa' ? (
-                          <LowPriorityCard
-                            key={task.id}
-                            task={task}
-                            index={i}
-                            onOpenDetail={setSelectedTaskId}
-                            onResume={() => handleResumeFromLowPriority(task)}
-                            hasActive={!!activeTask && activeTask.id !== task.id}
-                          />
-                        ) : (
-                          <DesignerTaskCard
-                            key={task.id}
-                            task={task}
-                            index={i}
-                            onOpenDetail={setSelectedTaskId}
-                            updateTask={updateTask}
-                            addHistory={addHistory}
-                          />
-                        )
-                      ))}
-                    </AnimatePresence>
+                    {s.items.map((task, i) => (
+                      s.key === 'baixa' ? (
+                        <LowPriorityCard
+                          key={task.id}
+                          task={task}
+                          index={i}
+                          onOpenDetail={setSelectedTaskId}
+                          onResume={() => handleResumeFromLowPriority(task)}
+                          hasActive={!!activeTask && activeTask.id !== task.id}
+                        />
+                      ) : (
+                        <DesignerTaskCard
+                          key={task.id}
+                          task={task}
+                          index={i}
+                          onOpenDetail={setSelectedTaskId}
+                          updateTask={updateTask}
+                          addHistory={addHistory}
+                        />
+                      )
+                    ))}
+
                   </div>
                 )}
               </motion.div>
@@ -1299,13 +1298,12 @@ function LowPriorityCard({ task, index, onOpenDetail, onResume, hasActive }: Low
 
   return (
     <motion.div
-      layout
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ delay: index * 0.04, type: 'spring', stiffness: 300, damping: 28 }}
+      transition={{ duration: 0.15 }}
       className="rounded-2xl border-2 border-slate-300/40 dark:border-slate-700/40 bg-gradient-to-r from-slate-500/5 to-slate-600/5 dark:from-slate-900/20 dark:to-slate-800/10 p-3 hover:border-violet-300/50 transition-colors"
     >
+
       <div
         onClick={() => onOpenDetail(task.id)}
         className="flex items-center gap-3 cursor-pointer"

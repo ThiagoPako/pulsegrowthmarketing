@@ -206,7 +206,7 @@ export function useDesignTasks() {
     // Cache considerado fresco por 30s — evita refetch redundante em navegações rápidas.
     staleTime: 30_000,
     gcTime: 30 * 60_000,
-    refetchInterval: 60_000,
+    refetchInterval: 120_000,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     refetchOnReconnect: false,
@@ -259,6 +259,25 @@ export function useDesignTasks() {
       if (error) throw error;
       return data;
     },
+    // Atualização otimista — o card se move na hora, sem esperar o servidor.
+    onMutate: async ({ id, ...updates }) => {
+      await queryClient.cancelQueries({ queryKey: ['design-tasks', activeCity] });
+      const previous = queryClient.getQueryData<DesignTask[]>(['design-tasks', activeCity]);
+      if (previous) {
+        queryClient.setQueryData<DesignTask[]>(['design-tasks', activeCity], (prev) => {
+          if (!prev) return prev;
+          return prev.map((task) => task.id === id ? { ...task, ...updates, updated_at: new Date().toISOString() } as DesignTask : task);
+        });
+      }
+      return { previous };
+    },
+    onError: (e: any, _vars, ctx) => {
+      // Reverte em caso de erro
+      if (ctx?.previous) {
+        queryClient.setQueryData(['design-tasks', activeCity], ctx.previous);
+      }
+      toast.error(e.message);
+    },
     onSuccess: (updated) => {
       if (updated?.id) {
         queryClient.setQueryData<DesignTask[]>(['design-tasks', activeCity], (prev) => {
@@ -266,10 +285,10 @@ export function useDesignTasks() {
           return prev.map((task) => task.id === updated.id ? { ...task, ...updated } as DesignTask : task);
         });
       }
-      queryClient.invalidateQueries({ queryKey: ['design-tasks'] });
+      // Sem invalidateQueries — cache local já foi atualizado. Refetch periódico do useQuery mantém tudo fresco.
     },
-    onError: (e: any) => toast.error(e.message),
   });
+
 
   const addHistory = useMutation({
     mutationFn: async (entry: { task_id: string; action: string; details?: string; attachment_url?: string; user_id?: string }) => {

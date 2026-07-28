@@ -446,30 +446,71 @@ export default function Scripts() {
 
       // Create content_task if it has a client or is an avulso recording
       if (form.clientId || (form.isAvulso && form.recordingId)) {
-        const contentTaskId = crypto.randomUUID();
-        const { error } = await supabase.from('content_tasks').insert({
-          id: contentTaskId,
-          client_id: form.clientId || null,
-          title: form.title,
-          content_type: form.contentFormat || 'reels',
-          kanban_column: kanbanColumn,
-          script_id: scriptId,
-          recording_id: form.recordingId || null,
-          description: form.directToEditing ? 'Material pronto do cliente — direto para edição' : null,
-          created_by: user?.id || null,
-          assigned_to: assignedTo,
-          drive_link: (form.directToEditing && form.materialLink) ? form.materialLink : null,
-        } as any);
+        // ── Consumir placeholder existente da COPY (ideias, sem script) ──
+        // Evita duplicação: se já existe um card gerado por déficit na "Zona de Ideias"
+        // para o mesmo cliente/formato, atualizamos ele em vez de criar outro.
+        let reusedPlaceholderId: string | null = null;
+        if (form.clientId && !form.directToEditing) {
+          const { data: placeholders } = await supabase
+            .from('content_tasks')
+            .select('id, created_at')
+            .eq('client_id', form.clientId)
+            .eq('content_type', form.contentFormat || 'reels')
+            .eq('kanban_column', 'ideias')
+            .is('script_id', null)
+            .is('recording_id', null)
+            .order('created_at', { ascending: true })
+            .limit(1);
+          if (placeholders && placeholders.length > 0) {
+            reusedPlaceholderId = (placeholders[0] as any).id;
+          }
+        }
+
+        let error: any = null;
+        if (reusedPlaceholderId) {
+          const upd = await supabase.from('content_tasks').update({
+            title: form.title,
+            script_id: scriptId,
+            content_type: form.contentFormat || 'reels',
+            kanban_column: kanbanColumn,
+            recording_id: form.recordingId || null,
+            assigned_to: assignedTo,
+            drive_link: (form.directToEditing && form.materialLink) ? form.materialLink : null,
+            updated_at: new Date().toISOString(),
+          } as any).eq('id', reusedPlaceholderId);
+          error = upd.error;
+        } else {
+          const contentTaskId = crypto.randomUUID();
+          const ins = await supabase.from('content_tasks').insert({
+            id: contentTaskId,
+            client_id: form.clientId || null,
+            title: form.title,
+            content_type: form.contentFormat || 'reels',
+            kanban_column: kanbanColumn,
+            script_id: scriptId,
+            recording_id: form.recordingId || null,
+            description: form.directToEditing ? 'Material pronto do cliente — direto para edição' : null,
+            created_by: user?.id || null,
+            assigned_to: assignedTo,
+            drive_link: (form.directToEditing && form.materialLink) ? form.materialLink : null,
+          } as any);
+          error = ins.error;
+        }
 
         if (error) {
           console.error('Auto content_task creation error:', error);
           toast.error('Erro ao criar tarefa de conteúdo');
         } else {
+          const effectiveTaskId = reusedPlaceholderId ?? (await supabase
+            .from('content_tasks')
+            .select('id')
+            .eq('script_id', scriptId)
+            .limit(1)).data?.[0]?.id;
           // Verification: check if the card was actually created and is in the correct column
           const { data: verifiedTask, error: verifyError } = await supabase
             .from('content_tasks')
             .select('id, kanban_column, assigned_to')
-            .eq('id', contentTaskId)
+            .eq('id', effectiveTaskId)
             .single();
 
           if (verifyError || !verifiedTask) {
@@ -485,7 +526,7 @@ export default function Scripts() {
             const client = clients.find(c => c.id === form.clientId);
             const ctx = buildSyncContext(
               {
-                id: contentTaskId,
+                id: effectiveTaskId,
                 client_id: form.clientId || null,
                 title: form.title,
                 content_type: form.contentFormat || 'reels',

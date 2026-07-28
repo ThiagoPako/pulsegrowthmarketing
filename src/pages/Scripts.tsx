@@ -501,11 +501,16 @@ export default function Scripts() {
           console.error('Auto content_task creation error:', error);
           toast.error('Erro ao criar tarefa de conteúdo');
         } else {
+          const effectiveTaskId = reusedPlaceholderId ?? (await supabase
+            .from('content_tasks')
+            .select('id')
+            .eq('script_id', scriptId)
+            .limit(1)).data?.[0]?.id;
           // Verification: check if the card was actually created and is in the correct column
           const { data: verifiedTask, error: verifyError } = await supabase
             .from('content_tasks')
             .select('id, kanban_column, assigned_to')
-            .eq('id', contentTaskId)
+            .eq('id', effectiveTaskId)
             .single();
 
           if (verifyError || !verifiedTask) {

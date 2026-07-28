@@ -526,7 +526,7 @@ export default function Scripts() {
             const client = clients.find(c => c.id === form.clientId);
             const ctx = buildSyncContext(
               {
-                id: contentTaskId,
+                id: effectiveTaskId,
                 client_id: form.clientId || null,
                 title: form.title,
                 content_type: form.contentFormat || 'reels',

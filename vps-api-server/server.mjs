@@ -5211,6 +5211,59 @@ app.post('/api/db/query', async (req, res) => {
           const itemScoped = scopeCity
             ? { ...item, city: assertValidCity(activeCity) }
             : (item && item.city !== undefined ? { ...item, city: assertValidCity(item.city) } : item);
+
+          // ─── Regra anti-duplicação: reutiliza placeholder em "ideias" ───
+          // Se está inserindo um content_task para um cliente + tipo que já tem placeholder
+          // (kanban_column='ideias', sem script e sem gravação), reutiliza esse card via UPDATE
+          // ao invés de criar um novo. Evita cópias fantasmas na Zona de Ideias.
+          if (
+            safeTable === 'content_tasks' &&
+            itemScoped &&
+            itemScoped.client_id &&
+            itemScoped.content_type &&
+            (itemScoped.kanban_column || 'ideias') !== 'arquivado'
+          ) {
+            try {
+              const cityClause = scopeCity ? `AND ${cityVisibilityExpression('city', '$3')}` : '';
+              const placeholderQuery = `
+                SELECT id FROM content_tasks
+                WHERE client_id = $1
+                  AND content_type = $2
+                  AND kanban_column = 'ideias'
+                  AND script_id IS NULL
+                  AND recording_id IS NULL
+                  ${cityClause}
+                ORDER BY created_at ASC
+                LIMIT 1
+              `;
+              const placeholderParams = scopeCity
+                ? [itemScoped.client_id, itemScoped.content_type, activeCity]
+                : [itemScoped.client_id, itemScoped.content_type];
+              const { rows: placeholderRows } = await pool.query(placeholderQuery, placeholderParams);
+              if (placeholderRows.length > 0) {
+                const placeholderId = placeholderRows[0].id;
+                const updateEntries = Object.entries(itemScoped)
+                  .map(([key, value]) => [sanitizeIdentifier(key), value])
+                  .filter(([key]) => key !== 'id' && key !== 'created_at')
+                  .filter(([key]) => !existingColumns || existingColumns.has(key));
+                if (updateEntries.length > 0) {
+                  const updKeys = updateEntries.map(([k]) => k);
+                  const updValues = updateEntries.map(([k, v]) => serializeValueForColumn(k, v, jsonColumns));
+                  const setClause = updKeys.map((k, i) => `${k} = $${i + 1}`).join(', ');
+                  const { rows: updated } = await pool.query(
+                    `UPDATE content_tasks SET ${setClause}, updated_at = NOW() WHERE id = $${updKeys.length + 1} RETURNING *`,
+                    [...updValues, placeholderId]
+                  );
+                  console.log(`[content_tasks anti-dup] Reused placeholder ${placeholderId} (client=${itemScoped.client_id}, type=${itemScoped.content_type})`);
+                  allResults.push(updated[0]);
+                  continue;
+                }
+              }
+            } catch (dupErr) {
+              console.warn('[content_tasks anti-dup] check failed, falling back to INSERT:', dupErr?.message || dupErr);
+            }
+          }
+
           const entries = Object.entries(itemScoped)
             .map(([key, value]) => [sanitizeIdentifier(key), value])
             .filter(([key]) => !existingColumns || existingColumns.has(key));

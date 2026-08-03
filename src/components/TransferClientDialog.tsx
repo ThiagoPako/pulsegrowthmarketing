@@ -30,7 +30,42 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
 
     setLoading(true);
     try {
-      // 1. Atualizar a cidade do cliente
+      // 1. Verificar conflitos de horários na cidade de destino para as gravações futuras
+      const now = new Date().toISOString().split('T')[0];
+      
+      // Buscar gravações futuras do cliente que será transferido
+      const { data: clientFutureRecordings, error: fetchError } = await supabase
+        .from('scheduled_recordings')
+        .select('*')
+        .eq('client_id', client.id)
+        .gte('date', now);
+
+      if (fetchError) throw fetchError;
+
+      if (clientFutureRecordings && clientFutureRecordings.length > 0) {
+        // Para cada gravação futura, verificar se já existe outra gravação na cidade de destino
+        // no mesmo dia, hora e para o mesmo videomaker
+        for (const recording of clientFutureRecordings) {
+          const { data: conflicts, error: conflictError } = await supabase
+            .from('scheduled_recordings')
+            .select('id, client_id')
+            .eq('city', targetCity)
+            .eq('date', recording.date)
+            .eq('time', recording.time)
+            .eq('videomaker_id', recording.videomaker_id)
+            .neq('client_id', client.id); // Ignorar o próprio cliente caso ele já tenha algo lá
+
+          if (conflictError) throw conflictError;
+
+          if (conflicts && conflicts.length > 0) {
+            toast.error(`Conflito de horário: O dia ${recording.date} às ${recording.time} já está ocupado na cidade ${targetCity}.`);
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
+      // 2. Atualizar a cidade do cliente
       const { error: clientError } = await supabase
         .from('clients')
         .update({ city: targetCity })
@@ -38,20 +73,18 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
 
       if (clientError) throw clientError;
 
-      // 2. Migrar gravações futuras (scheduled_recordings)
-      // Buscamos todas as gravações futuras (após agora) deste cliente
-      const now = new Date().toISOString();
+      // 3. Migrar gravações futuras
       const { error: recordingsError } = await supabase
         .from('scheduled_recordings')
         .update({ city: targetCity })
         .eq('client_id', client.id)
-        .gte('date', now.split('T')[0]); // Comparação simplificada por data
+        .gte('date', now);
 
       if (recordingsError) {
         console.error('Erro ao migrar gravações futuras:', recordingsError);
         toast.warning('Cliente transferido, mas houve um erro ao migrar gravações futuras.');
       } else {
-        toast.success(`Cliente ${client.companyName} e gravações futuras transferidos para ${targetCity}`);
+        toast.success(`Cliente ${client.companyName} e ${clientFutureRecordings?.length || 0} gravações futuras transferidos com sucesso.`);
       }
 
       onOpenChange(false);

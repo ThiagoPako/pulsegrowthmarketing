@@ -135,6 +135,7 @@ export default function Schedule() {
   const [form, setForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '08:30', type: 'fixa' as RecordingType, prospectName: '' });
   const [editForm, setEditForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '', type: 'fixa' as RecordingType, status: 'agendada' as Recording['status'] });
   const [filterVideomaker, setFilterVideomaker] = useState('all');
+  const [filterCity, setFilterCity] = useState<string>('all');
   const [weekOffset, setWeekOffset] = useState(0);
   const [showEndo, setShowEndo] = useState(true);
   const [showEvents, setShowEvents] = useState(true);
@@ -216,11 +217,17 @@ export default function Schedule() {
   const filteredRecordings = useMemo(() => {
     let recs = recordings;
     if (filterVideomaker !== 'all') recs = recs.filter(r => r.videomakerId === filterVideomaker);
+    if (filterCity !== 'all') {
+      recs = recs.filter(r => {
+        const client = clients.find(c => c.id === r.clientId);
+        return client?.city?.toLowerCase() === filterCity.toLowerCase();
+      });
+    }
     // Hide backup/extra unless toggled on
     if (!showBackup) recs = recs.filter(r => r.type !== 'backup');
     if (!showExtra) recs = recs.filter(r => r.type !== 'extra');
     return recs;
-  }, [recordings, filterVideomaker, showBackup, showExtra]);
+  }, [recordings, filterVideomaker, filterCity, clients, showBackup, showExtra]);
 
   // Low-script warning
   const lowScriptClients = useMemo(() => {

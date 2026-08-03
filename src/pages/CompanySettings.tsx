@@ -125,6 +125,13 @@ const MODULE_RESETS: ModuleReset[] = [
     description: 'Limpa todos os dados de tarefas executadas: histórico de ações, registros de entrega e gravações ativas.',
     confirmWord: 'LIMPAR EXECUCOES',
   },
+  {
+    label: 'Portal (Vídeos Antigos)',
+    icon: '🧹',
+    tables: ['portal_videos'],
+    description: 'Limpa vídeos do portal com mais de 60 dias (apenas vídeos antigos).',
+    confirmWord: 'LIMPAR VIDEOS ANTIGOS',
+  },
 ];
 
 export default function CompanySettings() {
@@ -173,15 +180,21 @@ export default function CompanySettings() {
     if (moduleConfirmText[mod.label] !== mod.confirmWord) return;
     setModuleResetting(mod.label);
     try {
-      for (const table of mod.tables) {
-        const { error } = await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        if (error) console.error(`Erro ao limpar ${table}:`, error.message);
+      if (mod.label === 'Portal (Vídeos Antigos)') {
+        const { data, error } = await supabase.rpc('cleanup_old_portal_videos');
+        if (error) throw error;
+        toast.success(`${data.deletedCount || 0} vídeos antigos removidos com sucesso!`);
+      } else {
+        for (const table of mod.tables) {
+          const { error } = await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+          if (error) console.error(`Erro ao limpar ${table}:`, error.message);
+        }
+        toast.success(`Módulo "${mod.label}" resetado com sucesso!`);
       }
-      toast.success(`Módulo "${mod.label}" resetado com sucesso!`);
       setModuleConfirmText(prev => ({ ...prev, [mod.label]: '' }));
       setTimeout(() => window.location.reload(), 1500);
-    } catch {
-      toast.error(`Erro ao resetar módulo "${mod.label}".`);
+    } catch (err: any) {
+      toast.error(err.message || `Erro ao resetar módulo "${mod.label}".`);
     } finally {
       setModuleResetting(null);
     }

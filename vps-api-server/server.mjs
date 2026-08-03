@@ -310,6 +310,24 @@ ensureProposalTables().catch((error) => {
   console.error('Failed to ensure proposal tables:', error);
 });
 
+async function cleanupOldPortalVideos() {
+  const { rows: videos } = await pool.query(`
+    SELECT id, video_url 
+    FROM portal_videos 
+    WHERE created_at < NOW() - INTERVAL '60 days'
+  `);
+  
+  if (videos.length === 0) return 0;
+  
+  // Clean DB first to avoid UI issues
+  const { rowCount } = await pool.query(`
+    DELETE FROM portal_videos 
+    WHERE created_at < NOW() - INTERVAL '60 days'
+  `);
+  
+  return rowCount;
+}
+
 async function ensureStoryEditingSessionsTable() {
   if (!storyEditingSessionsEnsuredPromise) {
     storyEditingSessionsEnsuredPromise = (async () => {
@@ -3084,6 +3102,11 @@ app.post('/api/portal-actions', async (req, res) => {
     }
 
     // ── Portal videos (welcome/news) ──
+    if (action === 'cleanup_old_portal_videos') {
+      const deletedCount = await cleanupOldPortalVideos();
+      return res.json({ success: true, deletedCount });
+    }
+
     if (action === 'get_portal_videos') {
       if (!client_id) return res.status(400).json({ error: 'client_id required' });
       const { rows: videos } = await pool.query('SELECT * FROM portal_videos WHERE is_active = true ORDER BY created_at DESC');

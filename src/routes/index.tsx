@@ -1,7 +1,7 @@
 export const SupabaseCheck = () => {
   return (
     <div className="p-4">
-      <p>Implementar validações durante a migração para impedir que as gravações futuras transferidas causem sobreposição de horários no mesmo videomaker.</p>
+      <p>agora vamos fazer assim, os videos no portal do cliente por esta ocupando muito espaco de armazenamento, vamos deixar apenas dos ultimos 60 dias, os demais pode apagar do sistema</p>
     </div>
   );
 };

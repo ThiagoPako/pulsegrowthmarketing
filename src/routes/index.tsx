@@ -1,7 +1,7 @@
 export const SupabaseCheck = () => {
   return (
     <div className="p-4">
-      <p>Implementar a migração automática das gravações futuras do cliente ao transferir de uma cidade para outra.</p>
+      <p>Implementar validações durante a migração para impedir que as gravações futuras transferidas causem sobreposição de horários no mesmo videomaker.</p>
     </div>
   );
 };

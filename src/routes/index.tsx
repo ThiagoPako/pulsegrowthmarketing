@@ -1,7 +1,7 @@
 export const SupabaseCheck = () => {
   return (
     <div className="p-4">
-      <p>o que quero dizer é que preciso que esse projeito use a VPS</p>
+      <p>Implementar a migração automática das gravações futuras do cliente ao transferir de uma cidade para outra.</p>
     </div>
   );
 };

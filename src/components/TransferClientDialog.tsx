@@ -30,14 +30,30 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
 
     setLoading(true);
     try {
-      const { error } = await supabase
+      // 1. Atualizar a cidade do cliente
+      const { error: clientError } = await supabase
         .from('clients')
         .update({ city: targetCity })
         .eq('id', client.id);
 
-      if (error) throw error;
+      if (clientError) throw clientError;
 
-      toast.success(`Cliente ${client.companyName} transferido para ${targetCity}`);
+      // 2. Migrar gravações futuras (scheduled_recordings)
+      // Buscamos todas as gravações futuras (após agora) deste cliente
+      const now = new Date().toISOString();
+      const { error: recordingsError } = await supabase
+        .from('scheduled_recordings')
+        .update({ city: targetCity })
+        .eq('client_id', client.id)
+        .gte('date', now.split('T')[0]); // Comparação simplificada por data
+
+      if (recordingsError) {
+        console.error('Erro ao migrar gravações futuras:', recordingsError);
+        toast.warning('Cliente transferido, mas houve um erro ao migrar gravações futuras.');
+      } else {
+        toast.success(`Cliente ${client.companyName} e gravações futuras transferidos para ${targetCity}`);
+      }
+
       onOpenChange(false);
       refetchData();
     } catch (error: any) {

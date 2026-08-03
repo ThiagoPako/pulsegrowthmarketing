@@ -1402,6 +1402,15 @@ export default function Schedule() {
         {/* ===== MONTHLY CALENDAR VIEW ===== */}
         <TabsContent value="calendar" className="space-y-3 mt-3">
           <div className="flex items-center gap-3 flex-wrap">
+            <Select value={filterCity} onValueChange={setFilterCity}>
+              <SelectTrigger className="w-32"><SelectValue placeholder="Cidade" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="minacu">Minaçu</SelectItem>
+                <SelectItem value="uruacu">Uruaçu</SelectItem>
+              </SelectContent>
+            </Select>
+
             <Select value={filterVideomaker} onValueChange={setFilterVideomaker}>
               <SelectTrigger className="w-40"><SelectValue placeholder="Videomaker" /></SelectTrigger>
               <SelectContent>
@@ -1575,6 +1584,15 @@ export default function Schedule() {
         {/* ===== KANBAN VIEW — Recording cards grouped by day ===== */}
         <TabsContent value="kanban" className="space-y-3 mt-3">
           <div className="flex items-center gap-3 flex-wrap">
+            <Select value={filterCity} onValueChange={setFilterCity}>
+              <SelectTrigger className="w-32"><SelectValue placeholder="Cidade" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="minacu">Minaçu</SelectItem>
+                <SelectItem value="uruacu">Uruaçu</SelectItem>
+              </SelectContent>
+            </Select>
+
             <Select value={filterVideomaker} onValueChange={setFilterVideomaker}>
               <SelectTrigger className="w-40"><SelectValue placeholder="Videomaker" /></SelectTrigger>
               <SelectContent>

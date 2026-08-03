@@ -2380,6 +2380,9 @@ export default function Clients() {
                 <Button variant="ghost" size="icon" className="h-8 w-8" title="Pulse Club" onClick={() => window.open(`/portal/${c.id}`, '_blank')}>
                   <MonitorPlay size={15} />
                 </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500" title="Transferir Cidade" onClick={() => setTransferClient(c)}>
+                  <MoveHorizontal size={15} />
+                </Button>
                 {!isDesignerOnly && (
                   <>
                     <Button variant="ghost" size="icon" className="h-8 w-8" title="Link do portal"
@@ -2418,7 +2421,6 @@ export default function Clients() {
                       generateClientCardPdf(c, vmName);
                     }}><Printer size={15} /></Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => handleOpen(c)}><Pencil size={15} /></Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500" title="Transferir Cidade" onClick={() => setTransferClient(c)}><MoveHorizontal size={15} /></Button>
                     {(c as any).status === 'cancelado' ? (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-500" title="Reativar" onClick={() => handleReactivate(c)}><RefreshCw size={15} /></Button>
                     ) : (

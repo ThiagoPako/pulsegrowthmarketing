@@ -2418,6 +2418,7 @@ export default function Clients() {
                       generateClientCardPdf(c, vmName);
                     }}><Printer size={15} /></Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => handleOpen(c)}><Pencil size={15} /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500" title="Transferir Cidade" onClick={() => setTransferClient(c)}><MoveHorizontal size={15} /></Button>
                     {(c as any).status === 'cancelado' ? (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-500" title="Reativar" onClick={() => handleReactivate(c)}><RefreshCw size={15} /></Button>
                     ) : (
@@ -2564,6 +2565,14 @@ export default function Clients() {
           )}
         </DialogContent>
       </Dialog>
+      
+      {transferClient && (
+        <TransferClientDialog
+          client={transferClient}
+          open={!!transferClient}
+          onOpenChange={o => !o && setTransferClient(null)}
+        />
+      )}
     </div>
   );
 }

@@ -35,4 +35,19 @@ for attempt in $(seq 1 20); do
   fi
   sleep 1
 done
+
+# Exercise the real database-backed login path without using a valid account.
+# A healthy endpoint returns 401; HTTP 500 means auth is still broken.
+AUTH_STATUS="$(curl --silent --output /tmp/pulse-auth-probe.json --write-out '%{http_code}' \
+  --header 'Content-Type: application/json' \
+  --data '{"email":"healthcheck-invalid@pulse.local","password":"invalid-healthcheck-password"}' \
+  http://127.0.0.1:3002/api/auth/login)"
+if [ "$AUTH_STATUS" != "401" ]; then
+  echo "Falha na verificação do login: HTTP $AUTH_STATUS"
+  cat /tmp/pulse-auth-probe.json
+  pm2 logs pulse-api --lines 100 --nostream
+  exit 1
+fi
+rm -f /tmp/pulse-auth-probe.json
+
 pm2 status

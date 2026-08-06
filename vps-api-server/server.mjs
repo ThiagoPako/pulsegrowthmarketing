@@ -758,8 +758,6 @@ async function verifyAdmin(req) {
 
 
 let profilesPasswordHashColumnPromise;
-let profilesMonthlySalaryColumnPromise;
-
 let authSupportTablesPromise;
 const tableColumnsPromiseCache = new Map();
 
@@ -796,70 +794,25 @@ function selectColumn(columns, columnName, fallbackSql = `NULL::text`) {
 }
 
 async function ensureProfilesMonthlySalaryColumn() {
-  if (!profilesMonthlySalaryColumnPromise) {
-    profilesMonthlySalaryColumnPromise = pool.query(`
-      DO $$
-      BEGIN
-        IF to_regclass('public.profiles') IS NOT NULL THEN
-          ALTER TABLE public.profiles
-            ADD COLUMN IF NOT EXISTS monthly_salary NUMERIC(10,2) DEFAULT 0;
-        END IF;
-      END $$;
-    `)
-      .then((result) => {
-        tableColumnsPromiseCache.delete('profiles');
-        return result;
-      })
-      .catch((error) => {
-        profilesMonthlySalaryColumnPromise = null;
-        throw error;
-      });
-  }
-
-  return profilesMonthlySalaryColumnPromise;
+  const columns = await getExistingColumns('profiles').catch(() => new Set());
+  return columns.has('monthly_salary');
 }
 
 async function ensureAuthSupportTables() {
   if (!authSupportTablesPromise) {
+    // Authentication requests must remain read-only at the schema level.
+    // Running CREATE/ALTER here makes every login depend on table ownership and
+    // caused production HTTP 500 errors when the API role was not the owner.
     authSupportTablesPromise = pool.query(`
-      CREATE TABLE IF NOT EXISTS auth_users (
-        id UUID PRIMARY KEY,
-        email TEXT NOT NULL UNIQUE,
-        password_hash TEXT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        last_sign_in TIMESTAMPTZ
-      );
-
-      ALTER TABLE auth_users
-        ADD COLUMN IF NOT EXISTS last_sign_in TIMESTAMPTZ;
-
-      CREATE TABLE IF NOT EXISTS user_roles (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id UUID NOT NULL,
-        role TEXT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        UNIQUE (user_id, role)
-      );
-
-      CREATE TABLE IF NOT EXISTS login_logs (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id UUID,
-        user_name TEXT NOT NULL DEFAULT '',
-        user_role TEXT NOT NULL DEFAULT '',
-        logged_in_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_auth_users_email_lower ON auth_users (lower(email));
-      CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles (user_id);
-      CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles (role);
-      CREATE INDEX IF NOT EXISTS idx_login_logs_logged_in_at ON login_logs (logged_in_at DESC);
+      SELECT
+        to_regclass('public.auth_users') IS NOT NULL AS has_auth_users,
+        to_regclass('public.user_roles') IS NOT NULL AS has_user_roles
     `)
-      .then(async (result) => {
-        await ensureProfilesMonthlySalaryColumn().catch((error) => {
-          console.warn('Could not ensure profiles.monthly_salary:', error?.message || error);
-        });
-        return result;
+      .then(({ rows }) => {
+        if (!rows[0]?.has_auth_users) {
+          throw new Error('Tabela auth_users não encontrada; execute o reparo de autenticação');
+        }
+        return rows[0];
       })
       .catch((error) => {
         authSupportTablesPromise = null;
@@ -1389,22 +1342,22 @@ async function authenticateWithLegacyAuth(email, password) {
   const legacyClient = getUserClient('');
   if (!legacyClient) return null;
 
-  const { data, error } = await legacyClient.auth.signInWithPassword({ email, password });
-  if (error || !data?.user) return null;
-
-  const legacyEmail = data.user.email || email;
-  const profile = await getAuthProfileById(data.user.id).catch(() => null)
-    || await getAuthProfileByEmail(legacyEmail).catch(() => null);
-
-  if (!profile) return null;
-
   try {
-    await storeUserPassword(profile.id, password);
-  } catch (syncError) {
-    console.error('Legacy password sync failed:', syncError?.message || syncError);
-  }
+    const { data, error } = await legacyClient.auth.signInWithPassword({ email, password });
+    if (error || !data?.user) return null;
 
-  return profile;
+    const legacyEmail = data.user.email || email;
+    const profile = await getAuthProfileById(data.user.id).catch(() => null)
+      || await getAuthProfileByEmail(legacyEmail).catch(() => null);
+
+    if (!profile) return null;
+
+    await storeUserPassword(profile.id, password);
+    return profile;
+  } catch (legacyAuthError) {
+    console.error('Legacy auth attempt failed:', legacyAuthError?.message || legacyAuthError);
+    return null;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════

@@ -625,6 +625,15 @@ export default function ClientPortal() {
                 </button>
               )}
             </div>
+            {isTeamMember && (
+              <button
+                onClick={() => setActiveTab('admin')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'admin' ? 'bg-red-500/20 text-red-400' : 'text-red-400/50 hover:text-red-400 hover:bg-red-500/10'}`}
+              >
+                <Trash2 size={14} />
+                Limpeza
+              </button>
+            )}
             <PortalVideoButtons hasNews={portalVideoState.hasNews} hasWelcome={portalVideoState.hasWelcome} isNewClient={portalVideoState.isNewClient} />
             <PortalNotifications
               clientId={client.id}

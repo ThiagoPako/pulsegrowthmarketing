@@ -675,6 +675,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
 
   // Video upload state
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoUploadProgress, setVideoUploadProgress] = useState(0);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
   // Optimization slots state
@@ -766,14 +767,31 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setUploadingVideo(true);
-    try {
-      const videoUrl = await uploadFileToVps(file, `content/${task.client_id}/${task.id}`);
+    if (!file.type.startsWith('video/')) {
+      toast.error('Selecione um arquivo de vídeo válido.');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024 * 1024) {
+      toast.error('O vídeo deve ter no máximo 2 GB.');
+      e.target.value = '';
+      return;
+    }
 
-      await supabase.from('content_tasks').update({
+    setUploadingVideo(true);
+    setVideoUploadProgress(0);
+    try {
+      const videoUrl = await uploadFileToVps(file, {
+        folder: `content/${task.client_id}/${task.id}`,
+        retries: 2,
+        onProgress: ({ percent }) => setVideoUploadProgress(Math.round(percent)),
+      });
+
+      const { error: updateError } = await supabase.from('content_tasks').update({
         edited_video_link: videoUrl,
         updated_at: new Date().toISOString(),
       } as any).eq('id', task.id);
+      if (updateError) throw updateError;
 
       toast.success('🎬 Vídeo enviado com sucesso!');
       onRefresh();
@@ -781,6 +799,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
       toast.error(`Erro no upload: ${err.message}`);
     } finally {
       setUploadingVideo(false);
+      setVideoUploadProgress(0);
       if (videoInputRef.current) videoInputRef.current.value = '';
     }
   };
@@ -1653,7 +1672,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                               disabled={uploadingVideo}
                             >
                               {uploadingVideo ? (
-                                <><Loader2 size={14} className="animate-spin" /> Enviando vídeo...</>
+                                <><Loader2 size={14} className="animate-spin" /> Enviando vídeo — {videoUploadProgress}%</>
                               ) : (
                                 <><Upload size={14} /> Enviar Arquivo de Vídeo</>
                               )}

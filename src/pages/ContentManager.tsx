@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/vpsDb';
 import { uploadFileToVps, uploadBlobToVps } from '@/services/vpsApi';
 import { useAuth } from '@/hooks/useAuth';
+import { useApp } from '@/contexts/AppContext';
+import PortalBulkDelete from '@/components/portal/PortalBulkDelete';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -243,6 +245,7 @@ function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDel
 
 export default function ContentManager() {
   const { user } = useAuth();
+  const { currentUser } = useApp();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [clients, setClients] = useState<ClientOption[]>([]);
@@ -261,6 +264,7 @@ export default function ContentManager() {
   const [showPortalSelector, setShowPortalSelector] = useState(false);
   const [playingContent, setPlayingContent] = useState<ContentRow | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.roles?.includes('admin') === true;
 
   useEffect(() => { loadData(); }, []);
 
@@ -413,6 +417,9 @@ export default function ContentManager() {
           </div>
         </div>
       </motion.div>
+
+      {/* Admin cleanup belongs in the Portal module itself. */}
+      {isAdmin && <PortalBulkDelete />}
 
       {/* Portal Client Selector Dialog */}
       {showPortalSelector && (

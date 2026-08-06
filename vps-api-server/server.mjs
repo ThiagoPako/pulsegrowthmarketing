@@ -3,7 +3,7 @@
  * Deploy on agenciapulse.tech alongside the existing upload-server
  * 
  * SETUP:
- * 1. npm install express cors @supabase/supabase-js pg bcryptjs jsonwebtoken
+ * 1. npm install express cors pg bcryptjs jsonwebtoken
  * 2. Create .env with all required variables (see bottom of file)
  * 3. pm2 start server.mjs --name pulse-api
  * 
@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
-import { createClient } from '@supabase/supabase-js';
+import { createPgClient } from './pgClient.mjs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -605,22 +605,17 @@ const JWT_SECRET = process.env.JWT_SECRET || 'CHANGE_ME_IN_PRODUCTION';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30d';
 const JWT_REFRESH_GRACE_SECONDS = Number(process.env.JWT_REFRESH_GRACE_SECONDS || 60 * 60 * 24 * 14);
 
-// ─── Supabase clients (transitional — will be removed later) ──
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+// ─── Cliente de dados 100% VPS (PostgreSQL local) ────────────
+// REGRA DO PROJETO: nada de Supabase/serviços externos. Todo acesso a dados
+// passa pelo PostgreSQL da própria VPS.
+const dbClient = createPgClient(pool);
 
 function getAdminClient() {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  return dbClient;
 }
 
-function getUserClient(authHeader) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-  const options = authHeader
-    ? { global: { headers: { Authorization: authHeader } } }
-    : undefined;
-  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, options);
+function getUserClient() {
+  return dbClient;
 }
 
 // ─── Auth helpers (JWT-based) ───────────────────────────────
@@ -671,17 +666,7 @@ async function verifyUser(req) {
       userClient: getUserClient(authHeader),
     };
   } catch (error) {
-    if (process.env.ALLOW_LEGACY_SUPABASE_AUTH !== 'true') {
-      throw new Error('Unauthorized');
-    }
-
-    // Optional one-time migration bridge for legacy tokens. Disabled by default
-    // because production authentication must be VPS/JWT only.
-    const userClient = getUserClient(authHeader);
-    if (!userClient) throw new Error('Unauthorized');
-    const { data, error: legacyAuthError } = await userClient.auth.getUser(token);
-    if (legacyAuthError || !data?.user) throw new Error('Unauthorized');
-    return { user: data.user, userClient };
+    throw new Error('Unauthorized');
   }
 }
 
@@ -1336,28 +1321,9 @@ async function upgradePasswordHashIfNeeded(profile, rawPassword) {
   }
 }
 
-async function authenticateWithLegacyAuth(email, password) {
-  if (process.env.ALLOW_LEGACY_SUPABASE_AUTH !== 'true') return null;
-
-  const legacyClient = getUserClient('');
-  if (!legacyClient) return null;
-
-  try {
-    const { data, error } = await legacyClient.auth.signInWithPassword({ email, password });
-    if (error || !data?.user) return null;
-
-    const legacyEmail = data.user.email || email;
-    const profile = await getAuthProfileById(data.user.id).catch(() => null)
-      || await getAuthProfileByEmail(legacyEmail).catch(() => null);
-
-    if (!profile) return null;
-
-    await storeUserPassword(profile.id, password);
-    return profile;
-  } catch (legacyAuthError) {
-    console.error('Legacy auth attempt failed:', legacyAuthError?.message || legacyAuthError);
-    return null;
-  }
+// Autenticação externa legada removida: o login é exclusivamente VPS/JWT.
+async function authenticateWithLegacyAuth() {
+  return null;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4300,8 +4266,7 @@ app.post('/api/reset-password', async (req, res) => {
     const { user, admin } = await verifyAdmin(req);
     const { userId, newPassword } = req.body;
     if (!userId || !newPassword || newPassword.length < 6) return res.status(400).json({ error: 'userId and newPassword (min 6 chars) required' });
-    const { error } = await admin.auth.admin.updateUser(userId, { password: newPassword });
-    if (error) return res.status(400).json({ error: error.message });
+    await storeUserPassword(userId, newPassword);
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -4319,8 +4284,7 @@ app.post('/api/delete-user', async (req, res) => {
     await admin.from('user_roles').delete().eq('user_id', userId);
     await admin.from('notifications').delete().eq('user_id', userId);
     await admin.from('profiles').delete().eq('id', userId);
-    const { error } = await admin.auth.admin.deleteUser(userId);
-    if (error) throw error;
+    await pool.query('DELETE FROM auth_users WHERE id::text = $1', [String(userId)]).catch(() => null);
     res.json({ success: true });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -6958,41 +6922,10 @@ async function loadSeasonalClients(clientIds = []) {
 }
 
 async function fetchSystemSeasonalAlerts({ clientIds = [], fallbackClients = null } = {}) {
+  // Alertas sazonais calculados 100% localmente na VPS (sem serviços externos).
   const referenceDate = new Date();
   const clients = Array.isArray(fallbackClients) ? fallbackClients : await loadSeasonalClients(clientIds);
-  const fallbackAlerts = buildSeasonalAlertItems(clients, referenceDate);
-
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
-  if (!supabaseUrl || !supabaseKey) return fallbackAlerts;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 4000);
-
-  try {
-    const response = await fetch(`${supabaseUrl}/functions/v1/seasonal-alerts`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${supabaseKey}`,
-      },
-      body: JSON.stringify({ clientIds }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      console.warn('[seasonal-alerts] Falling back after edge error:', response.status);
-      return fallbackAlerts;
-    }
-
-    const data = await response.json();
-    return Array.isArray(data?.alerts) && data.alerts.length > 0 ? data.alerts : fallbackAlerts;
-  } catch (error) {
-    console.warn('[seasonal-alerts] Falling back to local seasonal mapping:', error?.message || error);
-    return fallbackAlerts;
-  } finally {
-    clearTimeout(timeout);
-  }
+  return buildSeasonalAlertItems(clients, referenceDate);
 }
 
 // ─── TV Dashboard endpoint ──────────────────────────────────

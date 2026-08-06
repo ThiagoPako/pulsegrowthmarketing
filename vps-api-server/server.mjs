@@ -310,21 +310,34 @@ ensureProposalTables().catch((error) => {
   console.error('Failed to ensure proposal tables:', error);
 });
 
-async function cleanupOldPortalVideos() {
-  const { rows: videos } = await pool.query(`
-    SELECT id, video_url 
-    FROM portal_videos 
-    WHERE created_at < NOW() - INTERVAL '60 days'
-  `);
+async function cleanupOldPortalVideos(options = {}) {
+  const { 
+    months = [], 
+    clientId = null, 
+    allClients = true, 
+    olderThanDays = 60 
+  } = options;
+
+  let query = 'DELETE FROM portal_videos WHERE 1=1';
+  const params = [];
+
+  if (clientId && !allClients) {
+    params.push(clientId);
+    query += ` AND client_id = $${params.length}`;
+  }
+
+  if (months.length > 0) {
+    // months is an array of strings like ['2026-08', '2026-07']
+    const monthConditions = months.map(m => {
+      const [year, month] = m.split('-');
+      return `(season_year = ${parseInt(year)} AND season_month = ${parseInt(month)})`;
+    });
+    query += ` AND (${monthConditions.join(' OR ')})`;
+  } else if (olderThanDays) {
+    query += ` AND created_at < NOW() - INTERVAL '${olderThanDays} days'`;
+  }
   
-  if (videos.length === 0) return 0;
-  
-  // Clean DB first to avoid UI issues
-  const { rowCount } = await pool.query(`
-    DELETE FROM portal_videos 
-    WHERE created_at < NOW() - INTERVAL '60 days'
-  `);
-  
+  const { rowCount } = await pool.query(query, params);
   return rowCount;
 }
 

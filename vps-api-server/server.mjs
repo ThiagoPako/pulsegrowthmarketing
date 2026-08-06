@@ -318,7 +318,9 @@ async function cleanupOldPortalVideos(options = {}) {
     olderThanDays = 60 
   } = options;
 
-  let query = 'DELETE FROM portal_videos WHERE 1=1';
+  let query = `DELETE FROM client_portal_contents
+    WHERE file_url IS NOT NULL
+      AND content_type <> 'arte'`;
   const params = [];
 
   if (clientId && !allClients) {
@@ -337,7 +339,35 @@ async function cleanupOldPortalVideos(options = {}) {
     query += ` AND created_at < NOW() - INTERVAL '${olderThanDays} days'`;
   }
   
-  const { rowCount } = await pool.query(query, params);
+  query += ' RETURNING file_url';
+  const { rows, rowCount } = await pool.query(query, params);
+
+  for (const row of rows) {
+    const fileUrl = String(row.file_url || '');
+    if (!fileUrl) continue;
+
+    const { rows: [{ still_used }] } = await pool.query(
+      'SELECT EXISTS (SELECT 1 FROM client_portal_contents WHERE file_url = $1) AS still_used',
+      [fileUrl],
+    );
+    if (still_used) continue;
+
+    try {
+      const parsed = new URL(fileUrl, 'https://agenciapulse.tech');
+      if (parsed.origin !== 'https://agenciapulse.tech' || !parsed.pathname.startsWith('/uploads/')) continue;
+      const relativePath = decodeURIComponent(parsed.pathname.replace(/^\/uploads\//, ''));
+      if (!relativePath || relativePath.includes('..')) continue;
+      for (const root of ['/var/www/uploads', '/var/www/html/uploads']) {
+        const rootPath = path.resolve(root);
+        const candidate = path.resolve(rootPath, relativePath);
+        if (candidate.startsWith(`${rootPath}${path.sep}`) && fs.existsSync(candidate)) {
+          fs.unlinkSync(candidate);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to remove portal video file:', error?.message || error);
+    }
+  }
   return rowCount;
 }
 
@@ -8188,7 +8218,12 @@ app.get('/api/gestao/summary', async (req, res) => {
 
 app.post('/api/portal-videos/bulk-delete', async (req, res) => {
   try {
+    const { user } = await verifyUser(req);
+    if (user.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito ao administrador' });
     const { months = [], clientId = null, allClients = true } = req.body;
+    if (!Array.isArray(months) || months.length === 0 || months.some(month => !/^\d{4}-(0[1-9]|1[0-2])$/.test(String(month)))) {
+      return res.status(400).json({ error: 'Selecione ao menos um mês válido' });
+    }
     
     const deletedCount = await cleanupOldPortalVideos({
       months,
@@ -8206,11 +8241,19 @@ app.post('/api/portal-videos/bulk-delete', async (req, res) => {
 
 app.get('/api/portal-videos/months', async (req, res) => {
   try {
+    const { user } = await verifyUser(req);
+    if (user.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito ao administrador' });
+    const clientId = String(req.query.clientId || '').trim();
+    const params = clientId ? [clientId] : [];
     const { rows } = await pool.query(`
-      SELECT DISTINCT season_year, season_month
-      FROM portal_videos
+      SELECT season_year, season_month, COUNT(*)::int AS video_count
+      FROM client_portal_contents
+      WHERE file_url IS NOT NULL
+        AND content_type <> 'arte'
+        ${clientId ? 'AND client_id = $1' : ''}
+      GROUP BY season_year, season_month
       ORDER BY season_year DESC, season_month DESC
-    `);
+    `, params);
     res.json({ months: rows });
   } catch (error) {
     res.status(500).json({ error: error.message });

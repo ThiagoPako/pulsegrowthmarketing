@@ -16,6 +16,7 @@ import { supabase } from '@/lib/vpsDb';
 import { supabase as supabaseCloud } from '@/integrations/supabase/client';
 import { ASSISTANT_KEY } from '@/components/ProductionAssistant';
 import { getHolidays, createHoliday, deleteHoliday, sendHolidayNotifications, getWhatsAppConfig, updateWhatsAppConfig, type Holiday } from '@/services/whatsappService';
+import PortalBulkDelete from '@/components/portal/PortalBulkDelete';
 import { format, parseISO, addDays, isSameDay, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -295,6 +296,8 @@ export default function CompanySettings() {
   return (
     <div className="max-w-2xl space-y-6">
       <h1 className="text-2xl font-display font-bold">Configurações</h1>
+
+      {isAdmin && <PortalBulkDelete />}
 
       {/* Turnos e Expediente */}
       <div className="glass-card p-6 space-y-5">

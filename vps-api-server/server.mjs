@@ -1342,22 +1342,22 @@ async function authenticateWithLegacyAuth(email, password) {
   const legacyClient = getUserClient('');
   if (!legacyClient) return null;
 
-  const { data, error } = await legacyClient.auth.signInWithPassword({ email, password });
-  if (error || !data?.user) return null;
-
-  const legacyEmail = data.user.email || email;
-  const profile = await getAuthProfileById(data.user.id).catch(() => null)
-    || await getAuthProfileByEmail(legacyEmail).catch(() => null);
-
-  if (!profile) return null;
-
   try {
-    await storeUserPassword(profile.id, password);
-  } catch (syncError) {
-    console.error('Legacy password sync failed:', syncError?.message || syncError);
-  }
+    const { data, error } = await legacyClient.auth.signInWithPassword({ email, password });
+    if (error || !data?.user) return null;
 
-  return profile;
+    const legacyEmail = data.user.email || email;
+    const profile = await getAuthProfileById(data.user.id).catch(() => null)
+      || await getAuthProfileByEmail(legacyEmail).catch(() => null);
+
+    if (!profile) return null;
+
+    await storeUserPassword(profile.id, password);
+    return profile;
+  } catch (legacyAuthError) {
+    console.error('Legacy auth attempt failed:', legacyAuthError?.message || legacyAuthError);
+    return null;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════

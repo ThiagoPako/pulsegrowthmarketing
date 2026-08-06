@@ -763,6 +763,24 @@ async function isAdminUser(user) {
   }
 }
 
+async function userHasAssignedRole(user, role) {
+  if (!user || !role) return false;
+  if (user.role === role) return true;
+  try {
+    await ensureAuthSupportTables();
+    const linkedIds = await getLinkedUserIds(user);
+    if (linkedIds.length === 0) return false;
+    const { rows } = await pool.query(
+      'SELECT 1 FROM user_roles WHERE user_id::text = ANY($1::text[]) AND role = $2 LIMIT 1',
+      [linkedIds, role]
+    );
+    return rows.length > 0;
+  } catch (error) {
+    console.error('Role lookup failed:', error?.message || error);
+    return false;
+  }
+}
+
 async function verifyAdmin(req) {
   const { user, userClient } = await verifyUser(req);
   if (await isAdminUser(user)) {
@@ -8221,7 +8239,7 @@ app.get('/api/gestao/summary', async (req, res) => {
 app.post('/api/portal-videos/bulk-delete', async (req, res) => {
   try {
     const { user } = await verifyUser(req);
-    if (user.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito ao administrador' });
+    if (!(await userHasAssignedRole(user, 'admin'))) return res.status(403).json({ error: 'Acesso restrito ao administrador' });
     const { months = [], clientId = null, allClients = true } = req.body;
     if (!Array.isArray(months) || months.length === 0 || months.some(month => !/^\d{4}-(0[1-9]|1[0-2])$/.test(String(month)))) {
       return res.status(400).json({ error: 'Selecione ao menos um mês válido' });
@@ -8244,7 +8262,7 @@ app.post('/api/portal-videos/bulk-delete', async (req, res) => {
 app.get('/api/portal-videos/months', async (req, res) => {
   try {
     const { user } = await verifyUser(req);
-    if (user.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito ao administrador' });
+    if (!(await userHasAssignedRole(user, 'admin'))) return res.status(403).json({ error: 'Acesso restrito ao administrador' });
     const clientId = String(req.query.clientId || '').trim();
     const params = clientId ? [clientId] : [];
     const { rows } = await pool.query(`

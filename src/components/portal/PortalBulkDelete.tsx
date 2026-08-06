@@ -13,8 +13,27 @@ interface VideoMonth {
   video_count?: number;
 }
 
+interface VideoContentType {
+  content_type: string;
+  video_count?: number;
+}
+
+const CONTENT_TYPE_LABELS: Record<string, string> = {
+  reel: 'Reels',
+  reels: 'Reels',
+  story: 'Stories',
+  stories: 'Stories',
+  video: 'Vídeos',
+  feed: 'Feed',
+  outros: 'Outros',
+};
+
+const typeLabel = (type: string) => CONTENT_TYPE_LABELS[type] ?? type;
+
 export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
   const [months, setMonths] = useState<VideoMonth[]>([]);
+  const [contentTypes, setContentTypes] = useState<VideoContentType[]>([]);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [clients, setClients] = useState<Array<{ id: string; company_name: string }>>([]);
   const [selectedClient, setSelectedClient] = useState(clientId || 'all');
   const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
@@ -25,13 +44,17 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
     setLoading(true);
     try {
       const token = localStorage.getItem('pulse_jwt');
-      const params = selectedClient !== 'all' ? `?clientId=${encodeURIComponent(selectedClient)}` : '';
+      const search = new URLSearchParams();
+      if (selectedClient !== 'all') search.set('clientId', selectedClient);
+      if (selectedTypes.length > 0) search.set('contentTypes', selectedTypes.join(','));
+      const params = search.toString() ? `?${search.toString()}` : '';
       const res = await fetch(`https://agenciapulse.tech/api/portal-videos/months${params}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Não foi possível carregar os meses');
       setMonths(data.months || []);
+      setContentTypes(data.contentTypes || []);
       setSelectedMonths([]);
     } catch (err) {
       console.error('Erro ao carregar meses:', err);
@@ -43,7 +66,7 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
 
   useEffect(() => {
     loadMonths();
-  }, [selectedClient]);
+  }, [selectedClient, selectedTypes]);
 
   useEffect(() => {
     if (clientId) return;
@@ -76,6 +99,7 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
           months: selectedMonths,
           clientId: selectedClient === 'all' ? null : selectedClient,
           allClients: selectedClient === 'all',
+          contentTypes: selectedTypes,
         })
       });
 
@@ -93,6 +117,12 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
     } finally {
       setDeleting(false);
     }
+  };
+
+  const toggleType = (t: string) => {
+    setSelectedTypes(prev =>
+      prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]
+    );
   };
 
   const toggleMonth = (m: string) => {
@@ -128,6 +158,34 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
           </Select>
         </div>
       )}
+
+      <div className="space-y-2">
+        <Label className="text-xs font-medium">Tipo de conteúdo</Label>
+        {contentTypes.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Nenhum tipo disponível.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {contentTypes.map(t => (
+              <div
+                key={t.content_type}
+                className="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+              >
+                <Checkbox
+                  id={`type-${t.content_type}`}
+                  checked={selectedTypes.includes(t.content_type)}
+                  onCheckedChange={() => toggleType(t.content_type)}
+                />
+                <Label htmlFor={`type-${t.content_type}`} className="text-xs cursor-pointer">
+                  {typeLabel(t.content_type)}{t.video_count ? ` (${t.video_count})` : ''}
+                </Label>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="text-[11px] text-muted-foreground">
+          {selectedTypes.length === 0 ? 'Nenhum tipo marcado = todos os tipos serão excluídos.' : `Excluindo apenas: ${selectedTypes.map(typeLabel).join(', ')}`}
+        </p>
+      </div>
 
       {loading ? (
         <div className="flex justify-center py-4">

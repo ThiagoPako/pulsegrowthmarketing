@@ -4,7 +4,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/vpsDb';
+import { supabase, vpsAuthedFetch } from '@/lib/vpsDb';
 import { toast } from 'sonner';
 
 interface VideoMonth {
@@ -43,26 +43,24 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
   const loadMonths = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('pulse_jwt');
       const search = new URLSearchParams();
       if (selectedClient !== 'all') search.set('clientId', selectedClient);
       if (selectedTypes.length > 0) search.set('contentTypes', selectedTypes.join(','));
       const params = search.toString() ? `?${search.toString()}` : '';
-      const res = await fetch(`https://agenciapulse.tech/api/portal-videos/months${params}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      const data = await res.json();
+      const res = await vpsAuthedFetch(`/portal-videos/months${params}`);
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Não foi possível carregar os meses');
       setMonths(data.months || []);
       setContentTypes(data.contentTypes || []);
       setSelectedMonths([]);
     } catch (err) {
       console.error('Erro ao carregar meses:', err);
-      toast.error('Erro ao carregar os meses com vídeos');
+      toast.error(err instanceof Error ? err.message : 'Erro ao carregar os meses com vídeos');
     } finally {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     loadMonths();
@@ -89,12 +87,8 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
 
     setDeleting(true);
     try {
-      const response = await fetch('https://agenciapulse.tech/api/portal-videos/bulk-delete', {
+      const response = await vpsAuthedFetch('/portal-videos/bulk-delete', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(localStorage.getItem('pulse_jwt') ? { Authorization: `Bearer ${localStorage.getItem('pulse_jwt')}` } : {}),
-        },
         body: JSON.stringify({
           months: selectedMonths,
           clientId: selectedClient === 'all' ? null : selectedClient,
@@ -103,7 +97,8 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
         })
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
+
       if (response.ok && data.success) {
         toast.success(`${data.deletedCount} vídeos deletados com sucesso!`);
         setSelectedMonths([]);

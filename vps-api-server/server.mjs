@@ -8265,7 +8265,9 @@ app.post('/api/portal-videos/bulk-delete', async (req, res) => {
     res.json({ success: true, deletedCount });
   } catch (error) {
     console.error('bulk-delete error:', error);
-    res.status(500).json({ error: error.message });
+    const message = error?.message || 'Erro interno';
+    const status = error?.status || (/unauthorized|token|jwt/i.test(message) ? 401 : 500);
+    res.status(status).json({ error: status === 401 ? 'Sessão expirada. Faça login novamente.' : message });
   }
 });
 
@@ -8305,7 +8307,10 @@ app.get('/api/portal-videos/months', async (req, res) => {
 
     res.json({ months: rows, contentTypes: typeRows });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('portal-videos/months error:', error);
+    const message = error?.message || 'Erro interno';
+    const status = error?.status || (/unauthorized|token|jwt/i.test(message) ? 401 : 500);
+    res.status(status).json({ error: status === 401 ? 'Sessão expirada. Faça login novamente.' : message });
   }
 });
 

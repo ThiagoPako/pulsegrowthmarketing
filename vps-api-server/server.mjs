@@ -1732,10 +1732,10 @@ function getAiConfig(provider, dbApiKey) {
   throw new Error('Nenhuma API key de IA configurada.');
 }
 
-async function fetchDbApiKey(supabase, aiProvider) {
+async function fetchDbApiKey(db, aiProvider) {
   if (!aiProvider) return undefined;
   const providerMap = { gemini: 'ai_gemini', openai: 'ai_openai', claude: 'ai_claude' };
-  const { data } = await supabase
+  const { data } = await db
     .from('api_integrations').select('config')
     .eq('provider', providerMap[aiProvider] || '').eq('status', 'ativo').limit(1).single();
   return data?.config?.api_key_encrypted;
@@ -1814,7 +1814,7 @@ async function callAi(ai, model, messages, options = {}) {
 const WHATSAPP_API_URL = 'https://api.atendeclique.com.br/api/messages/send';
 const PORTAL_BASE_URL = 'https://pulsegrowthmarketing.lovable.app/portal';
 
-async function sendWhatsAppDirect(config, number, message, supabase, clientId, triggerType) {
+async function sendWhatsAppDirect(config, number, message, db, clientId, triggerType) {
   try {
     const apiBody = {
       number: number.replace(/\D/g, ''),
@@ -1830,7 +1830,7 @@ async function sendWhatsAppDirect(config, number, message, supabase, clientId, t
       body: JSON.stringify(apiBody),
     });
     const apiResult = await apiResponse.json();
-    await supabase.from('whatsapp_messages').insert({
+    await db.from('whatsapp_messages').insert({
       phone_number: number.replace(/\D/g, ''),
       message,
       status: apiResponse.ok ? 'sent' : 'failed',
@@ -8465,9 +8465,6 @@ server.listen(PORT, () => {
 /*
  * .env required variables:
  * 
- * SUPABASE_URL=https://zqpplhbzhetabjopdzcn.supabase.co
- * SUPABASE_SERVICE_ROLE_KEY=<your_service_role_key>
- * SUPABASE_ANON_KEY=<your_anon_key>
  * GOOGLE_GEMINI_API_KEY=<your_gemini_key>
  * WHATSAPP_API_TOKEN=<your_whatsapp_token>
  * API_PORT=3002

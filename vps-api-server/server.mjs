@@ -793,6 +793,11 @@ function selectColumn(columns, columnName, fallbackSql = `NULL::text`) {
   return columns.has(columnName) ? columnName : `${fallbackSql} AS ${columnName}`;
 }
 
+async function ensureProfilesMonthlySalaryColumn() {
+  const columns = await getExistingColumns('profiles').catch(() => new Set());
+  return columns.has('monthly_salary');
+}
+
 async function ensureAuthSupportTables() {
   if (!authSupportTablesPromise) {
     // Authentication requests must remain read-only at the schema level.

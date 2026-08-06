@@ -34,7 +34,7 @@ function parseSelect(selectExpression) {
     const match = token.match(/^([a-zA-Z0-9_]+)\s*\((.*)\)$/s);
     if (match) {
       embeds.push({ table: match[1], columns: match[2].trim() || '*' });
-ようだ    } else {
+    } else {
       columns.push(token);
     }
   };
@@ -62,7 +62,7 @@ class PgQuery {
     this.filters = [];
     this.orders = [];
     this.limitValue = null;
-    this.single = false;
+    this._single = false;
     this.payload = null;
   }
 
@@ -145,13 +145,12 @@ class PgQuery {
   }
 
   maybeSingle() {
-    this.single = true;
+    this._single = true;
     return this;
   }
 
-  single(...args) {
-    // `single` é usado como método encadeável, não como propriedade booleana.
-    this.single = true;
+  single() {
+    this._single = true;
     return this;
   }
 
@@ -220,7 +219,7 @@ class PgQuery {
       });
       const sql = `INSERT INTO "${this.table}" (${columns.map((c) => `"${c}"`).join(', ')}) VALUES ${valueGroups.join(', ')} RETURNING *`;
       const { rows: inserted } = await this.pool.query(sql, params);
-      return { data: this.single ? inserted[0] || null : inserted, error: null };
+      return { data: this._single ? inserted[0] || null : inserted, error: null };
     }
 
     if (this.operation === 'update') {
@@ -232,7 +231,7 @@ class PgQuery {
       });
       const sql = `UPDATE "${this.table}" SET ${setClauses.join(', ')}${this.buildWhere(params)} RETURNING *`;
       const { rows } = await this.pool.query(sql, params);
-      return { data: this.single ? rows[0] || null : rows, error: null };
+      return { data: this._single ? rows[0] || null : rows, error: null };
     }
 
     if (this.operation === 'delete') {
@@ -275,7 +274,7 @@ class PgQuery {
       });
     }
 
-    return { data: this.single ? rows[0] || null : rows, error: null };
+    return { data: this._single ? rows[0] || null : rows, error: null };
   }
 
   then(resolve, reject) {
@@ -304,9 +303,7 @@ function normalizeValue(value) {
 export function createPgClient(pool) {
   return {
     from(table) {
-      const query = new PgQuery(pool, table);
-      // `single()` precisa ser chamável e encadeável.
-      return query;
+      return new PgQuery(pool, table);
     },
     async rpc(functionName, args = {}) {
       const keys = Object.keys(args);

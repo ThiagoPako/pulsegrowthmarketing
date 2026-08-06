@@ -8552,8 +8552,86 @@ app.post('/api/public-reschedule', async (req, res) => {
   }
 });
 
+// ─── Uploads (substitui o antigo upload-server na porta 3001) ───
+// O front (src/services/vpsApi.ts) envia multipart para POST /api/upload
+// com os campos { folder?, file } e espera { path } relativo a /uploads/.
+const UPLOAD_ROOT = process.env.UPLOAD_ROOT
+  || (fs.existsSync('/var/www/uploads') ? '/var/www/uploads' : '/var/www/html/uploads');
+
+function sanitizeUploadFolder(raw) {
+  if (typeof raw !== 'string') return '';
+  return raw
+    .split('/')
+    .map((part) => part.trim().replace(/[^a-zA-Z0-9._-]/g, ''))
+    .filter((part) => part && part !== '.' && part !== '..')
+    .join('/');
+}
+
+const uploadStorage = multer.diskStorage({
+  destination(req, _file, cb) {
+    try {
+      const folder = sanitizeUploadFolder(req.body?.folder);
+      const dest = path.resolve(UPLOAD_ROOT, folder);
+      if (!dest.startsWith(path.resolve(UPLOAD_ROOT))) return cb(new Error('Pasta inválida'));
+      fs.mkdirSync(dest, { recursive: true });
+      cb(null, dest);
+    } catch (error) {
+      cb(error);
+    }
+  },
+  filename(_req, file, cb) {
+    const ext = path.extname(file.originalname || '').toLowerCase().replace(/[^.a-z0-9]/g, '');
+    const base = `${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
+    cb(null, `${base}${ext}`);
+  },
+});
+
+const uploadHandler = multer({
+  storage: uploadStorage,
+  limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // 2 GB
+});
+
+app.post('/api/upload', (req, res) => {
+  uploadHandler.single('file')(req, res, (err) => {
+    if (err) {
+      console.error('[upload] error:', err);
+      return res.status(400).json({ error: err.message || 'Falha no upload' });
+    }
+    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+
+    const relative = path
+      .relative(path.resolve(UPLOAD_ROOT), req.file.path)
+      .split(path.sep)
+      .join('/');
+
+    res.json({
+      path: relative,
+      filename: req.file.filename,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+      url: `/uploads/${relative}`,
+    });
+  });
+});
+
+app.delete('/api/upload', express.json(), (req, res) => {
+  try {
+    const raw = String(req.body?.path || '').replace(/^\/+/, '').replace(/^uploads\//, '');
+    const relative = sanitizeUploadFolder(raw);
+    if (!relative) return res.status(400).json({ error: 'Caminho inválido' });
+
+    const abs = path.resolve(UPLOAD_ROOT, relative);
+    if (!abs.startsWith(path.resolve(UPLOAD_ROOT))) return res.status(400).json({ error: 'Caminho inválido' });
+    if (fs.existsSync(abs)) fs.unlinkSync(abs);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[upload:delete] error:', error);
+    res.status(500).json({ error: error.message || 'Falha ao remover arquivo' });
+  }
+});
 
 // ─── Start ──────────────────────────────────────────────────
+
 
 server.listen(PORT, () => {
   console.log(`🚀 Pulse API Server running on port ${PORT} (HTTP + WebSocket)`);

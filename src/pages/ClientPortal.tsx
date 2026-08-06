@@ -67,7 +67,7 @@ interface ClientData {
   client_type?: string;
 }
 
-type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem' | 'designer' | 'descontos' | 'entregas' | 'rendimento' | 'eventos' | 'treinamento' | 'otimizados';
+type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem' | 'designer' | 'descontos' | 'entregas' | 'rendimento' | 'eventos' | 'treinamento' | 'otimizados' | 'admin';
 
 const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';

@@ -244,7 +244,7 @@ function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDel
 }
 
 export default function ContentManager() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { currentUser } = useApp();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -262,9 +262,10 @@ export default function ContentManager() {
   const [file, setFile] = useState<File | null>(null);
   const [filterClient, setFilterClient] = useState('all');
   const [showPortalSelector, setShowPortalSelector] = useState(false);
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [playingContent, setPlayingContent] = useState<ContentRow | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.roles?.includes('admin') === true;
+  const isAdmin = profile?.role === 'admin' || currentUser?.role === 'admin' || currentUser?.roles?.includes('admin') === true;
 
   useEffect(() => { loadData(); }, []);
 
@@ -403,6 +404,21 @@ export default function ContentManager() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Button
+                variant="destructive"
+                size="sm"
+                className="gap-1.5"
+                onClick={event => {
+                  event.stopPropagation();
+                  setShowBulkDelete(current => !current);
+                }}
+                aria-expanded={showBulkDelete}
+                aria-controls="portal-video-cleanup"
+              >
+                <Trash2 size={14} /> Excluir vídeos
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -418,8 +434,15 @@ export default function ContentManager() {
         </div>
       </motion.div>
 
-      {/* Admin cleanup belongs in the Portal module itself. */}
-      {isAdmin && <PortalBulkDelete />}
+      {isAdmin && showBulkDelete && (
+        <motion.div
+          id="portal-video-cleanup"
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <PortalBulkDelete />
+        </motion.div>
+      )}
 
       {/* Portal Client Selector Dialog */}
       {showPortalSelector && (

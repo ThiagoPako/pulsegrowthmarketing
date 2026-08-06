@@ -87,12 +87,8 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
 
     setDeleting(true);
     try {
-      const response = await fetch('https://agenciapulse.tech/api/portal-videos/bulk-delete', {
+      const response = await vpsAuthedFetch('/portal-videos/bulk-delete', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(localStorage.getItem('pulse_jwt') ? { Authorization: `Bearer ${localStorage.getItem('pulse_jwt')}` } : {}),
-        },
         body: JSON.stringify({
           months: selectedMonths,
           clientId: selectedClient === 'all' ? null : selectedClient,
@@ -101,7 +97,8 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
         })
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
+
       if (response.ok && data.success) {
         toast.success(`${data.deletedCount} vídeos deletados com sucesso!`);
         setSelectedMonths([]);

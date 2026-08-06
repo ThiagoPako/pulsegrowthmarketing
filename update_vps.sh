@@ -25,5 +25,14 @@ pm2 save
 
 sudo nginx -t
 sudo systemctl reload nginx
-curl --fail --silent --show-error http://127.0.0.1:3002/api/health >/dev/null
+for attempt in $(seq 1 20); do
+  if curl --fail --silent http://127.0.0.1:3002/api/health >/dev/null; then
+    break
+  fi
+  if [ "$attempt" -eq 20 ]; then
+    pm2 logs pulse-api --lines 80 --nostream
+    exit 1
+  fi
+  sleep 1
+done
 pm2 status

@@ -8300,6 +8300,38 @@ app.get('/api/gestao/summary', async (req, res) => {
   }
 });
 
+app.post('/api/portal-videos/bulk-delete', async (req, res) => {
+  try {
+    const { months = [], clientId = null, allClients = true } = req.body;
+    
+    const deletedCount = await cleanupOldPortalVideos({
+      months,
+      clientId,
+      allClients,
+      olderThanDays: months.length > 0 ? null : 60
+    });
+
+    res.json({ success: true, deletedCount });
+  } catch (error) {
+    console.error('bulk-delete error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/portal-videos/months', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT DISTINCT season_year, season_month
+      FROM portal_videos
+      ORDER BY season_year DESC, season_month DESC
+    `);
+    res.json({ months: rows });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+});
+
 // Close month snapshot --------------------------------------------
 app.post('/api/gestao/close-month', async (req, res) => {
   try {

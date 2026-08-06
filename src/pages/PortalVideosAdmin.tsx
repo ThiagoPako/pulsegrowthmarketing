@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { Trash2, Video, Eye, Upload, Sparkles, Megaphone, Rocket, Film, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
+import PortalBulkDelete from '@/components/portal/PortalBulkDelete';
 
 interface PortalVideo {
   id: string;
@@ -118,6 +119,8 @@ export default function PortalVideosAdmin() {
           <p className="text-sm text-muted-foreground">Gerencie os vídeos de boas-vindas e novidades do Pulse Club</p>
         </div>
       </motion.div>
+
+      <PortalBulkDelete />
 
       {/* Upload Card */}
       <motion.div

@@ -152,7 +152,7 @@ export default function CompanySettings() {
   const [autoHolidayNotification, setAutoHolidayNotification] = useState(false);
   const [sendingHoliday, setSendingHoliday] = useState<string | null>(null);
 
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.roles?.includes('admin') === true;
 
   const loadHolidays = useCallback(async () => {
     const h = await getHolidays();

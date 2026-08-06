@@ -928,6 +928,16 @@ export default function ClientPortal() {
           <motion.div key="treinamento" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
             <PortalTraining clientId={client.id} clientColor={clientColor} isTeamMember={isTeamMember} />
           </motion.div>
+        ) : activeTab === 'admin' && isTeamMember ? (
+          <motion.div key="admin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[800px] mx-auto px-4 sm:px-8 py-8 pb-20">
+            <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <Shield className="text-violet-400" size={20} />
+              Área de Administração
+            </h2>
+            <p className="text-sm text-white/50 mb-6">Controle avançado do portal para membros da equipe.</p>
+            
+            <PortalBulkDelete clientId={client.id} />
+          </motion.div>
         ) : (
           /* ── METRICS TAB ── */
           <motion.div key="metrics" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8 pb-20 space-y-8">

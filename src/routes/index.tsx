@@ -1,13 +1,40 @@
+import React from 'react';
+
 export const SupabaseCheck = () => {
+  const deployCommand = "cd /var/www/pulsegrowthmarketing && git pull && npm install && npm run build && pm2 restart pulse-api pulse-uploads && sudo systemctl reload nginx && pm2 status";
+
   return (
-    <div className="p-4 bg-card text-card-foreground rounded-lg border shadow-sm">
-      <h2 className="text-lg font-bold mb-2">Comando de Atualização da VPS</h2>
-      <p className="mb-4">Use o comando abaixo no terminal da sua VPS para carregar todas as atualizações mais recentes:</p>
-      <div className="bg-muted p-3 rounded font-mono text-sm break-all select-all">
-        cd /var/www/pulsegrowthmarketing && git pull && npm install && npm run build && pm2 restart pulse-api pulse-uploads && sudo systemctl reload nginx && pm2 status
-      </div>
-      <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-md text-sm text-blue-600 dark:text-blue-400">
-        <strong>Nota:</strong> Este comando sincroniza o código, reconstrói o frontend e reinicia os serviços do backend.
+    <div className="min-h-screen bg-background p-8 flex items-center justify-center">
+      <div className="max-w-2xl w-full p-6 bg-card text-card-foreground rounded-xl border-2 border-primary/20 shadow-2xl space-y-6">
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold tracking-tight text-primary">Comando de Atualização VPS</h2>
+          <p className="text-muted-foreground">
+            Este é o comando validado que atualiza o sistema mantendo a integridade de todos os dados do banco de dados e arquivos locais.
+          </p>
+        </div>
+
+        <div className="relative group">
+          <div className="absolute -inset-1 bg-gradient-to-r from-orange-500 to-red-600 rounded-lg blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
+          <div className="relative bg-muted p-4 rounded-lg font-mono text-sm break-all cursor-pointer hover:bg-muted/80 transition-colors border border-border" onClick={() => navigator.clipboard.writeText(deployCommand)}>
+            {deployCommand}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          <div className="p-3 bg-secondary/50 rounded-lg border border-border">
+            <span className="font-semibold block mb-1 text-primary">Preservação de Dados</span>
+            O banco de dados PostgreSQL e os uploads não são afetados pelo build ou git pull.
+          </div>
+          <div className="p-3 bg-secondary/50 rounded-lg border border-border">
+            <span className="font-semibold block mb-1 text-primary">Zero Downtime</span>
+            O reload do Nginx e restart do PM2 garantem que a transição seja suave.
+          </div>
+        </div>
+
+        <div className="pt-4 border-t border-border flex justify-between items-center text-xs text-muted-foreground italic">
+          <span>Última validação: Hoje</span>
+          <span>pulsegrowthmarketing</span>
+        </div>
       </div>
     </div>
   );

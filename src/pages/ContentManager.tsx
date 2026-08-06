@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/vpsDb';
 import { uploadFileToVps, uploadBlobToVps } from '@/services/vpsApi';
 import { useAuth } from '@/hooks/useAuth';
-import { useApp } from '@/contexts/AppContext';
 import PortalBulkDelete from '@/components/portal/PortalBulkDelete';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -244,8 +243,7 @@ function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDel
 }
 
 export default function ContentManager() {
-  const { user, profile } = useAuth();
-  const { currentUser } = useApp();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [clients, setClients] = useState<ClientOption[]>([]);

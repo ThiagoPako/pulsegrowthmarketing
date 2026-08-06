@@ -8556,8 +8556,30 @@ app.post('/api/public-reschedule', async (req, res) => {
 // ─── Uploads (substitui o antigo upload-server na porta 3001) ───
 // O front (src/services/vpsApi.ts) envia multipart para POST /api/upload
 // com os campos { folder?, file } e espera { path } relativo a /uploads/.
-const UPLOAD_ROOT = process.env.UPLOAD_ROOT
-  || (fs.existsSync('/var/www/uploads') ? '/var/www/uploads' : '/var/www/html/uploads');
+function resolveUploadRoot() {
+  const configuredRoot = process.env.UPLOAD_ROOT?.trim();
+  const candidates = [
+    configuredRoot,
+    '/var/www/uploads',
+    path.join(__dirname, '..', 'uploads'),
+  ].filter((candidate, index, all) => candidate && all.indexOf(candidate) === index);
+
+  for (const candidate of candidates) {
+    try {
+      const absolute = path.resolve(candidate);
+      fs.mkdirSync(absolute, { recursive: true });
+      fs.accessSync(absolute, fs.constants.R_OK | fs.constants.W_OK);
+      return absolute;
+    } catch (error) {
+      console.error(`[upload] diretório indisponível: ${candidate}`, error.message);
+    }
+  }
+
+  throw new Error('Nenhum diretório de upload possui permissão de leitura e escrita');
+}
+
+const UPLOAD_ROOT = resolveUploadRoot();
+console.log(`[upload] arquivos serão gravados em ${UPLOAD_ROOT}`);
 
 function sanitizeUploadFolder(raw) {
   if (typeof raw !== 'string') return '';
@@ -8592,11 +8614,37 @@ const uploadHandler = multer({
   limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // 2 GB
 });
 
+function uploadErrorStatus(error) {
+  if (error?.code === 'LIMIT_FILE_SIZE') return 413;
+  if (error?.code === 'ENOSPC') return 507;
+  return 500;
+}
+
+app.get('/api/upload-health', (_req, res) => {
+  try {
+    fs.accessSync(UPLOAD_ROOT, fs.constants.R_OK | fs.constants.W_OK);
+    const stats = fs.statfsSync(UPLOAD_ROOT);
+    return res.json({
+      ok: true,
+      uploadRoot: UPLOAD_ROOT,
+      freeBytes: stats.bavail * stats.bsize,
+    });
+  } catch (error) {
+    console.error('[upload:health] error:', error);
+    return res.status(503).json({ ok: false, error: error.message || 'Diretório de upload indisponível' });
+  }
+});
+
 app.post('/api/upload', (req, res) => {
   uploadHandler.single('file')(req, res, (err) => {
     if (err) {
       console.error('[upload] error:', err);
-      return res.status(400).json({ error: err.message || 'Falha no upload' });
+      return res.status(uploadErrorStatus(err)).json({
+        error: err.code === 'ENOSPC'
+          ? 'Sem espaço disponível para armazenar o arquivo'
+          : err.message || 'Falha no upload',
+        code: err.code || 'UPLOAD_ERROR',
+      });
     }
     if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
 

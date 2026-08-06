@@ -183,9 +183,17 @@ function uploadOnce(
       const ct = xhr.getResponseHeader('content-type') || '';
       if (xhr.status < 200 || xhr.status >= 300) {
         if (!ct.includes('application/json')) {
-          return reject(new Error(`Servidor indisponível (HTTP ${xhr.status}).`));
+          const proxyHint = xhr.status === 413
+            ? ' O arquivo excede o limite configurado no Nginx.'
+            : ' Verifique o proxy e o espaço em disco da VPS.';
+          return reject(new Error(`Servidor indisponível (HTTP ${xhr.status}).${proxyHint}`));
         }
-        return reject(new Error(`Falha no upload: ${xhr.responseText}`));
+        try {
+          const errorData = JSON.parse(xhr.responseText);
+          return reject(new Error(errorData?.error || `Falha no upload (HTTP ${xhr.status}).`));
+        } catch {
+          return reject(new Error(`Falha no upload (HTTP ${xhr.status}).`));
+        }
       }
       if (!ct.includes('application/json')) {
         return reject(new Error('Resposta inesperada do servidor de upload.'));

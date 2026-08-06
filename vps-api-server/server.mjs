@@ -3,7 +3,7 @@
  * Deploy on agenciapulse.tech alongside the existing upload-server
  * 
  * SETUP:
- * 1. npm install express cors @supabase/supabase-js pg bcrypt jsonwebtoken
+ * 1. npm install express cors @supabase/supabase-js pg bcryptjs jsonwebtoken
  * 2. Create .env with all required variables (see bottom of file)
  * 3. pm2 start server.mjs --name pulse-api
  * 
@@ -17,7 +17,7 @@ import express from 'express';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
 import pg from 'pg';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
@@ -8329,7 +8329,6 @@ app.get('/api/portal-videos/months', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
-});
 });
 
 // Close month snapshot --------------------------------------------

@@ -6,8 +6,10 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   Play, Pause, Maximize, Check, MessageSquare, X, ChevronLeft, ChevronRight,
   BarChart3, Send, Clock, Film, Image, Palette, Video, Award, Bell, Volume2,
-  VolumeX, Eye, TrendingUp, Sparkles, ChevronDown, Loader2, LogOut, Shield, Download, Rocket
+  VolumeX, Eye, TrendingUp, Sparkles, ChevronDown, Loader2, LogOut, Shield, Download, Rocket,
+  Trash2, Settings
 } from 'lucide-react';
+import PortalBulkDelete from '@/components/portal/PortalBulkDelete';
 import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -65,7 +67,7 @@ interface ClientData {
   client_type?: string;
 }
 
-type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem' | 'designer' | 'descontos' | 'entregas' | 'rendimento' | 'eventos' | 'treinamento' | 'otimizados';
+type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem' | 'designer' | 'descontos' | 'entregas' | 'rendimento' | 'eventos' | 'treinamento' | 'otimizados' | 'admin';
 
 const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
@@ -623,6 +625,15 @@ export default function ClientPortal() {
                 </button>
               )}
             </div>
+            {isTeamMember && (
+              <button
+                onClick={() => setActiveTab('admin')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'admin' ? 'bg-red-500/20 text-red-400' : 'text-red-400/50 hover:text-red-400 hover:bg-red-500/10'}`}
+              >
+                <Trash2 size={14} />
+                Limpeza
+              </button>
+            )}
             <PortalVideoButtons hasNews={portalVideoState.hasNews} hasWelcome={portalVideoState.hasWelcome} isNewClient={portalVideoState.isNewClient} />
             <PortalNotifications
               clientId={client.id}
@@ -916,6 +927,16 @@ export default function ClientPortal() {
         ) : activeTab === 'treinamento' ? (
           <motion.div key="treinamento" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
             <PortalTraining clientId={client.id} clientColor={clientColor} isTeamMember={isTeamMember} />
+          </motion.div>
+        ) : activeTab === 'admin' && isTeamMember ? (
+          <motion.div key="admin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[800px] mx-auto px-4 sm:px-8 py-8 pb-20">
+            <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <Shield className="text-violet-400" size={20} />
+              Área de Administração
+            </h2>
+            <p className="text-sm text-white/50 mb-6">Controle avançado do portal para membros da equipe.</p>
+            
+            <PortalBulkDelete clientId={client.id} />
           </motion.div>
         ) : (
           /* ── METRICS TAB ── */

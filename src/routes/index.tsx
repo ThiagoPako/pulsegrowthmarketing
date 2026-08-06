@@ -1,7 +1,7 @@
 import React from 'react';
 
 export const SupabaseCheck = () => {
-  const deployCommand = "cd /var/www/pulsegrowthmarketing && git pull && npm install && npm run build && pm2 restart pulse-api pulse-uploads && sudo systemctl reload nginx && pm2 status";
+   const deployCommand = "cd /var/www/pulsegrowthmarketing && git pull && npm install && npm run build && pm2 restart pulse-api pulse-uploads && sudo systemctl reload nginx && pm2 status";
 
   return (
     <div className="min-h-screen bg-background p-8 flex items-center justify-center">
@@ -34,6 +34,15 @@ export const SupabaseCheck = () => {
         <div className="pt-4 border-t border-border flex justify-between items-center text-xs text-muted-foreground italic">
           <span>Última validação: Hoje</span>
           <span>pulsegrowthmarketing</span>
+          <div className="mt-8 p-4 bg-violet-500/10 border border-violet-500/20 rounded-xl">
+            <h3 className="text-sm font-bold text-violet-400 mb-2">Novas Funções do Portal (Admin)</h3>
+            <ul className="text-xs text-white/60 list-disc list-inside space-y-1">
+              <li>Botão de Limpeza na header do Portal (visível apenas para admin)</li>
+              <li>Seleção múltipla de meses para deleção de vídeos</li>
+              <li>Filtro por cliente específico ou limpeza global</li>
+              <li>Endpoints de segurança na VPS para deleção em massa</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>

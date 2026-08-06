@@ -3065,6 +3065,8 @@ app.post('/api/portal-actions', async (req, res) => {
 
     // ── Portal videos (welcome/news) ──
     if (action === 'cleanup_old_portal_videos') {
+      const { user } = await verifyUser(req);
+      if (user.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito ao administrador' });
       const deletedCount = await cleanupOldPortalVideos();
       return res.json({ success: true, deletedCount });
     }

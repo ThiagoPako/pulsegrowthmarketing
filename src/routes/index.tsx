@@ -7,7 +7,7 @@ export const SupabaseCheck = () => {
     <div className="min-h-screen bg-background p-8 flex items-center justify-center">
       <div className="max-w-2xl w-full p-6 bg-card text-card-foreground rounded-xl border-2 border-primary/20 shadow-2xl space-y-6">
         <div className="space-y-2">
-          <h2 className="text-2xl font-bold tracking-tight text-primary">Comando de Atualização VPS</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-primary">comando pra atualizar na vps todas a atualziações que fizemos</h2>
           <p className="text-muted-foreground">
             Este é o comando validado que atualiza o sistema mantendo a integridade de todos os dados do banco de dados e arquivos locais.
           </p>

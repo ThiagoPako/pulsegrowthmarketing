@@ -315,13 +315,22 @@ async function cleanupOldPortalVideos(options = {}) {
     months = [], 
     clientId = null, 
     allClients = true, 
-    olderThanDays = 60 
+    olderThanDays = 60,
+    contentTypes = []
   } = options;
 
   let query = `DELETE FROM client_portal_contents
     WHERE file_url IS NOT NULL
       AND content_type <> 'arte'`;
   const params = [];
+
+  const types = Array.isArray(contentTypes)
+    ? contentTypes.map((t) => String(t || '').trim()).filter((t) => t && t !== 'arte')
+    : [];
+  if (types.length > 0) {
+    params.push(types);
+    query += ` AND content_type = ANY($${params.length}::text[])`;
+  }
 
   if (clientId && !allClients) {
     params.push(clientId);
@@ -8240,7 +8249,7 @@ app.post('/api/portal-videos/bulk-delete', async (req, res) => {
   try {
     const { user } = await verifyUser(req);
     if (!(await userHasAssignedRole(user, 'admin'))) return res.status(403).json({ error: 'Acesso restrito ao administrador' });
-    const { months = [], clientId = null, allClients = true } = req.body;
+    const { months = [], clientId = null, allClients = true, contentTypes = [] } = req.body;
     if (!Array.isArray(months) || months.length === 0 || months.some(month => !/^\d{4}-(0[1-9]|1[0-2])$/.test(String(month)))) {
       return res.status(400).json({ error: 'Selecione ao menos um mês válido' });
     }
@@ -8249,6 +8258,7 @@ app.post('/api/portal-videos/bulk-delete', async (req, res) => {
       months,
       clientId,
       allClients,
+      contentTypes: Array.isArray(contentTypes) ? contentTypes : [],
       olderThanDays: months.length > 0 ? null : 60
     });
 
@@ -8264,17 +8274,36 @@ app.get('/api/portal-videos/months', async (req, res) => {
     const { user } = await verifyUser(req);
     if (!(await userHasAssignedRole(user, 'admin'))) return res.status(403).json({ error: 'Acesso restrito ao administrador' });
     const clientId = String(req.query.clientId || '').trim();
-    const params = clientId ? [clientId] : [];
+    const rawTypes = String(req.query.contentTypes || '').trim();
+    const types = rawTypes ? rawTypes.split(',').map((t) => t.trim()).filter((t) => t && t !== 'arte') : [];
+
+    const params = [];
+    let filter = '';
+    if (clientId) { params.push(clientId); filter += ` AND client_id = $${params.length}`; }
+
+    const typeFilter = types.length ? (() => { params.push(types); return ` AND content_type = ANY($${params.length}::text[])`; })() : '';
+
     const { rows } = await pool.query(`
       SELECT season_year, season_month, COUNT(*)::int AS video_count
       FROM client_portal_contents
       WHERE file_url IS NOT NULL
         AND content_type <> 'arte'
-        ${clientId ? 'AND client_id = $1' : ''}
+        ${filter}${typeFilter}
       GROUP BY season_year, season_month
       ORDER BY season_year DESC, season_month DESC
     `, params);
-    res.json({ months: rows });
+
+    const { rows: typeRows } = await pool.query(`
+      SELECT COALESCE(content_type, 'outros') AS content_type, COUNT(*)::int AS video_count
+      FROM client_portal_contents
+      WHERE file_url IS NOT NULL
+        AND content_type <> 'arte'
+        ${filter}
+      GROUP BY 1
+      ORDER BY 1
+    `, clientId ? [clientId] : []);
+
+    res.json({ months: rows, contentTypes: typeRows });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

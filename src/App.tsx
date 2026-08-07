@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -131,10 +131,40 @@ function PageLoader() {
   );
 }
 
-function ProtectedRoute({ children, noLayout = false }: { children: React.ReactNode, noLayout?: boolean }) {
+/**
+ * Route guard: só renderiza a rota protegida depois que a sessão (`user`) E o
+ * perfil/role (`currentUser`) estiverem resolvidos. Isso evita o "flash" do
+ * Painel de Controle genérico e o carregamento pesado desnecessário antes de
+ * sabermos qual painel pertence ao usuário.
+ *
+ * Fallback de segurança: se o perfil não resolver em 8s (ex.: erro de rede),
+ * liberamos a renderização para não travar o app em loader infinito.
+ */
+function ProtectedRoute({
+  children,
+  noLayout = false,
+  requireProfile = true,
+}: {
+  children: React.ReactNode;
+  noLayout?: boolean;
+  requireProfile?: boolean;
+}) {
   const { user, loading } = useAuth();
+  const { currentUser } = useApp();
+  const [profileTimedOut, setProfileTimedOut] = useState(false);
+
+  useEffect(() => {
+    if (currentUser || !user) {
+      setProfileTimedOut(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setProfileTimedOut(true), 8000);
+    return () => window.clearTimeout(timer);
+  }, [currentUser, user]);
+
   if (loading) return <PageLoader />;
   if (!user) return <Navigate to="/login" replace />;
+  if (requireProfile && !currentUser && !profileTimedOut) return <PageLoader />;
   if (noLayout) return <>{children}</>;
   return <Layout>{children}</Layout>;
 }
@@ -156,19 +186,18 @@ function AppRoutes() {
         <Route path="/gestao/historico" element={<RequireSocioGestor><GestaoHistorico /></RequireSocioGestor>} />
         <Route path="/dashboard" element={
           <ProtectedRoute>
-            {/* Enquanto o perfil (e portanto a role) não terminou de carregar, exibimos o
-                loader em vez de cair no <Dashboard /> genérico — isso evitava o "flash"
-                do Painel de Controle antes do painel correto da função do usuário. */}
-            {!currentUser ? <PageLoader /> :
-             currentUser.role === 'videomaker' ? <VideomakerDashboard /> :
-             currentUser.role === 'endomarketing' ? <EndomarketingDashboard /> :
-             currentUser.role === 'editor' ? <EditorDashboard /> :
-             currentUser.role === 'designer' ? <DesignerDashboard /> :
-             currentUser.role === 'fotografo' ? <DesignerDashboard /> :
-             currentUser.role === 'parceiro' ? <EndomarketingDashboard /> :
+            {/* A role já está resolvida aqui (garantido pelo ProtectedRoute),
+                então o painel correto é renderizado direto, sem flash. */}
+            {currentUser?.role === 'videomaker' ? <VideomakerDashboard /> :
+             currentUser?.role === 'endomarketing' ? <EndomarketingDashboard /> :
+             currentUser?.role === 'editor' ? <EditorDashboard /> :
+             currentUser?.role === 'designer' ? <DesignerDashboard /> :
+             currentUser?.role === 'fotografo' ? <DesignerDashboard /> :
+             currentUser?.role === 'parceiro' ? <EndomarketingDashboard /> :
              <Dashboard />}
           </ProtectedRoute>
         } />
+
         <Route path="/agenda" element={<ProtectedRoute><Schedule /></ProtectedRoute>} />
         <Route path="/clientes" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
         <Route path="/equipe" element={<ProtectedRoute><Team /></ProtectedRoute>} />

@@ -9,6 +9,8 @@ import { CityProvider } from "@/contexts/CityContext";
 import Layout from "@/components/Layout";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Login from "@/pages/Login";
+import { UpdateAvailableBanner } from "@/components/UpdateAvailableBanner";
+
 
 // Lazy-loaded pages for code splitting
 const Dashboard = lazy(() => import("@/pages/Dashboard"));

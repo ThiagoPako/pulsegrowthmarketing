@@ -242,6 +242,22 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
         {deleting ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
         {deleting ? 'Deletando...' : `Deletar Vídeos Selecionados (${selectedMonths.length})`}
       </Button>
+
+      <div className="pt-2 border-t border-border space-y-2">
+        <p className="text-[11px] text-muted-foreground">
+          Se o espaço da VPS não diminuiu, existem arquivos antigos sem registro no banco. Use a varredura abaixo.
+        </p>
+        <Button
+          variant="outline"
+          className="w-full gap-2"
+          disabled={sweeping}
+          onClick={handleSweep}
+        >
+          {sweeping ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+          {sweeping ? 'Varrendo servidor...' : 'Liberar espaço (arquivos órfãos)'}
+        </Button>
+      </div>
+
     </div>
   );
 }

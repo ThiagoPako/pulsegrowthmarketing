@@ -493,11 +493,7 @@ function Sobre() {
   useEffect(() => {
     async function loadVideo() {
       try {
-        const { createClient } = await import('@supabase/supabase-js');
-        const url = import.meta.env.VITE_SUPABASE_URL;
-        const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-        if (!url || !key) return;
-        const sb = createClient(url, key);
+        const { supabase: sb } = await import('@/lib/vpsDb');
         const { data } = await sb
           .from('landing_page_settings')
           .select('video_url')

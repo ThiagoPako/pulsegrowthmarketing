@@ -100,7 +100,8 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
       const data = await response.json().catch(() => ({}));
 
       if (response.ok && data.success) {
-        toast.success(`${data.deletedCount} vídeos deletados com sucesso!`);
+        const mb = data.freedBytes ? ` (${(data.freedBytes / 1048576).toFixed(1)} MB liberados)` : '';
+        toast.success(`${data.deletedCount} vídeos deletados com sucesso!${mb}`);
         setSelectedMonths([]);
         loadMonths();
       } else {
@@ -113,6 +114,26 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
       setDeleting(false);
     }
   };
+
+  /** Remove do disco arquivos que já não têm registro no banco. */
+  const handleSweep = async () => {
+    if (!confirm('Varrer e apagar arquivos órfãos do servidor (sem registro no banco)? Esta ação é irreversível.')) return;
+    setSweeping(true);
+    try {
+      const res = await vpsAuthedFetch('/portal-videos/sweep-orphans', {
+        method: 'POST',
+        body: JSON.stringify({ dryRun: false }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || 'Falha na varredura');
+      toast.success(`${data.deletedFiles} arquivo(s) órfão(s) removido(s) — ${data.freedMb} MB liberados`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro na varredura de órfãos');
+    } finally {
+      setSweeping(false);
+    }
+  };
+
 
   const toggleType = (t: string) => {
     setSelectedTypes(prev =>

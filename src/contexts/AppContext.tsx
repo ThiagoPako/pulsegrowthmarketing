@@ -113,12 +113,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Heartbeat for virtual office presence
   usePresenceHeartbeat(user?.id ?? profile?.id);
 
-  // Re-fetch data when auth finishes loading and user is available
-  useEffect(() => {
-    if (!authLoading && !cityLoading && user) {
-      data.refetch();
-    }
-  }, [authLoading, cityLoading, activeCity, user]);
+  // O useSupabaseData já dispara o bootstrap ao resolver a cidade/token.
+  // Refetch extra aqui duplicava todas as requisições no primeiro carregamento.
+
   
   const [users, setUsers] = useState<User[]>([]);
 

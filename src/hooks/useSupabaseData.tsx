@@ -300,29 +300,50 @@ export function useSupabaseData() {
   const [activeRecordings, setActiveRecordings] = useState<ActiveRecording[]>([]);
   const [loading, setLoading] = useState(true);
   const hasFetched = useRef(false);
+  // Dedupe: evita disparar o mesmo bootstrap várias vezes (montagens simultâneas/efeitos duplicados).
+  const inFlight = useRef<Promise<void> | null>(null);
+  const lastFetchAt = useRef(0);
+  const MIN_INTERVAL_MS = 10_000;
   const { activeCity, isLoading: cityLoading } = useCity();
 
   // Wait for auth token before fetching
   const hasToken = !!localStorage.getItem('pulse_jwt');
 
-  const fetchAll = useCallback(async () => {
+  const runFetchAll = useCallback(async () => {
     const token = localStorage.getItem('pulse_jwt');
     if (cityLoading) return;
     if (!token) { setLoading(false); return; }
     setLoading(true);
-    const [cRes, rRes, tRes, sRes, setRes, arRes] = await Promise.all([
+
+    // Fase 1 (crítica): clientes + configurações — libera a UI o quanto antes.
+    const [cRes, setRes] = await Promise.all([
       invokeVpsFunction('clients', { method: 'GET' }),
+      invokeVpsFunction('company-settings', { method: 'GET' }),
+    ]);
+
+    if (setRes.data && !setRes.error) {
+      const settingsData = Array.isArray(setRes.data) ? setRes.data[0] : setRes.data;
+      if (settingsData) {
+        setSettings(rowToSettings(settingsData));
+        setSettingsId(settingsData.id);
+      }
+    }
+
+    const hasClients = !cRes.error && Array.isArray(cRes.data);
+    if (hasClients) setClients((cRes.data as any[]).map(rowToClient));
+    setLoading(false);
+    hasFetched.current = true;
+
+    // Fase 2 (secundária): dados pesados carregam em background, sem travar a tela.
+    const [rRes, tRes, sRes, arRes] = await Promise.all([
       invokeVpsFunction('recordings', { method: 'GET' }),
       invokeVpsFunction('kanban-tasks', { method: 'GET' }),
       invokeVpsFunction('scripts', { method: 'GET' }),
-      invokeVpsFunction('company-settings', { method: 'GET' }),
       invokeVpsFunction('active-recordings', { method: 'GET' }),
     ]);
-    const hasClientsPayload = !cRes.error && Array.isArray(cRes.data);
-    const allClientRows = hasClientsPayload ? cRes.data : [];
-    const allClients = allClientRows.map(rowToClient);
-    if (hasClientsPayload) setClients(allClients);
-    
+    const hasClientsPayload = hasClients;
+    const allClientRows: any[] = hasClientsPayload ? (cRes.data as any[]) : [];
+
     // Create a set of active client IDs for filtering other data
     const activeClientIds = new Set(
       allClientRows
@@ -354,22 +375,30 @@ export function useSupabaseData() {
       const allScripts = (Array.isArray(sRes.data) ? sRes.data : []).map(rowToScript);
       setScripts(shouldFilterByActiveClients ? allScripts.filter(s => !s.clientId || activeClientIds.has(s.clientId)) : allScripts);
     }
-    if (setRes.data && !setRes.error && setRes.data) {
-      const settingsData = Array.isArray(setRes.data) ? setRes.data[0] : setRes.data;
-      setSettings(rowToSettings(settingsData));
-      setSettingsId(settingsData.id);
-    }
 
     if (arRes.data && !arRes.error) setActiveRecordings((Array.isArray(arRes.data) ? arRes.data : []).map(rowToActiveRecording));
-    setLoading(false);
-    hasFetched.current = true;
   }, [cityLoading]);
+
+  // Wrapper com dedupe + intervalo mínimo — evita rajadas de bootstrap concorrentes.
+  const fetchAll = useCallback(async (options?: { force?: boolean }) => {
+    if (inFlight.current) return inFlight.current;
+    if (!options?.force && hasFetched.current && Date.now() - lastFetchAt.current < MIN_INTERVAL_MS) return;
+    const promise = runFetchAll().finally(() => {
+      inFlight.current = null;
+      lastFetchAt.current = Date.now();
+    });
+    inFlight.current = promise;
+    return promise;
+  }, [runFetchAll]);
+
 
   // ── Initial fetch — only when token exists ──
   useEffect(() => {
     if (cityLoading) return;
-    fetchAll();
-  }, [cityLoading, activeCity, fetchAll]);
+    // Troca de cidade força recarga; montagens repetidas reaproveitam o cache recente.
+    fetchAll({ force: true });
+  }, [cityLoading, activeCity]);
+
 
   // ── Listen for auth changes (login/logout) and re-fetch ──
   useEffect(() => {
@@ -406,29 +435,36 @@ export function useSupabaseData() {
     const token = localStorage.getItem('pulse_jwt');
     if (!token || cityLoading) return;
 
+    // Debounce: várias mudanças seguidas geram um único refetch.
+    let debounceId: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefetch = () => {
+      if (debounceId) clearTimeout(debounceId);
+      debounceId = setTimeout(() => fetchAll(), 3000);
+    };
+
     // Realtime subscription for content_tasks
     const channel = supabase
       .channel('public:content_tasks')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'content_tasks' },
-        (payload: any) => {
-          console.log('Realtime change received:', payload);
-          fetchAll(); // Refresh everything when a task changes
-        }
+        () => scheduleRefetch()
       )
       .subscribe();
 
     // Still keep polling as a fallback, but much slower
-    const interval = setInterval(async () => {
-      fetchAll();
-    }, 60000);
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      fetchAll({ force: true });
+    }, 120000);
 
     return () => {
+      if (debounceId) clearTimeout(debounceId);
       clearInterval(interval);
       (channel as any).unsubscribe?.();
     };
   }, [cityLoading, activeCity, fetchAll]);
+
 
   // ── Bulk insert recordings ──
   const addRecordingsBulk = useCallback(async (recs: Recording[]): Promise<boolean> => {

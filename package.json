@@ -10,7 +10,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "verify:bundle": "node scripts/verify-bundle.mjs",
+    "build:verified": "vite build && node scripts/verify-bundle.mjs"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",

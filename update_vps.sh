@@ -9,10 +9,8 @@ npm install
 npm run build
 printf '{"version":"%s","builtAt":"%s"}\n' "$BUILD_VERSION" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/build-version.json
 
-grep -Rq "Excluir vídeos por período" dist/assets || {
-  echo "ERRO: o botão de exclusão não entrou no bundle gerado."
-  exit 1
-}
+# Gate de deploy: aborta se marcadores críticos de UI não entraram no bundle.
+node scripts/verify-bundle.mjs dist
 
 cd /var/www/pulsegrowthmarketing/vps-api-server
 rm -rf node_modules/bcrypt

@@ -341,11 +341,9 @@ export function useSupabaseData() {
       invokeVpsFunction('scripts', { method: 'GET' }),
       invokeVpsFunction('active-recordings', { method: 'GET' }),
     ]);
-    const hasClientsPayload = !cRes.error && Array.isArray(cRes.data);
-    const allClientRows = hasClientsPayload ? cRes.data : [];
-    const allClients = allClientRows.map(rowToClient);
-    if (hasClientsPayload) setClients(allClients);
-    
+    const hasClientsPayload = hasClients;
+    const allClientRows: any[] = hasClientsPayload ? (cRes.data as any[]) : [];
+
     // Create a set of active client IDs for filtering other data
     const activeClientIds = new Set(
       allClientRows
@@ -377,16 +375,22 @@ export function useSupabaseData() {
       const allScripts = (Array.isArray(sRes.data) ? sRes.data : []).map(rowToScript);
       setScripts(shouldFilterByActiveClients ? allScripts.filter(s => !s.clientId || activeClientIds.has(s.clientId)) : allScripts);
     }
-    if (setRes.data && !setRes.error && setRes.data) {
-      const settingsData = Array.isArray(setRes.data) ? setRes.data[0] : setRes.data;
-      setSettings(rowToSettings(settingsData));
-      setSettingsId(settingsData.id);
-    }
 
     if (arRes.data && !arRes.error) setActiveRecordings((Array.isArray(arRes.data) ? arRes.data : []).map(rowToActiveRecording));
-    setLoading(false);
-    hasFetched.current = true;
   }, [cityLoading]);
+
+  // Wrapper com dedupe + intervalo mínimo — evita rajadas de bootstrap concorrentes.
+  const fetchAll = useCallback(async (options?: { force?: boolean }) => {
+    if (inFlight.current) return inFlight.current;
+    if (!options?.force && hasFetched.current && Date.now() - lastFetchAt.current < MIN_INTERVAL_MS) return;
+    const promise = runFetchAll().finally(() => {
+      inFlight.current = null;
+      lastFetchAt.current = Date.now();
+    });
+    inFlight.current = promise;
+    return promise;
+  }, [runFetchAll]);
+
 
   // ── Initial fetch — only when token exists ──
   useEffect(() => {

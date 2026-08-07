@@ -395,8 +395,10 @@ export function useSupabaseData() {
   // ── Initial fetch — only when token exists ──
   useEffect(() => {
     if (cityLoading) return;
-    fetchAll();
-  }, [cityLoading, activeCity, fetchAll]);
+    // Troca de cidade força recarga; montagens repetidas reaproveitam o cache recente.
+    fetchAll({ force: true });
+  }, [cityLoading, activeCity]);
+
 
   // ── Listen for auth changes (login/logout) and re-fetch ──
   useEffect(() => {

@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import { createPgClient } from './pgClient.mjs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
@@ -40,6 +41,8 @@ const PORT = process.env.API_PORT || 3002;
 
 // ─── Middleware ──────────────────────────────────────────────
 app.use(cors());
+// Gzip: o payload do kanban da designer (centenas de cards com textos) cai ~80%.
+app.use(compression({ threshold: 1024 }));
 app.use(express.json({ limit: '10mb' }));
 
 // ─── PostgreSQL local ───────────────────────────────────────

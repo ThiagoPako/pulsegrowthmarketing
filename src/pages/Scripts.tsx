@@ -1141,30 +1141,17 @@ export default function Scripts() {
 
     setGenerating(true);
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-      const response = await fetch(`${supabaseUrl}/functions/v1/ai-script-generator`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-        body: JSON.stringify({
+      const { invokeVpsFunction } = await import('@/services/vpsEdgeFunctions');
+      const { data, error: fnError } = await invokeVpsFunction('ai-script-generator', {
+        body: {
           clientId: form.clientId,
           topic: form.title || undefined,
           videoType: form.videoType,
           contentFormat: form.contentFormat,
           additionalContext: form.content?.replace(/<[^>]*>/g, '').substring(0, 300) || undefined,
-        }),
+        },
       });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
+      if (fnError) throw new Error(fnError.message || 'Falha ao gerar roteiro');
       if (data?.script) {
         // Content is already HTML from the edge function
         let htmlContent = data.script;

@@ -8,7 +8,7 @@ import {
   Menu, X, Sparkles, Target, Megaphone, Camera, Film, PenTool, Gift, LogIn,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 import FacebookPixel from '@/components/FacebookPixel';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -493,11 +493,7 @@ function Sobre() {
   useEffect(() => {
     async function loadVideo() {
       try {
-        const { createClient } = await import('@supabase/supabase-js');
-        const url = import.meta.env.VITE_SUPABASE_URL;
-        const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-        if (!url || !key) return;
-        const sb = createClient(url, key);
+        const { supabase: sb } = await import('@/lib/vpsDb');
         const { data } = await sb
           .from('landing_page_settings')
           .select('video_url')
@@ -1138,7 +1134,7 @@ function Depoimentos() {
   const [current, setCurrent] = useState(0);
 
   useEffect(() => {
-    import('@/integrations/supabase/client').then(({ supabase }) => {
+    import('@/lib/vpsDb').then(({ supabase }) => {
       supabase
         .from('client_testimonials')
         .select('client_name, client_role, message, rating')

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 
 export default function FacebookPixel() {
   const [pixelId, setPixelId] = useState<string | null>(null);

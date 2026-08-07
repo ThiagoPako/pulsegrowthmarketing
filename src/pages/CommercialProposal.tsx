@@ -609,22 +609,15 @@ export default function CommercialProposal() {
     if (!systemFunctionsDesc.trim()) { toast.error('Descreva as funções do sistema'); return; }
     setGeneratingModules(true);
     try {
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const res = await fetch(`https://${projectId}.supabase.co/functions/v1/ai-content-suggestions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
-        body: JSON.stringify({
-          type: 'system_modules',
-          description: systemFunctionsDesc,
-        }),
+      const { invokeVpsFunction } = await import('@/services/vpsEdgeFunctions');
+      const { data, error: fnError } = await invokeVpsFunction('ai-content-suggestions', {
+        body: { type: 'system_modules', description: systemFunctionsDesc },
       });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        toast.error(errData.error || `Erro ${res.status} ao gerar módulos`);
+      if (fnError) {
+        toast.error(fnError.message || 'Erro ao gerar módulos');
         setGeneratingModules(false);
         return;
       }
-      const data = await res.json();
       if (data.modules && Array.isArray(data.modules)) {
         const newScope = data.modules.map((m: any) => ({
           id: crypto.randomUUID(),
@@ -653,19 +646,15 @@ export default function CommercialProposal() {
     if (!cronogramaDesc.trim()) { toast.error('Descreva o projeto para a IA gerar o cronograma'); return; }
     setGeneratingTimeline(true);
     try {
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const res = await fetch(`https://${projectId}.supabase.co/functions/v1/ai-content-suggestions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
-        body: JSON.stringify({ type: 'proposal_timeline', description: cronogramaDesc }),
+      const { invokeVpsFunction } = await import('@/services/vpsEdgeFunctions');
+      const { data, error: fnError } = await invokeVpsFunction('ai-content-suggestions', {
+        body: { type: 'proposal_timeline', description: cronogramaDesc },
       });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        toast.error(errData.error || `Erro ${res.status} ao gerar cronograma`);
+      if (fnError) {
+        toast.error(fnError.message || 'Erro ao gerar cronograma');
         setGeneratingTimeline(false);
         return;
       }
-      const data = await res.json();
       if (data.deliverables && Array.isArray(data.deliverables)) {
         setCronogramaDeliverables(data.deliverables.map((d: any) => ({ ...d, id: crypto.randomUUID() })));
         if (data.phases) setCronogramaPhases(data.phases);

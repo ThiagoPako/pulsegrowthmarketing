@@ -1,3 +1,4 @@
+import { uploadFileToVps, getVpsMediaUrl, deleteFileFromVps } from '@/services/vpsApi';
 /**
  * VPS Database Client — Drop-in replacement for Supabase JS client
  * Mimics the Supabase chainable API (.from().select().eq().order() etc.)
@@ -601,6 +602,44 @@ export const supabase = {
   // Functions namespace — replaces supabase.functions.invoke
   functions: {
     invoke: invokeFunction,
+  },
+
+
+  // Storage namespace — arquivos ficam na própria VPS (/uploads)
+  storage: {
+    from(bucket: string) {
+      const folder = bucket.replace(/^\/+|\/+$/g, '');
+      return {
+        async upload(path: string, file: File | Blob, _options?: any) {
+          try {
+            const cleanPath = String(path).replace(/^\/+/, '');
+            const parts = cleanPath.split('/');
+            const filename = parts.pop() || `file-${Date.now()}`;
+            const subFolder = [folder, ...parts].filter(Boolean).join('/');
+            const realFile = file instanceof File ? file : new File([file], filename, { type: (file as Blob).type });
+            const url = await uploadFileToVps(realFile, subFolder);
+            return { data: { path: url, fullPath: url }, error: null };
+          } catch (e: any) {
+            return { data: null, error: { message: e?.message || 'Upload failed' } };
+          }
+        },
+        getPublicUrl(path: string) {
+          const clean = String(path || '').replace(/^\/+/, '');
+          const full = clean.startsWith('http') ? clean : getVpsMediaUrl(`${folder}/${clean}`.replace(/^\/+/, ''));
+          return { data: { publicUrl: full } };
+        },
+        async remove(paths: string[]) {
+          try {
+            for (const path of paths) {
+              await deleteFileFromVps(String(path).startsWith('http') ? String(path) : `${folder}/${path}`);
+            }
+            return { data: null, error: null };
+          } catch (e: any) {
+            return { data: null, error: { message: e?.message || 'Delete failed' } };
+          }
+        },
+      };
+    },
   },
 
   // Auth namespace

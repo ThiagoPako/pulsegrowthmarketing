@@ -96,24 +96,13 @@ export async function fetchAISeasonalAlerts(
   if (cached) return cached;
 
   try {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    const { invokeVpsFunction } = await import('@/services/vpsEdgeFunctions');
+    const { data, error } = await invokeVpsFunction('seasonal-alerts', { body: { clientIds } });
 
-    const response = await fetch(`${supabaseUrl}/functions/v1/seasonal-alerts`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${supabaseKey}`,
-      },
-      body: JSON.stringify({ clientIds }),
-    });
-
-    if (!response.ok) {
-      console.error('Seasonal alerts fetch error:', response.status);
+    if (error) {
+      console.error('Seasonal alerts fetch error:', error.message);
       return [];
     }
-
-    const data = await response.json();
     const alerts = data.alerts || [];
     setCachedAlerts(alerts);
     return alerts;

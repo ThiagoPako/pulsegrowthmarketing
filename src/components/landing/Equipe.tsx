@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Sparkles, Award } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 import placeholder1 from '@/assets/team-placeholder-1.jpg';
 import placeholder2 from '@/assets/team-placeholder-2.jpg';
 import placeholder3 from '@/assets/team-placeholder-3.jpg';

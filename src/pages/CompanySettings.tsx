@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket, RotateCcw, CalendarOff, Plus, Send, Loader2, DollarSign } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
-import { supabase as supabaseCloud } from '@/integrations/supabase/client';
+import { supabase as supabaseCloud } from '@/lib/vpsDb';
 import { ASSISTANT_KEY } from '@/components/ProductionAssistant';
 import { getHolidays, createHoliday, deleteHoliday, sendHolidayNotifications, getWhatsAppConfig, updateWhatsAppConfig, type Holiday } from '@/services/whatsappService';
 import PortalBulkDelete from '@/components/portal/PortalBulkDelete';

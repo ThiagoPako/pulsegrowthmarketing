@@ -1605,8 +1605,14 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                   </div>
                 )}
 
+                {/* Player inline do vídeo editado */}
+                {task.edited_video_link && (
+                  <InlineVideoPlayer url={task.edited_video_link} />
+                )}
+
                 {/* Links */}
                 <div className="space-y-2">
+
                   {task.drive_link && (
                     <a href={task.drive_link} target="_blank" rel="noopener noreferrer"
                       className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/15 border border-blue-500/20 transition-colors">

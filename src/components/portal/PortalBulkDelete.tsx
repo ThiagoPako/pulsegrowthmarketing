@@ -39,6 +39,8 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
   const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [sweeping, setSweeping] = useState(false);
+
 
   const loadMonths = async () => {
     setLoading(true);

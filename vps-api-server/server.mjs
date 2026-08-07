@@ -314,6 +314,61 @@ ensureProposalTables().catch((error) => {
   console.error('Failed to ensure proposal tables:', error);
 });
 
+/**
+ * Todas as raízes possíveis onde os arquivos de /uploads/ podem estar
+ * gravados nesta VPS. UPLOAD_ROOT é resolvido mais abaixo no arquivo, por isso
+ * é lido de forma preguiçosa (a função só roda em tempo de request).
+ */
+function uploadRoots() {
+  const roots = [
+    process.env.UPLOAD_ROOT?.trim(),
+    (() => { try { return UPLOAD_ROOT; } catch { return null; } })(),
+    '/var/www/uploads',
+    '/var/www/html/uploads',
+    path.join(__dirname, '..', 'uploads'),
+    path.join(__dirname, 'uploads'),
+  ].filter(Boolean).map((r) => path.resolve(r));
+  return [...new Set(roots)];
+}
+
+/**
+ * Converte uma URL pública (/uploads/...) em caminho relativo seguro.
+ * Retorna null quando a URL é externa (Drive, YouTube, etc.).
+ */
+function uploadRelativePath(fileUrl) {
+  const raw = String(fileUrl || '').trim();
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw, 'https://agenciapulse.tech');
+    if (!parsed.pathname.startsWith('/uploads/')) return null;
+    const relative = decodeURIComponent(parsed.pathname.replace(/^\/uploads\//, ''));
+    if (!relative || relative.includes('..')) return null;
+    return relative;
+  } catch {
+    return null;
+  }
+}
+
+/** Remove o arquivo físico em todas as raízes conhecidas. Retorna bytes liberados. */
+function removeUploadFile(fileUrl) {
+  const relative = uploadRelativePath(fileUrl);
+  if (!relative) return 0;
+
+  let freed = 0;
+  for (const root of uploadRoots()) {
+    const candidate = path.resolve(root, relative);
+    if (!candidate.startsWith(`${root}${path.sep}`)) continue;
+    try {
+      if (!fs.existsSync(candidate)) continue;
+      freed += fs.statSync(candidate).size;
+      fs.unlinkSync(candidate);
+    } catch (error) {
+      console.warn('[cleanup] falha ao remover arquivo:', candidate, error?.message || error);
+    }
+  }
+  return freed;
+}
+
 async function cleanupOldPortalVideos(options = {}) {
   const { 
     months = [], 
@@ -352,37 +407,33 @@ async function cleanupOldPortalVideos(options = {}) {
     query += ` AND created_at < NOW() - INTERVAL '${olderThanDays} days'`;
   }
   
-  query += ' RETURNING file_url';
+  query += ' RETURNING file_url, thumbnail_url';
   const { rows, rowCount } = await pool.query(query, params);
 
+  let freedBytes = 0;
   for (const row of rows) {
-    const fileUrl = String(row.file_url || '');
-    if (!fileUrl) continue;
-
-    const { rows: [{ still_used }] } = await pool.query(
-      'SELECT EXISTS (SELECT 1 FROM client_portal_contents WHERE file_url = $1) AS still_used',
-      [fileUrl],
-    );
-    if (still_used) continue;
-
-    try {
-      const parsed = new URL(fileUrl, 'https://agenciapulse.tech');
-      if (parsed.origin !== 'https://agenciapulse.tech' || !parsed.pathname.startsWith('/uploads/')) continue;
-      const relativePath = decodeURIComponent(parsed.pathname.replace(/^\/uploads\//, ''));
-      if (!relativePath || relativePath.includes('..')) continue;
-      for (const root of ['/var/www/uploads', '/var/www/html/uploads']) {
-        const rootPath = path.resolve(root);
-        const candidate = path.resolve(rootPath, relativePath);
-        if (candidate.startsWith(`${rootPath}${path.sep}`) && fs.existsSync(candidate)) {
-          fs.unlinkSync(candidate);
-        }
-      }
-    } catch (error) {
-      console.warn('Failed to remove portal video file:', error?.message || error);
+    for (const url of [row.file_url, row.thumbnail_url]) {
+      if (!url) continue;
+      // Não apaga se outro registro ainda usa o mesmo arquivo.
+      const { rows: [{ still_used }] } = await pool.query(
+        `SELECT EXISTS (
+           SELECT 1 FROM client_portal_contents
+           WHERE file_url = $1 OR thumbnail_url = $1
+         ) AS still_used`,
+        [url],
+      );
+      if (still_used) continue;
+      freedBytes += removeUploadFile(url);
     }
   }
+
+  lastCleanupStats = { deletedCount: rowCount, freedBytes, at: new Date().toISOString() };
+  console.log(`[cleanup] ${rowCount} registros removidos, ${(freedBytes / 1048576).toFixed(1)} MB liberados`);
   return rowCount;
 }
+
+let lastCleanupStats = { deletedCount: 0, freedBytes: 0, at: null };
+
 
 async function ensureStoryEditingSessionsTable() {
   if (!storyEditingSessionsEnsuredPromise) {
@@ -8271,7 +8322,8 @@ app.post('/api/portal-videos/bulk-delete', async (req, res) => {
       olderThanDays: months.length > 0 ? null : 60
     });
 
-    res.json({ success: true, deletedCount });
+    res.json({ success: true, deletedCount, freedBytes: lastCleanupStats.freedBytes });
+
   } catch (error) {
     console.error('bulk-delete error:', error);
     const message = error?.message || 'Erro interno';
@@ -8279,6 +8331,97 @@ app.post('/api/portal-videos/bulk-delete', async (req, res) => {
     res.status(status).json({ error: status === 401 ? 'Sessão expirada. Faça login novamente.' : message });
   }
 });
+
+/**
+ * Varredura de órfãos: remove do disco todo arquivo em /uploads/ que não é
+ * mais referenciado por nenhum registro do banco. Resolve o caso em que a
+ * linha foi deletada, mas o arquivo continuou ocupando espaço na VPS.
+ * `dryRun: true` apenas relata, sem apagar.
+ */
+app.post('/api/portal-videos/sweep-orphans', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    if (!(await userHasAssignedRole(user, 'admin'))) {
+      return res.status(403).json({ error: 'Acesso restrito ao administrador' });
+    }
+    const dryRun = req.body?.dryRun === true;
+
+    // Todas as URLs ainda referenciadas em qualquer tabela relevante.
+    const referenced = new Set();
+    const sources = [
+      'SELECT file_url AS u FROM client_portal_contents WHERE file_url IS NOT NULL',
+      'SELECT thumbnail_url AS u FROM client_portal_contents WHERE thumbnail_url IS NOT NULL',
+      'SELECT edited_video_link AS u FROM content_tasks WHERE edited_video_link IS NOT NULL',
+      'SELECT raw_video_link AS u FROM content_tasks WHERE raw_video_link IS NOT NULL',
+      'SELECT file_url AS u FROM design_tasks WHERE file_url IS NOT NULL',
+      'SELECT video_url AS u FROM portal_videos WHERE video_url IS NOT NULL',
+    ];
+    for (const sql of sources) {
+      try {
+        const { rows } = await pool.query(sql);
+        for (const row of rows) {
+          const rel = uploadRelativePath(row.u);
+          if (rel) referenced.add(rel);
+        }
+      } catch {
+        // Coluna/tabela inexistente nesta instalação — ignora com segurança.
+      }
+    }
+
+    const skipDirs = new Set(['training-videos']);
+    let deletedFiles = 0;
+    let freedBytes = 0;
+    let scanned = 0;
+
+    const walk = (root, dir) => {
+      let entries = [];
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (skipDirs.has(entry.name)) continue;
+          walk(root, full);
+          continue;
+        }
+        const rel = path.relative(root, full).split(path.sep).join('/');
+        scanned += 1;
+        if (referenced.has(rel)) continue;
+        try {
+          const size = fs.statSync(full).size;
+          if (!dryRun) fs.unlinkSync(full);
+          deletedFiles += 1;
+          freedBytes += size;
+        } catch (error) {
+          console.warn('[sweep] falha ao remover:', full, error?.message || error);
+        }
+      }
+    };
+
+    for (const root of uploadRoots()) {
+      if (fs.existsSync(root)) walk(root, root);
+    }
+
+    res.json({
+      success: true,
+      dryRun,
+      scanned,
+      deletedFiles,
+      freedBytes,
+      freedMb: Number((freedBytes / 1048576).toFixed(1)),
+    });
+  } catch (error) {
+    console.error('sweep-orphans error:', error);
+    const message = error?.message || 'Erro interno';
+    const status = error?.status || (/unauthorized|token|jwt/i.test(message) ? 401 : 500);
+    res.status(status).json({ error: status === 401 ? 'Sessão expirada. Faça login novamente.' : message });
+  }
+});
+
+
 
 app.get('/api/portal-videos/months', async (req, res) => {
   try {

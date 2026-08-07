@@ -39,6 +39,8 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
   const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [sweeping, setSweeping] = useState(false);
+
 
   const loadMonths = async () => {
     setLoading(true);
@@ -100,7 +102,8 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
       const data = await response.json().catch(() => ({}));
 
       if (response.ok && data.success) {
-        toast.success(`${data.deletedCount} vídeos deletados com sucesso!`);
+        const mb = data.freedBytes ? ` (${(data.freedBytes / 1048576).toFixed(1)} MB liberados)` : '';
+        toast.success(`${data.deletedCount} vídeos deletados com sucesso!${mb}`);
         setSelectedMonths([]);
         loadMonths();
       } else {
@@ -113,6 +116,26 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
       setDeleting(false);
     }
   };
+
+  /** Remove do disco arquivos que já não têm registro no banco. */
+  const handleSweep = async () => {
+    if (!confirm('Varrer e apagar arquivos órfãos do servidor (sem registro no banco)? Esta ação é irreversível.')) return;
+    setSweeping(true);
+    try {
+      const res = await vpsAuthedFetch('/portal-videos/sweep-orphans', {
+        method: 'POST',
+        body: JSON.stringify({ dryRun: false }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || 'Falha na varredura');
+      toast.success(`${data.deletedFiles} arquivo(s) órfão(s) removido(s) — ${data.freedMb} MB liberados`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro na varredura de órfãos');
+    } finally {
+      setSweeping(false);
+    }
+  };
+
 
   const toggleType = (t: string) => {
     setSelectedTypes(prev =>
@@ -219,6 +242,22 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
         {deleting ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
         {deleting ? 'Deletando...' : `Deletar Vídeos Selecionados (${selectedMonths.length})`}
       </Button>
+
+      <div className="pt-2 border-t border-border space-y-2">
+        <p className="text-[11px] text-muted-foreground">
+          Se o espaço da VPS não diminuiu, existem arquivos antigos sem registro no banco. Use a varredura abaixo.
+        </p>
+        <Button
+          variant="outline"
+          className="w-full gap-2"
+          disabled={sweeping}
+          onClick={handleSweep}
+        >
+          {sweeping ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+          {sweeping ? 'Varrendo servidor...' : 'Liberar espaço (arquivos órfãos)'}
+        </Button>
+      </div>
+
     </div>
   );
 }

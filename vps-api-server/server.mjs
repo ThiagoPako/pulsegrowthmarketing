@@ -8332,6 +8332,97 @@ app.post('/api/portal-videos/bulk-delete', async (req, res) => {
   }
 });
 
+/**
+ * Varredura de órfãos: remove do disco todo arquivo em /uploads/ que não é
+ * mais referenciado por nenhum registro do banco. Resolve o caso em que a
+ * linha foi deletada, mas o arquivo continuou ocupando espaço na VPS.
+ * `dryRun: true` apenas relata, sem apagar.
+ */
+app.post('/api/portal-videos/sweep-orphans', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    if (!(await userHasAssignedRole(user, 'admin'))) {
+      return res.status(403).json({ error: 'Acesso restrito ao administrador' });
+    }
+    const dryRun = req.body?.dryRun === true;
+
+    // Todas as URLs ainda referenciadas em qualquer tabela relevante.
+    const referenced = new Set();
+    const sources = [
+      'SELECT file_url AS u FROM client_portal_contents WHERE file_url IS NOT NULL',
+      'SELECT thumbnail_url AS u FROM client_portal_contents WHERE thumbnail_url IS NOT NULL',
+      'SELECT edited_video_link AS u FROM content_tasks WHERE edited_video_link IS NOT NULL',
+      'SELECT raw_video_link AS u FROM content_tasks WHERE raw_video_link IS NOT NULL',
+      'SELECT file_url AS u FROM design_tasks WHERE file_url IS NOT NULL',
+      'SELECT video_url AS u FROM portal_videos WHERE video_url IS NOT NULL',
+    ];
+    for (const sql of sources) {
+      try {
+        const { rows } = await pool.query(sql);
+        for (const row of rows) {
+          const rel = uploadRelativePath(row.u);
+          if (rel) referenced.add(rel);
+        }
+      } catch {
+        // Coluna/tabela inexistente nesta instalação — ignora com segurança.
+      }
+    }
+
+    const skipDirs = new Set(['training-videos']);
+    let deletedFiles = 0;
+    let freedBytes = 0;
+    let scanned = 0;
+
+    const walk = (root, dir) => {
+      let entries = [];
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (skipDirs.has(entry.name)) continue;
+          walk(root, full);
+          continue;
+        }
+        const rel = path.relative(root, full).split(path.sep).join('/');
+        scanned += 1;
+        if (referenced.has(rel)) continue;
+        try {
+          const size = fs.statSync(full).size;
+          if (!dryRun) fs.unlinkSync(full);
+          deletedFiles += 1;
+          freedBytes += size;
+        } catch (error) {
+          console.warn('[sweep] falha ao remover:', full, error?.message || error);
+        }
+      }
+    };
+
+    for (const root of uploadRoots()) {
+      if (fs.existsSync(root)) walk(root, root);
+    }
+
+    res.json({
+      success: true,
+      dryRun,
+      scanned,
+      deletedFiles,
+      freedBytes,
+      freedMb: Number((freedBytes / 1048576).toFixed(1)),
+    });
+  } catch (error) {
+    console.error('sweep-orphans error:', error);
+    const message = error?.message || 'Erro interno';
+    const status = error?.status || (/unauthorized|token|jwt/i.test(message) ? 401 : 500);
+    res.status(status).json({ error: status === 401 ? 'Sessão expirada. Faça login novamente.' : message });
+  }
+});
+
+
+
 app.get('/api/portal-videos/months', async (req, res) => {
   try {
     const { user } = await verifyUser(req);

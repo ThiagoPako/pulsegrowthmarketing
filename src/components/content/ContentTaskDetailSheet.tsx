@@ -23,6 +23,8 @@ import {
   Upload, Loader2, Rocket
 } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
+import InlineVideoPlayer from '@/components/content/InlineVideoPlayer';
+
 import ClientLogo from '@/components/ClientLogo';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';

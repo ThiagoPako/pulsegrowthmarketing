@@ -19,6 +19,10 @@ const REQUIRED_MARKERS = [
     text: "Excluir vídeos por período",
     feature: "Botão de exclusão de vídeos do Portal (ContentManager)",
   },
+  {
+    text: "Prévia do Vídeo",
+    feature: "Player inline no card de revisão (ContentTaskDetailSheet)",
+  },
 ];
 
 const DIST_DIR = resolve(process.argv[2] ?? "dist");

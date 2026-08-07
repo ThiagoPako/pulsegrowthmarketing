@@ -7424,7 +7424,7 @@ app.get('/api/tv-dashboard', async (req, res) => {
         SELECT s.id, s.copywriter_id, s.copywriter_name, s.task_id, s.request_id,
                s.client_id, s.topic, s.content_format, s.batch_size, s.started_at,
                p.name AS profile_name, p.avatar_url AS copywriter_avatar,
-               c.name AS client_name, c.logo_url AS client_logo, c.brand_color AS client_color
+               c.company_name AS client_name, c.logo_url AS client_logo, c.color AS client_color
         FROM copy_active_sessions s
         LEFT JOIN profiles p ON p.id = s.copywriter_id
         LEFT JOIN clients c ON c.id = s.client_id

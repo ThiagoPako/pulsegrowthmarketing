@@ -8322,7 +8322,8 @@ app.post('/api/portal-videos/bulk-delete', async (req, res) => {
       olderThanDays: months.length > 0 ? null : 60
     });
 
-    res.json({ success: true, deletedCount });
+    res.json({ success: true, deletedCount, freedBytes: lastCleanupStats.freedBytes });
+
   } catch (error) {
     console.error('bulk-delete error:', error);
     const message = error?.message || 'Erro interno';

@@ -300,22 +300,45 @@ export function useSupabaseData() {
   const [activeRecordings, setActiveRecordings] = useState<ActiveRecording[]>([]);
   const [loading, setLoading] = useState(true);
   const hasFetched = useRef(false);
+  // Dedupe: evita disparar o mesmo bootstrap várias vezes (montagens simultâneas/efeitos duplicados).
+  const inFlight = useRef<Promise<void> | null>(null);
+  const lastFetchAt = useRef(0);
+  const MIN_INTERVAL_MS = 10_000;
   const { activeCity, isLoading: cityLoading } = useCity();
 
   // Wait for auth token before fetching
   const hasToken = !!localStorage.getItem('pulse_jwt');
 
-  const fetchAll = useCallback(async () => {
+  const runFetchAll = useCallback(async () => {
     const token = localStorage.getItem('pulse_jwt');
     if (cityLoading) return;
     if (!token) { setLoading(false); return; }
     setLoading(true);
-    const [cRes, rRes, tRes, sRes, setRes, arRes] = await Promise.all([
+
+    // Fase 1 (crítica): clientes + configurações — libera a UI o quanto antes.
+    const [cRes, setRes] = await Promise.all([
       invokeVpsFunction('clients', { method: 'GET' }),
+      invokeVpsFunction('company-settings', { method: 'GET' }),
+    ]);
+
+    if (setRes.data && !setRes.error) {
+      const settingsData = Array.isArray(setRes.data) ? setRes.data[0] : setRes.data;
+      if (settingsData) {
+        setSettings(rowToSettings(settingsData));
+        setSettingsId(settingsData.id);
+      }
+    }
+
+    const hasClients = !cRes.error && Array.isArray(cRes.data);
+    if (hasClients) setClients((cRes.data as any[]).map(rowToClient));
+    setLoading(false);
+    hasFetched.current = true;
+
+    // Fase 2 (secundária): dados pesados carregam em background, sem travar a tela.
+    const [rRes, tRes, sRes, arRes] = await Promise.all([
       invokeVpsFunction('recordings', { method: 'GET' }),
       invokeVpsFunction('kanban-tasks', { method: 'GET' }),
       invokeVpsFunction('scripts', { method: 'GET' }),
-      invokeVpsFunction('company-settings', { method: 'GET' }),
       invokeVpsFunction('active-recordings', { method: 'GET' }),
     ]);
     const hasClientsPayload = !cRes.error && Array.isArray(cRes.data);

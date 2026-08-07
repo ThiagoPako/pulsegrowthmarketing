@@ -304,6 +304,8 @@ const App = () => (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Sonner />
+        <UpdateAvailableBanner />
+
         <AuthProvider>
           <CityProvider>
             <BrowserRouter>

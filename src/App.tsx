@@ -156,12 +156,16 @@ function AppRoutes() {
         <Route path="/gestao/historico" element={<RequireSocioGestor><GestaoHistorico /></RequireSocioGestor>} />
         <Route path="/dashboard" element={
           <ProtectedRoute>
-            {currentUser?.role === 'videomaker' ? <VideomakerDashboard /> :
-             currentUser?.role === 'endomarketing' ? <EndomarketingDashboard /> :
-             currentUser?.role === 'editor' ? <EditorDashboard /> :
-             currentUser?.role === 'designer' ? <DesignerDashboard /> :
-             currentUser?.role === 'fotografo' ? <DesignerDashboard /> :
-             currentUser?.role === 'parceiro' ? <EndomarketingDashboard /> :
+            {/* Enquanto o perfil (e portanto a role) não terminou de carregar, exibimos o
+                loader em vez de cair no <Dashboard /> genérico — isso evitava o "flash"
+                do Painel de Controle antes do painel correto da função do usuário. */}
+            {!currentUser ? <PageLoader /> :
+             currentUser.role === 'videomaker' ? <VideomakerDashboard /> :
+             currentUser.role === 'endomarketing' ? <EndomarketingDashboard /> :
+             currentUser.role === 'editor' ? <EditorDashboard /> :
+             currentUser.role === 'designer' ? <DesignerDashboard /> :
+             currentUser.role === 'fotografo' ? <DesignerDashboard /> :
+             currentUser.role === 'parceiro' ? <EndomarketingDashboard /> :
              <Dashboard />}
           </ProtectedRoute>
         } />

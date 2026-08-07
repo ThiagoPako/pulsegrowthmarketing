@@ -435,29 +435,36 @@ export function useSupabaseData() {
     const token = localStorage.getItem('pulse_jwt');
     if (!token || cityLoading) return;
 
+    // Debounce: várias mudanças seguidas geram um único refetch.
+    let debounceId: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefetch = () => {
+      if (debounceId) clearTimeout(debounceId);
+      debounceId = setTimeout(() => fetchAll(), 3000);
+    };
+
     // Realtime subscription for content_tasks
     const channel = supabase
       .channel('public:content_tasks')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'content_tasks' },
-        (payload: any) => {
-          console.log('Realtime change received:', payload);
-          fetchAll(); // Refresh everything when a task changes
-        }
+        () => scheduleRefetch()
       )
       .subscribe();
 
     // Still keep polling as a fallback, but much slower
-    const interval = setInterval(async () => {
-      fetchAll();
-    }, 60000);
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      fetchAll({ force: true });
+    }, 120000);
 
     return () => {
+      if (debounceId) clearTimeout(debounceId);
       clearInterval(interval);
       (channel as any).unsubscribe?.();
     };
   }, [cityLoading, activeCity, fetchAll]);
+
 
   // ── Bulk insert recordings ──
   const addRecordingsBulk = useCallback(async (recs: Recording[]): Promise<boolean> => {

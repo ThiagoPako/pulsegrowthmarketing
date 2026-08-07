@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 
 import { Calendar, MapPin, Clock, Plus, Copy, Users, ExternalLink, Trash2, Eye, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';

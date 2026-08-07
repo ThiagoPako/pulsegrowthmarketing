@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/vpsDb';
 import { getPlan, PLANS, getPlansForCity } from '@/data/plans';
 import { useSearchParams } from 'react-router-dom';
 import { useCity } from '@/contexts/CityContext';

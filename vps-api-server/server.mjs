@@ -6215,6 +6215,11 @@ Gere uma mensagem curta e divertida para este momento.`;
     const message = await callAi(ai, selectedModel, messages, { temperature: 0.8, max_tokens: 300 });
     res.json({ message });
   } catch (error) {
+    // Sem chave de IA configurada não é um erro de servidor: responde 200 desativado
+    // para não poluir os logs com stack traces a cada polling do front-end.
+    if (String(error?.message || '').includes('Nenhuma API key de IA')) {
+      return res.json({ message: null, disabled: true, reason: 'ai_not_configured' });
+    }
     console.error('Production assistant error:', error);
     res.status(500).json({ error: error.message });
   }

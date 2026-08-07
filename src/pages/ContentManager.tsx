@@ -402,19 +402,6 @@ export default function ContentManager() {
           </div>
           <div className="flex items-center gap-2">
             <Button
-              variant="destructive"
-              size="sm"
-              className="gap-1.5"
-              onClick={event => {
-                event.stopPropagation();
-                setShowBulkDelete(current => !current);
-              }}
-              aria-expanded={showBulkDelete}
-              aria-controls="portal-video-cleanup"
-            >
-              <Trash2 size={14} /> Excluir vídeos
-            </Button>
-            <Button
               variant="outline"
               size="sm"
               className="gap-1.5"
@@ -502,11 +489,21 @@ export default function ContentManager() {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Gerenciador de Conteúdos</h1>
           <p className="text-sm text-muted-foreground">Envie conteúdos para o Pulse Club</p>
         </div>
+        <Button
+          variant="destructive"
+          className="w-full gap-2 sm:w-auto"
+          onClick={() => setShowBulkDelete(current => !current)}
+          aria-expanded={showBulkDelete}
+          aria-controls="portal-video-cleanup"
+        >
+          <Trash2 size={16} />
+          {showBulkDelete ? 'Fechar exclusão de vídeos' : 'Excluir vídeos por período'}
+        </Button>
       </div>
 
       {/* Upload form */}

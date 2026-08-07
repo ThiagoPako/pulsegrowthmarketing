@@ -9,6 +9,11 @@ npm install
 npm run build
 printf '{"version":"%s","builtAt":"%s"}\n' "$BUILD_VERSION" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/build-version.json
 
+grep -Rq "Excluir vídeos por período" dist/assets || {
+  echo "ERRO: o botão de exclusão não entrou no bundle gerado."
+  exit 1
+}
+
 cd /var/www/pulsegrowthmarketing/vps-api-server
 rm -rf node_modules/bcrypt
 npm install
@@ -49,5 +54,15 @@ if [ "$AUTH_STATUS" != "401" ]; then
   exit 1
 fi
 rm -f /tmp/pulse-auth-probe.json
+
+PUBLIC_BUILD_VERSION="$(curl --fail --silent --header 'Cache-Control: no-cache' "https://agenciapulse.tech/build-version.json?t=$(date +%s)")"
+if [[ "$PUBLIC_BUILD_VERSION" != *"$BUILD_VERSION"* ]]; then
+  echo "ERRO: o Nginx não está servindo o dist recém-gerado."
+  echo "Esperado: $BUILD_VERSION"
+  echo "Recebido: $PUBLIC_BUILD_VERSION"
+  exit 1
+fi
+
+echo "OK: botão no bundle e versão pública atualizada ($BUILD_VERSION)."
 
 pm2 status

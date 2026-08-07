@@ -32,7 +32,6 @@ jobs:
           port: 22
           script: |
             cd /var/www/pulsegrowthmarketing
-            git pull origin main
-            npm install
-            npm run build
-            systemctl reload nginx
+            git fetch origin main --prune
+            git reset --hard origin/main
+            bash update_vps.sh

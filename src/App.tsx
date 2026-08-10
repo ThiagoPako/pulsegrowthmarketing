@@ -9,7 +9,6 @@ import { CityProvider } from "@/contexts/CityContext";
 import Layout from "@/components/Layout";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Login from "@/pages/Login";
-import { UpdateAvailableBanner } from "@/components/UpdateAvailableBanner";
 
 
 // Lazy-loaded pages for code splitting
@@ -306,7 +305,6 @@ const App = () => (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Sonner />
-        <UpdateAvailableBanner />
 
         <AuthProvider>
           <CityProvider>

@@ -308,7 +308,6 @@ export default function CRM() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          
 
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>

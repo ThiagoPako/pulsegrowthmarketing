@@ -1,4 +1,7 @@
-// Confirmar que a VPS tem a variável JWT_SECRET correta no .env e que o processo pulse-api está carregando esse arquivo corretamente.
+// index-0lit2o0U.js:69 
+// POST https://agenciapulse.tech/api/auth/login 502 (Bad Gateway)
+//
+// erro continua
 // Veja o link da imagem enviada abaixo e analise o conteúdo dela para responder:
 // Imagem 1: https://sorax.lovable.app/api/public/i/j8pypvszvj.png
 // Imagem 2 (DevTools): user-uploads://Captura_de_Tela_2026-08-11_às_11.36.13.png

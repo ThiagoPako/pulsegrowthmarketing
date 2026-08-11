@@ -53,6 +53,16 @@ interface ScriptRequest {
   created_at: string;
 }
 
+interface ActiveCopySession {
+  taskId?: string;
+  requestId?: string;
+  batchTaskIds?: string[];
+  startedAt: number;
+  taskSnapshot?: PendingTask;
+  requestSnapshot?: ScriptRequest;
+  batchSnapshot?: PendingTask[];
+}
+
 /** Detecta e monta embed inline para YouTube, Vimeo, TikTok, Instagram, Drive e vídeo direto. */
 function resolveEmbed(rawUrl: string): { src: string; kind: 'iframe' | 'video' | 'link'; aspect?: string } {
   const fallback = { src: '', kind: 'link' as const };
@@ -197,7 +207,7 @@ export default function Copy() {
   const [tasks, setTasks] = useState<PendingTask[]>([]);
   const [requests, setRequests] = useState<ScriptRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeSession, setActiveSession] = useState<{ taskId?: string; requestId?: string; batchTaskIds?: string[]; startedAt: number } | null>(null);
+  const [activeSession, setActiveSession] = useState<ActiveCopySession | null>(null);
   const [now, setNow] = useState(Date.now());
   const [finalizing, setFinalizing] = useState<{ task?: PendingTask; request?: ScriptRequest; batch?: PendingTask[] } | null>(null);
   const [batchForms, setBatchForms] = useState<{ title: string; content: string; caption: string }[]>([]);
@@ -384,10 +394,20 @@ export default function Copy() {
     return rows;
   }, [scripts, tasks, clientById]);
 
-  const activeTask = activeSession?.taskId ? tasks.find(t => t.id === activeSession.taskId) : null;
-  const activeRequest = activeSession?.requestId ? requests.find(r => r.id === activeSession.requestId) : null;
+  // A sincronização pode remover momentaneamente o item da lista filtrada após
+  // ele entrar em execução. O snapshot persistido mantém o painel, o timer e a
+  // finalização estáveis até a conclusão explícita pelo usuário.
+  const activeTask = activeSession?.taskId
+    ? tasks.find(t => t.id === activeSession.taskId) ?? activeSession.taskSnapshot ?? null
+    : null;
+  const activeRequest = activeSession?.requestId
+    ? requests.find(r => r.id === activeSession.requestId) ?? activeSession.requestSnapshot ?? null
+    : null;
   const activeBatchIds = activeSession?.batchTaskIds || [];
-  const activeBatch = activeBatchIds.length > 0 ? tasks.filter(t => activeBatchIds.includes(t.id)) : [];
+  const liveBatch = activeBatchIds.length > 0 ? tasks.filter(t => activeBatchIds.includes(t.id)) : [];
+  const activeBatch = activeBatchIds.length > 0
+    ? activeBatchIds.map(id => liveBatch.find(task => task.id === id) ?? activeSession?.batchSnapshot?.find(task => task.id === id)).filter((task): task is PendingTask => Boolean(task))
+    : [];
   const isBusy = !!activeSession;
   const excludedTaskIds = new Set<string>([
     ...(activeSession?.taskId ? [activeSession.taskId] : []),
@@ -401,7 +421,7 @@ export default function Copy() {
 
   const startTask = (task: PendingTask) => {
     if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }
-    const session = { taskId: task.id, startedAt: Date.now() };
+    const session: ActiveCopySession = { taskId: task.id, taskSnapshot: task, startedAt: Date.now() };
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
     writeCopyLive({ taskId: task.id, clientId: task.client_id, topic: task.title, contentFormat: task.content_type });
@@ -412,7 +432,7 @@ export default function Copy() {
   const startBatch = (batchTasks: PendingTask[]) => {
     if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }
     if (batchTasks.length === 0) return;
-    const session = { batchTaskIds: batchTasks.map(t => t.id), startedAt: Date.now() };
+    const session: ActiveCopySession = { batchTaskIds: batchTasks.map(t => t.id), batchSnapshot: batchTasks, startedAt: Date.now() };
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
     writeCopyLive({ batchTaskIds: session.batchTaskIds, clientId: batchTasks[0]?.client_id, topic: `Lote de ${batchTasks.length} stories`, contentFormat: 'story' });
@@ -423,7 +443,7 @@ export default function Copy() {
   const openStoryBatch = (batchTasks: PendingTask[]) => {
     if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }
     if (batchTasks.length === 0) return;
-    const session = { batchTaskIds: batchTasks.map(t => t.id), startedAt: Date.now() };
+    const session: ActiveCopySession = { batchTaskIds: batchTasks.map(t => t.id), batchSnapshot: batchTasks, startedAt: Date.now() };
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
     writeCopyLive({ batchTaskIds: session.batchTaskIds, clientId: batchTasks[0]?.client_id, topic: `Lote de ${batchTasks.length} stories`, contentFormat: 'story' });
@@ -434,7 +454,7 @@ export default function Copy() {
 
   const openSingleTask = (task: PendingTask) => {
     if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }
-    const session = { taskId: task.id, startedAt: Date.now() };
+    const session: ActiveCopySession = { taskId: task.id, taskSnapshot: task, startedAt: Date.now() };
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
     writeCopyLive({ taskId: task.id, clientId: task.client_id, topic: task.title, contentFormat: task.content_type });
@@ -450,7 +470,7 @@ export default function Copy() {
 
   const startRequest = async (req: ScriptRequest) => {
     if (isBusy) { toast.error('Finalize a tarefa atual antes de iniciar outra'); return; }
-    const session = { requestId: req.id, startedAt: Date.now() };
+    const session: ActiveCopySession = { requestId: req.id, requestSnapshot: req, startedAt: Date.now() };
     setActiveSession(session);
     if (sessionKey) localStorage.setItem(sessionKey, JSON.stringify(session));
     await supabase.from('script_requests').update({ status: 'in_progress' } as any).eq('id', req.id);

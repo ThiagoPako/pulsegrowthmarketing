@@ -38,6 +38,12 @@ check_src() {
 }
 check_src "Excluir vídeos por período" "Botão excluir vídeos do Portal"
 check_src "Prévia do Vídeo"            "Player inline no card de revisão"
+check_src "PULSE_STABLE_NO_AUTO_RELOAD_V1" "Proteção de estabilidade e rascunho"
+
+if grep -Rqs --include='*.tsx' --include='*.ts' -- "location.reload()" src/main.tsx src/App.tsx src/contexts/CityContext.tsx 2>/dev/null; then
+  die "foi encontrada recarga automática no núcleo da aplicação"
+fi
+grn "  ✓ núcleo sem atualização automática de página"
 [ "$MISSING_SRC" -eq 0 ] || die "o commit baixado é antigo. Publique/faça push das alterações do Lovable para o GitHub e rode de novo."
 
 # --- 3. Build --------------------------------------------------------------

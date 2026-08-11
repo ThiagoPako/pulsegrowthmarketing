@@ -32,9 +32,11 @@ import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 import pulseHeader from '@/assets/pulse_header.png';
 import ClientLogo from '@/components/ClientLogo';
+import { useAutoSave } from '@/hooks/useAutoSave';
 
 const VIDEO_TYPES: ScriptVideoType[] = ['vendas', 'institucional', 'reconhecimento', 'educacional', 'bastidores', 'depoimento', 'lancamento', 'evento'];
 const CONTENT_FORMATS: ScriptContentFormat[] = ['reels', 'story', 'criativo'];
+const STABLE_SCRIPT_DRAFT_KEY = 'PULSE_STABLE_NO_AUTO_RELOAD_V1';
 
 function RichEditor({ content, onChange }: { content: string; onChange: (html: string) => void }) {
   const editor = useEditor({
@@ -221,6 +223,25 @@ export default function Scripts() {
     campaignSlotId: '' as string,
     campaignName: '' as string,
   });
+
+  // Protege o trabalho em andamento mesmo se uma aba antiga, queda de conexão
+  // ou fechamento acidental interromper o editor. O rascunho é local e não
+  // dispara navegação, refetch ou atualização da página.
+  const recoverScriptDraft = useCallback((draft: { form: typeof form; editingId: string | null; wasOpen: boolean }) => {
+    if (!draft?.wasOpen || (!draft.form?.title && !draft.form?.content)) return;
+    setForm(draft.form);
+    setEditing(draft.editingId ? scripts.find(script => script.id === draft.editingId) ?? null : null);
+    setOpen(true);
+    toast.info('Rascunho em andamento recuperado');
+  }, [scripts]);
+
+  const { clearSaved: clearScriptDraft } = useAutoSave(
+    `${STABLE_SCRIPT_DRAFT_KEY}:${user?.id ?? 'anonymous'}`,
+    { form, editingId: editing?.id ?? null, wasOpen: open },
+    // Permanece habilitado para conseguir recuperar logo após uma remontagem.
+    // Quando o editor está fechado, o estado `wasOpen: false` impede reabertura.
+    { enabled: true, interval: 3_000, onRecover: recoverScriptDraft },
+  );
 
   // ── Deep-link from Campanhas: preset form and auto-open ──
   const [searchParams, setSearchParams] = useSearchParams();
@@ -547,6 +568,7 @@ export default function Scripts() {
       
       toast.success(form.directToEditing ? 'Enviado para fila de edição!' : 'Roteiro criado');
     }
+    clearScriptDraft();
     setOpen(false);
   };
 

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -153,6 +153,9 @@ function ProtectedRoute({
   const { user, loading } = useAuth();
   const { currentUser } = useApp();
   const [profileTimedOut, setProfileTimedOut] = useState(false);
+  const profileResolvedOnce = useRef(false);
+
+  if (currentUser) profileResolvedOnce.current = true;
 
   useEffect(() => {
     if (currentUser || !user) {
@@ -165,7 +168,7 @@ function ProtectedRoute({
 
   if (loading) return <PageLoader />;
   if (!user) return <Navigate to="/login" replace />;
-  if (requireProfile && !currentUser && !profileTimedOut) return <PageLoader />;
+  if (requireProfile && !currentUser && !profileResolvedOnce.current && !profileTimedOut) return <PageLoader />;
   if (noLayout) return <>{children}</>;
   return <Layout>{children}</Layout>;
 }

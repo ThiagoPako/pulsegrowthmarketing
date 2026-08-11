@@ -1,5 +1,5 @@
 import React from 'react';
-// preciso do comando pra usar no terminal
+// preciso que me envie o prompt para copiar e colar na VPS para atualizar
 
 export const SupabaseCheck = () => {
    const deployCommand = "cd /var/www/pulsegrowthmarketing && git pull && npm install && npm run build && pm2 restart pulse-api pulse-uploads && sudo systemctl reload nginx && pm2 status";

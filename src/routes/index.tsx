@@ -1,7 +1,6 @@
-// resultado apos ultimo comando
 // Veja o link da imagem enviada abaixo e analise o conteúdo dela para responder:
-// Imagem 1: https://sorax.lovable.app/api/public/i/z3rkscpwpx.png
-// Imagem 2 (DevTools): user-uploads://Captura_de_Tela_2026-08-11_às_12.27.56.png
+// Imagem 1: https://sorax.lovable.app/api/public/i/zndyqcoobl.png
+// Imagem 2 (DevTools): user-uploads://Captura_de_Tela_2026-08-11_às_12.29.20.png
 
 
 export const SupabaseCheck = () => {

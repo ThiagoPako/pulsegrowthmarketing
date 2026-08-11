@@ -791,19 +791,18 @@ async function verifyUser(req) {
     // Try JWT first (new system)
     const decoded = verifyToken(token);
     
-    // Check if sub is present
     if (!decoded || !decoded.sub) {
-      console.error("[Auth-JWT-MissingSub]", { decoded, path: req.path });
+      console.error("[Auth-JWT-Error] Token valid but 'sub' (userId) is missing:", { decoded, path: req.path });
       throw new Error('Unauthorized');
     }
 
     const profile = await getAuthProfileById(decoded.sub).catch(err => {
-      console.error("[Auth-DB-ProfileError]", { sub: decoded.sub, error: err.message });
+      console.error("[Auth-DB-Error] Failed to fetch profile from DB:", { sub: decoded.sub, error: err.message });
       return null;
     });
 
     if (!profile) {
-      console.warn("[Auth-ProfileNotFound] Reverting to decoded claims", { sub: decoded.sub });
+      console.warn("[Auth-ProfileNotFound] User ID not found in profiles table, using token claims:", { sub: decoded.sub });
     }
 
     const role = profile

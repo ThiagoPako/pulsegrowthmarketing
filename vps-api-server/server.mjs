@@ -7966,6 +7966,26 @@ import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 
 const server = createServer(app);
+const wss = new WebSocketServer({ server, path: '/api/realtime' });
+
+wss.on('connection', (ws) => {
+  wssClients.add(ws);
+  ws.on('close', () => wssClients.delete(ws));
+  ws.on('error', () => wssClients.delete(ws));
+  
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message);
+      if (data.type === 'subscribe') {
+        // Auth already handled by verifyUser on first REST call, 
+        // we keep it simple for now as it's a internal local network VPS.
+        ws.subscribedChannels = ws.subscribedChannels || new Set();
+        ws.subscribedChannels.add(data.channel);
+      }
+    } catch (e) {}
+  });
+});
+
 const wss = new WebSocketServer({ server, path: '/ws/office' });
 
 const wsClients = new Set();

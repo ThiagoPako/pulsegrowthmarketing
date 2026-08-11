@@ -17,7 +17,7 @@ import {
   Plus, Flame, Snowflake, RotateCcw, MessageSquare, 
   Briefcase, Phone, UserPlus, Target, TrendingUp, 
   DollarSign, Users, LayoutDashboard, Filter, Search,
-  Calendar as CalendarIcon, Clock, Pencil, Trash2
+  Calendar as CalendarIcon, Clock, Pencil, Trash2, UserMinus
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { toast } from 'sonner';
@@ -341,6 +341,18 @@ export default function CRM() {
                 <div className="grid gap-2">
                   <Label htmlFor="email">Email</Label>
                   <Input id="email" name="email" type="email" placeholder="contato@empresa.com" className="bg-muted/50" />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="city">Cidade</Label>
+                  <Select name="city" defaultValue="Minaçu">
+                    <SelectTrigger className="bg-muted/50">
+                      <SelectValue placeholder="Selecione a cidade" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Minaçu">Minaçu</SelectItem>
+                      <SelectItem value="Uruaçu">Uruaçu</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="description">Descrição / Observações</Label>

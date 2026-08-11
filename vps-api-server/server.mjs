@@ -48,6 +48,11 @@ app.use(cors());
 app.use(compression({ threshold: 1024 }));
 app.use(express.json({ limit: '10mb' }));
 
+// Health Check: endpoint leve para monitoramento do Nginx/Uptime
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime() });
+});
+
 // ─── PostgreSQL local ───────────────────────────────────────
 // Accept both the project's PG_* names and the standard libpq names used by
 // many VPS/PostgreSQL installers. This prevents the API from silently falling

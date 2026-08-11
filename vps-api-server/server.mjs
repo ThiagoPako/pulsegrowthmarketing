@@ -8989,33 +8989,6 @@ app.get('/api/upload-health', (_req, res) => {
   }
 });
 
-// ─── CRM Lead Harvester: Public API Proxy ───────────────────
-app.post('/api/crm/harvest/search', async (req, res) => {
-  try {
-    const { user } = await verifyUser(req);
-    const { city, niche, min_capital } = req.body;
-    
-    // MOCK: In a real VPS scenario, this calls https://receitaws.com.br/v1/search
-    // or crawls a CNAE list. For now, returning structured data.
-    const mockCompanies = [
-      {
-        id: '1',
-        razao_social: `${niche?.toUpperCase() || 'EMPRESA'} PULSE LTDA`,
-        contato: 'Diretoria Comercial',
-        email: 'contato@exemplo.com.br',
-        telefone: '(62) 99999-9999',
-        atuacao: niche || 'Geral',
-        endereco: 'Av. Principal, 123',
-        capital_social: Number(min_capital || 10000) * 1.5,
-        cidade: city === 'all' ? 'Minaçu' : city
-      }
-    ];
-
-    res.json({ success: true, data: mockCompanies });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
 
 // ─── Endpoint de Reparo e Diagnóstico Atômico ───────────────
 // Executa manutenções críticas no banco e filesystem sem deletar dados.

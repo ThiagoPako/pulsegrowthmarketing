@@ -518,8 +518,6 @@ class ChannelBuilder {
       this._socket = null;
     }
   }
-}
-
   send(payload: { type?: string; event: string; payload?: any }): 'ok' | 'queued' | 'error' {
     const msg = JSON.stringify({
       type: 'broadcast',
@@ -567,42 +565,12 @@ async function invokeFunction(functionName: string, options?: { body?: any }): P
     if (!response.ok) {
       return { data: null, error: data.error || { message: `HTTP ${response.status}` } };
     }
-    return data;
-  } catch (error: any) {
-    return { data: null, error: { message: error.message || 'Network error' } };
-  }
-}
-
-
-/**
- * Invoke a VPS API function (replaces supabase.functions.invoke)
- * Routes to https://agenciapulse.tech/api/<functionName>
- */
-async function invokeFunction(functionName: string, options?: { body?: any }): Promise<{ data: any; error: any }> {
-  try {
-    let response = await fetch(`${VPS_API_BASE}/${functionName}`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: options?.body ? JSON.stringify(options.body) : undefined,
-    });
-
-    if (response.status === 401 && await refreshVpsSession()) {
-      response = await fetch(`${VPS_API_BASE}/${functionName}`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: options?.body ? JSON.stringify(options.body) : undefined,
-      });
-    }
-
-    const data = await response.json();
-    if (!response.ok) {
-      return { data: null, error: data.error || { message: `HTTP ${response.status}` } };
-    }
     return { data, error: null };
   } catch (error: any) {
     return { data: null, error: { message: error.message || 'Network error' } };
   }
 }
+
 
 /**
  * VPS Database client — drop-in replacement for Supabase client

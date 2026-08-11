@@ -1,7 +1,7 @@
-// analise a imagem do terminal, entenda o erro que impede o sistema de funcionar, e crie um comando para usar no terminal para corrigir
+// esse é o resultado apos o uktimo comando
 // Veja o link da imagem enviada abaixo e analise o conteúdo dela para responder:
-// Imagem 1: https://sorax.lovable.app/api/public/i/ajbbdybti2.png
-// Imagem 2 (DevTools): user-uploads://Captura_de_Tela_2026-08-11_às_12.23.33.png
+// Imagem 1: https://sorax.lovable.app/api/public/i/1ej33njahc.png
+// Imagem 2 (DevTools): user-uploads://Captura_de_Tela_2026-08-11_às_12.26.04.png
 
 
 export const SupabaseCheck = () => {

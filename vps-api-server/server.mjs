@@ -115,6 +115,57 @@ function collectOnlinePresenceIds() {
   );
 }
 
+async function ensureCrmLeadsColumns() {
+  if (!crmLeadsColumnsEnsuredPromise) {
+    crmLeadsColumnsEnsuredPromise = (async () => {
+      try {
+        const { rows: columns } = await pool.query(`
+          SELECT column_name, data_type 
+          FROM information_schema.columns 
+          WHERE table_name = 'crm_leads'
+        `);
+        
+        const hasReturnDate = columns.some(c => c.column_name === 'return_date');
+        if (!hasReturnDate) {
+          await pool.query(`ALTER TABLE crm_leads ADD COLUMN return_date DATE`);
+          console.log('Added return_date column to crm_leads');
+        }
+
+        // Check if fridge status is allowed by constraint if any, or just ensure it works in logic
+        // The status is TEXT CHECK (status IN (...)) usually.
+        // Let's check constraints.
+        const { rows: constraints } = await pool.query(`
+          SELECT pg_get_constraintdef(c.oid) as condef
+          FROM pg_constraint c
+          JOIN pg_class t ON t.oid = c.conrelid
+          WHERE t.relname = 'crm_leads' AND c.conname LIKE '%status%check%'
+        `);
+        
+        if (constraints.length > 0) {
+          const condef = constraints[0].condef;
+          if (!condef.includes('fridge')) {
+            // Drop and recreate status constraint to include 'fridge'
+            const conName = constraints[0].conname; // We need the name
+            // Get name properly
+            const { rows: conNames } = await pool.query(`
+               SELECT conname FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid WHERE t.relname = 'crm_leads' AND c.contype = 'c' AND pg_get_constraintdef(c.oid) LIKE '%status%'
+            `);
+            for (const row of conNames) {
+               await pool.query(`ALTER TABLE crm_leads DROP CONSTRAINT ${row.conname}`);
+            }
+            await pool.query(`ALTER TABLE crm_leads ADD CONSTRAINT crm_leads_status_check CHECK (status IN ('lead', 'contacted', 'meeting', 'contracted', 'lost', 'recovery_followup_1', 'recovery_followup_2', 'fridge'))`);
+            console.log('Updated crm_leads status constraint to include fridge');
+          }
+        }
+      } catch (err) {
+        console.error('ensureCrmLeadsColumns error:', err);
+        crmLeadsColumnsEnsuredPromise = null;
+      }
+    })();
+  }
+  return crmLeadsColumnsEnsuredPromise;
+}
+
 const CLIENT_PORTAL_BASE_FIELDS = [
   'id',
   'company_name',
@@ -139,6 +190,7 @@ let storyEditingSessionsEnsuredPromise;
 let scriptRequestsEnsuredPromise;
 let copyActiveSessionsEnsuredPromise;
 const tableJsonColumnsPromiseCache = new Map();
+let fridgeCleanupEnsuredPromise;
 const SCHEMA_CACHE_TTL_MS = 5 * 60 * 1000;
 
 function getSchemaCacheValue(cache, key) {
@@ -8966,7 +9018,16 @@ app.post('/api/crm/harvest/search', async (req, res) => {
 
 // ─── Endpoint de Reparo e Diagnóstico Atômico ───────────────
 // Executa manutenções críticas no banco e filesystem sem deletar dados.
+// API Admin atomic repair
 app.post('/api/admin/repair-atomic', async (req, res) => {
+  try {
+    await ensureCrmLeadsColumns();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
   try {
     const { user } = await verifyUser(req);
     const isAdmin = await isAdminUser(user);

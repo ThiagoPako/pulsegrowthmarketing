@@ -873,7 +873,7 @@ function LeadDetailsDialog({
       <DialogContent className="max-w-3xl p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
         <div className="flex h-[600px]">
           {/* Coluna Esquerda: Dados */}
-          <div className="w-2/5 bg-muted/30 p-8 flex flex-col gap-6">
+          <div className="w-2/5 bg-muted/30 p-8 flex flex-col gap-6 overflow-y-auto">
             <div>
               <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-4">Dados da Oportunidade</h3>
               <div className="space-y-4">

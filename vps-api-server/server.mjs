@@ -25,6 +25,9 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import multer from 'multer';
 import { WebSocketServer } from 'ws';
+import { execFile, spawn } from 'child_process';
+import { promisify } from 'util';
+import { Readable } from 'stream';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -4015,9 +4018,8 @@ app.post('/api/portal-recordings', async (req, res) => {
 });
 
 // ─── 7. Portal Media Proxy (streaming-first + 480p warmup) ───────
-import { execFile, spawn } from 'child_process';
-import { promisify } from 'util';
-import { Readable } from 'stream';
+// (Imports removidos daqui e movidos para o topo do arquivo para evitar SyntaxError de declaração dupla)
+
 
 const execFileAsync = promisify(execFile);
 const TRANSCODE_CACHE_DIR = '/tmp/pulse-video-cache';

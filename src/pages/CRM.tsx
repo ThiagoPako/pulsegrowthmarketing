@@ -117,10 +117,6 @@ const STAGES: { id: LeadStatus; label: string; color: string; icon: any }[] = [
 ];
 
 
-const RECOVERY_STAGES: { id: LeadStatus; label: string; color: string; icon: any }[] = [
-  { id: 'recovery_followup_1', label: 'Follow-up 1', color: 'border-t-orange-400', icon: RotateCcw },
-  { id: 'recovery_followup_2', label: 'Follow-up 2', color: 'border-t-red-400', icon: RotateCcw },
-];
 
 export default function CRM() {
   const { user, profile } = useAuth();

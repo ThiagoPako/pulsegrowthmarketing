@@ -53,7 +53,16 @@ app.use(express.json({ limit: '10mb' }));
 
 // Health Check: endpoint leve para monitoramento do Nginx/Uptime
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime() });
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(), 
+    uptime: process.uptime(),
+    env: {
+      has_jwt_secret: !!process.env.JWT_SECRET,
+      has_db_url: !!process.env.DATABASE_URL,
+      node_env: process.env.NODE_ENV
+    }
+  });
 });
 
 // ─── PostgreSQL local ───────────────────────────────────────
@@ -794,7 +803,16 @@ async function verifyUser(req) {
       userClient: getUserClient(authHeader),
     };
   } catch (error) {
-    console.error(`[Auth] verifyUser failed for ${req.path}:`, error.message);
+    const errorDetail = {
+      message: error.message,
+      name: error.name,
+      stack: error.stack?.split('\n').slice(0, 3).join('\n'),
+      path: req.path,
+      hasAuthHeader: !!req.headers.authorization,
+      authHeaderLength: req.headers.authorization?.length || 0,
+      timestamp: new Date().toISOString()
+    };
+    console.error(`[Auth-Critical] verifyUser failed:`, JSON.stringify(errorDetail, null, 2));
     throw new Error('Unauthorized');
   }
 }

@@ -1,6 +1,6 @@
 // analise esses erros
 // Veja o link da imagem enviada abaixo e analise o conteúdo dela para responder:
-// Imagem 1: https://sorax.lovable.app/api/public/i/nzv7832chq.png
+// Imagem 1: https://sorax.lovable.app/api/public/i/kutv9878sw.png
 
 
 export const SupabaseCheck = () => {

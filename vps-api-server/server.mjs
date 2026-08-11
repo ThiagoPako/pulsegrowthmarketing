@@ -790,10 +790,26 @@ async function verifyUser(req) {
   try {
     // Try JWT first (new system)
     const decoded = verifyToken(token);
-    const profile = await getAuthProfileById(decoded.sub).catch(() => null);
+    
+    // Check if sub is present
+    if (!decoded || !decoded.sub) {
+      console.error("[Auth-JWT-MissingSub]", { decoded, path: req.path });
+      throw new Error('Unauthorized');
+    }
+
+    const profile = await getAuthProfileById(decoded.sub).catch(err => {
+      console.error("[Auth-DB-ProfileError]", { sub: decoded.sub, error: err.message });
+      return null;
+    });
+
+    if (!profile) {
+      console.warn("[Auth-ProfileNotFound] Reverting to decoded claims", { sub: decoded.sub });
+    }
+
     const role = profile
       ? await getUserPrimaryRole(profile.id, profile.role || decoded.role || 'editor')
-      : decoded.role;
+      : (decoded.role || 'editor');
+
     return {
       user: {
         id: profile?.id || decoded.sub,

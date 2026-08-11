@@ -12,6 +12,13 @@ printf '{"version":"%s","builtAt":"%s"}\n' "$BUILD_VERSION" "$(date -u +%Y-%m-%d
 # Gate de deploy: aborta se marcadores críticos de UI não entraram no bundle.
 node scripts/verify-bundle.mjs dist
 
+# Gate de estabilidade: o núcleo nunca pode recarregar a página sozinho.
+if grep -Rqs --include='*.tsx' --include='*.ts' -- "location.reload()" \
+  src/main.tsx src/App.tsx src/contexts/CityContext.tsx 2>/dev/null; then
+  echo "ERRO: recarga automática encontrada no núcleo da aplicação."
+  exit 1
+fi
+
 cd /var/www/pulsegrowthmarketing/vps-api-server
 rm -rf node_modules/bcrypt
 npm install

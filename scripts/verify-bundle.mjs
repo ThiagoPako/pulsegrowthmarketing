@@ -23,6 +23,10 @@ const REQUIRED_MARKERS = [
     text: "Prévia do Vídeo",
     feature: "Player inline no card de revisão (ContentTaskDetailSheet)",
   },
+  {
+    text: "PULSE_STABLE_NO_AUTO_RELOAD_V1",
+    feature: "Proteção contra perda do roteiro e atualização automática",
+  },
 ];
 
 const DIST_DIR = resolve(process.argv[2] ?? "dist");

@@ -17,9 +17,11 @@ import {
   Plus, Flame, Snowflake, RotateCcw, MessageSquare, 
   Briefcase, Phone, UserPlus, Target, TrendingUp, 
   DollarSign, Users, LayoutDashboard, Filter, Search,
-  Calendar as CalendarIcon, Clock, Pencil, Trash2, UserMinus
+  Calendar as CalendarIcon, Clock, Pencil, Trash2, UserMinus,
+  Sprout, Handshake
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { LeadHarvester } from '@/components/crm/LeadHarvester';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, isSameDay } from 'date-fns';

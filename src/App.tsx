@@ -299,7 +299,9 @@ function AppRoutes() {
 
         <Route path="/tv" element={<Suspense fallback={<PageLoader />}><TvDashboard /></Suspense>} />
         <Route path="/designer/playbook/:clientId" element={<ProtectedRoute><ClientArtPlaybook /></ProtectedRoute>} />
+        <Route path="/repair-auth" element={<RepairAuth />} />
         <Route path="*" element={<NotFound />} />
+
       </Routes>
     </Suspense>
   );

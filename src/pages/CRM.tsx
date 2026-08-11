@@ -26,7 +26,7 @@ import { CRMBanner } from '@/components/crm/CRMBanner';
 
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
-import { format, isSameDay } from 'date-fns';
+import { format, isSameDay, isToday, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 function normalizeMeetingDateInput(value?: string | null) {

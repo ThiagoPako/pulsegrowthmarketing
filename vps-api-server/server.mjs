@@ -794,6 +794,7 @@ async function verifyUser(req) {
       userClient: getUserClient(authHeader),
     };
   } catch (error) {
+    console.error(`[Auth] verifyUser failed for ${req.path}:`, error.message);
     throw new Error('Unauthorized');
   }
 }

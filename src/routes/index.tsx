@@ -1,6 +1,6 @@
-// vamos atualizar o que for preciso pra corrigir desde que nao apague os dados do sistema
-// Veja o link da imagem enviada abaixo e analise o conteúdo dela para responder:
-// Imagem 1: https://sorax.lovable.app/api/public/i/bayawr34ok.png
+// CRM Colheita de Leads: Nicho de atuação em lista (CNAE/Min. Fazenda) via API VPS.
+// Analisando viabilidade técnica para integração com ReceitaWS/BrasilAPI no backend.
+// Imagem de referência: https://sorax.lovable.app/api/public/i/bayawr34ok.png
 
 
 export const SupabaseCheck = () => {

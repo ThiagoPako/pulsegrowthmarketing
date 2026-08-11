@@ -1,13 +1,12 @@
 // CRM Colheita de Leads: Nicho de atuação em lista (CNAE/Min. Fazenda) via API VPS.
 // Botão de limpeza adicionado para gerenciar resultados da colheita.
-// Imagem de referência: https://sorax.lovable.app/api/public/i/bayawr34ok.png
-
 
 export const SupabaseCheck = () => {
-   const deployCommand = "cd /var/www/pulsegrowthmarketing && git pull && npm install && npm run build && pm2 delete pulse-uploads 2>/dev/null || true && pm2 restart pulse-api --update-env && sudo systemctl reload nginx && pm2 status";
+  const deployCommand = "cd /var/www/pulsegrowthmarketing && git pull && npm install && npm run build && pm2 delete pulse-uploads 2>/dev/null || true && pm2 restart pulse-api --update-env && sudo systemctl reload nginx && pm2 status";
 
   return (
-    <div className="min-h-screen bg-background p-8 flex items-center justify-center">
+    <div className="min-h-screen bg-background p-8 flex flex-col items-center justify-start space-y-12">
+      {/* Bloco de Atualização VPS */}
       <div className="max-w-2xl w-full p-6 bg-card text-card-foreground rounded-xl border-2 border-primary/20 shadow-2xl space-y-6">
         <div className="space-y-2">
           <h2 className="text-2xl font-bold tracking-tight text-primary">comando pra atualizar na VPS porque ainda nao aparece no dominio</h2>
@@ -33,19 +32,88 @@ export const SupabaseCheck = () => {
             O reload do Nginx e restart do PM2 garantem que a transição seja suave.
           </div>
         </div>
+      </div>
 
-        <div className="pt-4 border-t border-border flex justify-between items-center text-xs text-muted-foreground italic">
-          <span>Última validação: Hoje</span>
-          <span>pulsegrowthmarketing</span>
-          <div className="mt-8 p-4 bg-violet-500/10 border border-violet-500/20 rounded-xl">
-            <h3 className="text-sm font-bold text-violet-400 mb-2">Novas Funções do Portal (Admin)</h3>
-            <ul className="text-xs text-white/60 list-disc list-inside space-y-1">
-              <li>Botão de Limpeza na header do Portal (visível apenas para admin)</li>
-              <li>Seleção múltipla de meses para deleção de vídeos</li>
-              <li>Filtro por cliente específico ou limpeza global</li>
-              <li>Endpoints de segurança na VPS para deleção em massa</li>
+      {/* Regras de Funcionamento da Colheita */}
+      <div className="max-w-4xl w-full p-8 bg-card text-card-foreground rounded-xl border border-border shadow-sm space-y-8">
+        <div className="border-b border-border pb-4">
+          <h1 className="text-3xl font-black tracking-tighter text-primary uppercase">COLHEITA DE LEADS — FUNCIONAMENTO</h1>
+          <p className="mt-4 text-muted-foreground leading-relaxed">
+            A funcionalidade Colheita de Leads será responsável por encontrar empresas para prospecção comercial, utilizando a base pública de CNPJ da Receita Federal e, posteriormente, o Google Places para enriquecimento dos dados.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <section className="space-y-3">
+            <h3 className="font-bold text-lg text-primary">1. Definição da busca</h3>
+            <ul className="text-sm space-y-1 list-disc list-inside text-muted-foreground">
+              <li>Estado</li>
+              <li>Cidade ou região</li>
+              <li>Segmento/nicho da empresa</li>
+              <li>Opcionalmente, CNAE e outros filtros</li>
             </ul>
+            <p className="text-xs italic">Ao clicar em “Iniciar Colheita”, o sistema começa a busca.</p>
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="font-bold text-lg text-primary">2. Receita Federal — empresas</h3>
+            <p className="text-sm text-muted-foreground">
+              O sistema consulta a base de CNPJ para identificar:
+            </p>
+            <ul className="text-sm space-y-1 list-disc list-inside text-muted-foreground">
+              <li>CNPJ, Razão social, Nome fantasia</li>
+              <li>CNAE/atividade, Endereço completo</li>
+              <li>Situação cadastral</li>
+            </ul>
+          </section>
+        </div>
+
+        <div className="space-y-4 bg-muted/30 p-6 rounded-lg border border-border">
+          <h3 className="font-bold text-lg text-primary">3. Google — enriquecimento dos dados</h3>
+          <p className="text-sm text-muted-foreground">
+            O objetivo principal desta etapa é encontrar o <strong>telefone comercial</strong>.
+            Também coletamos: Site, Avaliações e link do Google Maps.
+          </p>
+        </div>
+
+        <div className="bg-primary/5 p-6 rounded-lg border-2 border-primary/20">
+          <h3 className="font-bold text-lg text-primary uppercase mb-3">4. REGRA PRINCIPAL DA COLHEITA</h3>
+          <p className="text-sm font-medium mb-4">
+            A empresa só poderá virar um card dentro do sistema se possuir <span className="underline decoration-primary">telefone comercial encontrado</span>.
+          </p>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div className="p-3 bg-background rounded border border-border">
+              <p className="font-bold mb-1">Empresa A</p>
+              <p>Receita ✅ | Google ✅ | Telefone ✅</p>
+              <p className="text-green-500 font-bold mt-1">→ Gerar card</p>
+            </div>
+            <div className="p-3 bg-background rounded border border-border">
+              <p className="font-bold mb-1">Empresa B</p>
+              <p>Receita ✅ | Google ✅ | Telefone ❌</p>
+              <p className="text-destructive font-bold mt-1">→ Não gerar card</p>
+            </div>
           </div>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="font-bold text-lg text-primary">5. Geração dos Cards</h3>
+          <p className="text-sm text-muted-foreground">
+            O telefone será o critério obrigatório. Antes de criar, o sistema verifica duplicidade por CNPJ para evitar cadastros repetidos.
+          </p>
+        </div>
+
+        <div className="pt-6 border-t border-border flex flex-col sm:flex-row justify-between items-center gap-4 text-[10px] uppercase tracking-widest text-muted-foreground font-bold">
+          <div className="flex items-center gap-2">
+            <span>Filtros</span>
+            <span className="text-primary">→</span>
+            <span>Receita Federal</span>
+            <span className="text-primary">→</span>
+            <span>Google Places</span>
+            <span className="text-primary">→</span>
+            <span>Card</span>
+          </div>
+          <span>Agência Pulse 2026</span>
         </div>
       </div>
     </div>

@@ -108,6 +108,8 @@ const CampaignPlaybook = lazy(() => import("@/pages/CampaignPlaybook"));
 const TeamOrgChart = lazy(() => import("@/pages/TeamOrgChart"));
 const TeamPresentation = lazy(() => import("@/pages/TeamPresentation"));
 const Copy = lazy(() => import("@/pages/Copy"));
+const RepairAuth = lazy(() => import("@/pages/RepairAuth"));
+
 
 
 const queryClient = new QueryClient({

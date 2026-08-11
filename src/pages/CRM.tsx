@@ -456,6 +456,9 @@ export default function CRM() {
             <TabsTrigger value="calendar" className="gap-2 px-6">
               <CalendarIcon className="h-4 w-4" /> Calendário
             </TabsTrigger>
+            <TabsTrigger value="harvester" className="gap-2 px-6">
+              <Sprout className="h-4 w-4" /> Colheita de Leads
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -520,7 +523,19 @@ export default function CRM() {
                                           <div className="p-4 space-y-3 relative">
                                             <div className="flex justify-between items-start gap-2">
                                               <div className="flex-1 min-w-0">
-                                                <h4 className="font-bold text-sm truncate group-hover:text-primary transition-colors">{lead.name}</h4>
+                                                <div className="flex items-center gap-2">
+                                                  <h4 className="font-bold text-sm truncate group-hover:text-primary transition-colors">{lead.name}</h4>
+                                                  {lead.source_tag === 'colheita' && (
+                                                    <Badge variant="outline" className="h-4 px-1 text-[8px] bg-green-50 text-green-700 border-green-200">
+                                                      COLHEITA
+                                                    </Badge>
+                                                  )}
+                                                  {lead.source_tag === 'indicacao' && (
+                                                    <Badge variant="outline" className="h-4 px-1 text-[8px] bg-blue-50 text-blue-700 border-blue-200">
+                                                      INDICAÇÃO
+                                                    </Badge>
+                                                  )}
+                                                </div>
                                                 <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
                                                   <Briefcase className="h-3 w-3" /> {lead.company || 'Pessoa Física'} {lead.city && <span className="text-primary/70">· {lead.city}</span>}
                                                 </p>
@@ -811,6 +826,10 @@ export default function CRM() {
               </div>
             </div>
           </Card>
+        </TabsContent>
+        
+        <TabsContent value="harvester" className="m-0">
+          <LeadHarvester />
         </TabsContent>
       </Tabs>
     </div>

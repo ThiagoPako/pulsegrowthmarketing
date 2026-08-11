@@ -964,13 +964,13 @@ async function getExistingColumns(tableName) {
       )
         .then(({ rows }) => new Set(rows.map((row) => row.column_name)))
         .catch((error) => {
-          tableColumnsPromiseCache.delete(normalizedTable);
+          cache.delete(normalizedTable);
           throw error;
         }) }
     );
   }
 
-  return tableColumnsPromiseCache.get(normalizedTable).value;
+  return cache.get(normalizedTable).value;
 }
 
 function selectColumn(columns, columnName, fallbackSql = `NULL::text`) {

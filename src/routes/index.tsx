@@ -1,9 +1,6 @@
-// Adicione um endpoint /health no meu pulse-api para eu verificar rapidamente se o backend está respondendo e passar isso no Nginx sem erro 502.
-//
-// erro continua
 // Veja o link da imagem enviada abaixo e analise o conteúdo dela para responder:
-// Imagem 1: https://sorax.lovable.app/api/public/i/j8pypvszvj.png
-// Imagem 2 (DevTools): user-uploads://Captura_de_Tela_2026-08-11_às_11.36.13.png
+// Imagem 1: https://sorax.lovable.app/api/public/i/q5c721sdut.png
+// Imagem 2 (DevTools): user-uploads://Captura_de_Tela_2026-08-11_às_12.01.26.png
 
 
 export const SupabaseCheck = () => {

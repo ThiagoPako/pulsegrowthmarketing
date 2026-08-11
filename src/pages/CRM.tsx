@@ -900,8 +900,14 @@ function LeadDetailsDialog({ lead, onUpdate }: { lead: Lead, onUpdate: () => voi
             </div>
 
             <div className="mt-auto space-y-4">
+              <div className="flex gap-2 mb-4">
+                <EditLeadDialog lead={lead} onUpdate={(data) => updateLead.mutate(data)} />
+                <DeleteLeadDialog leadName={lead.name} onDelete={() => deleteLead.mutate(lead.id)} />
+              </div>
+              
               <div className="space-y-2">
                 <Label className="text-[10px] font-bold uppercase text-muted-foreground">Mover para Estágio</Label>
+
                 <div className="flex flex-wrap gap-2">
                   {STAGES.map(s => (
                     <Button 

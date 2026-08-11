@@ -1,4 +1,5 @@
-// o erro continua, erro de autenticação do servidor impedindo os demais de fazer login, preciso que passe o comando pra usar na VPS
+// POST https://agenciapulse.tech/api/auth/login 502 (Bad Gateway)
+// ainda continua
 // Veja o link da imagem enviada abaixo e analise o conteúdo dela para responder:
 // Imagem 1: https://sorax.lovable.app/api/public/i/j8pypvszvj.png
 // Imagem 2 (DevTools): user-uploads://Captura_de_Tela_2026-08-11_às_11.36.13.png

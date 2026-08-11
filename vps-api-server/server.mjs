@@ -921,14 +921,7 @@ let authSupportTablesPromise;
 const wssClients = new Set();
 const tableColumnsPromiseCache = new Map();
 
-/**
- * Ensures tableColumnsPromiseCache is defined before use to prevent ReferenceError.
- */
-function ensureTableColumnsCache() {
-  if (typeof tableColumnsPromiseCache === 'undefined') {
-    // This is a safety fallback for initialization order issues
-    return new Map();
-  }
+function getTableColumnsPromiseCache() {
   return tableColumnsPromiseCache;
 }
 
@@ -948,7 +941,7 @@ async function getExistingColumns(tableName) {
   const normalizedTable = String(tableName || '').trim();
   if (!normalizedTable) return new Set();
 
-  const cache = ensureTableColumnsCache();
+  const cache = getTableColumnsPromiseCache();
   const cached = cache.get(normalizedTable);
   if (cached && (Date.now() - (cached.cachedAt || 0)) < 3600000) return cached.value;
 

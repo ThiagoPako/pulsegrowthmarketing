@@ -498,37 +498,26 @@ class ChannelBuilder {
             });
           }
         } catch (e) {
-          console.error('WS parse error:', e);
+          console.warn('[realtime] Parse error:', e);
         }
       };
 
       this._socket.onclose = () => {
-        // Reconnect logic could be added here
+        // Simple reconnect after 5s
+        setTimeout(() => this.subscribe(), 5000);
       };
-
-      this._socket.onerror = (err) => {
-        console.error('WS error:', err);
-      };
-
     } catch (e) {
-      console.error('WS connection failed:', e);
+      console.error('[realtime] Connection error:', e);
     }
-
     return this;
   }
-
+  
   unsubscribe() {
     if (this._socket) {
       this._socket.close();
       this._socket = null;
     }
   }
-
-  /**
-   * Send a broadcast message on this channel.
-   * Server relays to all other subscribers of the same channel name.
-   * Returns 'ok' if the frame was written, 'queued' if the socket is still connecting.
-   */
   send(payload: { type?: string; event: string; payload?: any }): 'ok' | 'queued' | 'error' {
     const msg = JSON.stringify({
       type: 'broadcast',
@@ -549,6 +538,8 @@ class ChannelBuilder {
     return 'error';
   }
 }
+
+const activeChannels = new Map<string, ChannelBuilder>();
 
 /**
  * Invoke a VPS API function (replaces supabase.functions.invoke)
@@ -579,6 +570,7 @@ async function invokeFunction(functionName: string, options?: { body?: any }): P
     return { data: null, error: { message: error.message || 'Network error' } };
   }
 }
+
 
 /**
  * VPS Database client — drop-in replacement for Supabase client

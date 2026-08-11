@@ -12,6 +12,8 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createServer } from 'node:http';
+import fs from 'node:fs';
 import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
@@ -22,6 +24,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import multer from 'multer';
+import { WebSocketServer } from 'ws';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -78,7 +81,7 @@ function collectOnlinePresenceUsers() {
   for (const [uid, info] of presenceState) {
     const heartbeatAt = getPresenceHeartbeatTime(info);
     if (uid && heartbeatAt > 0 && now - heartbeatAt < ONLINE_PRESENCE_MS) {
-      online.push(info);
+      online.push({ ...info, id: uid });
     } else {
       presenceState.delete(uid);
     }
@@ -113,6 +116,7 @@ const CLIENT_PORTAL_BASE_FIELDS = [
 ].join(', ');
 
 let clientsArtRequestsLimitColumnPromise;
+let crmLeadsColumnsEnsuredPromise;
 let proposalTablesEnsuredPromise;
 let storyEditingSessionsEnsuredPromise;
 let scriptRequestsEnsuredPromise;
@@ -313,6 +317,26 @@ async function ensureProposalTables() {
 ensureProposalTables().catch((error) => {
   console.error('Failed to ensure proposal tables:', error);
 });
+
+async function ensureCrmLeadsColumns() {
+  if (!crmLeadsColumnsEnsuredPromise) {
+    crmLeadsColumnsEnsuredPromise = (async () => {
+      const columns = await getExistingColumns('crm_leads');
+      const alter = [];
+      if (!columns.has('description')) alter.push('ADD COLUMN description TEXT');
+      if (!columns.has('city')) alter.push('ADD COLUMN city TEXT');
+      if (alter.length > 0) {
+        await pool.query(`ALTER TABLE crm_leads ${alter.join(', ')}`).catch(err => {
+          if (!/already exists|must be owner/i.test(err.message)) throw err;
+        });
+      }
+    })();
+  }
+  return crmLeadsColumnsEnsuredPromise;
+}
+
+ensureCrmLeadsColumns().catch(err => console.error('CRM leads column sync failed:', err));
+
 
 /**
  * Todas as raízes possíveis onde os arquivos de /uploads/ podem estar
@@ -856,7 +880,20 @@ async function verifyAdmin(req) {
 
 let profilesPasswordHashColumnPromise;
 let authSupportTablesPromise;
+const wssClients = new Set();
 const tableColumnsPromiseCache = new Map();
+
+function broadcastToAll(message) {
+  const payload = JSON.stringify(message);
+  for (const client of wssClients) {
+    if (client.readyState === 1) { // 1 = OPEN
+      try { client.send(payload); } catch (e) { wssClients.delete(client); }
+    } else {
+      wssClients.delete(client);
+    }
+  }
+}
+
 
 async function getExistingColumns(tableName) {
   const normalizedTable = String(tableName || '').trim();
@@ -5270,9 +5307,8 @@ app.post('/api/db/query', async (req, res) => {
         const items = Array.isArray(data) ? data : [data];
         const allResults = [];
         const jsonColumns = await getTableJsonColumns(safeTable);
-        const existingColumns = safeTable === 'script_requests'
-          ? await getExistingColumns(safeTable)
-          : null;
+        const isAdmin = await isAdminUser(user);
+        const existingColumns = await getExistingColumns(safeTable);
         for (const item of items) {
           // Multi-city: força city para a cidade ativa (ignora qualquer valor enviado pelo cliente)
           const itemScoped = scopeCity
@@ -5343,6 +5379,21 @@ app.post('/api/db/query', async (req, res) => {
             values
           );
           allResults.push(rows[0]);
+
+          // Broadcaster: Notificações globais de novos fechamentos
+          if (safeTable === 'crm_leads' && rows[0]?.status === 'contracted') {
+            const city = rows[0].city || 'Pulse';
+            broadcastToAll({
+              type: 'broadcast',
+              event: 'crm:new_client',
+              payload: { 
+                id: rows[0].id, 
+                name: rows[0].name, 
+                city,
+                message: `🎉 Novo contrato fechado: ${rows[0].name} (${city})`
+              }
+            });
+          }
         }
         result = { data: allResults.length === 1 ? allResults[0] : allResults, error: null };
         break;
@@ -5396,9 +5447,7 @@ app.post('/api/db/query', async (req, res) => {
         const scopedData = scopeCity
           ? { ...data, city: assertValidCity(activeCity) }
           : (data && data.city !== undefined ? { ...data, city: assertValidCity(data.city) } : data);
-        const existingColumns = safeTable === 'script_requests'
-          ? await getExistingColumns(safeTable)
-          : null;
+        const existingColumns = await getExistingColumns(safeTable);
         const entries = Object.entries(scopedData)
           .map(([key, value]) => [sanitizeIdentifier(key), value])
           .filter(([key]) => !existingColumns || existingColumns.has(key));
@@ -5432,6 +5481,33 @@ app.post('/api/db/query', async (req, res) => {
         query += ' RETURNING *';
 
         const { rows } = await pool.query(query, params);
+        
+        // Broadcaster: Notificações globais de status de lead
+        if (safeTable === 'crm_leads' && rows.length > 0) {
+          for (const lead of rows) {
+            if (lead.status === 'contracted') {
+              broadcastToAll({
+                type: 'broadcast',
+                event: 'crm:new_client',
+                payload: { 
+                  id: lead.id, name: lead.name, city: lead.city || 'Pulse',
+                  message: `🎉 Novo contrato fechado: ${lead.name} (${lead.city || 'Pulse'})`
+                }
+              });
+            } else if (lead.status === 'meeting') {
+              broadcastToAll({
+                type: 'broadcast',
+                event: 'crm:meeting_scheduled',
+                payload: { 
+                  id: lead.id, name: lead.name, 
+                  date: lead.meeting_date, time: lead.meeting_time,
+                  message: `📅 Reunião agendada: ${lead.name} às ${lead.meeting_time}`
+                }
+              });
+            }
+          }
+        }
+        
         result = { data: rows, error: null };
         break;
       }
@@ -7893,6 +7969,26 @@ import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 
 const server = createServer(app);
+const wss = new WebSocketServer({ server, path: '/api/realtime' });
+
+wss.on('connection', (ws) => {
+  wssClients.add(ws);
+  ws.on('close', () => wssClients.delete(ws));
+  ws.on('error', () => wssClients.delete(ws));
+  
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message);
+      if (data.type === 'subscribe') {
+        // Auth already handled by verifyUser on first REST call, 
+        // we keep it simple for now as it's a internal local network VPS.
+        ws.subscribedChannels = ws.subscribedChannels || new Set();
+        ws.subscribedChannels.add(data.channel);
+      }
+    } catch (e) {}
+  });
+});
+
 const wss = new WebSocketServer({ server, path: '/ws/office' });
 
 const wsClients = new Set();

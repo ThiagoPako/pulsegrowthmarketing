@@ -73,7 +73,7 @@ function formatMeetingDate(value: string | null | undefined, pattern: string, fa
 }
 
 
-type LeadStatus = 'lead' | 'contacted' | 'meeting' | 'contracted' | 'lost' | 'recovery_followup_1' | 'recovery_followup_2';
+type LeadStatus = 'lead' | 'contacted' | 'meeting' | 'contracted' | 'lost' | 'recovery_followup_1' | 'recovery_followup_2' | 'fridge';
 type LeadTag = 'hot' | 'cold';
 
 interface Lead {
@@ -87,11 +87,13 @@ interface Lead {
   tag: LeadTag | null;
   meeting_date: string | null;
   meeting_time: string | null;
+  return_date?: string | null;
   city: string | null;
   description: string | null;
   source_tag: string | null;
   referral_info: { referrer_name?: string; referrer_notes?: string } | null;
 }
+
 
 
 interface Goal {

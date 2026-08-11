@@ -78,7 +78,7 @@ function collectOnlinePresenceUsers() {
   for (const [uid, info] of presenceState) {
     const heartbeatAt = getPresenceHeartbeatTime(info);
     if (uid && heartbeatAt > 0 && now - heartbeatAt < ONLINE_PRESENCE_MS) {
-      online.push(info);
+      online.push({ ...info, id: uid });
     } else {
       presenceState.delete(uid);
     }
@@ -113,6 +113,7 @@ const CLIENT_PORTAL_BASE_FIELDS = [
 ].join(', ');
 
 let clientsArtRequestsLimitColumnPromise;
+let crmLeadsColumnsEnsuredPromise;
 let proposalTablesEnsuredPromise;
 let storyEditingSessionsEnsuredPromise;
 let scriptRequestsEnsuredPromise;
@@ -313,6 +314,26 @@ async function ensureProposalTables() {
 ensureProposalTables().catch((error) => {
   console.error('Failed to ensure proposal tables:', error);
 });
+
+async function ensureCrmLeadsColumns() {
+  if (!crmLeadsColumnsEnsuredPromise) {
+    crmLeadsColumnsEnsuredPromise = (async () => {
+      const columns = await getExistingColumns('crm_leads');
+      const alter = [];
+      if (!columns.has('description')) alter.push('ADD COLUMN description TEXT');
+      if (!columns.has('city')) alter.push('ADD COLUMN city TEXT');
+      if (alter.length > 0) {
+        await pool.query(`ALTER TABLE crm_leads ${alter.join(', ')}`).catch(err => {
+          if (!/already exists|must be owner/i.test(err.message)) throw err;
+        });
+      }
+    })();
+  }
+  return crmLeadsColumnsEnsuredPromise;
+}
+
+ensureCrmLeadsColumns().catch(err => console.error('CRM leads column sync failed:', err));
+
 
 /**
  * Todas as raízes possíveis onde os arquivos de /uploads/ podem estar

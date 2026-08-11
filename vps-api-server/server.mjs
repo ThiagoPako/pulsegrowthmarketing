@@ -877,7 +877,20 @@ async function verifyAdmin(req) {
 
 let profilesPasswordHashColumnPromise;
 let authSupportTablesPromise;
+const wssClients = new Set();
 const tableColumnsPromiseCache = new Map();
+
+function broadcastToAll(message) {
+  const payload = JSON.stringify(message);
+  for (const client of wssClients) {
+    if (client.readyState === 1) { // 1 = OPEN
+      try { client.send(payload); } catch (e) { wssClients.delete(client); }
+    } else {
+      wssClients.delete(client);
+    }
+  }
+}
+
 
 async function getExistingColumns(tableName) {
   const normalizedTable = String(tableName || '').trim();

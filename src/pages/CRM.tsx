@@ -930,8 +930,16 @@ function LeadDetailsDialog({
             </div>
 
 
-            <div className="mt-auto space-y-4">
-              <div className="flex gap-2 mb-4">
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-primary uppercase">Valor Negociado</p>
+                <p className="text-2xl font-black text-primary">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.contract_value)}
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+
                 {onEdit && <EditLeadDialog lead={lead} onUpdate={onEdit} />}
                 {onDelete && <DeleteLeadDialog leadName={lead.name} onDelete={() => onDelete(lead.id)} />}
               </div>

@@ -69,7 +69,7 @@ function formatMeetingDate(value: string | null | undefined, pattern: string, fa
 }
 
 
-type LeadStatus = 'lead' | 'contacted' | 'meeting' | 'contracted' | 'recovery_followup_1' | 'recovery_followup_2';
+type LeadStatus = 'lead' | 'contacted' | 'meeting' | 'contracted' | 'lost' | 'recovery_followup_1' | 'recovery_followup_2';
 type LeadTag = 'hot' | 'cold';
 
 interface Lead {
@@ -83,6 +83,8 @@ interface Lead {
   tag: LeadTag | null;
   meeting_date: string | null;
   meeting_time: string | null;
+  city: string | null;
+  description: string | null;
 }
 
 
@@ -99,7 +101,8 @@ const STAGES: { id: LeadStatus; label: string; color: string; icon: any }[] = [
   { id: 'lead', label: 'Possíveis Clientes', color: 'border-t-slate-400', icon: Users },
   { id: 'contacted', label: 'Contato Efetuado', color: 'border-t-blue-400', icon: Phone },
   { id: 'meeting', label: 'Reunião Agendada', color: 'border-t-purple-400', icon: Briefcase },
-  { id: 'contracted', label: 'Contrato Fechado', color: 'border-t-green-400', icon: Target },
+  { id: 'contracted', label: 'Contrato Fechado', color: 'border-t-green-400 bg-green-50/30 ring-2 ring-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.1)]', icon: Target },
+  { id: 'lost', label: 'Leads Desistentes', color: 'border-t-zinc-500 grayscale opacity-70', icon: UserMinus },
 ];
 
 const RECOVERY_STAGES: { id: LeadStatus; label: string; color: string; icon: any }[] = [
@@ -322,6 +325,8 @@ export default function CRM() {
                   email: formData.get('email') as string,
                   phone: formData.get('phone') as string,
                   contract_value: Number(formData.get('value')),
+                  city: formData.get('city') as string,
+                  description: formData.get('description') as string,
                   status: newLeadStatus
                 });
               }} className="space-y-4 py-4">
@@ -336,6 +341,10 @@ export default function CRM() {
                 <div className="grid gap-2">
                   <Label htmlFor="email">Email</Label>
                   <Input id="email" name="email" type="email" placeholder="contato@empresa.com" className="bg-muted/50" />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="description">Descrição / Observações</Label>
+                  <Textarea id="description" name="description" placeholder="Algum detalhe importante sobre o lead..." className="bg-muted/50 resize-none h-20" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
@@ -453,10 +462,25 @@ export default function CRM() {
                                               <div className="flex-1 min-w-0">
                                                 <h4 className="font-bold text-sm truncate group-hover:text-primary transition-colors">{lead.name}</h4>
                                                 <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                                                  <Briefcase className="h-3 w-3" /> {lead.company || 'Pessoa Física'}
+                                                  <Briefcase className="h-3 w-3" /> {lead.company || 'Pessoa Física'} {lead.city && <span className="text-primary/70">· {lead.city}</span>}
                                                 </p>
                                               </div>
-                                              <div className="shrink-0 flex gap-1">
+                                              <div className="shrink-0 flex items-center gap-1">
+                                                {lead.phone && (
+                                                  <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    className="h-8 w-8 rounded-full text-green-600 hover:bg-green-50"
+                                                    title="Abrir WhatsApp"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      const cleanPhone = lead.phone?.replace(/\D/g, '');
+                                                      window.open(`https://wa.me/55${cleanPhone}`, '_blank');
+                                                    }}
+                                                  >
+                                                    <MessageSquare size={14} className="fill-current opacity-20 group-hover:opacity-100 transition-opacity" />
+                                                  </Button>
+                                                )}
                                                 {lead.tag === 'hot' && (
                                                   <div className="p-1 rounded-full bg-orange-100 text-orange-600 animate-pulse">
                                                     <Flame size={12} fill="currentColor" />
@@ -1014,6 +1038,8 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
             email: formData.get('email') as string,
             phone: formData.get('phone') as string,
             contract_value: Number(formData.get('value')),
+            city: formData.get('city') as string,
+            description: formData.get('description') as string,
             status: formData.get('status') as LeadStatus
           });
           setOpen(false);
@@ -1029,6 +1055,22 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
           <div className="grid gap-2">
             <Label htmlFor="edit-email">Email</Label>
             <Input id="edit-email" name="email" type="email" defaultValue={lead.email || ''} className="bg-muted/50" />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="edit-city">Cidade</Label>
+            <Select name="city" defaultValue={lead.city || 'Minaçu'}>
+              <SelectTrigger className="bg-muted/50">
+                <SelectValue placeholder="Selecione a cidade" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Minaçu">Minaçu</SelectItem>
+                <SelectItem value="Uruaçu">Uruaçu</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="edit-description">Descrição / Observações</Label>
+            <Textarea id="edit-description" name="description" defaultValue={lead.description || ''} className="bg-muted/50 resize-none h-20" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">

@@ -123,13 +123,26 @@ async function ensureCrmLeadsColumns() {
     crmLeadsColumnsEnsuredPromise = (async () => {
       try {
         const columns = await getExistingColumns('crm_leads');
+        const alter = [];
         
-        if (!columns.has('return_date')) {
-          await pool.query(`ALTER TABLE crm_leads ADD COLUMN return_date DATE`);
-          console.log('Added return_date column to crm_leads');
-          getTableColumnsPromiseCache().delete('crm_leads');
+        // Colunas para Geladeira e CRM avançado
+        if (!columns.has('return_date')) alter.push('ADD COLUMN return_date DATE');
+        if (!columns.has('description')) alter.push('ADD COLUMN description TEXT');
+        if (!columns.has('city')) alter.push('ADD COLUMN city TEXT');
+        if (!columns.has('source_tag')) alter.push('ADD COLUMN source_tag TEXT');
+        if (!columns.has('referral_info')) alter.push('ADD COLUMN referral_info JSONB');
+
+        if (alter.length > 0) {
+          await pool.query(`ALTER TABLE crm_leads ${alter.join(', ')}`).catch(err => {
+            if (!/already exists|must be owner/i.test(err.message)) throw err;
+          });
+          console.log('CRM columns updated/verified');
+          if (typeof getTableColumnsPromiseCache === 'function') {
+            getTableColumnsPromiseCache().delete('crm_leads');
+          }
         }
 
+        // Atualizar Constraint de Status para incluir 'fridge'
         const { rows: constraints } = await pool.query(`
           SELECT conname 
           FROM pg_constraint c 
@@ -140,15 +153,14 @@ async function ensureCrmLeadsColumns() {
         `);
         
         for (const row of constraints) {
-          await pool.query(`ALTER TABLE crm_leads DROP CONSTRAINT ${row.conname}`);
+          await pool.query(`ALTER TABLE crm_leads DROP CONSTRAINT ${row.conname}`).catch(() => {});
         }
         
         await pool.query(`
           ALTER TABLE crm_leads 
           ADD CONSTRAINT crm_leads_status_check 
           CHECK (status IN ('lead', 'contacted', 'meeting', 'contracted', 'lost', 'recovery_followup_1', 'recovery_followup_2', 'fridge'))
-        `);
-        console.log('Updated crm_leads status constraint to include fridge');
+        `).catch(() => {});
       } catch (err) {
         console.error('ensureCrmLeadsColumns error:', err);
         crmLeadsColumnsEnsuredPromise = null;
@@ -177,9 +189,7 @@ const CLIENT_PORTAL_BASE_FIELDS = [
 ].join(', ');
 
 let clientsArtRequestsLimitColumnPromise;
-let crmLeadsColumnsEnsuredPromise;
 let proposalTablesEnsuredPromise;
-let storyEditingSessionsEnsuredPromise;
 let scriptRequestsEnsuredPromise;
 let copyActiveSessionsEnsuredPromise;
 const tableJsonColumnsPromiseCache = new Map();
@@ -380,25 +390,7 @@ ensureProposalTables().catch((error) => {
   console.error('Failed to ensure proposal tables:', error);
 });
 
-async function ensureCrmLeadsColumns() {
-  if (!crmLeadsColumnsEnsuredPromise) {
-    crmLeadsColumnsEnsuredPromise = (async () => {
-      const columns = await getExistingColumns('crm_leads');
-      const alter = [];
-      if (!columns.has('description')) alter.push('ADD COLUMN description TEXT');
-      if (!columns.has('city')) alter.push('ADD COLUMN city TEXT');
-      if (!columns.has('source_tag')) alter.push('ADD COLUMN source_tag TEXT');
-      if (!columns.has('referral_info')) alter.push('ADD COLUMN referral_info JSONB');
-      if (alter.length > 0) {
-        await pool.query(`ALTER TABLE crm_leads ${alter.join(', ')}`).catch(err => {
-          if (!/already exists|must be owner/i.test(err.message)) throw err;
-        });
-      }
-    })();
-  }
-  return crmLeadsColumnsEnsuredPromise;
-}
-
+// ensureCrmLeadsColumns was moved to line 121 to avoid duplication
 ensureCrmLeadsColumns().catch(err => console.error('CRM leads column sync failed:', err));
 
 
@@ -8997,33 +8989,6 @@ app.get('/api/upload-health', (_req, res) => {
   }
 });
 
-// ─── CRM Lead Harvester: Public API Proxy ───────────────────
-app.post('/api/crm/harvest/search', async (req, res) => {
-  try {
-    const { user } = await verifyUser(req);
-    const { city, niche, min_capital } = req.body;
-    
-    // MOCK: In a real VPS scenario, this calls https://receitaws.com.br/v1/search
-    // or crawls a CNAE list. For now, returning structured data.
-    const mockCompanies = [
-      {
-        id: '1',
-        razao_social: `${niche?.toUpperCase() || 'EMPRESA'} PULSE LTDA`,
-        contato: 'Diretoria Comercial',
-        email: 'contato@exemplo.com.br',
-        telefone: '(62) 99999-9999',
-        atuacao: niche || 'Geral',
-        endereco: 'Av. Principal, 123',
-        capital_social: Number(min_capital || 10000) * 1.5,
-        cidade: city === 'all' ? 'Minaçu' : city
-      }
-    ];
-
-    res.json({ success: true, data: mockCompanies });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
 
 // ─── Endpoint de Reparo e Diagnóstico Atômico ───────────────
 // Executa manutenções críticas no banco e filesystem sem deletar dados.
@@ -9072,8 +9037,6 @@ app.post('/api/admin/repair-atomic', async (req, res) => {
   }
 });
 
-});
-
 app.post('/api/upload', (req, res) => {
   uploadHandler.single('file')(req, res, (err) => {
     if (err) {
@@ -9102,6 +9065,22 @@ app.post('/api/upload', (req, res) => {
   });
 });
 
+app.delete('/api/upload', express.json(), (req, res) => {
+  try {
+    const raw = String(req.body?.path || '').replace(/^\/+/, '').replace(/^uploads\//, '');
+    const relative = sanitizeUploadFolder(raw);
+    if (!relative) return res.status(400).json({ error: 'Caminho inválido' });
+
+    const abs = path.resolve(UPLOAD_ROOT, relative);
+    if (!abs.startsWith(path.resolve(UPLOAD_ROOT))) return res.status(400).json({ error: 'Caminho inválido' });
+    if (fs.existsSync(abs)) fs.unlinkSync(abs);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[upload:delete] error:', error);
+    res.status(500).json({ error: error.message || 'Falha ao remover arquivo' });
+  }
+});
+
 app.post('/api/crm/harvest/search', async (req, res) => {
   try {
     const { city, niche, min_capital } = req.body;
@@ -9124,22 +9103,6 @@ app.post('/api/crm/harvest/search', async (req, res) => {
     res.json({ data: filtered });
   } catch (error) {
     res.status(500).json({ error: error.message });
-  }
-});
-
-app.delete('/api/upload', express.json(), (req, res) => {
-  try {
-    const raw = String(req.body?.path || '').replace(/^\/+/, '').replace(/^uploads\//, '');
-    const relative = sanitizeUploadFolder(raw);
-    if (!relative) return res.status(400).json({ error: 'Caminho inválido' });
-
-    const abs = path.resolve(UPLOAD_ROOT, relative);
-    if (!abs.startsWith(path.resolve(UPLOAD_ROOT))) return res.status(400).json({ error: 'Caminho inválido' });
-    if (fs.existsSync(abs)) fs.unlinkSync(abs);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('[upload:delete] error:', error);
-    res.status(500).json({ error: error.message || 'Falha ao remover arquivo' });
   }
 });
 

@@ -1,5 +1,6 @@
 // CRM Colheita de Leads: Nicho de atuação em lista (CNAE/Min. Fazenda) via API VPS.
-// Botão de limpeza adicionado para gerenciar resultados da colheita.
+// Geladeira de Leads (Lead Fridge) implementada com data de retorno e notificações.
+
 
 export const SupabaseCheck = () => {
   const deployCommand = "cd /var/www/pulsegrowthmarketing && git pull && npm install && npm run build && pm2 delete pulse-uploads 2>/dev/null || true && pm2 restart pulse-api --update-env && sudo systemctl reload nginx && pm2 status";

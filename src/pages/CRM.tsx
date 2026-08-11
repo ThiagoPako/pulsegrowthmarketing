@@ -22,9 +22,11 @@ import {
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { LeadHarvester } from '@/components/crm/LeadHarvester';
+import { CRMBanner } from '@/components/crm/CRMBanner';
+
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
-import { format, isSameDay } from 'date-fns';
+import { format, isSameDay, isToday, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 function normalizeMeetingDateInput(value?: string | null) {
@@ -71,7 +73,7 @@ function formatMeetingDate(value: string | null | undefined, pattern: string, fa
 }
 
 
-type LeadStatus = 'lead' | 'contacted' | 'meeting' | 'contracted' | 'lost' | 'recovery_followup_1' | 'recovery_followup_2';
+type LeadStatus = 'lead' | 'contacted' | 'meeting' | 'contracted' | 'lost' | 'recovery_followup_1' | 'recovery_followup_2' | 'fridge';
 type LeadTag = 'hot' | 'cold';
 
 interface Lead {
@@ -85,11 +87,13 @@ interface Lead {
   tag: LeadTag | null;
   meeting_date: string | null;
   meeting_time: string | null;
+  return_date?: string | null;
   city: string | null;
   description: string | null;
   source_tag: string | null;
   referral_info: { referrer_name?: string; referrer_notes?: string } | null;
 }
+
 
 
 interface Goal {
@@ -105,9 +109,11 @@ const STAGES: { id: LeadStatus; label: string; color: string; icon: any }[] = [
   { id: 'lead', label: 'Possíveis Clientes', color: 'border-t-slate-400', icon: Users },
   { id: 'contacted', label: 'Contato Efetuado', color: 'border-t-blue-400', icon: Phone },
   { id: 'meeting', label: 'Reunião Agendada', color: 'border-t-purple-400', icon: Briefcase },
+  { id: 'fridge', label: 'Geladeira', color: 'border-t-cyan-300', icon: Snowflake },
   { id: 'contracted', label: 'Contrato Fechado', color: 'border-t-green-400 bg-green-50/30 ring-2 ring-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.1)]', icon: Target },
   { id: 'lost', label: 'Leads Desistentes', color: 'border-t-zinc-500 grayscale opacity-70', icon: UserMinus },
 ];
+
 
 const RECOVERY_STAGES: { id: LeadStatus; label: string; color: string; icon: any }[] = [
   { id: 'recovery_followup_1', label: 'Follow-up 1', color: 'border-t-orange-400', icon: RotateCcw },
@@ -284,6 +290,8 @@ export default function CRM() {
 
   return (
     <div className="p-4 md:p-6 h-full flex flex-col gap-6 bg-background/50">
+      <CRMBanner />
+
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
@@ -585,6 +593,15 @@ export default function CRM() {
                                                   </div>
                                                 </div>
                                               )}
+                                              {lead.status === 'fridge' && lead.return_date && (
+                                                <div className="flex flex-col items-end">
+                                                  <span className="text-[9px] uppercase font-semibold text-muted-foreground tracking-tighter">Retorno</span>
+                                                  <div className="flex items-center gap-1 text-[10px] font-bold text-cyan-600">
+                                                    <CalendarIcon className="h-3 w-3" /> {format(parseISO(lead.return_date), 'dd/MM', { locale: ptBR })}
+                                                  </div>
+                                                </div>
+                                              )}
+
 
 
                                               <div className="flex items-center gap-1.5 opacity-100 group-hover:opacity-100 transition-all">
@@ -610,6 +627,44 @@ export default function CRM() {
                                                     <Briefcase size={14} />
                                                   </Button>
                                                 )}
+                                                {stage.id === 'contacted' && (
+                                                   <Dialog>
+                                                      <DialogTrigger asChild>
+                                                        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full bg-cyan-50 text-cyan-600 hover:bg-cyan-100" title="Mover para Geladeira">
+                                                          <Snowflake className="h-4 w-4" />
+                                                        </Button>
+                                                      </DialogTrigger>
+                                                      <DialogContent>
+                                                        <DialogHeader><DialogTitle>Mover para Geladeira - {lead.name}</DialogTitle></DialogHeader>
+                                                        <form onSubmit={async (e) => {
+                                                            e.preventDefault();
+                                                            const formData = new FormData(e.currentTarget);
+                                                            const r_date = formData.get('return_date') as string;
+                                                            if (!r_date) {
+                                                              toast.error('Data de retorno é obrigatória.');
+                                                              return;
+                                                            }
+                                                            const { error } = await supabase.from('crm_leads').update({
+                                                                status: 'fridge',
+                                                                return_date: r_date
+                                                            } as any).eq('id', lead.id);
+                                                            if (!error) {
+                                                                queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
+                                                                toast.success('Lead movido para a geladeira!');
+                                                            }
+                                                        }}>
+                                                            <div className="grid gap-4 py-4">
+                                                                <div className="grid gap-2">
+                                                                  <Label>Data de Retorno</Label>
+                                                                  <Input type="date" name="return_date" required min={new Date().toISOString().split('T')[0]} />
+                                                                </div>
+                                                                <Button type="submit" className="w-full">Confirmar</Button>
+                                                            </div>
+                                                        </form>
+                                                      </DialogContent>
+                                                   </Dialog>
+                                                )}
+
                                                 {stage.id === 'contacted' && (
                                                    <Dialog>
                                                       <DialogTrigger asChild>
@@ -957,6 +1012,29 @@ function LeadDetailsDialog({ lead, onUpdate }: { lead: Lead, onUpdate: () => voi
             </div>
 
             <div className="mt-auto space-y-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-bold uppercase text-muted-foreground">Mover para Estágio</Label>
+                <div className="flex flex-wrap gap-2">
+                  {STAGES.map(s => (
+                    <Button 
+                      key={s.id} 
+                      size="sm" 
+                      variant={lead.status === s.id ? 'default' : 'outline'}
+                      className="h-8 text-[10px] px-2 flex-1 min-w-[100px]"
+                      onClick={async () => {
+                        const { error } = await supabase.from('crm_leads').update({ status: s.id } as any).eq('id', lead.id);
+                        if (!error) {
+                          onUpdate();
+                          toast.success(`Lead movido para ${s.label}`);
+                        }
+                      }}
+                    >
+                      <s.icon className="h-3 w-3 mr-1" /> {s.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label className="text-[10px] font-bold uppercase text-muted-foreground">Nova Atualização</Label>
                 <Textarea 

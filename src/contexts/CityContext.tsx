@@ -93,7 +93,7 @@ export function CityProvider({ children }: { children: ReactNode }) {
     // edições em andamento. Somente descarte os dados da cidade anterior para
     // que as telas ativas consultem novamente usando o novo header de cidade.
     void queryClient.cancelQueries().then(() => {
-      queryClient.clear();
+      queryClient.removeQueries();
       window.dispatchEvent(new CustomEvent('pulse:city-changed', { detail: { city } }));
     });
   }, [activeCity, queryClient]);

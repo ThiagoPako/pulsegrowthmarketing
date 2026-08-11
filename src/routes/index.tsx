@@ -1,7 +1,7 @@
-// esse erro ocorreu ao executar o comando anterior
+// resultado apos executar comando
 // Veja o link da imagem enviada abaixo e analise o conteúdo dela para responder:
-// Imagem 1: https://sorax.lovable.app/api/public/i/q5c721sdut.png
-// Imagem 2 (DevTools): user-uploads://Captura_de_Tela_2026-08-11_às_12.01.26.png
+// Imagem 1: https://sorax.lovable.app/api/public/i/9mm8ma5zwa.png
+// Imagem 2 (DevTools): user-uploads://Captura_de_Tela_2026-08-11_às_12.04.59.png
 
 
 export const SupabaseCheck = () => {

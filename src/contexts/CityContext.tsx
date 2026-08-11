@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 
 export type CityCode = 'minacu' | 'uruacu';
@@ -29,6 +30,7 @@ function readStored(): CityCode {
 
 export function CityProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useAuth();
+  const queryClient = useQueryClient();
   const [activeCity, setActiveCityState] = useState<CityCode>(readStored);
   const [availableCities, setAvailableCities] = useState<CityCode[]>(['minacu']);
   const [isLoading, setIsLoading] = useState(true);
@@ -83,12 +85,18 @@ export function CityProvider({ children }: { children: ReactNode }) {
   }, [user, authLoading]);
 
   const setActiveCity = useCallback((city: CityCode) => {
+    if (city === activeCity) return;
     localStorage.setItem(STORAGE_KEY, city);
     (window as any).__PULSE_ACTIVE_CITY__ = city;
     setActiveCityState(city);
-    // Recarrega para limpar caches/queries em flight
-    setTimeout(() => window.location.reload(), 50);
-  }, []);
+    // Nunca recarregue a página: isso interrompe roteiros, uploads, timers e
+    // edições em andamento. Somente descarte os dados da cidade anterior para
+    // que as telas ativas consultem novamente usando o novo header de cidade.
+    void queryClient.cancelQueries().then(() => {
+      queryClient.removeQueries();
+      window.dispatchEvent(new CustomEvent('pulse:city-changed', { detail: { city } }));
+    });
+  }, [activeCity, queryClient]);
 
   return (
     <CityContext.Provider value={{ activeCity, availableCities, isLoading, setActiveCity }}>

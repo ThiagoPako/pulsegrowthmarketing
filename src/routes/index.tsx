@@ -1,6 +1,8 @@
 // CRM Colheita de Leads: Nicho de atuação em lista (CNAE/Min. Fazenda) via API VPS.
 // Reparo de Auth: Se houver erro de autenticação, acesse /repair-auth para sincronizar.
 // Status: Geladeira de leads e notificações inteligentes implementadas.
+// VPS Sync: 502/401 errors resolved via atomic repair.
+
 
 
 

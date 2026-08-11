@@ -110,15 +110,13 @@ const STAGES: { id: LeadStatus; label: string; color: string; icon: any }[] = [
   { id: 'contacted', label: 'Contato Efetuado', color: 'border-t-blue-400', icon: Phone },
   { id: 'meeting', label: 'Reunião Agendada', color: 'border-t-purple-400', icon: Briefcase },
   { id: 'fridge', label: 'Geladeira', color: 'border-t-cyan-300', icon: Snowflake },
+  { id: 'recovery_followup_1', label: 'Follow-up 1', color: 'border-t-orange-400', icon: RotateCcw },
+  { id: 'recovery_followup_2', label: 'Follow-up 2', color: 'border-t-red-400', icon: RotateCcw },
   { id: 'contracted', label: 'Contrato Fechado', color: 'border-t-green-400 bg-green-50/30 ring-2 ring-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.1)]', icon: Target },
   { id: 'lost', label: 'Leads Desistentes', color: 'border-t-zinc-500 grayscale opacity-70', icon: UserMinus },
 ];
 
 
-const RECOVERY_STAGES: { id: LeadStatus; label: string; color: string; icon: any }[] = [
-  { id: 'recovery_followup_1', label: 'Follow-up 1', color: 'border-t-orange-400', icon: RotateCcw },
-  { id: 'recovery_followup_2', label: 'Follow-up 2', color: 'border-t-red-400', icon: RotateCcw },
-];
 
 export default function CRM() {
   const { user, profile } = useAuth();
@@ -286,7 +284,7 @@ export default function CRM() {
     return stats;
   }, [leads]);
 
-  const currentStages = isRecoveryView ? RECOVERY_STAGES : STAGES;
+  const currentStages = STAGES;
 
   return (
     <div className="p-4 md:p-6 h-full flex flex-col gap-6 bg-background/50">
@@ -435,9 +433,6 @@ export default function CRM() {
                     </SelectTrigger>
                     <SelectContent>
                       {STAGES.map(s => (
-                        <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
-                      ))}
-                      {RECOVERY_STAGES.map(s => (
                         <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
                       ))}
                     </SelectContent>
@@ -1171,9 +1166,6 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
               </SelectTrigger>
               <SelectContent>
                 {STAGES.map(s => (
-                  <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
-                ))}
-                {RECOVERY_STAGES.map(s => (
                   <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
                 ))}
               </SelectContent>

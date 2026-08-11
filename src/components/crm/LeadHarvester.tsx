@@ -43,6 +43,11 @@ export function LeadHarvester() {
     enabled: false
   });
 
+  const clearLeads = () => {
+    queryClient.setQueryData(['lead_harvest', city, niche, minCapital], []);
+    toast.info('Resultados da colheita limpos.');
+  };
+
   const addLead = useMutation({
     mutationFn: async (company: Company) => {
       if (!user?.id) throw new Error('Sessão expirada');
@@ -116,10 +121,22 @@ export function LeadHarvester() {
               onChange={(e) => setMinCapital(e.target.value)}
             />
           </div>
-          <Button type="submit" className="w-full gap-2 h-10" disabled={isLoading}>
-            <Search className="h-4 w-4" />
-            {isLoading ? 'Buscando...' : 'Colher Leads'}
-          </Button>
+          <div className="flex gap-2">
+            <Button type="submit" className="flex-1 gap-2 h-10" disabled={isLoading}>
+              <Search className="h-4 w-4" />
+              {isLoading ? 'Buscando...' : 'Colher Leads'}
+            </Button>
+            {companies.length > 0 && (
+              <Button 
+                type="button" 
+                variant="outline" 
+                className="gap-2 h-10 border-destructive/20 text-destructive hover:bg-destructive/10" 
+                onClick={clearLeads}
+              >
+                Limpar
+              </Button>
+            )}
+          </div>
         </form>
       </Card>
 

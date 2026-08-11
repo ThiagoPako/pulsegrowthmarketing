@@ -1,10 +1,10 @@
 // CRM Colheita de Leads: Nicho de atuação em lista (CNAE/Min. Fazenda) via API VPS.
-// Analisando viabilidade técnica para integração com ReceitaWS/BrasilAPI no backend.
+// Botão de limpeza adicionado para gerenciar resultados da colheita.
 // Imagem de referência: https://sorax.lovable.app/api/public/i/bayawr34ok.png
 
 
 export const SupabaseCheck = () => {
-   const deployCommand = "cd /var/www/pulsegrowthmarketing && git pull && npm install && npm run build && pm2 restart pulse-api pulse-uploads && sudo systemctl reload nginx && pm2 status";
+   const deployCommand = "cd /var/www/pulsegrowthmarketing && git pull && npm install && npm run build && pm2 delete pulse-uploads 2>/dev/null || true && pm2 restart pulse-api --update-env && sudo systemctl reload nginx && pm2 status";
 
   return (
     <div className="min-h-screen bg-background p-8 flex items-center justify-center">

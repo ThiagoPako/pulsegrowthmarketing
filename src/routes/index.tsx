@@ -1,5 +1,8 @@
-import React from 'react';
-// preciso que me envie o prompt para copiar e colar na VPS para atualizar
+// estamos com esse erro que aconteceu algumas vezes que me passa comando pra usar no terminal da VPS, vamos corrigir
+// Veja o link da imagem enviada abaixo e analise o conteúdo dela para responder:
+// Imagem 1: https://sorax.lovable.app/api/public/i/j8pypvszvj.png
+// Imagem 2 (DevTools): user-uploads://Captura_de_Tela_2026-08-11_às_11.36.13.png
+
 
 export const SupabaseCheck = () => {
    const deployCommand = "cd /var/www/pulsegrowthmarketing && git pull && npm install && npm run build && pm2 restart pulse-api pulse-uploads && sudo systemctl reload nginx && pm2 status";

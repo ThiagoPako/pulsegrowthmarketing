@@ -1,6 +1,6 @@
-// analise esses erros
+// vamos atualizar o que for preciso pra corrigir desde que nao apague os dados do sistema
 // Veja o link da imagem enviada abaixo e analise o conteúdo dela para responder:
-// Imagem 1: https://sorax.lovable.app/api/public/i/kutv9878sw.png
+// Imagem 1: https://sorax.lovable.app/api/public/i/19jfkq6jbs.png
 
 
 export const SupabaseCheck = () => {

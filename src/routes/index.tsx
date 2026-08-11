@@ -1,5 +1,6 @@
 // CRM Colheita de Leads: Nicho de atuação em lista (CNAE/Min. Fazenda) via API VPS.
-// Geladeira de Leads (Lead Fridge) implementada com data de retorno e notificações.
+// Reparo de Auth: Se houver erro de autenticação, acesse /repair-auth para sincronizar.
+
 
 
 export const SupabaseCheck = () => {

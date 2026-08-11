@@ -108,6 +108,8 @@ const CampaignPlaybook = lazy(() => import("@/pages/CampaignPlaybook"));
 const TeamOrgChart = lazy(() => import("@/pages/TeamOrgChart"));
 const TeamPresentation = lazy(() => import("@/pages/TeamPresentation"));
 const Copy = lazy(() => import("@/pages/Copy"));
+const RepairAuth = lazy(() => import("@/pages/RepairAuth"));
+
 
 
 const queryClient = new QueryClient({
@@ -297,7 +299,9 @@ function AppRoutes() {
 
         <Route path="/tv" element={<Suspense fallback={<PageLoader />}><TvDashboard /></Suspense>} />
         <Route path="/designer/playbook/:clientId" element={<ProtectedRoute><ClientArtPlaybook /></ProtectedRoute>} />
+        <Route path="/repair-auth" element={<RepairAuth />} />
         <Route path="*" element={<NotFound />} />
+
       </Routes>
     </Suspense>
   );

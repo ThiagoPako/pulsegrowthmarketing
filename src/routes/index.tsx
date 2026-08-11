@@ -1,5 +1,4 @@
-// index-0lit2o0U.js:69 
-// POST https://agenciapulse.tech/api/auth/login 502 (Bad Gateway)
+// Adicione um endpoint /health no meu pulse-api para eu verificar rapidamente se o backend está respondendo e passar isso no Nginx sem erro 502.
 //
 // erro continua
 // Veja o link da imagem enviada abaixo e analise o conteúdo dela para responder:

@@ -808,11 +808,14 @@ async function verifyUser(req) {
       name: error.name,
       stack: error.stack?.split('\n').slice(0, 3).join('\n'),
       path: req.path,
+      method: req.method,
       hasAuthHeader: !!req.headers.authorization,
       authHeaderLength: req.headers.authorization?.length || 0,
       timestamp: new Date().toISOString()
     };
-    console.error(`[Auth-Critical] verifyUser failed:`, JSON.stringify(errorDetail, null, 2));
+    
+    // Se o erro for "Unauthorized", logamos o detalhe mas mantemos o throw para o client
+    console.error(`[Auth-Critical] ${req.method} ${req.path} failed:`, JSON.stringify(errorDetail, null, 2));
     throw new Error('Unauthorized');
   }
 }

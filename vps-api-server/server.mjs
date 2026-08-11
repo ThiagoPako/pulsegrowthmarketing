@@ -115,48 +115,40 @@ function collectOnlinePresenceIds() {
   );
 }
 
+let storyEditingSessionsEnsuredPromise = null;
+let crmLeadsColumnsEnsuredPromise = null;
+
 async function ensureCrmLeadsColumns() {
   if (!crmLeadsColumnsEnsuredPromise) {
     crmLeadsColumnsEnsuredPromise = (async () => {
       try {
-        const { rows: columns } = await pool.query(`
-          SELECT column_name, data_type 
-          FROM information_schema.columns 
-          WHERE table_name = 'crm_leads'
-        `);
+        const columns = await getExistingColumns('crm_leads');
         
-        const hasReturnDate = columns.some(c => c.column_name === 'return_date');
-        if (!hasReturnDate) {
+        if (!columns.has('return_date')) {
           await pool.query(`ALTER TABLE crm_leads ADD COLUMN return_date DATE`);
           console.log('Added return_date column to crm_leads');
+          getTableColumnsPromiseCache().delete('crm_leads');
         }
 
-        // Check if fridge status is allowed by constraint if any, or just ensure it works in logic
-        // The status is TEXT CHECK (status IN (...)) usually.
-        // Let's check constraints.
         const { rows: constraints } = await pool.query(`
-          SELECT pg_get_constraintdef(c.oid) as condef
-          FROM pg_constraint c
-          JOIN pg_class t ON t.oid = c.conrelid
-          WHERE t.relname = 'crm_leads' AND c.conname LIKE '%status%check%'
+          SELECT conname 
+          FROM pg_constraint c 
+          JOIN pg_class t ON t.oid = c.conrelid 
+          WHERE t.relname = 'crm_leads' 
+            AND c.contype = 'c' 
+            AND pg_get_constraintdef(c.oid) LIKE '%status%'
         `);
         
-        if (constraints.length > 0) {
-          const condef = constraints[0].condef;
-          if (!condef.includes('fridge')) {
-            // Drop and recreate status constraint to include 'fridge'
-            const conName = constraints[0].conname; // We need the name
-            // Get name properly
-            const { rows: conNames } = await pool.query(`
-               SELECT conname FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid WHERE t.relname = 'crm_leads' AND c.contype = 'c' AND pg_get_constraintdef(c.oid) LIKE '%status%'
-            `);
-            for (const row of conNames) {
-               await pool.query(`ALTER TABLE crm_leads DROP CONSTRAINT ${row.conname}`);
-            }
-            await pool.query(`ALTER TABLE crm_leads ADD CONSTRAINT crm_leads_status_check CHECK (status IN ('lead', 'contacted', 'meeting', 'contracted', 'lost', 'recovery_followup_1', 'recovery_followup_2', 'fridge'))`);
-            console.log('Updated crm_leads status constraint to include fridge');
-          }
+        for (const row of constraints) {
+          await pool.query(`ALTER TABLE crm_leads DROP CONSTRAINT ${row.conname}`);
         }
+        
+        await pool.query(`
+          ALTER TABLE crm_leads 
+          ADD CONSTRAINT crm_leads_status_check 
+          CHECK (status IN ('lead', 'contacted', 'meeting', 'contracted', 'lost', 'recovery_followup_1', 'recovery_followup_2', 'fridge'))
+        `);
+        console.log('Updated crm_leads status constraint to include fridge');
       } catch (err) {
         console.error('ensureCrmLeadsColumns error:', err);
         crmLeadsColumnsEnsuredPromise = null;
@@ -165,6 +157,7 @@ async function ensureCrmLeadsColumns() {
   }
   return crmLeadsColumnsEnsuredPromise;
 }
+
 
 const CLIENT_PORTAL_BASE_FIELDS = [
   'id',
@@ -5417,7 +5410,11 @@ app.post('/api/db/query', async (req, res) => {
         const jsonColumns = await getTableJsonColumns(safeTable);
         const isAdmin = await isAdminUser(user);
         const existingColumns = await getExistingColumns(safeTable);
+        if (safeTable === 'crm_leads') {
+          await ensureCrmLeadsColumns();
+        }
         for (const item of items) {
+
           // Multi-city: força city para a cidade ativa (ignora qualquer valor enviado pelo cliente)
           const itemScoped = scopeCity
             ? { ...item, city: assertValidCity(activeCity) }
@@ -5512,7 +5509,11 @@ app.post('/api/db/query', async (req, res) => {
         const allResults = [];
         const jsonColumns = await getTableJsonColumns(safeTable);
 
+        if (safeTable === 'crm_leads') {
+          await ensureCrmLeadsColumns();
+        }
         for (const item of items) {
+
           const itemScoped = scopeCity
             ? { ...item, city: assertValidCity(activeCity) }
             : (item && item.city !== undefined ? { ...item, city: assertValidCity(item.city) } : item);
@@ -5547,9 +5548,13 @@ app.post('/api/db/query', async (req, res) => {
 
 
       case 'update': {
-        if (safeTable === 'crm_leads' && isCrmLeadManagementPayload(data) && !(await isAdminUser(user))) {
-          return res.status(403).json({ error: 'Apenas admin ou social_media podem editar este lead no CRM.' });
+        if (safeTable === 'crm_leads') {
+          await ensureCrmLeadsColumns();
+          if (isCrmLeadManagementPayload(data) && !(await isAdminUser(user))) {
+            return res.status(403).json({ error: 'Apenas admin ou social_media podem editar este lead no CRM.' });
+          }
         }
+
 
         const jsonColumns = await getTableJsonColumns(safeTable);
         const scopedData = scopeCity

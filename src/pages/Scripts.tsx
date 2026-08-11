@@ -238,7 +238,9 @@ export default function Scripts() {
   const { clearSaved: clearScriptDraft } = useAutoSave(
     `${STABLE_SCRIPT_DRAFT_KEY}:${user?.id ?? 'anonymous'}`,
     { form, editingId: editing?.id ?? null, wasOpen: open },
-    { enabled: open, interval: 3_000, onRecover: recoverScriptDraft },
+    // Permanece habilitado para conseguir recuperar logo após uma remontagem.
+    // Quando o editor está fechado, o estado `wasOpen: false` impede reabertura.
+    { enabled: true, interval: 3_000, onRecover: recoverScriptDraft },
   );
 
   // ── Deep-link from Campanhas: preset form and auto-open ──

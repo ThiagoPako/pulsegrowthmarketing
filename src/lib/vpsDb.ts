@@ -498,6 +498,48 @@ class ChannelBuilder {
             });
           }
         } catch (e) {
+          console.warn('[realtime] Parse error:', e);
+        }
+      };
+
+      this._socket.onclose = () => {
+        // Simple reconnect after 5s
+        setTimeout(() => this.subscribe(), 5000);
+      };
+    } catch (e) {
+      console.error('[realtime] Connection error:', e);
+    }
+    return this;
+  }
+  
+  unsubscribe() {
+    if (this._socket) {
+      this._socket.close();
+      this._socket = null;
+    }
+  }
+}
+
+const activeChannels = new Map<string, ChannelBuilder>();
+
+export const supabase = {
+  // ... existing methods ...
+  channel(name: string) {
+    if (activeChannels.has(name)) return activeChannels.get(name)!;
+    const chan = new ChannelBuilder(name);
+    activeChannels.set(name, chan);
+    return chan;
+  },
+  removeChannel(channel: ChannelBuilder) {
+    channel.unsubscribe();
+    // find key by value and delete
+    for (const [k, v] of activeChannels.entries()) {
+      if (v === channel) {
+        activeChannels.delete(k);
+        break;
+      }
+    }
+  },
           console.error('WS parse error:', e);
         }
       };

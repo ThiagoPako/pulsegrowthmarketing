@@ -113,6 +113,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Heartbeat for virtual office presence
   usePresenceHeartbeat(user?.id ?? profile?.id);
 
+  // Global CRM Notifications Listener
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const channel = supabase.channel('crm-notifications')
+      .on('broadcast', { event: 'crm:new_client' }, (payload) => {
+        const { message, city } = payload.payload || {};
+        const toastId = `crm-new-client-${Date.now()}`;
+        import('sonner').then(({ toast }) => {
+          toast.success('NOVO CONTRATO FECHADO! 🚀', {
+            id: toastId,
+            description: message || 'Um novo cliente acaba de entrar para a Pulse!',
+            duration: 10000,
+            action: {
+              label: 'Ver CRM',
+              onClick: () => window.location.hash = '/crm'
+            }
+          });
+        });
+      })
+      .on('broadcast', { event: 'crm:meeting_scheduled' }, (payload) => {
+        const { message } = payload.payload || {};
+        import('sonner').then(({ toast }) => {
+          toast.info('REUNIÃO AGENDADA 📅', {
+            description: message || 'Uma nova reunião comercial foi marcada.',
+            duration: 5000,
+          });
+        });
+      })
+      .subscribe();
+      
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id]);
+
   // O useSupabaseData já dispara o bootstrap ao resolver a cidade/token.
   // Refetch extra aqui duplicava todas as requisições no primeiro carregamento.
 

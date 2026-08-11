@@ -65,7 +65,11 @@ export default function Login() {
             <Button variant="outline" className="w-full text-xs font-bold uppercase tracking-widest gap-2" onClick={() => navigate('/treinamento-registro')}>
               <UserPlus size={14} /> Criar conta de acesso
             </Button>
+            <p className="mt-4 text-[10px] text-muted-foreground opacity-50 hover:opacity-100 transition-opacity text-center">
+              Problemas com login? <a href="/repair-auth" className="underline hover:text-primary">Recuperar Acesso</a>
+            </p>
           </div>
+
         </div>
       </div>
     </div>

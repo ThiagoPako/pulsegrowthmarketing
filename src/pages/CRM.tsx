@@ -587,12 +587,8 @@ export default function CRM() {
                                               </div>
 
                                             </div>
-
-                                            
-                                            <div className="flex gap-2">
-                                              <TagSelector leadId={lead.id} currentTag={lead.tag} />
-                                            </div>
                                           </div>
+
                                         </Card>
                                       </motion.div>
                                     </div>

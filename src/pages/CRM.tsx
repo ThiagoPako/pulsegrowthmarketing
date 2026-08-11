@@ -548,33 +548,6 @@ export default function CRM() {
                                                   <Briefcase className="h-3 w-3" /> {lead.company || 'Pessoa Física'} {lead.city && <span className="text-primary/70">· {lead.city}</span>}
                                                 </p>
                                               </div>
-                                              <div className="shrink-0 flex items-center gap-1">
-                                                {lead.phone && (
-                                                  <Button
-                                                    size="icon"
-                                                    variant="ghost"
-                                                    className="h-8 w-8 rounded-full text-green-600 hover:bg-green-50"
-                                                    title="Abrir WhatsApp"
-                                                    onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      const cleanPhone = lead.phone?.replace(/\D/g, '');
-                                                      window.open(`https://wa.me/55${cleanPhone}`, '_blank');
-                                                    }}
-                                                  >
-                                                    <MessageSquare size={14} className="fill-current opacity-20 group-hover:opacity-100 transition-opacity" />
-                                                  </Button>
-                                                )}
-                                                {lead.tag === 'hot' && (
-                                                  <div className="p-1 rounded-full bg-orange-100 text-orange-600 animate-pulse">
-                                                    <Flame size={12} fill="currentColor" />
-                                                  </div>
-                                                )}
-                                                {lead.tag === 'cold' && (
-                                                  <div className="p-1 rounded-full bg-blue-100 text-blue-600">
-                                                    <Snowflake size={12} />
-                                                  </div>
-                                                )}
-                                              </div>
                                             </div>
 
                                             <div className="flex items-center justify-between pt-2 border-t border-muted/50">
@@ -604,128 +577,18 @@ export default function CRM() {
 
 
 
-                                              <div className="flex items-center gap-1.5 opacity-100 group-hover:opacity-100 transition-all">
-                                                {stage.id === 'contacted' && (
-                                                  <Button
-                                                    size="icon"
-                                                    variant="ghost"
-                                                    className="h-8 w-8 rounded-full bg-orange-50 text-orange-600 hover:bg-orange-100"
-                                                    title="Mover p/ Recuperação"
-                                                    onClick={() => updateLeadStatus.mutate({ id: lead.id, status: 'recovery_followup_1' })}
-                                                  >
-                                                    <RotateCcw size={14} />
-                                                  </Button>
-                                                )}
-                                                {(stage.id === 'recovery_followup_1' || stage.id === 'recovery_followup_2') && (
-                                                  <Button
-                                                    size="icon"
-                                                    variant="ghost"
-                                                    className="h-8 w-8 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100"
-                                                    title="Reativar Reunião"
-                                                    onClick={() => updateLeadStatus.mutate({ id: lead.id, status: 'meeting' })}
-                                                  >
-                                                    <Briefcase size={14} />
-                                                  </Button>
-                                                )}
-                                                {stage.id === 'contacted' && (
-                                                   <Dialog>
-                                                      <DialogTrigger asChild>
-                                                        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full bg-cyan-50 text-cyan-600 hover:bg-cyan-100" title="Mover para Geladeira">
-                                                          <Snowflake className="h-4 w-4" />
-                                                        </Button>
-                                                      </DialogTrigger>
-                                                      <DialogContent>
-                                                        <DialogHeader><DialogTitle>Mover para Geladeira - {lead.name}</DialogTitle></DialogHeader>
-                                                        <form onSubmit={async (e) => {
-                                                            e.preventDefault();
-                                                            const formData = new FormData(e.currentTarget);
-                                                            const r_date = formData.get('return_date') as string;
-                                                            if (!r_date) {
-                                                              toast.error('Data de retorno é obrigatória.');
-                                                              return;
-                                                            }
-                                                            const { error } = await supabase.from('crm_leads').update({
-                                                                status: 'fridge',
-                                                                return_date: r_date
-                                                            } as any).eq('id', lead.id);
-                                                            if (!error) {
-                                                                queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
-                                                                toast.success('Lead movido para a geladeira!');
-                                                            }
-                                                        }}>
-                                                            <div className="grid gap-4 py-4">
-                                                                <div className="grid gap-2">
-                                                                  <Label>Data de Retorno</Label>
-                                                                  <Input type="date" name="return_date" required min={new Date().toISOString().split('T')[0]} />
-                                                                </div>
-                                                                <Button type="submit" className="w-full">Confirmar</Button>
-                                                            </div>
-                                                        </form>
-                                                      </DialogContent>
-                                                   </Dialog>
-                                                )}
-
-                                                {stage.id === 'contacted' && (
-                                                   <Dialog>
-                                                      <DialogTrigger asChild>
-                                                        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100" title="Agendar Reunião">
-                                                          <CalendarIcon className="h-4 w-4" />
-                                                        </Button>
-                                                      </DialogTrigger>
-                                                      <DialogContent>
-                                                        <DialogHeader><DialogTitle>Agendar Reunião - {lead.name}</DialogTitle></DialogHeader>
-                                                        <form onSubmit={async (e) => {
-                                                            e.preventDefault();
-                                                            const formData = new FormData(e.currentTarget);
-                                                            const m_date = normalizeMeetingDateInput(formData.get('date') as string);
-                                                            const m_time = formData.get('time') as string;
-                                                            if (!m_date) {
-                                                              toast.error('Data da reunião inválida.');
-                                                              return;
-                                                            }
-                                                            
-                                                            const { error } = await supabase.from('crm_leads').update({
-                                                                status: 'meeting',
-                                                                meeting_date: m_date,
-                                                                meeting_time: m_time
-                                                            } as any).eq('id', lead.id);
-                                                            
-                                                            if (!error) {
-                                                                queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
-                                                                toast.success('Reunião agendada!');
-                                                            }
-                                                        }}>
-                                                            <div className="grid gap-4 py-4">
-                                                                <div className="grid gap-2">
-                                                                  <Label>Data da Reunião</Label>
-                                                                  <Input type="date" name="date" required />
-                                                                </div>
-                                                                <div className="grid gap-2">
-                                                                  <Label>Hora da Reunião</Label>
-                                                                  <Input type="time" name="time" required />
-                                                                </div>
-                                                                <Button type="submit" className="w-full">Confirmar Agendamento</Button>
-                                                            </div>
-                                                        </form>
-                                                      </DialogContent>
-
-                                                   </Dialog>
-                                                )}
-                                                {canEdit && (
-                                                  <>
-                                                    <EditLeadDialog lead={lead} onUpdate={(data) => updateLead.mutate(data)} />
-                                                    <DeleteLeadDialog leadName={lead.name} onDelete={() => deleteLead.mutate(lead.id)} />
-                                                  </>
-                                                )}
-                                                <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
-
+                                              <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all">
+                                                <LeadDetailsDialog 
+                                                  lead={lead} 
+                                                  onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
+                                                  onEdit={(data) => updateLead.mutate(data)}
+                                                  onDelete={(id) => deleteLead.mutate(id)}
+                                                />
                                               </div>
-                                            </div>
-                                            
-                                            <div className="flex gap-2">
-                                              <TagSelector leadId={lead.id} currentTag={lead.tag} />
+
                                             </div>
                                           </div>
+
                                         </Card>
                                       </motion.div>
                                     </div>
@@ -862,14 +725,14 @@ export default function CRM() {
                         </div>
                         <div className="flex items-center gap-1">
                           <MeetingActions lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
-                          {canEdit && (
-                            <>
-                              <EditLeadDialog lead={lead} onUpdate={(data) => updateLead.mutate(data)} />
-                              <DeleteLeadDialog leadName={lead.name} onDelete={() => deleteLead.mutate(lead.id)} />
-                            </>
-                          )}
-                          <LeadDetailsDialog lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                          <LeadDetailsDialog 
+                            lead={lead} 
+                            onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
+                            onEdit={(data) => updateLead.mutate(data)}
+                            onDelete={(id) => deleteLead.mutate(id)}
+                          />
                         </div>
+
                       </div>
                     )})}
                   {leads.filter((l) => parseMeetingDate(l.meeting_date)).length === 0 && (
@@ -928,7 +791,17 @@ function TagSelector({ leadId, currentTag }: { leadId: string, currentTag: LeadT
   );
 }
 
-function LeadDetailsDialog({ lead, onUpdate }: { lead: Lead, onUpdate: () => void }) {
+function LeadDetailsDialog({ 
+  lead, 
+  onUpdate,
+  onEdit,
+  onDelete
+}: { 
+  lead: Lead, 
+  onUpdate: () => void,
+  onEdit?: (lead: Partial<Lead> & { id: string }) => void,
+  onDelete?: (id: string) => void
+}) {
   const [note, setNote] = useState('');
   const { data: notes = [] } = useQuery({
     queryKey: ['lead_notes', lead.id],
@@ -969,10 +842,26 @@ function LeadDetailsDialog({ lead, onUpdate }: { lead: Lead, onUpdate: () => voi
       <DialogContent className="max-w-3xl p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
         <div className="flex h-[600px]">
           {/* Coluna Esquerda: Dados */}
-          <div className="w-2/5 bg-muted/30 p-8 flex flex-col gap-6">
+          <div className="w-2/5 bg-muted/30 p-8 flex flex-col gap-6 overflow-y-auto">
             <div>
               <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-4">Dados da Oportunidade</h3>
               <div className="space-y-4">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-primary uppercase">Ações Rápidas</p>
+                  <div className="flex flex-wrap gap-2">
+                    {lead.phone && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-[10px] bg-green-50 text-green-600 border-green-200 hover:bg-green-100"
+                        onClick={() => window.open(`https://wa.me/55${lead.phone.replace(/\D/g, '')}`, '_blank')}
+                      >
+                        <MessageSquare className="h-3 w-3 mr-1" /> WhatsApp
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
                 <div className="space-y-1">
                   <p className="text-[10px] font-bold text-primary uppercase">Contato</p>
                   <p className="font-bold text-lg flex items-center gap-2">
@@ -1003,17 +892,31 @@ function LeadDetailsDialog({ lead, onUpdate }: { lead: Lead, onUpdate: () => voi
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[10px] font-bold text-primary uppercase">Valor Negociado</p>
-                  <p className="text-2xl font-black text-primary">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.contract_value)}
-                  </p>
+                  <p className="text-[10px] font-bold text-primary uppercase">Etiqueta de Temperatura</p>
+                  <TagSelector leadId={lead.id} currentTag={lead.tag} />
                 </div>
               </div>
             </div>
 
-            <div className="mt-auto space-y-4">
+
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-primary uppercase">Valor Negociado</p>
+                <p className="text-2xl font-black text-primary">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.contract_value)}
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+
+                {onEdit && <EditLeadDialog lead={lead} onUpdate={onEdit} />}
+                {onDelete && <DeleteLeadDialog leadName={lead.name} onDelete={() => onDelete(lead.id)} />}
+              </div>
+
+              
               <div className="space-y-2">
                 <Label className="text-[10px] font-bold uppercase text-muted-foreground">Mover para Estágio</Label>
+
                 <div className="flex flex-wrap gap-2">
                   {STAGES.map(s => (
                     <Button 

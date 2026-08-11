@@ -921,6 +921,17 @@ let authSupportTablesPromise;
 const wssClients = new Set();
 const tableColumnsPromiseCache = new Map();
 
+/**
+ * Ensures tableColumnsPromiseCache is defined before use to prevent ReferenceError.
+ */
+function ensureTableColumnsCache() {
+  if (typeof tableColumnsPromiseCache === 'undefined') {
+    // This is a safety fallback for initialization order issues
+    return new Map();
+  }
+  return tableColumnsPromiseCache;
+}
+
 function broadcastToAll(message) {
   const payload = JSON.stringify(message);
   for (const client of wssClients) {
@@ -937,11 +948,12 @@ async function getExistingColumns(tableName) {
   const normalizedTable = String(tableName || '').trim();
   if (!normalizedTable) return new Set();
 
-  const cached = getSchemaCacheValue(tableColumnsPromiseCache, normalizedTable);
-  if (cached) return cached;
+  const cache = ensureTableColumnsCache();
+  const cached = cache.get(normalizedTable);
+  if (cached && (Date.now() - (cached.cachedAt || 0)) < 3600000) return cached.value;
 
-  if (!tableColumnsPromiseCache.has(normalizedTable)) {
-    tableColumnsPromiseCache.set(
+  if (!cache.has(normalizedTable)) {
+    cache.set(
       normalizedTable,
       { cachedAt: Date.now(), value: pool.query(
         `SELECT column_name

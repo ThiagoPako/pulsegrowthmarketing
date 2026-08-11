@@ -1,51 +1,55 @@
 #!/bin/bash
-# VPS Auth & Stability Repair Script
-# Final build logic for agenciapulse.tech
-
+# ==============================================================================
+# PULSE REPAIR SCRIPT - AUTH & PERMISSIONS
+# ==============================================================================
 set -e
 
 PROJECT_ROOT="/var/www/pulsegrowthmarketing"
-SERVER_PATH="$PROJECT_ROOT/vps-api-server"
+DB_NAME="pulse_db"
+DB_USER="pulse_user"
 
-echo "Step 1: Updating source code..."
+echo "Step 1: Fixing File Ownership and Permissions..."
+sudo chown -R pulse_user:pulse_user $PROJECT_ROOT
+sudo chmod -R 755 $PROJECT_ROOT
+
+echo "Step 2: Syncing Repository..."
 cd $PROJECT_ROOT
 git pull
 
-echo "Step 2: Installing dependencies..."
-npm install
-cd $SERVER_PATH
-npm install
+echo "Step 3: Database Repairs (Table Ownership & Permissions)..."
+# Garante que o usuário da API seja o dono das tabelas de auth para permitir sincronização de schema e CRUD
+sudo -u postgres psql -d $DB_NAME <<EOF
+GRANT ALL PRIVILEGES ON SCHEMA public TO $DB_USER;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO $DB_USER;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO $DB_USER;
+ALTER TABLE auth_users OWNER TO $DB_USER;
+ALTER TABLE profiles OWNER TO $DB_USER;
+ALTER TABLE user_roles OWNER TO $DB_USER;
+ALTER TABLE crm_leads OWNER TO $DB_USER;
+EOF
 
-echo "Step 3: Building frontend with stability patches..."
+echo "Step 4: Running Auth Repair Script (Node)..."
+cd $PROJECT_ROOT/vps-api-server
+npm install
+# O script repair-auth.mjs garante que o admin exista e as senhas estejam consistentes
+node repair-auth.mjs
+
+echo "Step 5: Frontend Build & Asset Verification..."
 cd $PROJECT_ROOT
-# Ensure we're building for production
-npm run build
+npm install
+npm run build:verified
 
-echo "Step 4: Ensuring database permissions for API user..."
-# We assume the current shell has access to the db or we use the local postgres
-# This fixes "must be owner" and "permission denied" errors shown in logs
-sudo -u postgres psql -d pulse_db -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO pulse_user;"
-sudo -u postgres psql -d pulse_db -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO pulse_user;"
-sudo -u postgres psql -d pulse_db -c "ALTER TABLE auth_users OWNER TO pulse_user;"
-sudo -u postgres psql -d pulse_db -c "ALTER TABLE profiles OWNER TO pulse_user;"
-sudo -u postgres psql -d pulse_db -c "ALTER TABLE user_roles OWNER TO pulse_user;"
-
-echo "Step 5: Cleaning Nginx cache and updating assets..."
-NGINX_ROOT=$(grep -r "root" /etc/nginx/sites-enabled/ | head -1 | awk '{print $2}' | tr -d ';')
-if [ -n "$NGINX_ROOT" ] && [ -d "$NGINX_ROOT" ]; then
-    echo "Updating Nginx root: $NGINX_ROOT"
-    sudo cp -r dist/* $NGINX_ROOT/
-else
-    echo "Using default Nginx root..."
-    sudo cp -r dist/* /var/www/pulsegrowthmarketing/dist/
-fi
-
-echo "Step 6: Restarting PM2 processes..."
-pm2 restart pulse-api || pm2 start server.mjs --name pulse-api
+echo "Step 6: Restarting Services..."
+# O comando mata e inicia para garantir que variáveis de ambiente do .env sejam recarregadas
+pm2 delete pulse-api 2>/dev/null || true
+cd $PROJECT_ROOT/vps-api-server
+pm2 start server.mjs --name pulse-api
 pm2 save
 
-echo "Step 7: Reloading Nginx..."
 sudo systemctl reload nginx
 
-echo "✅ SUCCESS: System updated and hardened."
+echo "=============================================================================="
+echo "REPAIR COMPLETE! The 502/401 errors should be resolved."
+echo "Check logs with: pm2 logs pulse-api"
+echo "=============================================================================="
 pm2 status

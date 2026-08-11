@@ -5291,9 +5291,8 @@ app.post('/api/db/query', async (req, res) => {
         const items = Array.isArray(data) ? data : [data];
         const allResults = [];
         const jsonColumns = await getTableJsonColumns(safeTable);
-        const existingColumns = safeTable === 'script_requests'
-          ? await getExistingColumns(safeTable)
-          : null;
+        const isAdmin = await isAdminUser(user);
+        const existingColumns = await getExistingColumns(safeTable);
         for (const item of items) {
           // Multi-city: força city para a cidade ativa (ignora qualquer valor enviado pelo cliente)
           const itemScoped = scopeCity
@@ -5364,6 +5363,21 @@ app.post('/api/db/query', async (req, res) => {
             values
           );
           allResults.push(rows[0]);
+
+          // Broadcaster: Notificações globais de novos fechamentos
+          if (safeTable === 'crm_leads' && rows[0]?.status === 'contracted') {
+            const city = rows[0].city || 'Pulse';
+            broadcastToAll({
+              type: 'broadcast',
+              event: 'crm:new_client',
+              payload: { 
+                id: rows[0].id, 
+                name: rows[0].name, 
+                city,
+                message: `🎉 Novo contrato fechado: ${rows[0].name} (${city})`
+              }
+            });
+          }
         }
         result = { data: allResults.length === 1 ? allResults[0] : allResults, error: null };
         break;
@@ -5417,9 +5431,7 @@ app.post('/api/db/query', async (req, res) => {
         const scopedData = scopeCity
           ? { ...data, city: assertValidCity(activeCity) }
           : (data && data.city !== undefined ? { ...data, city: assertValidCity(data.city) } : data);
-        const existingColumns = safeTable === 'script_requests'
-          ? await getExistingColumns(safeTable)
-          : null;
+        const existingColumns = await getExistingColumns(safeTable);
         const entries = Object.entries(scopedData)
           .map(([key, value]) => [sanitizeIdentifier(key), value])
           .filter(([key]) => !existingColumns || existingColumns.has(key));
@@ -5453,6 +5465,33 @@ app.post('/api/db/query', async (req, res) => {
         query += ' RETURNING *';
 
         const { rows } = await pool.query(query, params);
+        
+        // Broadcaster: Notificações globais de status de lead
+        if (safeTable === 'crm_leads' && rows.length > 0) {
+          for (const lead of rows) {
+            if (lead.status === 'contracted') {
+              broadcastToAll({
+                type: 'broadcast',
+                event: 'crm:new_client',
+                payload: { 
+                  id: lead.id, name: lead.name, city: lead.city || 'Pulse',
+                  message: `🎉 Novo contrato fechado: ${lead.name} (${lead.city || 'Pulse'})`
+                }
+              });
+            } else if (lead.status === 'meeting') {
+              broadcastToAll({
+                type: 'broadcast',
+                event: 'crm:meeting_scheduled',
+                payload: { 
+                  id: lead.id, name: lead.name, 
+                  date: lead.meeting_date, time: lead.meeting_time,
+                  message: `📅 Reunião agendada: ${lead.name} às ${lead.meeting_time}`
+                }
+              });
+            }
+          }
+        }
+        
         result = { data: rows, error: null };
         break;
       }

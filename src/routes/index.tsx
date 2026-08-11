@@ -1,6 +1,6 @@
 // analise o chats anteriores para garantir informacoes do sistema e como ele funciona analise a imagem anexada que é o resultado apos o ultimo comando, apos isso crie a correcao correta e enie o cpomando pra suar nao terminal, lembrando que nao pode apagar dados do sistema que esta ativo
 // Veja o link da imagem enviada abaixo e analise o conteúdo dela para responder:
-// Imagem 1: https://sorax.lovable.app/api/public/i/26bdw6k9xz.png
+// sistema entrou
 
 
 export const SupabaseCheck = () => {

@@ -920,8 +920,26 @@ function LeadDetailsDialog({ lead, onUpdate }: { lead: Lead, onUpdate: () => voi
               <div className="space-y-4">
                 <div className="space-y-1">
                   <p className="text-[10px] font-bold text-primary uppercase">Contato</p>
-                  <p className="font-bold text-lg">{lead.name}</p>
+                  <p className="font-bold text-lg flex items-center gap-2">
+                    {lead.name}
+                    {lead.source_tag === 'colheita' && (
+                      <Badge variant="outline" className="h-4 px-1 text-[8px] bg-green-50 text-green-700 border-green-200">
+                        COLHEITA
+                      </Badge>
+                    )}
+                  </p>
                 </div>
+                {lead.source_tag === 'indicacao' && lead.referral_info?.referrer_name && (
+                  <div className="p-3 rounded-lg bg-blue-50 border border-blue-100 space-y-1">
+                    <p className="text-[10px] font-bold text-blue-700 uppercase flex items-center gap-1">
+                      <Handshake className="h-3 w-3" /> Indicação de:
+                    </p>
+                    <p className="text-sm font-bold text-blue-900">{lead.referral_info.referrer_name}</p>
+                    {lead.referral_info.referrer_notes && (
+                      <p className="text-[11px] text-blue-800/80 italic leading-tight">"{lead.referral_info.referrer_notes}"</p>
+                    )}
+                  </div>
+                )}
                 <div className="space-y-1">
                   <p className="text-[10px] font-bold text-primary uppercase">Empresa</p>
                   <div className="flex items-center gap-2 text-sm font-medium">

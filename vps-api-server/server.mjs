@@ -177,7 +177,6 @@ const CLIENT_PORTAL_BASE_FIELDS = [
 ].join(', ');
 
 let clientsArtRequestsLimitColumnPromise;
-let crmLeadsColumnsEnsuredPromise;
 let proposalTablesEnsuredPromise;
 let storyEditingSessionsEnsuredPromise;
 let scriptRequestsEnsuredPromise;
@@ -9072,8 +9071,6 @@ app.post('/api/admin/repair-atomic', async (req, res) => {
   }
 });
 
-});
-
 app.post('/api/upload', (req, res) => {
   uploadHandler.single('file')(req, res, (err) => {
     if (err) {
@@ -9100,31 +9097,6 @@ app.post('/api/upload', (req, res) => {
       url: `/uploads/${relative}`,
     });
   });
-});
-
-app.post('/api/crm/harvest/search', async (req, res) => {
-  try {
-    const { city, niche, min_capital } = req.body;
-    
-    // Dataset simulado (Mock) conforme solicitado no plano
-    const mockCompanies = [
-      { id: '1', razao_social: 'Engenharia de Alimentos S.A.', contato: 'Joana Silva', email: 'contato@engalimentos.com.br', telefone: '62998887766', atuacao: 'Indústria Alimentícia', endereco: 'Rua das Indústrias, 45 - Setor Industrial', capital_social: 1500000, cidade: 'Minaçu' },
-      { id: '2', razao_social: 'Supermercado Central', contato: 'Pedro Oliveira', email: 'vendas@central.com.br', telefone: '6233774411', atuacao: 'Varejo', endereco: 'Av. Brasil, 1020 - Centro', capital_social: 500000, cidade: 'Uruaçu' },
-      { id: '3', razao_social: 'Construtora Vale do Sol', contato: 'Marcos Santos', email: 'diretoria@valedosol.com', telefone: '6298112233', atuacao: 'Construção Civil', endereco: 'Rua das Flores, s/n', capital_social: 2500000, cidade: 'Minaçu' },
-      { id: '4', razao_social: 'Agropecuária Rebanho Forte', contato: 'Zeca Boiadeiro', email: 'contato@rebanhoforte.agr.br', telefone: '6299114455', atuacao: 'Agronegócio', endereco: 'Fazenda Rebanho, KM 12', capital_social: 5000000, cidade: 'Uruaçu' },
-      { id: '5', razao_social: 'Oficina do Grau', contato: 'Beto Mecânico', email: 'oficinagrau@gmail.com', telefone: '6233558899', atuacao: 'Serviços Automotivos', endereco: 'Av. dos Operários, 300', capital_social: 120000, cidade: 'Minaçu' },
-      { id: '6', razao_social: 'Clínica Sorriso Aberto', contato: 'Dra. Maria Clara', email: 'agendamento@sorrisoaberto.com', telefone: '6298556622', atuacao: 'Saúde', endereco: 'Rua Médica, 10', capital_social: 800000, cidade: 'Uruaçu' },
-    ];
-
-    let filtered = mockCompanies;
-    if (city && city !== 'all') filtered = filtered.filter(c => c.cidade === city);
-    if (niche && niche !== 'all') filtered = filtered.filter(c => c.atuacao.toLowerCase().includes(niche.toLowerCase()));
-    if (min_capital) filtered = filtered.filter(c => c.capital_social >= Number(min_capital));
-
-    res.json({ data: filtered });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
 });
 
 app.delete('/api/upload', express.json(), (req, res) => {

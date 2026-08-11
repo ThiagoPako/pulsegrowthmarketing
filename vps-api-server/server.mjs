@@ -123,13 +123,26 @@ async function ensureCrmLeadsColumns() {
     crmLeadsColumnsEnsuredPromise = (async () => {
       try {
         const columns = await getExistingColumns('crm_leads');
+        const alter = [];
         
-        if (!columns.has('return_date')) {
-          await pool.query(`ALTER TABLE crm_leads ADD COLUMN return_date DATE`);
-          console.log('Added return_date column to crm_leads');
-          getTableColumnsPromiseCache().delete('crm_leads');
+        // Colunas para Geladeira e CRM avançado
+        if (!columns.has('return_date')) alter.push('ADD COLUMN return_date DATE');
+        if (!columns.has('description')) alter.push('ADD COLUMN description TEXT');
+        if (!columns.has('city')) alter.push('ADD COLUMN city TEXT');
+        if (!columns.has('source_tag')) alter.push('ADD COLUMN source_tag TEXT');
+        if (!columns.has('referral_info')) alter.push('ADD COLUMN referral_info JSONB');
+
+        if (alter.length > 0) {
+          await pool.query(`ALTER TABLE crm_leads ${alter.join(', ')}`).catch(err => {
+            if (!/already exists|must be owner/i.test(err.message)) throw err;
+          });
+          console.log('CRM columns updated/verified');
+          if (typeof getTableColumnsPromiseCache === 'function') {
+            getTableColumnsPromiseCache().delete('crm_leads');
+          }
         }
 
+        // Atualizar Constraint de Status para incluir 'fridge'
         const { rows: constraints } = await pool.query(`
           SELECT conname 
           FROM pg_constraint c 
@@ -140,15 +153,14 @@ async function ensureCrmLeadsColumns() {
         `);
         
         for (const row of constraints) {
-          await pool.query(`ALTER TABLE crm_leads DROP CONSTRAINT ${row.conname}`);
+          await pool.query(`ALTER TABLE crm_leads DROP CONSTRAINT ${row.conname}`).catch(() => {});
         }
         
         await pool.query(`
           ALTER TABLE crm_leads 
           ADD CONSTRAINT crm_leads_status_check 
           CHECK (status IN ('lead', 'contacted', 'meeting', 'contracted', 'lost', 'recovery_followup_1', 'recovery_followup_2', 'fridge'))
-        `);
-        console.log('Updated crm_leads status constraint to include fridge');
+        `).catch(() => {});
       } catch (err) {
         console.error('ensureCrmLeadsColumns error:', err);
         crmLeadsColumnsEnsuredPromise = null;
@@ -178,7 +190,6 @@ const CLIENT_PORTAL_BASE_FIELDS = [
 
 let clientsArtRequestsLimitColumnPromise;
 let proposalTablesEnsuredPromise;
-let storyEditingSessionsEnsuredPromise;
 let scriptRequestsEnsuredPromise;
 let copyActiveSessionsEnsuredPromise;
 const tableJsonColumnsPromiseCache = new Map();
@@ -379,25 +390,7 @@ ensureProposalTables().catch((error) => {
   console.error('Failed to ensure proposal tables:', error);
 });
 
-async function ensureCrmLeadsColumns() {
-  if (!crmLeadsColumnsEnsuredPromise) {
-    crmLeadsColumnsEnsuredPromise = (async () => {
-      const columns = await getExistingColumns('crm_leads');
-      const alter = [];
-      if (!columns.has('description')) alter.push('ADD COLUMN description TEXT');
-      if (!columns.has('city')) alter.push('ADD COLUMN city TEXT');
-      if (!columns.has('source_tag')) alter.push('ADD COLUMN source_tag TEXT');
-      if (!columns.has('referral_info')) alter.push('ADD COLUMN referral_info JSONB');
-      if (alter.length > 0) {
-        await pool.query(`ALTER TABLE crm_leads ${alter.join(', ')}`).catch(err => {
-          if (!/already exists|must be owner/i.test(err.message)) throw err;
-        });
-      }
-    })();
-  }
-  return crmLeadsColumnsEnsuredPromise;
-}
-
+// ensureCrmLeadsColumns was moved to line 121 to avoid duplication
 ensureCrmLeadsColumns().catch(err => console.error('CRM leads column sync failed:', err));
 
 

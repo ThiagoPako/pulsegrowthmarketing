@@ -1,5 +1,5 @@
 import React from 'react';
-// Sistema esta atualizando a página sozinho
+// preciso do comando pra atualizar na VPS, para corrigir essas atualizaçoes toda hora
 
 export const SupabaseCheck = () => {
    const deployCommand = "cd /var/www/pulsegrowthmarketing && git pull && npm install && npm run build && pm2 restart pulse-api pulse-uploads && sudo systemctl reload nginx && pm2 status";

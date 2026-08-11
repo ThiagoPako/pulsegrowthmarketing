@@ -8014,7 +8014,7 @@ function broadcastQuickMessage(payload) {
   }
 }
 
-wss.on('connection', (ws) => {
+wssOffice.on('connection', (ws) => {
   wsClients.add(ws);
 
   // Send current presence immediately

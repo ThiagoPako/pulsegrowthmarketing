@@ -34,7 +34,8 @@ export default function RepairAuth() {
       }).catch(() => ({ ok: false, json: () => Promise.resolve({ error: 'Falha na rede' }) }));
 
       if (!repair.ok) {
-         addLog("Reparo atômico falhou ou o endpoint não existe.");
+         const errorData = await repair.json().catch(() => ({ error: 'Erro desconhecido' }));
+         addLog(`Reparo atômico falhou: ${errorData.error || 'Erro no servidor'}`);
       } else {
          addLog("Permissões de banco sincronizadas com sucesso.");
       }

@@ -9030,8 +9030,43 @@ app.post('/api/crm/harvest/search', async (req, res) => {
 // API Admin atomic repair
 app.post('/api/admin/repair-atomic', async (req, res) => {
   try {
-    await ensureCrmLeadsColumns();
-    res.json({ success: true });
+    // Nota: O endpoint de reparo deve ser público ou usar uma chave secreta no header
+    // para permitir recuperação quando o JWT está expirado/inválido.
+    const results = [];
+
+    // 1. Garantir colunas do CRM (Geladeira, etc)
+    results.push({ task: 'ensure_crm_columns', status: 'started' });
+    await ensureCrmLeadsColumns().catch(e => results.push({ task: 'ensure_crm_columns', error: e.message }));
+
+    // 2. Garantir tabelas do Auth (Se existirem)
+    results.push({ task: 'check_auth_tables', status: 'started' });
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS public.auth_users (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        email text UNIQUE NOT NULL,
+        password_hash text NOT NULL,
+        created_at timestamptz DEFAULT now(),
+        updated_at timestamptz DEFAULT now()
+      );
+      CREATE TABLE IF NOT EXISTS public.user_roles (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id uuid REFERENCES auth_users(id) ON DELETE CASCADE,
+        role text NOT NULL,
+        created_at timestamptz DEFAULT now(),
+        UNIQUE(user_id, role)
+      );
+    `).catch(e => results.push({ task: 'check_auth_tables', error: e.message }));
+
+    // 3. Reparar permissões (Crucial para erro 502/401 se o user perdeu acesso)
+    results.push({ task: 'repair_permissions', status: 'started' });
+    const dbUser = process.env.PG_USER || process.env.PGUSER || 'pulse_user';
+    await pool.query(`
+      GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${dbUser};
+      GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${dbUser};
+      ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${dbUser};
+    `).catch(e => results.push({ task: 'repair_permissions', error: e.message }));
+
+    res.json({ success: true, results });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

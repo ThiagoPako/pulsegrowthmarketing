@@ -1,13 +1,6 @@
 /**
  * VPS API Server — Replaces all Supabase Edge Functions
- * Deploy on agenciapulse.tech alongside the existing upload-server
- * 
- * SETUP:
- * 1. npm install express cors pg bcryptjs jsonwebtoken
- * 2. Create .env with all required variables (see bottom of file)
- * 3. pm2 start server.mjs --name pulse-api
- * 
- * Runs on port 3002 (upload-server uses 3001)
+ * Version: 1.2.2 - Security & Auth Repair Fix
  */
 
 import path from 'node:path';

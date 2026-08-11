@@ -907,13 +907,12 @@ function LeadDetailsDialog({
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[10px] font-bold text-primary uppercase">Valor Negociado</p>
-                  <p className="text-2xl font-black text-primary">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.contract_value)}
-                  </p>
+                  <p className="text-[10px] font-bold text-primary uppercase">Etiqueta de Temperatura</p>
+                  <TagSelector leadId={lead.id} currentTag={lead.tag} />
                 </div>
               </div>
             </div>
+
 
             <div className="mt-auto space-y-4">
               <div className="flex gap-2 mb-4">

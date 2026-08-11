@@ -878,6 +878,22 @@ function LeadDetailsDialog({
               <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-4">Dados da Oportunidade</h3>
               <div className="space-y-4">
                 <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-primary uppercase">Ações Rápidas</p>
+                  <div className="flex flex-wrap gap-2">
+                    {lead.phone && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-[10px] bg-green-50 text-green-600 border-green-200 hover:bg-green-100"
+                        onClick={() => window.open(`https://wa.me/55${lead.phone.replace(/\D/g, '')}`, '_blank')}
+                      >
+                        <MessageSquare className="h-3 w-3 mr-1" /> WhatsApp
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
                   <p className="text-[10px] font-bold text-primary uppercase">Contato</p>
                   <p className="font-bold text-lg flex items-center gap-2">
                     {lead.name}

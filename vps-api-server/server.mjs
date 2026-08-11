@@ -53,7 +53,16 @@ app.use(express.json({ limit: '10mb' }));
 
 // Health Check: endpoint leve para monitoramento do Nginx/Uptime
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime() });
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(), 
+    uptime: process.uptime(),
+    env: {
+      has_jwt_secret: !!process.env.JWT_SECRET,
+      has_db_url: !!process.env.DATABASE_URL,
+      node_env: process.env.NODE_ENV
+    }
+  });
 });
 
 // ─── PostgreSQL local ───────────────────────────────────────

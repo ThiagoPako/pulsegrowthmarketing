@@ -794,7 +794,16 @@ async function verifyUser(req) {
       userClient: getUserClient(authHeader),
     };
   } catch (error) {
-    console.error(`[Auth] verifyUser failed for ${req.path}:`, error.message);
+    const errorDetail = {
+      message: error.message,
+      name: error.name,
+      stack: error.stack?.split('\n').slice(0, 3).join('\n'),
+      path: req.path,
+      hasAuthHeader: !!req.headers.authorization,
+      authHeaderLength: req.headers.authorization?.length || 0,
+      timestamp: new Date().toISOString()
+    };
+    console.error(`[Auth-Critical] verifyUser failed:`, JSON.stringify(errorDetail, null, 2));
     throw new Error('Unauthorized');
   }
 }

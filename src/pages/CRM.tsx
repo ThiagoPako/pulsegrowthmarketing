@@ -110,11 +110,9 @@ const STAGES: { id: LeadStatus; label: string; color: string; icon: any }[] = [
   { id: 'contacted', label: 'Contato Efetuado', color: 'border-t-blue-400', icon: Phone },
   { id: 'meeting', label: 'Reunião Agendada', color: 'border-t-purple-400', icon: Briefcase },
   { id: 'fridge', label: 'Geladeira', color: 'border-t-cyan-300', icon: Snowflake },
-  { id: 'recovery_followup_1', label: 'Follow-up 1', color: 'border-t-orange-400', icon: RotateCcw },
-  { id: 'recovery_followup_2', label: 'Follow-up 2', color: 'border-t-red-400', icon: RotateCcw },
-  { id: 'contracted', label: 'Contrato Fechado', color: 'border-t-green-400 bg-green-50/30 ring-2 ring-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.1)]', icon: Target },
   { id: 'lost', label: 'Leads Desistentes', color: 'border-t-zinc-500 grayscale opacity-70', icon: UserMinus },
-];
+
+  { id: 'contracted', label: 'Contrato Fechado', color: 'border-t-green-400 bg-green-50/30 ring-2 ring-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.1)]', icon: Target },
 
 
 
@@ -123,7 +121,7 @@ export default function CRM() {
   const canEdit = profile?.role === 'admin' || profile?.role === 'social_media';
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'pipeline' | 'goals' | 'calendar' | 'harvester'>('pipeline');
-  const [isRecoveryView, setIsRecoveryView] = useState(false);
+  
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [newLeadStatus, setNewLeadStatus] = useState<LeadStatus>('lead');
@@ -310,14 +308,6 @@ export default function CRM() {
             />
           </div>
           
-          <Button 
-            variant="outline" 
-            onClick={() => setIsRecoveryView(!isRecoveryView)}
-            className={`h-10 transition-all ${isRecoveryView ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-card'}`}
-          >
-            <RotateCcw className={`mr-2 h-4 w-4 ${isRecoveryView ? 'animate-spin-slow' : ''}`} />
-            {isRecoveryView ? 'Pipeline Principal' : 'Recuperação'}
-          </Button>
 
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>

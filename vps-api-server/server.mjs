@@ -7973,9 +7973,7 @@ app.get('/api/training/stream/:lessonId', async (req, res) => {
 
 // ─── WebSocket Server for real-time presence & chat ─────────
 
-import { WebSocketServer } from 'ws';
-import { createServer } from 'http';
-
+// WebSocketServer já importado no topo
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: '/api/realtime' });
 

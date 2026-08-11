@@ -93,12 +93,19 @@ export function LeadHarvester() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Nicho / Atuação</Label>
-            <Input 
-              placeholder="Ex: Saúde, Varejo..." 
-              value={niche} 
-              onChange={(e) => setNiche(e.target.value)}
-            />
+            <Label>Nicho / Atuação (Ministério da Fazenda)</Label>
+            <Select value={niche} onValueChange={setNiche}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o nicho" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="varejo">Comércio Varejista</SelectItem>
+                <SelectItem value="saude">Saúde e Serviços Sociais</SelectItem>
+                <SelectItem value="gastronomia">Alimentação e Gastronomia</SelectItem>
+                <SelectItem value="servicos">Prestação de Serviços</SelectItem>
+                <SelectItem value="industria">Indústria e Fabricação</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label>Capital Social Mínimo (R$)</Label>

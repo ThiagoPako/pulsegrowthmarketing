@@ -593,6 +593,15 @@ export default function CRM() {
                                                   </div>
                                                 </div>
                                               )}
+                                              {lead.status === 'fridge' && lead.return_date && (
+                                                <div className="flex flex-col items-end">
+                                                  <span className="text-[9px] uppercase font-semibold text-muted-foreground tracking-tighter">Retorno</span>
+                                                  <div className="flex items-center gap-1 text-[10px] font-bold text-cyan-600">
+                                                    <CalendarIcon className="h-3 w-3" /> {format(parseISO(lead.return_date), 'dd/MM', { locale: ptBR })}
+                                                  </div>
+                                                </div>
+                                              )}
+
 
 
                                               <div className="flex items-center gap-1.5 opacity-100 group-hover:opacity-100 transition-all">
@@ -618,6 +627,44 @@ export default function CRM() {
                                                     <Briefcase size={14} />
                                                   </Button>
                                                 )}
+                                                {stage.id === 'contacted' && (
+                                                   <Dialog>
+                                                      <DialogTrigger asChild>
+                                                        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full bg-cyan-50 text-cyan-600 hover:bg-cyan-100" title="Mover para Geladeira">
+                                                          <Snowflake className="h-4 w-4" />
+                                                        </Button>
+                                                      </DialogTrigger>
+                                                      <DialogContent>
+                                                        <DialogHeader><DialogTitle>Mover para Geladeira - {lead.name}</DialogTitle></DialogHeader>
+                                                        <form onSubmit={async (e) => {
+                                                            e.preventDefault();
+                                                            const formData = new FormData(e.currentTarget);
+                                                            const r_date = formData.get('return_date') as string;
+                                                            if (!r_date) {
+                                                              toast.error('Data de retorno é obrigatória.');
+                                                              return;
+                                                            }
+                                                            const { error } = await supabase.from('crm_leads').update({
+                                                                status: 'fridge',
+                                                                return_date: r_date
+                                                            } as any).eq('id', lead.id);
+                                                            if (!error) {
+                                                                queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
+                                                                toast.success('Lead movido para a geladeira!');
+                                                            }
+                                                        }}>
+                                                            <div className="grid gap-4 py-4">
+                                                                <div className="grid gap-2">
+                                                                  <Label>Data de Retorno</Label>
+                                                                  <Input type="date" name="return_date" required min={new Date().toISOString().split('T')[0]} />
+                                                                </div>
+                                                                <Button type="submit" className="w-full">Confirmar</Button>
+                                                            </div>
+                                                        </form>
+                                                      </DialogContent>
+                                                   </Dialog>
+                                                )}
+
                                                 {stage.id === 'contacted' && (
                                                    <Dialog>
                                                       <DialogTrigger asChild>
@@ -965,6 +1012,29 @@ function LeadDetailsDialog({ lead, onUpdate }: { lead: Lead, onUpdate: () => voi
             </div>
 
             <div className="mt-auto space-y-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-bold uppercase text-muted-foreground">Mover para Estágio</Label>
+                <div className="flex flex-wrap gap-2">
+                  {STAGES.map(s => (
+                    <Button 
+                      key={s.id} 
+                      size="sm" 
+                      variant={lead.status === s.id ? 'default' : 'outline'}
+                      className="h-8 text-[10px] px-2 flex-1 min-w-[100px]"
+                      onClick={async () => {
+                        const { error } = await supabase.from('crm_leads').update({ status: s.id } as any).eq('id', lead.id);
+                        if (!error) {
+                          onUpdate();
+                          toast.success(`Lead movido para ${s.label}`);
+                        }
+                      }}
+                    >
+                      <s.icon className="h-3 w-3 mr-1" /> {s.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label className="text-[10px] font-bold uppercase text-muted-foreground">Nova Atualização</Label>
                 <Textarea 

@@ -122,8 +122,9 @@ export default function CRM() {
   const canEdit = profile?.role === 'admin' || profile?.role === 'social_media';
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'pipeline' | 'goals' | 'calendar' | 'harvester'>('pipeline');
-  
+  const [isRecoveryView, setIsRecoveryView] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [newLeadStatus, setNewLeadStatus] = useState<LeadStatus>('lead');
 

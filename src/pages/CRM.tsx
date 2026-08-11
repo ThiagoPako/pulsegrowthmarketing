@@ -816,7 +816,17 @@ function TagSelector({ leadId, currentTag }: { leadId: string, currentTag: LeadT
   );
 }
 
-function LeadDetailsDialog({ lead, onUpdate }: { lead: Lead, onUpdate: () => void }) {
+function LeadDetailsDialog({ 
+  lead, 
+  onUpdate,
+  onEdit,
+  onDelete
+}: { 
+  lead: Lead, 
+  onUpdate: () => void,
+  onEdit?: (lead: Partial<Lead> & { id: string }) => void,
+  onDelete?: (id: string) => void
+}) {
   const [note, setNote] = useState('');
   const { data: notes = [] } = useQuery({
     queryKey: ['lead_notes', lead.id],

@@ -7973,9 +7973,7 @@ app.get('/api/training/stream/:lessonId', async (req, res) => {
 
 // ─── WebSocket Server for real-time presence & chat ─────────
 
-import { WebSocketServer } from 'ws';
-import { createServer } from 'http';
-
+// WebSocketServer já importado no topo
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: '/api/realtime' });
 
@@ -7997,7 +7995,7 @@ wss.on('connection', (ws) => {
   });
 });
 
-const wss = new WebSocketServer({ server, path: '/ws/office' });
+const wssOffice = new WebSocketServer({ server, path: '/ws/office' });
 
 const wsClients = new Set();
 
@@ -8016,7 +8014,7 @@ function broadcastQuickMessage(payload) {
   }
 }
 
-wss.on('connection', (ws) => {
+wssOffice.on('connection', (ws) => {
   wsClients.add(ws);
 
   // Send current presence immediately

@@ -113,6 +113,8 @@ export interface Client {
   proposalId?: string | null; // linked commercial proposal
   status?: string; // 'ativo' | 'cancelado'
   cancellationDate?: string | null;
+  source_tag?: string | null;
+  referral_info?: { referrer_name?: string; referrer_notes?: string } | null;
 }
 
 export interface SocialAccount {

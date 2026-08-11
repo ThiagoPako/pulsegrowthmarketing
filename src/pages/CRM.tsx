@@ -85,6 +85,8 @@ interface Lead {
   meeting_time: string | null;
   city: string | null;
   description: string | null;
+  source_tag: string | null;
+  referral_info: { referrer_name?: string; referrer_notes?: string } | null;
 }
 
 

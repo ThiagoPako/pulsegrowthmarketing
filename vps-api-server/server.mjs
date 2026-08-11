@@ -325,6 +325,8 @@ async function ensureCrmLeadsColumns() {
       const alter = [];
       if (!columns.has('description')) alter.push('ADD COLUMN description TEXT');
       if (!columns.has('city')) alter.push('ADD COLUMN city TEXT');
+      if (!columns.has('source_tag')) alter.push('ADD COLUMN source_tag TEXT');
+      if (!columns.has('referral_info')) alter.push('ADD COLUMN referral_info JSONB');
       if (alter.length > 0) {
         await pool.query(`ALTER TABLE crm_leads ${alter.join(', ')}`).catch(err => {
           if (!/already exists|must be owner/i.test(err.message)) throw err;

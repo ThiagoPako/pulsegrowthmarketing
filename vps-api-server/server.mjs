@@ -811,10 +811,16 @@ async function verifyUser(req) {
       method: req.method,
       hasAuthHeader: !!req.headers.authorization,
       authHeaderLength: req.headers.authorization?.length || 0,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      token_preview: req.headers.authorization?.slice(0, 20) + '...'
     };
     
-    // Se o erro for "Unauthorized", logamos o detalhe mas mantemos o throw para o client
+    if (error.name === 'JsonWebTokenError') {
+      console.error(`[Auth-JWT-Invalid] Invalid token signature for ${req.path}. Check JWT_SECRET syncing.`);
+    } else if (error.name === 'TokenExpiredError') {
+      console.error(`[Auth-JWT-Expired] Token expired for ${req.path} at ${error.expiredAt}`);
+    }
+
     console.error(`[Auth-Critical] ${req.method} ${req.path} failed:`, JSON.stringify(errorDetail, null, 2));
     throw new Error('Unauthorized');
   }

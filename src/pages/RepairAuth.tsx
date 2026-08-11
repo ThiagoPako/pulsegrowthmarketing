@@ -59,8 +59,9 @@ export default function RepairAuth() {
         <div className="space-y-2 text-center">
           <h1 className="text-2xl font-bold tracking-tighter flex items-center justify-center gap-2">
             <ShieldCheck className="text-primary w-6 h-6" />
-            AUTH RECOVERY TOOL v1.0
+            AUTH RECOVERY TOOL v1.1
           </h1>
+
           <p className="text-slate-400 text-sm">Ferramenta de emergência para reparo de autenticação VPS</p>
         </div>
 

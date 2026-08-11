@@ -284,7 +284,7 @@ export default function CRM() {
     return stats;
   }, [leads]);
 
-  const currentStages = isRecoveryView ? RECOVERY_STAGES : STAGES;
+  const currentStages = STAGES;
 
   return (
     <div className="p-4 md:p-6 h-full flex flex-col gap-6 bg-background/50">

@@ -5248,10 +5248,14 @@ app.post('/api/db/query', async (req, res) => {
 
     switch (operation) {
       case 'select': {
+        if (safeTable === 'crm_leads') {
+          await ensureCrmLeadsColumns();
+        }
         const selectClause = joins && Array.isArray(joins)
           ? qualifyBaseSelectClause(select || '*', safeTable, joins)
           : (select || '*');
         let query = `SELECT ${selectClause} FROM ${safeTable}`;
+
         const params = [];
         let paramIdx = 1;
 

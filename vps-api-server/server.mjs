@@ -7995,7 +7995,7 @@ wss.on('connection', (ws) => {
   });
 });
 
-const wss = new WebSocketServer({ server, path: '/ws/office' });
+const wssOffice = new WebSocketServer({ server, path: '/ws/office' });
 
 const wsClients = new Set();
 

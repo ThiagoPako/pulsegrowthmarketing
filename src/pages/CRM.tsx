@@ -22,6 +22,8 @@ import {
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { LeadHarvester } from '@/components/crm/LeadHarvester';
+import { CRMBanner } from '@/components/crm/CRMBanner';
+
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, isSameDay } from 'date-fns';
@@ -105,9 +107,11 @@ const STAGES: { id: LeadStatus; label: string; color: string; icon: any }[] = [
   { id: 'lead', label: 'Possíveis Clientes', color: 'border-t-slate-400', icon: Users },
   { id: 'contacted', label: 'Contato Efetuado', color: 'border-t-blue-400', icon: Phone },
   { id: 'meeting', label: 'Reunião Agendada', color: 'border-t-purple-400', icon: Briefcase },
+  { id: 'fridge', label: 'Geladeira', color: 'border-t-cyan-300', icon: Snowflake },
   { id: 'contracted', label: 'Contrato Fechado', color: 'border-t-green-400 bg-green-50/30 ring-2 ring-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.1)]', icon: Target },
   { id: 'lost', label: 'Leads Desistentes', color: 'border-t-zinc-500 grayscale opacity-70', icon: UserMinus },
 ];
+
 
 const RECOVERY_STAGES: { id: LeadStatus; label: string; color: string; icon: any }[] = [
   { id: 'recovery_followup_1', label: 'Follow-up 1', color: 'border-t-orange-400', icon: RotateCcw },
@@ -284,6 +288,8 @@ export default function CRM() {
 
   return (
     <div className="p-4 md:p-6 h-full flex flex-col gap-6 bg-background/50">
+      <CRMBanner />
+
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">

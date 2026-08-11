@@ -520,57 +520,6 @@ class ChannelBuilder {
   }
 }
 
-const activeChannels = new Map<string, ChannelBuilder>();
-
-export const supabase = {
-  // ... existing methods ...
-  channel(name: string) {
-    if (activeChannels.has(name)) return activeChannels.get(name)!;
-    const chan = new ChannelBuilder(name);
-    activeChannels.set(name, chan);
-    return chan;
-  },
-  removeChannel(channel: ChannelBuilder) {
-    channel.unsubscribe();
-    // find key by value and delete
-    for (const [k, v] of activeChannels.entries()) {
-      if (v === channel) {
-        activeChannels.delete(k);
-        break;
-      }
-    }
-  },
-          console.error('WS parse error:', e);
-        }
-      };
-
-      this._socket.onclose = () => {
-        // Reconnect logic could be added here
-      };
-
-      this._socket.onerror = (err) => {
-        console.error('WS error:', err);
-      };
-
-    } catch (e) {
-      console.error('WS connection failed:', e);
-    }
-
-    return this;
-  }
-
-  unsubscribe() {
-    if (this._socket) {
-      this._socket.close();
-      this._socket = null;
-    }
-  }
-
-  /**
-   * Send a broadcast message on this channel.
-   * Server relays to all other subscribers of the same channel name.
-   * Returns 'ok' if the frame was written, 'queued' if the socket is still connecting.
-   */
   send(payload: { type?: string; event: string; payload?: any }): 'ok' | 'queued' | 'error' {
     const msg = JSON.stringify({
       type: 'broadcast',
@@ -591,6 +540,39 @@ export const supabase = {
     return 'error';
   }
 }
+
+const activeChannels = new Map<string, ChannelBuilder>();
+
+/**
+ * Invoke a VPS API function (replaces supabase.functions.invoke)
+ * Routes to https://agenciapulse.tech/api/<functionName>
+ */
+async function invokeFunction(functionName: string, options?: { body?: any }): Promise<{ data: any; error: any }> {
+  try {
+    let response = await fetch(`${VPS_API_BASE}/${functionName}`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: options?.body ? JSON.stringify(options.body) : undefined,
+    });
+
+    if (response.status === 401 && await refreshVpsSession()) {
+      response = await fetch(`${VPS_API_BASE}/${functionName}`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: options?.body ? JSON.stringify(options.body) : undefined,
+      });
+    }
+
+    const data = await response.json();
+    if (!response.ok) {
+      return { data: null, error: data.error || { message: `HTTP ${response.status}` } };
+    }
+    return data;
+  } catch (error: any) {
+    return { data: null, error: { message: error.message || 'Network error' } };
+  }
+}
+
 
 /**
  * Invoke a VPS API function (replaces supabase.functions.invoke)

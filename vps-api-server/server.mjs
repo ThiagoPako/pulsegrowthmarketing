@@ -25,9 +25,9 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import multer from 'multer';
 import { WebSocketServer } from 'ws';
-import { execFile, spawn } from 'child_process';
-import { promisify } from 'util';
-import { Readable } from 'stream';
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
+import { Readable } from 'node:stream';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

@@ -118,7 +118,7 @@ export default function CRM() {
   const { user, profile } = useAuth();
   const canEdit = profile?.role === 'admin' || profile?.role === 'social_media';
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'goals'>('pipeline');
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'goals' | 'calendar' | 'harvester'>('pipeline');
   const [isRecoveryView, setIsRecoveryView] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -240,6 +240,10 @@ export default function CRM() {
           contract_value: Number.isFinite(newLead.contract_value) ? newLead.contract_value : 0,
           status: newLead.status || 'lead',
           user_id: user.id,
+          city: newLead.city || null,
+          description: newLead.description || null,
+          source_tag: newLead.source_tag || null,
+          referral_info: newLead.referral_info || null,
         }]);
       if (error) throw error;
     },
@@ -331,7 +335,12 @@ export default function CRM() {
                   contract_value: Number(formData.get('value')),
                   city: formData.get('city') as string,
                   description: formData.get('description') as string,
-                  status: newLeadStatus
+                  status: newLeadStatus,
+                  source_tag: formData.get('source_tag') as string || null,
+                  referral_info: formData.get('source_tag') === 'indicacao' ? {
+                    referrer_name: formData.get('referrer_name') as string,
+                    referrer_notes: formData.get('referrer_notes') as string,
+                  } : null
                 });
               }} className="space-y-4 py-4">
                 <div className="grid gap-2">
@@ -369,8 +378,43 @@ export default function CRM() {
                       <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input id="value" name="value" type="number" step="0.01" placeholder="0.00" className="pl-9 bg-muted/50" />
                     </div>
+                </div>
+                
+                <div className="grid gap-2">
+                  <Label htmlFor="source_tag">Origem do Lead</Label>
+                  <Select name="source_tag" defaultValue="manual">
+                    <SelectTrigger className="bg-muted/50">
+                      <SelectValue placeholder="Selecione a origem" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="manual">Manual</SelectItem>
+                      <SelectItem value="indicacao">Indicação</SelectItem>
+                      <SelectItem value="marketing">Marketing Social</SelectItem>
+                      <SelectItem value="colheita">Colheita de Leads</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Campos condicionais para Indicação */}
+                <div className="space-y-4 pt-2 border-t border-muted/50 data-[visible=false]:hidden" id="referral-fields">
+                  <div className="grid gap-2">
+                    <Label htmlFor="referrer_name">Quem indicou?</Label>
+                    <Input id="referrer_name" name="referrer_name" placeholder="Nome do indicador" className="bg-muted/50" />
                   </div>
                   <div className="grid gap-2">
+                    <Label htmlFor="referrer_notes">Informações do indicador sobre o lead</Label>
+                    <Textarea id="referrer_notes" name="referrer_notes" placeholder="O que o indicador falou?" className="bg-muted/50 resize-none h-16" />
+                  </div>
+                </div>
+
+                <script dangerouslySetInnerHTML={{ __html: `
+                  document.querySelector('select[name="source_tag"]')?.addEventListener('change', (e) => {
+                    const el = document.getElementById('referral-fields');
+                    if (el) el.setAttribute('data-visible', e.target.value === 'indicacao');
+                  });
+                `}} />
+
+                <div className="grid gap-2">
                     <Label htmlFor="phone">WhatsApp</Label>
                     <Input id="phone" name="phone" placeholder="(00) 00000-0000" className="bg-muted/50" />
                   </div>

@@ -15,7 +15,7 @@ export const SupabaseCheck = () => {
       {/* Bloco de Atualização VPS */}
       <div className="max-w-2xl w-full p-6 bg-card text-card-foreground rounded-xl border-2 border-primary/20 shadow-2xl space-y-6">
         <div className="space-y-2">
-          <h2 className="text-2xl font-bold tracking-tight text-primary">comando pra atualizar na VPS porque ainda nao aparece no dominio</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-primary">Comando para atualizar na VPS (Correção de Colunas)</h2>
           <p className="text-muted-foreground">
             Este é o comando validado que atualiza o sistema mantendo a integridade de todos os dados do banco de dados e arquivos locais.
           </p>

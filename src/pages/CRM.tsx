@@ -548,33 +548,6 @@ export default function CRM() {
                                                   <Briefcase className="h-3 w-3" /> {lead.company || 'Pessoa Física'} {lead.city && <span className="text-primary/70">· {lead.city}</span>}
                                                 </p>
                                               </div>
-                                              <div className="shrink-0 flex items-center gap-1">
-                                                {lead.phone && (
-                                                  <Button
-                                                    size="icon"
-                                                    variant="ghost"
-                                                    className="h-8 w-8 rounded-full text-green-600 hover:bg-green-50"
-                                                    title="Abrir WhatsApp"
-                                                    onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      const cleanPhone = lead.phone?.replace(/\D/g, '');
-                                                      window.open(`https://wa.me/55${cleanPhone}`, '_blank');
-                                                    }}
-                                                  >
-                                                    <MessageSquare size={14} className="fill-current opacity-20 group-hover:opacity-100 transition-opacity" />
-                                                  </Button>
-                                                )}
-                                                {lead.tag === 'hot' && (
-                                                  <div className="p-1 rounded-full bg-orange-100 text-orange-600 animate-pulse">
-                                                    <Flame size={12} fill="currentColor" />
-                                                  </div>
-                                                )}
-                                                {lead.tag === 'cold' && (
-                                                  <div className="p-1 rounded-full bg-blue-100 text-blue-600">
-                                                    <Snowflake size={12} />
-                                                  </div>
-                                                )}
-                                              </div>
                                             </div>
 
                                             <div className="flex items-center justify-between pt-2 border-t border-muted/50">

@@ -744,51 +744,91 @@ export default function CRM() {
               </div>
               <div className="flex-1 space-y-4">
                 <div className="grid gap-3">
-                  {leads
-                    .filter((l) => parseMeetingDate(l.meeting_date))
-                    .sort((a, b) => {
-                      const aTime = parseMeetingDate(a.meeting_date)?.getTime() ?? Number.MAX_SAFE_INTEGER;
-                      const bTime = parseMeetingDate(b.meeting_date)?.getTime() ?? Number.MAX_SAFE_INTEGER;
-                      return aTime - bTime;
-                    })
-                    .map((lead) => {
-                      const meetingDate = parseMeetingDate(lead.meeting_date);
-                      if (!meetingDate) return null;
+                  <DragDropContext onDragEnd={(result) => {
+                    if (!result.destination) return;
+                    const leadId = result.draggableId;
+                    const newDateStr = result.destination.droppableId; // format: 'YYYY-MM-DD'
+                    
+                    const lead = leads.find(l => l.id === leadId);
+                    if (lead && lead.meeting_date !== newDateStr) {
+                      updateLead.mutate({
+                        id: leadId,
+                        meeting_date: newDateStr,
+                        status: 'meeting'
+                      });
+                      toast.success(`Reunião de ${lead.name} movida para ${format(parseISO(newDateStr), 'dd/MM', { locale: ptBR })}`);
+                    }
+                  }}>
+                    {/* Exibir os próximos 7 dias como áreas de drop se quisermos Drag & Drop entre dias na lista */}
+                    {Array.from({ length: 7 }).map((_, i) => {
+                      const date = addDays(startOfDay(new Date()), i);
+                      const dateStr = format(date, 'yyyy-MM-dd');
+                      const dayLeads = leads.filter(l => l.meeting_date === dateStr);
 
                       return (
-                      <div key={lead.id} className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-muted/50 hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center gap-4">
-                          <div className={`p-2 rounded-lg flex flex-col items-center min-w-[60px] ${lead.status === 'meeting' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                            <span className="text-[10px] uppercase font-bold">{format(meetingDate, 'MMM', { locale: ptBR })}</span>
-                            <span className="text-xl font-black">{format(meetingDate, 'dd')}</span>
-                          </div>
-                          <div>
-                            <p className="font-bold">{lead.name}</p>
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Clock className="h-3 w-3" /> {lead.meeting_time?.slice(0, 5) || '—'} · {lead.company || 'Pessoa Física'}
-                            </p>
-                            <Badge variant="outline" className="mt-1 text-[10px] h-4">
-                              {STAGES.find(s => s.id === lead.status)?.label || lead.status}
-                            </Badge>
-                          </div>
+                        <div key={dateStr} className="space-y-2">
+                          <h4 className="text-[10px] font-bold uppercase text-muted-foreground px-1 flex items-center gap-2">
+                            <CalendarIcon className="h-3 w-3" />
+                            {isToday(date) ? 'Hoje' : format(date, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                          </h4>
+                          
+                          <Droppable droppableId={dateStr}>
+                            {(provided, snapshot) => (
+                              <div
+                                {...provided.droppableProps}
+                                ref={provided.innerRef}
+                                className={`min-h-[50px] rounded-xl transition-colors ${
+                                  snapshot.isDraggingOver ? 'bg-primary/5 border-2 border-dashed border-primary/20' : 'bg-transparent'
+                                }`}
+                              >
+                                {dayLeads.map((lead, index) => (
+                                  <Draggable key={lead.id} draggableId={lead.id} index={index}>
+                                    {(provided, snapshot) => (
+                                      <div
+                                        ref={provided.innerRef}
+                                        {...provided.draggableProps}
+                                        {...provided.dragHandleProps}
+                                        className="mb-2 last:mb-0"
+                                      >
+                                        <div className={`flex items-center justify-between p-4 rounded-xl bg-card border border-muted/50 hover:shadow-md transition-all ${snapshot.isDragging ? 'rotate-2 scale-105 shadow-xl z-50' : ''}`}>
+                                          <div className="flex items-center gap-4">
+                                            <div className={`p-2 rounded-lg flex flex-col items-center min-w-[50px] ${lead.status === 'meeting' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                                              <span className="text-xl font-black">{lead.meeting_time?.slice(0, 5) || '--:--'}</span>
+                                            </div>
+                                            <div>
+                                              <p className="font-bold text-sm">{lead.name}</p>
+                                              <p className="text-[10px] text-muted-foreground">
+                                                {lead.company || 'Pessoa Física'}
+                                              </p>
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-1">
+                                            <MeetingActions lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                                            <LeadDetailsDialog 
+                                              lead={lead} 
+                                              onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
+                                              onEdit={(data) => updateLead.mutate(data)}
+                                              onDelete={(id) => deleteLead.mutate(id)}
+                                            />
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </Draggable>
+                                ))}
+                                {provided.placeholder}
+                                {dayLeads.length === 0 && !snapshot.isDraggingOver && (
+                                  <div className="py-4 text-center text-[10px] text-muted-foreground italic border border-dashed rounded-xl opacity-50">
+                                    Nenhuma reunião
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </Droppable>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <MeetingActions lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
-                          <LeadDetailsDialog 
-                            lead={lead} 
-                            onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
-                            onEdit={(data) => updateLead.mutate(data)}
-                            onDelete={(id) => deleteLead.mutate(id)}
-                          />
-                        </div>
-
-                      </div>
-                    )})}
-                  {leads.filter((l) => parseMeetingDate(l.meeting_date)).length === 0 && (
-                    <div className="py-12 text-center text-muted-foreground border-2 border-dashed rounded-xl">
-                      Nenhuma reunião registrada no momento.
-                    </div>
-                  )}
+                      );
+                    })}
+                  </DragDropContext>
                 </div>
               </div>
             </div>

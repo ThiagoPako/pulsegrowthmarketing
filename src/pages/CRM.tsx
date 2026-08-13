@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/vpsDb';
 import { useAuth } from '@/hooks/useAuth';
@@ -162,6 +162,7 @@ export default function CRM() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedMeetingDate, setSelectedMeetingDate] = useState<string>('');
+  const [meetingRefreshKey, setMeetingRefreshKey] = useState(0);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [newLeadStatus, setNewLeadStatus] = useState<LeadStatus>('lead');
@@ -230,6 +231,7 @@ export default function CRM() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
+      setMeetingRefreshKey(prev => prev + 1);
       toast.success('Lead atualizado!');
     },
   });
@@ -254,6 +256,7 @@ export default function CRM() {
 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
+      setMeetingRefreshKey(prev => prev + 1);
       toast.success('Lead atualizado com sucesso!');
     },
     onError: (error: any) => {
@@ -271,6 +274,7 @@ export default function CRM() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
+      setMeetingRefreshKey(prev => prev + 1);
       toast.success('Lead excluído com sucesso!');
     },
     onError: (error: any) => {
@@ -306,6 +310,7 @@ export default function CRM() {
       queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
       setIsAddDialogOpen(false);
       setNewLeadStatus('lead');
+      setMeetingRefreshKey(prev => prev + 1);
       toast.success('Novo lead cadastrado!');
     },
     onError: (error: any) => {
@@ -341,7 +346,7 @@ export default function CRM() {
 
   return (
     <div className="p-4 md:p-6 h-full flex flex-col gap-6 bg-background/50">
-      <CRMBanner />
+      <CRMBanner key={meetingRefreshKey} />
 
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -707,6 +712,7 @@ export default function CRM() {
                                                   onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
                                                   onEdit={(data) => updateLead.mutate(data)}
                                                   onDelete={(id) => deleteLead.mutate(id)}
+                                                  onSetRefreshKey={setMeetingRefreshKey}
                                                 />
                                               </div>
 
@@ -903,12 +909,13 @@ export default function CRM() {
                                             </div>
                                           </div>
                                           <div className="flex items-center gap-1">
-                                            <MeetingActions lead={lead} leads={leads} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                                            <MeetingActions lead={lead} leads={leads} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} onSetRefreshKey={setMeetingRefreshKey} />
                                             <LeadDetailsDialog 
                                               lead={lead} 
                                               onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
                                               onEdit={(data) => updateLead.mutate(data)}
                                               onDelete={(id) => deleteLead.mutate(id)}
+                                              onSetRefreshKey={setMeetingRefreshKey}
                                             />
                                           </div>
                                         </div>
@@ -973,12 +980,13 @@ export default function CRM() {
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
-                          <MeetingActions lead={lead} leads={leads} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                          <MeetingActions lead={lead} leads={leads} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} onSetRefreshKey={setMeetingRefreshKey} />
                           <LeadDetailsDialog 
                             lead={lead} 
                             onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
                             onEdit={(data) => updateLead.mutate(data)}
                             onDelete={(id) => deleteLead.mutate(id)}
+                            onSetRefreshKey={setMeetingRefreshKey}
                           />
                         </div>
                       </div>
@@ -1029,12 +1037,13 @@ export default function CRM() {
                         <p className="text-[11px] text-muted-foreground mt-1">{lead.company || 'Pessoa Física'}</p>
                       </div>
                       <div className="flex items-center gap-1">
-                        <MeetingActions lead={lead} leads={leads} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                        <MeetingActions lead={lead} leads={leads} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} onSetRefreshKey={setMeetingRefreshKey} />
                         <LeadDetailsDialog 
                           lead={lead} 
                           onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
                           onEdit={(data) => updateLead.mutate(data)}
                           onDelete={(id) => deleteLead.mutate(id)}
+                          onSetRefreshKey={setMeetingRefreshKey}
                         />
                       </div>
                     </div>
@@ -1102,12 +1111,14 @@ function LeadDetailsDialog({
   lead, 
   onUpdate,
   onEdit,
-  onDelete
+  onDelete,
+  onSetRefreshKey
 }: { 
   lead: Lead, 
   onUpdate: () => void,
   onEdit?: (lead: Partial<Lead> & { id: string }) => void,
-  onDelete?: (id: string) => void
+  onDelete?: (id: string) => void,
+  onSetRefreshKey?: React.Dispatch<React.SetStateAction<number>>
 }) {
   const [note, setNote] = useState('');
   const { data: notes = [] } = useQuery({
@@ -1268,6 +1279,7 @@ function LeadDetailsDialog({
                         const { error } = await supabase.from('crm_leads').update({ status: s.id } as any).eq('id', lead.id);
                         if (!error) {
                           onUpdate();
+                          if (onSetRefreshKey) onSetRefreshKey(prev => prev + 1);
                           toast.success(`Lead movido para ${s.label}`);
                         }
                       }}
@@ -1331,7 +1343,7 @@ function LeadDetailsDialog({
   );
 }
 
-function MeetingActions({ lead, leads, onUpdate }: { lead: Lead; leads: Lead[]; onUpdate: () => void }) {
+function MeetingActions({ lead, leads, onUpdate, onSetRefreshKey }: { lead: Lead; leads: Lead[]; onUpdate: () => void; onSetRefreshKey?: React.Dispatch<React.SetStateAction<number>> }) {
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [selectedRescheduleDate, setSelectedRescheduleDate] = useState<string>(normalizeMeetingDateInput(lead.meeting_date));
@@ -1364,6 +1376,7 @@ function MeetingActions({ lead, leads, onUpdate }: { lead: Lead; leads: Lead[]; 
     }
     setOpen(false);
     onUpdate();
+    if (onSetRefreshKey) onSetRefreshKey(prev => prev + 1);
     toast.success('Reunião reagendada!');
   };
 
@@ -1378,6 +1391,7 @@ function MeetingActions({ lead, leads, onUpdate }: { lead: Lead; leads: Lead[]; 
     }
     setConfirmDelete(false);
     onUpdate();
+    if (onSetRefreshKey) onSetRefreshKey(prev => prev + 1);
     toast.success('Reunião removida. Lead voltou para Contato Efetuado.');
   };
 

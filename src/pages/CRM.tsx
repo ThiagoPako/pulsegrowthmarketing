@@ -132,6 +132,7 @@ export default function CRM() {
   const [activeTab, setActiveTab] = useState<'pipeline' | 'goals' | 'calendar' | 'harvester' | 'meetings'>('pipeline');
   const [isRecoveryView, setIsRecoveryView] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date | undefined>(new Date());
 
   const [searchTerm, setSearchTerm] = useState('');
   const [newLeadStatus, setNewLeadStatus] = useState<LeadStatus>('lead');
@@ -256,6 +257,8 @@ export default function CRM() {
           description: newLead.description || null,
           source_tag: newLead.source_tag || null,
           referral_info: newLead.referral_info || null,
+          meeting_date: newLead.meeting_date || null,
+          meeting_time: newLead.meeting_time || null,
         }]);
       if (error) throw error;
     },
@@ -344,6 +347,9 @@ export default function CRM() {
               <form onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
+                const mDate = formData.get('meeting_date') as string;
+                const mTime = formData.get('meeting_time') as string;
+
                 createLead.mutate({
                   name: formData.get('name') as string,
                   company: formData.get('company') as string,
@@ -353,6 +359,8 @@ export default function CRM() {
                   city: formData.get('city') as string,
                   description: formData.get('description') as string,
                   status: newLeadStatus,
+                  meeting_date: newLeadStatus === 'meeting' ? (mDate || (calendarSelectedDate ? format(calendarSelectedDate, 'yyyy-MM-dd') : null)) : null,
+                  meeting_time: newLeadStatus === 'meeting' ? (mTime || null) : null,
                   source_tag: formData.get('source_tag') as string || null,
                   referral_info: formData.get('source_tag') === 'indicacao' ? {
                     referrer_name: formData.get('referrer_name') as string,
@@ -436,6 +444,31 @@ export default function CRM() {
                     <Input id="phone" name="phone" placeholder="(00) 00000-0000" className="bg-muted/50" />
                   </div>
                 </div>
+
+                {newLeadStatus === 'meeting' && (
+                  <div className="grid grid-cols-2 gap-4 border-t border-muted/50 pt-4 mt-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="meeting_date">Data da Reunião</Label>
+                      <Input 
+                        id="meeting_date" 
+                        name="meeting_date" 
+                        type="date" 
+                        defaultValue={calendarSelectedDate ? format(calendarSelectedDate, 'yyyy-MM-dd') : ''}
+                        className="bg-muted/50" 
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="meeting_time">Horário</Label>
+                      <Input 
+                        id="meeting_time" 
+                        name="meeting_time" 
+                        type="time" 
+                        className="bg-muted/50" 
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid gap-2">
                   <Label htmlFor="status">Status Inicial</Label>
                   <Select value={newLeadStatus} onValueChange={(value) => setNewLeadStatus(value as LeadStatus)}>
@@ -688,8 +721,15 @@ export default function CRM() {
               <div className="flex-none">
                 <Calendar
                   mode="single"
-                  selected={new Date()}
-                  className="rounded-md border bg-card"
+                  selected={calendarSelectedDate}
+                  onSelect={(date) => {
+                    setCalendarSelectedDate(date);
+                    if (date) {
+                      setNewLeadStatus('meeting');
+                      setIsAddDialogOpen(true);
+                    }
+                  }}
+                  className="rounded-md border bg-card cursor-pointer"
                   locale={ptBR}
                   modifiers={{
                     meeting: (date) => leads.some((l) => {

@@ -18,7 +18,7 @@ import {
   Briefcase, Phone, UserPlus, Target, TrendingUp, 
   DollarSign, Users, LayoutDashboard, Filter, Search,
   Calendar as CalendarIcon, Clock, Pencil, Trash2, UserMinus,
-  Sprout, Handshake
+  Sprout, Handshake, Info
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { LeadHarvester } from '@/components/crm/LeadHarvester';

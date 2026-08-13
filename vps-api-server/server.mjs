@@ -5433,6 +5433,10 @@ app.post('/api/db/query', async (req, res) => {
           await ensureCrmLeadsColumns();
         }
         for (const item of items) {
+          if (safeTable === 'crm_leads' && item.status === 'meeting') {
+            await validateMeetingConflict(item.meeting_date, item.meeting_time);
+          }
+
 
           // Multi-city: força city para a cidade ativa (ignora qualquer valor enviado pelo cliente)
           const itemScoped = scopeCity

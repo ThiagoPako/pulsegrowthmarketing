@@ -5579,10 +5579,23 @@ app.post('/api/db/query', async (req, res) => {
         }
 
 
-        const jsonColumns = await getTableJsonColumns(safeTable);
         const scopedData = scopeCity
           ? { ...data, city: assertValidCity(activeCity) }
           : (data && data.city !== undefined ? { ...data, city: assertValidCity(data.city) } : data);
+
+        if (safeTable === 'crm_leads' && (scopedData.meeting_date || scopedData.meeting_time || scopedData.status === 'meeting')) {
+          const leadId = filters?.find(f => f.column === 'id' && f.op === 'eq')?.value;
+          const { rows: currentLead } = await pool.query(`SELECT meeting_date, meeting_time, status FROM crm_leads WHERE id = $1`, [leadId]);
+          
+          const mDate = scopedData.meeting_date || currentLead[0]?.meeting_date;
+          const mTime = scopedData.meeting_time || currentLead[0]?.meeting_time;
+          const status = scopedData.status || currentLead[0]?.status;
+
+          if (status === 'meeting') {
+            await validateMeetingConflict(mDate, mTime, leadId);
+          }
+        }
+
         const existingColumns = await getExistingColumns(safeTable);
         const entries = Object.entries(scopedData)
           .map(([key, value]) => [sanitizeIdentifier(key), value])

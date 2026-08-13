@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { Toaster as Sonner } from "@/components/ui/sonner";
+import { Toaster as Sonner, Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
@@ -307,24 +307,49 @@ function AppRoutes() {
   );
 }
 
-const App = () => (
-  <ErrorBoundary>
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Sonner />
+const App = () => {
+  useEffect(() => {
+    // Cache-busting: Verifica se há uma nova versão e limpa cache se necessário
+    const checkVersion = async () => {
+      try {
+        const response = await fetch('/build-version.json?t=' + Date.now());
+        if (response.ok) {
+          const data = await response.json();
+          const lastVersion = localStorage.getItem('pulse_build_version');
+          if (lastVersion && lastVersion !== data.version) {
+            console.log('Nova versão detectada, limpando cache...');
+            localStorage.setItem('pulse_build_version', data.version);
+            window.location.reload();
+          } else {
+            localStorage.setItem('pulse_build_version', data.version);
+          }
+        }
+      } catch (e) {
+        console.warn('Falha ao verificar versão do build');
+      }
+    };
+    checkVersion();
+  }, []);
 
-        <AuthProvider>
-          <CityProvider>
-            <BrowserRouter>
-              <AppProvider>
-                <AppRoutes />
-              </AppProvider>
-            </BrowserRouter>
-          </CityProvider>
-        </AuthProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
-  </ErrorBoundary>
-);
+  return (
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Sonner />
+
+          <AuthProvider>
+            <CityProvider>
+              <BrowserRouter>
+                <AppProvider>
+                  <AppRoutes />
+                </AppProvider>
+              </BrowserRouter>
+            </CityProvider>
+          </AuthProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
+  );
+};
 
 export default App;

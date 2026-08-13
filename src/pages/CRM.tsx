@@ -841,7 +841,7 @@ export default function CRM() {
                                             </div>
                                           </div>
                                           <div className="flex items-center gap-1">
-                                            <MeetingActions lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                                            <MeetingActions lead={lead} leads={leads} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
                                             <LeadDetailsDialog 
                                               lead={lead} 
                                               onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
@@ -910,12 +910,15 @@ export default function CRM() {
                             )}
                           </div>
                         </div>
-                        <LeadDetailsDialog 
-                          lead={lead} 
-                          onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
-                          onEdit={(data) => updateLead.mutate(data)}
-                          onDelete={(id) => deleteLead.mutate(id)}
-                        />
+                        <div className="flex items-center gap-1">
+                          <MeetingActions lead={lead} leads={leads} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                          <LeadDetailsDialog 
+                            lead={lead} 
+                            onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
+                            onEdit={(data) => updateLead.mutate(data)}
+                            onDelete={(id) => deleteLead.mutate(id)}
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -963,12 +966,15 @@ export default function CRM() {
                         </div>
                         <p className="text-[11px] text-muted-foreground mt-1">{lead.company || 'Pessoa Física'}</p>
                       </div>
-                      <LeadDetailsDialog 
-                        lead={lead} 
-                        onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
-                        onEdit={(data) => updateLead.mutate(data)}
-                        onDelete={(id) => deleteLead.mutate(id)}
-                      />
+                      <div className="flex items-center gap-1">
+                        <MeetingActions lead={lead} leads={leads} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                        <LeadDetailsDialog 
+                          lead={lead} 
+                          onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
+                          onEdit={(data) => updateLead.mutate(data)}
+                          onDelete={(id) => deleteLead.mutate(id)}
+                        />
+                      </div>
                     </div>
                   ))}
                 {leads.filter(l => {
@@ -1263,7 +1269,7 @@ function LeadDetailsDialog({
   );
 }
 
-function MeetingActions({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }) {
+function MeetingActions({ lead, leads, onUpdate }: { lead: Lead; leads: Lead[]; onUpdate: () => void }) {
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -1376,7 +1382,7 @@ function MeetingActions({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }
               <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-start gap-2">
                 <Info className="h-4 w-4 text-blue-500 mt-0.5" />
                 <p className="text-[10px] text-blue-700 leading-tight">
-                  <strong>Lembrete Automático:</strong> O sistema enviará um lembrete de confirmação via WhatsApp para o cliente 24h antes do horário agendado.
+                  <strong>Regra de Intervalo:</strong> O sistema exige um intervalo mínimo de 1h30 entre as reuniões para garantir a qualidade do atendimento.
                 </p>
               </div>
 

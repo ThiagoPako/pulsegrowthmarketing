@@ -1,4 +1,4 @@
-// CRM Colheita de Leads: Nicho de atuação em lista (CNAE/Min. Fazenda) via API VPS.
+// CRM: Sistema inteligente que sugere automaticamente apenas horários disponíveis com intervalo de 1h30 entre reuniões.
 // Reparo de Auth: Se houver erro de autenticação, acesse /repair-auth para sincronizar.
 // Agenda CRM: Sistema de Briefing SDR -> Closer e lembretes 24h implementados.
 // Agenda CRM Calendário: Agendamento direto via clique, edição rápida e reagendamento por drag-and-drop entre os dias.

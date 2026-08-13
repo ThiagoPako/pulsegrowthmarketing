@@ -72,6 +72,34 @@ function formatMeetingDate(value: string | null | undefined, pattern: string, fa
   return format(parsed, pattern, { locale: ptBR });
 }
 
+function getAvailableTimeSlots(dateStr: string, allLeads: Lead[], excludeLeadId?: string) {
+  const slots = [];
+  for (let h = 8; h <= 18; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      if (h === 18 && m > 0) break;
+      slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+    }
+  }
+
+  const existingMeetings = allLeads.filter(l => 
+    l.meeting_date === dateStr && 
+    l.meeting_time && 
+    l.id !== excludeLeadId
+  );
+
+  return slots.filter(slot => {
+    const [h, m] = slot.split(':').map(Number);
+    const slotMinutes = h * 60 + m;
+
+    return !existingMeetings.some(l => {
+      const [lh, lm] = l.meeting_time!.split(':').map(Number);
+      const leadMinutes = lh * 60 + lm;
+      return Math.abs(slotMinutes - leadMinutes) < 90;
+    });
+  });
+}
+
+
 
 type LeadStatus = 'lead' | 'contacted' | 'meeting' | 'contracted' | 'lost' | 'recovery_followup_1' | 'recovery_followup_2' | 'fridge';
 type LeadTag = 'hot' | 'cold';
@@ -133,9 +161,21 @@ export default function CRM() {
   const [isRecoveryView, setIsRecoveryView] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date | undefined>(new Date());
+  const [selectedMeetingDate, setSelectedMeetingDate] = useState<string>('');
 
   const [searchTerm, setSearchTerm] = useState('');
   const [newLeadStatus, setNewLeadStatus] = useState<LeadStatus>('lead');
+
+  useEffect(() => {
+    if (isAddDialogOpen) {
+      if (newLeadStatus === 'meeting' && calendarSelectedDate) {
+        setSelectedMeetingDate(format(calendarSelectedDate, 'yyyy-MM-dd'));
+      } else {
+        setSelectedMeetingDate('');
+      }
+    }
+  }, [isAddDialogOpen, newLeadStatus, calendarSelectedDate]);
+
 
   const { data: leads = [], isLoading: leadsLoading } = useQuery({
     queryKey: ['crm_leads'],
@@ -1272,6 +1312,8 @@ function LeadDetailsDialog({
 function MeetingActions({ lead, leads, onUpdate }: { lead: Lead; leads: Lead[]; onUpdate: () => void }) {
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [selectedRescheduleDate, setSelectedRescheduleDate] = useState<string>(normalizeMeetingDateInput(lead.meeting_date));
+
 
   const handleReschedule = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -1280,26 +1322,9 @@ function MeetingActions({ lead, leads, onUpdate }: { lead: Lead; leads: Lead[]; 
     const m_time = formData.get('time') as string;
     const briefing = formData.get('sdr_briefing') as string;
 
-    if (!m_date) {
-      toast.error('Data da reunião inválida.');
+    if (!m_date || !m_time) {
+      toast.error('Data e horário são obrigatórios.');
       return;
-    }
-
-    if (m_time) {
-      const existingOnDate = leads.filter(l => l.meeting_date === m_date && l.meeting_time && l.id !== lead.id);
-      const [h, m] = m_time.split(':').map(Number);
-      const newTimeMinutes = h * 60 + m;
-
-      const hasConflict = existingOnDate.some(l => {
-        const [lh, lm] = l.meeting_time!.split(':').map(Number);
-        const leadTimeMinutes = lh * 60 + lm;
-        return Math.abs(newTimeMinutes - leadTimeMinutes) < 90;
-      });
-
-      if (hasConflict) {
-        toast.error('Horário indisponível: Mínimo 1h30 de intervalo entre reuniões.');
-        return;
-      }
     }
 
     const { error } = await supabase
@@ -1355,17 +1380,30 @@ function MeetingActions({ lead, leads, onUpdate }: { lead: Lead; leads: Lead[]; 
                     type="date"
                     name="date"
                     required
-                    defaultValue={normalizeMeetingDateInput(lead.meeting_date)}
+                    value={selectedRescheduleDate}
+                    onChange={(e) => setSelectedRescheduleDate(e.target.value)}
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label>Horário</Label>
-                  <Input
-                    type="time"
-                    name="time"
-                    required
-                    defaultValue={lead.meeting_time?.slice(0, 5) ?? ''}
-                  />
+                  <Label>Horário Disponível</Label>
+                  <Select name="time" required defaultValue={lead.meeting_time?.slice(0, 5) ?? ''}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o horário" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {selectedRescheduleDate ? (
+                        getAvailableTimeSlots(selectedRescheduleDate, leads, lead.id).length > 0 ? (
+                          getAvailableTimeSlots(selectedRescheduleDate, leads, lead.id).map(slot => (
+                            <SelectItem key={slot} value={slot}>{slot}</SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="none" disabled>Nenhum horário disponível</SelectItem>
+                        )
+                      ) : (
+                        <SelectItem value="none" disabled>Selecione a data primeiro</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 

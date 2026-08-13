@@ -1,23 +1,28 @@
 import fs from 'fs';
 import path from 'path';
 
-// Este script gera um identificador único de build para forçar o navegador a recarregar
-const buildId = new Date().getTime();
-const buildVersion = {
-  version: "1.0." + buildId,
-  timestamp: new Date().toISOString(),
-  forceRefresh: true
+const buildId = {
+  version: Date.now().toString(),
+  timestamp: new Date().toISOString()
 };
 
 const distPath = path.join(process.cwd(), 'dist');
-// O build-version.json deve estar na raiz do servidor estático (dentro de dist/)
 if (!fs.existsSync(distPath)) {
   fs.mkdirSync(distPath, { recursive: true });
 }
 
 fs.writeFileSync(
   path.join(distPath, 'build-version.json'),
-  JSON.stringify(buildVersion, null, 2)
+  JSON.stringify(buildId, null, 2)
 );
 
-console.log(`Build version ${buildVersion.version} generated in dist/build-version.json`);
+// Also write to public for dev mode consistency
+const publicPath = path.join(process.cwd(), 'public');
+if (fs.existsSync(publicPath)) {
+  fs.writeFileSync(
+    path.join(publicPath, 'build-version.json'),
+    JSON.stringify(buildId, null, 2)
+  );
+}
+
+console.log(`Build ID generated: ${buildId.version}`);

@@ -1,7 +1,7 @@
 // CRM: Sistema inteligente com prevenção de conflitos e validação atômica no backend (intervalo 1h30).
 // Reparo de Auth: Se houver erro de autenticação, acesse /repair-auth para sincronizar.
 // Agenda CRM: Sistema de Briefing SDR -> Closer e lembretes 24h implementados.
-// Cache-Busting: Para ver atualizações na VPS, use o comando completo que limpa cache e reinicia processos.
+// Cache-Busting: Estratégia de "Hard Reload" ativada para garantir que as atualizações fiquem visíveis na VPS.
 // Agenda CRM Calendário: Regra de intervalo mínimo de 1h30 entre reuniões implementada.
 
 
@@ -9,7 +9,7 @@
 
 
 export const SupabaseCheck = () => {
-  const deployCommand = "cd /var/www/pulsegrowthmarketing && git stash push -m \"pre-deploy\" && git pull && npm install && rm -rf dist && node scripts/generate-build-id.mjs && npm run build && (pm2 delete pulse-uploads 2>/dev/null || true) && pm2 restart pulse-api --update-env && sudo systemctl reload nginx && pm2 status";
+  const deployCommand = "cd /var/www/pulsegrowthmarketing && git stash push -m \"pre-deploy\" && git pull && npm install && rm -rf dist && node scripts/generate-build-id.mjs && npm run build && pm2 restart pulse-api --update-env && sudo systemctl reload nginx && pm2 status";
 
   return (
     <div className="min-h-screen bg-background p-8 flex flex-col items-center justify-start space-y-12">

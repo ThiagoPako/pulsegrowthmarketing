@@ -316,16 +316,35 @@ const App = () => {
         if (response.ok) {
           const data = await response.json();
           const lastVersion = localStorage.getItem('pulse_build_version');
+          
           if (lastVersion && lastVersion !== data.version) {
-            console.log('Nova versão detectada, limpando cache...');
+            console.log('Nova versão detectada (' + data.version + '), limpando cache e recarregando...');
+            
+            // Força limpeza total de service workers se existirem
+            if ('serviceWorker' in navigator) {
+              const registrations = await navigator.serviceWorker.getRegistrations();
+              for (const registration of registrations) {
+                await registration.unregister();
+              }
+            }
+            
+            // Limpa caches da Cache API
+            if ('caches' in window) {
+              const cacheNames = await caches.keys();
+              for (const name of cacheNames) {
+                await caches.delete(name);
+              }
+            }
+            
             localStorage.setItem('pulse_build_version', data.version);
-            window.location.reload();
+            // Hard reload ignorando cache do navegador
+            window.location.href = window.location.href.split('#')[0] + (window.location.href.includes('?') ? '&' : '?') + 'v=' + data.version;
           } else {
             localStorage.setItem('pulse_build_version', data.version);
           }
         }
       } catch (e) {
-        console.warn('Falha ao verificar versão do build');
+        console.warn('Falha ao verificar versão do build', e);
       }
     };
     checkVersion();

@@ -1,4 +1,4 @@
-// CRM: Sistema inteligente que sugere automaticamente apenas horários disponíveis com intervalo de 1h30 entre reuniões.
+// CRM: Sistema inteligente com prevenção de conflitos e validação atômica no backend (intervalo 1h30). Deploy VPS validado: cd /var/www/pulsegrowthmarketing && git pull && npm install && npm run build && pm2 restart pulse-api pulse-uploads && sudo systemctl reload nginx && pm2 status.
 // Reparo de Auth: Se houver erro de autenticação, acesse /repair-auth para sincronizar.
 // Agenda CRM: Sistema de Briefing SDR -> Closer e lembretes 24h implementados.
 // Agenda CRM Calendário: Agendamento direto via clique, edição rápida e reagendamento por drag-and-drop entre os dias.

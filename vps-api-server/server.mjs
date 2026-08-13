@@ -333,6 +333,29 @@ function splitOrFilterParts(value) {
   return parts;
 }
 
+async function validateMeetingConflict(meetingDate, meetingTime, excludeLeadId = null) {
+  if (!meetingDate || !meetingTime) return;
+
+  const { rows: existingMeetings } = await pool.query(
+    `SELECT id, meeting_time FROM crm_leads 
+     WHERE meeting_date = $1 
+       AND meeting_time IS NOT NULL 
+       AND ($2::uuid IS NULL OR id != $2)`,
+    [meetingDate, excludeLeadId]
+  );
+
+  const [h, m] = meetingTime.split(':').map(Number);
+  const newTimeMinutes = h * 60 + m;
+
+  for (const m of existingMeetings) {
+    const [lh, lm] = m.meeting_time.split(':').map(Number);
+    const leadTimeMinutes = lh * 60 + lm;
+    if (Math.abs(newTimeMinutes - leadTimeMinutes) < 90) {
+      throw new Error(`Horário indisponível: Já existe uma reunião às ${m.meeting_time.slice(0, 5)} (mínimo 1h30 de intervalo).`);
+    }
+  }
+}
+
 async function ensureProposalTables() {
   if (!proposalTablesEnsuredPromise) {
     proposalTablesEnsuredPromise = pool.query(`
@@ -5410,6 +5433,10 @@ app.post('/api/db/query', async (req, res) => {
           await ensureCrmLeadsColumns();
         }
         for (const item of items) {
+          if (safeTable === 'crm_leads' && item.status === 'meeting') {
+            await validateMeetingConflict(item.meeting_date, item.meeting_time);
+          }
+
 
           // Multi-city: força city para a cidade ativa (ignora qualquer valor enviado pelo cliente)
           const itemScoped = scopeCity
@@ -5552,10 +5579,23 @@ app.post('/api/db/query', async (req, res) => {
         }
 
 
-        const jsonColumns = await getTableJsonColumns(safeTable);
         const scopedData = scopeCity
           ? { ...data, city: assertValidCity(activeCity) }
           : (data && data.city !== undefined ? { ...data, city: assertValidCity(data.city) } : data);
+
+        if (safeTable === 'crm_leads' && (scopedData.meeting_date || scopedData.meeting_time || scopedData.status === 'meeting')) {
+          const leadId = filters?.find(f => f.column === 'id' && f.op === 'eq')?.value;
+          const { rows: currentLead } = await pool.query(`SELECT meeting_date, meeting_time, status FROM crm_leads WHERE id = $1`, [leadId]);
+          
+          const mDate = scopedData.meeting_date || currentLead[0]?.meeting_date;
+          const mTime = scopedData.meeting_time || currentLead[0]?.meeting_time;
+          const status = scopedData.status || currentLead[0]?.status;
+
+          if (status === 'meeting') {
+            await validateMeetingConflict(mDate, mTime, leadId);
+          }
+        }
+
         const existingColumns = await getExistingColumns(safeTable);
         const entries = Object.entries(scopedData)
           .map(([key, value]) => [sanitizeIdentifier(key), value])

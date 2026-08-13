@@ -1,4 +1,4 @@
-// CRM: Sistema inteligente que sugere automaticamente apenas horários disponíveis com intervalo de 1h30 entre reuniões.
+// CRM: Sistema inteligente com prevenção de conflitos e validação atômica no backend (intervalo 1h30).
 // Reparo de Auth: Se houver erro de autenticação, acesse /repair-auth para sincronizar.
 // Agenda CRM: Sistema de Briefing SDR -> Closer e lembretes 24h implementados.
 // Agenda CRM Calendário: Agendamento direto via clique, edição rápida e reagendamento por drag-and-drop entre os dias.

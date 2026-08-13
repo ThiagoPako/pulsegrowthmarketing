@@ -26,7 +26,7 @@ import { CRMBanner } from '@/components/crm/CRMBanner';
 
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
-import { format, isSameDay, isToday, parseISO } from 'date-fns';
+import { format, isSameDay, isToday, parseISO, addDays, isWithinInterval, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 function normalizeMeetingDateInput(value?: string | null) {
@@ -96,6 +96,7 @@ interface Lead {
   meeting_notes: string | null;
   sdr_id: string | null;
   closer_id: string | null;
+  reminder_sent_24h: boolean | null;
 }
 
 
@@ -128,7 +129,7 @@ export default function CRM() {
   const { user, profile } = useAuth();
   const canEdit = profile?.role === 'admin' || profile?.role === 'social_media';
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'goals' | 'calendar' | 'harvester'>('pipeline');
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'goals' | 'calendar' | 'harvester' | 'meetings'>('pipeline');
   const [isRecoveryView, setIsRecoveryView] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
@@ -469,6 +470,9 @@ export default function CRM() {
             <TabsTrigger value="calendar" className="gap-2 px-6">
               <CalendarIcon className="h-4 w-4" /> Calendário
             </TabsTrigger>
+            <TabsTrigger value="meetings" className="gap-2 px-6">
+              <Clock className="h-4 w-4" /> Gestão de Reuniões
+            </TabsTrigger>
             <TabsTrigger value="harvester" className="gap-2 px-6">
               <Sprout className="h-4 w-4" /> Colheita de Leads
             </TabsTrigger>
@@ -749,6 +753,118 @@ export default function CRM() {
               </div>
             </div>
           </Card>
+        </TabsContent>
+        
+        <TabsContent value="meetings" className="m-0 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Reuniões de Hoje */}
+            <Card className="p-6 border-none shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold flex items-center gap-2 text-primary">
+                  <CalendarIcon className="h-5 w-5" /> Hoje
+                </h3>
+                <Badge variant="secondary" className="bg-primary/10 text-primary border-none">
+                  {leads.filter(l => l.meeting_date && isToday(parseISO(l.meeting_date))).length} Agendadas
+                </Badge>
+              </div>
+              <div className="space-y-3">
+                {leads
+                  .filter(l => l.meeting_date && isToday(parseISO(l.meeting_date)))
+                  .sort((a, b) => (a.meeting_time || '').localeCompare(b.meeting_time || ''))
+                  .map(lead => (
+                    <div key={lead.id} className="p-4 rounded-xl bg-muted/30 border border-muted/50 hover:bg-muted/50 transition-colors group">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold">{lead.meeting_time?.slice(0, 5)}</span>
+                            <span className="text-xs font-medium text-muted-foreground tracking-tighter uppercase">· {lead.name}</span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-1">{lead.company || 'Pessoa Física'}</p>
+                          <div className="flex items-center gap-2 mt-2">
+                            {lead.reminder_sent_24h ? (
+                              <Badge variant="outline" className="text-[9px] bg-green-50 text-green-600 border-green-200">
+                                Lembrete Enviado
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[9px] bg-orange-50 text-orange-600 border-orange-200">
+                                Lembrete Pendente
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <LeadDetailsDialog 
+                          lead={lead} 
+                          onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
+                          onEdit={(data) => updateLead.mutate(data)}
+                          onDelete={(id) => deleteLead.mutate(id)}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                {leads.filter(l => l.meeting_date && isToday(parseISO(l.meeting_date))).length === 0 && (
+                  <p className="text-center py-8 text-sm text-muted-foreground italic">Nenhuma reunião para hoje.</p>
+                )}
+              </div>
+            </Card>
+
+            {/* Próximos 7 Dias */}
+            <Card className="p-6 border-none shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold flex items-center gap-2 text-primary">
+                  <TrendingUp className="h-5 w-5" /> Próximos 7 Dias
+                </h3>
+                <Badge variant="secondary" className="bg-muted text-muted-foreground border-none">
+                  {leads.filter(l => {
+                    if (!l.meeting_date) return false;
+                    const date = parseISO(l.meeting_date);
+                    const today = startOfDay(new Date());
+                    const next7Days = addDays(today, 7);
+                    return isWithinInterval(date, { start: addDays(today, 1), end: next7Days });
+                  }).length} Total
+                </Badge>
+              </div>
+              <div className="space-y-3">
+                {leads
+                  .filter(l => {
+                    if (!l.meeting_date) return false;
+                    const date = parseISO(l.meeting_date);
+                    const today = startOfDay(new Date());
+                    const next7Days = addDays(today, 7);
+                    return isWithinInterval(date, { start: addDays(today, 1), end: next7Days });
+                  })
+                  .sort((a, b) => (a.meeting_date || '').localeCompare(b.meeting_date || ''))
+                  .map(lead => (
+                    <div key={lead.id} className="p-4 rounded-xl bg-muted/30 border border-muted/50 hover:bg-muted/50 transition-colors flex justify-between items-center group">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-[10px] font-bold">
+                            {format(parseISO(lead.meeting_date!), 'dd/MM')}
+                          </Badge>
+                          <span className="text-sm font-bold">{lead.meeting_time?.slice(0, 5)}</span>
+                          <span className="text-xs text-muted-foreground tracking-tighter uppercase">· {lead.name}</span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-1">{lead.company || 'Pessoa Física'}</p>
+                      </div>
+                      <LeadDetailsDialog 
+                        lead={lead} 
+                        onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
+                        onEdit={(data) => updateLead.mutate(data)}
+                        onDelete={(id) => deleteLead.mutate(id)}
+                      />
+                    </div>
+                  ))}
+                {leads.filter(l => {
+                  if (!l.meeting_date) return false;
+                  const date = parseISO(l.meeting_date);
+                  const today = startOfDay(new Date());
+                  const next7Days = addDays(today, 7);
+                  return isWithinInterval(date, { start: addDays(today, 1), end: next7Days });
+                }).length === 0 && (
+                  <p className="text-center py-8 text-sm text-muted-foreground italic">Nenhuma reunião nos próximos 7 dias.</p>
+                )}
+              </div>
+            </Card>
+          </div>
         </TabsContent>
         
         <TabsContent value="harvester" className="m-0">

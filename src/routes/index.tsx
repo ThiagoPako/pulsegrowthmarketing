@@ -2,7 +2,7 @@
 // Reparo de Auth: Se houver erro de autenticação, acesse /repair-auth para sincronizar.
 // Agenda CRM: Sistema de Briefing SDR -> Closer e lembretes 24h implementados.
 // Agenda CRM Calendário: Agendamento direto via clique, edição rápida e reagendamento por drag-and-drop entre os dias.
-// VPS Sync: 502/401 errors resolved via atomic repair.
+// Agenda CRM Calendário: Regra de intervalo mínimo de 1h30 entre reuniões implementada.
 
 
 

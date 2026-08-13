@@ -349,6 +349,26 @@ export default function CRM() {
                 const formData = new FormData(e.currentTarget);
                 const mDate = formData.get('meeting_date') as string;
                 const mTime = formData.get('meeting_time') as string;
+                const dateToCheck = mDate || (calendarSelectedDate ? format(calendarSelectedDate, 'yyyy-MM-dd') : null);
+
+                if (newLeadStatus === 'meeting' && dateToCheck && mTime) {
+                  const existingMeetings = leads.filter(l => l.meeting_date === dateToCheck && l.meeting_time);
+                  const newTimeMinutes = (() => {
+                    const [h, m] = mTime.split(':').map(Number);
+                    return h * 60 + m;
+                  })();
+
+                  const hasConflict = existingMeetings.some(l => {
+                    const [lh, lm] = l.meeting_time!.split(':').map(Number);
+                    const leadTimeMinutes = lh * 60 + lm;
+                    return Math.abs(newTimeMinutes - leadTimeMinutes) < 90;
+                  });
+
+                  if (hasConflict) {
+                    toast.error('Já existe uma reunião agendada em um horário muito próximo (mínimo 1h30 de intervalo).');
+                    return;
+                  }
+                }
 
                 createLead.mutate({
                   name: formData.get('name') as string,
@@ -359,7 +379,7 @@ export default function CRM() {
                   city: formData.get('city') as string,
                   description: formData.get('description') as string,
                   status: newLeadStatus,
-                  meeting_date: newLeadStatus === 'meeting' ? (mDate || (calendarSelectedDate ? format(calendarSelectedDate, 'yyyy-MM-dd') : null)) : null,
+                  meeting_date: newLeadStatus === 'meeting' ? dateToCheck : null,
                   meeting_time: newLeadStatus === 'meeting' ? (mTime || null) : null,
                   source_tag: formData.get('source_tag') as string || null,
                   referral_info: formData.get('source_tag') === 'indicacao' ? {
@@ -751,6 +771,24 @@ export default function CRM() {
                     
                     const lead = leads.find(l => l.id === leadId);
                     if (lead && lead.meeting_date !== newDateStr) {
+                      // Check for conflicts on the destination date if time exists
+                      if (lead.meeting_time) {
+                        const existingOnDate = leads.filter(l => l.meeting_date === newDateStr && l.meeting_time && l.id !== lead.id);
+                        const [h, m] = lead.meeting_time.split(':').map(Number);
+                        const movingTimeMinutes = h * 60 + m;
+
+                        const hasConflict = existingOnDate.some(l => {
+                          const [lh, lm] = l.meeting_time!.split(':').map(Number);
+                          const leadTimeMinutes = lh * 60 + lm;
+                          return Math.abs(movingTimeMinutes - leadTimeMinutes) < 90;
+                        });
+
+                        if (hasConflict) {
+                          toast.error('Conflito de horário: Mínimo 1h30 entre reuniões.');
+                          return;
+                        }
+                      }
+
                       updateLead.mutate({
                         id: leadId,
                         meeting_date: newDateStr,
@@ -803,7 +841,7 @@ export default function CRM() {
                                             </div>
                                           </div>
                                           <div className="flex items-center gap-1">
-                                            <MeetingActions lead={lead} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                                            <MeetingActions lead={lead} leads={leads} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
                                             <LeadDetailsDialog 
                                               lead={lead} 
                                               onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
@@ -872,12 +910,15 @@ export default function CRM() {
                             )}
                           </div>
                         </div>
-                        <LeadDetailsDialog 
-                          lead={lead} 
-                          onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
-                          onEdit={(data) => updateLead.mutate(data)}
-                          onDelete={(id) => deleteLead.mutate(id)}
-                        />
+                        <div className="flex items-center gap-1">
+                          <MeetingActions lead={lead} leads={leads} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                          <LeadDetailsDialog 
+                            lead={lead} 
+                            onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
+                            onEdit={(data) => updateLead.mutate(data)}
+                            onDelete={(id) => deleteLead.mutate(id)}
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -925,12 +966,15 @@ export default function CRM() {
                         </div>
                         <p className="text-[11px] text-muted-foreground mt-1">{lead.company || 'Pessoa Física'}</p>
                       </div>
-                      <LeadDetailsDialog 
-                        lead={lead} 
-                        onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
-                        onEdit={(data) => updateLead.mutate(data)}
-                        onDelete={(id) => deleteLead.mutate(id)}
-                      />
+                      <div className="flex items-center gap-1">
+                        <MeetingActions lead={lead} leads={leads} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                        <LeadDetailsDialog 
+                          lead={lead} 
+                          onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
+                          onEdit={(data) => updateLead.mutate(data)}
+                          onDelete={(id) => deleteLead.mutate(id)}
+                        />
+                      </div>
                     </div>
                   ))}
                 {leads.filter(l => {
@@ -1225,7 +1269,7 @@ function LeadDetailsDialog({
   );
 }
 
-function MeetingActions({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }) {
+function MeetingActions({ lead, leads, onUpdate }: { lead: Lead; leads: Lead[]; onUpdate: () => void }) {
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -1240,6 +1284,24 @@ function MeetingActions({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }
       toast.error('Data da reunião inválida.');
       return;
     }
+
+    if (m_time) {
+      const existingOnDate = leads.filter(l => l.meeting_date === m_date && l.meeting_time && l.id !== lead.id);
+      const [h, m] = m_time.split(':').map(Number);
+      const newTimeMinutes = h * 60 + m;
+
+      const hasConflict = existingOnDate.some(l => {
+        const [lh, lm] = l.meeting_time!.split(':').map(Number);
+        const leadTimeMinutes = lh * 60 + lm;
+        return Math.abs(newTimeMinutes - leadTimeMinutes) < 90;
+      });
+
+      if (hasConflict) {
+        toast.error('Horário indisponível: Mínimo 1h30 de intervalo entre reuniões.');
+        return;
+      }
+    }
+
     const { error } = await supabase
       .from('crm_leads')
       .update({ 
@@ -1320,7 +1382,7 @@ function MeetingActions({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }
               <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-start gap-2">
                 <Info className="h-4 w-4 text-blue-500 mt-0.5" />
                 <p className="text-[10px] text-blue-700 leading-tight">
-                  <strong>Lembrete Automático:</strong> O sistema enviará um lembrete de confirmação via WhatsApp para o cliente 24h antes do horário agendado.
+                  <strong>Regra de Intervalo:</strong> O sistema exige um intervalo mínimo de 1h30 entre as reuniões para garantir a qualidade do atendimento.
                 </p>
               </div>
 

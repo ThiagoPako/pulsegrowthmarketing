@@ -1,52 +1,66 @@
 #!/usr/bin/env bash
-# Deploy Pulse Growth Marketing na VPS (force-sync com o GitHub)
-# Uso: bash scripts/deploy-vps.sh
+# Deploy definitivo Pulse Growth Marketing: GitHub -> build -> Nginx
 set -euo pipefail
 
 APP_DIR="/var/www/pulsegrowthmarketing"
+DOMAIN="agenciapulse.tech"
 cd "$APP_DIR"
 
-echo "==> 1. Diagnostico inicial"
-echo "Pasta atual: $(pwd)"
-echo "Branch atual: $(git rev-parse --abbrev-ref HEAD)"
-echo "Commit local ANTES: $(git rev-parse --short HEAD)"
-
-echo "==> 2. Descobrindo branch remota principal"
+echo "==> 1. Sincronizando com a branch principal do GitHub"
 git fetch origin --prune
-BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-if ! git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
-  BRANCH="$(git remote show origin | sed -n 's/.*HEAD branch: //p')"
+BRANCH="$(git remote show origin | sed -n 's/.*HEAD branch: //p')"
+if [ -z "$BRANCH" ] || ! git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
+  BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 fi
-echo "Branch de deploy: $BRANCH"
-
-echo "==> 3. Force sync com origin/$BRANCH (descarta alteracoes locais de codigo)"
 git reset --hard "origin/$BRANCH"
-git clean -fd -e node_modules -e .env -e dist -e uploads
-echo "Commit local DEPOIS: $(git rev-parse --short HEAD)"
+git clean -fd -e node_modules -e .env -e uploads
+DEPLOY_COMMIT="$(git rev-parse HEAD)"
+echo "Commit: $DEPLOY_COMMIT"
 
-echo "==> 4. Dependencias"
+echo "==> 2. Instalando dependencias e gerando build limpo"
 npm install --no-audit --no-fund
-
-echo "==> 5. Build limpo com novo build id"
 rm -rf dist
 node scripts/generate-build-id.mjs
 npm run build
+test -s dist/index.html
+test -s dist/build-version.json
+printf '%s\n' "$DEPLOY_COMMIT" > dist/deploy-commit.txt
 
-echo "==> 6. Reiniciando servicos"
+echo "==> 3. Corrigindo o root do Nginx"
+while IFS= read -r CONFIG; do
+  [ -f "$CONFIG" ] || continue
+  if grep -Eq 'root[[:space:]]+/(var/www/html|var/www/pulsegrowthmarketing)(/dist)?[[:space:]]*;' "$CONFIG"; then
+    sudo cp "$CONFIG" "$CONFIG.bak.$(date +%Y%m%d%H%M%S)"
+    sudo sed -Ei 's#root[[:space:]]+/(var/www/html|var/www/pulsegrowthmarketing)(/dist)?[[:space:]]*;#root /var/www/pulsegrowthmarketing/dist;#g' "$CONFIG"
+  fi
+done < <(find -L /etc/nginx/sites-enabled -maxdepth 1 -type f 2>/dev/null)
+sudo nginx -t
+
+echo "==> 4. Reiniciando API e recarregando Nginx"
 pm2 restart pulse-api --update-env || pm2 start vps-api-server/server.mjs --name pulse-api
-pm2 restart pulse-uploads --update-env 2>/dev/null || true
+if pm2 describe pulse-uploads >/dev/null 2>&1; then
+  pm2 restart pulse-uploads --update-env
+fi
 sudo systemctl reload nginx
 
-echo "==> 7. Verificacao final"
+echo "==> 5. Confirmando que o Nginx entrega o build novo"
+LOCAL_ASSET="$(grep -o 'assets/[^\"]*\.js' dist/index.html | head -1)"
+SERVED_HTML="$(curl -fsS -H "Host: $DOMAIN" -H 'Cache-Control: no-cache' "http://127.0.0.1/index.html?deploy=$(date +%s)")"
+SERVED_ASSET="$(printf '%s' "$SERVED_HTML" | grep -o 'assets/[^\"]*\.js' | head -1)"
+
+echo "Asset no build: $LOCAL_ASSET"
+echo "Asset servido:  $SERVED_ASSET"
+if [ -z "$LOCAL_ASSET" ] || [ "$LOCAL_ASSET" != "$SERVED_ASSET" ]; then
+  echo "ERRO: Nginx nao esta servindo $APP_DIR/dist. Roots ativos:"
+  sudo nginx -T 2>/dev/null | grep -E 'server_name|root ' | tail -30
+  exit 1
+fi
+
+PUBLIC_COMMIT="$(curl -fsS -H "Host: $DOMAIN" -H 'Cache-Control: no-cache' "http://127.0.0.1/deploy-commit.txt?deploy=$(date +%s)" | tr -d '\r\n')"
+if [ "$PUBLIC_COMMIT" != "$DEPLOY_COMMIT" ]; then
+  echo "ERRO: commit servido ($PUBLIC_COMMIT) difere do commit gerado ($DEPLOY_COMMIT)."
+  exit 1
+fi
+
 pm2 status
-echo "--- build-version.json gerado ---"
-cat dist/build-version.json 2>/dev/null || echo "(nao encontrado)"
-echo "--- root(s) configurados no nginx ---"
-grep -rhn "root " /etc/nginx/sites-enabled/ | sed 's/^/  /'
-echo "--- index.html servido pelo nginx ---"
-curl -s -H "Cache-Control: no-cache" http://127.0.0.1/index.html | grep -o 'assets/[^"]*\.js' | head -5
-echo "--- index.html no dist ---"
-grep -o 'assets/[^"]*\.js' dist/index.html | head -5
-echo ""
-echo "Se as duas listas de assets acima forem DIFERENTES, o nginx NAO esta servindo $APP_DIR/dist."
-echo "Deploy finalizado."
+echo "DEPLOY CONFIRMADO: commit $DEPLOY_COMMIT esta publicado."

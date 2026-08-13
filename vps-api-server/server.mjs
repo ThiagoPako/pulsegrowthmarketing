@@ -124,6 +124,13 @@ async function ensureCrmLeadsColumns() {
         if (!columns.has('city')) alter.push('ADD COLUMN city TEXT');
         if (!columns.has('source_tag')) alter.push('ADD COLUMN source_tag TEXT');
         if (!columns.has('referral_info')) alter.push('ADD COLUMN referral_info JSONB');
+        if (!columns.has('meeting_date')) alter.push('ADD COLUMN meeting_date DATE');
+        if (!columns.has('meeting_time')) alter.push('ADD COLUMN meeting_time TIME');
+        if (!columns.has('closer_id')) alter.push('ADD COLUMN closer_id UUID');
+        if (!columns.has('sdr_id')) alter.push('ADD COLUMN sdr_id UUID');
+        if (!columns.has('sdr_briefing')) alter.push('ADD COLUMN sdr_briefing TEXT');
+        if (!columns.has('meeting_notes')) alter.push('ADD COLUMN meeting_notes TEXT');
+        if (!columns.has('reminder_sent_24h')) alter.push('ADD COLUMN reminder_sent_24h BOOLEAN DEFAULT FALSE');
 
         if (alter.length > 0) {
           await pool.query(`ALTER TABLE crm_leads ${alter.join(', ')}`).catch(err => {
@@ -9098,6 +9105,42 @@ app.post('/api/crm/harvest/search', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Cron-like task for CRM meeting reminders
+setInterval(async () => {
+  try {
+    // Busca reuniões agendadas para amanhã (24h de antecedência) que ainda não tiveram lembrete enviado
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+
+    const { rows: pendingReminders } = await pool.query(
+      `SELECT id, name, phone, meeting_time, company 
+       FROM crm_leads 
+       WHERE status = 'meeting' 
+         AND meeting_date = $1 
+         AND reminder_sent_24h = FALSE 
+         AND phone IS NOT NULL`,
+      [tomorrowStr]
+    );
+
+    for (const lead of pendingReminders) {
+      console.log(`[CRM-Reminder] Sending reminder to ${lead.name} (${lead.phone}) for meeting at ${lead.meeting_time}`);
+      
+      // Aqui integraria com a API de WhatsApp (ex: Evolution API ou Z-API)
+      // Por enquanto simulamos o envio e marcamos como enviado no banco
+      const message = `Olá ${lead.name}, aqui é da Agência Pulse! Passando para confirmar nossa reunião de amanhã às ${lead.meeting_time?.slice(0, 5)}. Podemos confirmar?`;
+      
+      // Mock de envio bem sucedido
+      await pool.query(
+        `UPDATE crm_leads SET reminder_sent_24h = TRUE WHERE id = $1`,
+        [lead.id]
+      );
+    }
+  } catch (err) {
+    console.error('[CRM-Reminder-Error]', err);
+  }
+}, 1000 * 60 * 60); // Roda a cada 1 hora
 
 // ─── Start ──────────────────────────────────────────────────
 

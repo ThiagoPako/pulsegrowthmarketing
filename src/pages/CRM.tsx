@@ -346,7 +346,9 @@ export default function CRM() {
 
   return (
     <div className="p-4 md:p-6 h-full flex flex-col gap-6 bg-background/50">
-      <CRMBanner key={meetingRefreshKey} />
+      <div className="mb-6">
+        <CRMBanner key={meetingRefreshKey} />
+      </div>
 
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>

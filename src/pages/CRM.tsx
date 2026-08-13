@@ -340,9 +340,9 @@ export default function CRM() {
                 Novo Lead
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
-                <DialogTitle>Novo Lead Comercial</DialogTitle>
+                <DialogTitle>{newLeadStatus === 'meeting' ? 'Agendar Nova Reunião' : 'Novo Lead Comercial'}</DialogTitle>
               </DialogHeader>
               <form onSubmit={(e) => {
                 e.preventDefault();
@@ -483,7 +483,7 @@ export default function CRM() {
                   </Select>
                 </div>
                 <Button type="submit" className="w-full mt-4" disabled={createLead.isPending}>
-                  {createLead.isPending ? 'Cadastrando...' : 'Criar Oportunidade'}
+                  {createLead.isPending ? 'Cadastrando...' : (newLeadStatus === 'meeting' ? 'Agendar e Criar Lead' : 'Criar Oportunidade')}
                 </Button>
               </form>
             </DialogContent>

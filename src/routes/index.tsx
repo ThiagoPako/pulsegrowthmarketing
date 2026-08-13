@@ -1,4 +1,4 @@
-// CRM: Sistema inteligente com prevenção de conflitos e validação atômica no backend (intervalo 1h30).
+// ainda nao atualizou , continua da mesma forma
 // Reparo de Auth: Se houver erro de autenticação, acesse /repair-auth para sincronizar.
 // Agenda CRM: Sistema de Briefing SDR -> Closer e lembretes 24h implementados.
 // Cache-Busting: Estratégia de "Hard Reload" ativada para garantir que as atualizações fiquem visíveis na VPS.

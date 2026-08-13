@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/vpsDb';
 import { useAuth } from '@/hooks/useAuth';
@@ -162,6 +162,7 @@ export default function CRM() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedMeetingDate, setSelectedMeetingDate] = useState<string>('');
+  const [meetingRefreshKey, setMeetingRefreshKey] = useState(0);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [newLeadStatus, setNewLeadStatus] = useState<LeadStatus>('lead');
@@ -230,6 +231,7 @@ export default function CRM() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
+      setMeetingRefreshKey(prev => prev + 1);
       toast.success('Lead atualizado!');
     },
   });
@@ -254,6 +256,7 @@ export default function CRM() {
 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
+      setMeetingRefreshKey(prev => prev + 1);
       toast.success('Lead atualizado com sucesso!');
     },
     onError: (error: any) => {
@@ -271,6 +274,7 @@ export default function CRM() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
+      setMeetingRefreshKey(prev => prev + 1);
       toast.success('Lead excluído com sucesso!');
     },
     onError: (error: any) => {
@@ -306,6 +310,7 @@ export default function CRM() {
       queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
       setIsAddDialogOpen(false);
       setNewLeadStatus('lead');
+      setMeetingRefreshKey(prev => prev + 1);
       toast.success('Novo lead cadastrado!');
     },
     onError: (error: any) => {
@@ -341,7 +346,7 @@ export default function CRM() {
 
   return (
     <div className="p-4 md:p-6 h-full flex flex-col gap-6 bg-background/50">
-      <CRMBanner />
+      <CRMBanner key={meetingRefreshKey} />
 
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -1268,6 +1273,7 @@ function LeadDetailsDialog({
                         const { error } = await supabase.from('crm_leads').update({ status: s.id } as any).eq('id', lead.id);
                         if (!error) {
                           onUpdate();
+                          setMeetingRefreshKey(prev => prev + 1);
                           toast.success(`Lead movido para ${s.label}`);
                         }
                       }}
@@ -1364,6 +1370,7 @@ function MeetingActions({ lead, leads, onUpdate }: { lead: Lead; leads: Lead[]; 
     }
     setOpen(false);
     onUpdate();
+    setMeetingRefreshKey(prev => prev + 1);
     toast.success('Reunião reagendada!');
   };
 
@@ -1378,6 +1385,7 @@ function MeetingActions({ lead, leads, onUpdate }: { lead: Lead; leads: Lead[]; 
     }
     setConfirmDelete(false);
     onUpdate();
+    setMeetingRefreshKey(prev => prev + 1);
     toast.success('Reunião removida. Lead voltou para Contato Efetuado.');
   };
 

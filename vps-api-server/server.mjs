@@ -9106,6 +9106,42 @@ app.post('/api/crm/harvest/search', async (req, res) => {
   }
 });
 
+// Cron-like task for CRM meeting reminders
+setInterval(async () => {
+  try {
+    // Busca reuniões agendadas para amanhã (24h de antecedência) que ainda não tiveram lembrete enviado
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+
+    const { rows: pendingReminders } = await pool.query(
+      `SELECT id, name, phone, meeting_time, company 
+       FROM crm_leads 
+       WHERE status = 'meeting' 
+         AND meeting_date = $1 
+         AND reminder_sent_24h = FALSE 
+         AND phone IS NOT NULL`,
+      [tomorrowStr]
+    );
+
+    for (const lead of pendingReminders) {
+      console.log(`[CRM-Reminder] Sending reminder to ${lead.name} (${lead.phone}) for meeting at ${lead.meeting_time}`);
+      
+      // Aqui integraria com a API de WhatsApp (ex: Evolution API ou Z-API)
+      // Por enquanto simulamos o envio e marcamos como enviado no banco
+      const message = `Olá ${lead.name}, aqui é da Agência Pulse! Passando para confirmar nossa reunião de amanhã às ${lead.meeting_time?.slice(0, 5)}. Podemos confirmar?`;
+      
+      // Mock de envio bem sucedido
+      await pool.query(
+        `UPDATE crm_leads SET reminder_sent_24h = TRUE WHERE id = $1`,
+        [lead.id]
+      );
+    }
+  } catch (err) {
+    console.error('[CRM-Reminder-Error]', err);
+  }
+}, 1000 * 60 * 60); // Roda a cada 1 hora
+
 // ─── Start ──────────────────────────────────────────────────
 
 

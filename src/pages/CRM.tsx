@@ -712,6 +712,7 @@ export default function CRM() {
                                                   onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
                                                   onEdit={(data) => updateLead.mutate(data)}
                                                   onDelete={(id) => deleteLead.mutate(id)}
+                                                  onSetRefreshKey={setMeetingRefreshKey}
                                                 />
                                               </div>
 
@@ -908,12 +909,13 @@ export default function CRM() {
                                             </div>
                                           </div>
                                           <div className="flex items-center gap-1">
-                                            <MeetingActions lead={lead} leads={leads} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                                            <MeetingActions lead={lead} leads={leads} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} onSetRefreshKey={setMeetingRefreshKey} />
                                             <LeadDetailsDialog 
                                               lead={lead} 
                                               onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
                                               onEdit={(data) => updateLead.mutate(data)}
                                               onDelete={(id) => deleteLead.mutate(id)}
+                                              onSetRefreshKey={setMeetingRefreshKey}
                                             />
                                           </div>
                                         </div>
@@ -978,12 +980,13 @@ export default function CRM() {
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
-                          <MeetingActions lead={lead} leads={leads} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                          <MeetingActions lead={lead} leads={leads} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} onSetRefreshKey={setMeetingRefreshKey} />
                           <LeadDetailsDialog 
                             lead={lead} 
                             onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
                             onEdit={(data) => updateLead.mutate(data)}
                             onDelete={(id) => deleteLead.mutate(id)}
+                            onSetRefreshKey={setMeetingRefreshKey}
                           />
                         </div>
                       </div>
@@ -1034,12 +1037,13 @@ export default function CRM() {
                         <p className="text-[11px] text-muted-foreground mt-1">{lead.company || 'Pessoa Física'}</p>
                       </div>
                       <div className="flex items-center gap-1">
-                        <MeetingActions lead={lead} leads={leads} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} />
+                        <MeetingActions lead={lead} leads={leads} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })} onSetRefreshKey={setMeetingRefreshKey} />
                         <LeadDetailsDialog 
                           lead={lead} 
                           onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
                           onEdit={(data) => updateLead.mutate(data)}
                           onDelete={(id) => deleteLead.mutate(id)}
+                          onSetRefreshKey={setMeetingRefreshKey}
                         />
                       </div>
                     </div>
@@ -1107,12 +1111,14 @@ function LeadDetailsDialog({
   lead, 
   onUpdate,
   onEdit,
-  onDelete
+  onDelete,
+  onSetRefreshKey
 }: { 
   lead: Lead, 
   onUpdate: () => void,
   onEdit?: (lead: Partial<Lead> & { id: string }) => void,
-  onDelete?: (id: string) => void
+  onDelete?: (id: string) => void,
+  onSetRefreshKey?: React.Dispatch<React.SetStateAction<number>>
 }) {
   const [note, setNote] = useState('');
   const { data: notes = [] } = useQuery({
@@ -1273,7 +1279,7 @@ function LeadDetailsDialog({
                         const { error } = await supabase.from('crm_leads').update({ status: s.id } as any).eq('id', lead.id);
                         if (!error) {
                           onUpdate();
-                          setMeetingRefreshKey(prev => prev + 1);
+                          if (onSetRefreshKey) onSetRefreshKey(prev => prev + 1);
                           toast.success(`Lead movido para ${s.label}`);
                         }
                       }}
@@ -1337,7 +1343,7 @@ function LeadDetailsDialog({
   );
 }
 
-function MeetingActions({ lead, leads, onUpdate }: { lead: Lead; leads: Lead[]; onUpdate: () => void }) {
+function MeetingActions({ lead, leads, onUpdate, onSetRefreshKey }: { lead: Lead; leads: Lead[]; onUpdate: () => void; onSetRefreshKey?: React.Dispatch<React.SetStateAction<number>> }) {
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [selectedRescheduleDate, setSelectedRescheduleDate] = useState<string>(normalizeMeetingDateInput(lead.meeting_date));
@@ -1370,7 +1376,7 @@ function MeetingActions({ lead, leads, onUpdate }: { lead: Lead; leads: Lead[]; 
     }
     setOpen(false);
     onUpdate();
-    setMeetingRefreshKey(prev => prev + 1);
+    if (onSetRefreshKey) onSetRefreshKey(prev => prev + 1);
     toast.success('Reunião reagendada!');
   };
 
@@ -1385,7 +1391,7 @@ function MeetingActions({ lead, leads, onUpdate }: { lead: Lead; leads: Lead[]; 
     }
     setConfirmDelete(false);
     onUpdate();
-    setMeetingRefreshKey(prev => prev + 1);
+    if (onSetRefreshKey) onSetRefreshKey(prev => prev + 1);
     toast.success('Reunião removida. Lead voltou para Contato Efetuado.');
   };
 

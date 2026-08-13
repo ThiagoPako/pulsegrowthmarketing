@@ -1,6 +1,7 @@
 // CRM Colheita de Leads: Nicho de atuação em lista (CNAE/Min. Fazenda) via API VPS.
 // Reparo de Auth: Se houver erro de autenticação, acesse /repair-auth para sincronizar.
 // Agenda CRM: Sistema de Briefing SDR -> Closer e lembretes 24h implementados.
+// Agenda CRM Calendário: Agendamento direto via clique no calendário com criação automática de lead.
 // VPS Sync: 502/401 errors resolved via atomic repair.
 
 

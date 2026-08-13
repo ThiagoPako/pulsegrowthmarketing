@@ -333,6 +333,29 @@ function splitOrFilterParts(value) {
   return parts;
 }
 
+async function validateMeetingConflict(meetingDate, meetingTime, excludeLeadId = null) {
+  if (!meetingDate || !meetingTime) return;
+
+  const { rows: existingMeetings } = await pool.query(
+    `SELECT id, meeting_time FROM crm_leads 
+     WHERE meeting_date = $1 
+       AND meeting_time IS NOT NULL 
+       AND ($2::uuid IS NULL OR id != $2)`,
+    [meetingDate, excludeLeadId]
+  );
+
+  const [h, m] = meetingTime.split(':').map(Number);
+  const newTimeMinutes = h * 60 + m;
+
+  for (const m of existingMeetings) {
+    const [lh, lm] = m.meeting_time.split(':').map(Number);
+    const leadTimeMinutes = lh * 60 + lm;
+    if (Math.abs(newTimeMinutes - leadTimeMinutes) < 90) {
+      throw new Error(`Horário indisponível: Já existe uma reunião às ${m.meeting_time.slice(0, 5)} (mínimo 1h30 de intervalo).`);
+    }
+  }
+}
+
 async function ensureProposalTables() {
   if (!proposalTablesEnsuredPromise) {
     proposalTablesEnsuredPromise = pool.query(`

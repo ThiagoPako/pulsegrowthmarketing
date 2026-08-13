@@ -92,6 +92,10 @@ interface Lead {
   description: string | null;
   source_tag: string | null;
   referral_info: { referrer_name?: string; referrer_notes?: string } | null;
+  sdr_briefing: string | null;
+  meeting_notes: string | null;
+  sdr_id: string | null;
+  closer_id: string | null;
 }
 
 
@@ -896,6 +900,39 @@ function LeadDetailsDialog({
                   <p className="text-[10px] font-bold text-primary uppercase">Etiqueta de Temperatura</p>
                   <TagSelector leadId={lead.id} currentTag={lead.tag} />
                 </div>
+
+                {lead.status === 'meeting' && (
+                  <div className="p-4 rounded-xl bg-purple-50 border border-purple-100 space-y-4">
+                    <p className="text-[10px] font-bold text-purple-700 uppercase flex items-center gap-1">
+                      <Briefcase className="h-3 w-3" /> Briefing do SDR para o Closer
+                    </p>
+                    
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <Label className="text-[10px] font-bold text-purple-900/60 uppercase">O que o SDR conversou?</Label>
+                        <p className="text-xs text-purple-900 leading-relaxed bg-white/50 p-2 rounded border border-purple-200/50 italic">
+                          {lead.sdr_briefing || "Nenhum briefing registrado pelo SDR."}
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-bold text-purple-900/60 uppercase">Notas da Reunião (Closer)</Label>
+                        <Textarea 
+                          placeholder="O que foi decidido na reunião?" 
+                          className="bg-white border-purple-200 min-h-[80px] text-xs"
+                          defaultValue={lead.meeting_notes || ''}
+                          onBlur={async (e) => {
+                            const val = e.target.value;
+                            if (val !== lead.meeting_notes) {
+                              const { error } = await supabase.from('crm_leads').update({ meeting_notes: val } as any).eq('id', lead.id);
+                              if (!error) toast.success('Notas da reunião salvas!');
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1001,13 +1038,20 @@ function MeetingActions({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }
     const formData = new FormData(e.currentTarget);
     const m_date = normalizeMeetingDateInput(formData.get('date') as string);
     const m_time = formData.get('time') as string;
+    const briefing = formData.get('sdr_briefing') as string;
+
     if (!m_date) {
       toast.error('Data da reunião inválida.');
       return;
     }
     const { error } = await supabase
       .from('crm_leads')
-      .update({ meeting_date: m_date, meeting_time: m_time, status: 'meeting' } as any)
+      .update({ 
+        meeting_date: m_date, 
+        meeting_time: m_time, 
+        sdr_briefing: briefing,
+        status: 'meeting' 
+      } as any)
       .eq('id', lead.id);
     if (error) {
       toast.error('Não foi possível reagendar.');
@@ -1042,29 +1086,49 @@ function MeetingActions({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }
         </DialogTrigger>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reagendar Reunião - {lead.name}</DialogTitle>
+            <DialogTitle>Agendar/Reagendar Reunião - {lead.name}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleReschedule}>
             <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>Data da Reunião</Label>
+                  <Input
+                    type="date"
+                    name="date"
+                    required
+                    defaultValue={normalizeMeetingDateInput(lead.meeting_date)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Horário</Label>
+                  <Input
+                    type="time"
+                    name="time"
+                    required
+                    defaultValue={lead.meeting_time?.slice(0, 5) ?? ''}
+                  />
+                </div>
+              </div>
+
               <div className="grid gap-2">
-                <Label>Nova Data</Label>
-                <Input
-                  type="date"
-                  name="date"
-                  required
-                  defaultValue={normalizeMeetingDateInput(lead.meeting_date)}
+                <Label>Briefing do SDR (Contexto para o Closer)</Label>
+                <Textarea 
+                  name="sdr_briefing"
+                  placeholder="O que foi conversado? Qual a dor do cliente? O que ele espera da reunião?"
+                  className="min-h-[100px] bg-muted/30"
+                  defaultValue={lead.sdr_briefing || ''}
                 />
               </div>
-              <div className="grid gap-2">
-                <Label>Novo Horário</Label>
-                <Input
-                  type="time"
-                  name="time"
-                  required
-                  defaultValue={lead.meeting_time?.slice(0, 5) ?? ''}
-                />
+
+              <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-start gap-2">
+                <Info className="h-4 w-4 text-blue-500 mt-0.5" />
+                <p className="text-[10px] text-blue-700 leading-tight">
+                  <strong>Lembrete Automático:</strong> O sistema enviará um lembrete de confirmação via WhatsApp para o cliente 24h antes do horário agendado.
+                </p>
               </div>
-              <Button type="submit" className="w-full">Confirmar Reagendamento</Button>
+
+              <Button type="submit" className="w-full">Confirmar Agendamento</Button>
             </div>
           </form>
         </DialogContent>

@@ -124,6 +124,13 @@ async function ensureCrmLeadsColumns() {
         if (!columns.has('city')) alter.push('ADD COLUMN city TEXT');
         if (!columns.has('source_tag')) alter.push('ADD COLUMN source_tag TEXT');
         if (!columns.has('referral_info')) alter.push('ADD COLUMN referral_info JSONB');
+        if (!columns.has('meeting_date')) alter.push('ADD COLUMN meeting_date DATE');
+        if (!columns.has('meeting_time')) alter.push('ADD COLUMN meeting_time TIME');
+        if (!columns.has('closer_id')) alter.push('ADD COLUMN closer_id UUID');
+        if (!columns.has('sdr_id')) alter.push('ADD COLUMN sdr_id UUID');
+        if (!columns.has('sdr_briefing')) alter.push('ADD COLUMN sdr_briefing TEXT');
+        if (!columns.has('meeting_notes')) alter.push('ADD COLUMN meeting_notes TEXT');
+        if (!columns.has('reminder_sent_24h')) alter.push('ADD COLUMN reminder_sent_24h BOOLEAN DEFAULT FALSE');
 
         if (alter.length > 0) {
           await pool.query(`ALTER TABLE crm_leads ${alter.join(', ')}`).catch(err => {

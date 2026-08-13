@@ -506,25 +506,47 @@ export default function CRM() {
                 </div>
 
                 {newLeadStatus === 'meeting' && (
-                  <div className="grid grid-cols-2 gap-4 border-t border-muted/50 pt-4 mt-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor="meeting_date">Data da Reunião</Label>
-                      <Input 
-                        id="meeting_date" 
-                        name="meeting_date" 
-                        type="date" 
-                        defaultValue={calendarSelectedDate ? format(calendarSelectedDate, 'yyyy-MM-dd') : ''}
-                        className="bg-muted/50" 
-                      />
+                  <div className="space-y-4 pt-4 border-t border-muted/50 mt-2">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="meeting_date">Data da Reunião</Label>
+                        <Input 
+                          id="meeting_date" 
+                          name="meeting_date" 
+                          type="date" 
+                          required 
+                          className="bg-muted/50"
+                          value={selectedMeetingDate}
+                          onChange={(e) => setSelectedMeetingDate(e.target.value)}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="meeting_time">Horário Disponível</Label>
+                        <Select name="meeting_time" required>
+                          <SelectTrigger className="bg-muted/50">
+                            <SelectValue placeholder="Selecione o horário" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {selectedMeetingDate ? (
+                              getAvailableTimeSlots(selectedMeetingDate, leads).length > 0 ? (
+                                getAvailableTimeSlots(selectedMeetingDate, leads).map(slot => (
+                                  <SelectItem key={slot} value={slot}>{slot}</SelectItem>
+                                ))
+                              ) : (
+                                <SelectItem value="none" disabled>Nenhum horário disponível</SelectItem>
+                              )
+                            ) : (
+                              <SelectItem value="none" disabled>Selecione a data primeiro</SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="meeting_time">Horário</Label>
-                      <Input 
-                        id="meeting_time" 
-                        name="meeting_time" 
-                        type="time" 
-                        className="bg-muted/50" 
-                      />
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-start gap-2">
+                      <Info className="h-4 w-4 text-blue-500 mt-0.5" />
+                      <p className="text-[10px] text-blue-700 leading-tight">
+                        <strong>Dica SDR:</strong> O sistema mostra apenas horários com pelo menos 1h30 de intervalo para garantir a qualidade da reunião.
+                      </p>
                     </div>
                   </div>
                 )}

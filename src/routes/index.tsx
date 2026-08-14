@@ -1,4 +1,4 @@
-// ainda nao atualizou , continua da mesma forma
+// Erro no upload corrigido: Adicionada verificação de nulidade em jsonColumns no serializeValueForColumn.
 // Reparo de Auth: Se houver erro de autenticação, acesse /repair-auth para sincronizar.
 // Agenda CRM: Sistema de Briefing SDR -> Closer e lembretes 24h implementados.
 // Cache-Busting: Estratégia de "Hard Reload" ativada para garantir que as atualizações fiquem visíveis na VPS.

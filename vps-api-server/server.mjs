@@ -293,7 +293,7 @@ async function getTableJsonColumns(tableName) {
 }
 
 function serializeValueForColumn(columnName, value, jsonColumns) {
-  if (jsonColumns.has(columnName) && value !== null && typeof value === 'object') {
+  if (jsonColumns && jsonColumns.has(columnName) && value !== null && typeof value === 'object') {
     return JSON.stringify(value);
   }
 

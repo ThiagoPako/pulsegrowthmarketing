@@ -1,4 +1,4 @@
-// Corrigido erro "jsonColumns is not defined" no upload da VPS. Aplicada proteção global no serializeValueForColumn. (Verificado via imagem: Captura_de_Tela_2026-08-14_às_09.15.59.png)
+// Erro persistente na VPS: O comando de deploy foi executado mas o erro "jsonColumns" ainda aparece. Verificando cache e reinicialização forçada do processo.
 // Reparo de Auth: Se houver erro de autenticação, acesse /repair-auth para sincronizar.
 // Agenda CRM: Sistema de Briefing SDR -> Closer e lembretes 24h implementados.
 // Cache-Busting: Estratégia de "Hard Reload" ativada para garantir que as atualizações fiquem visíveis na VPS.

@@ -9096,9 +9096,8 @@ app.post('/api/upload', (req, res) => {
         .split(path.sep)
         .join('/');
 
-      // Obter colunas JSON para garantir serialização correta se necessário
-      // Embora uploads geralmente retornem metadados simples
-      const jsonColumns = await getTableJsonColumns('client_portal_contents').catch(() => new Set());
+      // Obter colunas JSON explicitamente para evitar ReferenceError caso a tabela precise ser mapeada
+      const jsonCols = await getTableJsonColumns('client_portal_contents').catch(() => new Set());
 
       res.json({
         path: relative,

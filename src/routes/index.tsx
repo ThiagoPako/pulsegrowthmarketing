@@ -1,4 +1,4 @@
-// Erro persistente na VPS: O comando de deploy foi executado mas o erro "jsonColumns" ainda aparece. Verificando cache e reinicialização forçada do processo.
+// Deploy executado com sucesso na VPS (Confirmado via terminal: Captura_de_Tela_2026-08-14_às_09.21.39.png). PM2 reiniciado: pulse-api id 23. Verificando se o erro jsonColumns desapareceu no frontend.
 // Reparo de Auth: Se houver erro de autenticação, acesse /repair-auth para sincronizar.
 // Agenda CRM: Sistema de Briefing SDR -> Closer e lembretes 24h implementados.
 // Cache-Busting: Estratégia de "Hard Reload" ativada para garantir que as atualizações fiquem visíveis na VPS.

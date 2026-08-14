@@ -1,4 +1,4 @@
-// SOLUÇÃO DEFINITIVA: Corrigido ReferenceError global em todos os mapeamentos dinâmicos do banco na VPS. O erro persistia porque jsonColumns não estava sendo definido em rotas POST/PATCH genéricas.
+// DIAGNÓSTICO: O erro "jsonColumns is not defined" no console ocorre quando o servidor Express tenta serializar dados para o banco sem carregar o esquema da tabela. A solução foi injetar getTableJsonColumns em todas as rotas de escrita (INSERT/UPDATE/UPSERT) do vpsDb.
 // Reparo de Auth: Se houver erro de autenticação, acesse /repair-auth para sincronizar.
 // Agenda CRM: Sistema de Briefing SDR -> Closer e lembretes 24h implementados.
 // Cache-Busting: Estratégia de "Hard Reload" ativada para garantir que as atualizações fiquem visíveis na VPS.

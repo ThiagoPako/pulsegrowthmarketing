@@ -5605,6 +5605,7 @@ app.post('/api/db/query', async (req, res) => {
           break;
         }
         const keys = entries.map(([key]) => key);
+        const jsonColumns = await getTableJsonColumns(safeTable);
         const values = entries.map(([key, value]) => serializeValueForColumn(key, value, jsonColumns));
         let paramIdx = 1;
         const setClauses = keys.map(k => `${k} = $${paramIdx++}`);

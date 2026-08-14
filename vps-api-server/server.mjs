@@ -293,7 +293,7 @@ async function getTableJsonColumns(tableName) {
 }
 
 function serializeValueForColumn(columnName, value, jsonColumns) {
-  if (jsonColumns.has(columnName) && value !== null && typeof value === 'object') {
+  if (jsonColumns && jsonColumns.has(columnName) && value !== null && typeof value === 'object') {
     return JSON.stringify(value);
   }
 
@@ -9078,7 +9078,7 @@ app.post('/api/admin/repair-atomic', async (req, res) => {
 });
 
 app.post('/api/upload', (req, res) => {
-  uploadHandler.single('file')(req, res, (err) => {
+  uploadHandler.single('file')(req, res, async (err) => {
     if (err) {
       console.error('[upload] error:', err);
       return res.status(uploadErrorStatus(err)).json({
@@ -9090,18 +9090,27 @@ app.post('/api/upload', (req, res) => {
     }
     if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
 
-    const relative = path
-      .relative(path.resolve(UPLOAD_ROOT), req.file.path)
-      .split(path.sep)
-      .join('/');
+    try {
+      const relative = path
+        .relative(path.resolve(UPLOAD_ROOT), req.file.path)
+        .split(path.sep)
+        .join('/');
 
-    res.json({
-      path: relative,
-      filename: req.file.filename,
-      size: req.file.size,
-      mimetype: req.file.mimetype,
-      url: `/uploads/${relative}`,
-    });
+      // Obter colunas JSON para garantir serialização correta se necessário
+      // Embora uploads geralmente retornem metadados simples
+      const jsonColumns = await getTableJsonColumns('client_portal_contents').catch(() => new Set());
+
+      res.json({
+        path: relative,
+        filename: req.file.filename,
+        size: req.file.size,
+        mimetype: req.file.mimetype,
+        url: `/uploads/${relative}`,
+      });
+    } catch (error) {
+      console.error('[upload:process] error:', error);
+      res.status(500).json({ error: 'Erro ao processar metadados do upload' });
+    }
   });
 });
 

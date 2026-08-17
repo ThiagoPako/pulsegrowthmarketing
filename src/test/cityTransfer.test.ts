@@ -133,3 +133,46 @@ describe('auditoria da fonte da cidade (logs)', () => {
     expect(line).toContain('query=Minaçu');
   });
 });
+
+describe('erros claros de cidade', () => {
+  it('reporta CITY_UNRESOLVED quando não há header nem query', () => {
+    const r = diagnoseTransferCity({ headers: {}, query: {} });
+    expect(r.ok).toBe(false);
+    expect(r.error.code).toBe('CITY_UNRESOLVED');
+    expect(r.error.hint).toBeTruthy();
+  });
+
+  it('reporta CITY_INVALID para cidade não suportada', () => {
+    const r = diagnoseTransferCity({ headers: {}, query: { city: 'goiania' } });
+    expect(r.ok).toBe(false);
+    expect(r.error.code).toBe('CITY_INVALID');
+    expect(r.error.supported).toContain('uruacu');
+  });
+
+  it('prioriza a seleção (query) e sinaliza conflito com o header', () => {
+    const r = diagnoseTransferCity({ headers: { 'x-pulse-city': 'minacu' }, query: { city: 'Uruaçu' } });
+    expect(r.ok).toBe(true);
+    expect(r.city).toBe('uruacu');
+    expect(r.conflict).toBe(true);
+    expect(r.warning.code).toBe('CITY_CONFLICT');
+  });
+
+  it('não sinaliza conflito quando header e query concordam', () => {
+    const r = diagnoseTransferCity({ headers: { 'x-pulse-city': 'uruacu' }, query: { city: 'Uruaçu' } });
+    expect(r.ok).toBe(true);
+    expect(r.conflict).toBe(false);
+    expect(r.warning).toBeNull();
+  });
+
+  it('describeCityError traduz payload da API', () => {
+    const f = describeCityError({ code: 'CITY_INVALID', message: 'Cidade inválida', received: { header: 'x', query: null } }, 400);
+    expect(f.title).toBe('Cidade de destino inválida');
+    expect(f.details).toContain('header: x');
+  });
+
+  it('describeCityError trata sessão expirada', () => {
+    const f = describeCityError(null, 401);
+    expect(f.code).toBe('UNAUTHORIZED');
+    expect(f.message).toMatch(/sessão/i);
+  });
+});

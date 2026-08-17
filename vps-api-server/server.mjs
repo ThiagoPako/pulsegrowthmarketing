@@ -569,8 +569,20 @@ async function ensureWarehouseTables() {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       );
 
+      CREATE TABLE IF NOT EXISTS warehouse_movements (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        item_id UUID REFERENCES warehouse_items(id) ON DELETE CASCADE,
+        type TEXT NOT NULL CHECK (type IN ('entrada', 'saida', 'transferencia', 'manutencao')),
+        from_responsible_id UUID,
+        to_responsible_id UUID,
+        observations TEXT,
+        movement_date DATE DEFAULT CURRENT_DATE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
       CREATE INDEX IF NOT EXISTS idx_warehouse_items_tag ON warehouse_items(tag_id);
       CREATE INDEX IF NOT EXISTS idx_warehouse_items_responsible ON warehouse_items(responsible_id);
+      CREATE INDEX IF NOT EXISTS idx_warehouse_movements_item ON warehouse_movements(item_id);
       
       -- Add structure_investment column to expenses if not exists
       DO $$

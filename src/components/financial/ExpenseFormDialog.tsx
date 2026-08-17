@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Users, Calendar, Star, CheckCircle, Loader2 } from 'lucide-react';
+import { Users, Calendar, Star, CheckCircle, Loader2, Hammer } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -27,7 +27,15 @@ interface ExpenseFormDialogProps {
   onSave: (form: any, editingId: string | null) => Promise<void>;
 }
 
-const emptyForm = { date: new Date().toISOString().split('T')[0], amount: 0, category_id: '', expense_type: 'fixa', description: '', responsible: '' };
+const emptyForm = { 
+  date: new Date().toISOString().split('T')[0], 
+  amount: 0, 
+  category_id: '', 
+  expense_type: 'fixa', 
+  description: '', 
+  responsible: '',
+  structure_investment: false
+};
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin',
@@ -66,6 +74,7 @@ export default function ExpenseFormDialog({ open, onOpenChange, categories, edit
         expense_type: editingExpense.expense_type,
         description: editingExpense.description,
         responsible: editingExpense.responsible,
+        structure_investment: editingExpense.structure_investment || false,
       });
       if (salaryCategory && editingExpense.category_id === salaryCategory.id) {
         setIsSalaryMode(true);
@@ -104,7 +113,6 @@ export default function ExpenseFormDialog({ open, onOpenChange, categories, edit
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth();
-    // If we're past the day already, use current month still (user might be registering)
     const d = new Date(year, month, day);
     setForm(f => ({ ...f, date: d.toISOString().split('T')[0] }));
   };
@@ -254,6 +262,25 @@ export default function ExpenseFormDialog({ open, onOpenChange, categories, edit
             <Label>Descrição</Label>
             <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder={isSalaryMode ? 'Ex: Salário referente março/2026' : 'Descrição da despesa'} />
           </div>
+
+          {!isSalaryMode && (
+            <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-full bg-primary/10 text-primary">
+                  <Hammer size={18} />
+                </div>
+                <div>
+                  <Label className="text-sm font-semibold cursor-pointer" htmlFor="structure-toggle">Investimento em Estrutura</Label>
+                  <p className="text-[10px] text-muted-foreground">Equipamentos, reformas e ponto comercial</p>
+                </div>
+              </div>
+              <Switch 
+                id="structure-toggle"
+                checked={form.structure_investment} 
+                onCheckedChange={checked => setForm({ ...form, structure_investment: checked })} 
+              />
+            </div>
+          )}
 
           {/* Responsible (auto-filled in salary mode) */}
           {!isSalaryMode && (

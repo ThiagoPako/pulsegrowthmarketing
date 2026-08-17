@@ -59,6 +59,7 @@ const DesignerDashboard = lazy(() => import("@/pages/DesignerDashboard"));
 const DesignerReports = lazy(() => import("@/pages/DesignerReports"));
 const ClientArtPlaybook = lazy(() => import("@/pages/ClientArtPlaybook"));
 const ClientDatabase = lazy(() => import("@/pages/ClientDatabase"));
+const Warehouse = lazy(() => import("@/pages/Warehouse"));
 
 const OnboardingManagement = lazy(() => import("@/pages/OnboardingManagement"));
 const ClientBriefing = lazy(() => import("@/pages/ClientBriefing"));
@@ -264,6 +265,8 @@ function AppRoutes() {
         <Route path="/conteudos-portal" element={<ProtectedRoute><ContentManager /></ProtectedRoute>} />
         <Route path="/trafego" element={<ProtectedRoute><TrafficManagement /></ProtectedRoute>} />
         <Route path="/automacoes" element={<ProtectedRoute><AutomationFlows /></ProtectedRoute>} />
+        <Route path="/banco-clientes" element={<ProtectedRoute><ClientDatabase /></ProtectedRoute>} />
+        <Route path="/almoxerifado" element={<ProtectedRoute><Warehouse /></ProtectedRoute>} />
         <Route path="/panfletagem" element={<ProtectedRoute><FlyerTemplates /></ProtectedRoute>} />
         <Route path="/portal-videos" element={<ProtectedRoute><PortalVideosAdmin /></ProtectedRoute>} />
         <Route path="/relacionamento" element={<ProtectedRoute><ClientRelationship /></ProtectedRoute>} />

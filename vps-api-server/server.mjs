@@ -110,6 +110,30 @@ function collectOnlinePresenceIds() {
 
 let storyEditingSessionsEnsuredPromise = null;
 let crmLeadsColumnsEnsuredPromise = null;
+let expenseStructureColumnEnsuredPromise = null;
+
+async function ensureExpenseStructureColumn() {
+  if (!expenseStructureColumnEnsuredPromise) {
+    expenseStructureColumnEnsuredPromise = (async () => {
+      try {
+        const columns = await getExistingColumns('expenses');
+        if (!columns.has('structure_investment')) {
+          await pool.query('ALTER TABLE expenses ADD COLUMN structure_investment BOOLEAN DEFAULT FALSE').catch(err => {
+            if (!/already exists|must be owner/i.test(err.message)) throw err;
+          });
+          console.log('Column structure_investment added to expenses');
+          const cache = getTableColumnsPromiseCache();
+          if (cache) cache.delete('expenses');
+        }
+      } catch (err) {
+        console.error('ensureExpenseStructureColumn error:', err);
+        expenseStructureColumnEnsuredPromise = null;
+      }
+    })();
+  }
+  return expenseStructureColumnEnsuredPromise;
+}
+
 
 async function ensureCrmLeadsColumns() {
   if (!crmLeadsColumnsEnsuredPromise) {
@@ -519,6 +543,57 @@ async function ensureClientDatabaseShareTable() {
 
 ensureClientDatabaseShareTable().catch((error) => {
   console.error('Failed to ensure client database share table:', error);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ALMOXERIFADO & ESTRUTURA
+// ═══════════════════════════════════════════════════════════════
+let warehouseTablesPromise = null;
+
+async function ensureWarehouseTables() {
+  if (!warehouseTablesPromise) {
+    warehouseTablesPromise = pool.query(`
+      CREATE TABLE IF NOT EXISTS warehouse_items (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        tag_id TEXT,
+        responsible_id UUID,
+        status TEXT DEFAULT 'em_uso' CHECK (status IN ('em_uso', 'manutencao', 'disponivel', 'descartado')),
+        purchase_date DATE,
+        purchase_price NUMERIC,
+        expense_id UUID,
+        observations TEXT,
+        city TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_warehouse_items_tag ON warehouse_items(tag_id);
+      CREATE INDEX IF NOT EXISTS idx_warehouse_items_responsible ON warehouse_items(responsible_id);
+      
+      -- Add structure_investment column to expenses if not exists
+      DO $$
+      BEGIN
+          IF NOT EXISTS (
+              SELECT 1 FROM information_schema.columns 
+              WHERE table_name = 'expenses' AND column_name = 'structure_investment'
+          ) THEN
+              ALTER TABLE expenses ADD COLUMN structure_investment BOOLEAN DEFAULT FALSE;
+          END IF;
+      END $$;
+    `).catch((error) => {
+      warehouseTablesPromise = null;
+      throw error;
+    });
+  }
+  return warehouseTablesPromise;
+}
+
+ensureWarehouseTables().catch((error) => {
+  console.error('Failed to ensure warehouse tables:', error);
+});
+
 });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -9505,6 +9580,11 @@ app.post('/api/admin/repair-atomic', async (req, res) => {
     // 1. Garantir colunas do CRM (Geladeira, etc)
     results.push({ task: 'ensure_crm_columns', status: 'started' });
     await ensureCrmLeadsColumns().catch(e => results.push({ task: 'ensure_crm_columns', error: e.message }));
+    
+    // Ensure Structure column on expenses
+    results.push({ task: 'ensure_expense_structure_column', status: 'started' });
+    await ensureExpenseStructureColumn().catch(e => results.push({ task: 'ensure_expense_structure_column', error: e.message }));
+
 
     // 2. Garantir tabelas do Auth (Se existirem)
     results.push({ task: 'check_auth_tables', status: 'started' });

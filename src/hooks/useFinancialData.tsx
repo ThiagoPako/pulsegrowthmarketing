@@ -96,6 +96,7 @@ export interface Expense {
   expense_type: string;
   description: string;
   responsible: string;
+  structure_investment?: boolean;
   created_at: string;
 }
 

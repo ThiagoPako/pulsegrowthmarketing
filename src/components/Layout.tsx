@@ -154,6 +154,7 @@ const navCategories: NavCategory[] = [
     speedometer: true,
     items: [
       { path: '/financeiro', label: 'Financeiro', icon: Gauge, roles: ['admin'] },
+      { path: '/almoxerifado', label: 'Almoxerifado', icon: Package, roles: ['admin', 'gestor', 'endomarketing'] },
       { path: '/custo-conteudo', label: 'Pente Fino', icon: Flame, roles: ['admin'] },
     ],
   },

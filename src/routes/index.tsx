@@ -1,4 +1,4 @@
-// COMANDO DE DEPLOY SEGURO (COPIE E COLE NO TERMINAL DA VPS):
+// qual comando uso no terminal?
 // cd /var/www/pulsegrowthmarketing && git stash push -m "pre-deploy" && git pull && npm install && rm -rf dist && node scripts/generate-build-id.mjs && npm run build && pm2 restart pulse-api --update-env && sudo systemctl reload nginx && pm2 status
 
 // A funcionalidade de metas de entrega personalizáveis (Plano Especial) está ativa.

@@ -1,4 +1,4 @@
-// failed to load resource: the server responded with a status of 502 (Bad Gateway) - erro continua
+// Implemente um endpoint de health check (ex: /api/health) que retorne status da API, do banco e do serviço de autenticação para eu diagnosticar o 502 rapidamente.
 // Login na VPS: Implementado Fallback Robusto no endpoint /api/auth/login.
 // Identificado que usuários existentes apenas na tabela 'auth_users' (sem vínculo em 'profiles') falhavam no login.
 

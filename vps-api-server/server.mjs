@@ -336,25 +336,34 @@ function splitOrFilterParts(value) {
 async function validateMeetingConflict(meetingDate, meetingTime, excludeLeadId = null) {
   if (!meetingDate || !meetingTime) return;
 
+  // Sanitiza o formato do tempo para garantir HH:mm:ss ou HH:mm para comparação
+  const formattedTime = meetingTime.includes(':') ? meetingTime : null;
+  if (!formattedTime) return;
+
   const { rows: existingMeetings } = await pool.query(
-    `SELECT id, meeting_time FROM crm_leads 
+    `SELECT id, meeting_time::text as meeting_time FROM crm_leads 
      WHERE meeting_date = $1 
        AND meeting_time IS NOT NULL 
-       AND ($2::uuid IS NULL OR id != $2)`,
+       AND ($2::uuid IS NULL OR id != $2)
+       AND status = 'meeting'`,
     [meetingDate, excludeLeadId]
   );
 
-  const [h, m] = meetingTime.split(':').map(Number);
+  const [h, m] = formattedTime.split(':').map(Number);
   const newTimeMinutes = h * 60 + m;
 
-  for (const m of existingMeetings) {
-    const [lh, lm] = m.meeting_time.split(':').map(Number);
+  for (const row of existingMeetings) {
+    const [lh, lm] = row.meeting_time.split(':').map(Number);
     const leadTimeMinutes = lh * 60 + lm;
-    if (Math.abs(newTimeMinutes - leadTimeMinutes) < 90) {
-      throw new Error(`Horário indisponível: Já existe uma reunião às ${m.meeting_time.slice(0, 5)} (mínimo 1h30 de intervalo).`);
+    const diff = Math.abs(newTimeMinutes - leadTimeMinutes);
+    
+    if (diff < 90) {
+      const existingTimeFormatted = row.meeting_time.substring(0, 5);
+      throw new Error(`CONFLITO_AGENDA: Já existe uma reunião às ${existingTimeFormatted}. O intervalo mínimo entre reuniões deve ser de 1h30.`);
     }
   }
 }
+
 
 async function ensureProposalTables() {
   if (!proposalTablesEnsuredPromise) {

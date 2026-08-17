@@ -1768,9 +1768,9 @@ function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => 
           {step === 'preview' && preview && (
             <>
               <div className="flex items-center justify-center gap-3 text-sm font-bold">
-                <Badge variant="outline">{CITY_LABELS[preview.from] || preview.from}</Badge>
+                <Badge variant="outline">{CITY_LABELS[preview.from.toLowerCase()] || preview.from}</Badge>
                 <ArrowRightLeft className="h-4 w-4 text-orange-500" />
-                <Badge className="bg-orange-500 text-white border-none">{CITY_LABELS[preview.to] || preview.to}</Badge>
+                <Badge className="bg-orange-500 text-white border-none">{CITY_LABELS[preview.to.toLowerCase()] || preview.to}</Badge>
               </div>
 
               {preview.same_city && (

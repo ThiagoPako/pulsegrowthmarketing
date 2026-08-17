@@ -1923,6 +1923,7 @@ export default function Clients() {
   );
   };
 
+
   const renderStep3 = () => {
     // Entregas exibidas e editadas como MENSAL. Persistência continua em campos semanais (weekly = ceil(monthly/4)).
     const monthlyReels = (form.weeklyReels ?? 0) * 4;

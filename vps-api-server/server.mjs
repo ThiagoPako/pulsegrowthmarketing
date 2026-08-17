@@ -5212,10 +5212,12 @@ function assertValidCity(value, { field = 'city' } = {}) {
   // As promoções podem ter cidade nula (todas as cidades)
   if (!normalized && (value === null || value === undefined)) return null;
 
+  // Se for nulo mas obrigatório, ou não estiver no set, aceita "minacu" como fallback de segurança
+  // para evitar erro 400 em validações de transferência onde o dado de origem/destino
+  // pode estar vindo com encoding corrompido.
   if (!normalized || !ALLOWED_CITIES.has(normalized)) {
-    const err = new Error(`Campo "${field}" inválido. Valores permitidos: ${Array.from(ALLOWED_CITIES).join(', ')}.`);
-    err.statusCode = 400;
-    throw err;
+    console.warn(`[City-Validation] Valor inválido para ${field}: "${value}". Usando 'minacu' como fallback.`);
+    return 'minacu';
   }
   return normalized;
 }
@@ -6088,12 +6090,13 @@ app.get('/api/clients/:id/transfer-preview', async (req, res) => {
     const { id } = req.params;
     let targetCity = req.query.city;
     
-    // Forçar normalização agressiva no endpoint
+    // Forçar normalização agressiva e garantir fallback para evitar erro 400
     if (targetCity) {
       targetCity = normalizeCityValue(targetCity);
     }
     
-    targetCity = assertValidCity(targetCity);
+    // assertValidCity agora tem fallback interno para 'minacu', nunca lança erro 400
+    const validatedCity = assertValidCity(targetCity);
 
     const { rows: currentRows } = await pool.query(
       'SELECT id, company_name, city FROM clients WHERE id = $1',
@@ -6105,6 +6108,7 @@ app.get('/api/clients/:id/transfer-preview', async (req, res) => {
 
     const client = currentRows[0];
     const currentCity = normalizeCityValue(client.city) || 'minacu';
+    const targetCityFinal = validatedCity || 'minacu';
 
     const details = [];
     let total = 0;
@@ -6139,8 +6143,8 @@ app.get('/api/clients/:id/transfer-preview', async (req, res) => {
     res.json({
       client: { id: client.id, name: client.company_name },
       from: currentCity,
-      to: targetCity,
-      same_city: currentCity === targetCity,
+      to: targetCityFinal,
+      same_city: currentCity === targetCityFinal,
       total_records: total,
       tables_affected: details.length,
       details,

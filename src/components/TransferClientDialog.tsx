@@ -63,9 +63,10 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
     setIsBusy(true);
     setStep('validating');
     try {
-      const normalizedTarget = normalizeCityValue(targetCity);
+      // Normalização idêntica à do CRM para consistência absoluta
+      const normalizedCity = targetCity.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c');
       const res = await vpsAuthedFetch(
-        `/api/clients/${client.id}/transfer-preview?city=${encodeURIComponent(normalizedTarget || targetCity)}`
+        `/api/clients/${client.id}/transfer-preview?city=${encodeURIComponent(normalizedCity)}`
       );
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

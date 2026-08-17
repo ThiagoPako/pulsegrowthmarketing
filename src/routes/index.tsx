@@ -1,8 +1,8 @@
+// erro continua
 // Não é apenas no CRM que quero transfeir cliente, quero transfeir cliente no modulo CLIENTE para outra cidade
 // CORREÇÃO: Criada e liberada a tabela 'scheduled_recordings' no backend (VPS) para permitir transferência de clientes.
 // Implementada validação atômica no backend (VPS) para intervalo de 1h30 entre reuniões no CRM.
 // CRM: Sistema de Briefing SDR -> Closer e lembretes 24h ativos.
-// Cache-Busting: Estratégia de "Hard Reload" ativada para garantir sincronização na VPS.
 
 // CORREÇÃO: Criada e liberada a tabela 'scheduled_recordings' no backend (VPS) para permitir transferência de clientes.
 // Implementada validação atômica no backend (VPS) para intervalo de 1h30 entre reuniões no CRM.

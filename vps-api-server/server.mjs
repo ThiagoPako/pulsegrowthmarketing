@@ -5378,6 +5378,10 @@ app.post('/api/db/query', async (req, res) => {
       await ensureManualVideoTasksTable();
     }
 
+    if (safeTable === 'scheduled_recordings') {
+      await ensureScheduledRecordingsTable();
+    }
+
     // Multi-city: resolve cidade ativa e prepara flag de scoping
     // Só aplica se a tabela estiver na lista E realmente tiver a coluna `city` no DB.
     const scopeCity = TABLES_WITH_CITY.has(safeTable) && await tableHasCityColumn(safeTable);

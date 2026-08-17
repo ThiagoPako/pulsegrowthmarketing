@@ -1,8 +1,8 @@
 // Erro ao validar a transferência
-// ao clicar em validar transferencia, mesmo após executar todos os comando enviados o erro nao foi solucionado, analise a causa e entenda o que precisa ser feito e encaminhe o comando seguro para atualiza a vps
-// CORREÇÃO CRÍTICA (FINAL): O erro persistia pois o backend e frontend podiam discordar da normalização de encoding.
-// Implementada normalização redundante no frontend e mapeamento explícito (Hard-Mapping) no backend para 'minacu' e 'uruacu'.
-// Agora, qualquer variação de "Minaçu" (acentuada, minúscula ou com encoding corrompido) é forçada a "minacu".
+// ao clicar em validar , mesmo apos executar o comando acima na vps
+// DIAGNÓSTICO: O erro 400 persistente indica que o servidor VPS pode estar rejeitando a requisição por falta de permissões RLS ou desalinhamento de schema no Postgres local.
+// AÇÃO: O comando abaixo agora inclui uma reparação forçada de permissões e reinício limpo do serviço.
+// Comando seguro abaixo atualiza código, limpa cache e repara permissões do banco local na VPS.
 // Comando seguro abaixo aplica a correção no núcleo do servidor e limpa cache do front.
 
 // CORREÇÃO: Criada e liberada a tabela 'scheduled_recordings' no backend (VPS) para permitir transferência de clientes.

@@ -7,7 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Building2, Loader2, MapPin, Pencil, Plus, Search, Stethoscope, Trash2 } from 'lucide-react';
+import { Building2, Check, Copy, Link2, Loader2, MapPin, Pencil, Plus, Search, Stethoscope, Trash2, FolderOpen, Share2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { vpsAuthedFetch } from '@/lib/vpsDb';
+import MediaLibrary, { type MediaOwner } from '@/components/clientdb/MediaLibrary';
 import ProfessionalDialog from '@/components/clientdb/ProfessionalDialog';
 import UnitDialog, { UNIT_TYPES } from '@/components/clientdb/UnitDialog';
 import { useClientDatabase, type ClientProfessional, type ClientUnit } from '@/hooks/useClientDatabase';
@@ -25,6 +28,9 @@ export default function ClientDatabase() {
   const [unitDialogOpen, setUnitDialogOpen] = useState(false);
   const [editingPro, setEditingPro] = useState<ClientProfessional | null>(null);
   const [editingUnit, setEditingUnit] = useState<ClientUnit | null>(null);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const { professionals, units, saveRecord, deleteRecord } = useClientDatabase(clientId || undefined);
 
@@ -40,6 +46,54 @@ export default function ClientDatabase() {
   const filteredUnits = (units.data || []).filter((u) =>
     !term || `${u.unit_name} ${u.city_name || ''}`.toLowerCase().includes(term),
   );
+
+  /** Dados achatados para o playbook visual (fotos + vídeos por dono). */
+  const mediaOwners = useMemo<MediaOwner[]>(() => [
+    ...filteredPros.map((pro) => ({
+      id: pro.id,
+      label: pro.name,
+      sublabel: pro.specialty,
+      kind: 'professional' as const,
+      photos: pro.photos,
+      videos: pro.videos,
+    })),
+    ...filteredUnits.map((unit) => ({
+      id: unit.id,
+      label: unit.unit_name,
+      sublabel: [unit.city_name, unit.state].filter(Boolean).join(' / '),
+      kind: 'unit' as const,
+      photos: unit.photos,
+      videos: unit.videos,
+    })),
+  ], [filteredPros, filteredUnits]);
+
+  /** Gera (ou reaproveita) o link público de compartilhamento do cliente. */
+  const handleShare = async () => {
+    if (!clientId) return;
+    setSharing(true);
+    setCopied(false);
+    try {
+      const response = await vpsAuthedFetch('/api/client-database/share', {
+        method: 'POST',
+        body: JSON.stringify({ client_id: clientId }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload?.token) throw new Error(payload?.error || 'Falha ao gerar link');
+      const url = `${window.location.origin}/banco-publico/${payload.token}`;
+      setShareUrl(url);
+      try {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        toast.success('Link público copiado!');
+      } catch {
+        toast.success('Link público gerado.');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao gerar link público');
+    } finally {
+      setSharing(false);
+    }
+  };
 
   const unitTypeLabel = (value?: string | null) =>
     UNIT_TYPES.find((t) => t.value === value)?.label || 'Unidade geral';
@@ -88,6 +142,9 @@ export default function ClientDatabase() {
             </TabsTrigger>
             <TabsTrigger value="unidades">
               <Building2 className="mr-1.5 h-4 w-4" /> Rede / Unidades ({filteredUnits.length})
+            </TabsTrigger>
+            <TabsTrigger value="acervo">
+              <FolderOpen className="mr-1.5 h-4 w-4" /> Acervo de mídia
             </TabsTrigger>
           </TabsList>
 
@@ -204,6 +261,49 @@ export default function ClientDatabase() {
                   </Card>
                 ))}
               </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="acervo" className="space-y-4 pt-4">
+            <Card className="flex flex-wrap items-center gap-3 p-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Compartilhar acervo</p>
+                <p className="text-xs text-muted-foreground">
+                  Gera um link público (sem login) com fotos e vídeos deste cliente.
+                </p>
+              </div>
+              <Button className="ml-auto" onClick={handleShare} disabled={sharing}>
+                {sharing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Share2 className="mr-1.5 h-4 w-4" />}
+                Gerar link
+              </Button>
+              {shareUrl && (
+                <div className="flex w-full items-center gap-2 rounded-lg border border-border bg-muted/40 p-2">
+                  <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <a href={shareUrl} target="_blank" rel="noopener noreferrer" className="truncate text-xs text-primary underline">
+                    {shareUrl}
+                  </a>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="ml-auto h-7 w-7"
+                    aria-label="Copiar link"
+                    onClick={() => {
+                      navigator.clipboard.writeText(shareUrl).then(() => {
+                        setCopied(true);
+                        toast.success('Link copiado!');
+                      });
+                    }}
+                  >
+                    {copied ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5" />}
+                  </Button>
+                </div>
+              )}
+            </Card>
+
+            {professionals.isLoading || units.isLoading ? (
+              <div className="flex justify-center p-10"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+            ) : (
+              <MediaLibrary owners={mediaOwners} />
             )}
           </TabsContent>
         </Tabs>

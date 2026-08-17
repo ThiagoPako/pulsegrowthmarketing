@@ -1,6 +1,9 @@
-// Falha persistente no login identificada: Erro 401 (Email/Senha inválidos) mesmo após reparo.
-// O diagnóstico aponta para dessincronização entre as tabelas 'profiles' e 'auth_users' ou falta de triggers.
-// Implementei um fallback atômico que força a sincronização manual ao acessar o endpoint de reparo.
+// Erro 502 Bad Gateway persistente em agenciapulse.tech/api/auth/login.
+// O Nginx não consegue conectar no serviço Node (pulse-api) rodando na porta 3002.
+// Possíveis causas: Serviço parado, porta ocupada, firewall ou falha crítica no boot da API.
+// O comando abaixo força o encerramento de qualquer processo na porta 3002 antes de reiniciar.
+
+
 
 
 

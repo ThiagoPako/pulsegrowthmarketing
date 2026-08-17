@@ -1,13 +1,13 @@
 // Erro ao validar a transferência
-// O comando anterior causou erro de conexão com servidor de autenticação.
-// CAUSA: O comando psql resetou permissões ou falhou ao encontrar o serviço postgres no caminho padrão.
-// AÇÃO: O novo comando abaixo usa caminhos absolutos e garante que o usuário da API (pulse_user) tenha acesso total
-// sem quebrar a estrutura de tabelas de autenticação (auth_users).
-// O backend agora também ignora erros de "already exists" em tabelas de autenticação para evitar crashes durante o boot.
+// O sistema de autenticação foi restaurado. O erro 400 no "Validar" em Clientes persistia devido a uma falha na injeção de cidade ativa via headers.
+// CAUSA: O componente TransferClientDialog não estava enviando o header 'x-pulse-city' correto, causando falha no resolveActiveCity do backend.
+// AÇÃO: Atualizada a função vpsAuthedFetch para garantir que o header de cidade seja sempre injetado.
+// Backend reforçado com fallbacks para garantir que admins nunca sejam bloqueados por cidade inválida durante transferências.
 
-// CORREÇÃO: Removido psql direto do deploy e movido para script de boot seguro no backend.
+// CORREÇÃO: Sincronização de headers de contexto de cidade entre frontend e backend.
 // Implementada normalização resiliente de cidade no frontend e backend.
 // Cache-Busting: Estratégia de "Hard Reload" ativada para garantir sincronização na VPS.
+
 
 
 export const SupabaseCheck = () => {

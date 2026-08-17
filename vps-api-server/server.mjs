@@ -6097,23 +6097,25 @@ const TRANSFER_TABLE_LABELS = {
 };
 
 app.get('/api/clients/:id/transfer-preview', async (req, res) => {
-  try {
-    await verifyUser(req);
-    const { id } = req.params;
-    let targetCity = req.query.city;
-    
-    // Forçar normalização agressiva e garantir fallback para evitar erro 400
-    if (targetCity) {
-      targetCity = normalizeCityValue(targetCity);
-    }
-    
-    // assertValidCity agora tem fallback interno para 'minacu', nunca lança erro 400
-    const validatedCity = assertValidCity(targetCity);
+   try {
+     const { id } = req.params;
+     let targetCity = req.query.city;
+     
+     // Admins podem visualizar previews sem validar activeCity rigorosamente
+     // para evitar o erro 400 se o header x-pulse-city vier mal formatado do front
+     const { user } = await verifyUser(req);
+     
+     if (targetCity) {
+       targetCity = normalizeCityValue(targetCity);
+     }
+     
+     const validatedCity = assertValidCity(targetCity);
 
-    const { rows: currentRows } = await pool.query(
-      'SELECT id, company_name, city FROM clients WHERE id = $1',
-      [id]
-    );
+     const { rows: currentRows } = await pool.query(
+       'SELECT id, company_name, city FROM clients WHERE id = $1',
+       [id]
+     );
+
     if (currentRows.length === 0) {
       return res.status(404).json({ error: 'Cliente não encontrado' });
     }

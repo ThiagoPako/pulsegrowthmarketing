@@ -4,6 +4,8 @@ import {
   normalizeCityValue as serverNormalize,
   assertValidCity,
   resolveTransferCity,
+  resolveTransferCityDetailed,
+  formatCityResolutionLog,
 } from '../../vps-api-server/lib/cityResolution.mjs';
 
 const silentLogger = { warn: vi.fn() };
@@ -95,5 +97,39 @@ describe('resolveTransferCity — header vs query string', () => {
       { logger: silentLogger },
     );
     expect(['minacu', 'uruacu']).toContain(city);
+  });
+});
+
+describe('auditoria da fonte da cidade (logs)', () => {
+  it('identifica o header como fonte', () => {
+    const r = resolveTransferCityDetailed(
+      { headers: { 'x-pulse-city': 'Uruaçu' }, query: { city: 'minacu' } },
+      { logger: silentLogger },
+    );
+    expect(r).toMatchObject({ city: 'uruacu', source: 'header', headerValid: true });
+  });
+
+  it('identifica a query string como fonte quando o header falta', () => {
+    const r = resolveTransferCityDetailed({ headers: {}, query: { city: 'uruacu' } }, { logger: silentLogger });
+    expect(r).toMatchObject({ city: 'uruacu', source: 'query', headerValid: false, queryValid: true });
+  });
+
+  it('identifica o fallback quando ambos são inválidos ou ausentes', () => {
+    const r = resolveTransferCityDetailed({ headers: {}, query: {} }, { logger: silentLogger });
+    expect(r).toMatchObject({ city: 'minacu', source: 'fallback' });
+  });
+
+  it('formata a linha de log com fonte e valores brutos', () => {
+    const r = resolveTransferCityDetailed(
+      { headers: { 'x-pulse-city': 'Uruaçu' }, query: { city: 'Minaçu' } },
+      { logger: silentLogger },
+    );
+    const line = formatCityResolutionLog(r, { scope: 'transfer-preview', clientId: 'abc' });
+    expect(line).toContain('scope=transfer-preview');
+    expect(line).toContain('client=abc');
+    expect(line).toContain('city=uruacu');
+    expect(line).toContain('source=header');
+    expect(line).toContain('header=Uruaçu');
+    expect(line).toContain('query=Minaçu');
   });
 });

@@ -161,8 +161,8 @@ export default function Clients() {
       if (total === 0) {
         return { ok: false, level: 'error' as const, message: 'Plano Especial ativo mas todas as metas estão em 0. Defina ao menos 1 entrega mensal (reels, criativos ou stories) — caso contrário nenhuma demanda de copy será gerada.' };
       }
-      if (wGoal !== total) {
-        return { ok: false, level: 'warn' as const, message: `Meta Total (${wGoal * 4}/mês) diferente da soma das metas (${total * 4}/mês). Isso pode gerar demandas incoerentes no módulo Copy.` };
+      if (Math.abs(wGoal - total) > 0.001) {
+        return { ok: false, level: 'warn' as const, message: `Meta Total (${Math.round(wGoal * 4)}/mês) diferente da soma das metas (${Math.round(total * 4)}/mês). Isso pode gerar demandas incoerentes no módulo Copy.` };
       }
       return { ok: true as const };
     }
@@ -1923,22 +1923,33 @@ export default function Clients() {
   );
   };
 
+
   const renderStep3 = () => {
-    // Entregas exibidas e editadas como MENSAL. Persistência continua em campos semanais (weekly = ceil(monthly/4)).
+    // Entregas exibidas e editadas como MENSAL. Persistência continua em campos semanais.
     const monthlyReels = (form.weeklyReels ?? 0) * 4;
     const monthlyCreatives = (form.weeklyCreatives ?? 0) * 4;
     const monthlyStories = (form.weeklyStories ?? 0) * 4;
-    const monthlyTotal = (form.weeklyGoal ?? 0) * 4;
+    const monthlyTotal = form.weeklyGoal !== undefined ? form.weeklyGoal * 4 : (monthlyReels + monthlyCreatives + monthlyStories);
+
     const setMonthly = (patch: Partial<{ reels: number; creatives: number; stories: number; total: number }>) => {
       setForm(prev => {
         const next = { ...prev };
-        if (patch.reels !== undefined) next.weeklyReels = Math.ceil(Math.max(0, patch.reels) / 4);
-        if (patch.creatives !== undefined) next.weeklyCreatives = Math.ceil(Math.max(0, patch.creatives) / 4);
-        if (patch.stories !== undefined) next.weeklyStories = Math.ceil(Math.max(0, patch.stories) / 4);
-        if (patch.total !== undefined) next.weeklyGoal = Math.ceil(Math.max(0, patch.total) / 4);
+        if (patch.reels !== undefined) next.weeklyReels = specialPlan ? patch.reels / 4 : Math.ceil(patch.reels / 4);
+        if (patch.creatives !== undefined) next.weeklyCreatives = specialPlan ? patch.creatives / 4 : Math.ceil(patch.creatives / 4);
+        if (patch.stories !== undefined) next.weeklyStories = specialPlan ? patch.stories / 4 : Math.ceil(patch.stories / 4);
+
+        
+        // Se estiver editando reels/creatives/stories, atualiza o total automaticamente se não for personalizado
+        if (patch.total === undefined && !specialPlan) {
+          next.weeklyGoal = (next.weeklyReels ?? 0) + (next.weeklyCreatives ?? 0) + (next.weeklyStories ?? 0);
+        } else if (patch.total !== undefined) {
+          next.weeklyGoal = specialPlan ? patch.total / 4 : Math.ceil(patch.total / 4);
+        }
+        
         return next;
       });
     };
+
     const planLabel = planId && !specialPlan
       ? (plans.find(p => p.id === planId)?.name || 'plano')
       : null;
@@ -1964,15 +1975,19 @@ export default function Clients() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="space-y-1">
             <Label>Reels/Mês</Label>
-            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyReels} onChange={e => setMonthly({ reels: Number(e.target.value) })} />
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyReels} onChange={e => setMonthly({ reels: Number(e.target.value) })} className="h-9 text-sm" />
           </div>
           <div className="space-y-1">
             <Label>Criativos/Mês</Label>
-            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyCreatives} onChange={e => setMonthly({ creatives: Number(e.target.value) })} />
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyCreatives} onChange={e => setMonthly({ creatives: Number(e.target.value) })} className="h-9 text-sm" />
           </div>
           <div className="space-y-1">
             <Label>Stories/Mês</Label>
-            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyStories} onChange={e => setMonthly({ stories: Number(e.target.value) })} />
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyStories} onChange={e => setMonthly({ stories: Number(e.target.value) })} className="h-9 text-sm" />
+          </div>
+          <div className="space-y-1">
+            <Label>Meta Total/Mês</Label>
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyTotal} onChange={e => setMonthly({ total: Number(e.target.value) })} className="h-9 text-sm" />
           </div>
           <div className="space-y-1">
             <Label>Limite Artes/Mês</Label>
@@ -1982,14 +1997,12 @@ export default function Clients() {
               value={form.artRequestsLimit ?? ''}
               onChange={e => setForm({ ...form, artRequestsLimit: e.target.value ? Number(e.target.value) : null })}
               placeholder="Sem limite"
+              className="h-9 text-sm"
             />
-            <p className="text-[10px] text-muted-foreground">Vazio = sem limite de solicitações</p>
-          </div>
-          <div className="space-y-1">
-            <Label>Meta Total/Mês</Label>
-            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyTotal} onChange={e => setMonthly({ total: Number(e.target.value) })} />
+            <p className="text-[10px] text-muted-foreground">Vazio = sem limite</p>
           </div>
         </div>
+
         {!planTargetsValidation.ok && (
           <div className={`p-3 rounded-lg border text-xs flex gap-2 items-start ${
             planTargetsValidation.level === 'error'
@@ -2089,9 +2102,10 @@ export default function Clients() {
         </div>
       </div>
 
-     </div>
-   );
-   };
+    </div>
+  );
+};
+
 
 
 

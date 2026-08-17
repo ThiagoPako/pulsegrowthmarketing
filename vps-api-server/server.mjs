@@ -5203,36 +5203,10 @@ async function tableHasCityColumn(tableName) {
 }
 
 // Whitelist global das cidades suportadas pelo sistema.
-const ALLOWED_CITIES = new Set(['minacu', 'uruacu']);
+// Implementação compartilhada em ./lib/cityResolution.mjs (coberta por testes automatizados).
+const { ALLOWED_CITIES, normalizeCityValue, assertValidCity, resolveTransferCity } =
+  await import('./lib/cityResolution.mjs');
 
-function normalizeCityValue(value) {
-  if (value === null || value === undefined) return null;
-  const v = String(value).trim().toLowerCase();
-  if (!v) return null;
-  // Normaliza acentos comuns: "Minaçu"/"Uruaçu" -> "minacu"/"uruacu"
-  const stripped = v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c');
-  
-  // Mapeamento explícito de segurança para cidades conhecidas se a normalização falhar por encoding
-  if (stripped.includes('minac') || stripped.includes('minacu')) return 'minacu';
-  if (stripped.includes('uruac') || stripped.includes('uruacu')) return 'uruacu';
-  
-  return stripped;
-}
-
-function assertValidCity(value, { field = 'city' } = {}) {
-  const normalized = normalizeCityValue(value);
-  // As promoções podem ter cidade nula (todas as cidades)
-  if (!normalized && (value === null || value === undefined)) return null;
-
-  // Se for nulo mas obrigatório, ou não estiver no set, aceita "minacu" como fallback de segurança
-  // para evitar erro 400 em validações de transferência onde o dado de origem/destino
-  // pode estar vindo com encoding corrompido.
-  if (!normalized || !ALLOWED_CITIES.has(normalized)) {
-    console.warn(`[City-Validation] Valor inválido para ${field}: "${value}". Usando 'minacu' como fallback.`);
-    return 'minacu';
-  }
-  return normalized;
-}
 
 function cityScopeExpression(columnName = 'city') {
   const safeColumn = columnName
@@ -6099,22 +6073,13 @@ const TRANSFER_TABLE_LABELS = {
 app.get('/api/clients/:id/transfer-preview', async (req, res) => {
    try {
      const { id } = req.params;
-     let targetCity = req.query.city;
-     
+
      // Admins podem visualizar previews sem validar activeCity rigorosamente
-     // para evitar o erro 400 se o header x-pulse-city vier mal formatado do front
-     const { user } = await verifyUser(req);
-     
-      // Prioritize city from header as it's the standard for multi-tenant isolation,
-      // but fallback to query param for the transfer preview flow.
-      const rawCity = req.headers['x-pulse-city'] || req.query.city;
-      
-      if (rawCity) {
-        targetCity = normalizeCityValue(rawCity);
-      }
-      
-      // If still missing, we default to 'minacu' to avoid 400 error and allow the checklist to load
-      const validatedCity = assertValidCity(targetCity || 'minacu');
+     await verifyUser(req);
+
+     // Header `x-pulse-city` tem prioridade; query `?city=` é fallback; 'minacu' é o último recurso.
+     const validatedCity = resolveTransferCity({ headers: req.headers, query: req.query });
+
 
      const { rows: currentRows } = await pool.query(
        'SELECT id, company_name, city FROM clients WHERE id = $1',

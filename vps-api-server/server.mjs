@@ -1,6 +1,6 @@
 /**
  * VPS API Server — Replaces all Supabase Edge Functions
- * Version: 1.2.2 - Security & Auth Repair Fix
+ * Version: 1.2.3 - Fix Auth Critical Fallback
  */
 
 import path from 'node:path';
@@ -1938,6 +1938,12 @@ app.post('/api/auth/login', async (req, res) => {
 
     const normalizedEmail = String(email).toLowerCase().trim();
     let profile = await getAuthProfileByEmail(normalizedEmail);
+    
+    // Log de diagnóstico para falha de login (ajuda o admin a ver o que está falhando)
+    if (!profile) {
+      console.warn(`[Login-Fail] User not found: ${normalizedEmail}`);
+    }
+
     let valid = await verifyStoredPassword(
       password,
       profile?.password_hash,
@@ -9609,15 +9615,19 @@ app.post('/api/admin/repair-atomic', async (req, res) => {
         email text UNIQUE NOT NULL,
         password_hash text NOT NULL,
         created_at timestamptz DEFAULT now(),
-        updated_at timestamptz DEFAULT now()
+        updated_at timestamptz DEFAULT now(),
+        last_sign_in timestamptz
       );
       CREATE TABLE IF NOT EXISTS public.user_roles (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id uuid REFERENCES auth_users(id) ON DELETE CASCADE,
+        user_id uuid,
         role text NOT NULL,
         created_at timestamptz DEFAULT now(),
         UNIQUE(user_id, role)
       );
+      ALTER TABLE public.user_roles 
+      DROP CONSTRAINT IF EXISTS user_roles_user_id_fkey,
+      ADD CONSTRAINT user_roles_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE;
     `).catch(e => results.push({ task: 'check_auth_tables', error: e.message }));
 
     // 3. Reparar permissões (Crucial para erro 502/401 se o user perdeu acesso)

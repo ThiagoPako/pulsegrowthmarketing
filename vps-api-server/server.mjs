@@ -5090,6 +5090,9 @@ function normalizeCityValue(value) {
 
 function assertValidCity(value, { field = 'city' } = {}) {
   const normalized = normalizeCityValue(value);
+  // As promoções podem ter cidade nula (todas as cidades)
+  if (!normalized && (value === null || value === undefined)) return null;
+
   if (!normalized || !ALLOWED_CITIES.has(normalized)) {
     const err = new Error(`Campo "${field}" inválido. Valores permitidos: ${Array.from(ALLOWED_CITIES).join(', ')}.`);
     err.statusCode = 400;

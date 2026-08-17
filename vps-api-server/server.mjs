@@ -5204,8 +5204,15 @@ async function tableHasCityColumn(tableName) {
 
 // Whitelist global das cidades suportadas pelo sistema.
 // Implementação compartilhada em ./lib/cityResolution.mjs (coberta por testes automatizados).
-const { ALLOWED_CITIES, normalizeCityValue, assertValidCity, resolveTransferCity } =
-  await import('./lib/cityResolution.mjs');
+const {
+  ALLOWED_CITIES,
+  normalizeCityValue,
+  assertValidCity,
+  resolveTransferCity,
+  resolveTransferCityDetailed,
+  formatCityResolutionLog,
+} = await import('./lib/cityResolution.mjs');
+
 
 
 function cityScopeExpression(columnName = 'city') {
@@ -6078,7 +6085,10 @@ app.get('/api/clients/:id/transfer-preview', async (req, res) => {
      await verifyUser(req);
 
      // Header `x-pulse-city` tem prioridade; query `?city=` é fallback; 'minacu' é o último recurso.
-     const validatedCity = resolveTransferCity({ headers: req.headers, query: req.query });
+     const cityResolution = resolveTransferCityDetailed({ headers: req.headers, query: req.query });
+     const validatedCity = cityResolution.city;
+     console.log(formatCityResolutionLog(cityResolution, { scope: 'transfer-preview', clientId: id }));
+
 
 
      const { rows: currentRows } = await pool.query(
@@ -6153,6 +6163,18 @@ app.put('/api/clients/:id', async (req, res) => {
     let newCityRaw = c.city;
     if (newCityRaw) newCityRaw = normalizeCityValue(newCityRaw);
     const newCity = newCityRaw ? assertValidCity(newCityRaw) : undefined;
+
+    // Log de auditoria: registra qual fonte definiu a cidade nesta transferência.
+    if (newCity && normalizeCityValue(oldCity) !== newCity) {
+      const bodyResolution = resolveTransferCityDetailed(
+        { headers: req.headers, query: { city: c.city } },
+      );
+      console.log(formatCityResolutionLog(
+        { ...bodyResolution, city: newCity, source: c.city ? 'body' : bodyResolution.source },
+        { scope: 'transfer-execute', clientId: id },
+      ), `from=${normalizeCityValue(oldCity) || '-'} to=${newCity}`);
+    }
+
 
     const allowed = [
       'company_name','responsible_person','phone','color','logo_url','fixed_day','fixed_time',

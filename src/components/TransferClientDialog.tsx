@@ -63,8 +63,9 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
     setIsBusy(true);
     setStep('validating');
     try {
+      const normalizedTarget = normalizeCityValue(targetCity);
       const res = await vpsAuthedFetch(
-        `/api/clients/${client.id}/transfer-preview?city=${encodeURIComponent(targetCity)}`
+        `/api/clients/${client.id}/transfer-preview?city=${encodeURIComponent(normalizedTarget || targetCity)}`
       );
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

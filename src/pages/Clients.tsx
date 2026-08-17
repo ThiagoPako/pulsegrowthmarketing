@@ -1997,7 +1997,7 @@ export default function Clients() {
           </div>
           <div className="space-y-1">
             <Label>Meta Total/Mês</Label>
-            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyTotal} onChange={e => setMonthly({ total: Number(e.target.value) })} />
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyTotal} onChange={e => setMonthly({ total: Number(e.target.value) })} className="h-9 text-sm" />
           </div>
         </div>
         {!planTargetsValidation.ok && (

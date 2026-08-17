@@ -1943,7 +1943,7 @@ export default function Clients() {
         if (patch.total === undefined && !specialPlan) {
           next.weeklyGoal = (next.weeklyReels ?? 0) + (next.weeklyCreatives ?? 0) + (next.weeklyStories ?? 0);
         } else if (patch.total !== undefined) {
-          next.weeklyGoal = Math.ceil(patch.total / 4);
+          next.weeklyGoal = specialPlan ? patch.total / 4 : Math.ceil(patch.total / 4);
         }
         
         return next;

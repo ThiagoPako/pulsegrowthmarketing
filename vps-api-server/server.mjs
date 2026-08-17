@@ -5203,36 +5203,10 @@ async function tableHasCityColumn(tableName) {
 }
 
 // Whitelist global das cidades suportadas pelo sistema.
-const ALLOWED_CITIES = new Set(['minacu', 'uruacu']);
+// Implementação compartilhada em ./lib/cityResolution.mjs (coberta por testes automatizados).
+const { ALLOWED_CITIES, normalizeCityValue, assertValidCity, resolveTransferCity } =
+  await import('./lib/cityResolution.mjs');
 
-function normalizeCityValue(value) {
-  if (value === null || value === undefined) return null;
-  const v = String(value).trim().toLowerCase();
-  if (!v) return null;
-  // Normaliza acentos comuns: "Minaçu"/"Uruaçu" -> "minacu"/"uruacu"
-  const stripped = v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c');
-  
-  // Mapeamento explícito de segurança para cidades conhecidas se a normalização falhar por encoding
-  if (stripped.includes('minac') || stripped.includes('minacu')) return 'minacu';
-  if (stripped.includes('uruac') || stripped.includes('uruacu')) return 'uruacu';
-  
-  return stripped;
-}
-
-function assertValidCity(value, { field = 'city' } = {}) {
-  const normalized = normalizeCityValue(value);
-  // As promoções podem ter cidade nula (todas as cidades)
-  if (!normalized && (value === null || value === undefined)) return null;
-
-  // Se for nulo mas obrigatório, ou não estiver no set, aceita "minacu" como fallback de segurança
-  // para evitar erro 400 em validações de transferência onde o dado de origem/destino
-  // pode estar vindo com encoding corrompido.
-  if (!normalized || !ALLOWED_CITIES.has(normalized)) {
-    console.warn(`[City-Validation] Valor inválido para ${field}: "${value}". Usando 'minacu' como fallback.`);
-    return 'minacu';
-  }
-  return normalized;
-}
 
 function cityScopeExpression(columnName = 'city') {
   const safeColumn = columnName

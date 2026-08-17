@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Database } from 'lucide-react';
@@ -70,14 +69,12 @@ export default function PublicClientDatabase() {
     ];
   }, [data]);
 
+  useEffect(() => {
+    document.title = data ? `Banco de Dados — ${data.client.company_name}` : 'Banco de Dados do Cliente';
+  }, [data]);
+
   return (
     <main className="min-h-screen bg-background px-4 py-8">
-      <Helmet>
-        <title>{data ? `Banco de Dados — ${data.client.company_name}` : 'Banco de Dados do Cliente'}</title>
-        <meta name="description" content="Acervo organizado de fotos e vídeos do cliente, com filtros e download direto." />
-        <meta name="robots" content="noindex, nofollow" />
-      </Helmet>
-
       <div className="mx-auto max-w-6xl space-y-6">
         {loading ? (
           <div className="flex justify-center py-24"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>

@@ -162,7 +162,7 @@ export default function Clients() {
         return { ok: false, level: 'error' as const, message: 'Plano Especial ativo mas todas as metas estão em 0. Defina ao menos 1 entrega mensal (reels, criativos ou stories) — caso contrário nenhuma demanda de copy será gerada.' };
       }
       if (wGoal !== total) {
-        return { ok: false, level: 'warn' as const, message: `Meta Total (${wGoal * 4}/mês) diferente da soma das metas (${total * 4}/mês). Isso pode gerar demandas incoerentes no módulo Copy.` };
+        return { ok: false, level: 'warn' as const, message: `Meta Total (${Math.round(wGoal * 4)}/mês) diferente da soma das metas (${Math.round(total * 4)}/mês). Isso pode gerar demandas incoerentes no módulo Copy.` };
       }
       return { ok: true as const };
     }

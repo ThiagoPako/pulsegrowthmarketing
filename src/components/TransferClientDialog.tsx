@@ -133,7 +133,7 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
                     <SelectValue placeholder="Selecione a cidade" />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableCities.filter(c => c.toLowerCase() !== (client.city || '').toLowerCase()).map(city => (
+                    {availableCities.filter(c => normalizeCityValue(c) !== normalizeCityValue(client.city || activeCity)).map(city => (
                       <SelectItem key={city} value={city}>
                         {city.charAt(0).toUpperCase() + city.slice(1)}
                       </SelectItem>

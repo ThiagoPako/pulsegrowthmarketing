@@ -1,4 +1,4 @@
-// 502 Bad Gateway - nginx/1.24.0 (Ubuntu) - Aplicando correção emergencial de boot.
+// 502 Bad Gateway - nginx/1.24.0 (Ubuntu) - Aplicando correção de resiliência e reinício forçado da API.
 // Login na VPS: Implementado Fallback Robusto no endpoint /api/auth/login.
 // Identificado que usuários existentes apenas na tabela 'auth_users' (sem vínculo em 'profiles') falhavam no login.
 

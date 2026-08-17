@@ -110,6 +110,30 @@ function collectOnlinePresenceIds() {
 
 let storyEditingSessionsEnsuredPromise = null;
 let crmLeadsColumnsEnsuredPromise = null;
+let expenseStructureColumnEnsuredPromise = null;
+
+async function ensureExpenseStructureColumn() {
+  if (!expenseStructureColumnEnsuredPromise) {
+    expenseStructureColumnEnsuredPromise = (async () => {
+      try {
+        const columns = await getExistingColumns('expenses');
+        if (!columns.has('structure_investment')) {
+          await pool.query('ALTER TABLE expenses ADD COLUMN structure_investment BOOLEAN DEFAULT FALSE').catch(err => {
+            if (!/already exists|must be owner/i.test(err.message)) throw err;
+          });
+          console.log('Column structure_investment added to expenses');
+          const cache = getTableColumnsPromiseCache();
+          if (cache) cache.delete('expenses');
+        }
+      } catch (err) {
+        console.error('ensureExpenseStructureColumn error:', err);
+        expenseStructureColumnEnsuredPromise = null;
+      }
+    })();
+  }
+  return expenseStructureColumnEnsuredPromise;
+}
+
 
 async function ensureCrmLeadsColumns() {
   if (!crmLeadsColumnsEnsuredPromise) {

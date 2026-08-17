@@ -255,6 +255,23 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
                 </Select>
               </div>
 
+              {cityError && (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 space-y-1 animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
+                    <p className="text-sm font-bold text-destructive">{cityError.title}</p>
+                  </div>
+                  <p className="text-xs text-destructive/90">{cityError.message}</p>
+                  {cityError.hint && <p className="text-xs text-muted-foreground">{cityError.hint}</p>}
+                  {cityError.details && (
+                    <p className="text-[10px] font-mono text-muted-foreground">{cityError.details}</p>
+                  )}
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">código: {cityError.code}</p>
+                </div>
+              )}
+
+
+
               <DialogFooter className="pt-4">
                 <Button variant="ghost" onClick={() => setStep('security')}>Voltar</Button>
                 <Button 

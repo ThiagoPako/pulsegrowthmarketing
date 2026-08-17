@@ -1983,8 +1983,10 @@ export default function Clients() {
           <div className="space-y-1">
             <Label>Stories/Mês</Label>
             <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyStories} onChange={e => setMonthly({ stories: Number(e.target.value) })} className="h-9 text-sm" />
-
           </div>
+          <div className="space-y-1">
+            <Label>Meta Total/Mês</Label>
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyTotal} onChange={e => setMonthly({ total: Number(e.target.value) })} className="h-9 text-sm" />
           </div>
           <div className="space-y-1">
             <Label>Limite Artes/Mês</Label>
@@ -1998,12 +2000,8 @@ export default function Clients() {
             />
             <p className="text-[10px] text-muted-foreground">Vazio = sem limite</p>
           </div>
-
-          <div className="space-y-1">
-            <Label>Meta Total/Mês</Label>
-            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyTotal} onChange={e => setMonthly({ total: Number(e.target.value) })} className="h-9 text-sm" />
-          </div>
         </div>
+
         {!planTargetsValidation.ok && (
           <div className={`p-3 rounded-lg border text-xs flex gap-2 items-start ${
             planTargetsValidation.level === 'error'

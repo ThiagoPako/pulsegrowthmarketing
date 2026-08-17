@@ -1,11 +1,17 @@
 /**
  * VPS API Server — Replaces all Supabase Edge Functions
- * Version: 1.2.3 - Fix Auth Critical Fallback
+ * Version: 1.2.4 - Emergency 502/Startup Fix
  */
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
+process.on('uncaughtException', (err) => {
+  console.error('CRITICAL UNCAUGHT EXCEPTION:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('CRITICAL UNHANDLED REJECTION:', reason);
+});
 import fs from 'node:fs';
 import dotenv from 'dotenv';
 import express from 'express';

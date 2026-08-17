@@ -6085,7 +6085,10 @@ app.get('/api/clients/:id/transfer-preview', async (req, res) => {
      await verifyUser(req);
 
      // Header `x-pulse-city` tem prioridade; query `?city=` é fallback; 'minacu' é o último recurso.
-     const validatedCity = resolveTransferCity({ headers: req.headers, query: req.query });
+     const cityResolution = resolveTransferCityDetailed({ headers: req.headers, query: req.query });
+     const validatedCity = cityResolution.city;
+     console.log(formatCityResolutionLog(cityResolution, { scope: 'transfer-preview', clientId: id }));
+
 
 
      const { rows: currentRows } = await pool.query(

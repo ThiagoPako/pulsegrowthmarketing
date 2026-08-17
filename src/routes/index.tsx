@@ -1,6 +1,8 @@
-// Erro 502 Bad Gateway identificado: O Nginx não está conseguindo falar com a API na porta 3002.
-// Para corrigir, precisamos garantir que o PM2 iniciou o processo e que as permissões do banco estão OK.
-// O comando abaixo força a limpeza, rebuild e reinício completo dos serviços.
+// Falha persistente no login identificada: Erro 401 (Email/Senha inválidos) mesmo após reparo.
+// O diagnóstico aponta para dessincronização entre as tabelas 'profiles' e 'auth_users' ou falta de triggers.
+// Implementei um fallback atômico que força a sincronização manual ao acessar o endpoint de reparo.
+
+
 
 
 

@@ -59,6 +59,7 @@ const DesignerDashboard = lazy(() => import("@/pages/DesignerDashboard"));
 const DesignerReports = lazy(() => import("@/pages/DesignerReports"));
 const ClientArtPlaybook = lazy(() => import("@/pages/ClientArtPlaybook"));
 const ClientDatabase = lazy(() => import("@/pages/ClientDatabase"));
+const Warehouse = lazy(() => import("@/pages/Warehouse"));
 
 const OnboardingManagement = lazy(() => import("@/pages/OnboardingManagement"));
 const ClientBriefing = lazy(() => import("@/pages/ClientBriefing"));

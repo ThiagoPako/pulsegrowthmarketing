@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Users, Calendar, Star, CheckCircle, Loader2 } from 'lucide-react';
+import { Users, Calendar, Star, CheckCircle, Loader2, Hammer } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -27,7 +27,15 @@ interface ExpenseFormDialogProps {
   onSave: (form: any, editingId: string | null) => Promise<void>;
 }
 
-const emptyForm = { date: new Date().toISOString().split('T')[0], amount: 0, category_id: '', expense_type: 'fixa', description: '', responsible: '' };
+const emptyForm = { 
+  date: new Date().toISOString().split('T')[0], 
+  amount: 0, 
+  category_id: '', 
+  expense_type: 'fixa', 
+  description: '', 
+  responsible: '',
+  structure_investment: false
+};
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin',
@@ -66,11 +74,11 @@ export default function ExpenseFormDialog({ open, onOpenChange, categories, edit
         expense_type: editingExpense.expense_type,
         description: editingExpense.description,
         responsible: editingExpense.responsible,
+        structure_investment: editingExpense.structure_investment || false,
       });
       if (salaryCategory && editingExpense.category_id === salaryCategory.id) {
         setIsSalaryMode(true);
-  structure_investment: boolean;
-}
+      }
     } else {
       setForm(emptyForm);
       setIsSalaryMode(false);
@@ -82,8 +90,7 @@ export default function ExpenseFormDialog({ open, onOpenChange, categories, edit
   useEffect(() => {
     if (isSalaryMode && salaryCategory) {
       setForm(f => ({ ...f, category_id: salaryCategory.id, expense_type: 'fixa' }));
-    structure_investment: initialData?.structure_investment || false,
-}
+    }
   }, [isSalaryMode, salaryCategory]);
 
   // When selecting a team member
@@ -106,7 +113,6 @@ export default function ExpenseFormDialog({ open, onOpenChange, categories, edit
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth();
-    // If we're past the day already, use current month still (user might be registering)
     const d = new Date(year, month, day);
     setForm(f => ({ ...f, date: d.toISOString().split('T')[0] }));
   };

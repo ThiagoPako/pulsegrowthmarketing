@@ -9635,7 +9635,6 @@ app.post('/api/admin/repair-atomic', async (req, res) => {
     const dbUser = process.env.PG_USER || process.env.PGUSER || 'pulse_user';
     const dbName = process.env.PG_DATABASE || process.env.PGDATABASE || 'pulse_db';
     
-    // GRANT ALL em tabelas específicas caso o 'ALL TABLES' falhe por ownership
     await pool.query(`
       GRANT ALL PRIVILEGES ON DATABASE ${dbName} TO ${dbUser};
       GRANT ALL ON SCHEMA public TO ${dbUser};
@@ -9644,13 +9643,24 @@ app.post('/api/admin/repair-atomic', async (req, res) => {
       ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${dbUser};
     `).catch(async (e) => {
       results.push({ task: 'repair_permissions', warning: e.message });
-      // Tentar ownership individual se necessário
       await pool.query(`ALTER TABLE auth_users OWNER TO ${dbUser}`).catch(() => {});
       await pool.query(`ALTER TABLE user_roles OWNER TO ${dbUser}`).catch(() => {});
     });
 
+    // 4. Sincronizar perfis órfãos (Crucial para erro 401)
+    results.push({ task: 'sync_orphan_profiles', status: 'started' });
+    await pool.query(`
+      INSERT INTO auth_users (id, email, password_hash)
+      SELECT p.id, p.email, p.password_hash 
+      FROM profiles p
+      WHERE p.email IS NOT NULL 
+        AND p.password_hash IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM auth_users au WHERE au.id = p.id OR lower(au.email) = lower(p.email))
+      ON CONFLICT DO NOTHING
+    `).catch(e => results.push({ task: 'sync_orphan_profiles', error: e.message }));
 
     res.json({ success: true, results });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

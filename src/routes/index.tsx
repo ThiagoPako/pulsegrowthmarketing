@@ -1,5 +1,5 @@
 // Erro ao validar a transferência
-// erro continua
+// ao clicar em validar transferencia, mesmo após executar todos os comando enviados o erro nao foi solucionado, analise a causa e entenda o que precisa ser feito e encaminhe o comando seguro para atualiza a vps
 // Não é apenas no CRM que quero transfeir cliente, quero transfeir cliente no modulo CLIENTE para outra cidade
 // CORREÇÃO: Criada e liberada a tabela 'scheduled_recordings' no backend (VPS) para permitir transferência de clientes.
 // Implementada validação atômica no backend (VPS) para intervalo de 1h30 entre reuniões no CRM.

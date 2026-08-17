@@ -30,7 +30,7 @@ npm install
 
 # 5. Reiniciar processos PM2
 # O pulse-api contém a lógica de migração automática ao iniciar
-pm2 restart pulse-api pulse-uploads
+pm2 restart pulse-api
 
 # 6. Recarregar Nginx
 sudo systemctl reload nginx

@@ -1653,8 +1653,9 @@ function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => 
     setIsBusy(true);
     setStep('validating');
     try {
+      const normalizedCity = targetCity.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c');
       const res = await vpsAuthedFetch(
-        `/api/clients/${lead.id}/transfer-preview?city=${encodeURIComponent(targetCity)}`
+        `/api/clients/${lead.id}/transfer-preview?city=${encodeURIComponent(normalizedCity)}`
       );
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

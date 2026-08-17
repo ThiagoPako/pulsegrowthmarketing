@@ -5199,6 +5199,11 @@ function normalizeCityValue(value) {
   if (!v) return null;
   // Normaliza acentos comuns: "Minaçu"/"Uruaçu" -> "minacu"/"uruacu"
   const stripped = v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c');
+  
+  // Mapeamento explícito de segurança para cidades conhecidas se a normalização falhar por encoding
+  if (stripped.includes('minac') || stripped.includes('minacu')) return 'minacu';
+  if (stripped.includes('uruac') || stripped.includes('uruacu')) return 'uruacu';
+  
   return stripped;
 }
 

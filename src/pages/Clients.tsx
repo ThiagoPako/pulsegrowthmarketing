@@ -1929,7 +1929,7 @@ export default function Clients() {
     const monthlyReels = (form.weeklyReels ?? 0) * 4;
     const monthlyCreatives = (form.weeklyCreatives ?? 0) * 4;
     const monthlyStories = (form.weeklyStories ?? 0) * 4;
-    const monthlyTotal = form.weeklyGoal ? form.weeklyGoal * 4 : (monthlyReels + monthlyCreatives + monthlyStories);
+    const monthlyTotal = form.weeklyGoal !== undefined ? form.weeklyGoal * 4 : (monthlyReels + monthlyCreatives + monthlyStories);
 
     const setMonthly = (patch: Partial<{ reels: number; creatives: number; stories: number; total: number }>) => {
       setForm(prev => {

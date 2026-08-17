@@ -9648,17 +9648,19 @@ app.post('/api/admin/repair-atomic', async (req, res) => {
     const dbUser = process.env.PG_USER || process.env.PGUSER || 'pulse_user';
     const dbName = process.env.PG_DATABASE || process.env.PGDATABASE || 'pulse_db';
     
-    await pool.query(`
-      GRANT ALL PRIVILEGES ON DATABASE ${dbName} TO ${dbUser};
-      GRANT ALL ON SCHEMA public TO ${dbUser};
-      GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${dbUser};
-      GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${dbUser};
-      ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${dbUser};
-    `).catch(async (e) => {
+    // Tenta resetar o owner e privilégios de forma agressiva
+    try {
+      await pool.query(`ALTER TABLE IF EXISTS auth_users OWNER TO ${dbUser}`);
+      await pool.query(`ALTER TABLE IF EXISTS user_roles OWNER TO ${dbUser}`);
+      await pool.query(`ALTER TABLE IF EXISTS profiles OWNER TO ${dbUser}`);
+      await pool.query(`GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${dbUser}`);
+      await pool.query(`GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${dbUser}`);
+      results.push({ task: 'repair_permissions', status: 'success' });
+    } catch (e) {
       results.push({ task: 'repair_permissions', warning: e.message });
-      await pool.query(`ALTER TABLE auth_users OWNER TO ${dbUser}`).catch(() => {});
-      await pool.query(`ALTER TABLE user_roles OWNER TO ${dbUser}`).catch(() => {});
-    });
+      // Fallback para quando não é superuser: tenta apenas grant
+      await pool.query(`GRANT ALL ON ALL TABLES IN SCHEMA public TO ${dbUser}`).catch(() => {});
+    }
 
     // 4. Sincronizar perfis órfãos (Crucial para erro 401)
     results.push({ task: 'sync_orphan_profiles', status: 'started' });

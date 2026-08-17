@@ -1,4 +1,4 @@
-// qual comando usar no terminal ?
+// failed to load resource: the server responded with a status of 502 (Bad Gateway) - erro continua
 // Login na VPS: Implementado Fallback Robusto no endpoint /api/auth/login.
 // Identificado que usuários existentes apenas na tabela 'auth_users' (sem vínculo em 'profiles') falhavam no login.
 

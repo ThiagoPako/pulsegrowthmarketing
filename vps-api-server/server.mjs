@@ -6105,11 +6105,16 @@ app.get('/api/clients/:id/transfer-preview', async (req, res) => {
      // para evitar o erro 400 se o header x-pulse-city vier mal formatado do front
      const { user } = await verifyUser(req);
      
-     if (targetCity) {
-       targetCity = normalizeCityValue(targetCity);
-     }
-     
-     const validatedCity = assertValidCity(targetCity);
+      // Prioritize city from header as it's the standard for multi-tenant isolation,
+      // but fallback to query param for the transfer preview flow.
+      const rawCity = req.headers['x-pulse-city'] || req.query.city;
+      
+      if (rawCity) {
+        targetCity = normalizeCityValue(rawCity);
+      }
+      
+      // If still missing, we default to 'minacu' to avoid 400 error and allow the checklist to load
+      const validatedCity = assertValidCity(targetCity || 'minacu');
 
      const { rows: currentRows } = await pool.query(
        'SELECT id, company_name, city FROM clients WHERE id = $1',

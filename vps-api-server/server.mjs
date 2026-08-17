@@ -9597,6 +9597,9 @@ app.post('/api/admin/repair-atomic', async (req, res) => {
     results.push({ task: 'ensure_expense_structure_column', status: 'started' });
     await ensureExpenseStructureColumn().catch(e => results.push({ task: 'ensure_expense_structure_column', error: e.message }));
 
+    // Ensure Warehouse tables
+    results.push({ task: 'ensure_warehouse_tables', status: 'started' });
+    await ensureWarehouseTables().catch(e => results.push({ task: 'ensure_warehouse_tables', error: e.message }));
 
     // 2. Garantir tabelas do Auth (Se existirem)
     results.push({ task: 'check_auth_tables', status: 'started' });

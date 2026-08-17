@@ -8703,8 +8703,8 @@ app.get('/api/training/stream/:lessonId', async (req, res) => {
 
 // ─── WebSocket Server for real-time presence & chat ─────────
 
-// WebSocketServer já importado no topo
-const server = createServer(app);
+// WebSocketServer already uses the global server instance initialized at the top
+
 const wss = new WebSocketServer({ server, path: '/api/realtime' });
 
 wss.on('connection', (ws) => {

@@ -59,8 +59,12 @@ async function refreshVpsSession(): Promise<boolean> {
  * Authenticated fetch against the VPS API.
  * Adds JWT + city headers and retries once after refreshing an expired session.
  */
-export async function vpsAuthedFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const url = path.startsWith('http') ? path : `${VPS_API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
+ export async function vpsAuthedFetch(path: string, init: RequestInit = {}): Promise<Response> {
+   // VPS_API_BASE já termina em "/api" — remover prefixo duplicado evita 404 em /api/api/...
+   const normalizedPath = path.startsWith('http')
+     ? path
+     : `/${path.replace(/^\/+/, '').replace(/^api\//, '')}`;
+   const url = path.startsWith('http') ? path : `${VPS_API_BASE}${normalizedPath}`;
   
   // Garantir que a cidade ativa esteja sempre presente nos headers de toda requisição autenticada
   const activeCity = getActiveCity();

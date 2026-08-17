@@ -6087,10 +6087,20 @@ app.get('/api/clients/:id/transfer-preview', async (req, res) => {
      // Admins podem visualizar previews sem validar activeCity rigorosamente
      await verifyUser(req);
 
-     // Header `x-pulse-city` tem prioridade; query `?city=` é fallback; 'minacu' é o último recurso.
-     const cityResolution = resolveTransferCityDetailed({ headers: req.headers, query: req.query });
-     const validatedCity = cityResolution.city;
-     console.log(formatCityResolutionLog(cityResolution, { scope: 'transfer-preview', clientId: id }));
+    // Diagnóstico estrito: em vez de cair silenciosamente em 'minacu', devolve
+    // um erro estruturado (code + hint) quando a cidade não pode ser resolvida.
+    const diagnosis = diagnoseTransferCity({ headers: req.headers, query: req.query });
+    if (!diagnosis.ok) {
+      console.warn(`[City-Resolution] scope=transfer-preview client=${id} FAILED code=${diagnosis.error.code} header=${req.headers['x-pulse-city'] ?? '-'} query=${req.query?.city ?? '-'}`);
+      return res.status(400).json(diagnosis.error);
+    }
+
+    const validatedCity = diagnosis.city;
+    console.log(formatCityResolutionLog(diagnosis, { scope: 'transfer-preview', clientId: id }));
+    if (diagnosis.warning) {
+      console.warn(`[City-Resolution] scope=transfer-preview client=${id} ${diagnosis.warning.code}: ${diagnosis.warning.message}`);
+    }
+
 
 
 

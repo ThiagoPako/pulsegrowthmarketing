@@ -14,8 +14,6 @@ import { vpsAuthedFetch } from '@/lib/vpsDb';
 
 function normalizeCityValue(value: string | null | undefined): string | null {
   if (!value) return null;
-  // Acentuação e cedilha já são tratados via normalização NFD e regex.
-  // IMPORTANTE: O backend agora é soberano na normalização final.
   return value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c');
 }
 
@@ -66,9 +64,7 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
     setIsBusy(true);
     setStep('validating');
     try {
-      // Normalização idêntica à do CRM para consistência absoluta
       const normalizedCity = targetCity.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c');
-      // Passar a cidade normalizada via query E via header manual para garantir que o backend receba o contexto
       const res = await vpsAuthedFetch(
         `/api/clients/${client.id}/transfer-preview?city=${encodeURIComponent(normalizedCity)}`,
         {
@@ -97,7 +93,6 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
     setIsBusy(true);
     setStep('preparing');
     try {
-      // Simulação de progresso enquanto a requisição atômica ocorre
       const progressInterval = setInterval(() => {
         setTransferProgress(prev => (prev < 90 ? prev + 5 : prev));
       }, 300);
@@ -150,17 +145,79 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
         </DialogHeader>
 
         <div className="py-4 space-y-4">
+          <div className="flex items-center justify-between mb-6 px-2">
+            {[
+              { id: 'security', icon: ShieldCheck },
+              { id: 'validating', icon: RefreshCw },
+              { id: 'preview', icon: CheckCircle2 },
+              { id: 'preparing', icon: Loader2 }
+            ].map((s, i) => {
+              const Icon = s.icon;
+              const isActive = step === s.id || (step === 'confirm' && s.id === 'security') || (step === 'done' && s.id === 'preparing');
+              return (
+                <div key={s.id} className="flex items-center flex-1 last:flex-none">
+                  <div className={`
+                    w-8 h-8 rounded-full flex items-center justify-center transition-colors
+                    ${isActive ? 'bg-orange-500 text-white' : 'bg-muted text-muted-foreground'}
+                  `}>
+                    <Icon className={`w-4 h-4 ${isActive && s.id === 'preparing' ? 'animate-spin' : ''}`} />
+                  </div>
+                  {i < 3 && (
+                    <div className={`h-[2px] flex-1 mx-2 ${isActive ? 'bg-orange-200' : 'bg-muted'}`} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {step === 'security' && (
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+              <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg flex gap-3">
+                <ShieldCheck className="w-8 h-8 text-blue-500 shrink-0" />
+                <div className="space-y-1">
+                  <p className="font-bold text-blue-900">Segurança de Dados</p>
+                  <p className="text-xs text-blue-700 leading-relaxed">
+                    Para garantir a integridade da transferência, o sistema irá preparar todos os registros vinculados ao cliente <strong>{client.companyName}</strong>. 
+                    Esta ação é segura, mas requer confirmação de que os dados estão prontos.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Contexto Atual</Label>
+                <div className="p-3 bg-muted/50 rounded-md text-xs font-medium">
+                  Cidade de Origem: {CITY_LABELS[(client.city || activeCity).toLowerCase()] || client.city || activeCity}
+                </div>
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+                <Button 
+                  className="bg-orange-500 hover:bg-orange-600 text-white gap-2" 
+                  onClick={() => setStep('confirm')}
+                >
+                  Preparar Dados <ArrowRightLeft className="w-4 h-4" />
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+
           {step === 'confirm' && (
-            <>
-              <div className="p-3 bg-orange-50 border border-orange-100 rounded-lg text-xs text-orange-800 space-y-2">
-                <p className="font-medium">Cliente: {client.companyName}</p>
-                <p>Ao transferir este cliente, todos os dados vinculados (histórico, tarefas, roteiros, financeiro, gravações) serão movidos para a nova cidade.</p>
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+              <div className="p-4 bg-orange-50 border border-orange-100 rounded-lg flex gap-3">
+                <AlertTriangle className="w-8 h-8 text-orange-500 shrink-0" />
+                <div className="space-y-1">
+                  <p className="font-bold text-orange-900">Destino da Transferência</p>
+                  <p className="text-xs text-orange-700">
+                    Selecione para qual cidade deseja mover o cliente e todos os seus <strong>roteiros, gravações e tarefas</strong>.
+                  </p>
+                </div>
               </div>
 
               <div className="space-y-2">
                 <Label>Cidade de Destino</Label>
                 <Select value={targetCity} onValueChange={setTargetCity}>
-                  <SelectTrigger className="bg-muted/50">
+                  <SelectTrigger className="bg-muted/50 h-12">
                     <SelectValue placeholder="Selecione a cidade" />
                   </SelectTrigger>
                   <SelectContent>
@@ -174,87 +231,121 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
               </div>
 
               <DialogFooter className="pt-4">
-                <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isBusy}>Cancelar</Button>
+                <Button variant="ghost" onClick={() => setStep('security')}>Voltar</Button>
                 <Button 
-                  className="bg-orange-500 hover:bg-orange-600 text-white" 
+                  className="bg-orange-500 hover:bg-orange-600 text-white flex-1" 
                   onClick={handleValidate}
                   disabled={isBusy || !targetCity}
                 >
-                  Validar transferência
+                  Liberar Validação
                 </Button>
               </DialogFooter>
-            </>
+            </div>
           )}
 
           {step === 'validating' && (
-            <div className="flex flex-col items-center justify-center py-10 space-y-4">
-              <Loader2 className="h-10 w-10 text-orange-500 animate-spin" />
+            <div className="flex flex-col items-center justify-center py-12 space-y-4 animate-in zoom-in-95 duration-300">
+              <div className="relative">
+                <div className="absolute inset-0 bg-orange-500/20 rounded-full animate-ping" />
+                <Loader2 className="h-12 w-12 text-orange-500 animate-spin relative" />
+              </div>
               <div className="text-center space-y-1">
-                <p className="font-bold">Analisando registros...</p>
-                <p className="text-xs text-muted-foreground">Isso pode levar alguns segundos</p>
+                <p className="font-bold text-lg">Validando Checklist...</p>
+                <p className="text-sm text-muted-foreground italic">Mapeando vínculos e dependências</p>
               </div>
             </div>
           )}
 
           {step === 'preview' && preview && (
-            <>
-              <div className="flex items-center justify-center gap-3 text-sm font-bold">
-                <Badge variant="outline">{CITY_LABELS[preview.from.toLowerCase()] || preview.from}</Badge>
-                <ArrowRightLeft className="h-4 w-4 text-orange-500" />
-                <Badge className="bg-orange-500 text-white border-none">{CITY_LABELS[preview.to.toLowerCase()] || preview.to}</Badge>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-lg border bg-muted/40 text-center">
-                  <p className="text-2xl font-bold text-orange-500">{preview.total_records}</p>
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Registros afetados</p>
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+              <div className="flex items-center justify-center gap-4 bg-muted/30 p-4 rounded-xl border border-dashed">
+                <div className="text-center">
+                  <p className="text-[10px] uppercase text-muted-foreground font-bold mb-1">DE</p>
+                  <Badge variant="outline" className="px-3 py-1">{CITY_LABELS[preview.from.toLowerCase()] || preview.from}</Badge>
                 </div>
-                <div className="p-3 rounded-lg border bg-muted/40 text-center">
-                  <p className="text-2xl font-bold text-orange-500">{preview.tables_affected}</p>
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Módulos envolvidos</p>
+                <ArrowRightLeft className="h-5 w-5 text-orange-500 animate-pulse" />
+                <div className="text-center">
+                  <p className="text-[10px] uppercase text-muted-foreground font-bold mb-1">PARA</p>
+                  <Badge className="bg-orange-500 text-white border-none px-3 py-1">{CITY_LABELS[preview.to.toLowerCase()] || preview.to}</Badge>
                 </div>
               </div>
 
-              <div className="max-h-52 overflow-y-auto rounded-lg border divide-y">
-                {preview.details.map((row) => (
-                  <div key={row.table} className="flex items-center justify-between px-3 py-2 text-xs">
-                    <span className="font-medium">{row.label}</span>
-                    <Badge variant="secondary" className="text-[10px]">{row.count}</Badge>
-                  </div>
-                ))}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl border bg-gradient-to-br from-white to-orange-50/30 text-center shadow-sm">
+                  <p className="text-3xl font-black text-orange-600 leading-none">{preview.total_records}</p>
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground mt-2">Registros Totais</p>
+                </div>
+                <div className="p-4 rounded-xl border bg-gradient-to-br from-white to-blue-50/30 text-center shadow-sm">
+                  <p className="text-3xl font-black text-blue-600 leading-none">{preview.tables_affected}</p>
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground mt-2">Módulos Sincronizados</p>
+                </div>
               </div>
 
-              <DialogFooter className="pt-2">
-                <Button variant="outline" onClick={resetState} disabled={isBusy}>Voltar</Button>
+              <div className="space-y-2">
+                <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Checklist de Transferência</Label>
+                <div className="max-h-48 overflow-y-auto rounded-xl border bg-white divide-y shadow-inner">
+                  {preview.details.map((row) => (
+                    <div key={row.table} className="flex items-center justify-between px-4 py-3 text-sm hover:bg-orange-50/20 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                        <span className="font-medium text-slate-700">{row.label}</span>
+                      </div>
+                      <Badge variant="secondary" className="font-mono bg-slate-100">{row.count}</Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <DialogFooter className="pt-2 gap-2">
+                <Button variant="ghost" onClick={() => setStep('confirm')} disabled={isBusy}>Alterar Destino</Button>
                 <Button
-                  className="bg-orange-500 hover:bg-orange-600 text-white"
+                  className="bg-orange-600 hover:bg-orange-700 text-white flex-1 font-bold h-12 shadow-lg shadow-orange-200"
                   onClick={handleTransfer}
                   disabled={isBusy}
                 >
-                  Confirmar transferência
+                  Clique para Transferir
                 </Button>
               </DialogFooter>
-            </>
+            </div>
           )}
 
           {step === 'preparing' && (
-            <div className="flex flex-col items-center justify-center py-10 space-y-4">
-              <Loader2 className="h-10 w-10 text-orange-500 animate-spin" />
+            <div className="flex flex-col items-center justify-center py-10 space-y-6 animate-in fade-in duration-300">
+              <div className="w-full max-w-[280px] space-y-3">
+                <div className="flex justify-between text-xs font-bold uppercase tracking-tighter text-orange-600">
+                  <span>Processando Migração</span>
+                  <span>{transferProgress}%</span>
+                </div>
+                <Progress value={transferProgress} className="h-3 bg-orange-100" />
+              </div>
+              
               <div className="text-center space-y-1">
-                <p className="font-bold">Organizando dados...</p>
-                <p className="text-xs text-muted-foreground">Movendo registros para {targetCity}</p>
+                <p className="font-black text-slate-800 text-xl">Organizando dados...</p>
+                <p className="text-sm text-muted-foreground animate-pulse">
+                  Movendo {client.companyName} para {targetCity}
+                </p>
+              </div>
+
+              <div className="p-3 bg-slate-50 border rounded-lg w-full text-[10px] text-slate-500 font-mono flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                UPDATE clients SET city = '{targetCity}' WHERE id = '{client.id}';
               </div>
             </div>
           )}
 
           {step === 'done' && (
-            <div className="flex flex-col items-center justify-center py-10 space-y-4">
-              <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                <Badge className="bg-green-500 text-white border-none">OK</Badge>
+            <div className="flex flex-col items-center justify-center py-12 space-y-6 animate-in zoom-in-95 duration-500">
+              <div className="h-20 w-20 rounded-full bg-green-100 flex items-center justify-center border-4 border-green-50 shadow-xl">
+                <CheckCircle2 className="w-12 h-12 text-green-600" />
               </div>
-              <div className="text-center space-y-1">
-                <p className="font-bold text-green-600">Concluído!</p>
-                <p className="text-xs text-muted-foreground">O cliente foi movido com sucesso.</p>
+              <div className="text-center space-y-2">
+                <h3 className="text-2xl font-black text-slate-900">Transferência Concluída!</h3>
+                <p className="text-muted-foreground max-w-[280px] mx-auto text-sm">
+                  O cliente e todos os seus registros agora pertencem à unidade de <strong>{targetCity}</strong>.
+                </p>
+              </div>
+              <div className="w-full bg-green-50 p-3 rounded-lg border border-green-100 text-center">
+                <span className="text-[10px] uppercase font-bold text-green-700">O sistema será atualizado automaticamente</span>
               </div>
             </div>
           )}

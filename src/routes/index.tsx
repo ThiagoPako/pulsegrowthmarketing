@@ -1,6 +1,8 @@
 // Erro 502 Bad Gateway persistente em agenciapulse.tech/api/auth/login.
-// Causa provável: O servidor Node estava tentando usar `server.listen` sem ter o `server` definido globalmente (ReferenceError).
-// Corrigi o `server.mjs` para criar a instância do servidor corretamente.
+// Causa real identificada: ReferenceError na API da VPS. O servidor tentava iniciar com `server.listen(PORT...)`, mas a variável `server` não estava definida, fazendo a API morrer no boot.
+// Corrigi o `server.mjs` para criar a instância `server` a partir do `express`.
+
+
 
 
 

@@ -11,6 +11,11 @@ import { RefreshCw, ArrowRightLeft, Loader2 } from 'lucide-react';
 import type { Client } from '@/types';
 import { vpsAuthedFetch } from '@/lib/vpsDb';
 
+function normalizeCityValue(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c');
+}
+
 interface TransferClientDialogProps {
   client: Client;
   open: boolean;
@@ -133,7 +138,7 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
                     <SelectValue placeholder="Selecione a cidade" />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableCities.filter(c => c.toLowerCase() !== (client.city || '').toLowerCase()).map(city => (
+                    {availableCities.filter(c => normalizeCityValue(c) !== normalizeCityValue(client.city || activeCity)).map(city => (
                       <SelectItem key={city} value={city}>
                         {city.charAt(0).toUpperCase() + city.slice(1)}
                       </SelectItem>

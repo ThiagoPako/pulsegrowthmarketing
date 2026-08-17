@@ -1638,7 +1638,7 @@ const CITY_LABELS: Record<string, string> = { minacu: 'Minaçu', uruacu: 'Uruaç
 
 function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }) {
   const [open, setOpen] = useState(false);
-  const [targetCity, setTargetCity] = useState(lead.city === 'Minaçu' ? 'Uruaçu' : 'Minaçu');
+  const [targetCity, setTargetCity] = useState(lead.city?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c') === 'minacu' ? 'Uruaçu' : 'Minaçu');
   const [isBusy, setIsBusy] = useState(false);
   const [step, setStep] = useState<'confirm' | 'validating' | 'preview' | 'preparing' | 'done'>('confirm');
   const [preview, setPreview] = useState<TransferPreview | null>(null);

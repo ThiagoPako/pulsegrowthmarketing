@@ -1736,8 +1736,8 @@ function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => 
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Minaçu">Minaçu</SelectItem>
-                    <SelectItem value="Uruaçu">Uruaçu</SelectItem>
+                    <SelectItem value="minacu">Minaçu</SelectItem>
+                    <SelectItem value="uruacu">Uruaçu</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -6041,7 +6041,107 @@ app.post('/api/clients', async (req, res) => {
   }
 });
 
+// ─── Pré-validação (dry-run) da transferência de cidade ─────
+// Retorna quais tabelas/registros seriam movidos, sem alterar nada no banco.
+const TRANSFER_TABLE_LABELS = {
+  recordings: 'Gravações',
+  kanban_tasks: 'Tarefas Kanban',
+  scripts: 'Roteiros',
+  content_tasks: 'Tarefas de Conteúdo',
+  design_tasks: 'Tarefas de Design',
+  delivery_records: 'Entregas',
+  revenues: 'Receitas',
+  expenses: 'Despesas',
+  financial_contracts: 'Contratos Financeiros',
+  billing_messages: 'Cobranças',
+  social_media_deliveries: 'Entregas Social Media',
+  social_accounts: 'Contas Sociais',
+  onboarding_tasks: 'Onboarding',
+  client_portal_contents: 'Conteúdos do Portal',
+  client_portal_comments: 'Comentários do Portal',
+  client_portal_notifications: 'Notificações do Portal',
+  flyer_items: 'Encartes',
+  portal_videos: 'Vídeos do Portal',
+  traffic_campaigns: 'Campanhas de Tráfego',
+  whatsapp_messages: 'Mensagens WhatsApp',
+  whatsapp_confirmations: 'Confirmações WhatsApp',
+  commercial_proposals: 'Propostas Comerciais',
+  event_recordings: 'Gravações de Evento',
+  client_testimonials: 'Depoimentos',
+  script_requests: 'Solicitações de Roteiro',
+  manual_video_tasks: 'Vídeos Avulsos',
+  story_editing_sessions: 'Edição de Stories',
+  crm_leads: 'Leads CRM',
+  crm_notes: 'Notas CRM',
+  endomarketing_clientes: 'Endomarketing',
+  goals: 'Metas',
+};
+
+app.get('/api/clients/:id/transfer-preview', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { id } = req.params;
+    const targetCity = assertValidCity(req.query.city);
+
+    const { rows: currentRows } = await pool.query(
+      'SELECT id, company_name, city FROM clients WHERE id = $1',
+      [id]
+    );
+    if (currentRows.length === 0) {
+      return res.status(404).json({ error: 'Cliente não encontrado' });
+    }
+
+    const client = currentRows[0];
+    const currentCity = normalizeCityValue(client.city) || 'minacu';
+
+    const details = [];
+    let total = 0;
+
+    for (const tableName of TABLES_WITH_CITY) {
+      if (tableName === 'clients') continue;
+      try {
+        if (!(await tableHasCityColumn(tableName))) continue;
+        const existingColumns = await getExistingColumns(tableName);
+        if (!existingColumns.has('client_id')) continue;
+
+        const { rows } = await pool.query(
+          `SELECT COUNT(*)::int AS total FROM ${tableName} WHERE client_id = $1`,
+          [id]
+        );
+        const count = rows[0]?.total || 0;
+        if (count > 0) {
+          total += count;
+          details.push({
+            table: tableName,
+            label: TRANSFER_TABLE_LABELS[tableName] || tableName,
+            count,
+          });
+        }
+      } catch (err) {
+        console.warn(`[Transfer-Preview] Falha ao contar ${tableName}:`, err?.message || err);
+      }
+    }
+
+    details.sort((a, b) => b.count - a.count);
+
+    res.json({
+      client: { id: client.id, name: client.company_name },
+      from: currentCity,
+      to: targetCity,
+      same_city: currentCity === targetCity,
+      total_records: total,
+      tables_affected: details.length,
+      details,
+    });
+  } catch (e) {
+    console.error('GET /api/clients/:id/transfer-preview error:', e);
+    const status = e?.statusCode === 400 ? 400 : 500;
+    res.status(status).json({ error: e.message });
+  }
+});
+
 app.put('/api/clients/:id', async (req, res) => {
+
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
     const { id } = req.params;

@@ -11,6 +11,11 @@ import { RefreshCw, ArrowRightLeft, Loader2 } from 'lucide-react';
 import type { Client } from '@/types';
 import { vpsAuthedFetch } from '@/lib/vpsDb';
 
+function normalizeCityValue(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c');
+}
+
 interface TransferClientDialogProps {
   client: Client;
   open: boolean;

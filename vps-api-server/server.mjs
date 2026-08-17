@@ -5198,7 +5198,7 @@ function normalizeCityValue(value) {
   const v = String(value).trim().toLowerCase();
   if (!v) return null;
   // Normaliza acentos comuns: "Minaçu"/"Uruaçu" -> "minacu"/"uruacu"
-  const stripped = v.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const stripped = v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c');
   return stripped;
 }
 

@@ -127,6 +127,25 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
         return;
       }
 
+      // Confirma que o registro realmente mudou de cidade — evita "sucesso"
+      // silencioso quando o UPDATE afeta 0 linhas por escopo de cidade.
+      const updated = await res.json().catch(() => null);
+      const target = normalizeCityValue(targetCity) || targetCity;
+      if (!updated?.id || normalizeCityValue(updated.city) !== target) {
+        const friendly: FriendlyCityError = {
+          code: 'TRANSFER_NOT_APPLIED',
+          title: 'Transferência não aplicada',
+          message: 'A API respondeu com sucesso, mas o cliente permaneceu na cidade de origem.',
+          hint: 'Atualize a API na VPS (pm2 restart pulse-api) e tente novamente.',
+        };
+        setCityError(friendly);
+        toast.error(friendly.title, { description: friendly.message });
+        setStep('preview');
+        setTransferProgress(0);
+        return;
+      }
+
+
       setTimeout(() => {
         setStep('done');
         toast.success(`Cliente ${client.companyName} transferido para ${targetCity} com sucesso!`);

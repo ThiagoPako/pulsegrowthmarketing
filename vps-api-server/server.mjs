@@ -6164,6 +6164,18 @@ app.put('/api/clients/:id', async (req, res) => {
     if (newCityRaw) newCityRaw = normalizeCityValue(newCityRaw);
     const newCity = newCityRaw ? assertValidCity(newCityRaw) : undefined;
 
+    // Log de auditoria: registra qual fonte definiu a cidade nesta transferência.
+    if (newCity && normalizeCityValue(oldCity) !== newCity) {
+      const bodyResolution = resolveTransferCityDetailed(
+        { headers: req.headers, query: { city: c.city } },
+      );
+      console.log(formatCityResolutionLog(
+        { ...bodyResolution, city: newCity, source: c.city ? 'body' : bodyResolution.source },
+        { scope: 'transfer-execute', clientId: id },
+      ), `from=${normalizeCityValue(oldCity) || '-'} to=${newCity}`);
+    }
+
+
     const allowed = [
       'company_name','responsible_person','phone','color','logo_url','fixed_day','fixed_time',
       'videomaker_id','backup_time','backup_day','extra_day','extra_content_types','accepts_extra',

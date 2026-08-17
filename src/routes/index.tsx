@@ -1,4 +1,4 @@
-// CORREÇÃO: A tabela "plan_promotions" foi liberada na API da VPS adicionando-a ao array ALLOWED_TABLES no server.mjs.
+// CORREÇÃO: Permitido valor nulo para o campo "city" na API da VPS para suportar promoções globais, resolvendo o erro de validação.
 // Reparo de Auth: Se houver erro de autenticação, acesse /repair-auth para sincronizar.
 // Agenda CRM: Sistema de Briefing SDR -> Closer e lembretes 24h implementados.
 // Cache-Busting: Estratégia de "Hard Reload" ativada para garantir que as atualizações fiquem visíveis na VPS.

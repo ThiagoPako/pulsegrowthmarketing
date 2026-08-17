@@ -1943,6 +1943,15 @@ app.post('/api/auth/login', async (req, res) => {
     const normalizedEmail = String(email).toLowerCase().trim();
     let profile = await getAuthProfileByEmail(normalizedEmail);
     
+    // Fallback: Se não encontrou no join profiles+auth_users, tenta direto na auth_users por email
+    if (!profile) {
+      profile = await getLocalAuthUserByEmail(normalizedEmail);
+      if (profile) {
+        console.log(`[Login-Fallback] User found in auth_users but not linked in profiles: ${normalizedEmail}`);
+      }
+    }
+
+    
     // Log de diagnóstico para falha de login (ajuda o admin a ver o que está falhando)
     if (!profile) {
       console.warn(`[Login-Fail] User not found: ${normalizedEmail}`);

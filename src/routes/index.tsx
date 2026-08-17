@@ -1,4 +1,4 @@
-// 502 Bad Gateway - nginx/1.24.0 (Ubuntu) - Aplicando correção de resiliência e reinício forçado da API.
+// Falha ao conectar com o servidor de autenticação - Use 'pm2 logs pulse-api --lines 100' para ver os erros.
 // Login na VPS: Implementado Fallback Robusto no endpoint /api/auth/login.
 // Identificado que usuários existentes apenas na tabela 'auth_users' (sem vínculo em 'profiles') falhavam no login.
 

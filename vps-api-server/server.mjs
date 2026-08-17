@@ -521,6 +521,57 @@ ensureClientDatabaseShareTable().catch((error) => {
   console.error('Failed to ensure client database share table:', error);
 });
 
+// ═══════════════════════════════════════════════════════════════
+// ALMOXERIFADO & ESTRUTURA
+// ═══════════════════════════════════════════════════════════════
+let warehouseTablesPromise = null;
+
+async function ensureWarehouseTables() {
+  if (!warehouseTablesPromise) {
+    warehouseTablesPromise = pool.query(`
+      CREATE TABLE IF NOT EXISTS warehouse_items (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        tag_id TEXT,
+        responsible_id UUID,
+        status TEXT DEFAULT 'em_uso' CHECK (status IN ('em_uso', 'manutencao', 'disponivel', 'descartado')),
+        purchase_date DATE,
+        purchase_price NUMERIC,
+        expense_id UUID,
+        observations TEXT,
+        city TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_warehouse_items_tag ON warehouse_items(tag_id);
+      CREATE INDEX IF NOT EXISTS idx_warehouse_items_responsible ON warehouse_items(responsible_id);
+      
+      -- Add structure_investment column to expenses if not exists
+      DO $$
+      BEGIN
+          IF NOT EXISTS (
+              SELECT 1 FROM information_schema.columns 
+              WHERE table_name = 'expenses' AND column_name = 'structure_investment'
+          ) THEN
+              ALTER TABLE expenses ADD COLUMN structure_investment BOOLEAN DEFAULT FALSE;
+          END IF;
+      END $$;
+    `).catch((error) => {
+      warehouseTablesPromise = null;
+      throw error;
+    });
+  }
+  return warehouseTablesPromise;
+}
+
+ensureWarehouseTables().catch((error) => {
+  console.error('Failed to ensure warehouse tables:', error);
+});
+
+});
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function makeShareToken() {

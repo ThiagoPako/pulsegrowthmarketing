@@ -48,12 +48,27 @@ app.use(cors());
 app.use(compression({ threshold: 1024 }));
 app.use(express.json({ limit: '10mb' }));
 
-// Health Check: endpoint leve para monitoramento do Nginx/Uptime
-app.get('/health', (req, res) => {
+// Health Check: endpoint leve para monitoramento do Nginx/Uptime e Banco de Dados
+app.get('/api/health', async (req, res) => {
+  let dbStatus = 'ok';
+  let dbError = null;
+  
+  try {
+    const result = await pool.query('SELECT 1 as health');
+    if (!result.rows.length) dbStatus = 'error';
+  } catch (err) {
+    dbStatus = 'error';
+    dbError = err.message;
+  }
+
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(), 
     uptime: process.uptime(),
+    database: {
+      status: dbStatus,
+      error: dbError
+    },
     env: {
       has_jwt_secret: !!process.env.JWT_SECRET,
       has_db_url: !!process.env.DATABASE_URL,

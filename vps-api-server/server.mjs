@@ -1,6 +1,6 @@
 /**
  * VPS API Server — Replaces all Supabase Edge Functions
- * Version: 1.2.2 - Security & Auth Repair Fix
+ * Version: 1.2.3 - Fix Auth Critical Fallback
  */
 
 import path from 'node:path';

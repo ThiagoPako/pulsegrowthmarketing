@@ -5204,8 +5204,15 @@ async function tableHasCityColumn(tableName) {
 
 // Whitelist global das cidades suportadas pelo sistema.
 // Implementação compartilhada em ./lib/cityResolution.mjs (coberta por testes automatizados).
-const { ALLOWED_CITIES, normalizeCityValue, assertValidCity, resolveTransferCity } =
-  await import('./lib/cityResolution.mjs');
+const {
+  ALLOWED_CITIES,
+  normalizeCityValue,
+  assertValidCity,
+  resolveTransferCity,
+  resolveTransferCityDetailed,
+  formatCityResolutionLog,
+} = await import('./lib/cityResolution.mjs');
+
 
 
 function cityScopeExpression(columnName = 'city') {

@@ -55,6 +55,7 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
   const resetState = () => {
     setStep('security');
     setPreview(null);
+    setTransferProgress(0);
   };
 
   const handleValidate = async () => {

@@ -1618,27 +1618,70 @@ function DeleteLeadDialog({ leadName, onDelete }: { leadName: string; onDelete: 
   );
 }
 
+interface TransferPreviewRow {
+  table: string;
+  label: string;
+  count: number;
+}
+
+interface TransferPreview {
+  client: { id: string; name: string };
+  from: string;
+  to: string;
+  same_city: boolean;
+  total_records: number;
+  tables_affected: number;
+  details: TransferPreviewRow[];
+}
+
+const CITY_LABELS: Record<string, string> = { minacu: 'Minaçu', uruacu: 'Uruaçu' };
+
 function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }) {
   const [open, setOpen] = useState(false);
   const [targetCity, setTargetCity] = useState(lead.city === 'Minaçu' ? 'Uruaçu' : 'Minaçu');
-  const [isTransferring, setIsTransferring] = useState(false);
-  const [step, setStep] = useState<'confirm' | 'preparing' | 'done'>('confirm');
+  const [isBusy, setIsBusy] = useState(false);
+  const [step, setStep] = useState<'confirm' | 'validating' | 'preview' | 'preparing' | 'done'>('confirm');
+  const [preview, setPreview] = useState<TransferPreview | null>(null);
 
-  const handleTransfer = async () => {
-    setIsTransferring(true);
-    setStep('preparing');
-    
+  const resetState = () => {
+    setStep('confirm');
+    setPreview(null);
+  };
+
+  // Etapa 1: pré-validação (dry-run) — apenas contagem, nada é alterado no banco.
+  const handleValidate = async () => {
+    setIsBusy(true);
+    setStep('validating');
     try {
-      // Usamos o endpoint genérico de atualização de clientes que agora tem a lógica de cascata no backend
+      const res = await vpsAuthedFetch(
+        `/api/clients/${lead.id}/transfer-preview?city=${encodeURIComponent(targetCity)}`
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Erro ao validar a transferência');
+      }
+      const data: TransferPreview = await res.json();
+      setPreview(data);
+      setStep('preview');
+    } catch (error: any) {
+      toast.error(error.message);
+      setStep('confirm');
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  // Etapa 2: execução real da transferência (cascata atômica no backend).
+  const handleTransfer = async () => {
+    setIsBusy(true);
+    setStep('preparing');
+    try {
       const res = await vpsAuthedFetch(`/api/clients/${lead.id}`, {
         method: 'PUT',
-        body: JSON.stringify({ 
-          city: targetCity 
-        })
+        body: JSON.stringify({ city: targetCity }),
       });
-
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Erro ao transferir cliente');
       }
 
@@ -1647,28 +1690,30 @@ function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => 
       setTimeout(() => {
         setOpen(false);
         onUpdate();
-        // Reset state for next time
-        setStep('confirm');
+        resetState();
       }, 1500);
     } catch (error: any) {
       toast.error(error.message);
-      setStep('confirm');
+      setStep('preview');
     } finally {
-      setIsTransferring(false);
+      setIsBusy(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={(val) => {
-      setOpen(val);
-      if (!val) setStep('confirm');
-    }}>
+    <Dialog
+      open={open}
+      onOpenChange={(val) => {
+        setOpen(val);
+        if (!val) resetState();
+      }}
+    >
       <DialogTrigger asChild>
         <Button size="sm" variant="outline" className="h-8 text-[10px] bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100">
           <ArrowRightLeft className="h-3 w-3 mr-1" /> Transferir
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[400px]">
+      <DialogContent className="sm:max-w-[460px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ArrowRightLeft className="h-5 w-5 text-orange-500" />
@@ -1698,13 +1743,73 @@ function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => 
               </div>
 
               <DialogFooter className="pt-4">
-                <Button variant="outline" onClick={() => setOpen(false)} disabled={isTransferring}>Cancelar</Button>
-                <Button 
-                  className="bg-orange-500 hover:bg-orange-600 text-white" 
-                  onClick={handleTransfer}
-                  disabled={isTransferring}
+                <Button variant="outline" onClick={() => setOpen(false)} disabled={isBusy}>Cancelar</Button>
+                <Button
+                  className="bg-orange-500 hover:bg-orange-600 text-white"
+                  onClick={handleValidate}
+                  disabled={isBusy}
                 >
-                  Preparar e Transferir
+                  Validar transferência
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+
+          {step === 'validating' && (
+            <div className="flex flex-col items-center justify-center py-10 space-y-4">
+              <Loader2 className="h-10 w-10 text-orange-500 animate-spin" />
+              <div className="text-center space-y-1">
+                <p className="font-bold">Analisando registros...</p>
+                <p className="text-xs text-muted-foreground">Nenhum dado foi alterado ainda</p>
+              </div>
+            </div>
+          )}
+
+          {step === 'preview' && preview && (
+            <>
+              <div className="flex items-center justify-center gap-3 text-sm font-bold">
+                <Badge variant="outline">{CITY_LABELS[preview.from] || preview.from}</Badge>
+                <ArrowRightLeft className="h-4 w-4 text-orange-500" />
+                <Badge className="bg-orange-500 text-white border-none">{CITY_LABELS[preview.to] || preview.to}</Badge>
+              </div>
+
+              {preview.same_city && (
+                <div className="p-3 rounded-lg bg-muted text-xs text-muted-foreground">
+                  Este cliente já pertence a esta cidade. Nenhuma mudança será feita.
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-lg border bg-muted/40 text-center">
+                  <p className="text-2xl font-bold text-orange-500">{preview.total_records}</p>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Registros afetados</p>
+                </div>
+                <div className="p-3 rounded-lg border bg-muted/40 text-center">
+                  <p className="text-2xl font-bold text-orange-500">{preview.tables_affected}</p>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Módulos envolvidos</p>
+                </div>
+              </div>
+
+              <div className="max-h-52 overflow-y-auto rounded-lg border divide-y">
+                {preview.details.length === 0 && (
+                  <p className="p-3 text-xs text-muted-foreground">Nenhum registro vinculado encontrado além do cadastro do cliente.</p>
+                )}
+                {preview.details.map((row) => (
+                  <div key={row.table} className="flex items-center justify-between px-3 py-2 text-xs">
+                    <span className="font-medium">{row.label}</span>
+                    <Badge variant="secondary" className="text-[10px]">{row.count}</Badge>
+                  </div>
+                ))}
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button variant="outline" onClick={resetState} disabled={isBusy}>Voltar</Button>
+                <Button
+                  className="bg-orange-500 hover:bg-orange-600 text-white"
+                  onClick={handleTransfer}
+                  disabled={isBusy || preview.same_city}
+                >
+                  OK, transferir agora
                 </Button>
               </DialogFooter>
             </>
@@ -1736,3 +1841,4 @@ function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => 
     </Dialog>
   );
 }
+

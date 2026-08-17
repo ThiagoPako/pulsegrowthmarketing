@@ -1973,15 +1973,16 @@ export default function Clients() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="space-y-1">
             <Label>Reels/Mês</Label>
-            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyReels} onChange={e => setMonthly({ reels: Number(e.target.value) })} />
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyReels} onChange={e => setMonthly({ reels: Number(e.target.value) })} className="h-9 text-sm" />
           </div>
           <div className="space-y-1">
             <Label>Criativos/Mês</Label>
-            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyCreatives} onChange={e => setMonthly({ creatives: Number(e.target.value) })} />
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyCreatives} onChange={e => setMonthly({ creatives: Number(e.target.value) })} className="h-9 text-sm" />
           </div>
           <div className="space-y-1">
             <Label>Stories/Mês</Label>
-            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyStories} onChange={e => setMonthly({ stories: Number(e.target.value) })} />
+            <Input type="number" min={0} disabled={!!planId && !specialPlan} value={monthlyStories} onChange={e => setMonthly({ stories: Number(e.target.value) })} className="h-9 text-sm" />
+
           </div>
           <div className="space-y-1">
             <Label>Limite Artes/Mês</Label>

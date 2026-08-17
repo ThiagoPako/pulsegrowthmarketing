@@ -1,6 +1,8 @@
-// Erro 502 Bad Gateway persistente em agenciapulse.tech/api/auth/login.
-// Causa real identificada: ReferenceError na API da VPS. O servidor tentava iniciar com `server.listen(PORT...)`, mas a variável `server` não estava definida, fazendo a API morrer no boot.
-// Corrigi o `server.mjs` para criar a instância `server` a partir do `express`.
+// Login na VPS: Implementado Fallback Robusto no endpoint /api/auth/login.
+// Identificado que usuários existentes apenas na tabela 'auth_users' (sem vínculo em 'profiles') falhavam no login.
+// Agora o sistema consulta 'auth_users' diretamente caso o join inicial falhe, garantindo acesso imediato.
+
+
 
 
 

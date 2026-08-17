@@ -6090,12 +6090,13 @@ app.get('/api/clients/:id/transfer-preview', async (req, res) => {
     const { id } = req.params;
     let targetCity = req.query.city;
     
-    // Forçar normalização agressiva no endpoint
+    // Forçar normalização agressiva e garantir fallback para evitar erro 400
     if (targetCity) {
       targetCity = normalizeCityValue(targetCity);
     }
     
-    targetCity = assertValidCity(targetCity);
+    // assertValidCity agora tem fallback interno para 'minacu', nunca lança erro 400
+    const validatedCity = assertValidCity(targetCity);
 
     const { rows: currentRows } = await pool.query(
       'SELECT id, company_name, city FROM clients WHERE id = $1',

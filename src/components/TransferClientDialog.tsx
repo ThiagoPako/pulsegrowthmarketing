@@ -47,7 +47,7 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
   const { refetchData } = useApp();
   const [targetCity, setTargetCity] = useState<string>('');
   const [isBusy, setIsBusy] = useState(false);
-  const [step, setStep] = useState<'confirm' | 'validating' | 'preview' | 'preparing' | 'done'>('confirm');
+  const [step, setStep] = useState<'security' | 'confirm' | 'validating' | 'preview' | 'preparing' | 'done'>('security');
   const [preview, setPreview] = useState<TransferPreview | null>(null);
 
   const resetState = () => {

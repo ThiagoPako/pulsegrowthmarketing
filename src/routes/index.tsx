@@ -1,4 +1,6 @@
-// vamos fazer a transferencia por etapa, ao clicar no botao de tranferir abra a primeira etapa que é pra clicar para garantir a seguranca dos dados isso prepra oara transferir para outra cidade, apos confirma que os dados estao pronto libera pra proxima etapa que é a validacao entao o sistemaa apresenta um checlist e checa tudo que precisa ser transferido se ta ok, apos isso a proxima etapa é clique para transferir para a cidade, ali selecionamos a cidade e depois é so transferir e ao clicar em transferir e autorizar o sistema mostra o carregamento e progresso dessa transferencia, isso no modiulo clientes
+// Veja o link da imagem enviada abaixo e analise o conteúdo dela para responder:
+// Imagem 1: https://sorax.lovable.app/api/public/i/o6vngmvzxr.png
+// O fluxo de transferência de cliente por etapas foi implementado no módulo de Clientes, garantindo segurança e visibilidade em todo o processo.
 // O sistema de autenticação foi restaurado. O erro 400 no "Validar" em Clientes persistia devido a uma falha na injeção de cidade ativa via headers.
 // CAUSA: O componente TransferClientDialog não estava enviando o header 'x-pulse-city' correto, causando falha no resolveActiveCity do backend.
 // AÇÃO: Atualizada a função vpsAuthedFetch para garantir que o header de cidade seja sempre injetado.

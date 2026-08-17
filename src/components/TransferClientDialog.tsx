@@ -61,18 +61,10 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
     setIsBusy(true);
     setStep('validating');
     try {
-      const normalizedCity = targetCity.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c');
-      // The city validation error in the preview endpoint is often due to missing 'city' param 
-      // or rigid validation against a header that might be outdated. 
-      // We pass the city BOTH in the query param and the header for maximum compatibility.
-      const res = await vpsAuthedFetch(
-        `/api/clients/${client.id}/transfer-preview?city=${encodeURIComponent(normalizedCity)}`,
-        {
-          headers: {
-            'x-pulse-city': normalizedCity
-          }
-        }
-      );
+      // A cidade vai na query string E no header (backend prioriza o header, query é fallback).
+      const previewRequest = buildTransferPreviewRequest(client.id, targetCity);
+      const res = await vpsAuthedFetch(previewRequest.url, { headers: previewRequest.headers });
+
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

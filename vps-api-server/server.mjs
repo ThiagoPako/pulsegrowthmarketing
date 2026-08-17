@@ -878,6 +878,37 @@ ensureManualVideoTasksTable().catch((error) => {
   console.error('Failed to ensure manual_video_tasks table:', error);
 });
 
+let scheduledRecordingsEnsuredPromise = null;
+async function ensureScheduledRecordingsTable() {
+  if (!scheduledRecordingsEnsuredPromise) {
+    scheduledRecordingsEnsuredPromise = (async () => {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS scheduled_recordings (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+          date DATE NOT NULL,
+          start_time TIME NOT NULL,
+          videomaker_id UUID,
+          status TEXT DEFAULT 'agendada',
+          city TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_scheduled_recordings_client ON scheduled_recordings(client_id)`).catch(() => {});
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_scheduled_recordings_date ON scheduled_recordings(date)`).catch(() => {});
+    })().catch((error) => {
+      scheduledRecordingsEnsuredPromise = null;
+      throw error;
+    });
+  }
+  return scheduledRecordingsEnsuredPromise;
+}
+
+ensureScheduledRecordingsTable().catch((error) => {
+  console.error('Failed to ensure scheduled_recordings table:', error);
+});
+
 // ─── JWT Config ─────────────────────────────────────────────
 const JWT_SECRET = process.env.JWT_SECRET || 'CHANGE_ME_IN_PRODUCTION';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30d';
@@ -5345,6 +5376,10 @@ app.post('/api/db/query', async (req, res) => {
 
     if (safeTable === 'manual_video_tasks') {
       await ensureManualVideoTasksTable();
+    }
+
+    if (safeTable === 'scheduled_recordings') {
+      await ensureScheduledRecordingsTable();
     }
 
     // Multi-city: resolve cidade ativa e prepara flag de scoping

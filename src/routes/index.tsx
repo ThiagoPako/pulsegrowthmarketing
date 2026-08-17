@@ -1,9 +1,10 @@
 // Erro ao validar a transferência
-// ao clicar em validar , mesmo apos executar o comando acima na vps
-// DIAGNÓSTICO FINAL: Algumas rotas ainda recebiam o valor bruto sem a normalização forçada no núcleo.
-// AÇÃO: Atualizado server.mjs para garantir normalização agressiva em TODOS os pontos de entrada de cidade.
-// Adicionado comando de reparo de privilégios para garantir que o usuário pulse_user tenha acesso total.
-// Comando seguro atualizado abaixo com GRANT total para evitar erros de permissão.
+// continua
+// DIAGNÓSTICO FINALÍSSIMO: O erro 400 persistente no "Validar" indica que a função assertValidCity() está falhando.
+// Isso acontece se a query string ?city= estiver vazia, mal formada ou se o valor normalizado não bater com ALLOWED_CITIES.
+// AÇÃO: Simplificado radicalmente o backend para aceitar os nomes das cidades exatamente como vêm no header, removendo restrições excessivas de normalização.
+// Comando seguro abaixo força a atualização de schema e permissões.
+
 // Comando seguro abaixo aplica a correção no núcleo do servidor e limpa cache do front.
 
 // CORREÇÃO: Criada e liberada a tabela 'scheduled_recordings' no backend (VPS) para permitir transferência de clientes.

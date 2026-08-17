@@ -1,4 +1,5 @@
 // CORREÇÃO: Implementada validação atômica no backend (VPS) para intervalo de 1h30 entre reuniões no CRM.
+// Adicionada tabela 'scheduled_recordings' à ALLOWED_TABLES para habilitar transferências de clientes.
 // CRM: Sistema de Briefing SDR -> Closer e lembretes 24h ativos.
 // Cache-Busting: Estratégia de "Hard Reload" ativada para garantir sincronização na VPS.
 // VPS: Tudo operando 100% via API local, sem dependências externas de banco.

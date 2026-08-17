@@ -6073,22 +6073,13 @@ const TRANSFER_TABLE_LABELS = {
 app.get('/api/clients/:id/transfer-preview', async (req, res) => {
    try {
      const { id } = req.params;
-     let targetCity = req.query.city;
-     
+
      // Admins podem visualizar previews sem validar activeCity rigorosamente
-     // para evitar o erro 400 se o header x-pulse-city vier mal formatado do front
-     const { user } = await verifyUser(req);
-     
-      // Prioritize city from header as it's the standard for multi-tenant isolation,
-      // but fallback to query param for the transfer preview flow.
-      const rawCity = req.headers['x-pulse-city'] || req.query.city;
-      
-      if (rawCity) {
-        targetCity = normalizeCityValue(rawCity);
-      }
-      
-      // If still missing, we default to 'minacu' to avoid 400 error and allow the checklist to load
-      const validatedCity = assertValidCity(targetCity || 'minacu');
+     await verifyUser(req);
+
+     // Header `x-pulse-city` tem prioridade; query `?city=` é fallback; 'minacu' é o último recurso.
+     const validatedCity = resolveTransferCity({ headers: req.headers, query: req.query });
+
 
      const { rows: currentRows } = await pool.query(
        'SELECT id, company_name, city FROM clients WHERE id = $1',

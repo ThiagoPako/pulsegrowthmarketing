@@ -493,6 +493,128 @@ ensureClientDatabaseTables().catch((error) => {
   console.error('Failed to ensure client database tables:', error);
 });
 
+// ─── Compartilhamento público do banco de dados de um cliente ───
+let clientDatabaseSharePromise = null;
+
+async function ensureClientDatabaseShareTable() {
+  if (!clientDatabaseSharePromise) {
+    clientDatabaseSharePromise = pool.query(`
+      CREATE TABLE IF NOT EXISTS client_database_shares (
+        token TEXT PRIMARY KEY,
+        client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        created_by UUID,
+        active BOOLEAN NOT NULL DEFAULT true,
+        views INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS idx_client_database_shares_client
+        ON client_database_shares (client_id);
+    `).catch((error) => {
+      clientDatabaseSharePromise = null;
+      throw error;
+    });
+  }
+  return clientDatabaseSharePromise;
+}
+
+ensureClientDatabaseShareTable().catch((error) => {
+  console.error('Failed to ensure client database share table:', error);
+});
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function makeShareToken() {
+  return crypto.randomUUID().replace(/-/g, '').slice(0, 22);
+}
+
+/** Cria (ou reaproveita) um link público para o banco de dados de um cliente. */
+app.post('/api/client-database/share', async (req, res) => {
+  try {
+    const user = await verifyUser(req);
+    const clientId = String(req.body?.client_id || '');
+    if (!UUID_RE.test(clientId)) return res.status(400).json({ error: 'client_id inválido' });
+
+    await ensureClientDatabaseShareTable();
+
+    const existing = await pool.query(
+      'SELECT token FROM client_database_shares WHERE client_id = $1 AND active = true LIMIT 1',
+      [clientId],
+    );
+    if (existing.rows.length > 0) return res.json({ token: existing.rows[0].token, reused: true });
+
+    const token = makeShareToken();
+    await pool.query(
+      'INSERT INTO client_database_shares (token, client_id, created_by) VALUES ($1, $2, $3)',
+      [token, clientId, user?.id || user?.userId || null],
+    );
+    return res.json({ token, reused: false });
+  } catch (error) {
+    if (String(error?.message).includes('Unauthorized')) return res.status(401).json({ error: 'Unauthorized' });
+    console.error('client-database share error:', error);
+    return res.status(500).json({ error: 'Falha ao gerar link público' });
+  }
+});
+
+/** Revoga o link público ativo de um cliente. */
+app.delete('/api/client-database/share/:clientId', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const clientId = String(req.params.clientId || '');
+    if (!UUID_RE.test(clientId)) return res.status(400).json({ error: 'client_id inválido' });
+    await ensureClientDatabaseShareTable();
+    await pool.query('UPDATE client_database_shares SET active = false WHERE client_id = $1', [clientId]);
+    return res.json({ success: true });
+  } catch (error) {
+    if (String(error?.message).includes('Unauthorized')) return res.status(401).json({ error: 'Unauthorized' });
+    return res.status(500).json({ error: 'Falha ao revogar link' });
+  }
+});
+
+/** Leitura pública (sem login) do banco de dados de um cliente via token. */
+app.get('/api/public/client-database/:token', async (req, res) => {
+  try {
+    const token = String(req.params.token || '').replace(/[^a-zA-Z0-9]/g, '');
+    if (!token) return res.status(400).json({ error: 'Token inválido' });
+
+    await ensureClientDatabaseShareTable();
+    const share = await pool.query(
+      'SELECT client_id FROM client_database_shares WHERE token = $1 AND active = true LIMIT 1',
+      [token],
+    );
+    if (share.rows.length === 0) return res.status(404).json({ error: 'Link inválido ou revogado' });
+
+    const clientId = share.rows[0].client_id;
+    pool.query('UPDATE client_database_shares SET views = views + 1 WHERE token = $1', [token]).catch(() => {});
+
+    const [client, professionals, units] = await Promise.all([
+      pool.query('SELECT id, company_name, logo_url FROM clients WHERE id = $1 LIMIT 1', [clientId]),
+      pool.query(
+        `SELECT id, name, specialty, council_type, council_number, rqe, bio, schedule_notes, photos, videos, active
+         FROM client_professionals WHERE client_id = $1 ORDER BY name ASC`,
+        [clientId],
+      ),
+      pool.query(
+        `SELECT id, unit_name, unit_type, city_name, state, address, notes, photos, videos
+         FROM client_units WHERE client_id = $1 ORDER BY city_name ASC`,
+        [clientId],
+      ),
+    ]);
+
+    if (client.rows.length === 0) return res.status(404).json({ error: 'Cliente não encontrado' });
+
+    return res.json({
+      client: client.rows[0],
+      professionals: professionals.rows,
+      units: units.rows,
+    });
+  } catch (error) {
+    console.error('public client-database error:', error);
+    return res.status(500).json({ error: 'Falha ao carregar banco de dados público' });
+  }
+});
+
+
+
 
 // ensureCrmLeadsColumns was moved to line 121 to avoid duplication
 ensureCrmLeadsColumns().catch(err => console.error('CRM leads column sync failed:', err));

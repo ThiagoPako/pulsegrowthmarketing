@@ -13,6 +13,7 @@ import Login from "@/pages/Login";
 
 // Lazy-loaded pages for code splitting
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const PublicClientDatabase = lazy(() => import("@/pages/PublicClientDatabase"));
 const VideomakerDashboard = lazy(() => import("@/pages/VideomakerDashboard"));
 const EndomarketingDashboard = lazy(() => import("@/pages/EndomarketingDashboard"));
 const EndomarketingContracts = lazy(() => import("@/pages/EndomarketingContracts"));
@@ -209,6 +210,7 @@ function AppRoutes() {
         <Route path="/agenda" element={<ProtectedRoute><Schedule /></ProtectedRoute>} />
         <Route path="/clientes" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
         <Route path="/banco-clientes" element={<ProtectedRoute><ClientDatabase /></ProtectedRoute>} />
+        <Route path="/banco-publico/:token" element={<Suspense fallback={<PageLoader />}><PublicClientDatabase /></Suspense>} />
 
         <Route path="/equipe" element={<ProtectedRoute><Team /></ProtectedRoute>} />
         <Route path="/equipe/apresentacao" element={<TeamPresentation />} />

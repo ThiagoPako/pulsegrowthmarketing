@@ -9785,10 +9785,10 @@ setInterval(async () => {
 
 // ─── Start ──────────────────────────────────────────────────
 
-
 server.listen(PORT, () => {
   console.log(`🚀 Pulse API Server running on port ${PORT} (HTTP + WebSocket)`);
 });
+
 
 /*
  * .env required variables:

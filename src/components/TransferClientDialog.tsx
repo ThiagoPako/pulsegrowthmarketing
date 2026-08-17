@@ -11,11 +11,8 @@ import { RefreshCw, ArrowRightLeft, Loader2, ShieldCheck, CheckCircle2, AlertTri
 import { Progress } from '@/components/ui/progress';
 import type { Client } from '@/types';
 import { vpsAuthedFetch } from '@/lib/vpsDb';
+import { normalizeCityValue, buildTransferPreviewRequest } from '@/lib/cityScope';
 
-function normalizeCityValue(value: string | null | undefined): string | null {
-  if (!value) return null;
-  return value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c');
-}
 
 interface TransferClientDialogProps {
   client: Client;

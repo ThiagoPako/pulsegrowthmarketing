@@ -128,7 +128,7 @@ export default function Warehouse() {
 
   const getResponsibleName = (id: string) => {
     const user = users.find(u => u.id === id);
-    return user ? (user.display_name || user.name) : 'Não atribuído';
+    return user ? (user.displayName || user.name) : 'Não atribuído';
   };
 
   return (
@@ -208,7 +208,7 @@ export default function Warehouse() {
                       <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
                         {users.map(u => (
-                          <SelectItem key={u.id} value={u.id}>{u.display_name || u.name}</SelectItem>
+                          <SelectItem key={u.id} value={u.id}>{u.displayName || u.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

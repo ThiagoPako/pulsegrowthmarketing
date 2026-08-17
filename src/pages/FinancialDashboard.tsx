@@ -474,7 +474,7 @@ export default function FinancialDashboard() {
     { icon: <DollarSign size={18} />, label: 'MRR', value: fmt(mrr), gradient: 'from-blue-500/10 to-indigo-500/10', iconBg: 'bg-blue-500/20 text-blue-600', border: 'border-blue-200/50' },
     { icon: <TrendingUp size={18} />, label: 'Recebida', value: fmt(revenueRecebida), gradient: 'from-emerald-500/10 to-green-500/10', iconBg: 'bg-emerald-500/20 text-emerald-600', border: 'border-emerald-200/50', sub: `Prevista: ${fmt(revenuePrevista)}` },
     { icon: <TrendingDown size={18} />, label: 'Despesas', value: fmt(totalExpenses), gradient: 'from-rose-500/10 to-red-500/10', iconBg: 'bg-rose-500/20 text-rose-600', border: 'border-rose-200/50' },
-    { icon: <BarChart3 size={18} />, label: 'Lucro Líquido', value: fmt(lucro), gradient: lucro >= 0 ? 'from-emerald-500/10 to-teal-500/10' : 'from-rose-500/10 to-red-500/10', iconBg: lucro >= 0 ? 'bg-emerald-500/20 text-emerald-600' : 'bg-rose-500/20 text-rose-600', border: lucro >= 0 ? 'border-emerald-200/50' : 'border-rose-200/50' },
+    { icon: <BarChart3 size={18} />, label: 'Lucro Líquido', value: fmt(lucro), gradient: lucro >= 0 ? 'from-emerald-500/10 to-teal-500/10' : 'from-rose-500/10 to-red-500/10', iconBg: lucro >= 0 ? 'bg-emerald-500/20 text-emerald-600' : 'bg-rose-500/20 text-rose-600', border: lucro >= 0 ? 'border-emerald-200/50' : 'border-rose-200/50', sub: structureExpenses > 0 ? `Invest. Estrutural: ${fmt(structureExpenses)}` : undefined },
   ];
 
   const kpiRow2 = [

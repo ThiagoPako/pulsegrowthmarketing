@@ -69,7 +69,8 @@ export default function ExpenseFormDialog({ open, onOpenChange, categories, edit
       });
       if (salaryCategory && editingExpense.category_id === salaryCategory.id) {
         setIsSalaryMode(true);
-      }
+  structure_investment: boolean;
+}
     } else {
       setForm(emptyForm);
       setIsSalaryMode(false);
@@ -81,7 +82,8 @@ export default function ExpenseFormDialog({ open, onOpenChange, categories, edit
   useEffect(() => {
     if (isSalaryMode && salaryCategory) {
       setForm(f => ({ ...f, category_id: salaryCategory.id, expense_type: 'fixa' }));
-    }
+    structure_investment: initialData?.structure_investment || false,
+}
   }, [isSalaryMode, salaryCategory]);
 
   // When selecting a team member
@@ -254,6 +256,25 @@ export default function ExpenseFormDialog({ open, onOpenChange, categories, edit
             <Label>Descrição</Label>
             <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder={isSalaryMode ? 'Ex: Salário referente março/2026' : 'Descrição da despesa'} />
           </div>
+
+          {!isSalaryMode && (
+            <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-full bg-primary/10 text-primary">
+                  <Hammer size={18} />
+                </div>
+                <div>
+                  <Label className="text-sm font-semibold cursor-pointer" htmlFor="structure-toggle">Investimento em Estrutura</Label>
+                  <p className="text-[10px] text-muted-foreground">Equipamentos, reformas e ponto comercial</p>
+                </div>
+              </div>
+              <Switch 
+                id="structure-toggle"
+                checked={form.structure_investment} 
+                onCheckedChange={checked => setForm({ ...form, structure_investment: checked })} 
+              />
+            </div>
+          )}
 
           {/* Responsible (auto-filled in salary mode) */}
           {!isSalaryMode && (

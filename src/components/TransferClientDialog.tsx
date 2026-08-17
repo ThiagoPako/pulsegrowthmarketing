@@ -97,25 +97,37 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
     setIsBusy(true);
     setStep('preparing');
     try {
+      // Simulação de progresso enquanto a requisição atômica ocorre
+      const progressInterval = setInterval(() => {
+        setTransferProgress(prev => (prev < 90 ? prev + 5 : prev));
+      }, 300);
+
       const res = await vpsAuthedFetch(`/api/clients/${client.id}`, {
         method: 'PUT',
         body: JSON.stringify({ city: targetCity }),
       });
+
+      clearInterval(progressInterval);
+      setTransferProgress(100);
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Erro ao transferir cliente');
       }
 
-      setStep('done');
-      toast.success(`Cliente ${client.companyName} transferido para ${targetCity} com sucesso!`);
       setTimeout(() => {
-        onOpenChange(false);
-        refetchData();
-        resetState();
-      }, 1500);
+        setStep('done');
+        toast.success(`Cliente ${client.companyName} transferido para ${targetCity} com sucesso!`);
+        setTimeout(() => {
+          onOpenChange(false);
+          refetchData();
+          resetState();
+        }, 2000);
+      }, 500);
     } catch (error: any) {
       toast.error(error.message);
       setStep('preview');
+      setTransferProgress(0);
     } finally {
       setIsBusy(false);
     }

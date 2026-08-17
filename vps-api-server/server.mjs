@@ -38,6 +38,10 @@ const { Pool } = pg;
 const app = express();
 const PORT = process.env.API_PORT || 3002;
 
+// Criar servidor HTTP para permitir o uso de server.listen() globalmente
+const server = createServer(app);
+
+
 // ─── Middleware ──────────────────────────────────────────────
 app.use(cors());
 // Gzip: o payload do kanban da designer (centenas de cards com textos) cai ~80%.
@@ -9781,10 +9785,10 @@ setInterval(async () => {
 
 // ─── Start ──────────────────────────────────────────────────
 
-
 server.listen(PORT, () => {
   console.log(`🚀 Pulse API Server running on port ${PORT} (HTTP + WebSocket)`);
 });
+
 
 /*
  * .env required variables:

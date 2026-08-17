@@ -1,6 +1,12 @@
-// Falha persistente no login identificada: Erro 401 (Email/Senha inválidos) mesmo após reparo.
-// O diagnóstico aponta para dessincronização entre as tabelas 'profiles' e 'auth_users' ou falta de triggers.
-// Implementei um fallback atômico que força a sincronização manual ao acessar o endpoint de reparo.
+// Erro 502 Bad Gateway persistente em agenciapulse.tech/api/auth/login.
+// Causa real identificada: ReferenceError na API da VPS. O servidor tentava iniciar com `server.listen(PORT...)`, mas a variável `server` não estava definida, fazendo a API morrer no boot.
+// Corrigi o `server.mjs` para criar a instância `server` a partir do `express`.
+
+
+
+
+
+
 
 
 

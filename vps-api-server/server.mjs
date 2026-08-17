@@ -5211,6 +5211,9 @@ const {
   resolveTransferCity,
   resolveTransferCityDetailed,
   formatCityResolutionLog,
+  diagnoseTransferCity,
+  CITY_ERROR_CODES,
+  cityLabel,
 } = await import('./lib/cityResolution.mjs');
 
 

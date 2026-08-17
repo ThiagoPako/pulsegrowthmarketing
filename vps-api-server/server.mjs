@@ -631,7 +631,6 @@ ensureWarehouseTables().catch((error) => {
   console.error('Failed to ensure warehouse tables:', error);
 });
 
-});
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -8704,8 +8703,8 @@ app.get('/api/training/stream/:lessonId', async (req, res) => {
 
 // ─── WebSocket Server for real-time presence & chat ─────────
 
-// WebSocketServer já importado no topo
-const server = createServer(app);
+// WebSocketServer already uses the global server instance initialized at the top
+
 const wss = new WebSocketServer({ server, path: '/api/realtime' });
 
 wss.on('connection', (ws) => {

@@ -51,7 +51,7 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
   const [preview, setPreview] = useState<TransferPreview | null>(null);
 
   const resetState = () => {
-    setStep('confirm');
+    setStep('security');
     setPreview(null);
   };
 

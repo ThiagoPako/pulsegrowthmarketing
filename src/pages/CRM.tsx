@@ -1,7 +1,11 @@
 // CRM Inteligente com gestão de leads e metas
+// CORREÇÃO: Implementada transferência completa de clientes entre cidades (Minaçu <-> Uruaçu) com cascata automática para todos os registros vinculados.
+// CORREÇÃO: Criada e liberada a tabela 'scheduled_recordings' no backend (VPS) para permitir transferência de clientes.
+// Implementada validação atômica no backend (VPS) para intervalo de 1h30 entre reuniões no CRM.
+// CRM: Sistema de Briefing SDR -> Closer e lembretes 24h ativos.
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/vpsDb';
+import { supabase, vpsAuthedFetch } from '@/lib/vpsDb';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +23,7 @@ import {
   Briefcase, Phone, UserPlus, Target, TrendingUp, 
   DollarSign, Users, LayoutDashboard, Filter, Search,
   Calendar as CalendarIcon, Clock, Pencil, Trash2, UserMinus,
-  Sprout, Handshake, Info
+  Sprout, Handshake, Info, ArrowRightLeft, Loader2
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { LeadHarvester } from '@/components/crm/LeadHarvester';
@@ -1261,8 +1265,8 @@ function LeadDetailsDialog({
                 </p>
               </div>
 
-              <div className="flex gap-2">
-
+              <div className="flex flex-wrap gap-2">
+                <TransferClientDialog lead={lead} onUpdate={onUpdate} />
                 {onEdit && <EditLeadDialog lead={lead} onUpdate={onEdit} />}
                 {onDelete && <DeleteLeadDialog leadName={lead.name} onDelete={() => onDelete(lead.id)} />}
               </div>
@@ -1609,6 +1613,125 @@ function DeleteLeadDialog({ leadName, onDelete }: { leadName: string; onDelete: 
             setOpen(false);
           }}>Excluir</Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [targetCity, setTargetCity] = useState(lead.city === 'Minaçu' ? 'Uruaçu' : 'Minaçu');
+  const [isTransferring, setIsTransferring] = useState(false);
+  const [step, setStep] = useState<'confirm' | 'preparing' | 'done'>('confirm');
+
+  const handleTransfer = async () => {
+    setIsTransferring(true);
+    setStep('preparing');
+    
+    try {
+      // Usamos o endpoint genérico de atualização de clientes que agora tem a lógica de cascata no backend
+      const res = await vpsAuthedFetch(`/api/clients/${lead.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ 
+          city: targetCity 
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Erro ao transferir cliente');
+      }
+
+      setStep('done');
+      toast.success(`Cliente ${lead.name} transferido para ${targetCity} com sucesso!`);
+      setTimeout(() => {
+        setOpen(false);
+        onUpdate();
+        // Reset state for next time
+        setStep('confirm');
+      }, 1500);
+    } catch (error: any) {
+      toast.error(error.message);
+      setStep('confirm');
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(val) => {
+      setOpen(val);
+      if (!val) setStep('confirm');
+    }}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline" className="h-8 text-[10px] bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100">
+          <ArrowRightLeft className="h-3 w-3 mr-1" /> Transferir
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[400px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ArrowRightLeft className="h-5 w-5 text-orange-500" />
+            Transferência de Cidade
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="py-4 space-y-4">
+          {step === 'confirm' && (
+            <>
+              <div className="p-3 bg-orange-50 border border-orange-100 rounded-lg text-xs text-orange-800 space-y-2">
+                <p><strong>Atenção:</strong> Ao transferir este cliente, todos os dados vinculados (histórico, tarefas, roteiros, financeiro) serão movidos para a cidade selecionada.</p>
+                <p>O card sairá da pipeline de <strong>{lead.city}</strong> e aparecerá apenas em <strong>{targetCity}</strong>.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Cidade de Destino</Label>
+                <Select value={targetCity} onValueChange={setTargetCity}>
+                  <SelectTrigger className="bg-muted/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Minaçu">Minaçu</SelectItem>
+                    <SelectItem value="Uruaçu">Uruaçu</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <DialogFooter className="pt-4">
+                <Button variant="outline" onClick={() => setOpen(false)} disabled={isTransferring}>Cancelar</Button>
+                <Button 
+                  className="bg-orange-500 hover:bg-orange-600 text-white" 
+                  onClick={handleTransfer}
+                  disabled={isTransferring}
+                >
+                  Preparar e Transferir
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+
+          {step === 'preparing' && (
+            <div className="flex flex-col items-center justify-center py-10 space-y-4">
+              <Loader2 className="h-10 w-10 text-orange-500 animate-spin" />
+              <div className="text-center space-y-1">
+                <p className="font-bold">Organizando dados...</p>
+                <p className="text-xs text-muted-foreground">Movendo histórico e registros para {targetCity}</p>
+              </div>
+            </div>
+          )}
+
+          {step === 'done' && (
+            <div className="flex flex-col items-center justify-center py-10 space-y-4">
+              <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                <Badge className="bg-green-500 text-white border-none">OK</Badge>
+              </div>
+              <div className="text-center space-y-1">
+                <p className="font-bold text-green-600">Transferência Concluída!</p>
+                <p className="text-xs text-muted-foreground">O cliente agora pertence à unidade {targetCity}</p>
+              </div>
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

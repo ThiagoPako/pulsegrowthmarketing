@@ -6086,7 +6086,14 @@ app.get('/api/clients/:id/transfer-preview', async (req, res) => {
   try {
     await verifyUser(req);
     const { id } = req.params;
-    const targetCity = assertValidCity(req.query.city);
+    let targetCity = req.query.city;
+    
+    // Forçar normalização agressiva no endpoint
+    if (targetCity) {
+      targetCity = normalizeCityValue(targetCity);
+    }
+    
+    targetCity = assertValidCity(targetCity);
 
     const { rows: currentRows } = await pool.query(
       'SELECT id, company_name, city FROM clients WHERE id = $1',

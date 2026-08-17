@@ -65,6 +65,9 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
     setStep('validating');
     try {
       const normalizedCity = targetCity.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c');
+      // The city validation error in the preview endpoint is often due to missing 'city' param 
+      // or rigid validation against a header that might be outdated. 
+      // We pass the city BOTH in the query param and the header for maximum compatibility.
       const res = await vpsAuthedFetch(
         `/api/clients/${client.id}/transfer-preview?city=${encodeURIComponent(normalizedCity)}`,
         {

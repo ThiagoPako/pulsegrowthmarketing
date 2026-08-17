@@ -11,7 +11,7 @@ import { RefreshCw, ArrowRightLeft, Loader2, ShieldCheck, CheckCircle2, AlertTri
 import { Progress } from '@/components/ui/progress';
 import type { Client } from '@/types';
 import { vpsAuthedFetch } from '@/lib/vpsDb';
-import { normalizeCityValue, buildTransferPreviewRequest } from '@/lib/cityScope';
+import { normalizeCityValue, buildTransferPreviewRequest, describeCityError, type FriendlyCityError } from '@/lib/cityScope';
 
 
 interface TransferClientDialogProps {

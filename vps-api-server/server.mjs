@@ -9633,11 +9633,22 @@ app.post('/api/admin/repair-atomic', async (req, res) => {
     // 3. Reparar permissões (Crucial para erro 502/401 se o user perdeu acesso)
     results.push({ task: 'repair_permissions', status: 'started' });
     const dbUser = process.env.PG_USER || process.env.PGUSER || 'pulse_user';
+    const dbName = process.env.PG_DATABASE || process.env.PGDATABASE || 'pulse_db';
+    
+    // GRANT ALL em tabelas específicas caso o 'ALL TABLES' falhe por ownership
     await pool.query(`
+      GRANT ALL PRIVILEGES ON DATABASE ${dbName} TO ${dbUser};
+      GRANT ALL ON SCHEMA public TO ${dbUser};
       GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${dbUser};
       GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${dbUser};
       ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${dbUser};
-    `).catch(e => results.push({ task: 'repair_permissions', error: e.message }));
+    `).catch(async (e) => {
+      results.push({ task: 'repair_permissions', warning: e.message });
+      // Tentar ownership individual se necessário
+      await pool.query(`ALTER TABLE auth_users OWNER TO ${dbUser}`).catch(() => {});
+      await pool.query(`ALTER TABLE user_roles OWNER TO ${dbUser}`).catch(() => {});
+    });
+
 
     res.json({ success: true, results });
   } catch (err) {

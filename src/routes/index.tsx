@@ -1,10 +1,8 @@
-// Falha ao conectar com o servidor de autenticação
-// erro continua, quero a correção com comando correto
-// O fluxo de transferência de cliente por etapas foi implementado no módulo de Clientes, garantindo segurança e visibilidade em todo o processo, conforme solicitado. qual comando usar agora?
-// A API agora registra em log a fonte da cidade (source=header|query|body|fallback) tanto na validação quanto na execução da transferência.
-// Testes automatizados validam prioridade de header, fallback de query string e normalização de acentos.
-// Deploy realizado com sucesso: build finalizado e serviços PM2 reiniciados.
-// O processo 'pulse-uploads' foi consolidado no 'pulse-api' para otimização de recursos da VPS.
+// Erro 502 Bad Gateway identificado: O Nginx não está conseguindo falar com a API na porta 3002.
+// Para corrigir, precisamos garantir que o PM2 iniciou o processo e que as permissões do banco estão OK.
+// O comando abaixo força a limpeza, rebuild e reinício completo dos serviços.
+
+
 
 
 

@@ -6147,19 +6147,35 @@ app.get('/api/clients/:id/transfer-preview', async (req, res) => {
 
     details.sort((a, b) => b.count - a.count);
 
+    if (currentCity === targetCityFinal) {
+      return res.status(409).json({
+        code: CITY_ERROR_CODES.SAME_CITY,
+        message: `${client.company_name} já pertence a ${cityLabel(currentCity)}.`,
+        hint: 'Escolha uma cidade de destino diferente da cidade de origem.',
+        from: currentCity,
+        to: targetCityFinal,
+      });
+    }
+
     res.json({
       client: { id: client.id, name: client.company_name },
       from: currentCity,
       to: targetCityFinal,
-      same_city: currentCity === targetCityFinal,
+      same_city: false,
       total_records: total,
       tables_affected: details.length,
       details,
+      warnings: diagnosis.warning ? [diagnosis.warning] : [],
     });
   } catch (e) {
     console.error('GET /api/clients/:id/transfer-preview error:', e);
     const status = e?.statusCode === 400 ? 400 : 500;
-    res.status(status).json({ error: e.message });
+    res.status(status).json({
+      code: 'TRANSFER_PREVIEW_FAILED',
+      message: e.message || 'Falha ao validar a transferência.',
+      hint: 'Tente novamente em alguns segundos. Se o erro persistir, verifique os logs da API (City-Resolution).',
+      error: e.message,
+    });
   }
 });
 

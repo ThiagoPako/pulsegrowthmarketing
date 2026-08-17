@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useFinancialData } from '@/hooks/useFinancialData';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Package, Search, Plus, User, Tag, ClipboardList, Trash2, Pencil, CheckCircle, AlertTriangle, Hammer, Wrench } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { 
+  Package, Search, Plus, User, Tag, ClipboardList, 
+  Trash2, Pencil, CheckCircle, AlertTriangle, 
+  Hammer, Wrench, History, ArrowRightLeft, 
+  ArrowUpRight, ArrowDownLeft 
+} from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
 import { toast } from 'sonner';
 import { format } from 'date-fns';

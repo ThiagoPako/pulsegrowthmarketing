@@ -5098,7 +5098,7 @@ const ALLOWED_TABLES = [
   'endomarketing_profissionais','endomarketing_logs','endomarketing_packages',
   'endomarketing_partner_tasks','client_endomarketing_contracts','partners',
   'traffic_campaigns','whatsapp_config','whatsapp_messages','whatsapp_confirmations',
-  'recording_wait_logs','portal_videos','portal_video_views','commercial_proposals','proposal_comments',
+  'recording_wait_logs','portal_videos','portal_video_views','commercial_proposals','proposal_comments','scheduled_recordings',
   'event_recordings','client_testimonials','proposal_checklist_items','holidays',
   'tv_settings','fieldwork_activities',
   'training_presentations','training_slides',

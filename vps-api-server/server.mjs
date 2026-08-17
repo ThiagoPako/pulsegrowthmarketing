@@ -6108,6 +6108,7 @@ app.get('/api/clients/:id/transfer-preview', async (req, res) => {
 
     const client = currentRows[0];
     const currentCity = normalizeCityValue(client.city) || 'minacu';
+    const targetCityFinal = validatedCity || 'minacu';
 
     const details = [];
     let total = 0;
@@ -6142,8 +6143,8 @@ app.get('/api/clients/:id/transfer-preview', async (req, res) => {
     res.json({
       client: { id: client.id, name: client.company_name },
       from: currentCity,
-      to: targetCity,
-      same_city: currentCity === targetCity,
+      to: targetCityFinal,
+      same_city: currentCity === targetCityFinal,
       total_records: total,
       tables_affected: details.length,
       details,

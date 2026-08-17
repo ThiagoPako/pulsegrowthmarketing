@@ -394,11 +394,19 @@ export default function FinancialRevenues() {
           </SelectContent>
         </Select>
         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-          <Button size="sm" variant="outline" onClick={handleGenerate} className="shadow-sm"><RefreshCw size={14} className="mr-1" /> Gerar Receitas</Button>
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={handleGenerate} 
+            className="shadow-sm border-primary/20 text-primary hover:bg-primary/5 font-bold"
+          >
+            <RefreshCw size={14} className="mr-1" /> Gerar Receitas do Mês
+          </Button>
         </motion.div>
         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
           <Button size="sm" onClick={() => setShowNewDialog(true)} className="shadow-sm bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white"><Plus size={14} className="mr-1" /> Nova Receita</Button>
         </motion.div>
+
       </motion.div>
 
       {/* Dialog Nova Receita */}

@@ -5106,6 +5106,8 @@ const ALLOWED_TABLES = [
   'user_permissions','login_logs',
   'campaigns','campaign_slots',
   'story_editing_sessions','script_requests','manual_video_tasks','plan_promotions',
+  'client_professionals','client_units',
+
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -5320,6 +5322,14 @@ app.post('/api/db/query', async (req, res) => {
         console.warn('Could not ensure profiles.monthly_salary before generic query:', error?.message || error);
       });
     }
+
+    if (safeTable === 'client_professionals' || safeTable === 'client_units') {
+      await ensureClientDatabaseTables().catch((error) => {
+        console.warn('Could not ensure client database tables:', error?.message || error);
+      });
+    }
+
+
 
     if (safeTable === 'commercial_proposals' || safeTable === 'proposal_comments') {
       await ensureProposalTables();

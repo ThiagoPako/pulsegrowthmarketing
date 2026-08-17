@@ -212,6 +212,9 @@ export default function FinancialDashboard() {
   const totalExpenses = useMemo(() => monthExpenses.reduce((s, e) => s + Number(e.amount), 0), [monthExpenses]);
   // Lucro uses received + expected (prevista) revenues minus expenses for a more realistic view
   const revenuePendente = useMemo(() => monthRevenues.filter(r => r.status === 'prevista').reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
+  
+  const structureExpenses = useMemo(() => monthExpenses.filter(e => e.structure_investment).reduce((s, e) => s + Number(e.amount), 0), [monthExpenses]);
+  
   const lucro = revenueRecebida - totalExpenses;
   const lucroProjetado = revenuePrevista - totalExpenses;
   const activeClientsCount = activeContracts.length;

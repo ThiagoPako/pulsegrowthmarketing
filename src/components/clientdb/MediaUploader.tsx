@@ -93,11 +93,19 @@ export default function MediaUploader({ label, accept, folder, value, onChange, 
         <span className="text-sm font-medium text-foreground">{label}</span>
         <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => inputRef.current?.click()}>
           {uploading ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Upload className="mr-1 h-3.5 w-3.5" />}
-          Enviar
+          {uploading && progress ? `Enviando ${progress.current}/${progress.total}` : 'Enviar'}
         </Button>
       </div>
 
+      <p className="text-[11px] text-muted-foreground">
+        {kind === 'image'
+          ? `JPG, PNG, WEBP, GIF ou AVIF · até ${MAX_SIZE_MB.image}MB por arquivo`
+          : `MP4, MOV ou WEBM · até ${MAX_SIZE_MB.video}MB por arquivo`}
+      </p>
+
       <input ref={inputRef} type="file" accept={accept} multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
+
+
 
       {value.length === 0 ? (
         <p className="text-xs text-muted-foreground">Nenhum arquivo adicionado.</p>

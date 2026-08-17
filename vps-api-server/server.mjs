@@ -6162,7 +6162,9 @@ app.put('/api/clients/:id', async (req, res) => {
     // First, get the current client data to check the existing city
     const { rows: currentRows } = await pool.query('SELECT city FROM clients WHERE id = $1', [id]);
     const oldCity = currentRows[0]?.city;
-    const newCity = c.city ? assertValidCity(c.city) : undefined;
+    let newCityRaw = c.city;
+    if (newCityRaw) newCityRaw = normalizeCityValue(newCityRaw);
+    const newCity = newCityRaw ? assertValidCity(newCityRaw) : undefined;
 
     const allowed = [
       'company_name','responsible_person','phone','color','logo_url','fixed_day','fixed_time',

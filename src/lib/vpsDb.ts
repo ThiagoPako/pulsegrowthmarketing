@@ -61,10 +61,18 @@ async function refreshVpsSession(): Promise<boolean> {
  */
 export async function vpsAuthedFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const url = path.startsWith('http') ? path : `${VPS_API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
+  
+  // Garantir que a cidade ativa esteja sempre presente nos headers de toda requisição autenticada
+  const activeCity = getActiveCity();
   const build = (): RequestInit => ({
     ...init,
-    headers: { ...getAuthHeaders(), ...(init.headers as Record<string, string> | undefined) },
+    headers: { 
+      ...getAuthHeaders(), 
+      'x-pulse-city': activeCity,
+      ...(init.headers as Record<string, string> | undefined) 
+    },
   });
+
 
   let response = await fetch(url, build());
   if (response.status === 401 && (await refreshVpsSession())) {

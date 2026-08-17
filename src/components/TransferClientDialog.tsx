@@ -65,9 +65,16 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
     try {
       // Normalização idêntica à do CRM para consistência absoluta
       const normalizedCity = targetCity.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c');
+      // Passar a cidade normalizada via query E via header manual para garantir que o backend receba o contexto
       const res = await vpsAuthedFetch(
-        `/api/clients/${client.id}/transfer-preview?city=${encodeURIComponent(normalizedCity)}`
+        `/api/clients/${client.id}/transfer-preview?city=${encodeURIComponent(normalizedCity)}`,
+        {
+          headers: {
+            'x-pulse-city': normalizedCity
+          }
+        }
       );
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Erro ao validar a transferência');

@@ -6046,7 +6046,12 @@ app.put('/api/clients/:id', async (req, res) => {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
     const { id } = req.params;
     const c = req.body;
-    // Build dynamic SET clause from provided fields
+    
+    // First, get the current client data to check the existing city
+    const { rows: currentRows } = await pool.query('SELECT city FROM clients WHERE id = $1', [id]);
+    const oldCity = currentRows[0]?.city;
+    const newCity = c.city ? assertValidCity(c.city) : undefined;
+
     const allowed = [
       'company_name','responsible_person','phone','color','logo_url','fixed_day','fixed_time',
       'videomaker_id','backup_time','backup_day','extra_day','extra_content_types','accepts_extra',
@@ -6062,7 +6067,7 @@ app.put('/api/clients/:id', async (req, res) => {
     for (const key of allowed) {
       if (c[key] !== undefined) {
         let value = c[key];
-        if (key === 'city') value = assertValidCity(value);
+        if (key === 'city') value = newCity;
         if (key === 'briefing_data') value = JSON.stringify(c[key]);
         sets.push(`${key} = $${idx}`);
         vals.push(value);
@@ -6077,8 +6082,40 @@ app.put('/api/clients/:id', async (req, res) => {
       vals.push(activeCity);
       whereSql += ` AND ${cityVisibilityExpression('city', `$${idx + 1}`)}`;
     }
-    const { rows } = await pool.query(`UPDATE clients SET ${sets.join(', ')} ${whereSql} RETURNING *`, vals);
-    res.json(rows[0]);
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows } = await client.query(`UPDATE clients SET ${sets.join(', ')} ${whereSql} RETURNING *`, vals);
+      
+      // If the city was changed, update all related scoped tables
+      if (rows.length > 0 && newCity && oldCity && newCity !== oldCity) {
+        console.log(`[Cascading-City-Update] Transferring client ${id} from ${oldCity} to ${newCity}`);
+        
+        for (const tableName of TABLES_WITH_CITY) {
+          if (tableName === 'clients') continue;
+          
+          const hasCity = await tableHasCityColumn(tableName);
+          if (!hasCity) continue;
+          
+          const existingColumns = await getExistingColumns(tableName);
+          if (existingColumns.has('client_id')) {
+            await client.query(
+              `UPDATE ${tableName} SET city = $1 WHERE client_id = $2`,
+              [newCity, id]
+            );
+          }
+        }
+      }
+      
+      await client.query('COMMIT');
+      res.json(rows[0]);
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
   } catch (e) {
     console.error('PUT /api/clients error:', e);
     const status = e?.statusCode === 400 ? 400 : 500;

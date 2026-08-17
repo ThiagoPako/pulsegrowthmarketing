@@ -46,16 +46,23 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
   const [transferProgress, setTransferProgress] = useState(0);
   const [step, setStep] = useState<'security' | 'confirm' | 'validating' | 'preview' | 'preparing' | 'done'>('security');
   const [preview, setPreview] = useState<TransferPreview | null>(null);
+  const [cityError, setCityError] = useState<FriendlyCityError | null>(null);
 
   const resetState = () => {
     setStep('security');
     setPreview(null);
     setTransferProgress(0);
+    setCityError(null);
   };
 
   const handleValidate = async () => {
+    setCityError(null);
     if (!targetCity) {
-      toast.error('Selecione a cidade de destino');
+      setCityError({
+        code: 'CITY_UNRESOLVED',
+        title: 'Cidade de destino não selecionada',
+        message: 'Escolha a cidade para onde o cliente será movido.',
+      });
       return;
     }
     setIsBusy(true);
@@ -65,16 +72,27 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
       const previewRequest = buildTransferPreviewRequest(client.id, targetCity);
       const res = await vpsAuthedFetch(previewRequest.url, { headers: previewRequest.headers });
 
-
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Erro ao validar a transferência');
+        const payload = await res.json().catch(() => null);
+        const friendly = describeCityError(payload, res.status);
+        setCityError(friendly);
+        toast.error(friendly.title, { description: friendly.message });
+        setStep('confirm');
+        return;
       }
+
       const data: TransferPreview = await res.json();
       setPreview(data);
       setStep('preview');
     } catch (error: any) {
-      toast.error(error.message);
+      const friendly: FriendlyCityError = {
+        code: 'NETWORK_ERROR',
+        title: 'Sem resposta do servidor',
+        message: error?.message || 'Não foi possível contatar a API.',
+        hint: 'Verifique sua conexão e tente novamente em alguns segundos.',
+      };
+      setCityError(friendly);
+      toast.error(friendly.title, { description: friendly.message });
       setStep('confirm');
     } finally {
       setIsBusy(false);
@@ -84,6 +102,7 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
   const handleTransfer = async () => {
     setIsBusy(true);
     setStep('preparing');
+    setCityError(null);
     try {
       const progressInterval = setInterval(() => {
         setTransferProgress(prev => (prev < 90 ? prev + 5 : prev));
@@ -91,15 +110,21 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
 
       const res = await vpsAuthedFetch(`/api/clients/${client.id}`, {
         method: 'PUT',
-        body: JSON.stringify({ city: targetCity }),
+        headers: { 'x-pulse-city': normalizeCityValue(targetCity) || targetCity },
+        body: JSON.stringify({ city: normalizeCityValue(targetCity) || targetCity }),
       });
 
       clearInterval(progressInterval);
       setTransferProgress(100);
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Erro ao transferir cliente');
+        const payload = await res.json().catch(() => null);
+        const friendly = describeCityError(payload, res.status);
+        setCityError(friendly);
+        toast.error(friendly.title, { description: friendly.message });
+        setStep('preview');
+        setTransferProgress(0);
+        return;
       }
 
       setTimeout(() => {
@@ -112,13 +137,21 @@ export function TransferClientDialog({ client, open, onOpenChange }: TransferCli
         }, 2000);
       }, 500);
     } catch (error: any) {
-      toast.error(error.message);
+      const friendly: FriendlyCityError = {
+        code: 'NETWORK_ERROR',
+        title: 'Falha na transferência',
+        message: error?.message || 'Erro inesperado ao mover o cliente.',
+        hint: 'Nenhum dado foi alterado. Tente novamente.',
+      };
+      setCityError(friendly);
+      toast.error(friendly.title, { description: friendly.message });
       setStep('preview');
       setTransferProgress(0);
     } finally {
       setIsBusy(false);
     }
   };
+
 
   return (
     <Dialog 

@@ -1934,9 +1934,10 @@ export default function Clients() {
     const setMonthly = (patch: Partial<{ reels: number; creatives: number; stories: number; total: number }>) => {
       setForm(prev => {
         const next = { ...prev };
-        if (patch.reels !== undefined) next.weeklyReels = Math.ceil(patch.reels / 4);
-        if (patch.creatives !== undefined) next.weeklyCreatives = Math.ceil(patch.creatives / 4);
-        if (patch.stories !== undefined) next.weeklyStories = Math.ceil(patch.stories / 4);
+        if (patch.reels !== undefined) next.weeklyReels = specialPlan ? patch.reels / 4 : Math.ceil(patch.reels / 4);
+        if (patch.creatives !== undefined) next.weeklyCreatives = specialPlan ? patch.creatives / 4 : Math.ceil(patch.creatives / 4);
+        if (patch.stories !== undefined) next.weeklyStories = specialPlan ? patch.stories / 4 : Math.ceil(patch.stories / 4);
+
         
         // Se estiver editando reels/creatives/stories, atualiza o total automaticamente se não for personalizado
         if (patch.total === undefined && !specialPlan) {

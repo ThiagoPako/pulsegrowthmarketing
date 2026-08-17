@@ -1,6 +1,6 @@
+// qual comando usar no terminal ?
 // Login na VPS: Implementado Fallback Robusto no endpoint /api/auth/login.
 // Identificado que usuários existentes apenas na tabela 'auth_users' (sem vínculo em 'profiles') falhavam no login.
-// Agora o sistema consulta 'auth_users' diretamente caso o join inicial falhe, garantindo acesso imediato.
 
 
 

@@ -1,11 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import { normalizeCityValue, buildTransferPreviewRequest } from '@/lib/cityScope';
+import { normalizeCityValue, buildTransferPreviewRequest, describeCityError } from '@/lib/cityScope';
 import {
   normalizeCityValue as serverNormalize,
   assertValidCity,
   resolveTransferCity,
   resolveTransferCityDetailed,
   formatCityResolutionLog,
+  diagnoseTransferCity,
 } from '../../vps-api-server/lib/cityResolution.mjs';
 
 const silentLogger = { warn: vi.fn() };

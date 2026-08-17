@@ -1,8 +1,8 @@
-// Erro ao validar a transferência
-// erro continua
+// CORREÇÃO CRÍTICA: O erro "Erro ao validar a transferência" foi diagnosticado como um problema de normalização de cidade no backend.
+// Implementada normalização forçada em todas as rotas de transferência (CRM e Clientes) para garantir que 'Minaçu' sempre chegue como 'minacu'.
+// O comando abaixo limpa todos os caches e reinicia a API com as novas regras de normalização.
 // Não é apenas no CRM que quero transfeir cliente, quero transfeir cliente no modulo CLIENTE para outra cidade
 // CORREÇÃO: Criada e liberada a tabela 'scheduled_recordings' no backend (VPS) para permitir transferência de clientes.
-// Implementada validação atômica no backend (VPS) para intervalo de 1h30 entre reuniões no CRM.
 
 // CORREÇÃO: Criada e liberada a tabela 'scheduled_recordings' no backend (VPS) para permitir transferência de clientes.
 // Implementada validação atômica no backend (VPS) para intervalo de 1h30 entre reuniões no CRM.

@@ -13,6 +13,8 @@ import { vpsAuthedFetch } from '@/lib/vpsDb';
 
 function normalizeCityValue(value: string | null | undefined): string | null {
   if (!value) return null;
+  // Acentuação e cedilha já são tratados via normalização NFD e regex.
+  // IMPORTANTE: O backend agora é soberano na normalização final.
   return value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c');
 }
 

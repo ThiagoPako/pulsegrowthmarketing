@@ -21,6 +21,8 @@ export const AVAILABLE_MODULES: ModuleDef[] = [
   { key: 'entregas', label: 'Entregas', icon: '📦', description: 'Registro de entregas', paths: ['/entregas'] },
   { key: 'desempenho', label: 'Desempenho', icon: '🎯', description: 'Relatórios de desempenho', paths: ['/desempenho'] },
   { key: 'clientes', label: 'Clientes', icon: '🏢', description: 'Gestão de clientes', paths: ['/clientes'] },
+  { key: 'banco_clientes', label: 'Banco de Dados', icon: '🗂️', description: 'Profissionais e unidades de rede dos clientes', paths: ['/banco-clientes'] },
+
   { key: 'relacionamento', label: 'Relacionamento', icon: '🤝', description: 'Solicitações de gravação especial', paths: ['/relacionamento'] },
   { key: 'onboarding', label: 'Onboarding', icon: '👤', description: 'Onboarding de clientes', paths: ['/onboarding-gestao'] },
   { key: 'equipe', label: 'Equipe', icon: '👥', description: 'Gestão da equipe', paths: ['/equipe'] },

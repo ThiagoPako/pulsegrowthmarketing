@@ -111,6 +111,8 @@ const navCategories: NavCategory[] = [
     color: 'amber',
     items: [
       { path: '/clientes', label: 'Clientes', icon: Building2, roles: ['admin', 'social_media', 'gestor_projetos'] },
+      { path: '/banco-clientes', label: 'Banco de Dados', icon: Database, roles: ['admin', 'social_media', 'gestor_projetos', 'designer', 'copywriter'] },
+
       { path: '/relacionamento', label: 'Relacionamento', icon: Handshake, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/depoimentos', label: 'Depoimentos', icon: Star, roles: ['admin', 'social_media'] },
       { path: '/onboarding-gestao', label: 'Onboarding', icon: UserPlus, roles: ['admin', 'social_media', 'gestor_projetos'] },

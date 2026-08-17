@@ -422,6 +422,78 @@ ensureProposalTables().catch((error) => {
   console.error('Failed to ensure proposal tables:', error);
 });
 
+// ═══════════════════════════════════════════════════════════════
+// BANCO DE DADOS DE CLIENTES (Profissionais + Unidades/Rede)
+// ═══════════════════════════════════════════════════════════════
+let clientDatabaseTablesPromise = null;
+
+async function ensureClientDatabaseTables() {
+  if (!clientDatabaseTablesPromise) {
+    clientDatabaseTablesPromise = pool.query(`
+      CREATE TABLE IF NOT EXISTS client_professionals (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        name TEXT NOT NULL DEFAULT ''::text,
+        specialty TEXT DEFAULT ''::text,
+        council_type TEXT DEFAULT 'CRM'::text,
+        council_number TEXT DEFAULT ''::text,
+        rqe TEXT DEFAULT ''::text,
+        phone TEXT DEFAULT ''::text,
+        email TEXT DEFAULT ''::text,
+        bio TEXT DEFAULT ''::text,
+        schedule_notes TEXT DEFAULT ''::text,
+        schedule JSONB DEFAULT '[]'::jsonb,
+        photos JSONB DEFAULT '[]'::jsonb,
+        videos JSONB DEFAULT '[]'::jsonb,
+        active BOOLEAN NOT NULL DEFAULT true,
+        city TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_client_professionals_client
+        ON client_professionals (client_id);
+
+      CREATE TABLE IF NOT EXISTS client_units (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        unit_name TEXT NOT NULL DEFAULT ''::text,
+        unit_type TEXT DEFAULT 'geral'::text,
+        city_name TEXT DEFAULT ''::text,
+        state TEXT DEFAULT ''::text,
+        city_anniversary DATE,
+        population INTEGER,
+        competitors TEXT DEFAULT ''::text,
+        has_convenience BOOLEAN NOT NULL DEFAULT false,
+        has_lodging BOOLEAN NOT NULL DEFAULT false,
+        has_restaurant BOOLEAN NOT NULL DEFAULT false,
+        address TEXT DEFAULT ''::text,
+        phone TEXT DEFAULT ''::text,
+        manager_name TEXT DEFAULT ''::text,
+        notes TEXT DEFAULT ''::text,
+        photos JSONB DEFAULT '[]'::jsonb,
+        videos JSONB DEFAULT '[]'::jsonb,
+        city TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_client_units_client
+        ON client_units (client_id);
+    `).catch((error) => {
+      clientDatabaseTablesPromise = null;
+      throw error;
+    });
+  }
+
+  return clientDatabaseTablesPromise;
+}
+
+ensureClientDatabaseTables().catch((error) => {
+  console.error('Failed to ensure client database tables:', error);
+});
+
+
 // ensureCrmLeadsColumns was moved to line 121 to avoid duplication
 ensureCrmLeadsColumns().catch(err => console.error('CRM leads column sync failed:', err));
 
@@ -5034,6 +5106,8 @@ const ALLOWED_TABLES = [
   'user_permissions','login_logs',
   'campaigns','campaign_slots',
   'story_editing_sessions','script_requests','manual_video_tasks','plan_promotions',
+  'client_professionals','client_units',
+
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -5248,6 +5322,14 @@ app.post('/api/db/query', async (req, res) => {
         console.warn('Could not ensure profiles.monthly_salary before generic query:', error?.message || error);
       });
     }
+
+    if (safeTable === 'client_professionals' || safeTable === 'client_units') {
+      await ensureClientDatabaseTables().catch((error) => {
+        console.warn('Could not ensure client database tables:', error?.message || error);
+      });
+    }
+
+
 
     if (safeTable === 'commercial_proposals' || safeTable === 'proposal_comments') {
       await ensureProposalTables();

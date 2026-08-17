@@ -57,6 +57,8 @@ const DesignerKanban = lazy(() => import("@/pages/DesignerKanban"));
 const DesignerDashboard = lazy(() => import("@/pages/DesignerDashboard"));
 const DesignerReports = lazy(() => import("@/pages/DesignerReports"));
 const ClientArtPlaybook = lazy(() => import("@/pages/ClientArtPlaybook"));
+const ClientDatabase = lazy(() => import("@/pages/ClientDatabase"));
+
 const OnboardingManagement = lazy(() => import("@/pages/OnboardingManagement"));
 const ClientBriefing = lazy(() => import("@/pages/ClientBriefing"));
 const GestaoLogin = lazy(() => import("@/pages/GestaoLogin"));
@@ -206,6 +208,8 @@ function AppRoutes() {
 
         <Route path="/agenda" element={<ProtectedRoute><Schedule /></ProtectedRoute>} />
         <Route path="/clientes" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
+        <Route path="/banco-clientes" element={<ProtectedRoute><ClientDatabase /></ProtectedRoute>} />
+
         <Route path="/equipe" element={<ProtectedRoute><Team /></ProtectedRoute>} />
         <Route path="/equipe/apresentacao" element={<TeamPresentation />} />
         <Route path="/roteiros" element={<ProtectedRoute><Scripts /></ProtectedRoute>} />

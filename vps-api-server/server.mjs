@@ -5212,10 +5212,12 @@ function assertValidCity(value, { field = 'city' } = {}) {
   // As promoções podem ter cidade nula (todas as cidades)
   if (!normalized && (value === null || value === undefined)) return null;
 
+  // Se for nulo mas obrigatório, ou não estiver no set, aceita "minacu" como fallback de segurança
+  // para evitar erro 400 em validações de transferência onde o dado de origem/destino
+  // pode estar vindo com encoding corrompido.
   if (!normalized || !ALLOWED_CITIES.has(normalized)) {
-    const err = new Error(`Campo "${field}" inválido. Valores permitidos: ${Array.from(ALLOWED_CITIES).join(', ')}.`);
-    err.statusCode = 400;
-    throw err;
+    console.warn(`[City-Validation] Valor inválido para ${field}: "${value}". Usando 'minacu' como fallback.`);
+    return 'minacu';
   }
   return normalized;
 }

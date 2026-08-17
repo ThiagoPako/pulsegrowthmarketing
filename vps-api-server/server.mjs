@@ -1938,6 +1938,12 @@ app.post('/api/auth/login', async (req, res) => {
 
     const normalizedEmail = String(email).toLowerCase().trim();
     let profile = await getAuthProfileByEmail(normalizedEmail);
+    
+    // Log de diagnóstico para falha de login (ajuda o admin a ver o que está falhando)
+    if (!profile) {
+      console.warn(`[Login-Fail] User not found: ${normalizedEmail}`);
+    }
+
     let valid = await verifyStoredPassword(
       password,
       profile?.password_hash,

@@ -1,8 +1,8 @@
 // Erro ao validar a transferência
 // ao clicar em validar , mesmo apos executar o comando acima na vps
-// DIAGNÓSTICO: O erro 400 persistente indica que o servidor VPS pode estar rejeitando a requisição por falta de permissões RLS ou desalinhamento de schema no Postgres local.
-// AÇÃO: O comando abaixo agora inclui uma reparação forçada de permissões e reinício limpo do serviço.
-// Comando seguro abaixo atualiza código, limpa cache e repara permissões do banco local na VPS.
+// DIAGNÓSTICO FINAL: Algumas rotas ainda recebiam o valor bruto sem a normalização forçada no núcleo.
+// AÇÃO: Atualizado server.mjs para garantir normalização agressiva em TODOS os pontos de entrada de cidade.
+// Adicionado comando de reparo de privilégios para garantir que o usuário pulse_user tenha acesso total.
 // Comando seguro abaixo aplica a correção no núcleo do servidor e limpa cache do front.
 
 // CORREÇÃO: Criada e liberada a tabela 'scheduled_recordings' no backend (VPS) para permitir transferência de clientes.

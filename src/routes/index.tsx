@@ -1,4 +1,4 @@
-// Falha ao conectar com o servidor de autenticação - Use 'pm2 logs pulse-api --lines 100' para ver os erros.
+// Diagnóstico: A porta 3002 está inativa. Tente 'pm2 restart pulse-api --update-env' e depois 'pm2 status'.
 // Login na VPS: Implementado Fallback Robusto no endpoint /api/auth/login.
 // Identificado que usuários existentes apenas na tabela 'auth_users' (sem vínculo em 'profiles') falhavam no login.
 

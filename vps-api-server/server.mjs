@@ -6231,8 +6231,18 @@ app.put('/api/clients/:id', async (req, res) => {
     sets.push(`updated_at = NOW()`);
     vals.push(id);
     let whereSql = `WHERE id = $${idx}`;
+
+    // Detecta transferência de cidade ANTES de montar o escopo.
+    const normalizedOldCity = normalizeCityValue(oldCity);
+    const isCityTransfer = Boolean(newCity && normalizedOldCity && newCity !== normalizedOldCity);
+
+    // Em uma transferência, o frontend envia o header `x-pulse-city` já com a
+    // cidade de DESTINO. Se aplicássemos esse escopo no WHERE, o cliente (ainda
+    // na cidade de origem) não seria encontrado e o UPDATE afetaria 0 linhas —
+    // exatamente o bug de "passou todas as etapas mas nada mudou". Por isso, em
+    // transferências o escopo usa a cidade de ORIGEM.
     if (scopeCity) {
-      vals.push(activeCity);
+      vals.push(isCityTransfer ? normalizedOldCity : activeCity);
       whereSql += ` AND ${cityVisibilityExpression('city', `$${idx + 1}`)}`;
     }
 
@@ -6240,10 +6250,20 @@ app.put('/api/clients/:id', async (req, res) => {
     try {
       await client.query('BEGIN');
       const { rows } = await client.query(`UPDATE clients SET ${sets.join(', ')} ${whereSql} RETURNING *`, vals);
-      
+
+      if (rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({
+          code: 'CLIENT_NOT_UPDATED',
+          error: 'Cliente não encontrado no escopo atual',
+          message: 'Nenhum registro foi alterado. O cliente não está visível na cidade de origem informada.',
+          hint: 'Recarregue a lista de clientes e tente novamente com a cidade de origem correta.',
+        });
+      }
+
       // If the city was changed, update all related scoped tables
-      if (rows.length > 0 && newCity && oldCity && newCity !== oldCity) {
-        console.log(`[Cascading-City-Update] Transferring client ${id} from ${oldCity} to ${newCity}`);
+      if (isCityTransfer) {
+        console.log(`[Cascading-City-Update] Transferring client ${id} from ${normalizedOldCity} to ${newCity}`);
         
         for (const tableName of TABLES_WITH_CITY) {
           if (tableName === 'clients') continue;
@@ -6263,6 +6283,7 @@ app.put('/api/clients/:id', async (req, res) => {
       
       await client.query('COMMIT');
       res.json(rows[0]);
+
     } catch (e) {
       await client.query('ROLLBACK');
       throw e;

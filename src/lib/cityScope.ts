@@ -39,3 +39,57 @@ export function buildTransferPreviewRequest(
     headers: { 'x-pulse-city': city },
   };
 }
+
+// ─── Erros claros de validação de cidade ────────────────────────────
+export const CITY_LABELS: Record<string, string> = { minacu: 'Minaçu', uruacu: 'Uruaçu' };
+
+export interface CityErrorPayload {
+  code?: string;
+  message?: string;
+  hint?: string;
+  error?: string;
+  supported?: string[];
+  received?: { header?: string | null; query?: string | null };
+}
+
+export interface FriendlyCityError {
+  code: string;
+  title: string;
+  message: string;
+  hint?: string;
+  details?: string;
+}
+
+const CITY_ERROR_TITLES: Record<string, string> = {
+  CITY_UNRESOLVED: 'Cidade de destino não identificada',
+  CITY_INVALID: 'Cidade de destino inválida',
+  CITY_CONFLICT: 'Conflito de contexto de cidade',
+  CITY_SAME_AS_ORIGIN: 'Cidade de destino igual à de origem',
+  TRANSFER_PREVIEW_FAILED: 'Falha ao validar a transferência',
+};
+
+/** Converte a resposta de erro da API em uma mensagem legível para o usuário. */
+export function describeCityError(payload: CityErrorPayload | null | undefined, status?: number): FriendlyCityError {
+  const code = payload?.code || (status === 401 ? 'UNAUTHORIZED' : 'TRANSFER_PREVIEW_FAILED');
+  const received = payload?.received;
+  const details = received
+    ? `Contexto recebido — header: ${received.header ?? '—'} | seleção: ${received.query ?? '—'}`
+    : undefined;
+
+  return {
+    code,
+    title: CITY_ERROR_TITLES[code] || 'Não foi possível validar a transferência',
+    message:
+      payload?.message ||
+      payload?.error ||
+      (status === 401
+        ? 'Sua sessão expirou. Entre novamente para continuar.'
+        : 'Erro inesperado ao validar a transferência.'),
+    hint:
+      payload?.hint ||
+      (payload?.supported?.length
+        ? `Cidades suportadas: ${payload.supported.map((c) => CITY_LABELS[c] || c).join(', ')}.`
+        : undefined),
+    details,
+  };
+}

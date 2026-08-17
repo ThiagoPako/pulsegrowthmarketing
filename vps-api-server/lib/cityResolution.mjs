@@ -89,3 +89,85 @@ export function formatCityResolutionLog(resolution, context = {}) {
   return parts.join(' ');
 }
 
+// ─── Erros claros de resolução de cidade ─────────────────────────────
+export const CITY_ERROR_CODES = {
+  UNRESOLVED: 'CITY_UNRESOLVED',
+  INVALID: 'CITY_INVALID',
+  CONFLICT: 'CITY_CONFLICT',
+  SAME_CITY: 'CITY_SAME_AS_ORIGIN',
+};
+
+const CITY_LABELS = { minacu: 'Minaçu', uruacu: 'Uruaçu' };
+export function cityLabel(city) {
+  const normalized = normalizeCityValue(city);
+  return (normalized && CITY_LABELS[normalized]) || String(city ?? '—');
+}
+
+/**
+ * Diagnóstico estrito da cidade de destino: em vez de aplicar silenciosamente o
+ * fallback 'minacu', devolve um erro estruturado quando a cidade não pode ser
+ * resolvida com segurança (ausente, inválida ou conflitante entre header/query).
+ */
+export function diagnoseTransferCity({ headers = {}, query = {} } = {}) {
+  const rawHeader = headers['x-pulse-city'] ?? headers['X-Pulse-City'] ?? null;
+  const rawQuery = query.city ?? null;
+  const headerCity = normalizeCityValue(rawHeader);
+  const queryCity = normalizeCityValue(rawQuery);
+  const headerValid = Boolean(headerCity && ALLOWED_CITIES.has(headerCity));
+  const queryValid = Boolean(queryCity && ALLOWED_CITIES.has(queryCity));
+  const supported = [...ALLOWED_CITIES];
+
+  if (!headerCity && !queryCity) {
+    return {
+      ok: false,
+      error: {
+        code: CITY_ERROR_CODES.UNRESOLVED,
+        message: 'Não foi possível identificar a cidade de destino da transferência.',
+        hint: 'Selecione novamente a cidade de destino e tente outra vez. Se persistir, recarregue a página para renovar o contexto da unidade.',
+        supported,
+        received: { header: null, query: null },
+      },
+    };
+  }
+
+  if (!headerValid && !queryValid) {
+    return {
+      ok: false,
+      error: {
+        code: CITY_ERROR_CODES.INVALID,
+        message: `Cidade de destino inválida: "${rawQuery ?? rawHeader}".`,
+        hint: `Cidades suportadas: ${supported.map(cityLabel).join(', ')}.`,
+        supported,
+        received: { header: rawHeader ?? null, query: rawQuery ?? null },
+      },
+    };
+  }
+
+  // Conflito: header e query válidos, porém apontando para cidades diferentes.
+  // A query é o destino escolhido explicitamente pelo usuário e prevalece,
+  // mas o conflito é reportado para diagnóstico.
+  const conflict = headerValid && queryValid && headerCity !== queryCity;
+  const source = queryValid ? 'query' : 'header';
+  const city = queryValid ? queryCity : headerCity;
+
+  return {
+    ok: true,
+    city,
+    source,
+    conflict,
+    rawHeader: rawHeader === null ? null : String(rawHeader),
+    rawQuery: rawQuery === null ? null : String(rawQuery),
+    headerValid,
+    queryValid,
+    warning: conflict
+      ? {
+          code: CITY_ERROR_CODES.CONFLICT,
+          message: `Contexto divergente: header aponta para ${cityLabel(headerCity)} e a seleção para ${cityLabel(queryCity)}.`,
+          hint: `A transferência usará a cidade selecionada (${cityLabel(queryCity)}).`,
+          received: { header: rawHeader, query: rawQuery },
+        }
+      : null,
+  };
+}
+
+

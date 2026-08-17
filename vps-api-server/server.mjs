@@ -9580,6 +9580,11 @@ app.post('/api/admin/repair-atomic', async (req, res) => {
     // 1. Garantir colunas do CRM (Geladeira, etc)
     results.push({ task: 'ensure_crm_columns', status: 'started' });
     await ensureCrmLeadsColumns().catch(e => results.push({ task: 'ensure_crm_columns', error: e.message }));
+    
+    // Ensure Structure column on expenses
+    results.push({ task: 'ensure_expense_structure_column', status: 'started' });
+    await ensureExpenseStructureColumn().catch(e => results.push({ task: 'ensure_expense_structure_column', error: e.message }));
+
 
     // 2. Garantir tabelas do Auth (Se existirem)
     results.push({ task: 'check_auth_tables', status: 'started' });

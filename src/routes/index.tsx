@@ -1,8 +1,8 @@
+// CORREÇÃO: Implementada transferência completa de clientes entre cidades (Minaçu <-> Uruaçu) com cascata automática para todos os registros vinculados.
 // CORREÇÃO: Criada e liberada a tabela 'scheduled_recordings' no backend (VPS) para permitir transferência de clientes.
 // Implementada validação atômica no backend (VPS) para intervalo de 1h30 entre reuniões no CRM.
 // CRM: Sistema de Briefing SDR -> Closer e lembretes 24h ativos.
 // Cache-Busting: Estratégia de "Hard Reload" ativada para garantir sincronização na VPS.
-// VPS: Tudo operando 100% via API local, sem dependências externas de banco.
 
 
 

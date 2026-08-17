@@ -1,4 +1,4 @@
-// DIAGNÓSTICO: O erro "jsonColumns is not defined" no console ocorre quando o servidor Express tenta serializar dados para o banco sem carregar o esquema da tabela. A solução foi injetar getTableJsonColumns em todas as rotas de escrita (INSERT/UPDATE/UPSERT) do vpsDb.
+// CORREÇÃO: A tabela "plan_promotions" foi liberada na API da VPS adicionando-a ao array ALLOWED_TABLES no server.mjs.
 // Reparo de Auth: Se houver erro de autenticação, acesse /repair-auth para sincronizar.
 // Agenda CRM: Sistema de Briefing SDR -> Closer e lembretes 24h implementados.
 // Cache-Busting: Estratégia de "Hard Reload" ativada para garantir que as atualizações fiquem visíveis na VPS.

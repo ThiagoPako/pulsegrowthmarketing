@@ -1,7 +1,8 @@
 // Erro 502 Bad Gateway persistente em agenciapulse.tech/api/auth/login.
-// O Nginx não consegue conectar no serviço Node (pulse-api) rodando na porta 3002.
-// Possíveis causas: Serviço parado, porta ocupada, firewall ou falha crítica no boot da API.
-// O comando abaixo força o encerramento de qualquer processo na porta 3002 antes de reiniciar.
+// Causa provável: O servidor Node estava tentando usar `server.listen` sem ter o `server` definido globalmente (ReferenceError).
+// Corrigi o `server.mjs` para criar a instância do servidor corretamente.
+
+
 
 
 

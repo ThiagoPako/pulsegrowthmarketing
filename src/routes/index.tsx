@@ -1,6 +1,7 @@
-// Diagnóstico: A porta 3002 está inativa. Tente 'pm2 restart pulse-api --update-env' e depois 'pm2 status'.
-// Login na VPS: Implementado Fallback Robusto no endpoint /api/auth/login.
-// Identificado que usuários existentes apenas na tabela 'auth_users' (sem vínculo em 'profiles') falhavam no login.
+// ERRO DE SINTAXE CORRIGIDO: Removido '}' extra e declaração duplicada de 'server' no server.mjs.
+// A porta 3002 deve voltar a responder após o deploy.
+// Comando definitivo para deploy:
+
 
 
 

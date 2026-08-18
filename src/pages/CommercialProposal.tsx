@@ -238,6 +238,9 @@ export default function CommercialProposal() {
 
   // Personalizada fields
   const [contractDuration, setContractDuration] = useState<'semestral' | 'anual'>('semestral');
+  // Oferta anual 6+6: primeiros 6 meses em valor promocional, demais no valor normal
+  const [promo66Enabled, setPromo66Enabled] = useState(false);
+  const [promo66Value, setPromo66Value] = useState('');
   const [selectedBaseServices, setSelectedBaseServices] = useState<string[]>([]); // adicionais (fora do contrato)
   const [selectedIncludedServices, setSelectedIncludedServices] = useState<string[]>([]); // inclusos no contrato
   const [additionalServices, setAdditionalServices] = useState<{ id: string; name: string; price: number }[]>([]);
@@ -375,6 +378,8 @@ export default function CommercialProposal() {
         setSelectedBaseServices(Array.isArray(sys.selectedBaseServices) ? sys.selectedBaseServices : []);
         setSelectedIncludedServices(Array.isArray(sys.selectedIncludedServices) ? sys.selectedIncludedServices : []);
         setAdditionalServices(Array.isArray(sys.additionalServices) ? sys.additionalServices : []);
+        setPromo66Enabled(!!sys.promo66Enabled);
+        setPromo66Value(sys.promo66Value != null ? String(sys.promo66Value) : '');
       }
       // Cronograma
       if (p.proposal_type === 'cronograma') {
@@ -462,6 +467,8 @@ export default function CommercialProposal() {
       if (d.selectedBaseServices) setSelectedBaseServices(d.selectedBaseServices);
       if (d.selectedIncludedServices) setSelectedIncludedServices(d.selectedIncludedServices);
       if (d.additionalServices) setAdditionalServices(d.additionalServices);
+      if (d.promo66Enabled) setPromo66Enabled(true);
+      if (d.promo66Value) setPromo66Value(String(d.promo66Value));
       // Cronograma
       if (d.cronogramaDesc) setCronogramaDesc(d.cronogramaDesc);
       if (d.cronogramaDeliverables?.length) setCronogramaDeliverables(d.cronogramaDeliverables);
@@ -476,11 +483,19 @@ export default function CommercialProposal() {
     } catch { /* ignore corrupt data */ }
   }, []);
 
-  // Auto-apply 5% discount when annual contract is selected (custom proposal)
+  // Auto-apply 5% discount when annual contract is selected (custom proposal).
+  // Quando a oferta 6+6 está ativa, o desconto é representado pelo valor promocional
+  // dos 6 primeiros meses — por isso zeramos o desconto percentual para não duplicar.
   useEffect(() => {
     if (proposalType !== 'personalizada') return;
+    if (contractDuration === 'anual' && promo66Enabled) { setCustomDiscount(0); return; }
     setCustomDiscount(contractDuration === 'anual' ? 5 : 0);
-  }, [contractDuration, proposalType]);
+  }, [contractDuration, proposalType, promo66Enabled]);
+
+  // A oferta 6+6 só existe em contrato anual
+  useEffect(() => {
+    if (contractDuration !== 'anual' && promo66Enabled) setPromo66Enabled(false);
+  }, [contractDuration, promo66Enabled]);
 
   // Keep team member avatars in sync with the latest users list so that the
   // photo shown in the preview is exactly the one persisted to the public link.
@@ -512,13 +527,14 @@ export default function CommercialProposal() {
       endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription,
       customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings,
       cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, cronogramaPricingMode, cronogramaTotalCustomValue,
-      contractDuration, selectedBaseServices, selectedIncludedServices, additionalServices
+      contractDuration, selectedBaseServices, selectedIncludedServices, additionalServices,
+      promo66Enabled, promo66Value
     };
     const timer = setTimeout(() => {
       try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* quota */ }
     }, 500);
     return () => clearTimeout(timer);
-  }, [proposalType, clientName, clientCompany, validityDate, bonusServices, teamMembers, customDiscount, observations, whatsappNumber, selectedPlanId, hasContract, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription, customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings, cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, cronogramaPricingMode, cronogramaTotalCustomValue, contractDuration, selectedBaseServices, selectedIncludedServices, additionalServices]);
+  }, [proposalType, clientName, clientCompany, validityDate, bonusServices, teamMembers, customDiscount, observations, whatsappNumber, selectedPlanId, hasContract, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription, customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings, cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, cronogramaPricingMode, cronogramaTotalCustomValue, contractDuration, selectedBaseServices, selectedIncludedServices, additionalServices, promo66Enabled, promo66Value]);
   const { data: plans = [] } = useQuery({
     queryKey: ['plans-proposal'],
     queryFn: async () => {
@@ -758,7 +774,9 @@ export default function CommercialProposal() {
         contractDuration,
         selectedBaseServices,
         selectedIncludedServices,
-        additionalServices
+        additionalServices,
+        promo66Enabled,
+        promo66Value: parseFloat(promo66Value) || 0
       } : {};
 
       const cronogramaSumValue = cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0);
@@ -1213,27 +1231,75 @@ export default function CommercialProposal() {
             <CardTitle className="text-base flex items-center justify-between">
               <span>Tempo de Contrato</span>
               <Badge variant={contractDuration === 'anual' ? 'default' : 'outline'} className={cn(contractDuration === 'anual' && "bg-green-500")}>
-                {contractDuration === 'anual' ? '5% de Desconto Ativado' : 'Sem desconto'}
+                {contractDuration === 'anual'
+                  ? (promo66Enabled ? 'Oferta 6+6 Ativada' : '5% de Desconto Ativado')
+                  : 'Sem desconto'}
               </Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent className="flex gap-4">
-            <Button 
-              type="button" 
-              variant={contractDuration === 'semestral' ? 'default' : 'outline'}
-              className="flex-1"
-              onClick={() => setContractDuration('semestral')}
-            >
-              Semestral
-            </Button>
-            <Button 
-              type="button" 
-              variant={contractDuration === 'anual' ? 'default' : 'outline'}
-              className="flex-1"
-              onClick={() => setContractDuration('anual')}
-            >
-              Anual (5% OFF)
-            </Button>
+          <CardContent className="space-y-4">
+            <div className="flex gap-4">
+              <Button
+                type="button"
+                variant={contractDuration === 'semestral' ? 'default' : 'outline'}
+                className="flex-1"
+                onClick={() => setContractDuration('semestral')}
+              >
+                Semestral
+              </Button>
+              <Button
+                type="button"
+                variant={contractDuration === 'anual' ? 'default' : 'outline'}
+                className="flex-1"
+                onClick={() => setContractDuration('anual')}
+              >
+                Anual (5% OFF)
+              </Button>
+            </div>
+
+            {contractDuration === 'anual' && (
+              <div className="rounded-lg border border-dashed p-4 space-y-3">
+                <Button
+                  type="button"
+                  variant={promo66Enabled ? 'default' : 'outline'}
+                  className="w-full justify-start gap-2"
+                  onClick={() => setPromo66Enabled(v => !v)}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Oferta: primeiros 6 meses promocional {promo66Enabled ? '(ativa)' : ''}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Contrato de 12 meses: 6 primeiras parcelas com valor promocional e as 6 restantes no valor normal.
+                </p>
+
+                {promo66Enabled && (
+                  <div className="space-y-2">
+                    <Label className="text-xs">Valor mensal nos primeiros 6 meses (R$)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={promo66Value}
+                      onChange={(e) => setPromo66Value(e.target.value)}
+                      placeholder="Ex: 1200"
+                    />
+                    {(() => {
+                      const normal = monthlyTotalBeforeDiscount;
+                      const promo = parseFloat(promo66Value) || 0;
+                      if (!normal || !promo || promo >= normal) return null;
+                      const pct = ((normal - promo) / normal) * 100;
+                      const saving = (normal - promo) * 6;
+                      return (
+                        <div className="text-xs text-green-600 font-semibold space-y-0.5">
+                          <div>Desconto automático: {pct.toFixed(1)}% nos 6 primeiros meses</div>
+                          <div>Economia total: {fmt(saving)} • Total 12 meses: {fmt(promo * 6 + normal * 6)}</div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -2104,6 +2170,11 @@ export default function CommercialProposal() {
     const discountedVal = val * (1 - customDiscount / 100);
     const installs = parseInt(customInstallments) || 1;
     const installmentVal = discountedVal / installs;
+    // Oferta anual 6+6
+    const promoVal = parseFloat(promo66Value) || 0;
+    const promo66Active = contractDuration === 'anual' && promo66Enabled && promoVal > 0 && promoVal < val;
+    const promo66Pct = promo66Active ? ((val - promoVal) / val) * 100 : 0;
+    const promo66Saving = promo66Active ? (val - promoVal) * 6 : 0;
     const legacyExtraIds: string[] = [];
     if (customSocialMedia && !selectedIncludedServices.includes('social_media')) legacyExtraIds.push('social_media');
     if (customTrafficMgmt && !selectedIncludedServices.includes('meta_ads') && !selectedIncludedServices.includes('google_ads')) legacyExtraIds.push('meta_ads');
@@ -2253,20 +2324,48 @@ export default function CommercialProposal() {
                     )}
 
                     <Separator />
-                    <div className="grid grid-cols-2 gap-3 pt-1">
-                      <div className="rounded-xl border-2 p-4 text-center" style={{ borderColor: contractDuration === 'semestral' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Semestral</div>
-                        <div className="text-xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
-                        <div className="text-[10px] text-gray-500 mt-1">Compromisso de 6 meses</div>
-                      </div>
-                      <div className="rounded-xl border-2 p-4 text-center relative" style={{ borderColor: contractDuration === 'anual' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
-                        <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">5% OFF</div>
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Anual</div>
-                        <div className="text-xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val * 0.95)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
-                        <div className="text-[10px] text-green-600 font-semibold mt-1">Economia total de {fmt(val * 12 * 0.05)}</div>
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-gray-500 text-center pt-1">O valor é pago mensalmente conforme a duração do contrato escolhida.</p>
+                    {promo66Active ? (
+                      <>
+                        <div className="grid grid-cols-2 gap-3 pt-1">
+                          <div className="rounded-xl border-2 p-4 text-center relative" style={{ borderColor: 'hsl(142 71% 35%)' }}>
+                            <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">
+                              {promo66Pct.toFixed(0)}% OFF
+                            </div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Meses 1 a 6</div>
+                            <div className="text-2xl font-bold mt-1" style={{ color: 'hsl(142 71% 35%)' }}>{fmt(promoVal)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
+                            <div className="text-[10px] text-green-600 font-semibold mt-1">Valor promocional de entrada</div>
+                          </div>
+                          <div className="rounded-xl border-2 p-4 text-center" style={{ borderColor: 'hsl(16 82% 51%)' }}>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Meses 7 a 12</div>
+                            <div className="text-2xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
+                            <div className="text-[10px] text-gray-500 mt-1">Valor normal do contrato</div>
+                          </div>
+                        </div>
+                        <div className="rounded-xl p-4 text-center bg-green-50 border border-green-200">
+                          <div className="text-xs text-green-700 font-semibold uppercase tracking-wider">Economia total no plano anual</div>
+                          <div className="text-2xl font-bold" style={{ color: 'hsl(142 71% 35%)' }}>{fmt(promo66Saving)}</div>
+                          <div className="text-[11px] text-gray-600 mt-1">Investimento total em 12 meses: {fmt(promoVal * 6 + val * 6)}</div>
+                        </div>
+                        <p className="text-[11px] text-gray-500 text-center pt-1">Oferta exclusiva para contrato anual: 6 primeiras parcelas com valor promocional e as 6 restantes no valor normal.</p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-2 gap-3 pt-1">
+                          <div className="rounded-xl border-2 p-4 text-center" style={{ borderColor: contractDuration === 'semestral' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Semestral</div>
+                            <div className="text-xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
+                            <div className="text-[10px] text-gray-500 mt-1">Compromisso de 6 meses</div>
+                          </div>
+                          <div className="rounded-xl border-2 p-4 text-center relative" style={{ borderColor: contractDuration === 'anual' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
+                            <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">5% OFF</div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Anual</div>
+                            <div className="text-xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val * 0.95)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
+                            <div className="text-[10px] text-green-600 font-semibold mt-1">Economia total de {fmt(val * 12 * 0.05)}</div>
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-gray-500 text-center pt-1">O valor é pago mensalmente conforme a duração do contrato escolhida.</p>
+                      </>
+                    )}
 
                     {adicionaisTotal > 0 && (
                       <div className="mt-3 p-3 rounded-lg bg-gray-50 border border-gray-200 text-xs">

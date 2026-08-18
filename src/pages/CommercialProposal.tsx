@@ -467,6 +467,8 @@ export default function CommercialProposal() {
       if (d.selectedBaseServices) setSelectedBaseServices(d.selectedBaseServices);
       if (d.selectedIncludedServices) setSelectedIncludedServices(d.selectedIncludedServices);
       if (d.additionalServices) setAdditionalServices(d.additionalServices);
+      if (d.promo66Enabled) setPromo66Enabled(true);
+      if (d.promo66Value) setPromo66Value(String(d.promo66Value));
       // Cronograma
       if (d.cronogramaDesc) setCronogramaDesc(d.cronogramaDesc);
       if (d.cronogramaDeliverables?.length) setCronogramaDeliverables(d.cronogramaDeliverables);

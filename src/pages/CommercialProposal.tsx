@@ -2170,6 +2170,11 @@ export default function CommercialProposal() {
     const discountedVal = val * (1 - customDiscount / 100);
     const installs = parseInt(customInstallments) || 1;
     const installmentVal = discountedVal / installs;
+    // Oferta anual 6+6
+    const promoVal = parseFloat(promo66Value) || 0;
+    const promo66Active = contractDuration === 'anual' && promo66Enabled && promoVal > 0 && promoVal < val;
+    const promo66Pct = promo66Active ? ((val - promoVal) / val) * 100 : 0;
+    const promo66Saving = promo66Active ? (val - promoVal) * 6 : 0;
     const legacyExtraIds: string[] = [];
     if (customSocialMedia && !selectedIncludedServices.includes('social_media')) legacyExtraIds.push('social_media');
     if (customTrafficMgmt && !selectedIncludedServices.includes('meta_ads') && !selectedIncludedServices.includes('google_ads')) legacyExtraIds.push('meta_ads');

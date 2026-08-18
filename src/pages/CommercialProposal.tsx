@@ -238,6 +238,9 @@ export default function CommercialProposal() {
 
   // Personalizada fields
   const [contractDuration, setContractDuration] = useState<'semestral' | 'anual'>('semestral');
+  // Oferta anual 6+6: primeiros 6 meses em valor promocional, demais no valor normal
+  const [promo66Enabled, setPromo66Enabled] = useState(false);
+  const [promo66Value, setPromo66Value] = useState('');
   const [selectedBaseServices, setSelectedBaseServices] = useState<string[]>([]); // adicionais (fora do contrato)
   const [selectedIncludedServices, setSelectedIncludedServices] = useState<string[]>([]); // inclusos no contrato
   const [additionalServices, setAdditionalServices] = useState<{ id: string; name: string; price: number }[]>([]);

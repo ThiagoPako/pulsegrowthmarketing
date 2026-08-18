@@ -2316,7 +2316,7 @@ export default function CommercialProposal() {
                       <span className="text-gray-600">Forma de pagamento</span>
                       <span className="font-medium">{PAYMENT_METHODS.find(m => m.value === customPaymentMethod)?.label}</span>
                     </div>
-                    {installs > 1 && (
+                    {!promo66Active && installs > 1 && (
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-600">{customInstallments}x de</span>
                         <span className="font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(installmentVal)}</span>
@@ -2327,26 +2327,26 @@ export default function CommercialProposal() {
                     {promo66Active ? (
                       <>
                         <div className="grid grid-cols-2 gap-3 pt-1">
-                          <div className="rounded-xl border-2 p-4 text-center relative" style={{ borderColor: 'hsl(142 71% 35%)' }}>
-                            <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">
+                          <div className="rounded-xl border-2 p-5 text-center relative flex flex-col justify-center min-h-[110px]" style={{ borderColor: 'hsl(142 71% 35%)', background: 'hsl(142 71% 98%)' }}>
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-500 text-white text-[10px] font-black px-3 py-1 rounded-full shadow-sm whitespace-nowrap">
                               {promo66Pct.toFixed(0)}% OFF
                             </div>
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Meses 1 a 6</div>
-                            <div className="text-2xl font-bold mt-1" style={{ color: 'hsl(142 71% 35%)' }}>{fmt(promoVal)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
-                            <div className="text-[10px] text-green-600 font-semibold mt-1">Valor promocional de entrada</div>
+                            <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">MESES 1 A 6</div>
+                            <div className="text-3xl font-black" style={{ color: 'hsl(142 71% 35%)' }}>{fmt(promoVal)}<span className="text-sm font-normal text-gray-400">/mês</span></div>
+                            <div className="text-[10px] text-green-600 font-bold mt-1">Valor promocional de entrada</div>
                           </div>
-                          <div className="rounded-xl border-2 p-4 text-center" style={{ borderColor: 'hsl(16 82% 51%)' }}>
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Meses 7 a 12</div>
-                            <div className="text-2xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
-                            <div className="text-[10px] text-gray-500 mt-1">Valor normal do contrato</div>
+                          <div className="rounded-xl border-2 p-5 text-center flex flex-col justify-center min-h-[110px]" style={{ borderColor: 'hsl(16 82% 51%)', background: 'hsl(16 82% 99%)' }}>
+                            <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">MESES 7 A 12</div>
+                            <div className="text-3xl font-black" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val)}<span className="text-sm font-normal text-gray-400">/mês</span></div>
+                            <div className="text-[10px] text-gray-500 font-bold mt-1">Valor normal do contrato</div>
                           </div>
                         </div>
-                        <div className="rounded-xl p-4 text-center bg-green-50 border border-green-200">
-                          <div className="text-xs text-green-700 font-semibold uppercase tracking-wider">Economia total no plano anual</div>
-                          <div className="text-2xl font-bold" style={{ color: 'hsl(142 71% 35%)' }}>{fmt(promo66Saving)}</div>
-                          <div className="text-[11px] text-gray-600 mt-1">Investimento total em 12 meses: {fmt(promoVal * 6 + val * 6)}</div>
+                        <div className="rounded-2xl p-6 text-center shadow-sm border flex flex-col items-center justify-center gap-1" style={{ background: 'linear-gradient(135deg, hsl(142 71% 95%), hsl(142 71% 90%))', borderColor: 'hsl(142 71% 80%)' }}>
+                          <div className="text-[10px] text-green-700 font-black uppercase tracking-[0.2em]">ECONOMIA TOTAL NO PLANO ANUAL</div>
+                          <div className="text-4xl font-black" style={{ color: 'hsl(142 71% 25%)' }}>{fmt(promo66Saving)}</div>
+                          <div className="text-[11px] text-green-800/70 font-medium">Investimento total em 12 meses: {fmt(promoVal * 6 + val * 6)}</div>
                         </div>
-                        <p className="text-[11px] text-gray-500 text-center pt-1">Oferta exclusiva para contrato anual: 6 primeiras parcelas com valor promocional e as 6 restantes no valor normal.</p>
+                        <p className="text-[11px] text-gray-400 text-center font-medium italic">Oferta exclusiva para contrato anual: 6 primeiras parcelas com valor promocional e as 6 restantes no valor normal.</p>
                       </>
                     ) : (
                       <>

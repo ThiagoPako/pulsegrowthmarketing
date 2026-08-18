@@ -254,7 +254,8 @@ export default function CRM() {
           phone: lead.phone,
           contract_value: lead.contract_value,
           status: lead.status,
-          source_tag: lead.source_tag
+          source_tag: lead.source_tag,
+          referral_info: lead.referral_info
         } as any)
         .eq('id', lead.id);
       if (error) throw error;
@@ -1524,7 +1525,11 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
             city: formData.get('city') as string,
             description: formData.get('description') as string,
             status: formData.get('status') as LeadStatus,
-            source_tag: formData.get('source_tag') as string
+            source_tag: formData.get('source_tag') as string,
+            referral_info: {
+              ...lead.referral_info,
+              promo_value: formData.get('promo_value') ? Number(formData.get('promo_value')) : undefined
+            }
           });
           setOpen(false);
         }} className="space-y-4 py-4">
@@ -1632,7 +1637,7 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
                     type="number" 
                     step="0.01" 
                     placeholder="Valor promocional"
-                    defaultValue={lead.referral_info?.promo_value || ''} 
+                    defaultValue={(lead.referral_info as any)?.promo_value || ''} 
                     className="pl-8 h-8 text-sm bg-background" 
                   />
                 </div>

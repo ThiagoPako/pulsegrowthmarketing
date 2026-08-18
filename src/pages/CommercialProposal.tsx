@@ -774,7 +774,9 @@ export default function CommercialProposal() {
         contractDuration,
         selectedBaseServices,
         selectedIncludedServices,
-        additionalServices
+        additionalServices,
+        promo66Enabled,
+        promo66Value: parseFloat(promo66Value) || 0
       } : {};
 
       const cronogramaSumValue = cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0);

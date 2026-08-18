@@ -1223,6 +1223,35 @@ function LeadDetailsDialog({
                   <TagSelector leadId={lead.id} currentTag={lead.tag} />
                 </div>
 
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-primary uppercase">Links da Proposta</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-[10px] bg-primary/5 text-primary border-primary/20 hover:bg-primary/10"
+                      onClick={() => {
+                        const url = `${window.location.origin}/apresentacao/mensal?lead=${lead.id}${lead.source_tag === 'promo_6_6' ? '&type=promo_6_6' : ''}`;
+                        window.open(url, '_blank');
+                      }}
+                    >
+                      <ExternalLink className="h-3 w-3 mr-1" /> Abrir Proposta
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-[10px] bg-primary/5 text-primary border-primary/20 hover:bg-primary/10"
+                      onClick={async () => {
+                        const url = `${window.location.origin}/p/planos/mensal?lead=${lead.id}${lead.source_tag === 'promo_6_6' ? '&type=promo_6_6' : ''}`;
+                        await navigator.clipboard.writeText(url);
+                        toast.success('Link público copiado!');
+                      }}
+                    >
+                      <Link className="h-3 w-3 mr-1" /> Copiar Link Público
+                    </Button>
+                  </div>
+                </div>
+
                 {lead.status === 'meeting' && (
                   <div className="p-4 rounded-xl bg-purple-50 border border-purple-100 space-y-4">
                     <p className="text-[10px] font-bold text-purple-700 uppercase flex items-center gap-1">

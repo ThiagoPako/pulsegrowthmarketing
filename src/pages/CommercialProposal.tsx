@@ -2368,7 +2368,7 @@ export default function CommercialProposal() {
                             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
                             <div className="text-[10px] text-white/80 font-black uppercase tracking-[0.25em]">ECONOMIA TOTAL NO PLANO ANUAL</div>
                             <div className="text-4xl font-black text-white drop-shadow-sm">{fmt(promo66Saving)}</div>
-                            <div className="text-[11px] text-white/70 font-medium">Investimento total em 12 meses: {fmt(promoVal * 6 + val * 6)}</div>
+                            <div className="text-[11px] text-white/70 font-medium opacity-0 select-none pointer-events-none">Investimento total em 12 meses: {fmt(promoVal * 6 + val * 6)}</div>
                           </div>
                         </div>
                         <p className="text-[10px] text-gray-400 text-center font-bold px-4">

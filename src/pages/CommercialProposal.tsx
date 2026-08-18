@@ -2794,7 +2794,7 @@ export default function CommercialProposal() {
               </div>
             ))}
             <div className="border-t pt-1 mt-1 flex justify-between text-sm">
-              <span className="font-semibold text-gray-700">Total implementação</span>
+              <span className="font-semibold text-gray-700">Investimento implementação</span>
               <span className="font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(Object.values(IMPLEMENTATION_FEES).reduce((s, f) => s + f.value, 0))}</span>
             </div>
           </div>

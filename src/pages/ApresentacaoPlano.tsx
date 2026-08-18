@@ -1315,8 +1315,9 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
                           <span className="text-base opacity-90 font-semibold">/mês</span>
                         </div>
                         {mesesNormais > 0 && (
-                          <div className="mt-2 text-sm font-medium text-yellow-100/90">
-                            Após {mesesPromo} meses: {brl(an)}/mês
+                          <div className="mt-2 text-sm font-medium text-yellow-100/90 flex flex-col gap-0.5">
+                            <div>Após {mesesPromo} meses: {brl(an)}/mês</div>
+                            <div className="text-[10px] uppercase opacity-70">Até completar 12 meses</div>
                           </div>
                         )}
                       </div>

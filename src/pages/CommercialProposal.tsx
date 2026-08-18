@@ -481,11 +481,19 @@ export default function CommercialProposal() {
     } catch { /* ignore corrupt data */ }
   }, []);
 
-  // Auto-apply 5% discount when annual contract is selected (custom proposal)
+  // Auto-apply 5% discount when annual contract is selected (custom proposal).
+  // Quando a oferta 6+6 está ativa, o desconto é representado pelo valor promocional
+  // dos 6 primeiros meses — por isso zeramos o desconto percentual para não duplicar.
   useEffect(() => {
     if (proposalType !== 'personalizada') return;
+    if (contractDuration === 'anual' && promo66Enabled) { setCustomDiscount(0); return; }
     setCustomDiscount(contractDuration === 'anual' ? 5 : 0);
-  }, [contractDuration, proposalType]);
+  }, [contractDuration, proposalType, promo66Enabled]);
+
+  // A oferta 6+6 só existe em contrato anual
+  useEffect(() => {
+    if (contractDuration !== 'anual' && promo66Enabled) setPromo66Enabled(false);
+  }, [contractDuration, promo66Enabled]);
 
   // Keep team member avatars in sync with the latest users list so that the
   // photo shown in the preview is exactly the one persisted to the public link.

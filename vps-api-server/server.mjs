@@ -5675,7 +5675,12 @@ app.post('/api/db/query', async (req, res) => {
       await ensureManualVideoTasksTable();
     }
 
+    if (safeTable === 'plan_promotions') {
+      await ensurePlanPromotionsTable();
+    }
+
     if (safeTable === 'scheduled_recordings') {
+
       await ensureScheduledRecordingsTable();
     }
 

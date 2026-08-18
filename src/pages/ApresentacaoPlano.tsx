@@ -236,7 +236,10 @@ export default function ApresentacaoPlano() {
     // Promoção Anual: Aplicar apenas pela duração definida (duration_months)
     // Se não houver duration_months, assume 12 meses (contrato inteiro)
     const durationPromo = promo?.duration_months || 12;
-    const promoAnualMes = promoTargetAnnual ? an * (1 - Number(promo.discount_percent) / 100) : null;
+    
+    // Se for a promo 6+6 do CRM, usamos o valor manual se existir
+    const leadPromoVal = (leadData as any)?.referral_info?.promo_value;
+    const promoAnualMes = promoTargetAnnual ? (leadPromoVal || (an * (1 - Number(promo.discount_percent) / 100))) : null;
     
     const promoSemMes = semSource ? sem * (1 - Number(semSource.discount_percent) / 100) : null;
     

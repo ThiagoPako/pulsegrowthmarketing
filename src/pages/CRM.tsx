@@ -1529,7 +1529,7 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
             referral_info: {
               ...lead.referral_info,
               promo_value: formData.get('promo_value') ? Number(formData.get('promo_value')) : undefined
-            }
+            } as any
           });
           setOpen(false);
         }} className="space-y-4 py-4">

@@ -2494,7 +2494,7 @@ export default function CommercialProposal() {
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 font-bold">
-                      <td colSpan={3} className="p-3 text-right text-gray-800">Total</td>
+                      <td colSpan={3} className="p-3 text-right text-gray-800">Investimento</td>
                       <td className="p-3 text-right text-lg" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(totalValue)}</td>
                     </tr>
                   </tfoot>

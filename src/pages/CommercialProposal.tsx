@@ -2346,30 +2346,34 @@ export default function CommercialProposal() {
                       </div>
                     )}
 
-                    <Separator />
+                    <Separator className="opacity-50" />
                     {promo66Active ? (
                       <>
-                        <div className="grid grid-cols-2 gap-3 pt-1">
-                          <div className="rounded-xl border-2 p-5 text-center relative flex flex-col justify-center min-h-[110px]" style={{ borderColor: 'hsl(142 71% 35%)', background: 'hsl(142 71% 98%)' }}>
-                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-500 text-white text-[10px] font-black px-3 py-1 rounded-full shadow-sm whitespace-nowrap">
-                              {promo66Pct.toFixed(0)}% OFF
+                        <div className="bg-green-50/50 rounded-2xl p-6 border border-green-100 space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="rounded-xl border-2 p-5 text-center relative flex flex-col justify-center min-h-[110px] shadow-sm" style={{ borderColor: 'hsl(142 71% 35%)', background: 'white' }}>
+                              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-600 text-white text-[10px] font-black px-3 py-1 rounded-full shadow-md whitespace-nowrap">
+                                {promo66Pct.toFixed(0)}% OFF
+                              </div>
+                              <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">MESES 1 A 6</div>
+                              <div className="text-3xl font-black" style={{ color: 'hsl(142 71% 35%)' }}>{fmt(promoVal)}<span className="text-sm font-normal text-gray-400">/mês</span></div>
                             </div>
-                            <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">MESES 1 A 6</div>
-                            <div className="text-3xl font-black" style={{ color: 'hsl(142 71% 35%)' }}>{fmt(promoVal)}<span className="text-sm font-normal text-gray-400">/mês</span></div>
-                            <div className="text-[10px] text-green-600 font-bold mt-1">Valor promocional de entrada</div>
+                            <div className="rounded-xl border-2 p-5 text-center flex flex-col justify-center min-h-[110px] opacity-60 grayscale-[0.5]" style={{ borderColor: 'hsl(16 82% 51%)', background: 'white' }}>
+                              <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">MESES 7 A 12</div>
+                              <div className="text-2xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val)}<span className="text-xs font-normal text-gray-400">/mês</span></div>
+                            </div>
                           </div>
-                          <div className="rounded-xl border-2 p-5 text-center flex flex-col justify-center min-h-[110px]" style={{ borderColor: 'hsl(16 82% 51%)', background: 'hsl(16 82% 99%)' }}>
-                            <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">MESES 7 A 12</div>
-                            <div className="text-3xl font-black" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val)}<span className="text-sm font-normal text-gray-400">/mês</span></div>
-                            <div className="text-[10px] text-gray-500 font-bold mt-1">Valor normal do contrato</div>
+                          
+                          <div className="rounded-2xl p-6 text-center shadow-md border flex flex-col items-center justify-center gap-1 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, hsl(142 71% 45%), hsl(142 71% 35%))', borderColor: 'hsl(142 71% 30%)' }}>
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
+                            <div className="text-[10px] text-white/80 font-black uppercase tracking-[0.25em]">ECONOMIA TOTAL NO PLANO ANUAL</div>
+                            <div className="text-4xl font-black text-white drop-shadow-sm">{fmt(promo66Saving)}</div>
+                            <div className="text-[11px] text-white/70 font-medium">Investimento total em 12 meses: {fmt(promoVal * 6 + val * 6)}</div>
                           </div>
                         </div>
-                        <div className="rounded-2xl p-6 text-center shadow-sm border flex flex-col items-center justify-center gap-1" style={{ background: 'linear-gradient(135deg, hsl(142 71% 95%), hsl(142 71% 90%))', borderColor: 'hsl(142 71% 80%)' }}>
-                          <div className="text-[10px] text-green-700 font-black uppercase tracking-[0.2em]">ECONOMIA TOTAL NO PLANO ANUAL</div>
-                          <div className="text-4xl font-black" style={{ color: 'hsl(142 71% 25%)' }}>{fmt(promo66Saving)}</div>
-                          <div className="text-[11px] text-green-800/70 font-medium">Investimento total em 12 meses: {fmt(promoVal * 6 + val * 6)}</div>
-                        </div>
-                        <p className="text-[11px] text-gray-400 text-center font-medium italic">Oferta exclusiva para contrato anual: 6 primeiras parcelas com valor promocional e as 6 restantes no valor normal.</p>
+                        <p className="text-[10px] text-gray-400 text-center font-bold px-4">
+                          *Vantagem exclusiva: Redução imediata de custos no primeiro semestre para acelerar seu crescimento.
+                        </p>
                       </>
                     ) : (
                       <>

@@ -22,4 +22,3 @@ Implementação de suporte a ofertas de "preço promocional por X meses e preço
 - Modificação na função `useMemo` de `pricing` para calcular `totalAnual` como `(promoAnualMes * duration) + (valorNormal * (12 - duration))`.
 - Atualização do componente `StageInvest` para exibir a decomposição do valor anual.
 - Atualização do cabeçalho de deploy em `src/routes/index.tsx`.
-

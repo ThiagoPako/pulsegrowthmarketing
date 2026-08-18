@@ -378,6 +378,8 @@ export default function CommercialProposal() {
         setSelectedBaseServices(Array.isArray(sys.selectedBaseServices) ? sys.selectedBaseServices : []);
         setSelectedIncludedServices(Array.isArray(sys.selectedIncludedServices) ? sys.selectedIncludedServices : []);
         setAdditionalServices(Array.isArray(sys.additionalServices) ? sys.additionalServices : []);
+        setPromo66Enabled(!!sys.promo66Enabled);
+        setPromo66Value(sys.promo66Value != null ? String(sys.promo66Value) : '');
       }
       // Cronograma
       if (p.proposal_type === 'cronograma') {

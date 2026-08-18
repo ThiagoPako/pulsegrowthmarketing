@@ -253,7 +253,8 @@ export default function CRM() {
           email: lead.email,
           phone: lead.phone,
           contract_value: lead.contract_value,
-          status: lead.status
+          status: lead.status,
+          source_tag: lead.source_tag
         } as any)
         .eq('id', lead.id);
       if (error) throw error;

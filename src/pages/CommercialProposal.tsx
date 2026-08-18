@@ -1231,27 +1231,75 @@ export default function CommercialProposal() {
             <CardTitle className="text-base flex items-center justify-between">
               <span>Tempo de Contrato</span>
               <Badge variant={contractDuration === 'anual' ? 'default' : 'outline'} className={cn(contractDuration === 'anual' && "bg-green-500")}>
-                {contractDuration === 'anual' ? '5% de Desconto Ativado' : 'Sem desconto'}
+                {contractDuration === 'anual'
+                  ? (promo66Enabled ? 'Oferta 6+6 Ativada' : '5% de Desconto Ativado')
+                  : 'Sem desconto'}
               </Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent className="flex gap-4">
-            <Button 
-              type="button" 
-              variant={contractDuration === 'semestral' ? 'default' : 'outline'}
-              className="flex-1"
-              onClick={() => setContractDuration('semestral')}
-            >
-              Semestral
-            </Button>
-            <Button 
-              type="button" 
-              variant={contractDuration === 'anual' ? 'default' : 'outline'}
-              className="flex-1"
-              onClick={() => setContractDuration('anual')}
-            >
-              Anual (5% OFF)
-            </Button>
+          <CardContent className="space-y-4">
+            <div className="flex gap-4">
+              <Button
+                type="button"
+                variant={contractDuration === 'semestral' ? 'default' : 'outline'}
+                className="flex-1"
+                onClick={() => setContractDuration('semestral')}
+              >
+                Semestral
+              </Button>
+              <Button
+                type="button"
+                variant={contractDuration === 'anual' ? 'default' : 'outline'}
+                className="flex-1"
+                onClick={() => setContractDuration('anual')}
+              >
+                Anual (5% OFF)
+              </Button>
+            </div>
+
+            {contractDuration === 'anual' && (
+              <div className="rounded-lg border border-dashed p-4 space-y-3">
+                <Button
+                  type="button"
+                  variant={promo66Enabled ? 'default' : 'outline'}
+                  className="w-full justify-start gap-2"
+                  onClick={() => setPromo66Enabled(v => !v)}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Oferta: primeiros 6 meses promocional {promo66Enabled ? '(ativa)' : ''}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Contrato de 12 meses: 6 primeiras parcelas com valor promocional e as 6 restantes no valor normal.
+                </p>
+
+                {promo66Enabled && (
+                  <div className="space-y-2">
+                    <Label className="text-xs">Valor mensal nos primeiros 6 meses (R$)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={promo66Value}
+                      onChange={(e) => setPromo66Value(e.target.value)}
+                      placeholder="Ex: 1200"
+                    />
+                    {(() => {
+                      const normal = monthlyTotalBeforeDiscount;
+                      const promo = parseFloat(promo66Value) || 0;
+                      if (!normal || !promo || promo >= normal) return null;
+                      const pct = ((normal - promo) / normal) * 100;
+                      const saving = (normal - promo) * 6;
+                      return (
+                        <div className="text-xs text-green-600 font-semibold space-y-0.5">
+                          <div>Desconto automático: {pct.toFixed(1)}% nos 6 primeiros meses</div>
+                          <div>Economia total: {fmt(saving)} • Total 12 meses: {fmt(promo * 6 + normal * 6)}</div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 

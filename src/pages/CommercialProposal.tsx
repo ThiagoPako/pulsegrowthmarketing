@@ -525,13 +525,14 @@ export default function CommercialProposal() {
       endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription,
       customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings,
       cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, cronogramaPricingMode, cronogramaTotalCustomValue,
-      contractDuration, selectedBaseServices, selectedIncludedServices, additionalServices
+      contractDuration, selectedBaseServices, selectedIncludedServices, additionalServices,
+      promo66Enabled, promo66Value
     };
     const timer = setTimeout(() => {
       try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* quota */ }
     }, 500);
     return () => clearTimeout(timer);
-  }, [proposalType, clientName, clientCompany, validityDate, bonusServices, teamMembers, customDiscount, observations, whatsappNumber, selectedPlanId, hasContract, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription, customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings, cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, cronogramaPricingMode, cronogramaTotalCustomValue, contractDuration, selectedBaseServices, selectedIncludedServices, additionalServices]);
+  }, [proposalType, clientName, clientCompany, validityDate, bonusServices, teamMembers, customDiscount, observations, whatsappNumber, selectedPlanId, hasContract, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription, customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings, cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, cronogramaPricingMode, cronogramaTotalCustomValue, contractDuration, selectedBaseServices, selectedIncludedServices, additionalServices, promo66Enabled, promo66Value]);
   const { data: plans = [] } = useQuery({
     queryKey: ['plans-proposal'],
     queryFn: async () => {

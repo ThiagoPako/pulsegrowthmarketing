@@ -2319,20 +2319,48 @@ export default function CommercialProposal() {
                     )}
 
                     <Separator />
-                    <div className="grid grid-cols-2 gap-3 pt-1">
-                      <div className="rounded-xl border-2 p-4 text-center" style={{ borderColor: contractDuration === 'semestral' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Semestral</div>
-                        <div className="text-xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
-                        <div className="text-[10px] text-gray-500 mt-1">Compromisso de 6 meses</div>
-                      </div>
-                      <div className="rounded-xl border-2 p-4 text-center relative" style={{ borderColor: contractDuration === 'anual' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
-                        <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">5% OFF</div>
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Anual</div>
-                        <div className="text-xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val * 0.95)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
-                        <div className="text-[10px] text-green-600 font-semibold mt-1">Economia total de {fmt(val * 12 * 0.05)}</div>
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-gray-500 text-center pt-1">O valor é pago mensalmente conforme a duração do contrato escolhida.</p>
+                    {promo66Active ? (
+                      <>
+                        <div className="grid grid-cols-2 gap-3 pt-1">
+                          <div className="rounded-xl border-2 p-4 text-center relative" style={{ borderColor: 'hsl(142 71% 35%)' }}>
+                            <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">
+                              {promo66Pct.toFixed(0)}% OFF
+                            </div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Meses 1 a 6</div>
+                            <div className="text-2xl font-bold mt-1" style={{ color: 'hsl(142 71% 35%)' }}>{fmt(promoVal)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
+                            <div className="text-[10px] text-green-600 font-semibold mt-1">Valor promocional de entrada</div>
+                          </div>
+                          <div className="rounded-xl border-2 p-4 text-center" style={{ borderColor: 'hsl(16 82% 51%)' }}>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Meses 7 a 12</div>
+                            <div className="text-2xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
+                            <div className="text-[10px] text-gray-500 mt-1">Valor normal do contrato</div>
+                          </div>
+                        </div>
+                        <div className="rounded-xl p-4 text-center bg-green-50 border border-green-200">
+                          <div className="text-xs text-green-700 font-semibold uppercase tracking-wider">Economia total no plano anual</div>
+                          <div className="text-2xl font-bold" style={{ color: 'hsl(142 71% 35%)' }}>{fmt(promo66Saving)}</div>
+                          <div className="text-[11px] text-gray-600 mt-1">Investimento total em 12 meses: {fmt(promoVal * 6 + val * 6)}</div>
+                        </div>
+                        <p className="text-[11px] text-gray-500 text-center pt-1">Oferta exclusiva para contrato anual: 6 primeiras parcelas com valor promocional e as 6 restantes no valor normal.</p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-2 gap-3 pt-1">
+                          <div className="rounded-xl border-2 p-4 text-center" style={{ borderColor: contractDuration === 'semestral' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Semestral</div>
+                            <div className="text-xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
+                            <div className="text-[10px] text-gray-500 mt-1">Compromisso de 6 meses</div>
+                          </div>
+                          <div className="rounded-xl border-2 p-4 text-center relative" style={{ borderColor: contractDuration === 'anual' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
+                            <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">5% OFF</div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Anual</div>
+                            <div className="text-xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val * 0.95)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
+                            <div className="text-[10px] text-green-600 font-semibold mt-1">Economia total de {fmt(val * 12 * 0.05)}</div>
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-gray-500 text-center pt-1">O valor é pago mensalmente conforme a duração do contrato escolhida.</p>
+                      </>
+                    )}
 
                     {adicionaisTotal > 0 && (
                       <div className="mt-3 p-3 rounded-lg bg-gray-50 border border-gray-200 text-xs">

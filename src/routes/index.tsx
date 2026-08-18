@@ -1,4 +1,4 @@
-// em proposta unica para implementar essa funcionalidade de poder colocar 2 valores no mesmo contrato 1 valor para as primeiras 6 parcelas e o valor das outras parcelas restantes até completar 12.
+// em proposta unica adicionar oferta de plano anual com opcoa dos primeiros 6 meses ser valor promocional e apos os primeiros 6 meses o valor ser outro valor normal da proposta
 // cd /var/www/pulsegrowthmarketing && git stash push -m "pre-deploy" && git pull && npm install && rm -rf dist && node scripts/generate-build-id.mjs && npm run build && pm2 restart pulse-api --update-env && sudo systemctl reload nginx && pm2 status
 
 // Suporte a Ofertas Granulares (Anual 6+6):

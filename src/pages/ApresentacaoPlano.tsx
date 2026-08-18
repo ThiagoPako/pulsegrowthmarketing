@@ -66,6 +66,7 @@ export default function ApresentacaoPlano() {
   const [semPromo, setSemPromo] = useState<any | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const isMobile = useIsMobile();
+  const [leadData, setLeadData] = useState<any | null>(null);
 
   const toggleFullscreen = async () => {
     try {
@@ -87,6 +88,7 @@ export default function ApresentacaoPlano() {
   const queryCity = searchParams.get('city');
   const promoIdParam = searchParams.get('promo');
   const effectiveCity = (queryCity === 'minacu' || queryCity === 'uruacu') ? queryCity : activeCity;
+  const leadIdParam = searchParams.get('lead');
 
   const plan = plano ? getPlan(plano, effectiveCity) : undefined;
 
@@ -97,6 +99,16 @@ export default function ApresentacaoPlano() {
     (async () => {
       try {
         const today = new Date().toISOString().slice(0, 10);
+
+        // Se tiver leadId, tenta carregar dados do lead (promo personalizada)
+        if (leadIdParam) {
+          const { data: lead } = await supabase
+            .from('crm_leads')
+            .select('*')
+            .eq('id', leadIdParam)
+            .maybeSingle();
+          if (lead) setLeadData(lead);
+        }
 
         // Modo link exclusivo: carrega a promo pelo id, ignorando active/city/plan
         if (promoIdParam) {
@@ -122,11 +134,11 @@ export default function ApresentacaoPlano() {
 
         // Caso especial: Lead com tag de promoção 6+6 manual
         const isPromoManual = searchParams.get('type') === 'promo_6_6';
-        if (isPromoManual) {
+        if (isPromoManual || (leadData?.source_tag === 'promo_6_6')) {
           const mockPromo = {
             id: 'manual-6-6',
             title: 'Oferta Especial 6+6',
-            discount_percent: 20, // Exemplo de desconto
+            discount_percent: 20, 
             duration_months: 6,
             applies_to: 'anual',
             active: true,
@@ -236,7 +248,10 @@ export default function ApresentacaoPlano() {
     // Promoção Anual: Aplicar apenas pela duração definida (duration_months)
     // Se não houver duration_months, assume 12 meses (contrato inteiro)
     const durationPromo = promo?.duration_months || 12;
-    const promoAnualMes = promoTargetAnnual ? an * (1 - Number(promo.discount_percent) / 100) : null;
+    
+    // Se for a promo 6+6 do CRM, usamos o valor manual se existir
+    const leadPromoVal = (leadData as any)?.referral_info?.promo_value;
+    const promoAnualMes = promoTargetAnnual ? (leadPromoVal || (an * (1 - Number(promo.discount_percent) / 100))) : null;
     
     const promoSemMes = semSource ? sem * (1 - Number(semSource.discount_percent) / 100) : null;
     
@@ -1300,8 +1315,9 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
                           <span className="text-base opacity-90 font-semibold">/mês</span>
                         </div>
                         {mesesNormais > 0 && (
-                          <div className="mt-2 text-sm font-medium text-yellow-100/90">
-                            Após {mesesPromo} meses: {brl(an)}/mês
+                          <div className="mt-2 text-sm font-medium text-yellow-100/90 flex flex-col gap-0.5">
+                            <div>Após {mesesPromo} meses: {brl(an)}/mês</div>
+                            <div className="text-[10px] uppercase opacity-70">Até completar 12 meses</div>
                           </div>
                         )}
                       </div>

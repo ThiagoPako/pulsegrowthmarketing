@@ -23,7 +23,7 @@ import {
   Briefcase, Phone, UserPlus, Target, TrendingUp, 
   DollarSign, Users, LayoutDashboard, Filter, Search,
   Calendar as CalendarIcon, Clock, Pencil, Trash2, UserMinus,
-  Sprout, Handshake, Info, ArrowRightLeft, Loader2, Sparkles
+  Sprout, Handshake, Info, ArrowRightLeft, Loader2, Sparkles, ExternalLink, Link
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { LeadHarvester } from '@/components/crm/LeadHarvester';
@@ -254,7 +254,8 @@ export default function CRM() {
           phone: lead.phone,
           contract_value: lead.contract_value,
           status: lead.status,
-          source_tag: lead.source_tag
+          source_tag: lead.source_tag,
+          referral_info: lead.referral_info
         } as any)
         .eq('id', lead.id);
       if (error) throw error;
@@ -1222,6 +1223,35 @@ function LeadDetailsDialog({
                   <TagSelector leadId={lead.id} currentTag={lead.tag} />
                 </div>
 
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-primary uppercase">Links da Proposta</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-[10px] bg-primary/5 text-primary border-primary/20 hover:bg-primary/10"
+                      onClick={() => {
+                        const url = `${window.location.origin}/apresentacao/mensal?lead=${lead.id}${lead.source_tag === 'promo_6_6' ? '&type=promo_6_6' : ''}`;
+                        window.open(url, '_blank');
+                      }}
+                    >
+                      <ExternalLink className="h-3 w-3 mr-1" /> Abrir Proposta
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-[10px] bg-primary/5 text-primary border-primary/20 hover:bg-primary/10"
+                      onClick={async () => {
+                        const url = `${window.location.origin}/p/planos/mensal?lead=${lead.id}${lead.source_tag === 'promo_6_6' ? '&type=promo_6_6' : ''}`;
+                        await navigator.clipboard.writeText(url);
+                        toast.success('Link público copiado!');
+                      }}
+                    >
+                      <Link className="h-3 w-3 mr-1" /> Copiar Link Público
+                    </Button>
+                  </div>
+                </div>
+
                 {lead.status === 'meeting' && (
                   <div className="p-4 rounded-xl bg-purple-50 border border-purple-100 space-y-4">
                     <p className="text-[10px] font-bold text-purple-700 uppercase flex items-center gap-1">
@@ -1524,7 +1554,11 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
             city: formData.get('city') as string,
             description: formData.get('description') as string,
             status: formData.get('status') as LeadStatus,
-            source_tag: formData.get('source_tag') as string
+            source_tag: formData.get('source_tag') as string,
+            referral_info: {
+              ...lead.referral_info,
+              promo_value: formData.get('promo_value') ? Number(formData.get('promo_value')) : undefined
+            } as any
           });
           setOpen(false);
         }} className="space-y-4 py-4">
@@ -1586,29 +1620,59 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
             <Label className="text-[#FF6B00] font-bold flex items-center gap-2">
               <Sparkles className="h-4 w-4" /> Oferta Especial (Anual 6+6)
             </Label>
-            <div className="flex items-center gap-3 bg-primary/5 p-3 rounded-lg border border-primary/20">
-              <div className="flex-1">
-                <p className="text-[10px] text-muted-foreground uppercase font-bold">Status da Oferta</p>
-                <p className="text-xs font-medium">Ativar valor promocional para os primeiros 6 meses</p>
+            <div className="flex flex-col gap-3 bg-primary/5 p-3 rounded-lg border border-primary/20">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Status da Oferta</p>
+                  <p className="text-xs font-medium">Ativar valor promocional para os primeiros 6 meses</p>
+                </div>
+                <Button 
+                  type="button"
+                  size="sm"
+                  variant={lead.source_tag === 'promo_6_6' ? 'default' : 'outline'}
+                  className="h-8 text-[10px]"
+                  onClick={() => {
+                    const input = document.getElementById('edit-source-tag') as HTMLInputElement;
+                    const promoValueInput = document.getElementById('edit-promo-value') as HTMLInputElement;
+                    
+                    if (lead.source_tag === 'promo_6_6') {
+                      if (input) input.value = 'manual';
+                      toast.success('Oferta Desativada');
+                    } else {
+                      if (input) input.value = 'promo_6_6';
+                      // Se não tiver valor promo ainda, sugere 50% do valor atual
+                      if (promoValueInput && !promoValueInput.value) {
+                        const baseVal = Number((document.getElementById('edit-value') as HTMLInputElement)?.value || 0);
+                        promoValueInput.value = (baseVal * 0.8).toFixed(2);
+                      }
+                      toast.success('Oferta 6+6 Ativada!');
+                    }
+                    // Força re-render para mostrar o campo de valor se necessário (na prática o usuário verá o campo agora)
+                    const container = document.getElementById('promo-value-container');
+                    if (container) container.classList.toggle('hidden', input?.value !== 'promo_6_6');
+                  }}
+                >
+                  {lead.source_tag === 'promo_6_6' ? 'Ativado' : 'Ativar'}
+                </Button>
               </div>
-              <Button 
-                type="button"
-                size="sm"
-                variant={lead.source_tag === 'promo_6_6' ? 'default' : 'outline'}
-                className="h-8 text-[10px]"
-                onClick={() => {
-                  const current = lead.source_tag;
-                  const newVal = current === 'promo_6_6' ? 'manual' : 'promo_6_6';
-                  // Simulamos a atualização no formulário mudando o valor do select de origem se ele existisse, 
-                  // mas aqui vamos apenas disparar um toast e atualizar o estado local se necessário.
-                  // Para este componente, vamos injetar o valor no campo hidden ou similar.
-                  const input = document.getElementById('edit-source-tag') as HTMLInputElement;
-                  if (input) input.value = newVal;
-                  toast.success(newVal === 'promo_6_6' ? 'Oferta 6+6 Ativada!' : 'Oferta Desativada');
-                }}
-              >
-                {lead.source_tag === 'promo_6_6' ? 'Ativado' : 'Ativar'}
-              </Button>
+              
+              <div id="promo-value-container" className={lead.source_tag === 'promo_6_6' ? '' : 'hidden'}>
+                <Label htmlFor="edit-promo-value" className="text-[10px] uppercase font-bold text-muted-foreground">Valor nos primeiros 6 meses</Label>
+                <div className="relative mt-1">
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                  <Input 
+                    id="edit-promo-value" 
+                    name="promo_value" 
+                    type="number" 
+                    step="0.01" 
+                    placeholder="Valor promocional"
+                    defaultValue={(lead.referral_info as any)?.promo_value || ''} 
+                    className="pl-8 h-8 text-sm bg-background" 
+                  />
+                </div>
+                <p className="text-[9px] text-muted-foreground mt-1">Este valor será aplicado automaticamente nas primeiras 6 parcelas da proposta anual.</p>
+              </div>
+              
               <input type="hidden" id="edit-source-tag" name="source_tag" defaultValue={lead.source_tag || ''} />
             </div>
           </div>

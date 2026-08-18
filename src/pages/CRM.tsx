@@ -1580,6 +1580,36 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
               </SelectContent>
             </Select>
           </div>
+          <div className="grid gap-2 border-t pt-4 mt-2">
+            <Label className="text-primary font-bold flex items-center gap-2">
+              <Sparkles className="h-4 w-4" /> Oferta Especial (Anual 6+6)
+            </Label>
+            <div className="flex items-center gap-3 bg-primary/5 p-3 rounded-lg border border-primary/20">
+              <div className="flex-1">
+                <p className="text-[10px] text-muted-foreground uppercase font-bold">Status da Oferta</p>
+                <p className="text-xs font-medium">Ativar valor promocional para os primeiros 6 meses</p>
+              </div>
+              <Button 
+                type="button"
+                size="sm"
+                variant={lead.source_tag === 'promo_6_6' ? 'default' : 'outline'}
+                className="h-8 text-[10px]"
+                onClick={() => {
+                  const current = lead.source_tag;
+                  const newVal = current === 'promo_6_6' ? 'manual' : 'promo_6_6';
+                  // Simulamos a atualização no formulário mudando o valor do select de origem se ele existisse, 
+                  // mas aqui vamos apenas disparar um toast e atualizar o estado local se necessário.
+                  // Para este componente, vamos injetar o valor no campo hidden ou similar.
+                  const input = document.getElementById('edit-source-tag') as HTMLInputElement;
+                  if (input) input.value = newVal;
+                  toast.success(newVal === 'promo_6_6' ? 'Oferta 6+6 Ativada!' : 'Oferta Desativada');
+                }}
+              >
+                {lead.source_tag === 'promo_6_6' ? 'Ativado' : 'Ativar'}
+              </Button>
+              <input type="hidden" id="edit-source-tag" name="source_tag" defaultValue={lead.source_tag || ''} />
+            </div>
+          </div>
           <Button type="submit" className="w-full mt-4">
             Salvar Alterações
           </Button>

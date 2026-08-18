@@ -107,8 +107,6 @@ export default function ApresentacaoPlano() {
             .maybeSingle();
           const p: any = exact;
           if (p) {
-            // Em link exclusivo NÃO invalidamos pelo max_redemptions
-            // (esse número é usado só para exibir "vagas restantes").
             const valid =
               (!p.starts_at || p.starts_at <= today) &&
               (!p.ends_at || p.ends_at >= today) &&
@@ -120,6 +118,22 @@ export default function ApresentacaoPlano() {
               return;
             }
           }
+        }
+
+        // Caso especial: Lead com tag de promoção 6+6 manual
+        const isPromoManual = searchParams.get('type') === 'promo_6_6';
+        if (isPromoManual) {
+          const mockPromo = {
+            id: 'manual-6-6',
+            title: 'Oferta Especial 6+6',
+            discount_percent: 20, // Exemplo de desconto
+            duration_months: 6,
+            applies_to: 'anual',
+            active: true,
+            exclusive: true
+          };
+          setPromo(mockPromo);
+          return;
         }
 
         const { data } = await supabase

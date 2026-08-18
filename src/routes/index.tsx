@@ -1,9 +1,11 @@
 // qual comando uso no terminal?
 // cd /var/www/pulsegrowthmarketing && git stash push -m "pre-deploy" && git pull && npm install && rm -rf dist && node scripts/generate-build-id.mjs && npm run build && pm2 restart pulse-api --update-env && sudo systemctl reload nginx && pm2 status
 
-// A funcionalidade de metas de entrega personalizáveis (Plano Especial) está ativa.
-// Permite definir quantidades exatas (ex: 1, 2, 3) sem restrição de múltiplos de 4.
-// O cálculo da meta total permite sobreposição manual em planos especiais.
+// Suporte a Ofertas Granulares (Anual 6+6):
+// A tabela plan_promotions agora suporta duration_months. 
+// Na apresentação de planos, ofertas de duração menor que o contrato (ex: 6 meses promo em contrato de 12)
+// são exibidas com a transição de valores clara para o cliente.
+
 
 
 

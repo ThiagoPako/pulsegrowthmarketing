@@ -1137,11 +1137,12 @@ function StageDeliveries({ plan, categories }: { plan: any; categories: Category
 
 
 function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; pricing: any; promo: any; applyPromo?: boolean }) {
-  const { semestral, anual, sem, an, diffMes, totalEconomia, pct } = pricing;
+  const { semestral, anual, sem, an, diffMes, totalEconomia, pct, durationPromo } = pricing;
   const promoAnualMes = applyPromo ? pricing.promoAnualMes : null;
   const promoSemMes = applyPromo ? pricing.promoSemMes : null;
   const semPromo = pricing.semPromo || promo;
   const hasPromo = !!promo && applyPromo;
+
 
   return (
     <Slide>
@@ -1262,9 +1263,11 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
             {promoAnualMes !== null ? (
               <>
                 {(() => {
-                  const meses = Math.min(12, promo.duration_months || 12);
-                  const economiaMes = an - promoAnualMes;
-                  const totalAnual = economiaMes * meses;
+                  const mesesPromo = Math.min(12, durationPromo);
+                  const mesesNormais = 12 - mesesPromo;
+                  const economiaMes = an - (promoAnualMes || 0);
+                  const totalAnual = (economiaMes * mesesPromo);
+                  
                   return (
                     <>
                       {/* PREÇO FINAL GIGANTE */}
@@ -1273,13 +1276,20 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
                           <span className="text-base md:text-lg line-through opacity-80">{brl(an)}/mês</span>
                           <Badge className="bg-yellow-300 text-yellow-950 font-bold">-{promo.discount_percent}%</Badge>
                         </div>
-                        <div className="text-[11px] uppercase tracking-wider opacity-90 font-semibold">Você paga apenas</div>
+                        <div className="text-[11px] uppercase tracking-wider opacity-90 font-semibold">
+                          {mesesNormais > 0 ? `Primeiros ${mesesPromo} meses por` : 'Você paga apenas'}
+                        </div>
                         <div className="flex items-baseline gap-2 leading-none">
                           <span className="text-7xl md:text-8xl font-extrabold text-yellow-200 leading-none drop-shadow-lg" style={{ fontFamily: 'var(--font-display)' }}>
-                            {brl(promoAnualMes)}
+                            {brl(promoAnualMes || 0)}
                           </span>
                           <span className="text-base opacity-90 font-semibold">/mês</span>
                         </div>
+                        {mesesNormais > 0 && (
+                          <div className="mt-2 text-sm font-medium text-yellow-100/90">
+                            Após {mesesPromo} meses: {brl(an)}/mês
+                          </div>
+                        )}
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="rounded-xl bg-yellow-300 text-yellow-950 p-3 text-center shadow-lg">
@@ -1287,14 +1297,15 @@ function StageInvest({ plan, pricing, promo, applyPromo = true }: { plan: any; p
                           <div className="text-xl md:text-2xl font-extrabold leading-tight" style={{ fontFamily: 'var(--font-display)' }}>{brl(economiaMes)}<span className="text-xs font-bold opacity-80">/mês</span></div>
                         </div>
                         <div className="rounded-xl bg-white text-orange-600 p-3 text-center shadow-lg">
-                          <div className="text-[10px] uppercase tracking-wider opacity-80 font-bold">Economia total</div>
+                          <div className="text-[10px] uppercase tracking-wider opacity-80 font-bold">Economia no período</div>
                           <div className="text-xl md:text-2xl font-extrabold leading-tight" style={{ fontFamily: 'var(--font-display)' }}>{brl(totalAnual)}</div>
-                          <div className="text-[10px] opacity-80 font-semibold">em {meses} {meses === 1 ? 'mês' : 'meses'}</div>
+                          <div className="text-[10px] opacity-80 font-semibold">em {mesesPromo} meses</div>
                         </div>
                       </div>
                     </>
                   );
                 })()}
+
                 <div className="text-xs font-semibold text-yellow-100 mt-3">
                   🔥 {promo.discount_percent}% válido nos primeiros {promo.duration_months} {promo.duration_months === 1 ? 'mês' : 'meses'}
                 </div>

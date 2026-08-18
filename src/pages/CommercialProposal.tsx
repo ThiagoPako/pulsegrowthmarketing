@@ -2073,7 +2073,7 @@ export default function CommercialProposal() {
               )}
               {customDiscount > 0 && (
                 <div className="flex justify-between items-center border-t pt-2">
-                  <span className="font-bold text-gray-800">Total</span>
+                  <span className="font-bold text-gray-800">Valor mensal</span>
                   <span className="text-2xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(discountedVal)}</span>
                 </div>
               )}

@@ -23,7 +23,7 @@ import {
   Briefcase, Phone, UserPlus, Target, TrendingUp, 
   DollarSign, Users, LayoutDashboard, Filter, Search,
   Calendar as CalendarIcon, Clock, Pencil, Trash2, UserMinus,
-  Sprout, Handshake, Info, ArrowRightLeft, Loader2, Sparkles
+  Sprout, Handshake, Info, ArrowRightLeft, Loader2, Sparkles, ExternalLink, Link
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { LeadHarvester } from '@/components/crm/LeadHarvester';

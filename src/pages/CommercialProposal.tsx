@@ -2287,13 +2287,32 @@ export default function CommercialProposal() {
 
               <div data-pdf-section className="px-8 md:px-12 pb-8">
                 <h2 className="text-xl font-bold text-gray-800 mb-4">Investimento Mensal</h2>
-                <div className="border-2 rounded-2xl p-6" style={{ borderColor: 'hsl(16 82% 51%)' }}>
+                <div className="border-2 rounded-2xl p-6 relative overflow-hidden" style={{ borderColor: promo66Active ? 'hsl(142 71% 35%)' : 'hsl(16 82% 51%)' }}>
+                  {promo66Active && (
+                    <div className="absolute top-0 right-0 bg-green-600 text-white text-[10px] font-black px-4 py-1 rounded-bl-xl uppercase tracking-widest shadow-sm">
+                      Oferta Exclusiva
+                    </div>
+                  )}
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-600 text-sm">Valor do Contrato</span>
-                      <span className="text-xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val)}<span className="text-xs font-normal text-gray-500">/mês</span></span>
+                      <span className="text-gray-600 text-sm font-medium">Investimento Mensal</span>
+                      <div className="text-right">
+                        {promo66Active ? (
+                          <>
+                            <span className="text-2xl font-black" style={{ color: 'hsl(142 71% 35%)' }}>{fmt(promoVal)}</span>
+                            <span className="text-xs font-bold text-gray-400"> /mês*</span>
+                            <p className="text-[10px] text-green-600 font-bold mt-0.5">Valor promocional nos primeiros 6 meses</p>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val)}</span>
+                            <span className="text-xs font-normal text-gray-500">/mês</span>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    {customDiscount > 0 && (
+                    
+                    {customDiscount > 0 && !promo66Active && (
                       <>
                         <div className="flex justify-between items-center text-green-600 text-sm">
                           <span>Desconto {contractDuration === 'anual' ? '(Fidelidade Anual)' : `(${customDiscount}%)`}</span>
@@ -2305,21 +2324,25 @@ export default function CommercialProposal() {
                         </div>
                       </>
                     )}
-                    <Separator />
+
+                    <Separator className="opacity-50" />
+                    
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-gray-600">Duração do Contrato</span>
-                      <span className="font-bold uppercase tracking-tight" style={{ color: 'hsl(16 82% 51%)' }}>
-                        {contractDuration === 'anual' ? 'Anual' : 'Semestral'}
+                      <span className="font-black uppercase tracking-widest text-xs" style={{ color: promo66Active ? 'hsl(142 71% 35%)' : 'hsl(16 82% 51%)' }}>
+                        {contractDuration === 'anual' ? 'Plano Anual (12 meses)' : 'Plano Semestral (6 meses)'}
                       </span>
                     </div>
+
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-gray-600">Forma de pagamento</span>
-                      <span className="font-medium">{PAYMENT_METHODS.find(m => m.value === customPaymentMethod)?.label}</span>
+                      <span className="font-bold text-gray-800">{PAYMENT_METHODS.find(m => m.value === customPaymentMethod)?.label}</span>
                     </div>
+
                     {!promo66Active && installs > 1 && (
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-600">{customInstallments}x de</span>
-                        <span className="font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(installmentVal)}</span>
+                        <span className="font-bold text-gray-800">{fmt(installmentVal)}</span>
                       </div>
                     )}
 

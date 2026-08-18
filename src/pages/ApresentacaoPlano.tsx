@@ -218,9 +218,20 @@ export default function ApresentacaoPlano() {
     const pct = sem > 0 ? Math.round((diffMes / sem) * 100) : 0;
     const promoTargetAnnual = promo && (promo.applies_to === 'anual' || promo.applies_to === 'ambos');
     const semSource: any = semPromo || (promo && (promo.applies_to === 'semestral' || promo.applies_to === 'ambos') ? promo : null);
+    
+    // Promoção Anual: Aplicar apenas pela duração definida (duration_months)
+    // Se não houver duration_months, assume 12 meses (contrato inteiro)
+    const durationPromo = promo?.duration_months || 12;
     const promoAnualMes = promoTargetAnnual ? an * (1 - Number(promo.discount_percent) / 100) : null;
+    
     const promoSemMes = semSource ? sem * (1 - Number(semSource.discount_percent) / 100) : null;
-    return { semestral, anual, sem, an, diffMes, totalEconomia, pct, promoAnualMes, promoSemMes, semPromo: semSource };
+    
+    return { 
+      semestral, anual, sem, an, diffMes, totalEconomia, pct, 
+      promoAnualMes, promoSemMes, semPromo: semSource,
+      durationPromo 
+    };
+
   }, [plan, promo, semPromo]);
 
   if (!plan) return <Navigate to={isPublic ? '/p/planos' : '/apresentacao'} replace />;

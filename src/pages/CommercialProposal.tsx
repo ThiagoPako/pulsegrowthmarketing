@@ -2073,7 +2073,7 @@ export default function CommercialProposal() {
               )}
               {customDiscount > 0 && (
                 <div className="flex justify-between items-center border-t pt-2">
-                  <span className="font-bold text-gray-800">Total</span>
+                  <span className="font-bold text-gray-800">Valor mensal</span>
                   <span className="text-2xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(discountedVal)}</span>
                 </div>
               )}
@@ -2153,7 +2153,7 @@ export default function CommercialProposal() {
                     <span className="font-bold">-{fmt(endoVal - discountedVal)}</span>
                   </div>
                   <div className="flex justify-between items-center border-t pt-2">
-                    <span className="font-bold text-gray-800">Total mensal</span>
+                    <span className="font-bold text-gray-800">Valor mensal</span>
                     <span className="text-2xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(discountedVal)}<span className="text-sm font-normal text-gray-500">/mês</span></span>
                   </div>
                 </>
@@ -2368,7 +2368,7 @@ export default function CommercialProposal() {
                             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
                             <div className="text-[10px] text-white/80 font-black uppercase tracking-[0.25em]">ECONOMIA TOTAL NO PLANO ANUAL</div>
                             <div className="text-4xl font-black text-white drop-shadow-sm">{fmt(promo66Saving)}</div>
-                            <div className="text-[11px] text-white/70 font-medium">Investimento total em 12 meses: {fmt(promoVal * 6 + val * 6)}</div>
+                            <div className="text-[11px] text-white/70 font-medium opacity-0 select-none pointer-events-none">Investimento total em 12 meses: {fmt(promoVal * 6 + val * 6)}</div>
                           </div>
                         </div>
                         <p className="text-[10px] text-gray-400 text-center font-bold px-4">
@@ -2494,7 +2494,7 @@ export default function CommercialProposal() {
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 font-bold">
-                      <td colSpan={3} className="p-3 text-right text-gray-800">Total</td>
+                      <td colSpan={3} className="p-3 text-right text-gray-800">Investimento</td>
                       <td className="p-3 text-right text-lg" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(totalValue)}</td>
                     </tr>
                   </tfoot>
@@ -2507,7 +2507,7 @@ export default function CommercialProposal() {
           <div className="border-2 rounded-xl p-6" style={{ borderColor: 'hsl(16 82% 51%)' }}>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-gray-600">Valor total</span>
+                <span className="text-gray-600">Investimento</span>
                 <span className="text-xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(totalValue)}</span>
               </div>
               {customDiscount > 0 && (
@@ -2517,7 +2517,7 @@ export default function CommercialProposal() {
                     <span className="font-bold">-{fmt(totalValue - discountedVal)}</span>
                   </div>
                   <div className="flex justify-between items-center border-t pt-2">
-                    <span className="font-bold text-gray-800">Valor final</span>
+                    <span className="font-bold text-gray-800">Valor mensal</span>
                     <span className="text-2xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(discountedVal)}</span>
                   </div>
                 </>
@@ -2630,7 +2630,7 @@ export default function CommercialProposal() {
           )}
 
           <div className="rounded-2xl p-6 text-white" style={{ background: 'linear-gradient(135deg, hsl(16 82% 51%), hsl(16 82% 38%))' }}>
-            <p className="text-xs uppercase tracking-wider opacity-80">Investimento total</p>
+            <p className="text-xs uppercase tracking-wider opacity-80">Valor unitário/base</p>
             <p className="text-4xl md:text-5xl font-bold mt-1">{fmt(total)}</p>
             <div className="mt-3 space-y-1 text-xs opacity-90 border-t border-white/20 pt-3">
               <div className="flex justify-between">
@@ -2794,7 +2794,7 @@ export default function CommercialProposal() {
               </div>
             ))}
             <div className="border-t pt-1 mt-1 flex justify-between text-sm">
-              <span className="font-semibold text-gray-700">Total implementação</span>
+              <span className="font-semibold text-gray-700">Investimento implementação</span>
               <span className="font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(Object.values(IMPLEMENTATION_FEES).reduce((s, f) => s + f.value, 0))}</span>
             </div>
           </div>

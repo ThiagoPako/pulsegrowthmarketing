@@ -1522,7 +1522,8 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
             contract_value: Number(formData.get('value')),
             city: formData.get('city') as string,
             description: formData.get('description') as string,
-            status: formData.get('status') as LeadStatus
+            status: formData.get('status') as LeadStatus,
+            source_tag: formData.get('source_tag') as string
           });
           setOpen(false);
         }} className="space-y-4 py-4">

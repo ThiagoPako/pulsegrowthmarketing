@@ -1583,7 +1583,7 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
             </Select>
           </div>
           <div className="grid gap-2 border-t pt-4 mt-2">
-            <Label className="text-primary font-bold flex items-center gap-2">
+            <Label className="text-[#FF6B00] font-bold flex items-center gap-2">
               <Sparkles className="h-4 w-4" /> Oferta Especial (Anual 6+6)
             </Label>
             <div className="flex items-center gap-3 bg-primary/5 p-3 rounded-lg border border-primary/20">

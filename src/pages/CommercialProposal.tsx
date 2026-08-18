@@ -2507,7 +2507,7 @@ export default function CommercialProposal() {
           <div className="border-2 rounded-xl p-6" style={{ borderColor: 'hsl(16 82% 51%)' }}>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-gray-600">Valor total</span>
+                <span className="text-gray-600">Investimento</span>
                 <span className="text-xl font-bold" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(totalValue)}</span>
               </div>
               {customDiscount > 0 && (

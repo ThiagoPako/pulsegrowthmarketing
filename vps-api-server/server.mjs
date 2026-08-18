@@ -472,6 +472,52 @@ ensureProposalTables().catch((error) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// PLAN PROMOTIONS TABLE
+// ═══════════════════════════════════════════════════════════════
+let planPromotionsEnsuredPromise = null;
+async function ensurePlanPromotionsTable() {
+  if (planPromotionsEnsuredPromise) return planPromotionsEnsuredPromise;
+  planPromotionsEnsuredPromise = (async () => {
+    try {
+      const columns = await getExistingColumns('plan_promotions');
+      if (columns.size === 0) {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS plan_promotions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            title TEXT NOT NULL,
+            discount_percent NUMERIC NOT NULL,
+            duration_months INTEGER DEFAULT 12,
+            plan_key TEXT,
+            city TEXT,
+            active BOOLEAN DEFAULT true,
+            exclusive BOOLEAN DEFAULT false,
+            starts_at DATE,
+            ends_at DATE,
+            max_redemptions INTEGER,
+            redemptions_count INTEGER DEFAULT 0,
+            applies_to TEXT DEFAULT 'anual',
+            created_at TIMESTAMPTZ DEFAULT now()
+          )
+        `);
+      } else {
+        const alter = [];
+        if (!columns.has('duration_months')) alter.push('ADD COLUMN duration_months INTEGER DEFAULT 12');
+        if (!columns.has('applies_to')) alter.push('ADD COLUMN applies_to TEXT DEFAULT \'anual\'');
+        if (alter.length > 0) {
+          await pool.query(`ALTER TABLE plan_promotions ${alter.join(', ')}`).catch(() => {});
+        }
+      }
+    } catch (e) {
+      console.warn('ensurePlanPromotionsTable error:', e?.message || e);
+      planPromotionsEnsuredPromise = null;
+    }
+  })();
+  return planPromotionsEnsuredPromise;
+}
+
+ensurePlanPromotionsTable();
+
+
 // BANCO DE DADOS DE CLIENTES (Profissionais + Unidades/Rede)
 // ═══════════════════════════════════════════════════════════════
 let clientDatabaseTablesPromise = null;

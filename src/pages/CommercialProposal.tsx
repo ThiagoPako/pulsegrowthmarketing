@@ -871,8 +871,11 @@ export default function CommercialProposal() {
 
       const link = `${window.location.origin}/proposta/${token}${targetCity ? `?city=${targetCity}` : ''}`;
       setShareLink(link);
+      
+      // Auto-copy and ensure visibility
       await copyToClipboard(link);
       toast.success(editingProposalId ? `Link para ${targetCity === 'minacu' ? 'Minaçu' : 'Uruaçu'} atualizado!` : `Proposta salva! Link para ${targetCity === 'minacu' ? 'Minaçu' : 'Uruaçu'} copiado.`);
+
 
       localStorage.removeItem(DRAFT_KEY);
       refetchProposals();
@@ -3274,12 +3277,60 @@ export default function CommercialProposal() {
                     ⚠️ Selecione a "Cidade da Proposta" no topo do formulário para liberar o link.
                   </p>
                 )}
-                {shareLink && (
-                  <div className="mt-2 p-3 bg-white border rounded-lg flex items-center justify-between gap-2 overflow-hidden shadow-inner">
-                    <span className="text-xs text-muted-foreground truncate flex-1 font-mono">{shareLink}</span>
-                    <Button size="sm" variant="ghost" onClick={() => handleCopyLink(shareLink)}>
-                      <Copy className="h-4 w-4" />
-                    </Button>
+                {(shareLink || editingProposalId) && (
+                  <div className="mt-4 p-4 bg-white border-2 border-primary/20 rounded-xl flex flex-col gap-3 shadow-sm animate-in zoom-in-95 duration-200">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label className="text-primary font-bold flex items-center gap-2">
+                        <Link2 className="h-4 w-4" /> Link da Proposta
+                      </Label>
+                      <Badge variant="outline" className="text-[10px] uppercase font-bold text-primary border-primary/30">
+                        {targetCity === 'minacu' ? 'Minaçu' : 'Uruaçu'}
+                      </Badge>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 bg-accent/30 p-2 rounded-lg border border-border/50">
+                      <span className="text-xs text-muted-foreground truncate flex-1 font-mono select-all">
+                        {shareLink || (savedProposals.find((p: any) => p.id === editingProposalId) ? 
+                          `${window.location.origin}/proposta/${savedProposals.find((p: any) => p.id === editingProposalId).token}${targetCity ? `?city=${targetCity}` : ''}` : 
+                          'Gerando link...')
+                        }
+                      </span>
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        className="h-8 w-8 p-0 hover:bg-primary hover:text-white"
+                        onClick={() => handleCopyLink(shareLink || `${window.location.origin}/proposta/${savedProposals.find((p: any) => p.id === editingProposalId).token}${targetCity ? `?city=${targetCity}` : ''}`)}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-1 h-9 text-xs"
+                        onClick={() => {
+                          const linkToOpen = shareLink || `${window.location.origin}/proposta/${savedProposals.find((p: any) => p.id === editingProposalId).token}${targetCity ? `?city=${targetCity}` : ''}`;
+                          window.open(linkToOpen, '_blank');
+                        }}
+                      >
+                        <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> Abrir Proposta
+                      </Button>
+                      <Button 
+                        variant="default" 
+                        size="sm" 
+                        className="flex-1 h-9 text-xs bg-emerald-600 hover:bg-emerald-700"
+                        onClick={() => {
+                          const linkToSend = shareLink || `${window.location.origin}/proposta/${savedProposals.find((p: any) => p.id === editingProposalId).token}${targetCity ? `?city=${targetCity}` : ''}`;
+                          const text = encodeURIComponent(`Olá! Segue o link da nossa proposta comercial: ${linkToSend}`);
+                          window.open(`https://wa.me/${whatsappNumber.replace(/\D/g, '')}?text=${text}`, '_blank');
+                        }}
+                        disabled={!whatsappNumber}
+                      >
+                        <Share2 className="h-3.5 w-3.5 mr-1.5" /> WhatsApp
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>

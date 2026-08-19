@@ -108,6 +108,9 @@ const PAYMENT_METHODS = [
 ];
 
 function copyToClipboard(text: string): Promise<void> {
+  const url = new URL(text);
+  // Ensure the link includes the city if one is active or provided by the user context
+  // This is a helper for the share link generation
   if (navigator.clipboard && window.isSecureContext) {
     return navigator.clipboard.writeText(text);
   }

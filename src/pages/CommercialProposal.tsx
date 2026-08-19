@@ -3251,7 +3251,42 @@ export default function CommercialProposal() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Botão Salvar Principal */}
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="p-4">
+              <div className="flex flex-col gap-2">
+                <Button
+                  onClick={saveAndShareProposal}
+                  disabled={savingProposal || !clientCompany || !targetCity}
+                  size="lg"
+                  className="w-full bg-primary hover:bg-primary/90 text-white shadow-xl shadow-primary/20 font-bold py-6 text-lg"
+                >
+                  {savingProposal ? (
+                    <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+                  ) : (
+                    <Rocket className="mr-2 h-6 w-6" />
+                  )}
+                  {editingProposalId ? 'Atualizar e Copiar Link' : 'Salvar e Gerar Link'}
+                </Button>
+                {!targetCity && (
+                  <p className="text-sm text-center text-orange-600 font-bold animate-pulse">
+                    ⚠️ Selecione a "Cidade da Proposta" no topo do formulário para liberar o link.
+                  </p>
+                )}
+                {shareLink && (
+                  <div className="mt-2 p-3 bg-white border rounded-lg flex items-center justify-between gap-2 overflow-hidden shadow-inner">
+                    <span className="text-xs text-muted-foreground truncate flex-1 font-mono">{shareLink}</span>
+                    <Button size="sm" variant="ghost" onClick={() => handleCopyLink(shareLink)}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
+
       ) : (
         /* ===== PROPOSAL PREVIEW ===== */
         <div className="flex justify-center">

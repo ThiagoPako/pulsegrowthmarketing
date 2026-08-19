@@ -833,6 +833,8 @@ export default function CommercialProposal() {
       const payload = {
         client_name: clientName,
         client_company: clientCompany,
+        city: targetCity || null,
+
         plan_id: proposalType === 'marketing' ? selectedPlanId : null,
         plan_snapshot: proposalType === 'marketing' ? selectedPlan : null,
         bonus_services: bonusServices,
@@ -850,7 +852,7 @@ export default function CommercialProposal() {
 
       let data: any;
       if (editingProposalId) {
-        const res = await vpsDb.from('commercial_proposals').update(payload).eq('id', editingProposalId).select('*').single();
+        const res = await vpsDb.from('commercial_proposals').update({ ...payload, city: targetCity || null }).eq('id', editingProposalId).select('*').single();
         if (res.error) throw res.error;
         data = res.data;
       } else {
@@ -867,10 +869,11 @@ export default function CommercialProposal() {
       }
       if (!token) throw new Error('Proposta salva sem token de compartilhamento.');
 
-      const link = `${window.location.origin}/proposta/${token}`;
+      const link = `${window.location.origin}/proposta/${token}${targetCity ? `?city=${targetCity}` : ''}`;
       setShareLink(link);
       await copyToClipboard(link);
-      toast.success(editingProposalId ? 'Proposta atualizada! Link copiado.' : 'Proposta salva! Link copiado para a área de transferência.');
+      toast.success(editingProposalId ? `Link para ${targetCity === 'minacu' ? 'Minaçu' : 'Uruaçu'} atualizado!` : `Proposta salva! Link para ${targetCity === 'minacu' ? 'Minaçu' : 'Uruaçu'} copiado.`);
+
       localStorage.removeItem(DRAFT_KEY);
       refetchProposals();
     } catch (e: any) {

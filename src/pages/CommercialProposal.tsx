@@ -203,7 +203,9 @@ export default function CommercialProposal() {
   const [shareLink, setShareLink] = useState('');
   const [showSavedProposals, setShowSavedProposals] = useState(false);
   const [editingProposalId, setEditingProposalId] = useState<string | null>(null);
+  const [targetCity, setTargetCity] = useState<'uruacu' | 'minacu' | ''>('');
   const proposalRef = useRef<HTMLDivElement>(null);
+
 
   // Marketing fields
   const [selectedPlanId, setSelectedPlanId] = useState('');
@@ -317,7 +319,9 @@ export default function CommercialProposal() {
     setNewVideosExtraName(''); setNewVideosExtraValue('');
     setVideosPaymentMethod('pix'); setVideosInstallments('1');
     setEditingProposalId(null);
+    setTargetCity('');
     setShareLink('');
+
     localStorage.removeItem(DRAFT_KEY);
     toast.success('Proposta limpa com sucesso!');
   }, []);
@@ -326,7 +330,9 @@ export default function CommercialProposal() {
   const loadProposalForEdit = useCallback((p: any) => {
     try {
       setEditingProposalId(p.id);
+      setTargetCity((p.city as any) || '');
       setProposalType((p.proposal_type as ProposalType) || 'marketing');
+
       setClientName(p.client_name || '');
       setClientCompany(p.client_company || '');
       setWhatsappNumber(p.whatsapp_number || '');
@@ -827,6 +833,8 @@ export default function CommercialProposal() {
       const payload = {
         client_name: clientName,
         client_company: clientCompany,
+        city: targetCity || null,
+
         plan_id: proposalType === 'marketing' ? selectedPlanId : null,
         plan_snapshot: proposalType === 'marketing' ? selectedPlan : null,
         bonus_services: bonusServices,
@@ -844,7 +852,7 @@ export default function CommercialProposal() {
 
       let data: any;
       if (editingProposalId) {
-        const res = await vpsDb.from('commercial_proposals').update(payload).eq('id', editingProposalId).select('*').single();
+        const res = await vpsDb.from('commercial_proposals').update({ ...payload, city: targetCity || null }).eq('id', editingProposalId).select('*').single();
         if (res.error) throw res.error;
         data = res.data;
       } else {
@@ -861,10 +869,11 @@ export default function CommercialProposal() {
       }
       if (!token) throw new Error('Proposta salva sem token de compartilhamento.');
 
-      const link = `${window.location.origin}/proposta/${token}`;
+      const link = `${window.location.origin}/proposta/${token}${targetCity ? `?city=${targetCity}` : ''}`;
       setShareLink(link);
       await copyToClipboard(link);
-      toast.success(editingProposalId ? 'Proposta atualizada! Link copiado.' : 'Proposta salva! Link copiado para a área de transferência.');
+      toast.success(editingProposalId ? `Link para ${targetCity === 'minacu' ? 'Minaçu' : 'Uruaçu'} atualizado!` : `Proposta salva! Link para ${targetCity === 'minacu' ? 'Minaçu' : 'Uruaçu'} copiado.`);
+
       localStorage.removeItem(DRAFT_KEY);
       refetchProposals();
     } catch (e: any) {
@@ -3016,7 +3025,7 @@ export default function CommercialProposal() {
             ) : (
               <div className="space-y-2">
                 {savedProposals.map((p: any) => {
-                  const link = `${window.location.origin}/proposta/${p.token}`;
+                  const link = `${window.location.origin}/proposta/${p.token}${p.city ? `?city=${p.city}` : ''}`;
                   const TypeIcon = typeIcons[p.proposal_type] || Rocket;
                   return (
                     <div key={p.id} className="flex items-center justify-between bg-accent/30 rounded-lg p-3">
@@ -3242,7 +3251,42 @@ export default function CommercialProposal() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Botão Salvar Principal */}
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="p-4">
+              <div className="flex flex-col gap-2">
+                <Button
+                  onClick={saveAndShareProposal}
+                  disabled={savingProposal || !clientCompany || !targetCity}
+                  size="lg"
+                  className="w-full bg-primary hover:bg-primary/90 text-white shadow-xl shadow-primary/20 font-bold py-6 text-lg"
+                >
+                  {savingProposal ? (
+                    <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+                  ) : (
+                    <Rocket className="mr-2 h-6 w-6" />
+                  )}
+                  {editingProposalId ? 'Atualizar e Copiar Link' : 'Salvar e Gerar Link'}
+                </Button>
+                {!targetCity && (
+                  <p className="text-sm text-center text-orange-600 font-bold animate-pulse">
+                    ⚠️ Selecione a "Cidade da Proposta" no topo do formulário para liberar o link.
+                  </p>
+                )}
+                {shareLink && (
+                  <div className="mt-2 p-3 bg-white border rounded-lg flex items-center justify-between gap-2 overflow-hidden shadow-inner">
+                    <span className="text-xs text-muted-foreground truncate flex-1 font-mono">{shareLink}</span>
+                    <Button size="sm" variant="ghost" onClick={() => handleCopyLink(shareLink)}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
+
       ) : (
         /* ===== PROPOSAL PREVIEW ===== */
         <div className="flex justify-center">

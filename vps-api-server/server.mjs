@@ -434,8 +434,10 @@ async function ensureProposalTables() {
         token TEXT NOT NULL DEFAULT encode(gen_random_bytes(16), 'hex'),
         proposal_type TEXT NOT NULL DEFAULT 'marketing'::text,
         status TEXT NOT NULL DEFAULT 'pendente'::text,
+        city TEXT,
         endomarketing_data JSONB DEFAULT '{}'::jsonb,
         system_data JSONB DEFAULT '{}'::jsonb,
+
         client_response_at TIMESTAMPTZ,
         client_response_note TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

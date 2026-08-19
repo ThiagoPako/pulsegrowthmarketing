@@ -3025,7 +3025,7 @@ export default function CommercialProposal() {
             ) : (
               <div className="space-y-2">
                 {savedProposals.map((p: any) => {
-                  const link = `${window.location.origin}/proposta/${p.token}`;
+                  const link = `${window.location.origin}/proposta/${p.token}${p.city ? `?city=${p.city}` : ''}`;
                   const TypeIcon = typeIcons[p.proposal_type] || Rocket;
                   return (
                     <div key={p.id} className="flex items-center justify-between bg-accent/30 rounded-lg p-3">

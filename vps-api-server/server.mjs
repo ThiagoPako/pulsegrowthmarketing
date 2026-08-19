@@ -450,6 +450,14 @@ async function ensureProposalTables() {
       CREATE INDEX IF NOT EXISTS idx_commercial_proposals_created_at
         ON commercial_proposals (created_at DESC);
 
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='commercial_proposals' AND column_name='city') THEN
+          ALTER TABLE commercial_proposals ADD COLUMN city TEXT;
+        END IF;
+      END $$;
+
+
       CREATE TABLE IF NOT EXISTS proposal_comments (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         proposal_id UUID NOT NULL REFERENCES commercial_proposals(id) ON DELETE CASCADE,

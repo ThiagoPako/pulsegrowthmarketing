@@ -5453,7 +5453,8 @@ const ALLOWED_TABLES = [
   'user_permissions','login_logs',
   'campaigns','campaign_slots',
   'story_editing_sessions','script_requests','manual_video_tasks','plan_promotions',
-  'client_professionals','client_units',
+  'client_professionals','client_units','short_links',
+
 
 ];
 

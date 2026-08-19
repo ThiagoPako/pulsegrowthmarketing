@@ -108,9 +108,6 @@ const PAYMENT_METHODS = [
 ];
 
 function copyToClipboard(text: string): Promise<void> {
-  const url = new URL(text);
-  // Ensure the link includes the city if one is active or provided by the user context
-  // This is a helper for the share link generation
   if (navigator.clipboard && window.isSecureContext) {
     return navigator.clipboard.writeText(text);
   }
@@ -206,7 +203,9 @@ export default function CommercialProposal() {
   const [shareLink, setShareLink] = useState('');
   const [showSavedProposals, setShowSavedProposals] = useState(false);
   const [editingProposalId, setEditingProposalId] = useState<string | null>(null);
+  const [targetCity, setTargetCity] = useState<'uruacu' | 'minacu' | ''>('');
   const proposalRef = useRef<HTMLDivElement>(null);
+
 
   // Marketing fields
   const [selectedPlanId, setSelectedPlanId] = useState('');
@@ -320,7 +319,9 @@ export default function CommercialProposal() {
     setNewVideosExtraName(''); setNewVideosExtraValue('');
     setVideosPaymentMethod('pix'); setVideosInstallments('1');
     setEditingProposalId(null);
+    setTargetCity('');
     setShareLink('');
+
     localStorage.removeItem(DRAFT_KEY);
     toast.success('Proposta limpa com sucesso!');
   }, []);
@@ -329,7 +330,9 @@ export default function CommercialProposal() {
   const loadProposalForEdit = useCallback((p: any) => {
     try {
       setEditingProposalId(p.id);
+      setTargetCity((p.city as any) || '');
       setProposalType((p.proposal_type as ProposalType) || 'marketing');
+
       setClientName(p.client_name || '');
       setClientCompany(p.client_company || '');
       setWhatsappNumber(p.whatsapp_number || '');

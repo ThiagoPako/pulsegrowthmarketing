@@ -117,16 +117,13 @@ export const BIO_THEME_PRESETS: BioThemePreset[] = [
 export function normalizeBioTheme(raw: unknown): BioThemeConfig {
   if (!raw || typeof raw !== 'object') return { ...DEFAULT_BIO_THEME };
   const input = raw as Record<string, unknown>;
-  const out: BioThemeConfig = { ...DEFAULT_BIO_THEME };
-  (Object.keys(DEFAULT_BIO_THEME) as (keyof BioThemeConfig)[]).forEach((key) => {
+  const out = { ...DEFAULT_BIO_THEME } as unknown as Record<string, unknown>;
+  Object.keys(DEFAULT_BIO_THEME).forEach((key) => {
     const value = input[key];
-    if (typeof value === 'string' && value.trim()) {
-      (out as Record<string, unknown>)[key] = value;
-    } else if (typeof value === 'boolean') {
-      (out as Record<string, unknown>)[key] = value;
-    }
+    if (typeof value === 'string' && value.trim()) out[key] = value;
+    else if (typeof value === 'boolean') out[key] = value;
   });
-  return out;
+  return out as unknown as BioThemeConfig;
 }
 
 export const AVATAR_SIZE_PX: Record<BioAvatarSize, number> = { sm: 72, md: 104, lg: 136 };

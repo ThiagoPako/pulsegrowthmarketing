@@ -8866,11 +8866,6 @@ app.get('/api/public/bio/:slug', async (req, res) => {
     res.status(500).json({ error: String(err) });
   }
 });
-  } catch (err) {
-    console.error('[training/stream] error:', err);
-    if (!res.headersSent) res.status(500).end();
-  }
-});
 
 // ─── WebSocket Server for real-time presence & chat ─────────
 

@@ -51,7 +51,7 @@ export default function ShortLinkRedirect() {
         {status === "loading" ? (
           <div className="w-8 h-8 border-4 border-white/20 border-t-primary rounded-full animate-spin" />
         ) : (
-          <p className="text-base text-destructive font-medium">Link inválido ou expirado.</p>
+          <p className="text-base text-destructive font-medium">Link inválido ou expirado. nao quero que expire o link corrija esse encurtador</p>
         )}
       </div>
     </div>

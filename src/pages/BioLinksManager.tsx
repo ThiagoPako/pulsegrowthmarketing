@@ -10,6 +10,8 @@ import { useCity } from '@/contexts/CityContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+
 
 export default function BioLinksManager() {
   const [links, setLinks] = useState<any[]>([]);

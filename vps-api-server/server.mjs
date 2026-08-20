@@ -527,6 +527,43 @@ async function ensurePlanPromotionsTable() {
 
 ensurePlanPromotionsTable();
 
+// ═══════════════════════════════════════════════════════════════
+// LINK SHORTENER TABLES
+// ═══════════════════════════════════════════════════════════════
+let shortLinksTablesPromise = null;
+async function ensureShortLinksTables() {
+  if (shortLinksTablesPromise) return shortLinksTablesPromise;
+  shortLinksTablesPromise = pool.query(`
+    CREATE TABLE IF NOT EXISTS short_links (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      slug TEXT UNIQUE NOT NULL,
+      original_url TEXT NOT NULL,
+      campaign_name TEXT,
+      active BOOLEAN DEFAULT true,
+      city TEXT,
+      created_by UUID,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_short_links_slug ON short_links(slug);
+    CREATE INDEX IF NOT EXISTS idx_short_links_city ON short_links(city);
+
+    CREATE TABLE IF NOT EXISTS short_link_clicks (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      short_link_id UUID REFERENCES short_links(id) ON DELETE CASCADE,
+      clicked_at TIMESTAMPTZ DEFAULT now(),
+      user_agent TEXT,
+      referrer TEXT,
+      city TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_short_link_clicks_link ON short_link_clicks(short_link_id);
+  `).catch(err => {
+    console.error('ensureShortLinksTables error:', err);
+    shortLinksTablesPromise = null;
+  });
+  return shortLinksTablesPromise;
+}
+ensureShortLinksTables();
+
 
 // BANCO DE DADOS DE CLIENTES (Profissionais + Unidades/Rede)
 // ═══════════════════════════════════════════════════════════════
@@ -5693,6 +5730,10 @@ app.post('/api/db/query', async (req, res) => {
     if (safeTable === 'scheduled_recordings') {
 
       await ensureScheduledRecordingsTable();
+    }
+
+    if (safeTable === 'short_links' || safeTable === 'short_link_clicks') {
+      await ensureShortLinksTables();
     }
 
     // Multi-city: resolve cidade ativa e prepara flag de scoping

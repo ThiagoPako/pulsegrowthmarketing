@@ -113,6 +113,9 @@ const TeamOrgChart = lazy(() => import("@/pages/TeamOrgChart"));
 const TeamPresentation = lazy(() => import("@/pages/TeamPresentation"));
 const Copy = lazy(() => import("@/pages/Copy"));
 const RepairAuth = lazy(() => import("@/pages/RepairAuth"));
+const BioLinksManager = lazy(() => import("@/pages/BioLinksManager"));
+const PublicBioLink = lazy(() => import("@/pages/PublicBioLink"));
+
 
 
 
@@ -298,6 +301,10 @@ function AppRoutes() {
         <Route path="/treinamento-registro" element={<TrainingRegister />} />
         <Route path="/evento/:token" element={<EventRegistration />} />
         <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
+        <Route path="/bio-links" element={<ProtectedRoute><BioLinksManager /></ProtectedRoute>} />
+        <Route path="/b/:slug" element={<PublicBioLink />} />
+        <Route path="/bio/:slug" element={<PublicBioLink />} />
+
         <Route path="/encurtador" element={<ProtectedRoute><LinkShortener /></ProtectedRoute>} />
         <Route path="/campanhas" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
         <Route path="/campanhas/:id" element={<ProtectedRoute><CampaignDetail /></ProtectedRoute>} />

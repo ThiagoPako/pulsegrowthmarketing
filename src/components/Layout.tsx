@@ -12,7 +12,7 @@ import UserAvatar from '@/components/UserAvatar';
 import ProfileDialog from '@/components/ProfileDialog';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
-  LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Bot, Plug, Car, Menu, X, Video, Handshake, Star, Rocket, Type, Gift, Monitor, UserMinus, BookOpen, Sun, Moon, Gauge, Flame, Pin, PinOff, Database
+  LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Bot, Plug, Car, Menu, X, Video, Handshake, Star, Rocket, Type, Gift, Monitor, UserMinus, BookOpen, Sun, Moon, Gauge, Flame, Pin, PinOff, Database, Link2
   , Sparkles, type LucideIcon,
 } from 'lucide-react';
 
@@ -167,6 +167,7 @@ const navCategories: NavCategory[] = [
       { path: '/encurtador', label: 'Encurtador', icon: Type, roles: ['admin', 'social_media'] },
       { path: '/clube-descontos', label: 'Clube Descontos', icon: Gift, roles: ['admin', 'social_media'] },
       { path: '/regulamentos', label: 'Regulamentos', icon: FileText, roles: ['admin', 'social_media'] },
+      { path: '/bio-links', label: 'Bio Links', icon: Link2, roles: ['admin', 'social_media'] },
     ],
   },
 

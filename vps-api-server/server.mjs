@@ -659,6 +659,46 @@ async function ensureClientDatabaseShareTable() {
   return clientDatabaseSharePromise;
 }
 
+// BIO LINK TABLES
+let bioLinksTablesPromise = null;
+async function ensureBioLinksTables() {
+  if (bioLinksTablesPromise) return bioLinksTablesPromise;
+  bioLinksTablesPromise = pool.query(`
+    CREATE TABLE IF NOT EXISTS client_bio_links (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      slug TEXT UNIQUE NOT NULL,
+      title TEXT,
+      description TEXT,
+      logo_url TEXT,
+      theme_config JSONB DEFAULT '{}'::jsonb,
+      city TEXT,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_bio_links_slug ON client_bio_links(slug);
+    CREATE INDEX IF NOT EXISTS idx_bio_links_client ON client_bio_links(client_id);
+
+    CREATE TABLE IF NOT EXISTS client_bio_buttons (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      bio_link_id UUID NOT NULL REFERENCES client_bio_links(id) ON DELETE CASCADE,
+      label TEXT NOT NULL,
+      type TEXT NOT NULL CHECK (type IN ('whatsapp', 'location', 'social', 'custom')),
+      value TEXT NOT NULL,
+      icon TEXT,
+      position INTEGER DEFAULT 0,
+      active BOOLEAN DEFAULT true,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_bio_buttons_link ON client_bio_buttons(bio_link_id);
+  `).catch(err => {
+    console.error('ensureBioLinksTables error:', err);
+    bioLinksTablesPromise = null;
+  });
+  return bioLinksTablesPromise;
+}
+ensureBioLinksTables();
+
 ensureClientDatabaseShareTable().catch((error) => {
   console.error('Failed to ensure client database share table:', error);
 });
@@ -5490,7 +5530,7 @@ const ALLOWED_TABLES = [
   'user_permissions','login_logs',
   'campaigns','campaign_slots',
   'story_editing_sessions','script_requests','manual_video_tasks','plan_promotions',
-  'client_professionals','client_units','short_links',
+  'client_professionals','client_units','short_links','client_bio_links','client_bio_buttons',
 
 
 ];
@@ -5521,7 +5561,7 @@ const TABLES_WITH_CITY = new Set([
   'company_settings','whatsapp_config','payment_config',
   'crm_leads','crm_notes','goals','notifications',
   'plans',
-  'story_editing_sessions','script_requests','manual_video_tasks',
+  'story_editing_sessions','script_requests','manual_video_tasks','client_bio_links','client_bio_buttons',
 ]);
 
 // Cache de quais tabelas realmente possuem a coluna `city` no schema atual.
@@ -6017,6 +6057,9 @@ app.post('/api/db/query', async (req, res) => {
 
         if (safeTable === 'crm_leads') {
           await ensureCrmLeadsColumns();
+        }
+        if (safeTable === 'client_bio_links' || safeTable === 'client_bio_buttons') {
+          await ensureBioLinksTables();
         }
         for (const item of items) {
 
@@ -8798,6 +8841,31 @@ app.get('/api/training/stream/:lessonId', async (req, res) => {
       res.writeHead(200, { ...baseHeaders, 'Content-Length': total });
       fs.createReadStream(filePath).pipe(res);
     }
+  } catch (err) {
+    console.error('[training/stream] error:', err?.message);
+    res.status(500).end();
+  }
+});
+
+// GET /api/public/bio/:slug
+app.get('/api/public/bio/:slug', async (req, res) => {
+  try {
+    const slug = String(req.params.slug || '').toLowerCase();
+    const { rows: bioRows } = await pool.query(
+      'SELECT id, client_id, slug, title, description, logo_url, theme_config FROM client_bio_links WHERE slug = $1 LIMIT 1',
+      [slug]
+    );
+    if (!bioRows.length) return res.status(404).json({ error: 'Bio não encontrada' });
+    const bio = bioRows[0];
+    const { rows: buttonRows } = await pool.query(
+      'SELECT id, label, type, value, icon, position FROM client_bio_buttons WHERE bio_link_id = $1 AND active = true ORDER BY position ASC',
+      [bio.id]
+    );
+    res.json({ bio, buttons: buttonRows });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
   } catch (err) {
     console.error('[training/stream] error:', err);
     if (!res.headersSent) res.status(500).end();

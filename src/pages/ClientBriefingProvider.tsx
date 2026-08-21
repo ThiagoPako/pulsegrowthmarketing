@@ -26,6 +26,8 @@ import {
   FileText,
 } from 'lucide-react';
 
+import { ProviderBriefingSummary } from '@/components/briefing/ProviderBriefingSummary';
+
 const BRIEFING_API = '/api/client-briefing';
 
 const MARKETING_CHANNELS = [
@@ -148,6 +150,7 @@ export default function ClientBriefingProvider() {
   const [completed, setCompleted] = useState(false);
   const [client, setClient] = useState<any>(null);
   const [lockedClientId, setLockedClientId] = useState<string | null>(null);
+  const [savedData, setSavedData] = useState<Record<string, any> | null>(null);
 
   // Dados do provedor
   const [cities, setCities] = useState('');
@@ -214,7 +217,10 @@ export default function ClientBriefingProvider() {
             setSocialLinks(d.socialLinks || '');
             setVisualIdentity(d.visualIdentity || '');
             setAdditionalNotes(d.additionalNotes || '');
-            if (d._completed) setCompleted(true);
+            if (d._completed) {
+              setSavedData(d);
+              setCompleted(true);
+            }
           }
         }
         if (data.briefingCompleted) setCompleted(true);
@@ -297,6 +303,7 @@ export default function ClientBriefingProvider() {
         throw new Error(result.error || 'Erro ao salvar briefing');
       }
 
+      setSavedData(briefingData);
       setCompleted(true);
       toast.success('Briefing enviado com sucesso!');
     } catch (err: any) {

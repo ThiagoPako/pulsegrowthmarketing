@@ -63,6 +63,7 @@ const Warehouse = lazy(() => import("@/pages/Warehouse"));
 
 const OnboardingManagement = lazy(() => import("@/pages/OnboardingManagement"));
 const ClientBriefing = lazy(() => import("@/pages/ClientBriefing"));
+const ClientBriefingProvider = lazy(() => import("@/pages/ClientBriefingProvider"));
 const GestaoLogin = lazy(() => import("@/pages/GestaoLogin"));
 const GestaoDashboard = lazy(() => import("@/pages/GestaoDashboard"));
 const GestaoCustos = lazy(() => import("@/pages/GestaoCustos"));

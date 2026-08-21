@@ -2494,6 +2494,84 @@ export default function Clients() {
         </DialogContent>
       </Dialog>
 
+      {/* Briefing Send Dialog */}
+      <Dialog open={briefingSendOpen} onOpenChange={setBriefingSendOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send size={18} className="text-primary" /> Enviar Briefing
+            </DialogTitle>
+          </DialogHeader>
+          {briefingSendClient && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-secondary/50">
+                <p className="font-medium text-sm">{briefingSendClient.companyName}</p>
+                <p className="text-xs text-muted-foreground">{briefingSendClient.whatsapp || 'Sem WhatsApp'}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Selecione o tipo de briefing</Label>
+                <div className="grid grid-cols-1 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBriefingType('padrao')}
+                    className={`p-3 rounded-xl border-2 text-left transition-all ${
+                      briefingType === 'padrao'
+                        ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                        : 'border-border hover:border-primary/40'
+                    }`}
+                  >
+                    <span className="font-semibold block text-sm">📋 Briefing Padrão</span>
+                    <span className="text-[10px] text-muted-foreground">Formulário completo para qualquer nicho.</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBriefingType('provedor')}
+                    className={`p-3 rounded-xl border-2 text-left transition-all ${
+                      briefingType === 'provedor'
+                        ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                        : 'border-border hover:border-primary/40'
+                    }`}
+                  >
+                    <span className="font-semibold block text-sm">🌐 Provedor de Internet</span>
+                    <span className="text-[10px] text-muted-foreground">Perguntas específicas: cidades, planos, verbas, equipe.</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1 gap-2"
+                  onClick={() => {
+                    const link = `${window.location.origin}${briefingType === 'provedor' ? '/briefing-provedor' : '/briefing'}/${briefingSendClient.id}`;
+                    navigator.clipboard.writeText(link);
+                    toast.success('Link copiado! Envie ao cliente para preenchimento.');
+                    setBriefingSendOpen(false);
+                  }}
+                >
+                  <Copy size={14} /> Copiar link
+                </Button>
+                {briefingSendClient.whatsapp && (
+                  <Button
+                    className="flex-1 gap-2"
+                    onClick={() => {
+                      const link = `${window.location.origin}${briefingType === 'provedor' ? '/briefing-provedor' : '/briefing'}/${briefingSendClient.id}`;
+                      const message = `Olá! Segue o link para preenchermos o briefing da ${briefingSendClient.companyName}. Assim que enviar, nossa equipe já inicia a criação do editorial.\n\n${link}`;
+                      const waUrl = `https://wa.me/${briefingSendClient.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+                      window.open(waUrl, '_blank');
+                      setBriefingSendOpen(false);
+                    }}
+                  >
+                    <MessageSquare size={14} /> WhatsApp
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Art Database Dialog */}
       {artDbClient && (
         <ClientArtDatabaseDialog client={artDbClient} open={!!artDbClient} onOpenChange={o => !o && setArtDbClient(null)} />

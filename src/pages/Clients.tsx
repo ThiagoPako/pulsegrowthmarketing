@@ -2418,13 +2418,13 @@ export default function Clients() {
                       }}>
                       <Copy size={15} />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500" title="Link só do briefing"
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" title="Enviar briefing"
                       onClick={() => {
-                        const link = `${window.location.origin}/briefing/${c.id}`;
-                        navigator.clipboard.writeText(link);
-                        toast.success('Link do briefing copiado! Envie ao cliente para preenchimento.');
+                        setBriefingSendClient(c);
+                        setBriefingType('padrao');
+                        setBriefingSendOpen(true);
                       }}>
-                      <FileTextIcon size={15} />
+                      <Send size={15} />
                     </Button>
                     {c.whatsapp && (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-success" title="WhatsApp" onClick={() => {

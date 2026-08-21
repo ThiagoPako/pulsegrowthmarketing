@@ -100,6 +100,9 @@ export default function Clients() {
   const { createOnboardingForClient } = useOnboarding();
   const isDesignerOnly = currentUser?.role === 'designer' || currentUser?.role === 'fotografo';
   const [briefingClient, setBriefingClient] = useState<Client | null>(null);
+  const [briefingSendOpen, setBriefingSendOpen] = useState(false);
+  const [briefingSendClient, setBriefingSendClient] = useState<Client | null>(null);
+  const [briefingType, setBriefingType] = useState<'padrao' | 'provedor'>('padrao');
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelClient, setCancelClient] = useState<Client | null>(null);
   const [cancelReason, setCancelReason] = useState('');

@@ -63,6 +63,7 @@ const Warehouse = lazy(() => import("@/pages/Warehouse"));
 
 const OnboardingManagement = lazy(() => import("@/pages/OnboardingManagement"));
 const ClientBriefing = lazy(() => import("@/pages/ClientBriefing"));
+const ClientBriefingProvider = lazy(() => import("@/pages/ClientBriefingProvider"));
 const GestaoLogin = lazy(() => import("@/pages/GestaoLogin"));
 const GestaoDashboard = lazy(() => import("@/pages/GestaoDashboard"));
 const GestaoCustos = lazy(() => import("@/pages/GestaoCustos"));
@@ -247,6 +248,7 @@ function AppRoutes() {
         <Route path="/onboarding-gestao" element={<ProtectedRoute><OnboardingManagement /></ProtectedRoute>} />
         <Route path="/gestao/contratos" element={<ProtectedRoute><ContractsManagement /></ProtectedRoute>} />
         <Route path="/briefing/:clientId" element={<ClientBriefing />} />
+        <Route path="/briefing-provedor/:clientId" element={<ClientBriefingProvider />} />
         <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppDashboard /></ProtectedRoute>} />
         <Route path="/financeiro" element={<ProtectedRoute><FinancialDashboard /></ProtectedRoute>} />
         <Route path="/financeiro/contratos" element={<ProtectedRoute><FinancialContracts /></ProtectedRoute>} />

@@ -601,8 +601,8 @@ function BriefingActions({ group, task, onAdvance, onStart }: { group: ClientGro
         </div>
       )}
 
-      {!hasBriefing ? (
-      ) : (
+      {!hasBriefing && (
+
         <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
           <p className="text-xs text-amber-700 dark:text-amber-300">
             ⏳ Aguardando o cliente preencher o briefing pelo link.

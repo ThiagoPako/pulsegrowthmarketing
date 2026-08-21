@@ -25,6 +25,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { ProviderBriefingSummary, isProviderBriefing } from '@/components/briefing/ProviderBriefingSummary';
 
 const STATUS_COLORS: Record<string, string> = {
   pendente: 'bg-muted text-muted-foreground',
@@ -589,7 +590,19 @@ function BriefingActions({ group, task, onAdvance, onStart }: { group: ClientGro
             {Object.keys(group.briefingData).length} campos respondidos
           </p>
         </div>
-      ) : (
+      ) : null}
+
+      {isProviderBriefing(group.briefingData) && (
+        <div className="p-3 rounded-lg border">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+            Respostas do briefing
+          </p>
+          <ProviderBriefingSummary data={group.briefingData} />
+        </div>
+      )}
+
+      {!hasBriefing && (
+
         <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
           <p className="text-xs text-amber-700 dark:text-amber-300">
             ⏳ Aguardando o cliente preencher o briefing pelo link.

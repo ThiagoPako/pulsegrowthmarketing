@@ -3431,13 +3431,34 @@ app.all('/api/client-briefing', async (req, res) => {
       } catch (_) { /* tabela pode não existir ainda */ }
 
       // Reforça que clientId/_completed dentro do payload batem com a URL + versão
+      const incoming = (briefing_data && typeof briefing_data === 'object') ? briefing_data : {};
+      // Preserva o tipo do briefing entre reenvios (padrão x provedor de internet)
+      const briefingType = incoming._type || prevObj?._type || 'padrao';
+
       const safePayload = {
-        ...(briefing_data || {}),
+        ...incoming,
+        _type: briefingType,
         _clientId: clientId,
         _completed: true,
         _submittedAt: new Date().toISOString(),
         _version: nextVersion,
       };
+
+      // 🌐 Briefing de provedor de internet: normaliza campos para consulta posterior
+      if (briefingType === 'provedor_internet') {
+        const txt = (v) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim());
+        const PROVIDER_TEXT_FIELDS = [
+          'cities', 'plans', 'mainDifferential', 'teamVideos', 'teamVideosDetails',
+          'influencerBudget', 'externalMarketingBudget', 'metaAdsBudget', 'competitors',
+          'targetAudience', 'currentDifficulties', 'growthGoals', 'socialLinks',
+          'visualIdentity', 'additionalNotes',
+        ];
+        for (const f of PROVIDER_TEXT_FIELDS) safePayload[f] = txt(incoming[f]);
+        safePayload.marketingChannels = Array.isArray(incoming.marketingChannels)
+          ? incoming.marketingChannels.map(txt).filter(Boolean)
+          : [];
+      }
+
 
       await pool.query(
         `UPDATE clients SET briefing_data = $1, editorial = $2, updated_at = now() WHERE id = $3`,

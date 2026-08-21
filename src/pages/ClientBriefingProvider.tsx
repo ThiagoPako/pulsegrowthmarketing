@@ -366,24 +366,39 @@ export default function ClientBriefingProvider() {
         </div>
 
         {completed ? (
-          <Card className="overflow-hidden border-primary/30 bg-primary/5">
-            <CardContent className="p-8 text-center space-y-4">
-              <CheckCircle2 size={56} className="mx-auto text-primary" />
-              <h2 className="text-xl font-display font-bold">Briefing recebido! 🚀</h2>
-              <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                Obrigado pelas informações. Nossa equipe já vai analisar os dados e construir uma
-                estratégia de conteúdo personalizada para o provedor.
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => window.location.reload()}
-                className="mt-2"
-              >
-                Recarregar página
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="space-y-5">
+            <Card className="overflow-hidden border-primary/30 bg-primary/5">
+              <CardContent className="p-8 text-center space-y-4">
+                <CheckCircle2 size={56} className="mx-auto text-primary" />
+                <h2 className="text-xl font-display font-bold">Briefing recebido! 🚀</h2>
+                <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                  Obrigado pelas informações. Nossa equipe já vai analisar os dados e construir uma
+                  estratégia de conteúdo personalizada para o provedor.
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => window.location.reload()}
+                  className="mt-2"
+                >
+                  Recarregar página
+                </Button>
+              </CardContent>
+            </Card>
+
+            {savedData && (
+              <Card className="overflow-hidden border-border/60">
+                <CardContent className="p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileText size={16} className="text-primary" />
+                    <h3 className="font-display font-bold text-sm">Respostas registradas</h3>
+                  </div>
+                  <ProviderBriefingSummary data={savedData} />
+                </CardContent>
+              </Card>
+            )}
+          </div>
         ) : (
+
           <div className="space-y-6">
             <SectionCard
               icon={MapPin}

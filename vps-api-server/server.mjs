@@ -10043,7 +10043,17 @@ const NICHE_OSM_FILTERS = {
   construção: ['["shop"~"hardware|doityourself|trade|building_materials"]', '["craft"~"builder|carpenter|electrician|plumber"]'],
   agro: ['["shop"~"agrarian|farm"]', '["craft"="agricultural_engines"]', '["landuse"="farmyard"]["name"]'],
   automotiv: ['["shop"~"car|car_repair|car_parts|tyres|motorcycle"]', '["amenity"="fuel"]'],
-  all: ['["shop"]', '["office"]', '["craft"]', '["amenity"~"restaurant|cafe|fast_food|bar|clinic|doctors|dentist|pharmacy|veterinary|fuel|bank|gym"]'],
+  all: [
+    '["shop"]',
+    '["office"]',
+    '["craft"]',
+    '["healthcare"]',
+    '["amenity"]["name"]',
+    '["tourism"~"hotel|motel|guest_house|apartment|hostel|attraction"]',
+    '["leisure"]["name"]',
+    '["building"~"commercial|retail|industrial"]["name"]',
+    '["company"]',
+  ],
 };
 
 const normalizeText = (v) => String(v || '')
@@ -10183,14 +10193,51 @@ function osmElementToCompany(el, niche) {
 }
 
 // Resolve a cidade em uma área OSM (qualquer cidade do Brasil), com fallback via Nominatim
+const AREA_CACHE = new Map();
+
+// Resolve a cidade via Nominatim → id de área OSM + bounding box (fallback confiável)
 async function resolveSearchArea(areaName, state) {
+  const cacheKey = normalizeText(`${areaName}|${state}`);
+  if (AREA_CACHE.has(cacheKey)) return AREA_CACHE.get(cacheKey);
+
   const escapedArea = areaName.replace(/"/g, '\\"');
   const escapedState = String(state || '').replace(/"/g, '\\"');
-  if (escapedState) {
-    return `area["name"~"^${escapedState}$",i]["boundary"="administrative"]->.state;
-area["name"~"^${escapedArea}$",i]["boundary"="administrative"](area.state)->.searchArea;`;
+  const fallbackBlock = escapedState
+    ? `area["name"~"^${escapedState}$",i]["boundary"="administrative"]->.state;
+area["name"~"^${escapedArea}$",i]["boundary"="administrative"](area.state)->.searchArea;`
+    : `area["name"~"^${escapedArea}$",i]["boundary"="administrative"]->.searchArea;`;
+
+  let resolved = { areaBlock: fallbackBlock, bbox: null };
+
+  try {
+    const q = [areaName, state, 'Brasil'].filter(Boolean).join(', ');
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(q)}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    const resp = await fetch(url, {
+      headers: { 'User-Agent': 'PulseGrowthMarketing/1.0 (CRM lead harvest)' },
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    const arr = await resp.json();
+    const hit = Array.isArray(arr) ? arr[0] : null;
+    if (hit) {
+      const bb = (hit.boundingbox || []).map(Number);
+      const bbox = bb.length === 4 && bb.every(n => Number.isFinite(n))
+        ? { south: bb[0], north: bb[1], west: bb[2], east: bb[3] }
+        : null;
+      if (hit.osm_type === 'relation') {
+        resolved = { areaBlock: `area(${3600000000 + Number(hit.osm_id)})->.searchArea;`, bbox };
+      } else {
+        resolved = { areaBlock: fallbackBlock, bbox };
+      }
+    }
+  } catch (err) {
+    console.warn('[crm:harvest] nominatim fallback:', err.message);
   }
-  return `area["name"~"^${escapedArea}$",i]["boundary"="administrative"]->.searchArea;`;
+
+  AREA_CACHE.set(cacheKey, resolved);
+  return resolved;
 }
 
 app.post('/api/crm/harvest/search', async (req, res) => {
@@ -10207,21 +10254,36 @@ app.post('/api/crm/harvest/search', async (req, res) => {
     }
 
     const filters = NICHE_OSM_FILTERS[niche] || NICHE_OSM_FILTERS.all;
-    const areaBlock = await resolveSearchArea(areaName, state);
-    const body = filters
-      .map(f => `  node${f}(area.searchArea);\n  way${f}(area.searchArea);\n  relation${f}(area.searchArea);`)
-      .join('\n');
+    const { areaBlock, bbox } = await resolveSearchArea(areaName, state);
 
-    const cap = Math.min(Number(limit) || 400, 1000);
-    const query = `[out:json][timeout:60];
-${areaBlock}
-(
-${body}
-);
-out center ${cap};`;
+    const cap = Math.min(Math.max(Number(limit) || 2000, 1), 5000);
 
-    const json = await runOverpass(query);
-    const elements = Array.isArray(json?.elements) ? json.elements : [];
+    const buildQuery = (scope) => {
+      const body = filters
+        .map(f => `  node${f}${scope};\n  way${f}${scope};\n  relation${f}${scope};`)
+        .join('\n');
+      return `[out:json][timeout:120];\n${scope === '(area.searchArea)' ? areaBlock : ''}\n(\n${body}\n);\nout center ${cap};`;
+    };
+
+    // 1ª tentativa: área administrativa. 2ª: bounding box da cidade (pega tudo que a área perdeu).
+    let elements = [];
+    try {
+      const json = await runOverpass(buildQuery('(area.searchArea)'));
+      elements = Array.isArray(json?.elements) ? json.elements : [];
+    } catch (err) {
+      console.warn('[crm:harvest] area query falhou:', err.message);
+    }
+
+    if (elements.length < 30 && bbox) {
+      try {
+        const scope = `(${bbox.south},${bbox.west},${bbox.north},${bbox.east})`;
+        const json = await runOverpass(buildQuery(scope));
+        const bboxEls = Array.isArray(json?.elements) ? json.elements : [];
+        if (bboxEls.length > elements.length) elements = bboxEls;
+      } catch (err) {
+        console.warn('[crm:harvest] bbox query falhou:', err.message);
+      }
+    }
 
     let companies = elements.map(el => osmElementToCompany(el, niche)).filter(Boolean);
 

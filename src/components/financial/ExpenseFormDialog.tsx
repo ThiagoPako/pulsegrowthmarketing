@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Users, Calendar, Star, CheckCircle, Loader2, Hammer } from 'lucide-react';
+import { Users, Calendar, Star, CheckCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -33,8 +33,7 @@ const emptyForm = {
   category_id: '', 
   expense_type: 'fixa', 
   description: '', 
-  responsible: '',
-  structure_investment: false
+  responsible: ''
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -74,7 +73,6 @@ export default function ExpenseFormDialog({ open, onOpenChange, categories, edit
         expense_type: editingExpense.expense_type,
         description: editingExpense.description,
         responsible: editingExpense.responsible,
-        structure_investment: editingExpense.structure_investment || false,
       });
       if (salaryCategory && editingExpense.category_id === salaryCategory.id) {
         setIsSalaryMode(true);

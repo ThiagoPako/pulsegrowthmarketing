@@ -1275,6 +1275,48 @@ ensureScheduledRecordingsTable().catch((error) => {
   console.error('Failed to ensure scheduled_recordings table:', error);
 });
 
+/**
+ * Planos personalizados ("Plano Especial") permitem metas fracionadas por semana
+ * (ex.: 6 reels/mês = 1.5 por semana). As colunas nasceram como INTEGER, o que
+ * provoca: invalid input syntax for type integer: "1.5".
+ * Convertemos para NUMERIC(6,2) de forma idempotente.
+ */
+let clientFractionalGoalsPromise;
+async function ensureClientFractionalGoalColumns() {
+  if (!clientFractionalGoalsPromise) {
+    clientFractionalGoalsPromise = (async () => {
+      const columns = ['weekly_reels', 'weekly_creatives', 'weekly_stories', 'weekly_goal'];
+      for (const column of columns) {
+        await pool.query(
+          `ALTER TABLE clients ALTER COLUMN ${column} TYPE NUMERIC(6,2) USING ${column}::numeric`
+        ).catch((error) => {
+          // 42804/42P16 etc.: coluna já é numérica ou não existe — não deve derrubar a API
+          if (!/does not exist|cannot be cast|already/i.test(error.message)) {
+            console.warn(`[clients] falha ao converter ${column}:`, error.message);
+          }
+        });
+      }
+    })().catch((error) => {
+      clientFractionalGoalsPromise = null;
+      throw error;
+    });
+  }
+  return clientFractionalGoalsPromise;
+}
+
+ensureClientFractionalGoalColumns().catch((error) => {
+  console.error('Failed to ensure fractional client goals:', error);
+});
+
+/** Converte metas semanais para número, aceitando "1,5" e "1.5". */
+function parseWeeklyGoal(value, fallback = 0) {
+  if (value === null || value === undefined || value === '') return fallback;
+  const parsed = Number(String(value).replace(',', '.'));
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return Math.round(parsed * 100) / 100;
+}
+
+
 // ─── JWT Config ─────────────────────────────────────────────
 const JWT_SECRET = process.env.JWT_SECRET || 'CHANGE_ME_IN_PRODUCTION';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30d';
@@ -6503,7 +6545,10 @@ app.get('/api/clients', async (req, res) => {
 app.post('/api/clients', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
+    // Garante colunas NUMERIC antes de gravar metas fracionadas do plano especial
+    await ensureClientFractionalGoalColumns().catch(() => {});
     const c = req.body;
+
     const { rows } = await pool.query(
       `INSERT INTO clients (id, company_name, responsible_person, phone, color, logo_url, fixed_day, fixed_time,
         videomaker_id, backup_time, backup_day, extra_day, extra_content_types, accepts_extra, extra_client_appears,
@@ -6520,8 +6565,9 @@ app.post('/api/clients', async (req, res) => {
         c.backup_time || '14:00', c.backup_day || 'terca', c.extra_day || 'quarta',
         c.extra_content_types || '{}', c.accepts_extra ?? false, c.extra_client_appears ?? false,
         c.whatsapp || '', c.whatsapp_group || null, c.email || '', assertValidCity(scopeCity ? activeCity : (c.city || 'minacu')),
-        c.weekly_reels ?? 0, c.weekly_creatives ?? 0, c.weekly_goal ?? 10, c.has_endomarketing ?? false,
-        c.has_vehicle_flyer ?? false, c.weekly_stories ?? 0, c.presence_days ?? 1, c.monthly_recordings ?? 4,
+        parseWeeklyGoal(c.weekly_reels, 0), parseWeeklyGoal(c.weekly_creatives, 0), parseWeeklyGoal(c.weekly_goal, 10), c.has_endomarketing ?? false,
+        c.has_vehicle_flyer ?? false, parseWeeklyGoal(c.weekly_stories, 0), c.presence_days ?? 1, c.monthly_recordings ?? 4,
+
         c.niche || '', (c.client_login && String(c.client_login).trim()) || null, c.drive_link || '', c.drive_fotos || '',
         c.drive_identidade_visual || '', c.editorial || '', c.plan_id || null, c.contract_start_date || null,
         c.contract_duration_months ?? 12, c.auto_renewal ?? false, c.selected_weeks || '{1,2,3,4}',
@@ -6722,10 +6768,15 @@ app.put('/api/clients/:id', async (req, res) => {
         let value = c[key];
         if (key === 'city') value = newCity;
         if (key === 'briefing_data') value = JSON.stringify(c[key]);
+        // Metas semanais aceitam fração (plano especial): 6 reels/mês => 1.5/semana
+        if (['weekly_reels', 'weekly_creatives', 'weekly_stories', 'weekly_goal'].includes(key)) {
+          value = parseWeeklyGoal(c[key], 0);
+        }
         sets.push(`${key} = $${idx}`);
         vals.push(value);
         idx++;
       }
+
     }
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     sets.push(`updated_at = NOW()`);

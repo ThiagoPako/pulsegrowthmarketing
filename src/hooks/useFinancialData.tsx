@@ -354,7 +354,8 @@ export function useFinancialData() {
    * Retorna também um diagnóstico dos clientes ativos que ficaram de fora,
    * para que o cadastro possa ser corrigido.
    */
-  const generateMonthlyRevenues = async (monthStr: string) => {
+  const generateMonthlyRevenues = async (monthStr: string, options?: { reprocess?: boolean }) => {
+    const reprocess = options?.reprocess === true;
     const [yearStr, monthNumStr] = monthStr.split('-');
     const year = parseInt(yearStr);
     const monthNum = parseInt(monthNumStr);
@@ -365,7 +366,7 @@ export function useFinancialData() {
     const [freshContracts, freshClients, freshExisting] = await Promise.all([
       supabase.from('financial_contracts').select('*'),
       supabase.from('clients').select('id, company_name, status'),
-      supabase.from('revenues').select('client_id, reference_month'),
+      supabase.from('revenues').select('*'),
     ]);
 
     const allContracts = (freshContracts.data as any[]) || [];
@@ -374,46 +375,81 @@ export function useFinancialData() {
     );
     const contractByClient = new Map<string, any>(allContracts.map((c: any) => [c.client_id, c]));
 
-    const existingClientIds = new Set(
-      ((freshExisting.data as any[]) || [])
-        .filter((r: any) => normalizeDate(r.reference_month) === refMonth)
-        .map((r: any) => r.client_id)
+    const monthRevenues = ((freshExisting.data as any[]) || []).filter(
+      (r: any) => normalizeDate(r.reference_month) === refMonth
     );
+    // Duplicate protection: index existing revenues per client for this month
+    const revenuesByClient = new Map<string, any[]>();
+    for (const r of monthRevenues) {
+      if (!r.client_id) continue;
+      const list = revenuesByClient.get(r.client_id) || [];
+      list.push(r);
+      revenuesByClient.set(r.client_id, list);
+    }
 
     const skipped: { client: string; reason: string }[] = [];
+    const failed: { client: string; reason: string }[] = [];
     const newRevenues: any[] = [];
+    let updated = 0;
 
     for (const client of activeClients) {
-      if (existingClientIds.has(client.id)) continue; // já possui receita no mês
       const contract = contractByClient.get(client.id);
       const name = client.company_name || 'Cliente sem nome';
+      const existing = revenuesByClient.get(client.id) || [];
 
       if (!contract) {
-        skipped.push({ client: name, reason: 'sem contrato financeiro cadastrado' });
+        if (existing.length === 0) skipped.push({ client: name, reason: 'sem contrato financeiro cadastrado' });
         continue;
       }
       if (contract.status !== 'ativo') {
-        skipped.push({ client: name, reason: `contrato com status "${contract.status}"` });
+        if (existing.length === 0) skipped.push({ client: name, reason: `contrato com status "${contract.status}"` });
         continue;
       }
       if (!(Number(contract.contract_value) > 0)) {
-        skipped.push({ client: name, reason: 'valor do contrato zerado' });
+        if (existing.length === 0) skipped.push({ client: name, reason: 'valor do contrato zerado' });
         continue;
       }
 
       const dueDay = Math.min(Math.max(Number(contract.due_day) || 10, 1), lastDay);
+      const dueDate = `${year}-${String(monthNum).padStart(2, '0')}-${String(dueDay).padStart(2, '0')}`;
+      const amount = Number(contract.contract_value);
+
+      // Duplicate protection: never insert when the client already has a revenue this month
+      if (existing.length > 0) {
+        if (!reprocess) continue;
+        // Reprocess only pending entries — received revenues stay untouched
+        const pending = existing.filter((r: any) => r.status === 'prevista');
+        if (pending.length === 0) {
+          skipped.push({ client: name, reason: 'receita já recebida — não reprocessada' });
+          continue;
+        }
+        for (const rev of pending) {
+          const needsUpdate =
+            Number(rev.amount) !== amount ||
+            normalizeDate(rev.due_date) !== dueDate ||
+            rev.contract_id !== contract.id;
+          if (!needsUpdate) continue;
+          const { error } = await supabase
+            .from('revenues')
+            .update({ amount, due_date: dueDate, contract_id: contract.id } as any)
+            .eq('id', rev.id);
+          if (error) failed.push({ client: name, reason: error.message || 'erro ao atualizar receita' });
+          else updated++;
+        }
+        continue;
+      }
+
       newRevenues.push({
         client_id: client.id,
         contract_id: contract.id,
         reference_month: refMonth,
-        amount: Number(contract.contract_value),
-        due_date: `${year}-${String(monthNum).padStart(2, '0')}-${String(dueDay).padStart(2, '0')}`,
+        amount,
+        due_date: dueDate,
         status: 'prevista',
       });
     }
 
     let inserted = 0;
-    const failed: { client: string; reason: string }[] = [];
 
     for (const rev of newRevenues) {
       const { error } = await supabase.from('revenues').insert(rev as any);
@@ -426,13 +462,20 @@ export function useFinancialData() {
       }
     }
 
-    if (inserted > 0) {
-      await logActivity('geração', 'receita', `Gerou ${inserted} receita(s) recorrente(s) para ${monthStr}`, undefined, { month: monthStr, count: inserted });
+    if (inserted > 0 || updated > 0) {
+      await logActivity(
+        reprocess ? 'reprocessamento' : 'geração',
+        'receita',
+        `${reprocess ? 'Reprocessou' : 'Gerou'} receitas de ${monthStr}: ${inserted} nova(s), ${updated} atualizada(s)`,
+        undefined,
+        { month: monthStr, inserted, updated }
+      );
       await fetchAll();
     }
 
-    return { inserted, skipped, failed };
+    return { inserted, updated, skipped, failed };
   };
+
 
 
   const deleteRevenue = async (id: string) => {

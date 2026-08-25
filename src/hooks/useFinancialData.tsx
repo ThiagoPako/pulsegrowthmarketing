@@ -587,7 +587,11 @@ export function useFinancialData() {
 
   const deleteExpense = async (id: string) => {
     const expense = expenses.find(e => e.id === id);
-    await supabase.from('expenses').delete().eq('id', id);
+    const { error } = await supabase.from('expenses').delete().eq('id', id);
+    if (error) {
+      console.error('[useFinancialData] deleteExpense error:', error);
+      return false;
+    }
 
     // Remove linked cash movement
     const { data: linked } = await supabase
@@ -602,7 +606,9 @@ export function useFinancialData() {
 
     await logActivity('exclusão', 'despesa', `Excluiu despesa - R$ ${Number(expense?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${expense?.description}`, id);
     await fetchAll();
+    return true;
   };
+
 
   // Categories
   const addCategory = async (name: string) => {

@@ -381,6 +381,24 @@ export function LeadHarvester() {
               </div>
             </div>
 
+            {(company.decisor || company.cnpj) && (
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-2.5 space-y-1 text-xs">
+                <p className="flex items-center gap-1.5 font-semibold text-primary uppercase tracking-tight text-[10px]">
+                  <UserPlus className="h-3 w-3" /> Decisor
+                </p>
+                <p className="font-medium truncate">
+                  {company.decisor || 'Não identificado'}
+                  {company.decisor_cargo ? <span className="text-muted-foreground font-normal"> • {company.decisor_cargo}</span> : null}
+                </p>
+                {company.cnpj && (
+                  <p className="text-muted-foreground">CNPJ {company.cnpj}{company.porte ? ` • ${company.porte}` : ''}</p>
+                )}
+                {company.fontes?.length ? (
+                  <p className="text-[10px] text-muted-foreground">Fontes: {company.fontes.join(', ')}</p>
+                ) : null}
+              </div>
+            )}
+
             <div className="space-y-1.5 text-xs">
               <p className="flex items-start gap-2">
                 <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />

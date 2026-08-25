@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vpsAuthedFetch, supabase } from '@/lib/vpsDb';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Search, MapPin, Briefcase, DollarSign, UserPlus, Building2 } from 'lucide-react';
@@ -23,73 +24,119 @@ interface Company {
   cidade: string;
 }
 
+const NICHES = [
+  { value: 'all', label: 'Todos os nichos' },
+  { value: 'varejo', label: 'Comércio / Varejo' },
+  { value: 'saude', label: 'Saúde' },
+  { value: 'aliment', label: 'Alimentação e Gastronomia' },
+  { value: 'serviç', label: 'Prestação de Serviços' },
+  { value: 'indústria', label: 'Indústria' },
+  { value: 'construção', label: 'Construção Civil' },
+  { value: 'agro', label: 'Agronegócio' },
+  { value: 'automotiv', label: 'Automotivo' },
+];
+
 export function LeadHarvester() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [city, setCity] = useState('all');
-  const [niche, setNiche] = useState('');
+  const [location, setLocation] = useState('');
+  const [niche, setNiche] = useState('all');
+  const [term, setTerm] = useState('');
   const [minCapital, setMinCapital] = useState('');
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   const { data: companies = [], isLoading, refetch } = useQuery({
-    queryKey: ['lead_harvest', city, niche, minCapital],
+    queryKey: ['lead_harvest', city, location, niche, term, minCapital],
     queryFn: async () => {
       const res = await vpsAuthedFetch('/crm/harvest/search', {
         method: 'POST',
-        body: JSON.stringify({ city, niche, min_capital: minCapital })
+        body: JSON.stringify({ city, location, niche, term, min_capital: minCapital }),
       });
       const result = await res.json();
-      return result.data as Company[];
+      return (result.data || []) as Company[];
     },
-    enabled: false
+    enabled: false,
   });
 
+  const selectedCompanies = useMemo(
+    () => companies.filter(c => selected[c.id]),
+    [companies, selected]
+  );
+
   const clearLeads = () => {
-    queryClient.setQueryData(['lead_harvest', city, niche, minCapital], []);
+    queryClient.setQueryData(['lead_harvest', city, location, niche, term, minCapital], []);
+    setSelected({});
     toast.info('Resultados da colheita limpos.');
   };
 
+  const insertLead = async (company: Company) => {
+    if (!user?.id) throw new Error('Sessão expirada');
+    const { error } = await supabase.from('crm_leads').insert([{
+      name: company.contato,
+      company: company.razao_social,
+      email: company.email,
+      phone: company.telefone,
+      description: `Endereço: ${company.endereco}\nAtuação: ${company.atuacao}\nCapital Social: R$ ${Number(company.capital_social || 0).toLocaleString('pt-BR')}`,
+      city: company.cidade,
+      status: 'lead',
+      source_tag: 'colheita',
+      user_id: user.id,
+    }]);
+    if (error) throw error;
+  };
+
   const addLead = useMutation({
-    mutationFn: async (company: Company) => {
-      if (!user?.id) throw new Error('Sessão expirada');
-
-      const { error } = await supabase.from('crm_leads').insert([{
-        name: company.contato,
-        company: company.razao_social,
-        email: company.email,
-        phone: company.telefone,
-        description: `Endereço: ${company.endereco}\nAtuação: ${company.atuacao}\nCapital Social: R$ ${company.capital_social.toLocaleString()}`,
-        city: company.cidade,
-        status: 'lead',
-        source_tag: 'colheita',
-        user_id: user.id
-      }]);
-
-      if (error) throw error;
-    },
+    mutationFn: insertLead,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
       toast.success('Empresa adicionada ao CRM como novo lead!');
     },
-    onError: (err: any) => {
-      toast.error('Erro ao adicionar lead: ' + err.message);
-    }
+    onError: (err: any) => toast.error('Erro ao adicionar lead: ' + err.message),
   });
+
+  const addSelected = async () => {
+    if (selectedCompanies.length === 0) return;
+    setBulkLoading(true);
+    let ok = 0;
+    const fails: string[] = [];
+    for (const company of selectedCompanies) {
+      try {
+        await insertLead(company);
+        ok++;
+      } catch (err: any) {
+        fails.push(`${company.razao_social}: ${err?.message || 'erro'}`);
+      }
+    }
+    setBulkLoading(false);
+    setSelected({});
+    queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
+    if (ok > 0) toast.success(`${ok} lead(s) adicionado(s) ao CRM.`);
+    if (fails.length > 0) toast.error(`${fails.length} falha(s): ${fails[0]}`);
+  };
+
+  const toggleAll = (checked: boolean) => {
+    if (!checked) { setSelected({}); return; }
+    const next: Record<string, boolean> = {};
+    companies.forEach(c => { next[c.id] = true; });
+    setSelected(next);
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    setSelected({});
     refetch();
   };
 
   return (
     <div className="space-y-6">
       <Card className="p-6 bg-card/50 border-none shadow-sm">
-        <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
           <div className="space-y-2">
-            <Label>Cidade</Label>
+            <Label>Cidade base</Label>
             <Select value={city} onValueChange={setCity}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione a cidade" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Selecione a cidade" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas as Cidades</SelectItem>
                 <SelectItem value="Minaçu">Minaçu</SelectItem>
@@ -97,40 +144,55 @@ export function LeadHarvester() {
               </SelectContent>
             </Select>
           </div>
+
           <div className="space-y-2">
-            <Label>Nicho / Atuação (Ministério da Fazenda)</Label>
+            <Label>Localização (cidade, bairro, rua)</Label>
+            <Input
+              placeholder="Ex.: Centro, Setor Industrial"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Nicho / Atuação</Label>
             <Select value={niche} onValueChange={setNiche}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o nicho" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Selecione o nicho" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="varejo">Comércio Varejista</SelectItem>
-                <SelectItem value="saude">Saúde e Serviços Sociais</SelectItem>
-                <SelectItem value="gastronomia">Alimentação e Gastronomia</SelectItem>
-                <SelectItem value="servicos">Prestação de Serviços</SelectItem>
-                <SelectItem value="industria">Indústria e Fabricação</SelectItem>
+                {NICHES.map(n => <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
+
+          <div className="space-y-2">
+            <Label>Busca livre</Label>
+            <Input
+              placeholder="Nome, contato, atividade"
+              value={term}
+              onChange={(e) => setTerm(e.target.value)}
+            />
+          </div>
+
           <div className="space-y-2">
             <Label>Capital Social Mínimo (R$)</Label>
-            <Input 
-              type="number" 
-              placeholder="1000" 
-              value={minCapital} 
+            <Input
+              type="number"
+              placeholder="1000"
+              value={minCapital}
               onChange={(e) => setMinCapital(e.target.value)}
             />
           </div>
+
           <div className="flex gap-2">
             <Button type="submit" className="flex-1 gap-2 h-10" disabled={isLoading}>
               <Search className="h-4 w-4" />
-              {isLoading ? 'Buscando...' : 'Colher Leads'}
+              {isLoading ? 'Buscando...' : 'Colher'}
             </Button>
             {companies.length > 0 && (
-              <Button 
-                type="button" 
-                variant="outline" 
-                className="gap-2 h-10 border-destructive/20 text-destructive hover:bg-destructive/10" 
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2 h-10 border-destructive/20 text-destructive hover:bg-destructive/10"
                 onClick={clearLeads}
               >
                 Limpar
@@ -140,10 +202,37 @@ export function LeadHarvester() {
         </form>
       </Card>
 
+      {companies.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-card/40 px-4 py-3">
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={selectedCompanies.length === companies.length && companies.length > 0}
+              onCheckedChange={(v) => toggleAll(Boolean(v))}
+            />
+            Selecionar todos ({companies.length})
+          </label>
+          <span className="text-sm text-muted-foreground">
+            {selectedCompanies.length} selecionado(s)
+          </span>
+          <Button
+            className="ml-auto gap-2"
+            size="sm"
+            disabled={selectedCompanies.length === 0 || bulkLoading}
+            onClick={addSelected}
+          >
+            <UserPlus className="h-4 w-4" />
+            {bulkLoading ? 'Adicionando...' : 'Adicionar selecionados ao CRM'}
+          </Button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {companies.map((company) => (
-          <Card key={company.id} className="p-5 flex flex-col gap-4 border-none shadow-sm hover:shadow-md transition-all group overflow-hidden">
-            <div className="flex justify-between items-start gap-4">
+          <Card
+            key={company.id}
+            className={`p-5 flex flex-col gap-4 border shadow-sm hover:shadow-md transition-all overflow-hidden ${selected[company.id] ? 'border-primary ring-1 ring-primary/40' : 'border-transparent'}`}
+          >
+            <div className="flex justify-between items-start gap-3">
               <div className="space-y-1 min-w-0">
                 <h3 className="font-bold text-lg truncate flex items-center gap-2">
                   <Building2 className="h-4 w-4 text-primary shrink-0" />
@@ -158,6 +247,11 @@ export function LeadHarvester() {
                   </span>
                 </div>
               </div>
+              <Checkbox
+                aria-label={`Selecionar ${company.razao_social}`}
+                checked={Boolean(selected[company.id])}
+                onCheckedChange={(v) => setSelected(prev => ({ ...prev, [company.id]: Boolean(v) }))}
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-3 text-xs">
@@ -165,7 +259,7 @@ export function LeadHarvester() {
                 <p className="font-semibold text-muted-foreground flex items-center gap-1 uppercase tracking-tighter">
                   <DollarSign className="h-3 w-3" /> Capital Social
                 </p>
-                <p className="font-bold text-primary">R$ {company.capital_social.toLocaleString()}</p>
+                <p className="font-bold text-primary">R$ {Number(company.capital_social || 0).toLocaleString('pt-BR')}</p>
               </div>
               <div className="p-2 rounded-lg bg-muted/50 space-y-1">
                 <p className="font-semibold text-muted-foreground flex items-center gap-1 uppercase tracking-tighter">
@@ -180,7 +274,7 @@ export function LeadHarvester() {
               <p>{company.telefone}</p>
             </div>
 
-            <Button 
+            <Button
               className="w-full gap-2 mt-2 bg-primary/90 hover:bg-primary"
               onClick={() => addLead.mutate(company)}
               disabled={addLead.isPending}

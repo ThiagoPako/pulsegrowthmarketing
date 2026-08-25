@@ -10039,12 +10039,31 @@ app.post('/api/crm/harvest/search', async (req, res) => {
       { id: '6', razao_social: 'Clínica Sorriso Aberto', contato: 'Dra. Maria Clara', email: 'agendamento@sorrisoaberto.com', telefone: '6298556622', atuacao: 'Saúde', endereco: 'Rua Médica, 10', capital_social: 800000, cidade: 'Uruaçu' },
     ];
 
+    const { location, term } = req.body || {};
+    const norm = (v) => String(v || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().trim();
+
     let filtered = mockCompanies;
-    if (city && city !== 'all') filtered = filtered.filter(c => c.cidade === city);
-    if (niche && niche !== 'all') filtered = filtered.filter(c => c.atuacao.toLowerCase().includes(niche.toLowerCase()));
+    if (city && city !== 'all') filtered = filtered.filter(c => norm(c.cidade) === norm(city));
+    if (location) {
+      const loc = norm(location);
+      filtered = filtered.filter(c => norm(c.cidade).includes(loc) || norm(c.endereco).includes(loc));
+    }
+    if (niche && niche !== 'all') {
+      const n = norm(niche);
+      filtered = filtered.filter(c => norm(c.atuacao).includes(n) || norm(c.razao_social).includes(n));
+    }
+    if (term) {
+      const t = norm(term);
+      filtered = filtered.filter(c =>
+        norm(c.razao_social).includes(t) || norm(c.atuacao).includes(t) || norm(c.contato).includes(t)
+      );
+    }
     if (min_capital) filtered = filtered.filter(c => c.capital_social >= Number(min_capital));
 
     res.json({ data: filtered });
+
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

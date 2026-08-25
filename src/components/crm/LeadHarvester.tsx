@@ -94,7 +94,7 @@ export function LeadHarvester() {
     queryFn: async () => {
       const res = await vpsAuthedFetch('/crm/harvest/search', {
         method: 'POST',
-        body: JSON.stringify({ city, state, location, niche, term, onlyWithContact, limit: 600 }),
+        body: JSON.stringify({ city, state, location, niche, term, onlyWithContact, limit: 5000 }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || 'Falha ao buscar empresas');

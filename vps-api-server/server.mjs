@@ -10265,7 +10265,8 @@ app.post('/api/crm/harvest/search', async (req, res) => {
       return `[out:json][timeout:120];\n${scope === '(area.searchArea)' ? areaBlock : ''}\n(\n${body}\n);\nout center ${cap};`;
     };
 
-    // 1ª tentativa: área administrativa. 2ª: bounding box da cidade (pega tudo que a área perdeu).
+    // Combina a área administrativa com o bounding box. Algumas cidades têm relações OSM
+    // incompletas; consultar somente uma das fontes pode devolver apenas poucos registros.
     let elements = [];
     try {
       const json = await runOverpass(buildQuery('(area.searchArea)'));
@@ -10274,12 +10275,14 @@ app.post('/api/crm/harvest/search', async (req, res) => {
       console.warn('[crm:harvest] area query falhou:', err.message);
     }
 
-    if (elements.length < 30 && bbox) {
+    if (bbox) {
       try {
         const scope = `(${bbox.south},${bbox.west},${bbox.north},${bbox.east})`;
         const json = await runOverpass(buildQuery(scope));
         const bboxEls = Array.isArray(json?.elements) ? json.elements : [];
-        if (bboxEls.length > elements.length) elements = bboxEls;
+        const byOsmId = new Map(elements.map(element => [`${element.type}/${element.id}`, element]));
+        bboxEls.forEach(element => byOsmId.set(`${element.type}/${element.id}`, element));
+        elements = Array.from(byOsmId.values());
       } catch (err) {
         console.warn('[crm:harvest] bbox query falhou:', err.message);
       }

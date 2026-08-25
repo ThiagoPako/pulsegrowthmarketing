@@ -10066,11 +10066,13 @@ async function runOverpass(query) {
         signal: controller.signal,
       });
       clearTimeout(timer);
-      if (!response.ok) {
-        lastError = new Error(`Overpass ${response.status}`);
+      const text = await response.text();
+      if (!response.ok || !text.trim().startsWith('{')) {
+        lastError = new Error(`Overpass ${response.status} em ${endpoint}`);
         continue;
       }
-      return await response.json();
+      return JSON.parse(text);
+
     } catch (err) {
       lastError = err;
     }

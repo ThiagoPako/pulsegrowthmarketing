@@ -10303,35 +10303,57 @@ async function fetchCnpjData(cnpj) {
   };
 }
 
-// Varre o site oficial atrás de telefone, e-mail e WhatsApp de contato direto
-async function scrapeSiteContacts(website) {
+// ---------- Utilitários de telefone BR ----------
+const DDDS_VALIDOS = new Set([
+  11,12,13,14,15,16,17,18,19,21,22,24,27,28,31,32,33,34,35,37,38,41,42,43,44,45,46,
+  47,48,49,51,53,54,55,61,62,63,64,65,66,67,68,69,71,73,74,75,77,79,81,82,83,84,85,
+  86,87,88,89,91,92,93,94,95,96,97,98,99,
+]);
+
+function normalizePhoneBR(raw) {
+  let d = String(raw || '').replace(/\D/g, '');
+  if (!d) return '';
+  if (d.startsWith('55') && d.length > 11) d = d.slice(2);
+  if (d.length < 10 || d.length > 11) return '';
+  if (!DDDS_VALIDOS.has(Number(d.slice(0, 2)))) return '';
+  if (d.length === 11 && d[2] !== '9') return '';
+  return d;
+}
+
+function extractPhonesFromText(text = '') {
+  const out = [];
+  const re = /(?:\+?55[\s.-]?)?\(?\d{2}\)?[\s.-]?9?\d{4}[\s.-]?\d{4}/g;
+  for (const m of String(text).matchAll(re)) {
+    const p = normalizePhoneBR(m[0]);
+    if (p && !out.includes(p)) out.push(p);
+    if (out.length >= 6) break;
+  }
+  return out;
+}
+
+function extractEmailsFromText(text = '') {
+  return Array.from(String(text).matchAll(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g))
+    .map(m => m[0].toLowerCase())
+    .filter(e => !/\.(png|jpe?g|gif|svg|webp|css|js)$/i.test(e))
+    .filter(e => !/(sentry|wixpress|example|domain|email)\.(com|io)$/i.test(e))
+    .filter((e, i, arr) => arr.indexOf(e) === i)
+    .slice(0, 4);
+}
+
+async function fetchTextSafe(url, timeoutMs = 9000) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 9000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const url = /^https?:\/\//i.test(website) ? website : `https://${website}`;
     const resp = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PulseGrowthBot/1.0)' },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; PulseGrowthBot/1.0; +https://pulsegrowthmarketing.com)',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+      },
       signal: controller.signal,
       redirect: 'follow',
     });
     if (!resp.ok) return null;
-    const html = (await resp.text()).slice(0, 400000);
-
-    const emails = Array.from(html.matchAll(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g))
-      .map(m => m[0])
-      .filter(e => !/\.(png|jpe?g|gif|svg|webp)$/i.test(e))
-      .slice(0, 3);
-
-    const tels = Array.from(html.matchAll(/tel:\+?([\d\s().-]{8,20})/gi))
-      .map(m => m[1].trim())
-      .slice(0, 3);
-
-    const whats = Array.from(html.matchAll(/(?:wa\.me|api\.whatsapp\.com\/send\?phone=)\/?(\d{10,15})/gi))
-      .map(m => m[1])
-      .slice(0, 3);
-
-    if (!emails.length && !tels.length && !whats.length) return null;
-    return { emails, telefones: [...tels, ...whats], whatsapp: whats[0] || '' };
+    return (await resp.text()).slice(0, 500000);
   } catch {
     return null;
   } finally {
@@ -10339,12 +10361,93 @@ async function scrapeSiteContacts(website) {
   }
 }
 
-async function enrichCompany(company) {
+// Varre o site oficial (home + páginas de contato) atrás de telefone, e-mail, WhatsApp e redes
+async function scrapeSiteContacts(website) {
+  const base = /^https?:\/\//i.test(website) ? website : `https://${website}`;
+  let root;
+  try { root = new URL(base); } catch { return null; }
+
+  const paths = ['', '/contato', '/contatos', '/fale-conosco', '/sobre', '/quem-somos', '/contact'];
+  const emails = [];
+  const telefones = [];
+  const whats = [];
+  let instagram = '';
+  let facebook = '';
+  let achou = false;
+
+  for (const p of paths) {
+    const html = await fetchTextSafe(new URL(p, root).toString());
+    if (!html) continue;
+    achou = true;
+
+    extractEmailsFromText(html).forEach(e => { if (!emails.includes(e)) emails.push(e); });
+
+    for (const m of html.matchAll(/tel:\+?([\d\s().-]{8,20})/gi)) {
+      const n = normalizePhoneBR(m[1]);
+      if (n && !telefones.includes(n)) telefones.push(n);
+    }
+    for (const m of html.matchAll(/(?:wa\.me|api\.whatsapp\.com\/send\?phone=)\/?(\d{10,15})/gi)) {
+      const n = normalizePhoneBR(m[1]);
+      if (n && !whats.includes(n)) whats.push(n);
+    }
+    // Texto visível: pega telefones escritos sem link
+    const visivel = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ');
+    extractPhonesFromText(visivel).forEach(n => { if (!telefones.includes(n)) telefones.push(n); });
+
+    if (!instagram) {
+      const ig = html.match(/https?:\/\/(?:www\.)?instagram\.com\/([A-Za-z0-9_.]{2,30})/i);
+      if (ig && !/^(p|reel|explore)$/i.test(ig[1])) instagram = `https://instagram.com/${ig[1]}`;
+    }
+    if (!facebook) {
+      const fb = html.match(/https?:\/\/(?:www\.)?facebook\.com\/([A-Za-z0-9_.-]{3,40})/i);
+      if (fb && !/^(sharer|plugins|tr)$/i.test(fb[1])) facebook = `https://facebook.com/${fb[1]}`;
+    }
+
+    if (telefones.length && emails.length) break;
+  }
+
+  if (!achou || (!emails.length && !telefones.length && !whats.length && !instagram && !facebook)) return null;
+  return { emails, telefones: Array.from(new Set([...whats, ...telefones])), whatsapp: whats[0] || '', instagram, facebook };
+}
+
+// Busca aberta na web (DuckDuckGo HTML + Bing) para achar telefone de quem não tem site
+async function searchWebContacts(name, cidade) {
+  const q = encodeURIComponent(`"${name}" ${cidade || ''} telefone contato whatsapp`);
+  const urls = [
+    `https://html.duckduckgo.com/html/?q=${q}`,
+    `https://lite.duckduckgo.com/lite/?q=${q}`,
+    `https://www.bing.com/search?q=${q}&setlang=pt-br`,
+  ];
+  const telefones = [];
+  const emails = [];
+  let instagram = '';
+
+  for (const url of urls) {
+    const html = await fetchTextSafe(url, 8000);
+    if (!html) continue;
+    const texto = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ');
+    extractPhonesFromText(texto).forEach(n => { if (!telefones.includes(n)) telefones.push(n); });
+    extractEmailsFromText(texto).forEach(e => { if (!emails.includes(e)) emails.push(e); });
+    if (!instagram) {
+      const ig = html.match(/instagram\.com\/([A-Za-z0-9_.]{3,30})/i);
+      if (ig && !/^(p|reel|explore|accounts)$/i.test(ig[1])) instagram = `https://instagram.com/${ig[1]}`;
+    }
+    if (telefones.length) break;
+  }
+
+  if (!telefones.length && !emails.length && !instagram) return null;
+  return { telefones, emails, instagram };
+}
+
+async function enrichCompany(company, opts = {}) {
   const cacheKey = company.id;
   if (ENRICH_CACHE.has(cacheKey)) return { ...company, ...ENRICH_CACHE.get(cacheKey) };
 
   const patch = { fontes: ['openstreetmap'] };
+  const telefones = new Set((company.telefones || []).map(normalizePhoneBR).filter(Boolean));
+  let email = company.email || '';
 
+  // 1) Receita Federal via CNPJ (sócio/decisor + contatos oficiais)
   if (company.cnpj) {
     const cnpjData = await fetchCnpjData(company.cnpj);
     if (cnpjData) {
@@ -10355,46 +10458,70 @@ async function enrichCompany(company) {
       patch.capital_social = cnpjData.capital_social;
       patch.porte = cnpjData.porte;
       patch.razao_social_oficial = cnpjData.razao_social_oficial;
-      if (!company.email && cnpjData.email) patch.email = cnpjData.email;
-      if (cnpjData.telefones.length) {
-        patch.telefones = Array.from(new Set([...(company.telefones || []), ...cnpjData.telefones]));
-      }
+      if (!email && cnpjData.email) email = cnpjData.email;
+      cnpjData.telefones.forEach(t => { const n = normalizePhoneBR(t); if (n) telefones.add(n); });
     }
   }
 
-  const jaTemContato = Boolean(company.telefone || company.email);
-  if (!jaTemContato && company.website) {
+  // 2) Site oficial (home + páginas de contato)
+  if (company.website && (!telefones.size || !email)) {
     const site = await scrapeSiteContacts(company.website);
     if (site) {
       patch.fontes.push('site-oficial');
-      if (site.emails.length && !company.email) patch.email = site.emails[0];
-      if (site.telefones.length) {
-        patch.telefones = Array.from(new Set([...(patch.telefones || company.telefones || []), ...site.telefones]));
-      }
+      if (!email && site.emails.length) email = site.emails[0];
+      site.telefones.forEach(t => telefones.add(t));
+      if (!company.instagram && site.instagram) patch.instagram = site.instagram;
+      if (!company.facebook && site.facebook) patch.facebook = site.facebook;
     }
   }
 
-  if (patch.telefones?.length) {
-    patch.telefone = company.telefone || patch.telefones[0];
-    patch.whatsapp = company.whatsapp || toWhatsappLink(patch.telefone);
+  // 3) Busca aberta na web — garante contato para quem não tem site nem CNPJ
+  if (!telefones.size && opts.webSearch !== false) {
+    const web = await searchWebContacts(company.razao_social, company.cidade);
+    if (web) {
+      patch.fontes.push('busca-web');
+      web.telefones.forEach(t => telefones.add(t));
+      if (!email && web.emails.length) email = web.emails[0];
+      if (!company.instagram && web.instagram) patch.instagram = web.instagram;
+    }
   }
 
+  const lista = Array.from(telefones);
+  if (lista.length) {
+    patch.telefones = lista.map(formatPhoneBR);
+    patch.telefone = patch.telefones[0];
+    patch.whatsapp = company.whatsapp || toWhatsappLink(lista[0]);
+  }
+  if (email) patch.email = email;
+
   patch.contato = patch.decisor || company.contato;
-  patch.tem_contato = Boolean(patch.telefone || company.telefone || patch.email || company.email);
+  patch.tem_contato = Boolean(patch.telefone || company.telefone || email);
   patch.score = Math.min(
     100,
-    (company.score || 0) + (patch.decisor ? 15 : 0) + (patch.telefone && !company.telefone ? 20 : 0) + (patch.email && !company.email ? 10 : 0)
+    (company.score || 0) +
+    (patch.decisor ? 15 : 0) +
+    (patch.telefone && !company.telefone ? 20 : 0) +
+    (email && !company.email ? 10 : 0) +
+    (patch.instagram && !company.instagram ? 5 : 0)
   );
 
   ENRICH_CACHE.set(cacheKey, patch);
   return { ...company, ...patch };
 }
 
-// Enriquecimento com paralelismo controlado (evita bloqueio das APIs públicas)
-async function enrichCompanies(companies, maxItems = 80, concurrency = 6) {
+function formatPhoneBR(d) {
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return d;
+}
+
+// Enriquecimento com paralelismo controlado (evita bloqueio das fontes públicas)
+async function enrichCompanies(companies, maxItems = 400, concurrency = 10, opts = {}) {
+  // Prioriza quem está sem contato — objetivo é não deixar empresa sem telefone
   const alvo = companies
     .map((c, index) => ({ c, index }))
-    .filter(({ c }) => c.cnpj || (!c.tem_contato && c.website))
+    .filter(({ c }) => c.cnpj || c.website || !c.tem_contato)
+    .sort((a, b) => Number(a.c.tem_contato) - Number(b.c.tem_contato))
     .slice(0, maxItems);
 
   const out = [...companies];
@@ -10404,7 +10531,7 @@ async function enrichCompanies(companies, maxItems = 80, concurrency = 6) {
     while (cursor < alvo.length) {
       const item = alvo[cursor++];
       try {
-        out[item.index] = await enrichCompany(item.c);
+        out[item.index] = await enrichCompany(item.c, opts);
       } catch (err) {
         console.warn('[crm:harvest] enrich falhou:', err.message);
       }

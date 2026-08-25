@@ -10621,7 +10621,12 @@ app.post('/api/crm/harvest/search', async (req, res) => {
 
     // Enriquecimento multi-fonte: Receita Federal (sócio/decisor) + site oficial
     if (req.body?.enrich !== false) {
-      companies = await enrichCompanies(companies, Number(req.body?.enrichLimit) || 80);
+      companies = await enrichCompanies(
+        companies,
+        Number(req.body?.enrichLimit) || 400,
+        Number(req.body?.enrichConcurrency) || 10,
+        { webSearch: req.body?.webSearch !== false },
+      );
     }
 
     if (onlyWithContact) {

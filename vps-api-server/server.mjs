@@ -6545,7 +6545,10 @@ app.get('/api/clients', async (req, res) => {
 app.post('/api/clients', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
+    // Garante colunas NUMERIC antes de gravar metas fracionadas do plano especial
+    await ensureClientFractionalGoalColumns().catch(() => {});
     const c = req.body;
+
     const { rows } = await pool.query(
       `INSERT INTO clients (id, company_name, responsible_person, phone, color, logo_url, fixed_day, fixed_time,
         videomaker_id, backup_time, backup_day, extra_day, extra_content_types, accepts_extra, extra_client_appears,
@@ -6764,10 +6767,15 @@ app.put('/api/clients/:id', async (req, res) => {
         let value = c[key];
         if (key === 'city') value = newCity;
         if (key === 'briefing_data') value = JSON.stringify(c[key]);
+        // Metas semanais aceitam fração (plano especial): 6 reels/mês => 1.5/semana
+        if (['weekly_reels', 'weekly_creatives', 'weekly_stories', 'weekly_goal'].includes(key)) {
+          value = parseWeeklyGoal(c[key], 0);
+        }
         sets.push(`${key} = $${idx}`);
         vals.push(value);
         idx++;
       }
+
     }
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     sets.push(`updated_at = NOW()`);

@@ -494,12 +494,18 @@ export function useSupabaseData() {
 
   // ── Client CRUD ──
   const addClient = useCallback(async (client: Client): Promise<boolean> => {
-    if (clients.some(c => c.companyName.toLowerCase() === client.companyName.toLowerCase())) return false;
+    // Duplicidade real (mesmo nome já visível na cidade ativa) → retorna false.
+    if (clients.some(c => c.companyName.trim().toLowerCase() === client.companyName.trim().toLowerCase())) return false;
     const { error } = await invokeVpsFunction('clients', { body: clientToRow(client) });
-    if (error) { console.error('addClient error:', error); return false; }
+    // Falha de API NÃO é duplicidade: propaga a mensagem real para a UI.
+    if (error) {
+      console.error('addClient error:', error);
+      throw new Error((error as any)?.message || 'Erro ao cadastrar cliente na API');
+    }
     setClients(prev => [...prev, client]);
     return true;
   }, [clients]);
+
 
   const updateClient = useCallback(async (client: Client) => {
     const { id, ...rest } = clientToRow(client);

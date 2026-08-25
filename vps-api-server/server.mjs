@@ -6522,7 +6522,7 @@ app.post('/api/clients', async (req, res) => {
         c.whatsapp || '', c.whatsapp_group || null, c.email || '', assertValidCity(scopeCity ? activeCity : (c.city || 'minacu')),
         c.weekly_reels ?? 0, c.weekly_creatives ?? 0, c.weekly_goal ?? 10, c.has_endomarketing ?? false,
         c.has_vehicle_flyer ?? false, c.weekly_stories ?? 0, c.presence_days ?? 1, c.monthly_recordings ?? 4,
-        c.niche || '', c.client_login || '', c.drive_link || '', c.drive_fotos || '',
+        c.niche || '', (c.client_login && String(c.client_login).trim()) || null, c.drive_link || '', c.drive_fotos || '',
         c.drive_identidade_visual || '', c.editorial || '', c.plan_id || null, c.contract_start_date || null,
         c.contract_duration_months ?? 12, c.auto_renewal ?? false, c.selected_weeks || '{1,2,3,4}',
         c.has_photo_shoot ?? false, c.accepts_photo_shoot_cost ?? false,
@@ -6533,9 +6533,15 @@ app.post('/api/clients', async (req, res) => {
     res.json(rows[0]);
   } catch (e) {
     console.error('POST /api/clients error:', e);
+    // 23505 = violação de índice único (ex.: client_login repetido)
+    if (e?.code === '23505') {
+      const field = /client_login/i.test(e.detail || '') ? 'login do cliente' : 'campo único';
+      return res.status(409).json({ error: `Já existe um cliente com o mesmo ${field}. Altere o login e tente novamente.` });
+    }
     const status = e?.statusCode === 400 ? 400 : 500;
     res.status(status).json({ error: e.message });
   }
+
 });
 
 // ─── Pré-validação (dry-run) da transferência de cidade ─────

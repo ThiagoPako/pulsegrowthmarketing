@@ -1182,10 +1182,14 @@ function LeadDetailsDialog({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-w-3xl p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
-        <div className="flex h-[600px]">
+      <DialogContent className="max-w-4xl p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
+        <DialogHeader className="px-6 py-4 border-b bg-card">
+          <DialogTitle className="text-base font-bold truncate">{lead.name}</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col md:flex-row h-[70vh] md:h-[600px]">
           {/* Coluna Esquerda: Dados */}
-          <div className="w-2/5 bg-muted/30 p-8 flex flex-col gap-6 overflow-y-auto">
+          <div className="w-full md:w-2/5 bg-muted/30 p-6 flex flex-col gap-6 overflow-y-auto">
+
             <div>
               <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-4">Dados da Oportunidade</h3>
               <div className="space-y-4">
@@ -1318,31 +1322,42 @@ function LeadDetailsDialog({
                 {onDelete && <DeleteLeadDialog leadName={lead.name} onDelete={() => onDelete(lead.id)} />}
               </div>
 
-              
-              <div className="space-y-2">
-                <Label className="text-[10px] font-bold uppercase text-muted-foreground">Mover para Estágio</Label>
 
-                <div className="flex flex-wrap gap-2">
-                  {STAGES.map(s => (
-                    <Button 
-                      key={s.id} 
-                      size="sm" 
-                      variant={lead.status === s.id ? 'default' : 'outline'}
-                      className="h-8 text-[10px] px-2 flex-1 min-w-[100px]"
-                      onClick={async () => {
-                        const { error } = await supabase.from('crm_leads').update({ status: s.id } as any).eq('id', lead.id);
-                        if (!error) {
-                          onUpdate();
-                          if (onSetRefreshKey) onSetRefreshKey(prev => prev + 1);
-                          toast.success(`Lead movido para ${s.label}`);
-                        }
-                      }}
-                    >
-                      <s.icon className="h-3 w-3 mr-1" /> {s.label}
-                    </Button>
-                  ))}
+              <div className="space-y-2 rounded-xl border bg-card/60 p-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Mover para Estágio</Label>
+                  <Badge variant="outline" className="h-5 text-[9px] uppercase font-bold">
+                    {STAGES.find(s => s.id === lead.status)?.label || lead.status}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {STAGES.map(s => {
+                    const isCurrent = lead.status === s.id;
+                    return (
+                      <Button
+                        key={s.id}
+                        size="sm"
+                        variant={isCurrent ? 'default' : 'outline'}
+                        disabled={isCurrent}
+                        className="h-8 w-full justify-start gap-1.5 px-2 text-[10px] font-semibold disabled:opacity-100"
+                        onClick={async () => {
+                          const { error } = await supabase.from('crm_leads').update({ status: s.id } as any).eq('id', lead.id);
+                          if (!error) {
+                            onUpdate();
+                            if (onSetRefreshKey) onSetRefreshKey(prev => prev + 1);
+                            toast.success(`Lead movido para ${s.label}`);
+                          }
+                        }}
+                      >
+                        <s.icon className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{s.label}</span>
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
+
 
               <div className="space-y-2">
                 <Label className="text-[10px] font-bold uppercase text-muted-foreground">Nova Atualização</Label>

@@ -10111,10 +10111,15 @@ app.post('/api/crm/harvest/search', async (req, res) => {
   try {
     const { city, location, niche, term, limit } = req.body || {};
 
-    const areaName = String(location || '').trim() || (city && city !== 'all' ? String(city).trim() : '');
+    const cityName = city && city !== 'all' ? String(city).trim() : '';
+    const locationText = String(location || '').trim();
+    // Qualquer cidade é aceita: a área da busca é a cidade informada; se vazia, usa a localização livre.
+    const areaName = cityName || locationText;
+    const locationFilter = cityName && locationText ? locationText : '';
     if (!areaName) {
       return res.status(400).json({ error: 'Informe a cidade ou a localização para buscar empresas reais.' });
     }
+
 
     const filters = NICHE_OSM_FILTERS[niche] || NICHE_OSM_FILTERS.all;
     const escapedArea = areaName.replace(/"/g, '\\"');
@@ -10143,7 +10148,13 @@ out center ${Math.min(Number(limit) || 120, 250)};`;
       return true;
     });
 
+    if (locationFilter) {
+      const l = normalizeText(locationFilter);
+      companies = companies.filter(c => normalizeText(c.endereco).includes(l));
+    }
+
     if (term) {
+
       const t = normalizeText(term);
       companies = companies.filter(c =>
         normalizeText(c.razao_social).includes(t) ||

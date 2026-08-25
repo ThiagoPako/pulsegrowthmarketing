@@ -3,7 +3,7 @@
 // CORREÇÃO: Criada e liberada a tabela 'scheduled_recordings' no backend (VPS) para permitir transferência de clientes.
 // Implementada validação atômica no backend (VPS) para intervalo de 1h30 entre reuniões no CRM.
 // CRM: Sistema de Briefing SDR -> Closer e lembretes 24h ativos.
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase, vpsAuthedFetch } from '@/lib/vpsDb';
 import { useAuth } from '@/hooks/useAuth';
@@ -106,7 +106,7 @@ function getAvailableTimeSlots(dateStr: string, allLeads: Lead[], excludeLeadId?
 
 
 
-type LeadStatus = 'lead' | 'contacted' | 'meeting' | 'contracted' | 'lost' | 'recovery_followup_1' | 'recovery_followup_2' | 'fridge';
+type LeadStatus = 'lead' | 'contacted' | 'meeting' | 'contracted' | 'disqualified' | 'lost' | 'recovery_followup_1' | 'recovery_followup_2' | 'fridge';
 type LeadTag = 'hot' | 'cold';
 
 interface Lead {
@@ -151,6 +151,7 @@ const STAGES: { id: LeadStatus; label: string; color: string; icon: any }[] = [
   { id: 'recovery_followup_1', label: 'Follow-up 1', color: 'border-t-orange-400', icon: RotateCcw },
   { id: 'recovery_followup_2', label: 'Follow-up 2', color: 'border-t-red-400', icon: RotateCcw },
   { id: 'contracted', label: 'Contrato Fechado', color: 'border-t-green-400 bg-green-50/30 ring-2 ring-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.1)]', icon: Target },
+  { id: 'disqualified', label: 'Desqualificados', color: 'border-t-destructive/70 bg-destructive/5', icon: UserMinus },
   { id: 'lost', label: 'Leads Desistentes', color: 'border-t-zinc-500 grayscale opacity-70', icon: UserMinus },
 ];
 
@@ -254,6 +255,8 @@ export default function CRM() {
           phone: lead.phone,
           contract_value: lead.contract_value,
           status: lead.status,
+          city: lead.city,
+          description: lead.description,
           source_tag: lead.source_tag,
           referral_info: lead.referral_info
         } as any)
@@ -609,12 +612,12 @@ export default function CRM() {
         </div>
 
 
-        <TabsContent value="pipeline" className="flex-1 overflow-hidden m-0">
+        <TabsContent value="pipeline" className="m-0 h-[min(68vh,720px)] min-h-[460px] overflow-hidden">
           <div className="h-full overflow-x-auto custom-scrollbar">
             <DragDropContext onDragEnd={onDragEnd}>
               <div className="flex gap-6 h-full min-w-max pb-4">
                 {currentStages.map((stage) => (
-                  <div key={stage.id} className="w-[320px] flex flex-col gap-4">
+                  <div key={stage.id} className="h-full w-[300px] sm:w-[320px] flex flex-col gap-3 overflow-hidden">
                     <div className={`p-4 rounded-xl border-t-4 ${stage.color} bg-card shadow-sm flex flex-col gap-2 relative overflow-hidden group`}>
                       <div className="flex items-center justify-between relative z-10">
                         <div className="flex items-center gap-2">
@@ -643,9 +646,10 @@ export default function CRM() {
                         <div
                           {...provided.droppableProps}
                           ref={provided.innerRef}
-                          className={`flex-1 flex flex-col gap-3 p-2 rounded-xl transition-colors min-h-[200px] ${
+                          className={`flex-1 flex flex-col gap-3 p-2 rounded-xl transition-colors min-h-0 overflow-y-auto overscroll-contain custom-scrollbar ${
                             snapshot.isDraggingOver ? 'bg-primary/5 border-2 border-dashed border-primary/20' : 'bg-transparent'
                           }`}
+                          aria-label={`Leads em ${stage.label}`}
                         >
                           <AnimatePresence>
                             {filteredLeads
@@ -665,7 +669,19 @@ export default function CRM() {
                                         exit={{ opacity: 0, scale: 0.9 }}
                                         transition={{ duration: 0.2 }}
                                       >
-                                        <Card className={`group border-none shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden ${snapshot.isDragging ? 'rotate-3 scale-105 shadow-xl' : ''}`}>
+                                        <LeadDetailsDialog
+                                          lead={lead}
+                                          onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
+                                          onEdit={(data) => updateLead.mutate(data)}
+                                          onDelete={(id) => deleteLead.mutate(id)}
+                                          onSetRefreshKey={setMeetingRefreshKey}
+                                          trigger={
+                                            <Card
+                                              role="button"
+                                              tabIndex={0}
+                                              aria-label={`Abrir e editar ${lead.name}`}
+                                              className={`group cursor-pointer border-border/70 shadow-sm hover:border-primary/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-all duration-200 overflow-hidden ${snapshot.isDragging ? 'rotate-3 scale-105 shadow-xl' : ''}`}
+                                            >
                                           <div className="p-4 space-y-3 relative">
                                             <div className="flex justify-between items-start gap-2">
                                               <div className="flex-1 min-w-0">
@@ -715,20 +731,16 @@ export default function CRM() {
 
 
 
-                                              <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all">
-                                                <LeadDetailsDialog 
-                                                  lead={lead} 
-                                                  onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
-                                                  onEdit={(data) => updateLead.mutate(data)}
-                                                  onDelete={(id) => deleteLead.mutate(id)}
-                                                  onSetRefreshKey={setMeetingRefreshKey}
-                                                />
+                                              <div className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground group-hover:text-primary transition-colors">
+                                                <Pencil className="h-3 w-3" /> Gerenciar
                                               </div>
 
                                             </div>
                                           </div>
 
-                                        </Card>
+                                            </Card>
+                                          }
+                                        />
                                       </motion.div>
                                     </div>
                                   )}
@@ -1121,13 +1133,15 @@ function LeadDetailsDialog({
   onUpdate,
   onEdit,
   onDelete,
-  onSetRefreshKey
+  onSetRefreshKey,
+  trigger,
 }: { 
   lead: Lead, 
   onUpdate: () => void,
   onEdit?: (lead: Partial<Lead> & { id: string }) => void,
   onDelete?: (id: string) => void,
-  onSetRefreshKey?: React.Dispatch<React.SetStateAction<number>>
+  onSetRefreshKey?: React.Dispatch<React.SetStateAction<number>>,
+  trigger?: ReactNode,
 }) {
   const [note, setNote] = useState('');
   const { data: notes = [] } = useQuery({
@@ -1162,9 +1176,11 @@ function LeadDetailsDialog({
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/5">
-          <MessageSquare size={14} />
-        </Button>
+        {trigger ?? (
+          <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/5" aria-label={`Gerenciar ${lead.name}`}>
+            <MessageSquare size={14} />
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-w-3xl p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
         <div className="flex h-[600px]">

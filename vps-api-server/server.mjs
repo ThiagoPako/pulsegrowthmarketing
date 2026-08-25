@@ -191,7 +191,7 @@ async function ensureCrmLeadsColumns() {
           }
         }
 
-        // Atualizar Constraint de Status para incluir 'fridge'
+        // Atualizar constraint para manter todos os estágios disponíveis no Kanban.
         const { rows: constraints } = await pool.query(`
           SELECT conname 
           FROM pg_constraint c 
@@ -208,7 +208,7 @@ async function ensureCrmLeadsColumns() {
         await pool.query(`
           ALTER TABLE crm_leads 
           ADD CONSTRAINT crm_leads_status_check 
-          CHECK (status IN ('lead', 'contacted', 'meeting', 'contracted', 'lost', 'recovery_followup_1', 'recovery_followup_2', 'fridge'))
+          CHECK (status IN ('lead', 'contacted', 'meeting', 'contracted', 'disqualified', 'lost', 'recovery_followup_1', 'recovery_followup_2', 'fridge'))
         `).catch(() => {});
       } catch (err) {
         console.error('ensureCrmLeadsColumns error:', err);

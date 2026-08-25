@@ -10025,49 +10025,138 @@ app.delete('/api/upload', express.json(), (req, res) => {
   }
 });
 
+// Busca REAL de empresas via OpenStreetMap (Overpass API) — sem chave de API.
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
+
+const NICHE_OSM_FILTERS = {
+  varejo: ['["shop"]'],
+  saude: ['["amenity"~"clinic|doctors|dentist|pharmacy|hospital|veterinary"]', '["healthcare"]'],
+  aliment: ['["amenity"~"restaurant|cafe|fast_food|bar|ice_cream|pub"]', '["shop"~"bakery|butcher|confectionery|supermarket"]'],
+  serviços: ['["office"]', '["shop"~"hairdresser|beauty|laundry|travel_agency"]', '["amenity"~"gym|fitness_centre"]'],
+  indústria: ['["man_made"="works"]', '["industrial"]', '["landuse"="industrial"]["name"]'],
+  construção: ['["shop"~"hardware|doityourself|trade|building_materials"]', '["craft"~"builder|carpenter|electrician|plumber"]'],
+  agro: ['["shop"~"agrarian|farm"]', '["craft"="agricultural_engines"]', '["landuse"="farmyard"]["name"]'],
+  automotiv: ['["shop"~"car|car_repair|car_parts|tyres|motorcycle"]', '["amenity"="fuel"]'],
+  all: ['["shop"]', '["office"]', '["craft"]', '["amenity"~"restaurant|cafe|fast_food|bar|clinic|doctors|dentist|pharmacy|veterinary|fuel|bank|gym"]'],
+};
+
+const normalizeText = (v) => String(v || '')
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase().trim();
+
+async function runOverpass(query) {
+  let lastError = null;
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 30000);
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'PulseGrowthMarketing/1.0 (CRM lead harvest)',
+        },
+        body: new URLSearchParams({ data: query }).toString(),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!response.ok) {
+        lastError = new Error(`Overpass ${response.status}`);
+        continue;
+      }
+      return await response.json();
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('Falha ao consultar a base de empresas');
+}
+
+function osmElementToCompany(el) {
+  const tags = el.tags || {};
+  const name = tags.name || tags['operator'] || tags['brand'];
+  if (!name) return null;
+
+  const atuacao = tags.shop || tags.amenity || tags.office || tags.craft || tags.healthcare || tags.industrial || 'Empresa';
+  const enderecoParts = [
+    [tags['addr:street'], tags['addr:housenumber']].filter(Boolean).join(', '),
+    tags['addr:suburb'] || tags['addr:neighbourhood'],
+    tags['addr:city'],
+  ].filter(Boolean);
+
+  return {
+    id: `${el.type}/${el.id}`,
+    razao_social: name,
+    contato: tags['contact:person'] || tags.operator || name,
+    email: tags.email || tags['contact:email'] || '',
+    telefone: tags.phone || tags['contact:phone'] || tags['contact:mobile'] || '',
+    atuacao: String(atuacao).replace(/_/g, ' '),
+    endereco: enderecoParts.join(' - ') || tags['addr:full'] || '',
+    website: tags.website || tags['contact:website'] || '',
+    cidade: tags['addr:city'] || '',
+    lat: el.lat ?? el.center?.lat ?? null,
+    lon: el.lon ?? el.center?.lon ?? null,
+  };
+}
+
 app.post('/api/crm/harvest/search', async (req, res) => {
   try {
-    const { city, niche, min_capital } = req.body;
-    
-    // Dataset simulado (Mock) conforme solicitado no plano
-    const mockCompanies = [
-      { id: '1', razao_social: 'Engenharia de Alimentos S.A.', contato: 'Joana Silva', email: 'contato@engalimentos.com.br', telefone: '62998887766', atuacao: 'Indústria Alimentícia', endereco: 'Rua das Indústrias, 45 - Setor Industrial', capital_social: 1500000, cidade: 'Minaçu' },
-      { id: '2', razao_social: 'Supermercado Central', contato: 'Pedro Oliveira', email: 'vendas@central.com.br', telefone: '6233774411', atuacao: 'Varejo', endereco: 'Av. Brasil, 1020 - Centro', capital_social: 500000, cidade: 'Uruaçu' },
-      { id: '3', razao_social: 'Construtora Vale do Sol', contato: 'Marcos Santos', email: 'diretoria@valedosol.com', telefone: '6298112233', atuacao: 'Construção Civil', endereco: 'Rua das Flores, s/n', capital_social: 2500000, cidade: 'Minaçu' },
-      { id: '4', razao_social: 'Agropecuária Rebanho Forte', contato: 'Zeca Boiadeiro', email: 'contato@rebanhoforte.agr.br', telefone: '6299114455', atuacao: 'Agronegócio', endereco: 'Fazenda Rebanho, KM 12', capital_social: 5000000, cidade: 'Uruaçu' },
-      { id: '5', razao_social: 'Oficina do Grau', contato: 'Beto Mecânico', email: 'oficinagrau@gmail.com', telefone: '6233558899', atuacao: 'Serviços Automotivos', endereco: 'Av. dos Operários, 300', capital_social: 120000, cidade: 'Minaçu' },
-      { id: '6', razao_social: 'Clínica Sorriso Aberto', contato: 'Dra. Maria Clara', email: 'agendamento@sorrisoaberto.com', telefone: '6298556622', atuacao: 'Saúde', endereco: 'Rua Médica, 10', capital_social: 800000, cidade: 'Uruaçu' },
-    ];
+    const { city, location, niche, term, limit } = req.body || {};
 
-    const { location, term } = req.body || {};
-    const norm = (v) => String(v || '')
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase().trim();
+    const areaName = String(location || '').trim() || (city && city !== 'all' ? String(city).trim() : '');
+    if (!areaName) {
+      return res.status(400).json({ error: 'Informe a cidade ou a localização para buscar empresas reais.' });
+    }
 
-    let filtered = mockCompanies;
-    if (city && city !== 'all') filtered = filtered.filter(c => norm(c.cidade) === norm(city));
-    if (location) {
-      const loc = norm(location);
-      filtered = filtered.filter(c => norm(c.cidade).includes(loc) || norm(c.endereco).includes(loc));
-    }
-    if (niche && niche !== 'all') {
-      const n = norm(niche);
-      filtered = filtered.filter(c => norm(c.atuacao).includes(n) || norm(c.razao_social).includes(n));
-    }
+    const filters = NICHE_OSM_FILTERS[niche] || NICHE_OSM_FILTERS.all;
+    const escapedArea = areaName.replace(/"/g, '\\"');
+    const body = filters
+      .map(f => `  node${f}(area.searchArea);\n  way${f}(area.searchArea);`)
+      .join('\n');
+
+    const query = `[out:json][timeout:25];
+area["name"="${escapedArea}"]["boundary"="administrative"]->.searchArea;
+(
+${body}
+);
+out center ${Math.min(Number(limit) || 120, 250)};`;
+
+    const json = await runOverpass(query);
+    const elements = Array.isArray(json?.elements) ? json.elements : [];
+
+    let companies = elements.map(osmElementToCompany).filter(Boolean);
+
+    // Deduplica por nome + endereço
+    const seen = new Set();
+    companies = companies.filter(c => {
+      const key = `${normalizeText(c.razao_social)}|${normalizeText(c.endereco)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
     if (term) {
-      const t = norm(term);
-      filtered = filtered.filter(c =>
-        norm(c.razao_social).includes(t) || norm(c.atuacao).includes(t) || norm(c.contato).includes(t)
+      const t = normalizeText(term);
+      companies = companies.filter(c =>
+        normalizeText(c.razao_social).includes(t) ||
+        normalizeText(c.atuacao).includes(t) ||
+        normalizeText(c.endereco).includes(t)
       );
     }
-    if (min_capital) filtered = filtered.filter(c => c.capital_social >= Number(min_capital));
 
-    res.json({ data: filtered });
+    companies.sort((a, b) => Number(Boolean(b.telefone)) - Number(Boolean(a.telefone)));
+    companies = companies.map(c => ({ ...c, cidade: c.cidade || areaName }));
 
+    res.json({ data: companies, source: 'openstreetmap', area: areaName, total: companies.length });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[crm:harvest] error:', error);
+    res.status(502).json({ error: error.message || 'Falha ao consultar a base pública de empresas' });
   }
 });
+
 
 // Cron-like task for CRM meeting reminders
 setInterval(async () => {

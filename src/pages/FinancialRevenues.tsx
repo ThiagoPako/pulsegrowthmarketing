@@ -173,17 +173,42 @@ export default function FinancialRevenues() {
     if (selectedMonth < '2026-04') return;
     if (filtered.length === 0 && clients.length > 0 && contracts.length > 0) {
       autoGenRef.current = selectedMonth;
-      generateMonthlyRevenues(selectedMonth).then(count => {
-        if (count > 0) toast.success(`${count} receitas geradas automaticamente`);
+      generateMonthlyRevenues(selectedMonth).then(({ inserted }) => {
+        if (inserted > 0) toast.success(`${inserted} receitas geradas automaticamente`);
       });
     }
   }, [selectedMonth, loading, filtered.length, clients.length, contracts.length]);
 
   const handleGenerate = async () => {
     autoGenRef.current = selectedMonth;
-    const count = await generateMonthlyRevenues(selectedMonth);
-    toast.success(`${count} receitas geradas`);
+    const { inserted, skipped, failed } = await generateMonthlyRevenues(selectedMonth);
+
+    if (inserted > 0) {
+      toast.success(`${inserted} receita(s) gerada(s)`);
+    } else {
+      toast.info('Nenhuma receita nova para gerar neste mês');
+    }
+
+    if (failed.length > 0) {
+      toast.error(`${failed.length} receita(s) falharam ao ser criadas`, {
+        description: failed.slice(0, 5).map(f => `${f.client}: ${f.reason}`).join(' • '),
+        duration: 12000,
+      });
+    }
+
+    if (skipped.length > 0) {
+      toast.warning(`${skipped.length} cliente(s) ativo(s) ficaram de fora — organize o cadastro`, {
+        description: skipped.slice(0, 8).map(s => `${s.client} (${s.reason})`).join(' • ')
+          + (skipped.length > 8 ? ` e mais ${skipped.length - 8}...` : ''),
+        duration: 20000,
+        action: {
+          label: 'Ver contratos',
+          onClick: () => navigate('/financeiro/contratos'),
+        },
+      });
+    }
   };
+
 
   const handleCreateRevenue = async () => {
     if (!newRev.amount || !newRev.due_date) {

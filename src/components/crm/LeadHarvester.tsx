@@ -37,6 +37,13 @@ interface Company {
   score?: number;
   potencial_mensal?: number;
   tem_contato?: boolean;
+  cnpj?: string;
+  decisor?: string;
+  decisor_cargo?: string;
+  socios?: string[];
+  porte?: string;
+  capital_social?: number | null;
+  fontes?: string[];
 }
 
 interface HarvestResult {

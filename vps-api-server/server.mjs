@@ -10148,7 +10148,13 @@ out center ${Math.min(Number(limit) || 120, 250)};`;
       return true;
     });
 
+    if (locationFilter) {
+      const l = normalizeText(locationFilter);
+      companies = companies.filter(c => normalizeText(c.endereco).includes(l));
+    }
+
     if (term) {
+
       const t = normalizeText(term);
       companies = companies.filter(c =>
         normalizeText(c.razao_social).includes(t) ||

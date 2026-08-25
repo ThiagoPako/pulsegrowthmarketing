@@ -5742,6 +5742,74 @@ function isCrmLeadManagementPayload(data) {
   return Object.keys(data).some((key) => restrictedFields.has(key));
 }
 
+/** Estágios válidos do CRM (espelha a CHECK constraint de crm_leads.status). */
+const CRM_VALID_STAGES = new Set([
+  'lead', 'contacted', 'meeting', 'contracted', 'disqualified',
+  'lost', 'recovery_followup_1', 'recovery_followup_2', 'fridge',
+]);
+
+/** Estágios cuja entrada/saída exige permissão elevada (admin/social_media). */
+const CRM_PRIVILEGED_STAGES = new Set(['contracted']);
+
+/**
+ * Valida a movimentação de um lead entre estágios.
+ * Lança Error com .statusCode para ser traduzido em resposta HTTP.
+ */
+async function validateCrmStageTransition({ leadId, nextStatus, payload, user }) {
+  if (!CRM_VALID_STAGES.has(nextStatus)) {
+    const err = new Error(`Estágio inválido: "${nextStatus}".`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (!leadId) {
+    const err = new Error('Movimentação de estágio exige o ID do lead.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const { rows } = await pool.query(
+    'SELECT id, status, contract_value, meeting_date, meeting_time FROM crm_leads WHERE id = $1',
+    [leadId]
+  );
+  const current = rows[0];
+  if (!current) {
+    const err = new Error('Lead não encontrado.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  if (current.status === nextStatus) return; // no-op, nada a validar
+
+  const isPrivilegedMove =
+    CRM_PRIVILEGED_STAGES.has(nextStatus) || CRM_PRIVILEGED_STAGES.has(current.status);
+  if (isPrivilegedMove && !(await isAdminUser(user))) {
+    const err = new Error('Apenas admin ou social_media podem mover leads de/para "Contratado".');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  if (nextStatus === 'contracted') {
+    const value = Number(payload?.contract_value ?? current.contract_value ?? 0);
+    if (!Number.isFinite(value) || value <= 0) {
+      const err = new Error('Defina um valor de contrato maior que zero antes de marcar como Contratado.');
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
+  if (nextStatus === 'meeting') {
+    const mDate = payload?.meeting_date ?? current.meeting_date;
+    const mTime = payload?.meeting_time ?? current.meeting_time;
+    if (!mDate || !mTime) {
+      const err = new Error('Agende data e horário antes de mover o lead para "Reunião".');
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+}
+
+
 
 // Generic query endpoint
 app.post('/api/db/query', async (req, res) => {
@@ -6123,7 +6191,18 @@ app.post('/api/db/query', async (req, res) => {
           if (isCrmLeadManagementPayload(data) && !(await isAdminUser(user))) {
             return res.status(403).json({ error: 'Apenas admin ou social_media podem editar este lead no CRM.' });
           }
+          if (data && typeof data === 'object' && data.status !== undefined) {
+            const leadId = filters?.find(f => f.column === 'id' && f.op === 'eq')?.value;
+            try {
+              await validateCrmStageTransition({ leadId, nextStatus: data.status, payload: data, user });
+            } catch (stageError) {
+              return res
+                .status(stageError.statusCode || 400)
+                .json({ error: stageError.message || 'Movimentação de estágio inválida.' });
+            }
+          }
         }
+
 
 
         const scopedData = scopeCity

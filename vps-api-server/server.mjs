@@ -10240,6 +10240,178 @@ area["name"~"^${escapedArea}$",i]["boundary"="administrative"](area.state)->.sea
   return resolved;
 }
 
+// ===================== Enriquecimento de contatos (multi-fonte) =====================
+// Fontes usadas, todas públicas e sem chave de API:
+//  1) OpenStreetMap (tags de contato) — base primária
+//  2) BrasilAPI / ReceitaWS (CNPJ) — sócios (decisor), telefone e e-mail oficiais
+//  3) Site oficial da empresa — varredura de tel:, mailto: e wa.me
+
+const ENRICH_CACHE = new Map();
+
+async function fetchJsonSafe(url, timeoutMs = 9000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, {
+      headers: { 'User-Agent': 'PulseGrowthMarketing/1.0 (CRM lead enrichment)' },
+      signal: controller.signal,
+    });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function extractCnpj(tags = {}) {
+  const raw = tags['ref:vatin'] || tags['ref:cnpj'] || tags['cnpj'] || tags['ref:CNPJ'] || '';
+  const digits = String(raw).replace(/\D/g, '').replace(/^55(?=\d{14}$)/, '');
+  return digits.length === 14 ? digits : '';
+}
+
+// Consulta o CNPJ e devolve o quadro societário (decisor) + contatos oficiais
+async function fetchCnpjData(cnpj) {
+  const data =
+    (await fetchJsonSafe(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`)) ||
+    (await fetchJsonSafe(`https://publica.cnpj.ws/cnpj/${cnpj}`));
+  if (!data) return null;
+
+  const socios = Array.isArray(data.qsa) ? data.qsa : (data.socios || []);
+  const principal = socios[0] || null;
+  const ddd = data.ddd_telefone_1 || '';
+  const telefone = ddd
+    ? String(ddd)
+    : [data.ddd_1, data.telefone_1].filter(Boolean).join('');
+
+  return {
+    cnpj,
+    razao_social_oficial: data.razao_social || data.nome || '',
+    decisor: principal?.nome_socio || principal?.nome || '',
+    decisor_cargo: principal?.qualificacao_socio || principal?.qualificacao || 'Sócio / Responsável',
+    socios: socios.slice(0, 5).map(s => s.nome_socio || s.nome).filter(Boolean),
+    telefones: [telefone, data.ddd_telefone_2].filter(Boolean).map(String),
+    email: data.email || '',
+    capital_social: data.capital_social || null,
+    porte: data.porte || data.descricao_porte || '',
+    abertura: data.data_inicio_atividade || data.data_abertura || '',
+  };
+}
+
+// Varre o site oficial atrás de telefone, e-mail e WhatsApp de contato direto
+async function scrapeSiteContacts(website) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 9000);
+  try {
+    const url = /^https?:\/\//i.test(website) ? website : `https://${website}`;
+    const resp = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PulseGrowthBot/1.0)' },
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+    if (!resp.ok) return null;
+    const html = (await resp.text()).slice(0, 400000);
+
+    const emails = Array.from(html.matchAll(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g))
+      .map(m => m[0])
+      .filter(e => !/\.(png|jpe?g|gif|svg|webp)$/i.test(e))
+      .slice(0, 3);
+
+    const tels = Array.from(html.matchAll(/tel:\+?([\d\s().-]{8,20})/gi))
+      .map(m => m[1].trim())
+      .slice(0, 3);
+
+    const whats = Array.from(html.matchAll(/(?:wa\.me|api\.whatsapp\.com\/send\?phone=)\/?(\d{10,15})/gi))
+      .map(m => m[1])
+      .slice(0, 3);
+
+    if (!emails.length && !tels.length && !whats.length) return null;
+    return { emails, telefones: [...tels, ...whats], whatsapp: whats[0] || '' };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function enrichCompany(company) {
+  const cacheKey = company.id;
+  if (ENRICH_CACHE.has(cacheKey)) return { ...company, ...ENRICH_CACHE.get(cacheKey) };
+
+  const patch = { fontes: ['openstreetmap'] };
+
+  if (company.cnpj) {
+    const cnpjData = await fetchCnpjData(company.cnpj);
+    if (cnpjData) {
+      patch.fontes.push('receita-federal');
+      patch.decisor = cnpjData.decisor || '';
+      patch.decisor_cargo = cnpjData.decisor_cargo || '';
+      patch.socios = cnpjData.socios;
+      patch.capital_social = cnpjData.capital_social;
+      patch.porte = cnpjData.porte;
+      patch.razao_social_oficial = cnpjData.razao_social_oficial;
+      if (!company.email && cnpjData.email) patch.email = cnpjData.email;
+      if (cnpjData.telefones.length) {
+        patch.telefones = Array.from(new Set([...(company.telefones || []), ...cnpjData.telefones]));
+      }
+    }
+  }
+
+  const jaTemContato = Boolean(company.telefone || company.email);
+  if (!jaTemContato && company.website) {
+    const site = await scrapeSiteContacts(company.website);
+    if (site) {
+      patch.fontes.push('site-oficial');
+      if (site.emails.length && !company.email) patch.email = site.emails[0];
+      if (site.telefones.length) {
+        patch.telefones = Array.from(new Set([...(patch.telefones || company.telefones || []), ...site.telefones]));
+      }
+    }
+  }
+
+  if (patch.telefones?.length) {
+    patch.telefone = company.telefone || patch.telefones[0];
+    patch.whatsapp = company.whatsapp || toWhatsappLink(patch.telefone);
+  }
+
+  patch.contato = patch.decisor || company.contato;
+  patch.tem_contato = Boolean(patch.telefone || company.telefone || patch.email || company.email);
+  patch.score = Math.min(
+    100,
+    (company.score || 0) + (patch.decisor ? 15 : 0) + (patch.telefone && !company.telefone ? 20 : 0) + (patch.email && !company.email ? 10 : 0)
+  );
+
+  ENRICH_CACHE.set(cacheKey, patch);
+  return { ...company, ...patch };
+}
+
+// Enriquecimento com paralelismo controlado (evita bloqueio das APIs públicas)
+async function enrichCompanies(companies, maxItems = 80, concurrency = 6) {
+  const alvo = companies
+    .map((c, index) => ({ c, index }))
+    .filter(({ c }) => c.cnpj || (!c.tem_contato && c.website))
+    .slice(0, maxItems);
+
+  const out = [...companies];
+  let cursor = 0;
+
+  const worker = async () => {
+    while (cursor < alvo.length) {
+      const item = alvo[cursor++];
+      try {
+        out[item.index] = await enrichCompany(item.c);
+      } catch (err) {
+        console.warn('[crm:harvest] enrich falhou:', err.message);
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, alvo.length) }, worker));
+  return out;
+}
+
+
 app.post('/api/crm/harvest/search', async (req, res) => {
   try {
     const { city, location, niche, term, limit, state, onlyWithContact } = req.body || {};

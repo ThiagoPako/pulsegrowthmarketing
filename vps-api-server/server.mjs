@@ -1275,6 +1275,48 @@ ensureScheduledRecordingsTable().catch((error) => {
   console.error('Failed to ensure scheduled_recordings table:', error);
 });
 
+/**
+ * Planos personalizados ("Plano Especial") permitem metas fracionadas por semana
+ * (ex.: 6 reels/mês = 1.5 por semana). As colunas nasceram como INTEGER, o que
+ * provoca: invalid input syntax for type integer: "1.5".
+ * Convertemos para NUMERIC(6,2) de forma idempotente.
+ */
+let clientFractionalGoalsPromise;
+async function ensureClientFractionalGoalColumns() {
+  if (!clientFractionalGoalsPromise) {
+    clientFractionalGoalsPromise = (async () => {
+      const columns = ['weekly_reels', 'weekly_creatives', 'weekly_stories', 'weekly_goal'];
+      for (const column of columns) {
+        await pool.query(
+          `ALTER TABLE clients ALTER COLUMN ${column} TYPE NUMERIC(6,2) USING ${column}::numeric`
+        ).catch((error) => {
+          // 42804/42P16 etc.: coluna já é numérica ou não existe — não deve derrubar a API
+          if (!/does not exist|cannot be cast|already/i.test(error.message)) {
+            console.warn(`[clients] falha ao converter ${column}:`, error.message);
+          }
+        });
+      }
+    })().catch((error) => {
+      clientFractionalGoalsPromise = null;
+      throw error;
+    });
+  }
+  return clientFractionalGoalsPromise;
+}
+
+ensureClientFractionalGoalColumns().catch((error) => {
+  console.error('Failed to ensure fractional client goals:', error);
+});
+
+/** Converte metas semanais para número, aceitando "1,5" e "1.5". */
+function parseWeeklyGoal(value, fallback = 0) {
+  if (value === null || value === undefined || value === '') return fallback;
+  const parsed = Number(String(value).replace(',', '.'));
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return Math.round(parsed * 100) / 100;
+}
+
+
 // ─── JWT Config ─────────────────────────────────────────────
 const JWT_SECRET = process.env.JWT_SECRET || 'CHANGE_ME_IN_PRODUCTION';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30d';

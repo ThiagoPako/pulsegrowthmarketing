@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { generateBriefingPdf } from '@/lib/briefingPdf';
+import { BRIEFING_FIELD_LABELS, formatBriefingValue, getBriefingFieldLabel } from '@/lib/briefingLabels';
 
 const VERSIONS_API = 'https://agenciapulse.tech/api/briefing-versions';
 
@@ -29,6 +30,7 @@ interface Props {
 
 // Mesma legenda de campos usada em ClientBriefingView
 const FIELD_MAP: Record<string, string> = {
+  ...BRIEFING_FIELD_LABELS,
   ownerName: 'Responsável', niche: 'Nicho', mainDifferential: 'Principal Diferencial',
   productsServices: 'Produtos / Serviços', businessGoals: 'Objetivos do Negócio',
   attendanceType: 'Forma de Atendimento', targetCities: 'Cidades-alvo',
@@ -48,10 +50,7 @@ const FIELD_MAP: Record<string, string> = {
 };
 
 const fmtVal = (v: any): string => {
-  if (v == null || v === '') return '—';
-  if (Array.isArray(v)) return v.length ? v.join(', ') : '—';
-  if (typeof v === 'boolean') return v ? 'Sim' : 'Não';
-  return String(v);
+  return formatBriefingValue(v);
 };
 
 const collectKeys = (a: any, b: any): string[] => {
@@ -192,7 +191,7 @@ export default function BriefingVersionsDialog({ open, onOpenChange, clientId, c
                       className={`grid grid-cols-2 gap-2 rounded-lg border p-2 ${changed ? 'border-primary/50 bg-primary/5' : 'border-border'}`}
                     >
                       <div className="col-span-2 text-[10px] uppercase tracking-wider text-muted-foreground flex items-center justify-between">
-                        <span>{FIELD_MAP[k] || k}</span>
+                        <span>{FIELD_MAP[k] || getBriefingFieldLabel(k)}</span>
                         {changed && <Badge className="text-[9px] px-1.5 py-0">alterado</Badge>}
                       </div>
                       <div className="text-xs whitespace-pre-line">{va}</div>

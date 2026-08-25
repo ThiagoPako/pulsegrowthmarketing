@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge';
+import { formatBriefingValue, getBriefingFieldLabel } from '@/lib/briefingLabels';
 
 /** Rótulos legíveis dos canais de marketing salvos no briefing do provedor. */
 const CHANNEL_LABELS: Record<string, string> = {
@@ -33,6 +34,15 @@ const FIELDS: { key: string; label: string }[] = [
   { key: 'currentDifficulties', label: 'Dificuldades atuais' },
   { key: 'growthGoals', label: 'Metas de crescimento' },
   { key: 'socialLinks', label: 'Redes sociais' },
+  { key: 'instagramExists', label: 'Já possui Instagram?' },
+  { key: 'instagramProfile', label: 'Perfil ou link do Instagram' },
+  { key: 'instagramLogin', label: 'Instagram — login' },
+  { key: 'instagramPassword', label: 'Instagram — senha' },
+  { key: 'facebookPageExists', label: 'Já possui página no Facebook?' },
+  { key: 'facebookPage', label: 'Nome ou link da página do Facebook' },
+  { key: 'facebookLogin', label: 'Facebook — login' },
+  { key: 'facebookPassword', label: 'Facebook — senha' },
+  { key: 'otherAccesses', label: 'Outros acessos e observações' },
   { key: 'visualIdentity', label: 'Identidade visual' },
   { key: 'additionalNotes', label: 'Observações adicionais' },
 ];
@@ -87,7 +97,7 @@ export function ProviderBriefingSummary({ data, className }: ProviderBriefingSum
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
               Vídeos com a equipe
             </p>
-            <p className="text-sm mt-0.5">{TEAM_VIDEO_LABELS[d.teamVideos] || d.teamVideos}</p>
+             <p className="text-sm mt-0.5">{TEAM_VIDEO_LABELS[d.teamVideos] || formatBriefingValue(d.teamVideos)}</p>
           </div>
         )}
 
@@ -108,8 +118,8 @@ export function ProviderBriefingSummary({ data, className }: ProviderBriefingSum
 
         {answered.map((f) => (
           <div key={f.key} className="rounded-lg border border-border bg-muted/40 p-3">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{f.label}</p>
-            <p className="text-sm mt-0.5 whitespace-pre-wrap break-words">{String(d[f.key])}</p>
+             <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{f.label || getBriefingFieldLabel(f.key)}</p>
+             <p className="text-sm mt-0.5 whitespace-pre-wrap break-words">{formatBriefingValue(d[f.key])}</p>
           </div>
         ))}
       </div>

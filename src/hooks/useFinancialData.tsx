@@ -192,17 +192,16 @@ export function useFinancialData() {
     if (logRes.data) setActivityLog(logRes.data as any);
 
     // Auto-mark overdue revenues: if due_date < today and status is still 'prevista', update to 'em_atraso'
+    if (rRes.error) console.error('[useFinancialData] revenues fetch error:', rRes.error);
     if (rRes.data) {
       const today = new Date().toISOString().split('T')[0];
       const revenueData = rRes.data as any[];
 
-      const uniqueRevenues = deduplicateRevenues(revenueData)
-        .filter((r: any) => normalizeDate(r.reference_month) >= '2026-04-01' || r.status === 'recebida');
+      const uniqueRevenues = deduplicateRevenues(revenueData);
 
       const overdueIds: string[] = [];
-      const APRIL_2026 = '2026-04-01';
       for (const r of uniqueRevenues) {
-        if (r.status === 'prevista' && r.due_date && normalizeDate(r.due_date) < today && normalizeDate(r.reference_month) >= APRIL_2026) {
+        if (r.status === 'prevista' && r.due_date && normalizeDate(r.due_date) < today) {
           overdueIds.push(r.id);
         }
       }
@@ -217,11 +216,18 @@ export function useFinancialData() {
         if (updated.data) {
           const deduplicated = deduplicateRevenues(updated.data as any[]);
           setRevenues(deduplicated.filter(r => activeClientIds.has(r.client_id)));
+        } else {
+          setRevenues(
+            uniqueRevenues
+              .map(r => (overdueIds.includes(r.id) ? { ...r, status: 'em_atraso' } : r))
+              .filter(r => activeClientIds.has(r.client_id))
+          );
         }
       } else {
         setRevenues(uniqueRevenues.filter(r => activeClientIds.has(r.client_id)));
       }
     }
+
 
     setLoading(false);
   }, []);
@@ -279,10 +285,16 @@ export function useFinancialData() {
 
   const deleteContract = async (id: string) => {
     const contract = contracts.find(c => c.id === id);
-    await supabase.from('financial_contracts').delete().eq('id', id);
+    const { error } = await supabase.from('financial_contracts').delete().eq('id', id);
+    if (error) {
+      console.error('[useFinancialData] deleteContract error:', error);
+      return false;
+    }
     await logActivity('exclusão', 'contrato', `Excluiu contrato - R$ ${Number(contract?.contract_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id);
     await fetchAll();
+    return true;
   };
+
 
   // Revenue CRUD
   const addRevenue = async (r: Partial<Revenue>) => {
@@ -575,7 +587,11 @@ export function useFinancialData() {
 
   const deleteExpense = async (id: string) => {
     const expense = expenses.find(e => e.id === id);
-    await supabase.from('expenses').delete().eq('id', id);
+    const { error } = await supabase.from('expenses').delete().eq('id', id);
+    if (error) {
+      console.error('[useFinancialData] deleteExpense error:', error);
+      return false;
+    }
 
     // Remove linked cash movement
     const { data: linked } = await supabase
@@ -590,7 +606,9 @@ export function useFinancialData() {
 
     await logActivity('exclusão', 'despesa', `Excluiu despesa - R$ ${Number(expense?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${expense?.description}`, id);
     await fetchAll();
+    return true;
   };
+
 
   // Categories
   const addCategory = async (name: string) => {

@@ -64,8 +64,12 @@ export default function FinancialContracts() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Excluir contrato?')) { await deleteContract(id); toast.success('Contrato excluído'); }
+    if (!confirm('Excluir contrato?')) return;
+    const ok = await deleteContract(id);
+    if (ok) toast.success('Contrato excluído');
+    else toast.error('Não foi possível excluir o contrato');
   };
+
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 

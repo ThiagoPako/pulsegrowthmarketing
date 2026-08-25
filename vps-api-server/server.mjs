@@ -10166,6 +10166,10 @@ function osmElementToCompany(el, niche) {
   return {
     id: `${el.type}/${el.id}`,
     razao_social: name,
+    cnpj: extractCnpj(tags),
+    decisor: tags['contact:person'] || '',
+    decisor_cargo: tags['contact:person'] ? 'Responsável (OSM)' : '',
+    fontes: ['openstreetmap'],
     contato: tags['contact:person'] || tags.operator || name,
     email,
     telefone,

@@ -132,6 +132,10 @@ export function LeadHarvester() {
   const insertLead = async (company: Company) => {
     if (!user?.id) throw new Error('Sessão expirada');
     const detalhes = [
+      company.decisor ? `Decisor: ${company.decisor}${company.decisor_cargo ? ` (${company.decisor_cargo})` : ''}` : '',
+      company.socios?.length ? `Sócios: ${company.socios.join(' | ')}` : '',
+      company.cnpj ? `CNPJ: ${company.cnpj}` : '',
+      company.porte ? `Porte: ${company.porte}` : '',
       `Endereço: ${company.endereco || 'não informado'}`,
       company.bairro ? `Bairro: ${company.bairro}` : '',
       company.cep ? `CEP: ${company.cep}` : '',
@@ -142,6 +146,7 @@ export function LeadHarvester() {
       company.facebook ? `Facebook: ${company.facebook}` : '',
       company.horario ? `Horário: ${company.horario}` : '',
       company.maps_url ? `Mapa: ${company.maps_url}` : '',
+      company.fontes?.length ? `Fontes: ${company.fontes.join(', ')}` : '',
       `Potencial estimado: ${brl(company.potencial_mensal)}/mês`,
     ].filter(Boolean).join('\n');
 

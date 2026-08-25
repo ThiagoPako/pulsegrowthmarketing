@@ -6191,7 +6191,18 @@ app.post('/api/db/query', async (req, res) => {
           if (isCrmLeadManagementPayload(data) && !(await isAdminUser(user))) {
             return res.status(403).json({ error: 'Apenas admin ou social_media podem editar este lead no CRM.' });
           }
+          if (data && typeof data === 'object' && data.status !== undefined) {
+            const leadId = filters?.find(f => f.column === 'id' && f.op === 'eq')?.value;
+            try {
+              await validateCrmStageTransition({ leadId, nextStatus: data.status, payload: data, user });
+            } catch (stageError) {
+              return res
+                .status(stageError.statusCode || 400)
+                .json({ error: stageError.message || 'Movimentação de estágio inválida.' });
+            }
+          }
         }
+
 
 
         const scopedData = scopeCity

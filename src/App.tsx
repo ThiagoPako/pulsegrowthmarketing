@@ -43,6 +43,7 @@ const FinancialContracts = lazy(() => import("@/pages/FinancialContracts"));
 const ContractsManagement = lazy(() => import("@/pages/ContractsManagement"));
 const FinancialRevenues = lazy(() => import("@/pages/FinancialRevenues"));
 const FinancialExpenses = lazy(() => import("@/pages/FinancialExpenses"));
+const FinancialInvestments = lazy(() => import("@/pages/FinancialInvestments"));
 const FinancialDelinquency = lazy(() => import("@/pages/FinancialDelinquency"));
 const FinancialReports = lazy(() => import("@/pages/FinancialReports"));
 const FinancialSettings = lazy(() => import("@/pages/FinancialSettings"));
@@ -254,6 +255,7 @@ function AppRoutes() {
         <Route path="/financeiro/contratos" element={<ProtectedRoute><FinancialContracts /></ProtectedRoute>} />
         <Route path="/financeiro/receitas" element={<ProtectedRoute><FinancialRevenues /></ProtectedRoute>} />
         <Route path="/financeiro/despesas" element={<ProtectedRoute><FinancialExpenses /></ProtectedRoute>} />
+        <Route path="/financeiro/investimentos" element={<ProtectedRoute><FinancialInvestments /></ProtectedRoute>} />
         <Route path="/financeiro/inadimplencia" element={<ProtectedRoute><FinancialDelinquency /></ProtectedRoute>} />
         <Route path="/financeiro/relatorios" element={<ProtectedRoute><FinancialReports /></ProtectedRoute>} />
         <Route path="/financeiro/configuracoes" element={<ProtectedRoute><FinancialSettings /></ProtectedRoute>} />

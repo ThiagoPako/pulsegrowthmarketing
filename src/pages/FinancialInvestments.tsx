@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useFinancialData, normalizeDate, type Expense } from '@/hooks/useFinancialData';
+import { supabase } from '@/lib/vpsDb';
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,18 +10,48 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Hammer, Plus, Pencil, Trash2, Layers, CalendarRange } from 'lucide-react';
+import { ArrowLeft, Hammer, Plus, Pencil, Trash2, Layers, CalendarRange, Info } from 'lucide-react';
 import { toast } from 'sonner';
 
 const ALL = '__all__';
 
+/** Categorias fixas de investimento em estrutura (não são categorias de despesa). */
+const CATEGORIES: { value: string; label: string }[] = [
+  { value: 'reforma', label: 'Reforma / Obra' },
+  { value: 'mao_de_obra', label: 'Mão de obra' },
+  { value: 'materiais', label: 'Materiais' },
+  { value: 'equipamentos', label: 'Equipamentos' },
+  { value: 'mobiliario', label: 'Mobiliário' },
+  { value: 'ponto_comercial', label: 'Ponto comercial' },
+  { value: 'tecnologia', label: 'Tecnologia / TI' },
+  { value: 'outros', label: 'Outros' },
+];
+
+const categoryLabel = (value: string) =>
+  CATEGORIES.find(c => c.value === value)?.label || value || '—';
+
 const currency = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+/** Normaliza datas vindas do banco (DATE ou ISO) para YYYY-MM-DD. */
+const normalizeDate = (value: string | null | undefined): string => {
+  if (!value) return '';
+  return String(value).slice(0, 10);
+};
+
+interface StructureInvestment {
+  id: string;
+  date: string;
+  amount: number;
+  category: string;
+  description: string | null;
+  responsible: string | null;
+}
 
 interface InvestmentForm {
   date: string;
   amount: number;
-  category_id: string;
+  category: string;
   description: string;
   responsible: string;
 }
@@ -29,14 +59,16 @@ interface InvestmentForm {
 const emptyForm = (): InvestmentForm => ({
   date: new Date().toISOString().split('T')[0],
   amount: 0,
-  category_id: '',
+  category: 'reforma',
   description: '',
   responsible: '',
 });
 
 export default function FinancialInvestments() {
   const navigate = useNavigate();
-  const { expenses, categories, addExpense, updateExpense, deleteExpense, loading } = useFinancialData();
+
+  const [items, setItems] = useState<StructureInvestment[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -44,45 +76,63 @@ export default function FinancialInvestments() {
   const [search, setSearch] = useState('');
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<Expense | null>(null);
+  const [editing, setEditing] = useState<StructureInvestment | null>(null);
   const [form, setForm] = useState<InvestmentForm>(emptyForm());
   const [saving, setSaving] = useState(false);
 
-  const categoryName = (id: string) => categories.find(c => c.id === id)?.name || '—';
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('structure_investments')
+      .select('*')
+      .order('date', { ascending: false });
+    if (error) {
+      console.error('[FinancialInvestments] load error:', error);
+      toast.error('Não foi possível carregar os investimentos');
+      setItems([]);
+    } else {
+      setItems(
+        (data || []).map((row: any) => ({
+          id: row.id,
+          date: normalizeDate(row.date),
+          amount: Number(row.amount || 0),
+          category: row.category || 'outros',
+          description: row.description ?? '',
+          responsible: row.responsible ?? '',
+        })),
+      );
+    }
+    setLoading(false);
+  }, []);
 
-  const investments = useMemo(
-    () =>
-      expenses
-        .filter(e => Boolean(e.structure_investment))
-        .map(e => ({ ...e, date: normalizeDate(e.date) }))
-        .sort((a, b) => (a.date < b.date ? 1 : -1)),
-    [expenses]
-  );
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return investments.filter(e => {
+    return items.filter(e => {
       if (from && e.date < from) return false;
       if (to && e.date > to) return false;
-      if (categoryFilter !== ALL && e.category_id !== categoryFilter) return false;
+      if (categoryFilter !== ALL && e.category !== categoryFilter) return false;
       if (term) {
-        const haystack = `${e.description || ''} ${e.responsible || ''} ${categoryName(e.category_id)}`.toLowerCase();
+        const haystack = `${e.description || ''} ${e.responsible || ''} ${categoryLabel(e.category)}`.toLowerCase();
         if (!haystack.includes(term)) return false;
       }
       return true;
     });
-  }, [investments, from, to, categoryFilter, search, categories]);
+  }, [items, from, to, categoryFilter, search]);
 
   const total = useMemo(() => filtered.reduce((s, e) => s + Number(e.amount || 0), 0), [filtered]);
-  const totalGeral = useMemo(() => investments.reduce((s, e) => s + Number(e.amount || 0), 0), [investments]);
+  const totalGeral = useMemo(() => items.reduce((s, e) => s + Number(e.amount || 0), 0), [items]);
 
   const byCategory = useMemo(() => {
     const map = new Map<string, number>();
-    filtered.forEach(e => map.set(e.category_id, (map.get(e.category_id) || 0) + Number(e.amount || 0)));
+    filtered.forEach(e => map.set(e.category, (map.get(e.category) || 0) + Number(e.amount || 0)));
     return Array.from(map.entries())
-      .map(([id, value]) => ({ id, name: categoryName(id), value }))
+      .map(([id, value]) => ({ id, name: categoryLabel(id), value }))
       .sort((a, b) => b.value - a.value);
-  }, [filtered, categories]);
+  }, [filtered]);
 
   const openNew = () => {
     setEditing(null);
@@ -90,12 +140,12 @@ export default function FinancialInvestments() {
     setDialogOpen(true);
   };
 
-  const openEdit = (e: Expense) => {
+  const openEdit = (e: StructureInvestment) => {
     setEditing(e);
     setForm({
-      date: normalizeDate(e.date),
+      date: e.date,
       amount: Number(e.amount || 0),
-      category_id: e.category_id,
+      category: e.category,
       description: e.description || '',
       responsible: e.responsible || '',
     });
@@ -103,33 +153,43 @@ export default function FinancialInvestments() {
   };
 
   const handleSave = async () => {
-    if (!form.category_id || !form.amount || !form.date) {
+    if (!form.category || !form.amount || !form.date) {
       toast.error('Preencha data, valor e categoria');
       return;
     }
     setSaving(true);
     const payload = {
-      ...form,
+      date: form.date,
       amount: Number(form.amount),
-      expense_type: 'pontual',
-      structure_investment: true,
+      category: form.category,
+      description: form.description || null,
+      responsible: form.responsible || null,
     };
-    const ok = editing ? await updateExpense(editing.id, payload as any) : await addExpense(payload as any);
+    const { error } = editing
+      ? await supabase.from('structure_investments').update(payload as any).eq('id', editing.id)
+      : await supabase.from('structure_investments').insert(payload as any);
     setSaving(false);
-    if (ok) {
-      toast.success(editing ? 'Investimento atualizado' : 'Investimento registrado');
-      setDialogOpen(false);
-      setEditing(null);
-      setForm(emptyForm());
-    } else {
+    if (error) {
+      console.error('[FinancialInvestments] save error:', error);
       toast.error('Não foi possível salvar o investimento');
+      return;
     }
+    toast.success(editing ? 'Investimento atualizado' : 'Investimento registrado');
+    setDialogOpen(false);
+    setEditing(null);
+    setForm(emptyForm());
+    load();
   };
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('Excluir este investimento?')) return;
-    const ok = await deleteExpense(id);
-    toast[ok ? 'success' : 'error'](ok ? 'Investimento excluído' : 'Erro ao excluir');
+    const { error } = await supabase.from('structure_investments').delete().eq('id', id);
+    if (error) {
+      toast.error('Erro ao excluir');
+      return;
+    }
+    toast.success('Investimento excluído');
+    load();
   };
 
   const clearFilters = () => {
@@ -161,6 +221,14 @@ export default function FinancialInvestments() {
       </div>
 
       <FinancialQuickNav />
+
+      <div className="flex items-start gap-2 rounded-lg border bg-muted/40 p-3 mb-4">
+        <Info size={14} className="text-primary mt-0.5 shrink-0" />
+        <p className="text-xs text-muted-foreground">
+          Registro apenas para controle patrimonial. <strong>Não gera despesa</strong> e não afeta o
+          fluxo de caixa nem os relatórios financeiros.
+        </p>
+      </div>
 
       {/* Totais */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
@@ -201,7 +269,7 @@ export default function FinancialInvestments() {
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>Todas</SelectItem>
-                {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -253,7 +321,7 @@ export default function FinancialInvestments() {
                     {e.date ? e.date.split('-').reverse().join('/') : '—'}
                   </TableCell>
                   <TableCell className="text-sm">{e.description || '—'}</TableCell>
-                  <TableCell className="text-sm">{categoryName(e.category_id)}</TableCell>
+                  <TableCell className="text-sm">{categoryLabel(e.category)}</TableCell>
                   <TableCell className="text-sm">{e.responsible || '—'}</TableCell>
                   <TableCell className="text-right font-semibold whitespace-nowrap">{currency(Number(e.amount || 0))}</TableCell>
                   <TableCell>
@@ -289,10 +357,10 @@ export default function FinancialInvestments() {
             </div>
             <div>
               <Label>Categoria</Label>
-              <Select value={form.category_id} onValueChange={v => setForm({ ...form, category_id: v })}>
+              <Select value={form.category} onValueChange={v => setForm({ ...form, category: v })}>
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

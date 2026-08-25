@@ -741,6 +741,22 @@ async function ensureWarehouseTables() {
       CREATE INDEX IF NOT EXISTS idx_warehouse_items_tag ON warehouse_items(tag_id);
       CREATE INDEX IF NOT EXISTS idx_warehouse_items_responsible ON warehouse_items(responsible_id);
       CREATE INDEX IF NOT EXISTS idx_warehouse_movements_item ON warehouse_movements(item_id);
+
+      -- Investimentos em estrutura: controle próprio, NÃO gera despesa
+      CREATE TABLE IF NOT EXISTS structure_investments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        date DATE NOT NULL DEFAULT CURRENT_DATE,
+        amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+        category TEXT NOT NULL DEFAULT 'outros',
+        description TEXT,
+        responsible TEXT,
+        city TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_structure_investments_date ON structure_investments(date);
+
       
       -- Add structure_investment column to expenses if not exists
       DO $$
@@ -5594,6 +5610,8 @@ const ALLOWED_TABLES = [
   'campaigns','campaign_slots',
   'story_editing_sessions','script_requests','manual_video_tasks','plan_promotions',
   'client_professionals','client_units','short_links','client_bio_links','client_bio_buttons',
+  'warehouse_items','warehouse_movements','structure_investments',
+
 
 
 ];
@@ -5880,6 +5898,12 @@ app.post('/api/db/query', async (req, res) => {
 
     if (safeTable === 'commercial_proposals' || safeTable === 'proposal_comments') {
       await ensureProposalTables();
+    }
+
+    if (safeTable === 'warehouse_items' || safeTable === 'warehouse_movements' || safeTable === 'structure_investments') {
+      await ensureWarehouseTables().catch((error) => {
+        console.warn('Could not ensure warehouse/structure tables:', error?.message || error);
+      });
     }
 
     if (safeTable === 'story_editing_sessions') {

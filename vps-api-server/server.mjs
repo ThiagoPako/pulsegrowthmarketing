@@ -10043,7 +10043,17 @@ const NICHE_OSM_FILTERS = {
   construção: ['["shop"~"hardware|doityourself|trade|building_materials"]', '["craft"~"builder|carpenter|electrician|plumber"]'],
   agro: ['["shop"~"agrarian|farm"]', '["craft"="agricultural_engines"]', '["landuse"="farmyard"]["name"]'],
   automotiv: ['["shop"~"car|car_repair|car_parts|tyres|motorcycle"]', '["amenity"="fuel"]'],
-  all: ['["shop"]', '["office"]', '["craft"]', '["amenity"~"restaurant|cafe|fast_food|bar|clinic|doctors|dentist|pharmacy|veterinary|fuel|bank|gym"]'],
+  all: [
+    '["shop"]',
+    '["office"]',
+    '["craft"]',
+    '["healthcare"]',
+    '["amenity"]["name"]',
+    '["tourism"~"hotel|motel|guest_house|apartment|hostel|attraction"]',
+    '["leisure"]["name"]',
+    '["building"~"commercial|retail|industrial"]["name"]',
+    '["company"]',
+  ],
 };
 
 const normalizeText = (v) => String(v || '')

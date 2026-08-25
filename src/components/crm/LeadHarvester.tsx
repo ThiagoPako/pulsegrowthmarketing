@@ -145,15 +145,20 @@ export function LeadHarvester() {
         <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
           <div className="space-y-2">
             <Label>Cidade base</Label>
-            <Select value={city} onValueChange={setCity}>
-              <SelectTrigger><SelectValue placeholder="Selecione a cidade" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as Cidades</SelectItem>
-                <SelectItem value="Minaçu">Minaçu</SelectItem>
-                <SelectItem value="Uruaçu">Uruaçu</SelectItem>
-              </SelectContent>
-            </Select>
+            <Input
+              placeholder="Ex.: Goiânia, Uruaçu, Minaçu..."
+              value={city === 'all' ? '' : city}
+              onChange={(e) => setCity(e.target.value.trim() ? e.target.value : 'all')}
+              list="harvest-city-suggestions"
+            />
+            <datalist id="harvest-city-suggestions">
+              <option value="Minaçu" />
+              <option value="Uruaçu" />
+              <option value="Goiânia" />
+              <option value="Brasília" />
+            </datalist>
           </div>
+
 
           <div className="space-y-2">
             <Label>Localização (cidade, bairro, rua)</Label>

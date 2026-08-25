@@ -6533,9 +6533,15 @@ app.post('/api/clients', async (req, res) => {
     res.json(rows[0]);
   } catch (e) {
     console.error('POST /api/clients error:', e);
+    // 23505 = violação de índice único (ex.: client_login repetido)
+    if (e?.code === '23505') {
+      const field = /client_login/i.test(e.detail || '') ? 'login do cliente' : 'campo único';
+      return res.status(409).json({ error: `Já existe um cliente com o mesmo ${field}. Altere o login e tente novamente.` });
+    }
     const status = e?.statusCode === 400 ? 400 : 500;
     res.status(status).json({ error: e.message });
   }
+
 });
 
 // ─── Pré-validação (dry-run) da transferência de cidade ─────

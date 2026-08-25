@@ -369,7 +369,11 @@ export default function FinancialExpenses() {
   const handleEdit = (e: Expense) => { setEditingExpense(e); setOpen(true); };
 
   const handleDeleteExpense = async (id: string) => {
-    if (confirm('Excluir despesa?')) { await deleteExpense(id); toast.success('Excluída'); }
+    if (confirm('Excluir despesa?')) {
+      const ok = await deleteExpense(id);
+      toast[ok ? 'success' : 'error'](ok ? 'Excluída' : 'Não foi possível excluir a despesa');
+    }
+
   };
 
   const handleAddCategory = async () => {

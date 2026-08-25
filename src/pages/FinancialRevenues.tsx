@@ -442,11 +442,25 @@ export default function FinancialRevenues() {
             size="sm" 
             variant="outline" 
             onClick={handleGenerate} 
+            disabled={processing}
             className="shadow-sm border-primary/20 text-primary hover:bg-primary/5 font-bold"
           >
-            <RefreshCw size={14} className="mr-1" /> Gerar Receitas do Mês
+            {processing ? <Loader2 size={14} className="mr-1 animate-spin" /> : <RefreshCw size={14} className="mr-1" />} Gerar Receitas do Mês
           </Button>
         </motion.div>
+        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleReprocess}
+            disabled={processing}
+            title="Recria as receitas faltantes e corrige valores/vencimentos das pendentes, sem duplicar lançamentos nem alterar receitas já recebidas"
+            className="shadow-sm border-amber-500/30 text-amber-600 hover:bg-amber-500/10 font-bold"
+          >
+            {processing ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Undo2 size={14} className="mr-1" />} Reprocessar Mês
+          </Button>
+        </motion.div>
+
         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
           <Button size="sm" onClick={() => setShowNewDialog(true)} className="shadow-sm bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white"><Plus size={14} className="mr-1" /> Nova Receita</Button>
         </motion.div>

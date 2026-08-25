@@ -20,8 +20,8 @@ interface Company {
   telefone: string;
   atuacao: string;
   endereco: string;
-  capital_social: number;
   cidade: string;
+  website?: string;
 }
 
 const NICHES = [
@@ -43,21 +43,22 @@ export function LeadHarvester() {
   const [location, setLocation] = useState('');
   const [niche, setNiche] = useState('all');
   const [term, setTerm] = useState('');
-  const [minCapital, setMinCapital] = useState('');
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [bulkLoading, setBulkLoading] = useState(false);
 
   const { data: companies = [], isLoading, refetch } = useQuery({
-    queryKey: ['lead_harvest', city, location, niche, term, minCapital],
+    queryKey: ['lead_harvest', city, location, niche, term],
     queryFn: async () => {
       const res = await vpsAuthedFetch('/crm/harvest/search', {
         method: 'POST',
-        body: JSON.stringify({ city, location, niche, term, min_capital: minCapital }),
+        body: JSON.stringify({ city, location, niche, term }),
       });
       const result = await res.json();
+      if (!res.ok) throw new Error(result?.error || 'Falha ao buscar empresas');
       return (result.data || []) as Company[];
     },
     enabled: false,
+    retry: false,
   });
 
   const selectedCompanies = useMemo(
@@ -66,7 +67,7 @@ export function LeadHarvester() {
   );
 
   const clearLeads = () => {
-    queryClient.setQueryData(['lead_harvest', city, location, niche, term, minCapital], []);
+    queryClient.setQueryData(['lead_harvest', city, location, niche, term], []);
     setSelected({});
     toast.info('Resultados da colheita limpos.');
   };
@@ -78,7 +79,7 @@ export function LeadHarvester() {
       company: company.razao_social,
       email: company.email,
       phone: company.telefone,
-      description: `Endereço: ${company.endereco}\nAtuação: ${company.atuacao}\nCapital Social: R$ ${Number(company.capital_social || 0).toLocaleString('pt-BR')}`,
+      description: `Endereço: ${company.endereco || 'não informado'}\nAtuação: ${company.atuacao}${company.website ? `\nSite: ${company.website}` : ''}`,
       city: company.cidade,
       status: 'lead',
       source_tag: 'colheita',
@@ -123,16 +124,25 @@ export function LeadHarvester() {
     setSelected(next);
   };
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (city === 'all' && !location.trim()) {
+      toast.error('Informe uma cidade ou localização para buscar empresas reais.');
+      return;
+    }
     setSelected({});
-    refetch();
+    const result = await refetch();
+    if (result.error) {
+      toast.error((result.error as Error).message);
+    } else if ((result.data || []).length === 0) {
+      toast.info('Nenhuma empresa encontrada com esses filtros.');
+    }
   };
 
   return (
     <div className="space-y-6">
       <Card className="p-6 bg-card/50 border-none shadow-sm">
-        <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
+        <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
           <div className="space-y-2">
             <Label>Cidade base</Label>
             <Select value={city} onValueChange={setCity}>
@@ -170,16 +180,6 @@ export function LeadHarvester() {
               placeholder="Nome, contato, atividade"
               value={term}
               onChange={(e) => setTerm(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Capital Social Mínimo (R$)</Label>
-            <Input
-              type="number"
-              placeholder="1000"
-              value={minCapital}
-              onChange={(e) => setMinCapital(e.target.value)}
             />
           </div>
 
@@ -257,9 +257,9 @@ export function LeadHarvester() {
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div className="p-2 rounded-lg bg-muted/50 space-y-1">
                 <p className="font-semibold text-muted-foreground flex items-center gap-1 uppercase tracking-tighter">
-                  <DollarSign className="h-3 w-3" /> Capital Social
+                  <DollarSign className="h-3 w-3" /> Site
                 </p>
-                <p className="font-bold text-primary">R$ {Number(company.capital_social || 0).toLocaleString('pt-BR')}</p>
+                <p className="font-bold text-primary truncate">{company.website || '—'}</p>
               </div>
               <div className="p-2 rounded-lg bg-muted/50 space-y-1">
                 <p className="font-semibold text-muted-foreground flex items-center gap-1 uppercase tracking-tighter">
@@ -270,8 +270,8 @@ export function LeadHarvester() {
             </div>
 
             <div className="space-y-1 text-xs text-muted-foreground">
-              <p className="truncate">{company.endereco}</p>
-              <p>{company.telefone}</p>
+              <p className="truncate">{company.endereco || 'Endereço não informado'}</p>
+              <p>{company.telefone || 'Telefone não informado'}</p>
             </div>
 
             <Button

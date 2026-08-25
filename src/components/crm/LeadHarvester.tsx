@@ -37,6 +37,13 @@ interface Company {
   score?: number;
   potencial_mensal?: number;
   tem_contato?: boolean;
+  cnpj?: string;
+  decisor?: string;
+  decisor_cargo?: string;
+  socios?: string[];
+  porte?: string;
+  capital_social?: number | null;
+  fontes?: string[];
 }
 
 interface HarvestResult {
@@ -125,6 +132,10 @@ export function LeadHarvester() {
   const insertLead = async (company: Company) => {
     if (!user?.id) throw new Error('Sessão expirada');
     const detalhes = [
+      company.decisor ? `Decisor: ${company.decisor}${company.decisor_cargo ? ` (${company.decisor_cargo})` : ''}` : '',
+      company.socios?.length ? `Sócios: ${company.socios.join(' | ')}` : '',
+      company.cnpj ? `CNPJ: ${company.cnpj}` : '',
+      company.porte ? `Porte: ${company.porte}` : '',
       `Endereço: ${company.endereco || 'não informado'}`,
       company.bairro ? `Bairro: ${company.bairro}` : '',
       company.cep ? `CEP: ${company.cep}` : '',
@@ -135,6 +146,7 @@ export function LeadHarvester() {
       company.facebook ? `Facebook: ${company.facebook}` : '',
       company.horario ? `Horário: ${company.horario}` : '',
       company.maps_url ? `Mapa: ${company.maps_url}` : '',
+      company.fontes?.length ? `Fontes: ${company.fontes.join(', ')}` : '',
       `Potencial estimado: ${brl(company.potencial_mensal)}/mês`,
     ].filter(Boolean).join('\n');
 
@@ -368,6 +380,24 @@ export function LeadHarvester() {
                 <p className="font-bold text-base">{brl(company.potencial_mensal)}<span className="text-[10px] font-normal">/mês</span></p>
               </div>
             </div>
+
+            {(company.decisor || company.cnpj) && (
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-2.5 space-y-1 text-xs">
+                <p className="flex items-center gap-1.5 font-semibold text-primary uppercase tracking-tight text-[10px]">
+                  <UserPlus className="h-3 w-3" /> Decisor
+                </p>
+                <p className="font-medium truncate">
+                  {company.decisor || 'Não identificado'}
+                  {company.decisor_cargo ? <span className="text-muted-foreground font-normal"> • {company.decisor_cargo}</span> : null}
+                </p>
+                {company.cnpj && (
+                  <p className="text-muted-foreground">CNPJ {company.cnpj}{company.porte ? ` • ${company.porte}` : ''}</p>
+                )}
+                {company.fontes?.length ? (
+                  <p className="text-[10px] text-muted-foreground">Fontes: {company.fontes.join(', ')}</p>
+                ) : null}
+              </div>
+            )}
 
             <div className="space-y-1.5 text-xs">
               <p className="flex items-start gap-2">

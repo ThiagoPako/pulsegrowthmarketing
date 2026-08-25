@@ -10080,36 +10080,122 @@ async function runOverpass(query) {
   throw lastError || new Error('Falha ao consultar a base de empresas');
 }
 
-function osmElementToCompany(el) {
+// Ticket médio estimado por nicho (usado como "potencial de investimento" do lead)
+const NICHE_TICKET_ESTIMATE = {
+  varejo: 1200,
+  saude: 2500,
+  aliment: 1500,
+  'serviços': 1800,
+  'indústria': 3500,
+  'construção': 2200,
+  agro: 3000,
+  automotiv: 2000,
+  all: 1500,
+};
+
+function digitsOnly(v) {
+  return String(v || '').replace(/\D/g, '');
+}
+
+function toWhatsappLink(phone) {
+  const d = digitsOnly(phone);
+  if (d.length < 10) return '';
+  const withCountry = d.startsWith('55') ? d : `55${d}`;
+  return `https://wa.me/${withCountry}`;
+}
+
+function pickSocial(tags, key) {
+  const raw = tags[`contact:${key}`] || tags[key] || '';
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const handle = String(raw).replace(/^@/, '').trim();
+  return handle ? `https://${key}.com/${handle}` : '';
+}
+
+function osmElementToCompany(el, niche) {
   const tags = el.tags || {};
   const name = tags.name || tags['operator'] || tags['brand'];
   if (!name) return null;
 
-  const atuacao = tags.shop || tags.amenity || tags.office || tags.craft || tags.healthcare || tags.industrial || 'Empresa';
+  const atuacao = tags.shop || tags.amenity || tags.office || tags.craft || tags.healthcare || tags.industrial || tags.tourism || 'Empresa';
+  const bairro = tags['addr:suburb'] || tags['addr:neighbourhood'] || tags['addr:district'] || '';
   const enderecoParts = [
     [tags['addr:street'], tags['addr:housenumber']].filter(Boolean).join(', '),
-    tags['addr:suburb'] || tags['addr:neighbourhood'],
+    bairro,
     tags['addr:city'],
   ].filter(Boolean);
+
+  const telefones = [tags.phone, tags['contact:phone'], tags['contact:mobile'], tags['phone:mobile']]
+    .filter(Boolean)
+    .flatMap(p => String(p).split(/[;,]/))
+    .map(p => p.trim())
+    .filter((p, i, arr) => p && arr.indexOf(p) === i);
+
+  const telefone = telefones[0] || '';
+  const lat = el.lat ?? el.center?.lat ?? null;
+  const lon = el.lon ?? el.center?.lon ?? null;
+  const website = tags.website || tags['contact:website'] || tags.url || '';
+  const email = tags.email || tags['contact:email'] || '';
+  const instagram = pickSocial(tags, 'instagram');
+  const facebook = pickSocial(tags, 'facebook');
+
+  // Score de qualificação (0-100) — quanto mais dados de contato, mais quente o lead
+  let score = 20;
+  if (telefone) score += 30;
+  if (email) score += 15;
+  if (website) score += 10;
+  if (instagram || facebook) score += 10;
+  if (enderecoParts.length) score += 10;
+  if (tags['opening_hours']) score += 5;
+  score = Math.min(score, 100);
+
+  const ticket = NICHE_TICKET_ESTIMATE[niche] || NICHE_TICKET_ESTIMATE.all;
+  // Sem site/redes = maior necessidade de marketing => potencial maior
+  const multiplicador = (!website && !instagram && !facebook) ? 1.3 : 1;
 
   return {
     id: `${el.type}/${el.id}`,
     razao_social: name,
     contato: tags['contact:person'] || tags.operator || name,
-    email: tags.email || tags['contact:email'] || '',
-    telefone: tags.phone || tags['contact:phone'] || tags['contact:mobile'] || '',
+    email,
+    telefone,
+    telefones,
+    whatsapp: toWhatsappLink(telefone),
     atuacao: String(atuacao).replace(/_/g, ' '),
+    categoria: [tags.shop, tags.amenity, tags.office, tags.craft, tags.healthcare, tags.cuisine]
+      .filter(Boolean).map(v => String(v).replace(/_/g, ' ')).join(' / '),
     endereco: enderecoParts.join(' - ') || tags['addr:full'] || '',
-    website: tags.website || tags['contact:website'] || '',
+    bairro,
+    cep: tags['addr:postcode'] || '',
+    website,
+    instagram,
+    facebook,
+    horario: tags['opening_hours'] || '',
+    marca: tags.brand || '',
     cidade: tags['addr:city'] || '',
-    lat: el.lat ?? el.center?.lat ?? null,
-    lon: el.lon ?? el.center?.lon ?? null,
+    lat,
+    lon,
+    maps_url: lat && lon ? `https://www.google.com/maps/search/?api=1&query=${lat},${lon}` : '',
+    score,
+    potencial_mensal: Math.round(ticket * multiplicador),
+    tem_contato: Boolean(telefone || email),
   };
+}
+
+// Resolve a cidade em uma área OSM (qualquer cidade do Brasil), com fallback via Nominatim
+async function resolveSearchArea(areaName, state) {
+  const escapedArea = areaName.replace(/"/g, '\\"');
+  const escapedState = String(state || '').replace(/"/g, '\\"');
+  if (escapedState) {
+    return `area["name"~"^${escapedState}$",i]["boundary"="administrative"]->.state;
+area["name"~"^${escapedArea}$",i]["boundary"="administrative"](area.state)->.searchArea;`;
+  }
+  return `area["name"~"^${escapedArea}$",i]["boundary"="administrative"]->.searchArea;`;
 }
 
 app.post('/api/crm/harvest/search', async (req, res) => {
   try {
-    const { city, location, niche, term, limit } = req.body || {};
+    const { city, location, niche, term, limit, state, onlyWithContact } = req.body || {};
 
     const cityName = city && city !== 'all' ? String(city).trim() : '';
     const locationText = String(location || '').trim();
@@ -10120,24 +10206,24 @@ app.post('/api/crm/harvest/search', async (req, res) => {
       return res.status(400).json({ error: 'Informe a cidade ou a localização para buscar empresas reais.' });
     }
 
-
     const filters = NICHE_OSM_FILTERS[niche] || NICHE_OSM_FILTERS.all;
-    const escapedArea = areaName.replace(/"/g, '\\"');
+    const areaBlock = await resolveSearchArea(areaName, state);
     const body = filters
-      .map(f => `  node${f}(area.searchArea);\n  way${f}(area.searchArea);`)
+      .map(f => `  node${f}(area.searchArea);\n  way${f}(area.searchArea);\n  relation${f}(area.searchArea);`)
       .join('\n');
 
-    const query = `[out:json][timeout:25];
-area["name"="${escapedArea}"]["boundary"="administrative"]->.searchArea;
+    const cap = Math.min(Number(limit) || 400, 1000);
+    const query = `[out:json][timeout:60];
+${areaBlock}
 (
 ${body}
 );
-out center ${Math.min(Number(limit) || 120, 250)};`;
+out center ${cap};`;
 
     const json = await runOverpass(query);
     const elements = Array.isArray(json?.elements) ? json.elements : [];
 
-    let companies = elements.map(osmElementToCompany).filter(Boolean);
+    let companies = elements.map(el => osmElementToCompany(el, niche)).filter(Boolean);
 
     // Deduplica por nome + endereço
     const seen = new Set();
@@ -10150,28 +10236,43 @@ out center ${Math.min(Number(limit) || 120, 250)};`;
 
     if (locationFilter) {
       const l = normalizeText(locationFilter);
-      companies = companies.filter(c => normalizeText(c.endereco).includes(l));
+      companies = companies.filter(c =>
+        normalizeText(c.endereco).includes(l) || normalizeText(c.bairro).includes(l)
+      );
     }
 
     if (term) {
-
       const t = normalizeText(term);
       companies = companies.filter(c =>
         normalizeText(c.razao_social).includes(t) ||
         normalizeText(c.atuacao).includes(t) ||
+        normalizeText(c.categoria).includes(t) ||
         normalizeText(c.endereco).includes(t)
       );
     }
 
-    companies.sort((a, b) => Number(Boolean(b.telefone)) - Number(Boolean(a.telefone)));
+    if (onlyWithContact) {
+      companies = companies.filter(c => c.tem_contato);
+    }
+
+    companies.sort((a, b) => b.score - a.score || a.razao_social.localeCompare(b.razao_social));
     companies = companies.map(c => ({ ...c, cidade: c.cidade || areaName }));
 
-    res.json({ data: companies, source: 'openstreetmap', area: areaName, total: companies.length });
+    const comContato = companies.filter(c => c.tem_contato).length;
+    res.json({
+      data: companies,
+      source: 'openstreetmap',
+      area: areaName,
+      total: companies.length,
+      com_contato: comContato,
+      potencial_total: companies.reduce((s, c) => s + (c.potencial_mensal || 0), 0),
+    });
   } catch (error) {
     console.error('[crm:harvest] error:', error);
     res.status(502).json({ error: error.message || 'Falha ao consultar a base pública de empresas' });
   }
 });
+
 
 
 // Cron-like task for CRM meeting reminders

@@ -285,10 +285,16 @@ export function useFinancialData() {
 
   const deleteContract = async (id: string) => {
     const contract = contracts.find(c => c.id === id);
-    await supabase.from('financial_contracts').delete().eq('id', id);
+    const { error } = await supabase.from('financial_contracts').delete().eq('id', id);
+    if (error) {
+      console.error('[useFinancialData] deleteContract error:', error);
+      return false;
+    }
     await logActivity('exclusão', 'contrato', `Excluiu contrato - R$ ${Number(contract?.contract_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id);
     await fetchAll();
+    return true;
   };
+
 
   // Revenue CRUD
   const addRevenue = async (r: Partial<Revenue>) => {

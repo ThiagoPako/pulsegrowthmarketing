@@ -1182,10 +1182,14 @@ function LeadDetailsDialog({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-w-3xl p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
-        <div className="flex h-[600px]">
+      <DialogContent className="max-w-4xl p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
+        <DialogHeader className="px-6 py-4 border-b bg-card">
+          <DialogTitle className="text-base font-bold truncate">{lead.name}</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col md:flex-row h-[70vh] md:h-[600px]">
           {/* Coluna Esquerda: Dados */}
-          <div className="w-2/5 bg-muted/30 p-8 flex flex-col gap-6 overflow-y-auto">
+          <div className="w-full md:w-2/5 bg-muted/30 p-6 flex flex-col gap-6 overflow-y-auto">
+
             <div>
               <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-4">Dados da Oportunidade</h3>
               <div className="space-y-4">

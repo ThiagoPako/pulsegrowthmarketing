@@ -30,6 +30,7 @@ import { syncFinancialContract } from '@/lib/financialContracts';
 import ProposalChecklist from '@/components/ProposalChecklist';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
+import { BRIEFING_FIELD_LABELS, formatBriefingValue, getBriefingFieldLabel } from '@/lib/briefingLabels';
 
 const DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 const CONTENT_TYPES: ContentType[] = ['reels', 'story', 'produto'];
@@ -2806,10 +2807,8 @@ function ClientBriefingView({ client }: { client: Client }) {
   const driveIV = (client as any).driveIdentidadeVisual;
 
   const fmt = (v: any): string => {
-    if (v == null || v === '') return '';
-    if (Array.isArray(v)) return v.filter(x => x != null && x !== '').join(', ');
-    if (typeof v === 'boolean') return v ? 'Sim' : 'Não';
-    return String(v);
+    const formatted = formatBriefingValue(v);
+    return formatted === '—' ? '' : formatted;
   };
   const has = (k: string) => {
     const v = briefing[k];
@@ -2819,6 +2818,7 @@ function ClientBriefingView({ client }: { client: Client }) {
   };
 
   const LABELS: Record<string, string> = {
+    ...BRIEFING_FIELD_LABELS,
     ownerName: 'Responsável', mainDifferential: 'Principal Diferencial',
     productsServices: 'Produtos / Serviços', focusProducts: 'Produtos em Foco',
     businessGoals: 'Objetivos do Negócio', attendanceType: 'Forma de Atendimento',
@@ -2846,23 +2846,25 @@ function ClientBriefingView({ client }: { client: Client }) {
   type Sec = { key: string; title: string; accent: string; icon: any; fields: string[] };
   const SECTIONS: Sec[] = [
     { key: 'identidade', title: 'Identidade do Negócio', accent: 'from-red-600 to-orange-500', icon: Building2,
-      fields: ['ownerName','mainDifferential','businessGoals','goals','productsServices','products_services','focusProducts','attendanceType','targetCities','business_description','differentials'] },
+      fields: ['ownerName','cities','plans','mainDifferential','businessGoals','goals','productsServices','products_services','focusProducts','attendanceType','targetCities','business_description','differentials'] },
     { key: 'publico', title: 'Público-Alvo', accent: 'from-fuchsia-500 to-pink-500', icon: UsersIcon,
-      fields: ['idealClient','target_audience','ageRangesTarget','ageRangesBuyer','educationLevel','socialClass','clientUsesSocial','isAuthority'] },
+      fields: ['idealClient','targetAudience','target_audience','ageRangesTarget','ageRangesBuyer','educationLevel','socialClass','clientUsesSocial','isAuthority'] },
     { key: 'comunicacao', title: 'Comunicação & Voz', accent: 'from-amber-500 to-yellow-500', icon: Megaphone,
-      fields: ['socialObjectives','importantTopics','keywords','tone_of_voice','dislikedCommunication','desiredRecognition','undesiredRecognition','avoid'] },
+      fields: ['socialObjectives','importantTopics','keywords','tone_of_voice','dislikedCommunication','desiredRecognition','undesiredRecognition','avoid','marketingChannels','influencerBudget','externalMarketingBudget','metaAdsBudget'] },
     { key: 'visual', title: 'Marca & Visual', accent: 'from-violet-500 to-indigo-500', icon: Palette,
-      fields: ['hasVisualIdentity','brand_colors','useRealPhotos','comfortOnCamera','hasSite','socialLinks','social_media_links'] },
+      fields: ['hasVisualIdentity','brand_colors','visualIdentity','useRealPhotos','comfortOnCamera','hasSite','socialLinks','social_media_links','teamVideos','teamVideosDetails'] },
     { key: 'refs', title: 'Referências', accent: 'from-cyan-500 to-sky-500', icon: Lightbulb,
       fields: ['digitalReferences','nicheReferences','contentReferences','visual_references','competitors'] },
     { key: 'desafios', title: 'Desafios & Notas Finais', accent: 'from-emerald-500 to-teal-500', icon: Award,
-      fields: ['digitalDifficulty','businessDifficulty','finalNotes','additional_notes'] },
+      fields: ['digitalDifficulty','businessDifficulty','currentDifficulties','growthGoals','finalNotes','additionalNotes','additional_notes'] },
+    { key: 'acessos', title: 'Redes Sociais & Acessos', accent: 'from-blue-500 to-cyan-500', icon: KeyRound,
+      fields: ['instagramExists','instagramProfile','instagramLogin','instagramPassword','facebookPageExists','facebookPage','facebookLogin','facebookPassword','otherAccesses'] },
   ];
 
   const mappedKeys = new Set(SECTIONS.flatMap(s => s.fields));
   const extras = Object.entries(briefing)
     .filter(([k, v]) => !k.startsWith('_') && !mappedKeys.has(k) && !['niche','city'].includes(k) && v != null && v !== '' && !(Array.isArray(v) && v.length === 0))
-    .map(([k, v]) => ({ label: LABELS[k] || k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), value: fmt(v) }));
+    .map(([k, v]) => ({ label: LABELS[k] || getBriefingFieldLabel(k), value: fmt(v) }));
 
   const totalFilled = SECTIONS.reduce((n, s) => n + s.fields.filter(has).length, 0) + extras.length;
   const hasBriefing = totalFilled > 0;

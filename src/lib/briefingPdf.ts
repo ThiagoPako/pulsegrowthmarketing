@@ -2,9 +2,11 @@ import jsPDF from 'jspdf';
 import { parseEditorial } from './editorialFormatter';
 import pulseHeader from '@/assets/pulse_header.png';
 import pulseLogo from '@/assets/pulse_logo.png';
+import { BRIEFING_FIELD_LABELS, formatBriefingValue, getBriefingFieldLabel } from './briefingLabels';
 
 // Mapeia as chaves usadas no formulário (ClientBriefing.tsx) para rótulos amigáveis
 const FIELD_LABELS: Record<string, string> = {
+  ...BRIEFING_FIELD_LABELS,
   ownerName: 'Nome do responsável',
   niche: 'Nicho de atuação',
   mainDifferential: 'Principal diferencial',
@@ -110,10 +112,7 @@ function sanitize(s: string): string {
 }
 
 function formatValue(v: any): string {
-  if (v == null || v === '') return '—';
-  if (Array.isArray(v)) return v.length ? v.join(', ') : '—';
-  if (typeof v === 'boolean') return v ? 'Sim' : 'Não';
-  return String(v);
+  return formatBriefingValue(v);
 }
 
 async function loadImageAsDataUrl(src: string): Promise<{ dataUrl: string; width: number; height: number } | null> {
@@ -467,7 +466,7 @@ export async function generateBriefingPdf(opts: {
   let foundAny = false;
   for (const section of SECTIONS) {
     const items = section.keys
-      .map(k => ({ key: k, label: FIELD_LABELS[k] || k, value: formatValue(data[k]) }))
+       .map(k => ({ key: k, label: FIELD_LABELS[k] || getBriefingFieldLabel(k), value: formatValue(data[k]) }))
       .filter(it => it.value !== '—');
     if (items.length === 0) continue;
     foundAny = true;
@@ -482,7 +481,7 @@ export async function generateBriefingPdf(opts: {
     const validExtras = extraKeys.filter(k => formatValue(data[k]) !== '—');
     if (validExtras.length) {
       startSectionPage('08', 'Outros Campos', 'Respostas adicionais não categorizadas', validExtras.length);
-      for (const k of validExtras) writeField(FIELD_LABELS[k] || k.replace(/_/g, ' '), formatValue(data[k]));
+       for (const k of validExtras) writeField(FIELD_LABELS[k] || getBriefingFieldLabel(k), formatValue(data[k]));
     }
   }
 

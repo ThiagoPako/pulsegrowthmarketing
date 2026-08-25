@@ -167,6 +167,15 @@ export default function ClientBriefingProvider() {
   const [currentDifficulties, setCurrentDifficulties] = useState('');
   const [growthGoals, setGrowthGoals] = useState('');
   const [socialLinks, setSocialLinks] = useState('');
+  const [instagramExists, setInstagramExists] = useState('');
+  const [instagramProfile, setInstagramProfile] = useState('');
+  const [instagramLogin, setInstagramLogin] = useState('');
+  const [instagramPassword, setInstagramPassword] = useState('');
+  const [facebookPageExists, setFacebookPageExists] = useState('');
+  const [facebookPage, setFacebookPage] = useState('');
+  const [facebookLogin, setFacebookLogin] = useState('');
+  const [facebookPassword, setFacebookPassword] = useState('');
+  const [otherAccesses, setOtherAccesses] = useState('');
   const [visualIdentity, setVisualIdentity] = useState('');
   const [additionalNotes, setAdditionalNotes] = useState('');
 
@@ -215,6 +224,15 @@ export default function ClientBriefingProvider() {
             setCurrentDifficulties(d.currentDifficulties || '');
             setGrowthGoals(d.growthGoals || '');
             setSocialLinks(d.socialLinks || '');
+            setInstagramExists(d.instagramExists || '');
+            setInstagramProfile(d.instagramProfile || '');
+            setInstagramLogin(d.instagramLogin || '');
+            setInstagramPassword(d.instagramPassword || '');
+            setFacebookPageExists(d.facebookPageExists || '');
+            setFacebookPage(d.facebookPage || '');
+            setFacebookLogin(d.facebookLogin || '');
+            setFacebookPassword(d.facebookPassword || '');
+            setOtherAccesses(d.otherAccesses || '');
             setVisualIdentity(d.visualIdentity || '');
             setAdditionalNotes(d.additionalNotes || '');
             if (d._completed) {
@@ -284,6 +302,15 @@ export default function ClientBriefingProvider() {
         currentDifficulties: currentDifficulties.trim(),
         growthGoals: growthGoals.trim(),
         socialLinks: socialLinks.trim(),
+        instagramExists,
+        instagramProfile: instagramProfile.trim(),
+        instagramLogin: instagramLogin.trim(),
+        instagramPassword,
+        facebookPageExists,
+        facebookPage: facebookPage.trim(),
+        facebookLogin: facebookLogin.trim(),
+        facebookPassword,
+        otherAccesses: otherAccesses.trim(),
         visualIdentity: visualIdentity.trim(),
         additionalNotes: additionalNotes.trim(),
       };
@@ -569,12 +596,42 @@ export default function ClientBriefingProvider() {
             <SectionCard
               icon={Globe}
               title="Redes Sociais e Presença Digital"
-              subtitle="Links de Instagram, Facebook, site ou outras plataformas."
+              subtitle="Informe os perfis existentes e os dados necessários para a equipe administrar as redes."
             >
               <Textarea
                 value={socialLinks}
                 onChange={(e) => setSocialLinks(e.target.value)}
                 placeholder="Cole aqui os links das redes sociais e site..."
+                className="min-h-[80px]"
+              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-3">
+                <div className="space-y-3 rounded-lg border border-border p-4">
+                  <Label>Já possui Instagram?</Label>
+                  <RadioGroup options={[{ id: 'sim', label: 'Sim' }, { id: 'nao', label: 'Não' }]} value={instagramExists} onChange={setInstagramExists} />
+                  {instagramExists === 'sim' && (
+                    <div className="space-y-3">
+                      <Input value={instagramProfile} onChange={(e) => setInstagramProfile(e.target.value)} placeholder="@usuario ou link do Instagram" />
+                      <Input value={instagramLogin} onChange={(e) => setInstagramLogin(e.target.value)} placeholder="Login do Instagram" autoComplete="off" />
+                      <Input type="password" value={instagramPassword} onChange={(e) => setInstagramPassword(e.target.value)} placeholder="Senha do Instagram" autoComplete="new-password" />
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-3 rounded-lg border border-border p-4">
+                  <Label>Já possui página no Facebook?</Label>
+                  <RadioGroup options={[{ id: 'sim', label: 'Sim' }, { id: 'nao', label: 'Não' }]} value={facebookPageExists} onChange={setFacebookPageExists} />
+                  {facebookPageExists === 'sim' && (
+                    <div className="space-y-3">
+                      <Input value={facebookPage} onChange={(e) => setFacebookPage(e.target.value)} placeholder="Nome ou link da página" />
+                      <Input value={facebookLogin} onChange={(e) => setFacebookLogin(e.target.value)} placeholder="Login do Facebook" autoComplete="off" />
+                      <Input type="password" value={facebookPassword} onChange={(e) => setFacebookPassword(e.target.value)} placeholder="Senha do Facebook" autoComplete="new-password" />
+                    </div>
+                  )}
+                </div>
+              </div>
+              <Textarea
+                value={otherAccesses}
+                onChange={(e) => setOtherAccesses(e.target.value)}
+                placeholder="Outros acessos, permissões, administradores ou observações importantes..."
                 className="min-h-[80px]"
               />
             </SectionCard>

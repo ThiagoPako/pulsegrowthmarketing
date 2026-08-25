@@ -179,35 +179,54 @@ export default function FinancialRevenues() {
     }
   }, [selectedMonth, loading, filtered.length, clients.length, contracts.length]);
 
-  const handleGenerate = async () => {
+  const [processing, setProcessing] = useState(false);
+
+  const runGeneration = async (reprocess: boolean) => {
     autoGenRef.current = selectedMonth;
-    const { inserted, skipped, failed } = await generateMonthlyRevenues(selectedMonth);
+    setProcessing(true);
+    try {
+      const { inserted, updated, skipped, failed } = await generateMonthlyRevenues(selectedMonth, { reprocess });
 
-    if (inserted > 0) {
-      toast.success(`${inserted} receita(s) gerada(s)`);
-    } else {
-      toast.info('Nenhuma receita nova para gerar neste mês');
-    }
+      if (inserted > 0 || updated > 0) {
+        toast.success(
+          reprocess
+            ? `Reprocessado: ${inserted} nova(s), ${updated} atualizada(s)`
+            : `${inserted} receita(s) gerada(s)`
+        );
+      } else {
+        toast.info(
+          reprocess
+            ? 'Nada a corrigir: as receitas do mês já estão de acordo com os contratos'
+            : 'Nenhuma receita nova para gerar neste mês'
+        );
+      }
 
-    if (failed.length > 0) {
-      toast.error(`${failed.length} receita(s) falharam ao ser criadas`, {
-        description: failed.slice(0, 5).map(f => `${f.client}: ${f.reason}`).join(' • '),
-        duration: 12000,
-      });
-    }
+      if (failed.length > 0) {
+        toast.error(`${failed.length} receita(s) com erro`, {
+          description: failed.slice(0, 5).map(f => `${f.client}: ${f.reason}`).join(' • '),
+          duration: 12000,
+        });
+      }
 
-    if (skipped.length > 0) {
-      toast.warning(`${skipped.length} cliente(s) ativo(s) ficaram de fora — organize o cadastro`, {
-        description: skipped.slice(0, 8).map(s => `${s.client} (${s.reason})`).join(' • ')
-          + (skipped.length > 8 ? ` e mais ${skipped.length - 8}...` : ''),
-        duration: 20000,
-        action: {
-          label: 'Ver contratos',
-          onClick: () => navigate('/financeiro/contratos'),
-        },
-      });
+      if (skipped.length > 0) {
+        toast.warning(`${skipped.length} cliente(s) ativo(s) ficaram de fora — organize o cadastro`, {
+          description: skipped.slice(0, 8).map(s => `${s.client} (${s.reason})`).join(' • ')
+            + (skipped.length > 8 ? ` e mais ${skipped.length - 8}...` : ''),
+          duration: 20000,
+          action: {
+            label: 'Ver contratos',
+            onClick: () => navigate('/financeiro/contratos'),
+          },
+        });
+      }
+    } finally {
+      setProcessing(false);
     }
   };
+
+  const handleGenerate = () => runGeneration(false);
+  const handleReprocess = () => runGeneration(true);
+
 
 
   const handleCreateRevenue = async () => {

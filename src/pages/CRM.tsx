@@ -1318,31 +1318,42 @@ function LeadDetailsDialog({
                 {onDelete && <DeleteLeadDialog leadName={lead.name} onDelete={() => onDelete(lead.id)} />}
               </div>
 
-              
-              <div className="space-y-2">
-                <Label className="text-[10px] font-bold uppercase text-muted-foreground">Mover para Estágio</Label>
 
-                <div className="flex flex-wrap gap-2">
-                  {STAGES.map(s => (
-                    <Button 
-                      key={s.id} 
-                      size="sm" 
-                      variant={lead.status === s.id ? 'default' : 'outline'}
-                      className="h-8 text-[10px] px-2 flex-1 min-w-[100px]"
-                      onClick={async () => {
-                        const { error } = await supabase.from('crm_leads').update({ status: s.id } as any).eq('id', lead.id);
-                        if (!error) {
-                          onUpdate();
-                          if (onSetRefreshKey) onSetRefreshKey(prev => prev + 1);
-                          toast.success(`Lead movido para ${s.label}`);
-                        }
-                      }}
-                    >
-                      <s.icon className="h-3 w-3 mr-1" /> {s.label}
-                    </Button>
-                  ))}
+              <div className="space-y-2 rounded-xl border bg-card/60 p-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Mover para Estágio</Label>
+                  <Badge variant="outline" className="h-5 text-[9px] uppercase font-bold">
+                    {STAGES.find(s => s.id === lead.status)?.label || lead.status}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {STAGES.map(s => {
+                    const isCurrent = lead.status === s.id;
+                    return (
+                      <Button
+                        key={s.id}
+                        size="sm"
+                        variant={isCurrent ? 'default' : 'outline'}
+                        disabled={isCurrent}
+                        className="h-8 w-full justify-start gap-1.5 px-2 text-[10px] font-semibold disabled:opacity-100"
+                        onClick={async () => {
+                          const { error } = await supabase.from('crm_leads').update({ status: s.id } as any).eq('id', lead.id);
+                          if (!error) {
+                            onUpdate();
+                            if (onSetRefreshKey) onSetRefreshKey(prev => prev + 1);
+                            toast.success(`Lead movido para ${s.label}`);
+                          }
+                        }}
+                      >
+                        <s.icon className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{s.label}</span>
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
+
 
               <div className="space-y-2">
                 <Label className="text-[10px] font-bold uppercase text-muted-foreground">Nova Atualização</Label>

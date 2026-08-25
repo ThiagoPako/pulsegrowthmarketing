@@ -349,52 +349,91 @@ export function useFinancialData() {
     }
   };
 
+  /**
+   * Gera as receitas recorrentes do mês a partir dos contratos financeiros ativos.
+   * Retorna também um diagnóstico dos clientes ativos que ficaram de fora,
+   * para que o cadastro possa ser corrigido.
+   */
   const generateMonthlyRevenues = async (monthStr: string) => {
     const [yearStr, monthNumStr] = monthStr.split('-');
     const year = parseInt(yearStr);
     const monthNum = parseInt(monthNumStr);
     const refMonth = `${year}-${String(monthNum).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, monthNum, 0).getDate();
 
-    // Fetch fresh contracts and ALL existing revenues for this month to avoid duplicates
-    const [freshContracts, freshExisting] = await Promise.all([
-      supabase.from('financial_contracts').select('*').eq('status', 'ativo'),
+    // Fetch fresh contracts, active clients and ALL existing revenues for this month
+    const [freshContracts, freshClients, freshExisting] = await Promise.all([
+      supabase.from('financial_contracts').select('*'),
+      supabase.from('clients').select('id, company_name, status'),
       supabase.from('revenues').select('client_id, reference_month'),
     ]);
 
-    const activeContracts = (freshContracts.data as any[] || []).filter((c: any) => Number(c.contract_value) > 0);
-    // Normalize all existing revenue dates to match
+    const allContracts = (freshContracts.data as any[]) || [];
+    const activeClients = ((freshClients.data as any[]) || []).filter(
+      (c: any) => (c.status || 'ativo') === 'ativo'
+    );
+    const contractByClient = new Map<string, any>(allContracts.map((c: any) => [c.client_id, c]));
+
     const existingClientIds = new Set(
-      (freshExisting.data as any[] || [])
+      ((freshExisting.data as any[]) || [])
         .filter((r: any) => normalizeDate(r.reference_month) === refMonth)
         .map((r: any) => r.client_id)
     );
 
-    const newRevenues = activeContracts
-      .filter((c: any) => !existingClientIds.has(c.client_id))
-      .map((c: any) => ({
-        client_id: c.client_id,
-        contract_id: c.id,
-        reference_month: refMonth,
-        amount: c.contract_value,
-        due_date: `${year}-${String(monthNum).padStart(2, '0')}-${String(c.due_day).padStart(2, '0')}`,
-        status: 'prevista',
-      }));
+    const skipped: { client: string; reason: string }[] = [];
+    const newRevenues: any[] = [];
 
-    if (newRevenues.length > 0) {
-      // Insert one by one to skip duplicates gracefully
-      let inserted = 0;
-      for (const rev of newRevenues) {
-        const { error } = await supabase.from('revenues').insert(rev as any);
-        if (!error) inserted++;
+    for (const client of activeClients) {
+      if (existingClientIds.has(client.id)) continue; // já possui receita no mês
+      const contract = contractByClient.get(client.id);
+      const name = client.company_name || 'Cliente sem nome';
+
+      if (!contract) {
+        skipped.push({ client: name, reason: 'sem contrato financeiro cadastrado' });
+        continue;
       }
-      if (inserted > 0) {
-        await logActivity('geração', 'receita', `Gerou ${inserted} receita(s) recorrente(s) para ${monthStr}`, undefined, { month: monthStr, count: inserted });
+      if (contract.status !== 'ativo') {
+        skipped.push({ client: name, reason: `contrato com status "${contract.status}"` });
+        continue;
       }
-      await fetchAll();
-      return inserted;
+      if (!(Number(contract.contract_value) > 0)) {
+        skipped.push({ client: name, reason: 'valor do contrato zerado' });
+        continue;
+      }
+
+      const dueDay = Math.min(Math.max(Number(contract.due_day) || 10, 1), lastDay);
+      newRevenues.push({
+        client_id: client.id,
+        contract_id: contract.id,
+        reference_month: refMonth,
+        amount: Number(contract.contract_value),
+        due_date: `${year}-${String(monthNum).padStart(2, '0')}-${String(dueDay).padStart(2, '0')}`,
+        status: 'prevista',
+      });
     }
-    return 0;
+
+    let inserted = 0;
+    const failed: { client: string; reason: string }[] = [];
+
+    for (const rev of newRevenues) {
+      const { error } = await supabase.from('revenues').insert(rev as any);
+      if (error) {
+        const name = activeClients.find((c: any) => c.id === rev.client_id)?.company_name || 'Cliente';
+        console.error('[useFinancialData] Falha ao gerar receita:', name, error);
+        failed.push({ client: name, reason: error.message || 'erro ao inserir receita' });
+      } else {
+        inserted++;
+      }
+    }
+
+    if (inserted > 0) {
+      await logActivity('geração', 'receita', `Gerou ${inserted} receita(s) recorrente(s) para ${monthStr}`, undefined, { month: monthStr, count: inserted });
+      await fetchAll();
+    }
+
+    return { inserted, skipped, failed };
   };
+
 
   const deleteRevenue = async (id: string) => {
     try {

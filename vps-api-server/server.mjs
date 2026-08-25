@@ -5900,6 +5900,12 @@ app.post('/api/db/query', async (req, res) => {
       await ensureProposalTables();
     }
 
+    if (safeTable === 'warehouse_items' || safeTable === 'warehouse_movements' || safeTable === 'structure_investments') {
+      await ensureWarehouseTables().catch((error) => {
+        console.warn('Could not ensure warehouse/structure tables:', error?.message || error);
+      });
+    }
+
     if (safeTable === 'story_editing_sessions') {
       await ensureStoryEditingSessionsTable();
     }

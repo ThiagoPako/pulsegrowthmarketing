@@ -10880,14 +10880,8 @@ app.post('/api/crm/harvest/search', async (req, res) => {
 
     let companies = elements.map(el => osmElementToCompany(el, niche)).filter(Boolean);
 
-    // Deduplica por nome + endereço
-    const seen = new Set();
-    companies = companies.filter(c => {
-      const key = `${normalizeText(c.razao_social)}|${normalizeText(c.endereco)}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    // Deduplicação (CNPJ + similaridade de nome/endereço/telefone)
+    companies = dedupeCompanies(companies);
 
     if (locationFilter) {
       const l = normalizeText(locationFilter);
@@ -10906,32 +10900,58 @@ app.post('/api/crm/harvest/search', async (req, res) => {
       );
     }
 
-    // Enriquecimento multi-fonte: Receita Federal (sócio/decisor) + site oficial
+    // Modos: "rapido" usa apenas fontes prioritárias; "profundo" varre também a web aberta
+    const mode = req.body?.mode === 'profundo' ? 'profundo' : 'rapido';
     if (req.body?.enrich !== false) {
       companies = await enrichCompanies(
         companies,
-        Number(req.body?.enrichLimit) || 400,
+        Number(req.body?.enrichLimit) || (mode === 'profundo' ? 600 : 200),
         Number(req.body?.enrichConcurrency) || 10,
-        { webSearch: req.body?.webSearch !== false },
+        { webSearch: mode === 'profundo' && req.body?.webSearch !== false },
       );
     }
 
-    if (onlyWithContact) {
-      companies = companies.filter(c => c.tem_contato);
-    }
+    companies = companies.map(c => finalizeLead({ ...c, cidade: c.cidade || areaName }, niche));
+
+    // Filtros de qualidade / prontidão para prospecção
+    const contactFilter = String(req.body?.contactFilter || (onlyWithContact ? 'qualquer' : 'todos'));
+    const filtroContato = {
+      whatsapp: (c) => Boolean(c.whatsapp),
+      telefone: (c) => Boolean(c.telefone),
+      email: (c) => Boolean(c.email),
+      instagram: (c) => Boolean(c.instagram),
+      qualquer: (c) => c.pronto_para_contato,
+      todos: () => true,
+    }[contactFilter] || (() => true);
+    companies = companies.filter(filtroContato);
+
+    if (req.body?.onlyWithDecisor) companies = companies.filter(c => c.tem_decisor);
+    const minScore = Number(req.body?.minScore) || 0;
+    if (minScore) companies = companies.filter(c => (c.score || 0) >= minScore);
+    const minCompletude = Number(req.body?.minCompletude) || 0;
+    if (minCompletude) companies = companies.filter(c => (c.completude || 0) >= minCompletude);
 
     companies.sort((a, b) => b.score - a.score || a.razao_social.localeCompare(b.razao_social));
-    companies = companies.map(c => ({ ...c, cidade: c.cidade || areaName }));
 
-    const comContato = companies.filter(c => c.tem_contato).length;
+    const stats = harvestStats(companies);
+    const pageSize = Math.min(Math.max(Number(req.body?.pageSize) || 100, 25), 1000);
+    const page = Math.max(Number(req.body?.page) || 1, 1);
+    const paginadas = companies.slice((page - 1) * pageSize, page * pageSize);
+
     res.json({
-      data: companies,
+      data: paginadas,
       source: 'openstreetmap',
+      mode,
       area: areaName,
+      page,
+      page_size: pageSize,
+      total_pages: Math.max(1, Math.ceil(companies.length / pageSize)),
       total: companies.length,
-      com_contato: comContato,
+      com_contato: stats.prontos,
+      stats,
       potencial_total: companies.reduce((s, c) => s + (c.potencial_mensal || 0), 0),
     });
+
   } catch (error) {
     console.error('[crm:harvest] error:', error);
     res.status(502).json({ error: error.message || 'Falha ao consultar a base pública de empresas' });

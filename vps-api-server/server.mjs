@@ -10958,6 +10958,40 @@ app.post('/api/crm/harvest/search', async (req, res) => {
   }
 });
 
+// Enriquecimento sob demanda dos leads selecionados (botão "Enriquecer leads")
+app.post('/api/crm/harvest/enrich', async (req, res) => {
+  try {
+    const entrada = Array.isArray(req.body?.companies) ? req.body.companies : [];
+    if (!entrada.length) return res.status(400).json({ error: 'Nenhuma empresa enviada para enriquecimento.' });
+    if (entrada.length > 200) return res.status(400).json({ error: 'Selecione no máximo 200 empresas por vez.' });
+
+    const niche = req.body?.niche || 'all';
+    const force = req.body?.force === true;
+    const out = [...entrada];
+    let cursor = 0;
+
+    const worker = async () => {
+      while (cursor < entrada.length) {
+        const i = cursor++;
+        try {
+          out[i] = finalizeLead(await enrichCompany(entrada[i], { webSearch: true, force }), niche);
+        } catch (err) {
+          console.warn('[crm:harvest:enrich] falhou:', err.message);
+          out[i] = finalizeLead(entrada[i], niche);
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(8, entrada.length) }, worker));
+
+    res.json({ data: out, stats: harvestStats(out) });
+  } catch (error) {
+    console.error('[crm:harvest:enrich] error:', error);
+    res.status(502).json({ error: error.message || 'Falha ao enriquecer os leads' });
+  }
+});
+
+
+
 
 
 // Cron-like task for CRM meeting reminders

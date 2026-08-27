@@ -77,6 +77,9 @@ export function LeadHarvester() {
         method: 'POST',
         body: JSON.stringify({
           city, state, location, niche, term, mode,
+          // Busca rápida não enriquece durante a requisição (evita timeout sem resultados);
+          // use o botão "Enriquecer leads" depois.
+          enrich: mode === 'profundo',
           contactFilter, onlyWithDecisor,
           minCompletude: Number(minCompletude),
           pageSize: Number(pageSize), page, limit: 5000,

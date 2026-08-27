@@ -10900,15 +10900,26 @@ app.post('/api/crm/harvest/search', async (req, res) => {
       );
     }
 
-    // Modos: "rapido" usa apenas fontes prioritárias; "profundo" varre também a web aberta
+    // Modos: "rapido" devolve os dados públicos imediatamente (sem enriquecimento bloqueante,
+    // que estourava o timeout do proxy e deixava a tela sem resultados);
+    // "profundo" enriquece um lote limitado antes de responder.
     const mode = req.body?.mode === 'profundo' ? 'profundo' : 'rapido';
-    if (req.body?.enrich !== false) {
-      companies = await enrichCompanies(
-        companies,
-        Number(req.body?.enrichLimit) || (mode === 'profundo' ? 600 : 200),
-        Number(req.body?.enrichConcurrency) || 10,
-        { webSearch: mode === 'profundo' && req.body?.webSearch !== false },
+    const enrichAtivo = req.body?.enrich === true || mode === 'profundo';
+    if (enrichAtivo) {
+      const limiteEnriquecimento = Math.min(
+        Number(req.body?.enrichLimit) || 120,
+        150,
       );
+      try {
+        companies = await enrichCompanies(
+          companies,
+          limiteEnriquecimento,
+          Number(req.body?.enrichConcurrency) || 10,
+          { webSearch: mode === 'profundo' && req.body?.webSearch !== false },
+        );
+      } catch (err) {
+        console.warn('[crm:harvest] enriquecimento falhou, devolvendo dados base:', err.message);
+      }
     }
 
     companies = companies.map(c => finalizeLead({ ...c, cidade: c.cidade || areaName }, niche));

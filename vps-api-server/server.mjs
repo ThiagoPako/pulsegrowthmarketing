@@ -1526,6 +1526,23 @@ async function verifyAdmin(req) {
   throw new Error('Admin access required');
 }
 
+/**
+ * Gestão de equipe: admin/social_media OU gestor_projetos.
+ * O frontend (Team.tsx) libera essas ações para gestor_projetos,
+ * então o backend precisa aceitar o mesmo conjunto de papéis.
+ */
+async function verifyTeamManager(req) {
+  const { user, userClient } = await verifyUser(req);
+  if (await isAdminUser(user)) {
+    return { user, userClient, admin: getAdminClient() };
+  }
+  if (await userHasAssignedRole(user, 'gestor_projetos')) {
+    return { user, userClient, admin: getAdminClient() };
+  }
+  throw new Error('Admin access required');
+}
+
+
 
 let profilesPasswordHashColumnPromise;
 let authSupportTablesPromise;
@@ -2514,7 +2531,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
 app.get('/api/admin/user-cities', async (req, res) => {
   try {
     await ensureUserCitiesTable();
-    await verifyAdmin(req);
+    await verifyTeamManager(req);
     const { rows } = await pool.query(
       'SELECT user_id, city, is_primary FROM user_cities ORDER BY user_id, is_primary DESC, city ASC'
     );
@@ -2534,7 +2551,7 @@ app.get('/api/admin/user-cities', async (req, res) => {
 app.post('/api/admin/user-cities', async (req, res) => {
   try {
     await ensureUserCitiesTable();
-    await verifyAdmin(req);
+    await verifyTeamManager(req);
     const { userId, cities, primaryCity } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId obrigatório' });
     const list = sanitizeCities(cities);

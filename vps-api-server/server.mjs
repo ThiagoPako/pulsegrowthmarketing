@@ -1526,6 +1526,23 @@ async function verifyAdmin(req) {
   throw new Error('Admin access required');
 }
 
+/**
+ * Gestão de equipe: admin/social_media OU gestor_projetos.
+ * O frontend (Team.tsx) libera essas ações para gestor_projetos,
+ * então o backend precisa aceitar o mesmo conjunto de papéis.
+ */
+async function verifyTeamManager(req) {
+  const { user, userClient } = await verifyUser(req);
+  if (await isAdminUser(user)) {
+    return { user, userClient, admin: getAdminClient() };
+  }
+  if (await userHasAssignedRole(user, 'gestor_projetos')) {
+    return { user, userClient, admin: getAdminClient() };
+  }
+  throw new Error('Admin access required');
+}
+
+
 
 let profilesPasswordHashColumnPromise;
 let authSupportTablesPromise;

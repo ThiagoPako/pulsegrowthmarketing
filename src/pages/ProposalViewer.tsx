@@ -520,6 +520,16 @@ export default function ProposalViewer() {
     const installs = customData.installments || 1;
     const installmentVal = discountedVal / installs;
 
+    // Oferta 6+6: primeiros 6 meses com valor promocional
+    const promoVal = Number(customData.promo66Value) || 0;
+    const promo66Active = customData.contractDuration === 'anual'
+      && !!customData.promo66Enabled
+      && promoVal > 0
+      && promoVal < totalBeforeDiscount;
+    const promo66Pct = promo66Active ? ((totalBeforeDiscount - promoVal) / totalBeforeDiscount) * 100 : 0;
+    const promo66Saving = promo66Active ? (totalBeforeDiscount - promoVal) * 6 : 0;
+
+
     const extraServices: { icon: any; value: string | number; label: string }[] = [];
     if (customData.videos > 0) extraServices.push({ icon: Film, value: customData.videos, label: 'Vídeos/mês' });
     if (customData.stories > 0) extraServices.push({ icon: Camera, value: customData.stories, label: 'Stories/mês' });
@@ -647,23 +657,57 @@ export default function ProposalViewer() {
 
         <AnimatedSection className="px-6 md:px-10 pb-8">
           <h2 className="text-lg font-bold text-gray-800 mb-4">Investimento Mensal</h2>
-          <motion.div whileHover={{ scale: 1.01 }} className="border-2 rounded-2xl p-6" style={{ borderColor: accentColor }}>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600 text-sm">Valor do Contrato</span>
-                <span className="text-xl font-bold" style={{ color: accentColor }}>{fmt(totalBeforeDiscount)}<span className="text-xs font-normal text-gray-500">/mês</span></span>
+          <motion.div whileHover={{ scale: 1.01 }} className="border-2 rounded-2xl p-6 relative overflow-hidden" style={{ borderColor: promo66Active ? 'hsl(142 71% 35%)' : accentColor }}>
+            {promo66Active && (
+              <div className="absolute top-0 right-0 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl" style={{ background: 'hsl(142 71% 35%)' }}>
+                OFERTA ESPECIAL • {promo66Pct.toFixed(0)}% OFF
               </div>
-
-              {discount > 0 && (
+            )}
+            <div className="space-y-3">
+              {promo66Active ? (
                 <>
-                  <div className="flex justify-between items-center text-green-600 text-sm">
-                    <span>Desconto {customData.contractDuration === 'anual' ? '(Fidelidade Anual)' : `(${discount}%)`}</span>
-                    <span className="font-bold">-{fmt(totalBeforeDiscount - discountedVal)}</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600 text-sm">Valor normal</span>
+                    <span className="text-base font-semibold text-gray-400 line-through">{fmt(totalBeforeDiscount)}<span className="text-xs font-normal">/mês</span></span>
                   </div>
                   <div className="flex justify-between items-center border-t pt-2">
-                    <span className="font-bold text-gray-800">Total mensal</span>
-                    <motion.span animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 1, delay: 0.5 }} className="text-2xl font-bold" style={{ color: accentColor }}>{fmt(discountedVal)}<span className="text-xs font-normal text-gray-500">/mês</span></motion.span>
+                    <div>
+                      <span className="font-bold text-gray-800 block">Primeiros 6 meses</span>
+                      <span className="text-[11px] text-green-700 font-semibold">Valor promocional garantido</span>
+                    </div>
+                    <motion.span animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 1, delay: 0.5 }} className="text-3xl font-black" style={{ color: 'hsl(142 71% 35%)' }}>
+                      {fmt(promoVal)}<span className="text-xs font-normal text-gray-500">/mês</span>
+                    </motion.span>
                   </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-600">Do 7º ao 12º mês</span>
+                    <span className="font-bold" style={{ color: accentColor }}>{fmt(totalBeforeDiscount)}<span className="text-xs font-normal text-gray-500">/mês</span></span>
+                  </div>
+                  <div className="rounded-xl p-3 text-center" style={{ background: 'hsl(142 71% 96%)' }}>
+                    <p className="text-xs font-bold" style={{ color: 'hsl(142 71% 28%)' }}>
+                      Você economiza {fmt(promo66Saving)} nos 6 primeiros meses
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600 text-sm">Valor do Contrato</span>
+                    <span className="text-xl font-bold" style={{ color: accentColor }}>{fmt(totalBeforeDiscount)}<span className="text-xs font-normal text-gray-500">/mês</span></span>
+                  </div>
+
+                  {discount > 0 && (
+                    <>
+                      <div className="flex justify-between items-center text-green-600 text-sm">
+                        <span>Desconto {customData.contractDuration === 'anual' ? '(Fidelidade Anual)' : `(${discount}%)`}</span>
+                        <span className="font-bold">-{fmt(totalBeforeDiscount - discountedVal)}</span>
+                      </div>
+                      <div className="flex justify-between items-center border-t pt-2">
+                        <span className="font-bold text-gray-800">Total mensal</span>
+                        <motion.span animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 1, delay: 0.5 }} className="text-2xl font-bold" style={{ color: accentColor }}>{fmt(discountedVal)}<span className="text-xs font-normal text-gray-500">/mês</span></motion.span>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
 
@@ -678,28 +722,33 @@ export default function ProposalViewer() {
                 <span className="text-gray-600">Pagamento</span>
                 <span className="font-medium">{PAYMENT_METHODS[customData.paymentMethod] || customData.paymentMethod || 'PIX'}</span>
               </div>
-              {installs > 1 && (
+              {installs > 1 && !promo66Active && (
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600">{installs}x de</span>
                   <span className="font-bold" style={{ color: accentColor }}>{fmt(installmentVal)}</span>
                 </div>
               )}
 
-              <Separator />
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                <div className="rounded-xl border-2 p-4 text-center" style={{ borderColor: customData.contractDuration === 'semestral' ? accentColor : '#e5e7eb' }}>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Semestral</div>
-                  <div className="text-xl font-bold mt-1" style={{ color: accentColor }}>{fmt(totalBeforeDiscount)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
-                  <div className="text-[10px] text-gray-500 mt-1">Compromisso de 6 meses</div>
-                </div>
-                <div className="rounded-xl border-2 p-4 text-center relative" style={{ borderColor: customData.contractDuration === 'anual' ? accentColor : '#e5e7eb' }}>
-                  <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">5% OFF</div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Anual</div>
-                  <div className="text-xl font-bold mt-1" style={{ color: accentColor }}>{fmt(totalBeforeDiscount * 0.95)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
-                  <div className="text-[10px] text-green-600 font-semibold mt-1">Economia total de {fmt(totalBeforeDiscount * 12 * 0.05)}</div>
-                </div>
-              </div>
+              {!promo66Active && (
+                <>
+                  <Separator />
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div className="rounded-xl border-2 p-4 text-center" style={{ borderColor: customData.contractDuration === 'semestral' ? accentColor : '#e5e7eb' }}>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Semestral</div>
+                      <div className="text-xl font-bold mt-1" style={{ color: accentColor }}>{fmt(totalBeforeDiscount)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
+                      <div className="text-[10px] text-gray-500 mt-1">Compromisso de 6 meses</div>
+                    </div>
+                    <div className="rounded-xl border-2 p-4 text-center relative" style={{ borderColor: customData.contractDuration === 'anual' ? accentColor : '#e5e7eb' }}>
+                      <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">5% OFF</div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Anual</div>
+                      <div className="text-xl font-bold mt-1" style={{ color: accentColor }}>{fmt(totalBeforeDiscount * 0.95)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
+                      <div className="text-[10px] text-green-600 font-semibold mt-1">Economia total de {fmt(totalBeforeDiscount * 12 * 0.05)}</div>
+                    </div>
+                  </div>
+                </>
+              )}
               <p className="text-[11px] text-gray-500 text-center pt-1">O valor é pago mensalmente conforme a duração do contrato escolhida.</p>
+
 
               {adicionaisTotal > 0 && (
                 <div className="mt-3 p-3 rounded-lg bg-gray-50 border border-gray-200 text-xs">

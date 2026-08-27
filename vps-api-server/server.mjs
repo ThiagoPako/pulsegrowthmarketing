@@ -2531,7 +2531,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
 app.get('/api/admin/user-cities', async (req, res) => {
   try {
     await ensureUserCitiesTable();
-    await verifyAdmin(req);
+    await verifyTeamManager(req);
     const { rows } = await pool.query(
       'SELECT user_id, city, is_primary FROM user_cities ORDER BY user_id, is_primary DESC, city ASC'
     );
@@ -2551,7 +2551,7 @@ app.get('/api/admin/user-cities', async (req, res) => {
 app.post('/api/admin/user-cities', async (req, res) => {
   try {
     await ensureUserCitiesTable();
-    await verifyAdmin(req);
+    await verifyTeamManager(req);
     const { userId, cities, primaryCity } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId obrigatório' });
     const list = sanitizeCities(cities);

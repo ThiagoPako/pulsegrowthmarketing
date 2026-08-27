@@ -520,6 +520,16 @@ export default function ProposalViewer() {
     const installs = customData.installments || 1;
     const installmentVal = discountedVal / installs;
 
+    // Oferta 6+6: primeiros 6 meses com valor promocional
+    const promoVal = Number(customData.promo66Value) || 0;
+    const promo66Active = customData.contractDuration === 'anual'
+      && !!customData.promo66Enabled
+      && promoVal > 0
+      && promoVal < totalBeforeDiscount;
+    const promo66Pct = promo66Active ? ((totalBeforeDiscount - promoVal) / totalBeforeDiscount) * 100 : 0;
+    const promo66Saving = promo66Active ? (totalBeforeDiscount - promoVal) * 6 : 0;
+
+
     const extraServices: { icon: any; value: string | number; label: string }[] = [];
     if (customData.videos > 0) extraServices.push({ icon: Film, value: customData.videos, label: 'Vídeos/mês' });
     if (customData.stories > 0) extraServices.push({ icon: Camera, value: customData.stories, label: 'Stories/mês' });

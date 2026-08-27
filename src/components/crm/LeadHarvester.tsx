@@ -7,51 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import {
-  Search, MapPin, UserPlus, Building2, Phone, Mail, Globe, Instagram,
-  Facebook, Clock, TrendingUp, MessageCircle, Map,
-} from 'lucide-react';
+import { Search, UserPlus, Sparkles, Download, FileJson, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
-
-interface Company {
-  id: string;
-  razao_social: string;
-  contato: string;
-  email: string;
-  telefone: string;
-  telefones?: string[];
-  whatsapp?: string;
-  atuacao: string;
-  categoria?: string;
-  endereco: string;
-  bairro?: string;
-  cep?: string;
-  cidade: string;
-  website?: string;
-  instagram?: string;
-  facebook?: string;
-  horario?: string;
-  maps_url?: string;
-  score?: number;
-  potencial_mensal?: number;
-  tem_contato?: boolean;
-  cnpj?: string;
-  decisor?: string;
-  decisor_cargo?: string;
-  socios?: string[];
-  porte?: string;
-  capital_social?: number | null;
-  fontes?: string[];
-}
-
-interface HarvestResult {
-  data: Company[];
-  total: number;
-  com_contato: number;
-  potencial_total: number;
-}
+import { LeadCard } from './LeadCard';
+import { Company, HarvestResult, brl, exportCompanies } from './harvestTypes';
 
 const NICHES = [
   { value: 'all', label: 'Todos os nichos' },
@@ -73,14 +33,22 @@ const UFS = [
   'Amazonas', 'Acre', 'Rondônia', 'Roraima', 'Amapá',
 ];
 
-const brl = (v?: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v || 0);
+const CONTACT_FILTERS = [
+  { value: 'todos', label: 'Todas as empresas' },
+  { value: 'qualquer', label: 'Somente com algum contato' },
+  { value: 'whatsapp', label: 'Somente com WhatsApp' },
+  { value: 'telefone', label: 'Somente com telefone' },
+  { value: 'email', label: 'Somente com e-mail' },
+  { value: 'instagram', label: 'Somente com Instagram' },
+];
 
-const scoreTone = (score = 0) => {
-  if (score >= 75) return 'bg-primary/15 text-primary';
-  if (score >= 50) return 'bg-amber-500/15 text-amber-600 dark:text-amber-400';
-  return 'bg-muted text-muted-foreground';
-};
+const QUALITY_FILTERS = [
+  { value: '0', label: 'Qualquer completude' },
+  { value: '40', label: 'Dados parcialmente completos (40%+)' },
+  { value: '70', label: 'Dados completos (70%+)' },
+];
+
+const PAGE_SIZES = ['25', '50', '100', '250', '500', '1000'];
 
 export function LeadHarvester() {
   const { user } = useAuth();
@@ -90,18 +58,29 @@ export function LeadHarvester() {
   const [location, setLocation] = useState('');
   const [niche, setNiche] = useState('all');
   const [term, setTerm] = useState('');
-  const [onlyWithContact, setOnlyWithContact] = useState(false);
+  const [contactFilter, setContactFilter] = useState('todos');
+  const [onlyWithDecisor, setOnlyWithDecisor] = useState(false);
+  const [minCompletude, setMinCompletude] = useState('0');
+  const [mode, setMode] = useState<'rapido' | 'profundo'>('rapido');
+  const [pageSize, setPageSize] = useState('100');
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [enriching, setEnriching] = useState(false);
 
-  const queryKey = ['lead_harvest', city, state, location, niche, term, onlyWithContact];
+  const queryKey = ['lead_harvest', city, state, location, niche, term, contactFilter, onlyWithDecisor, minCompletude, mode, pageSize, page];
 
   const { data: result, isLoading, refetch } = useQuery<HarvestResult>({
     queryKey,
     queryFn: async () => {
       const res = await vpsAuthedFetch('/crm/harvest/search', {
         method: 'POST',
-        body: JSON.stringify({ city, state, location, niche, term, onlyWithContact, limit: 5000 }),
+        body: JSON.stringify({
+          city, state, location, niche, term, mode,
+          contactFilter, onlyWithDecisor,
+          minCompletude: Number(minCompletude),
+          pageSize: Number(pageSize), page, limit: 5000,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || 'Falha ao buscar empresas');
@@ -110,6 +89,10 @@ export function LeadHarvester() {
         total: json.total || 0,
         com_contato: json.com_contato || 0,
         potencial_total: json.potencial_total || 0,
+        page: json.page || 1,
+        total_pages: json.total_pages || 1,
+        stats: json.stats,
+        mode: json.mode,
       };
     },
     enabled: false,
@@ -117,14 +100,16 @@ export function LeadHarvester() {
   });
 
   const companies = result?.data || [];
+  const stats = result?.stats;
 
-  const selectedCompanies = useMemo(
-    () => companies.filter(c => selected[c.id]),
-    [companies, selected]
-  );
+  const selectedCompanies = useMemo(() => companies.filter(c => selected[c.id]), [companies, selected]);
+
+  const setCompanies = (next: Company[]) => {
+    queryClient.setQueryData(queryKey, { ...(result || {}), data: next });
+  };
 
   const clearLeads = () => {
-    queryClient.setQueryData(queryKey, { data: [], total: 0, com_contato: 0, potencial_total: 0 });
+    queryClient.setQueryData(queryKey, { data: [], total: 0, com_contato: 0, potencial_total: 0, page: 1, total_pages: 1 });
     setSelected({});
     toast.info('Resultados da colheita limpos.');
   };
@@ -132,26 +117,27 @@ export function LeadHarvester() {
   const insertLead = async (company: Company) => {
     if (!user?.id) throw new Error('Sessão expirada');
     const detalhes = [
-      company.decisor ? `Decisor: ${company.decisor}${company.decisor_cargo ? ` (${company.decisor_cargo})` : ''}` : '',
+      company.decisor ? `Responsável: ${company.decisor}${company.decisor_cargo ? ` (${company.decisor_cargo})` : ''}` : 'Responsável: não identificado',
       company.socios?.length ? `Sócios: ${company.socios.join(' | ')}` : '',
       company.cnpj ? `CNPJ: ${company.cnpj}` : '',
       company.porte ? `Porte: ${company.porte}` : '',
-      `Endereço: ${company.endereco || 'não informado'}`,
-      company.bairro ? `Bairro: ${company.bairro}` : '',
+      `Endereço: ${company.endereco || 'não identificado'}`,
       company.cep ? `CEP: ${company.cep}` : '',
-      `Atuação: ${company.categoria || company.atuacao}`,
+      `Segmento: ${company.categoria || company.atuacao}`,
       company.telefones?.length ? `Telefones: ${company.telefones.join(' | ')}` : '',
+      company.whatsapp ? `WhatsApp (${company.whatsapp_status === 'confirmado' ? 'confirmado' : 'provável'}): ${company.whatsapp}` : '',
       company.website ? `Site: ${company.website}` : '',
       company.instagram ? `Instagram: ${company.instagram}` : '',
       company.facebook ? `Facebook: ${company.facebook}` : '',
-      company.horario ? `Horário: ${company.horario}` : '',
       company.maps_url ? `Mapa: ${company.maps_url}` : '',
+      `Score: ${company.score ?? 0}/100 • Completude: ${company.completude ?? 0}% • Confiança: ${company.confianca || 'não confirmada'}`,
       company.fontes?.length ? `Fontes: ${company.fontes.join(', ')}` : '',
+      `Capturado em: ${new Date().toLocaleDateString('pt-BR')}`,
       `Potencial estimado: ${brl(company.potencial_mensal)}/mês`,
     ].filter(Boolean).join('\n');
 
     const { error } = await supabase.from('crm_leads').insert([{
-      name: company.contato,
+      name: company.decisor || company.contato,
       company: company.razao_social,
       email: company.email,
       phone: company.telefone,
@@ -168,9 +154,9 @@ export function LeadHarvester() {
     mutationFn: insertLead,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
-      toast.success('Empresa adicionada ao CRM como novo lead!');
+      toast.success('Empresa enviada para o CRM como novo lead!');
     },
-    onError: (err: any) => toast.error('Erro ao adicionar lead: ' + err.message),
+    onError: (err: Error) => toast.error('Erro ao adicionar lead: ' + err.message),
   });
 
   const addSelected = async () => {
@@ -179,18 +165,35 @@ export function LeadHarvester() {
     let ok = 0;
     const fails: string[] = [];
     for (const company of selectedCompanies) {
-      try {
-        await insertLead(company);
-        ok++;
-      } catch (err: any) {
-        fails.push(`${company.razao_social}: ${err?.message || 'erro'}`);
-      }
+      try { await insertLead(company); ok++; }
+      catch (err) { fails.push(`${company.razao_social}: ${(err as Error)?.message || 'erro'}`); }
     }
     setBulkLoading(false);
     setSelected({});
     queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
-    if (ok > 0) toast.success(`${ok} lead(s) adicionado(s) ao CRM.`);
+    if (ok > 0) toast.success(`${ok} lead(s) enviado(s) ao CRM.`);
     if (fails.length > 0) toast.error(`${fails.length} falha(s): ${fails[0]}`);
+  };
+
+  const enrichSelected = async () => {
+    const alvo = selectedCompanies.length ? selectedCompanies : companies;
+    if (!alvo.length) return;
+    setEnriching(true);
+    try {
+      const res = await vpsAuthedFetch('/crm/harvest/enrich', {
+        method: 'POST',
+        body: JSON.stringify({ companies: alvo.slice(0, 200), niche, force: true }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || 'Falha ao enriquecer');
+      const byId = new Map((json.data as Company[]).map(c => [c.id, c]));
+      setCompanies(companies.map(c => byId.get(c.id) || c));
+      toast.success(`${json.data.length} lead(s) enriquecido(s).`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setEnriching(false);
+    }
   };
 
   const toggleAll = (checked: boolean) => {
@@ -200,25 +203,22 @@ export function LeadHarvester() {
     setSelected(next);
   };
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const runSearch = async (targetPage = 1) => {
     if (city === 'all' && !location.trim()) {
       toast.error('Informe uma cidade para buscar empresas reais.');
       return;
     }
     setSelected({});
+    setPage(targetPage);
     const res = await refetch();
-    if (res.error) {
-      toast.error((res.error as Error).message);
-    } else if ((res.data?.data || []).length === 0) {
-      toast.info('Nenhuma empresa encontrada com esses filtros.');
-    }
+    if (res.error) toast.error((res.error as Error).message);
+    else if ((res.data?.data || []).length === 0) toast.info('Nenhuma empresa encontrada com esses filtros.');
   };
 
   return (
     <div className="space-y-6">
       <Card className="p-6 bg-card/50 border-none shadow-sm">
-        <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
+        <form onSubmit={(e) => { e.preventDefault(); runSearch(1); }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
           <div className="space-y-2">
             <Label>Cidade</Label>
             <Input
@@ -228,11 +228,8 @@ export function LeadHarvester() {
               list="harvest-city-suggestions"
             />
             <datalist id="harvest-city-suggestions">
-              <option value="Minaçu" />
-              <option value="Uruaçu" />
-              <option value="Goiânia" />
-              <option value="Anápolis" />
-              <option value="Porangatu" />
+              <option value="Minaçu" /><option value="Uruaçu" /><option value="Goiânia" />
+              <option value="Anápolis" /><option value="Porangatu" />
             </datalist>
           </div>
 
@@ -248,11 +245,7 @@ export function LeadHarvester() {
 
           <div className="space-y-2">
             <Label>Bairro / rua</Label>
-            <Input
-              placeholder="Ex.: Centro"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-            />
+            <Input placeholder="Ex.: Centro" value={location} onChange={(e) => setLocation(e.target.value)} />
           </div>
 
           <div className="space-y-2">
@@ -267,11 +260,7 @@ export function LeadHarvester() {
 
           <div className="space-y-2">
             <Label>Busca livre</Label>
-            <Input
-              placeholder="Nome ou atividade"
-              value={term}
-              onChange={(e) => setTerm(e.target.value)}
-            />
+            <Input placeholder="Nome ou atividade" value={term} onChange={(e) => setTerm(e.target.value)} />
           </div>
 
           <div className="flex gap-2">
@@ -280,43 +269,84 @@ export function LeadHarvester() {
               {isLoading ? 'Buscando...' : 'Colher'}
             </Button>
             {companies.length > 0 && (
-              <Button
-                type="button"
-                variant="outline"
-                className="gap-2 h-10 border-destructive/20 text-destructive hover:bg-destructive/10"
-                onClick={clearLeads}
-              >
+              <Button type="button" variant="outline" className="gap-2 h-10 border-destructive/20 text-destructive hover:bg-destructive/10" onClick={clearLeads}>
                 Limpar
               </Button>
             )}
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-muted-foreground lg:col-span-6">
-            <Checkbox checked={onlyWithContact} onCheckedChange={(v) => setOnlyWithContact(Boolean(v))} />
-            Mostrar apenas empresas com telefone ou e-mail
-          </label>
+          <div className="space-y-2 lg:col-span-2">
+            <Label>Leads prontos para contato</Label>
+            <Select value={contactFilter} onValueChange={setContactFilter}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {CONTACT_FILTERS.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2 lg:col-span-2">
+            <Label>Qualidade dos dados</Label>
+            <Select value={minCompletude} onValueChange={setMinCompletude}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {QUALITY_FILTERS.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Resultados por página</Label>
+            <Select value={pageSize} onValueChange={setPageSize}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {PAGE_SIZES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-end gap-2">
+            <Button
+              type="button"
+              variant={mode === 'profundo' ? 'default' : 'outline'}
+              className="gap-2 h-10 w-full"
+              onClick={() => setMode(mode === 'profundo' ? 'rapido' : 'profundo')}
+            >
+              {mode === 'profundo' ? <Sparkles className="h-4 w-4" /> : <Zap className="h-4 w-4" />}
+              {mode === 'profundo' ? 'Enriquecimento profundo' : 'Busca rápida'}
+            </Button>
+          </div>
+
+          <div className="lg:col-span-6 space-y-1">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Checkbox checked={onlyWithDecisor} onCheckedChange={(v) => setOnlyWithDecisor(Boolean(v))} />
+              Somente empresas com responsável/decisor identificado
+            </label>
+            {mode === 'profundo' && (
+              <p className="text-xs text-muted-foreground">Esta busca utiliza mais consultas e pode levar mais tempo.</p>
+            )}
+          </div>
         </form>
       </Card>
 
-      {companies.length > 0 && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Card className="p-4">
-            <p className="text-xs uppercase text-muted-foreground">Empresas</p>
-            <p className="text-2xl font-bold">{result?.total ?? companies.length}</p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-xs uppercase text-muted-foreground">Com contato</p>
-            <p className="text-2xl font-bold text-primary">{result?.com_contato ?? 0}</p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-xs uppercase text-muted-foreground">Potencial mensal</p>
-            <p className="text-2xl font-bold">{brl(result?.potencial_total)}</p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-xs uppercase text-muted-foreground">Selecionados</p>
-            <p className="text-2xl font-bold">{selectedCompanies.length}</p>
-          </Card>
-        </div>
+      {stats && companies.length > 0 && (
+        <Card className="p-5 space-y-3">
+          <p className="text-sm font-semibold uppercase tracking-tight text-muted-foreground">Central de prospecção</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 text-sm">
+            {[
+              ['Empresas', stats.total], ['Com telefone', stats.com_telefone], ['Com WhatsApp', stats.com_whatsapp],
+              ['Com Instagram', stats.com_instagram], ['Com e-mail', stats.com_email], ['Com decisor', stats.com_decisor],
+              ['Prontos p/ contato', stats.prontos], ['Completude média', `${stats.completude_media}%`],
+              ['Score médio', stats.score_medio], ['Taxa de enriquecimento', `${stats.taxa_enriquecimento}%`],
+              ['Potencial', brl(result?.potencial_total)], ['Selecionados', selectedCompanies.length],
+            ].map(([label, value]) => (
+              <div key={String(label)} className="rounded-lg bg-muted/40 p-3">
+                <p className="text-[10px] uppercase text-muted-foreground">{label}</p>
+                <p className="text-lg font-bold">{value}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
       )}
 
       {companies.length > 0 && (
@@ -328,150 +358,32 @@ export function LeadHarvester() {
             />
             Selecionar todos ({companies.length})
           </label>
-          <Button
-            className="ml-auto gap-2"
-            size="sm"
-            disabled={selectedCompanies.length === 0 || bulkLoading}
-            onClick={addSelected}
-          >
+          <Button variant="outline" size="sm" className="gap-2" onClick={enrichSelected} disabled={enriching}>
+            <Sparkles className="h-4 w-4" /> {enriching ? 'Enriquecendo...' : 'Enriquecer leads'}
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={() => exportCompanies(selectedCompanies.length ? selectedCompanies : companies, 'csv')}>
+            <Download className="h-4 w-4" /> CSV
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={() => exportCompanies(selectedCompanies.length ? selectedCompanies : companies, 'json')}>
+            <FileJson className="h-4 w-4" /> JSON
+          </Button>
+          <Button className="ml-auto gap-2" size="sm" disabled={selectedCompanies.length === 0 || bulkLoading} onClick={addSelected}>
             <UserPlus className="h-4 w-4" />
-            {bulkLoading ? 'Adicionando...' : 'Adicionar selecionados ao CRM'}
+            {bulkLoading ? 'Enviando...' : 'Enviar selecionados ao CRM'}
           </Button>
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {companies.map((company) => (
-          <Card
+          <LeadCard
             key={company.id}
-            className={`p-5 flex flex-col gap-4 border shadow-sm hover:shadow-md transition-all overflow-hidden ${selected[company.id] ? 'border-primary ring-1 ring-primary/40' : 'border-transparent'}`}
-          >
-            <div className="flex justify-between items-start gap-3">
-              <div className="space-y-1 min-w-0">
-                <h3 className="font-bold text-lg truncate flex items-center gap-2">
-                  <Building2 className="h-4 w-4 text-primary shrink-0" />
-                  {company.razao_social}
-                </h3>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/20 border-none">
-                    {company.categoria || company.atuacao}
-                  </Badge>
-                  <span className="flex items-center gap-1">
-                    <MapPin className="h-3 w-3" /> {company.cidade}
-                  </span>
-                </div>
-              </div>
-              <Checkbox
-                aria-label={`Selecionar ${company.razao_social}`}
-                checked={Boolean(selected[company.id])}
-                onCheckedChange={(v) => setSelected(prev => ({ ...prev, [company.id]: Boolean(v) }))}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className={`p-2 rounded-lg space-y-1 ${scoreTone(company.score)}`}>
-                <p className="font-semibold uppercase tracking-tighter flex items-center gap-1">
-                  <TrendingUp className="h-3 w-3" /> Score
-                </p>
-                <p className="font-bold text-base">{company.score ?? 0}/100</p>
-              </div>
-              <div className="p-2 rounded-lg bg-muted/50 space-y-1">
-                <p className="font-semibold text-muted-foreground uppercase tracking-tighter">Potencial</p>
-                <p className="font-bold text-base">{brl(company.potencial_mensal)}<span className="text-[10px] font-normal">/mês</span></p>
-              </div>
-            </div>
-
-            {(company.decisor || company.cnpj) && (
-              <div className="rounded-lg border border-primary/20 bg-primary/5 p-2.5 space-y-1 text-xs">
-                <p className="flex items-center gap-1.5 font-semibold text-primary uppercase tracking-tight text-[10px]">
-                  <UserPlus className="h-3 w-3" /> Decisor
-                </p>
-                <p className="font-medium truncate">
-                  {company.decisor || 'Não identificado'}
-                  {company.decisor_cargo ? <span className="text-muted-foreground font-normal"> • {company.decisor_cargo}</span> : null}
-                </p>
-                {company.cnpj && (
-                  <p className="text-muted-foreground">CNPJ {company.cnpj}{company.porte ? ` • ${company.porte}` : ''}</p>
-                )}
-                {company.fontes?.length ? (
-                  <p className="text-[10px] text-muted-foreground">Fontes: {company.fontes.join(', ')}</p>
-                ) : null}
-              </div>
-            )}
-
-            <div className="space-y-1.5 text-xs">
-              <p className="flex items-start gap-2">
-                <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
-                <span className="text-muted-foreground">
-                  {company.endereco || 'Endereço não informado'}{company.cep ? ` • ${company.cep}` : ''}
-                </span>
-              </p>
-              <p className="flex items-center gap-2">
-                <Phone className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                {company.telefones?.length
-                  ? <span className="font-medium">{company.telefones.join(' | ')}</span>
-                  : <span className="text-muted-foreground">Telefone não informado</span>}
-              </p>
-              <p className="flex items-center gap-2 truncate">
-                <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                {company.email
-                  ? <span className="truncate font-medium">{company.email}</span>
-                  : <span className="text-muted-foreground">E-mail não informado</span>}
-              </p>
-              {company.horario && (
-                <p className="flex items-center gap-2 text-muted-foreground truncate">
-                  <Clock className="h-3.5 w-3.5 shrink-0" /> {company.horario}
-                </p>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {company.whatsapp && (
-                <Button asChild size="sm" variant="outline" className="gap-1 h-8 text-xs">
-                  <a href={company.whatsapp} target="_blank" rel="noopener noreferrer">
-                    <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
-                  </a>
-                </Button>
-              )}
-              {company.website && (
-                <Button asChild size="sm" variant="outline" className="gap-1 h-8 text-xs">
-                  <a href={company.website} target="_blank" rel="noopener noreferrer">
-                    <Globe className="h-3.5 w-3.5" /> Site
-                  </a>
-                </Button>
-              )}
-              {company.instagram && (
-                <Button asChild size="sm" variant="outline" className="gap-1 h-8 text-xs">
-                  <a href={company.instagram} target="_blank" rel="noopener noreferrer">
-                    <Instagram className="h-3.5 w-3.5" /> Instagram
-                  </a>
-                </Button>
-              )}
-              {company.facebook && (
-                <Button asChild size="sm" variant="outline" className="gap-1 h-8 text-xs">
-                  <a href={company.facebook} target="_blank" rel="noopener noreferrer">
-                    <Facebook className="h-3.5 w-3.5" /> Facebook
-                  </a>
-                </Button>
-              )}
-              {company.maps_url && (
-                <Button asChild size="sm" variant="outline" className="gap-1 h-8 text-xs">
-                  <a href={company.maps_url} target="_blank" rel="noopener noreferrer">
-                    <Map className="h-3.5 w-3.5" /> Mapa
-                  </a>
-                </Button>
-              )}
-            </div>
-
-            <Button
-              className="w-full gap-2 mt-auto bg-primary/90 hover:bg-primary"
-              onClick={() => addLead.mutate(company)}
-              disabled={addLead.isPending}
-            >
-              <UserPlus className="h-4 w-4" />
-              {addLead.isPending ? 'Adicionando...' : 'Adicionar como Lead'}
-            </Button>
-          </Card>
+            company={company}
+            selected={Boolean(selected[company.id])}
+            onToggle={(v) => setSelected(prev => ({ ...prev, [company.id]: v }))}
+            onSendToCrm={() => addLead.mutate(company)}
+            sending={addLead.isPending}
+          />
         ))}
 
         {companies.length === 0 && !isLoading && (
@@ -481,6 +393,14 @@ export function LeadHarvester() {
           </div>
         )}
       </div>
+
+      {(result?.total_pages || 1) > 1 && (
+        <div className="flex items-center justify-center gap-3">
+          <Button variant="outline" size="sm" disabled={page <= 1 || isLoading} onClick={() => runSearch(page - 1)}>Anterior</Button>
+          <span className="text-sm text-muted-foreground">Página {result?.page} de {result?.total_pages}</span>
+          <Button variant="outline" size="sm" disabled={page >= (result?.total_pages || 1) || isLoading} onClick={() => runSearch(page + 1)}>Próxima</Button>
+        </div>
+      )}
     </div>
   );
 }

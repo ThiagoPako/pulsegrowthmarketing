@@ -10531,50 +10531,133 @@ async function searchWebContacts(name, cidade) {
   return { telefones, emails, instagram };
 }
 
+// Registra a origem de cada dado (valor, fonte, data, confiança) — exigido para auditoria
+function registrarOrigem(origem, campo, valor, fonte) {
+  if (!valor) return;
+  const atual = origem[campo];
+  if (atual) {
+    if (!atual.fontes.includes(fonte)) atual.fontes.push(fonte);
+    atual.confianca = atual.fontes.length >= 3 ? 'confirmado'
+      : atual.fontes.length === 2 ? 'alta' : atual.confianca;
+    return;
+  }
+  origem[campo] = {
+    valor: String(valor),
+    fontes: [fonte],
+    coletado_em: new Date().toISOString(),
+    confianca: fonte === 'receita-federal' ? 'confirmado'
+      : fonte === 'site-oficial' ? 'alta'
+      : fonte === 'openstreetmap' ? 'media' : 'baixa',
+  };
+}
+
 async function enrichCompany(company, opts = {}) {
   const cacheKey = company.id;
-  if (ENRICH_CACHE.has(cacheKey)) return { ...company, ...ENRICH_CACHE.get(cacheKey) };
+  const cacheHit = ENRICH_CACHE.get(cacheKey);
+  if (cacheHit && opts.force !== true) {
+    return { ...company, ...cacheHit, cache: true };
+  }
 
   const patch = { fontes: ['openstreetmap'] };
+  const origem = { ...(company.origem || {}) };
+  const historico = [...(company.historico || [])];
+  const log = (evento) => historico.push({ evento, em: new Date().toISOString() });
+  const erros = [];
+
+  if (!historico.length) log('Empresa encontrada na base pública (OpenStreetMap)');
+  if (company.telefone) registrarOrigem(origem, 'telefone', company.telefone, 'openstreetmap');
+  if (company.email) registrarOrigem(origem, 'email', company.email, 'openstreetmap');
+  if (company.website) registrarOrigem(origem, 'website', company.website, 'openstreetmap');
+  if (company.instagram) registrarOrigem(origem, 'instagram', company.instagram, 'openstreetmap');
+  if (company.endereco) registrarOrigem(origem, 'endereco', company.endereco, 'openstreetmap');
+
   const telefones = new Set((company.telefones || []).map(normalizePhoneBR).filter(Boolean));
   let email = company.email || '';
 
   // 1) Receita Federal via CNPJ (sócio/decisor + contatos oficiais)
   if (company.cnpj) {
-    const cnpjData = await fetchCnpjData(company.cnpj);
-    if (cnpjData) {
-      patch.fontes.push('receita-federal');
-      patch.decisor = cnpjData.decisor || '';
-      patch.decisor_cargo = cnpjData.decisor_cargo || '';
-      patch.socios = cnpjData.socios;
-      patch.capital_social = cnpjData.capital_social;
-      patch.porte = cnpjData.porte;
-      patch.razao_social_oficial = cnpjData.razao_social_oficial;
-      if (!email && cnpjData.email) email = cnpjData.email;
-      cnpjData.telefones.forEach(t => { const n = normalizePhoneBR(t); if (n) telefones.add(n); });
+    try {
+      const cnpjData = await fetchCnpjData(company.cnpj);
+      if (cnpjData) {
+        patch.fontes.push('receita-federal');
+        patch.decisor = cnpjData.decisor || '';
+        patch.decisor_cargo = cnpjData.decisor_cargo || '';
+        patch.socios = cnpjData.socios;
+        patch.capital_social = cnpjData.capital_social;
+        patch.porte = cnpjData.porte;
+        patch.razao_social_oficial = cnpjData.razao_social_oficial;
+        registrarOrigem(origem, 'cnpj', company.cnpj, 'receita-federal');
+        if (cnpjData.decisor) {
+          registrarOrigem(origem, 'decisor', cnpjData.decisor, 'receita-federal');
+          log(`Responsável identificado: ${cnpjData.decisor}`);
+        }
+        if (!email && cnpjData.email) {
+          email = cnpjData.email;
+          registrarOrigem(origem, 'email', email, 'receita-federal');
+        }
+        cnpjData.telefones.forEach(t => {
+          const n = normalizePhoneBR(t);
+          if (n) { telefones.add(n); registrarOrigem(origem, 'telefone', formatPhoneBR(n), 'receita-federal'); }
+        });
+      }
+    } catch (err) {
+      erros.push({ fonte: 'receita-federal', erro: err.message });
     }
   }
 
   // 2) Site oficial (home + páginas de contato)
   if (company.website && (!telefones.size || !email)) {
-    const site = await scrapeSiteContacts(company.website);
-    if (site) {
-      patch.fontes.push('site-oficial');
-      if (!email && site.emails.length) email = site.emails[0];
-      site.telefones.forEach(t => telefones.add(t));
-      if (!company.instagram && site.instagram) patch.instagram = site.instagram;
-      if (!company.facebook && site.facebook) patch.facebook = site.facebook;
+    try {
+      const site = await scrapeSiteContacts(company.website);
+      if (site) {
+        patch.fontes.push('site-oficial');
+        if (!email && site.emails.length) {
+          email = site.emails[0];
+          registrarOrigem(origem, 'email', email, 'site-oficial');
+        }
+        patch.emails_extras = site.emails.slice(1);
+        site.telefones.forEach(t => {
+          telefones.add(t);
+          registrarOrigem(origem, 'telefone', formatPhoneBR(t), 'site-oficial');
+        });
+        if (site.whatsapp) {
+          patch.whatsapp_status = 'confirmado';
+          patch.whatsapp = toWhatsappLink(site.whatsapp);
+          registrarOrigem(origem, 'whatsapp', formatPhoneBR(site.whatsapp), 'site-oficial');
+          log('WhatsApp encontrado no site oficial');
+        }
+        if (!company.instagram && site.instagram) {
+          patch.instagram = site.instagram;
+          registrarOrigem(origem, 'instagram', site.instagram, 'site-oficial');
+        }
+        if (!company.facebook && site.facebook) patch.facebook = site.facebook;
+      }
+    } catch (err) {
+      erros.push({ fonte: 'site-oficial', erro: err.message });
     }
   }
 
-  // 3) Busca aberta na web — garante contato para quem não tem site nem CNPJ
+  // 3) Busca aberta na web — apenas no modo profundo ou quando não há contato algum
   if (!telefones.size && opts.webSearch !== false) {
-    const web = await searchWebContacts(company.razao_social, company.cidade);
-    if (web) {
-      patch.fontes.push('busca-web');
-      web.telefones.forEach(t => telefones.add(t));
-      if (!email && web.emails.length) email = web.emails[0];
-      if (!company.instagram && web.instagram) patch.instagram = web.instagram;
+    try {
+      const web = await searchWebContacts(company.razao_social, company.cidade);
+      if (web) {
+        patch.fontes.push('busca-web');
+        web.telefones.forEach(t => {
+          telefones.add(t);
+          registrarOrigem(origem, 'telefone', formatPhoneBR(t), 'busca-web');
+        });
+        if (!email && web.emails.length) {
+          email = web.emails[0];
+          registrarOrigem(origem, 'email', email, 'busca-web');
+        }
+        if (!company.instagram && web.instagram) {
+          patch.instagram = web.instagram;
+          registrarOrigem(origem, 'instagram', web.instagram, 'busca-web');
+        }
+      }
+    } catch (err) {
+      erros.push({ fonte: 'busca-web', erro: err.message });
     }
   }
 
@@ -10582,24 +10665,136 @@ async function enrichCompany(company, opts = {}) {
   if (lista.length) {
     patch.telefones = lista.map(formatPhoneBR);
     patch.telefone = patch.telefones[0];
-    patch.whatsapp = company.whatsapp || toWhatsappLink(lista[0]);
+    log(`Telefone encontrado: ${patch.telefone}`);
+    // Celular (11 dígitos iniciando com 9) => WhatsApp apenas "provável", nunca afirmado
+    const celular = lista.find(d => d.length === 11);
+    if (!patch.whatsapp && celular) {
+      patch.whatsapp = toWhatsappLink(celular);
+      patch.whatsapp_status = 'provavel';
+    }
   }
-  if (email) patch.email = email;
+  if (!patch.whatsapp && company.whatsapp) {
+    patch.whatsapp = company.whatsapp;
+    patch.whatsapp_status = company.whatsapp_status || 'provavel';
+  }
+  if (email) {
+    patch.email = email;
+    log(`E-mail encontrado: ${email}`);
+  }
 
   patch.contato = patch.decisor || company.contato;
   patch.tem_contato = Boolean(patch.telefone || company.telefone || email);
-  patch.score = Math.min(
-    100,
-    (company.score || 0) +
-    (patch.decisor ? 15 : 0) +
-    (patch.telefone && !company.telefone ? 20 : 0) +
-    (email && !company.email ? 10 : 0) +
-    (patch.instagram && !company.instagram ? 5 : 0)
-  );
+  patch.origem = origem;
+  patch.historico = historico;
+  patch.erros_fontes = erros;
+  patch.enriquecido_em = new Date().toISOString();
 
   ENRICH_CACHE.set(cacheKey, patch);
-  return { ...company, ...patch };
+  return { ...company, ...patch, cache: false };
 }
+
+const CAMPOS_COMPLETUDE = [
+  'cnpj', 'razao_social', 'telefone', 'whatsapp', 'email',
+  'instagram', 'website', 'decisor', 'endereco',
+];
+
+// Score comercial (0-100), completude e nível de confiança consolidado
+function finalizeLead(company, niche) {
+  const preenchidos = CAMPOS_COMPLETUDE.filter(f => Boolean(company[f]));
+  const completude = Math.round((preenchidos.length / CAMPOS_COMPLETUDE.length) * 100);
+
+  let score = 0;
+  if (company.telefone) score += 20;
+  if (company.whatsapp) score += company.whatsapp_status === 'confirmado' ? 20 : 12;
+  if (company.instagram) score += 15;
+  if (company.website) score += 10;
+  if (company.decisor) score += 15;
+  if (company.email) score += 10;
+  if (niche && niche !== 'all' && normalizeText(company.categoria || company.atuacao).includes(normalizeText(niche))) {
+    score += 10;
+  }
+  score = Math.min(100, score);
+
+  const classificacao = score >= 80 ? 'quente' : score >= 60 ? 'bom' : score >= 40 ? 'moderado' : 'fraco';
+
+  const origem = company.origem || {};
+  const niveis = Object.values(origem).map(o => o.confianca);
+  const peso = { confirmado: 4, alta: 3, media: 2, baixa: 1 };
+  const media = niveis.length
+    ? niveis.reduce((s, n) => s + (peso[n] || 1), 0) / niveis.length
+    : 0;
+  const confianca = media >= 3.5 ? 'confirmado' : media >= 2.5 ? 'alta' : media >= 1.5 ? 'media' : media > 0 ? 'baixa' : 'nao_confirmado';
+
+  return {
+    ...company,
+    score,
+    completude,
+    classificacao,
+    confianca,
+    tem_decisor: Boolean(company.decisor),
+    pronto_para_contato: Boolean(company.telefone || company.whatsapp || company.email),
+  };
+}
+
+// Similaridade de nomes para deduplicação (tokens em comum)
+function nameSimilarity(a, b) {
+  const clean = (v) => normalizeText(v).replace(/\b(ltda|me|epp|eireli|sa|s\/a|comercio|clinica|servicos)\b/g, ' ');
+  const ta = new Set(clean(a).split(/\W+/).filter(t => t.length > 2));
+  const tb = new Set(clean(b).split(/\W+/).filter(t => t.length > 2));
+  if (!ta.size || !tb.size) return 0;
+  let inter = 0;
+  ta.forEach(t => { if (tb.has(t)) inter++; });
+  return inter / Math.min(ta.size, tb.size);
+}
+
+// Deduplica por CNPJ e, na ausência dele, por similaridade de nome + endereço/telefone
+function dedupeCompanies(companies) {
+  const porCnpj = new Map();
+  const restantes = [];
+  for (const c of companies) {
+    if (c.cnpj) {
+      const existente = porCnpj.get(c.cnpj);
+      if (!existente) porCnpj.set(c.cnpj, c);
+      else porCnpj.set(c.cnpj, { ...existente, ...c });
+    } else {
+      restantes.push(c);
+    }
+  }
+
+  const finais = Array.from(porCnpj.values());
+  for (const c of restantes) {
+    const dup = finais.find(f =>
+      nameSimilarity(f.razao_social, c.razao_social) >= 0.8 &&
+      (
+        normalizeText(f.endereco) === normalizeText(c.endereco) ||
+        (f.telefone && f.telefone === c.telefone) ||
+        (f.website && f.website === c.website)
+      )
+    );
+    if (!dup) finais.push(c);
+  }
+  return finais;
+}
+
+function harvestStats(companies) {
+  const total = companies.length;
+  const soma = (fn) => companies.filter(fn).length;
+  return {
+    total,
+    com_telefone: soma(c => Boolean(c.telefone)),
+    com_whatsapp: soma(c => Boolean(c.whatsapp)),
+    com_instagram: soma(c => Boolean(c.instagram)),
+    com_email: soma(c => Boolean(c.email)),
+    com_decisor: soma(c => Boolean(c.decisor)),
+    com_site: soma(c => Boolean(c.website)),
+    prontos: soma(c => c.pronto_para_contato),
+    enriquecidos: soma(c => Boolean(c.enriquecido_em)),
+    completude_media: total ? Math.round(companies.reduce((s, c) => s + (c.completude || 0), 0) / total) : 0,
+    score_medio: total ? Math.round(companies.reduce((s, c) => s + (c.score || 0), 0) / total) : 0,
+    taxa_enriquecimento: total ? Math.round((soma(c => c.pronto_para_contato) / total) * 100) : 0,
+  };
+}
+
 
 function formatPhoneBR(d) {
   if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;

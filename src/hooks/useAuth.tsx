@@ -138,6 +138,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    // Funções adicionais (colaborador com 2+ funções, ex.: videomaker + editor)
+    let extraRoles: AppRole[] = [];
+    try {
+      const { data: rolesData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId);
+      extraRoles = ((rolesData || []) as Array<{ role: AppRole }>).map(r => r.role).filter(Boolean);
+    } catch (error) {
+      console.warn('fetchProfile user_roles failed:', error);
+    }
+
+    const mergeRoles = (primary: AppRole): AppRole[] =>
+      Array.from(new Set<AppRole>([primary, ...extraRoles]));
+
     // Try VPS first
     const { data, error } = await supabase
       .from('profiles')
@@ -145,9 +160,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .eq('id', userId)
       .single();
     if (data && !error) {
+      const primary = (authProfile?.role as AppRole) || (data as Profile).role;
       setProfile({
         ...(data as Profile),
-        role: (authProfile?.role as AppRole) || (data as Profile).role,
+        role: primary,
+        roles: mergeRoles(primary),
         email: authProfile?.email || (data as Profile).email,
         name: authProfile?.name || (data as Profile).name,
       });
@@ -160,6 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         name: authProfile.name || authProfile.display_name || '',
         email: authProfile.email || '',
         role: authProfile.role as AppRole,
+        roles: mergeRoles(authProfile.role as AppRole),
         avatar_url: authProfile.avatar_url,
         display_name: authProfile.display_name || authProfile.name,
         job_title: authProfile.job_title,
@@ -171,6 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setProfile(null);
   }, []);
+
 
   // On mount, check for existing JWT token
   useEffect(() => {

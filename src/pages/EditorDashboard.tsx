@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, profileHasRole } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
 import BonusCongratsBanner from '@/components/BonusCongratsBanner';
 import { Badge } from '@/components/ui/badge';
@@ -217,7 +217,7 @@ export default function EditorDashboard() {
    const [saving, setSaving] = useState(false);
    const [oldVideoLink, setOldVideoLink] = useState<string | null>(null);
    const fileInputRef = useRef<HTMLInputElement>(null);
-   const isEditorRole = profile?.role === 'editor' || profile?.role === 'videomaker';
+   const isEditorRole = profileHasRole(profile, 'editor', 'videomaker');
 
    // Story upload state
    const [storyClientId, setStoryClientId] = useState('');

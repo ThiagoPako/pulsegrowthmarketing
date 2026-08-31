@@ -49,10 +49,14 @@ export default function EditingControl() {
   const [dragOverTarget, setDragOverTarget] = useState<string | null>(null);
   const [reassigning, setReassigning] = useState(false);
 
+  // Considera função principal + adicionais (ex.: videomaker que também é editor)
   const editors = useMemo(() =>
-    users.filter(u => u.role === 'editor').sort((a, b) => a.name.localeCompare(b.name)),
+    users
+      .filter(u => (u.roles && u.roles.length ? u.roles : [u.role]).includes('editor'))
+      .sort((a, b) => a.name.localeCompare(b.name)),
     [users]
   );
+
 
   const fetchTasks = async () => {
     const { data, error } = await supabase

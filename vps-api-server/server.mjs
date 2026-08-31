@@ -2038,8 +2038,9 @@ async function getUserPrimaryRole(userId, fallbackRole = 'editor') {
          LEFT JOIN auth_users current_auth ON current_auth.id = $1
         WHERE ur.user_id = $1
            OR lower(COALESCE(role_profile.email, role_auth.email, '')) = lower(COALESCE(current_profile.email, current_auth.email, ''))
-        LIMIT 1`,
-      [userId]
+         ORDER BY CASE WHEN ur.role::text = $2 THEN 0 ELSE 1 END, ur.role::text
+         LIMIT 1`,
+      [userId, fallbackRole]
     );
     return roles[0]?.role || fallbackRole || 'editor';
   } catch (error) {
@@ -2272,6 +2273,7 @@ app.get('/api/auth/me', async (req, res) => {
     const { user } = await verifyUser(req);
     const profileColumns = await getExistingColumns('profiles').catch(() => new Set());
     const roleColumns = await getExistingColumns('user_roles').catch(() => new Set());
+    const hasRoleRelation = roleColumns.has('user_id') && roleColumns.has('role');
     const profileSelect = profileColumns.has('id')
       ? `SELECT p.id,
                 ${profileColumns.has('name') ? 'p.name' : profileColumns.has('email') ? `split_part(p.email, '@', 1) AS name` : 'NULL::text AS name'},
@@ -2282,9 +2284,11 @@ app.get('/api/auth/me', async (req, res) => {
                 ${profileColumns.has('bio') ? 'p.bio' : 'NULL::text AS bio'},
                 ${profileColumns.has('birthday') ? 'p.birthday' : 'NULL::date AS birthday'},
                 ${profileColumns.has('monthly_salary') ? 'p.monthly_salary' : '0::numeric AS monthly_salary'},
-                COALESCE(${roleColumns.has('role') ? 'ur.role::text' : 'NULL::text'}, ${profileColumns.has('role') ? 'p.role::text' : 'NULL::text'}, $2) AS role
+                COALESCE(${profileColumns.has('role') ? 'p.role::text' : 'NULL::text'}, $2) AS role,
+                ${hasRoleRelation
+                  ? `COALESCE((SELECT json_agg(DISTINCT ur.role::text) FROM user_roles ur WHERE ur.user_id = p.id), '[]'::json)`
+                  : `'[]'::json`} AS roles
            FROM profiles p
-           ${roleColumns.has('user_id') && roleColumns.has('role') ? 'LEFT JOIN user_roles ur ON ur.user_id = p.id' : ''}
           WHERE p.id = $1
           LIMIT 1`
       : null;
@@ -2316,6 +2320,7 @@ app.get('/api/auth/me', async (req, res) => {
       email: profile.email,
       name: profile.display_name || profile.name,
       role: profile.role,
+      roles: Array.from(new Set([profile.role, ...(Array.isArray(profile.roles) ? profile.roles : [])].filter(Boolean))),
       avatar_url: profile.avatar_url,
       job_title: profile.job_title,
       bio: profile.bio,

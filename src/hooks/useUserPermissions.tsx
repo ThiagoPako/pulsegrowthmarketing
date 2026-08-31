@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/vpsDb';
 import { toast } from 'sonner';
+import { useAuth, profileHasRole } from '@/hooks/useAuth';
 
 export interface ModuleDef {
   key: string;
@@ -86,6 +87,7 @@ export function useUserPermissions(userId?: string) {
 
 /** Hook for current user to check their own permissions */
 export function useMyPermissions() {
+  const { profile } = useAuth();
   const query = useQuery({
     queryKey: ['my-permissions'],
     queryFn: async () => {
@@ -114,6 +116,12 @@ export function useMyPermissions() {
     
     // admin always has full access
     if (data.role === 'admin') return true;
+
+    // Editor e videomaker compartilham integralmente o módulo de edição.
+    // Essa permissão funcional não deve depender de uma configuração antiga
+    // em user_permissions, especialmente para colaboradores multifunção.
+    const editingModule = path === '/edicao' || path.startsWith('/edicao/');
+    if (editingModule && profileHasRole(profile, 'editor', 'videomaker')) return true;
 
     // If user has custom permissions set, use those
     if (data.modules && data.modules.length > 0) {

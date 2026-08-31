@@ -49,10 +49,13 @@ export default function EditingControl() {
   const [dragOverTarget, setDragOverTarget] = useState<string | null>(null);
   const [reassigning, setReassigning] = useState(false);
 
-  // Considera função principal + adicionais (ex.: videomaker que também é editor)
+  // Editor e videomaker possuem as mesmas funções operacionais no módulo de edição.
   const editors = useMemo(() =>
     users
-      .filter(u => (u.roles && u.roles.length ? u.roles : [u.role]).includes('editor'))
+      .filter(u => {
+        const roles = u.roles && u.roles.length ? u.roles : [u.role];
+        return roles.includes('editor') || roles.includes('videomaker');
+      })
       .sort((a, b) => a.name.localeCompare(b.name)),
     [users]
   );

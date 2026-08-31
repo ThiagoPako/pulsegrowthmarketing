@@ -24,6 +24,8 @@ export interface Profile {
   name: string;
   email: string;
   role: AppRole;
+  /** Todas as funções do colaborador (principal + adicionais em user_roles). */
+  roles?: AppRole[];
   avatar_url?: string;
   display_name?: string;
   job_title?: string;
@@ -31,6 +33,14 @@ export interface Profile {
   font_scale?: string;
   monthly_salary?: number | string | null;
 }
+
+/** Verifica se o perfil possui qualquer uma das funções informadas (principal ou adicional). */
+export function profileHasRole(profile: Profile | null | undefined, ...roles: AppRole[]): boolean {
+  if (!profile) return false;
+  const all = profile.roles && profile.roles.length ? profile.roles : [profile.role];
+  return roles.some(r => all.includes(r));
+}
+
 
 interface VpsAuthUser {
   id: string;

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, profileHasRole } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -418,7 +418,7 @@ export default function EditorKanban() {
   }, [fetchTasks]);
 
   const { profile } = useAuth();
-  const isEditorRole = profile?.role === 'editor' || profile?.role === 'videomaker';
+  const isEditorRole = profileHasRole(profile, 'editor', 'videomaker');
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {

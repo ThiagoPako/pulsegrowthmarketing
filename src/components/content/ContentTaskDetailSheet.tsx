@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { uploadFileToVps } from '@/services/vpsApi';
 import { useApp } from '@/contexts/AppContext';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, profileHasRole } from '@/hooks/useAuth';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -1647,8 +1647,9 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                   {/* Role-based action permissions */}
                   {(() => {
                     const role = profile?.role || '';
-                    const isEditor = role === 'editor';
-                    const isVideomaker = role === 'videomaker';
+                    const isEditor = profileHasRole(profile, 'editor');
+                    const isVideomaker = profileHasRole(profile, 'videomaker');
+                    const isEditingOperator = profileHasRole(profile, 'editor', 'videomaker');
                     const isAdmin = role === 'admin';
                     const isSocialMedia = role === 'social_media';
                     const canManage = isAdmin || isSocialMedia;
@@ -1662,8 +1663,8 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                           </Button>
                         ) : null}
                         
-                        {/* Video: Upload file OR paste link - only editors and admins */}
-                        {(task.kanban_column === 'edicao' || task.kanban_column === 'alteracao') && !task.edited_video_link && !isVideomaker && (
+                        {/* Editor e videomaker compartilham upload/link nas etapas de edição. */}
+                        {(task.kanban_column === 'edicao' || task.kanban_column === 'alteracao') && !task.edited_video_link && isEditingOperator && (
                           <div className="space-y-2">
                             <input
                               ref={videoInputRef}
@@ -1712,7 +1713,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                           <RocketLaunchButton label="Edição" onClick={() => handleMoveToNext('edicao')} disabled={!task.drive_link} />
                         )}
 
-                        {task.kanban_column === 'edicao' && task.edited_video_link && !isVideomaker && (
+                        {task.kanban_column === 'edicao' && task.edited_video_link && isEditingOperator && (
                           <RocketLaunchButton label="Revisão" onClick={() => handleMoveToNext('revisao')} />
                         )}
 
@@ -1739,7 +1740,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                             </Button>
                           </>
                         )}
-                        {task.kanban_column === 'revisao' && isEditor && (
+                        {task.kanban_column === 'revisao' && isEditingOperator && (
                           <div className="p-3 rounded-lg bg-muted/50 border border-border">
                             <p className="text-xs text-muted-foreground text-center">
                               👁 Aguardando revisão da Social Media ou Administrador
@@ -1760,8 +1761,8 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                             </Button>
                           )}
 
-                        {/* Alteração: Resubmit - editor, admin, ou videomaker em story */}
-                        {task.kanban_column === 'alteracao' && (isEditor || canManage || (isVideomaker && task.content_type === 'story')) && (
+                        {/* Alteração: editor e videomaker podem reenviar para revisão. */}
+                        {task.kanban_column === 'alteracao' && (isEditingOperator || canManage) && (
                           <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-teal-600 border-teal-300 hover:bg-teal-50 dark:text-teal-400 dark:border-teal-700" onClick={handleResubmitFromAlteracao}>
                             <Send size={14} /> Reenviar para Revisão
                           </Button>

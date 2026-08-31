@@ -171,14 +171,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     const profiles = profilesRes.data || [];
-    const roleByUserId = new Map(
-      ((rolesRes.data || []) as Array<{ user_id: string; role: UserRole }>).map(roleRow => [roleRow.user_id, roleRow.role])
-    );
+    // Um usuário pode ter várias funções (ex.: videomaker + editor).
+    const rolesByUserId = new Map<string, UserRole[]>();
+    ((rolesRes.data || []) as Array<{ user_id: string; role: UserRole }>).forEach(roleRow => {
+      const list = rolesByUserId.get(roleRow.user_id) || [];
+      if (!list.includes(roleRow.role)) list.push(roleRow.role);
+      rolesByUserId.set(roleRow.user_id, list);
+    });
 
-    setUsers(profiles.map((p: any) => profileToUser({
-      ...p,
-      role: roleByUserId.get(p.id) || p.role,
-    } as Profile)));
+    setUsers(profiles.map((p: any) => {
+      const extra = rolesByUserId.get(p.id) || [];
+      // A função principal continua sendo a do profile (fallback: primeira de user_roles).
+      const primary: UserRole = (p.role as UserRole) || extra[0];
+      return {
+        ...profileToUser({ ...p, role: primary } as Profile),
+        roles: Array.from(new Set<UserRole>([primary, ...extra].filter(Boolean))),
+      };
+    }));
+
   }, [cityLoading, activeCity]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers, profile]);

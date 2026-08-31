@@ -365,6 +365,8 @@ export default function Team() {
         if (checked) extras.add(role); else extras.delete(role);
         return { ...m, extraRoles: Array.from(extras) };
       }));
+      window.dispatchEvent(new CustomEvent('pulse:profiles-updated'));
+      toast.success('Funções do colaborador atualizadas!');
     } catch (err: any) {
       toast.error(err.message || 'Erro ao atualizar funções');
     }

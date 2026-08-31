@@ -47,6 +47,7 @@ interface VpsAuthUser {
   email: string;
   name?: string;
   role?: AppRole;
+  roles?: AppRole[];
   avatar_url?: string;
   job_title?: string;
 }
@@ -139,13 +140,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Funções adicionais (colaborador com 2+ funções, ex.: videomaker + editor)
-    let extraRoles: AppRole[] = [];
+    let extraRoles: AppRole[] = Array.isArray(authProfile?.roles) ? authProfile.roles : [];
     try {
       const { data: rolesData } = await supabase
         .from('user_roles')
         .select('role')
         .eq('user_id', userId);
-      extraRoles = ((rolesData || []) as Array<{ role: AppRole }>).map(r => r.role).filter(Boolean);
+      extraRoles = Array.from(new Set<AppRole>([
+        ...extraRoles,
+        ...((rolesData || []) as Array<{ role: AppRole }>).map(r => r.role).filter(Boolean),
+      ]));
     } catch (error) {
       console.warn('fetchProfile user_roles failed:', error);
     }

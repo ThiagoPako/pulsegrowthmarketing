@@ -6659,8 +6659,8 @@ app.post('/api/clients', async (req, res) => {
         has_vehicle_flyer, weekly_stories, presence_days, monthly_recordings, niche, client_login,
         drive_link, drive_fotos, drive_identidade_visual, editorial, plan_id, contract_start_date,
         contract_duration_months, auto_renewal, selected_weeks, has_photo_shoot, accepts_photo_shoot_cost,
-        briefing_data, show_metrics, photo_preference, client_type)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44)
+        briefing_data, show_metrics, photo_preference, client_type, company_birthday, client_owners)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46)
        RETURNING *`,
       [
         c.id || crypto.randomUUID(), c.company_name, c.responsible_person || '', c.phone || '', c.color || '217 91% 60%',
@@ -6676,7 +6676,8 @@ app.post('/api/clients', async (req, res) => {
         c.contract_duration_months ?? 12, c.auto_renewal ?? false, c.selected_weeks || '{1,2,3,4}',
         c.has_photo_shoot ?? false, c.accepts_photo_shoot_cost ?? false,
         c.briefing_data ? JSON.stringify(c.briefing_data) : '{}', c.show_metrics ?? true,
-        c.photo_preference || 'nao_precisa', c.client_type || 'novo'
+        c.photo_preference || 'nao_precisa', c.client_type || 'novo',
+        parseDateOrNull(c.company_birthday), JSON.stringify(normalizeClientOwners(c.client_owners))
       ]
     );
     res.json(rows[0]);

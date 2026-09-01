@@ -70,7 +70,17 @@ export const CLIENT_COLORS = [
   { name: 'Preto', value: '0 0% 15%' },
 ] as const;
 
+/** Proprietário/sócio do cliente — usado na área de Experiência do Cliente. */
+export interface ClientOwner {
+  name: string;
+  role?: string;
+  birthday?: string; // YYYY-MM-DD
+  phone?: string;
+}
+
 export interface Client {
+  companyBirthday?: string | null; // YYYY-MM-DD (aniversário da empresa)
+  owners?: ClientOwner[];
   id: string;
   companyName: string;
   responsiblePerson: string;

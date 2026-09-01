@@ -75,6 +75,8 @@ function rowToClient(r: any): Client {
     cancellationDate: r.cancellation_date || null,
     cancellationReason: r.cancellation_reason || null,
     briefingData: r.briefing_data || {},
+    companyBirthday: r.company_birthday ? String(r.company_birthday).split('T')[0] : '',
+    owners: Array.isArray(r.client_owners) ? r.client_owners : [],
   } as Client & { status: string; cancellationDate: string | null; cancellationReason: string | null; briefingData: any };
 }
 
@@ -119,6 +121,17 @@ function clientToRow(c: Client) {
     art_requests_limit: c.artRequestsLimit ?? null,
     client_type: c.clientType || 'novo',
     proposal_id: c.proposalId || null,
+    company_birthday: c.companyBirthday ? String(c.companyBirthday).slice(0, 10) : null,
+    client_owners: Array.isArray(c.owners)
+      ? c.owners
+          .filter((o) => o && String(o.name || '').trim())
+          .map((o) => ({
+            name: String(o.name).trim(),
+            role: o.role ? String(o.role).trim() : '',
+            birthday: o.birthday ? String(o.birthday).slice(0, 10) : null,
+            phone: o.phone ? String(o.phone).replace(/\D/g, '') : '',
+          }))
+      : [],
   };
 }
 

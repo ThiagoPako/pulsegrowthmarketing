@@ -1324,6 +1324,49 @@ ensureClientFractionalGoalColumns().catch((error) => {
   console.error('Failed to ensure fractional client goals:', error);
 });
 
+/**
+ * Área "Experiência do Cliente": aniversário da empresa e lista de proprietários
+ * (nome, cargo, aniversário e WhatsApp). Criação idempotente das colunas.
+ */
+let clientExperienceColumnsPromise;
+async function ensureClientExperienceColumns() {
+  if (!clientExperienceColumnsPromise) {
+    clientExperienceColumnsPromise = (async () => {
+      await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS company_birthday DATE`);
+      await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS client_owners JSONB DEFAULT '[]'::jsonb`);
+    })().catch((error) => {
+      clientExperienceColumnsPromise = null;
+      throw error;
+    });
+  }
+  return clientExperienceColumnsPromise;
+}
+
+ensureClientExperienceColumns().catch((error) => {
+  console.error('Failed to ensure client experience columns:', error);
+});
+
+/** Normaliza datas vindas do formulário: '' => null, ISO => YYYY-MM-DD. */
+function parseDateOrNull(value) {
+  if (value === null || value === undefined) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  return raw.slice(0, 10);
+}
+
+/** Garante um array JSON válido de proprietários. */
+function normalizeClientOwners(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((owner) => owner && String(owner.name || '').trim())
+    .map((owner) => ({
+      name: String(owner.name).trim(),
+      role: owner.role ? String(owner.role).trim() : '',
+      birthday: parseDateOrNull(owner.birthday),
+      phone: owner.phone ? String(owner.phone).replace(/\D/g, '') : '',
+    }));
+}
+
 /** Converte metas semanais para número, aceitando "1,5" e "1.5". */
 function parseWeeklyGoal(value, fallback = 0) {
   if (value === null || value === undefined || value === '') return fallback;
@@ -6607,6 +6650,7 @@ app.post('/api/clients', async (req, res) => {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
     // Garante colunas NUMERIC antes de gravar metas fracionadas do plano especial
     await ensureClientFractionalGoalColumns().catch(() => {});
+    await ensureClientExperienceColumns().catch(() => {});
     const c = req.body;
 
     const { rows } = await pool.query(
@@ -6616,8 +6660,8 @@ app.post('/api/clients', async (req, res) => {
         has_vehicle_flyer, weekly_stories, presence_days, monthly_recordings, niche, client_login,
         drive_link, drive_fotos, drive_identidade_visual, editorial, plan_id, contract_start_date,
         contract_duration_months, auto_renewal, selected_weeks, has_photo_shoot, accepts_photo_shoot_cost,
-        briefing_data, show_metrics, photo_preference, client_type)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44)
+        briefing_data, show_metrics, photo_preference, client_type, company_birthday, client_owners)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46)
        RETURNING *`,
       [
         c.id || crypto.randomUUID(), c.company_name, c.responsible_person || '', c.phone || '', c.color || '217 91% 60%',
@@ -6633,7 +6677,8 @@ app.post('/api/clients', async (req, res) => {
         c.contract_duration_months ?? 12, c.auto_renewal ?? false, c.selected_weeks || '{1,2,3,4}',
         c.has_photo_shoot ?? false, c.accepts_photo_shoot_cost ?? false,
         c.briefing_data ? JSON.stringify(c.briefing_data) : '{}', c.show_metrics ?? true,
-        c.photo_preference || 'nao_precisa', c.client_type || 'novo'
+        c.photo_preference || 'nao_precisa', c.client_type || 'novo',
+        parseDateOrNull(c.company_birthday), JSON.stringify(normalizeClientOwners(c.client_owners))
       ]
     );
     res.json(rows[0]);
@@ -6819,8 +6864,10 @@ app.put('/api/clients/:id', async (req, res) => {
       'monthly_recordings','niche','client_login','drive_link','drive_fotos','drive_identidade_visual',
       'editorial','plan_id','contract_start_date','contract_duration_months','auto_renewal',
       'selected_weeks','has_photo_shoot','accepts_photo_shoot_cost','briefing_data','show_metrics',
-      'photo_preference','client_type','onboarding_completed'
+      'photo_preference','client_type','onboarding_completed',
+      'company_birthday','client_owners'
     ];
+    await ensureClientExperienceColumns().catch(() => {});
     const sets = []; const vals = [];
     let idx = 1;
     for (const key of allowed) {
@@ -6828,6 +6875,8 @@ app.put('/api/clients/:id', async (req, res) => {
         let value = c[key];
         if (key === 'city') value = newCity;
         if (key === 'briefing_data') value = JSON.stringify(c[key]);
+        if (key === 'company_birthday') value = parseDateOrNull(c[key]);
+        if (key === 'client_owners') value = JSON.stringify(normalizeClientOwners(c[key]));
         // Metas semanais aceitam fração (plano especial): 6 reels/mês => 1.5/semana
         if (['weekly_reels', 'weekly_creatives', 'weekly_stories', 'weekly_goal'].includes(key)) {
           value = parseWeeklyGoal(c[key], 0);

@@ -6864,8 +6864,10 @@ app.put('/api/clients/:id', async (req, res) => {
       'monthly_recordings','niche','client_login','drive_link','drive_fotos','drive_identidade_visual',
       'editorial','plan_id','contract_start_date','contract_duration_months','auto_renewal',
       'selected_weeks','has_photo_shoot','accepts_photo_shoot_cost','briefing_data','show_metrics',
-      'photo_preference','client_type','onboarding_completed'
+      'photo_preference','client_type','onboarding_completed',
+      'company_birthday','client_owners'
     ];
+    await ensureClientExperienceColumns().catch(() => {});
     const sets = []; const vals = [];
     let idx = 1;
     for (const key of allowed) {
@@ -6873,6 +6875,8 @@ app.put('/api/clients/:id', async (req, res) => {
         let value = c[key];
         if (key === 'city') value = newCity;
         if (key === 'briefing_data') value = JSON.stringify(c[key]);
+        if (key === 'company_birthday') value = parseDateOrNull(c[key]);
+        if (key === 'client_owners') value = JSON.stringify(normalizeClientOwners(c[key]));
         // Metas semanais aceitam fração (plano especial): 6 reels/mês => 1.5/semana
         if (['weekly_reels', 'weekly_creatives', 'weekly_stories', 'weekly_goal'].includes(key)) {
           value = parseWeeklyGoal(c[key], 0);

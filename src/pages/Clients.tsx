@@ -1269,6 +1269,108 @@ export default function Clients() {
           <Switch checked={showMetrics} onCheckedChange={setShowMetrics} />
         </div>
       </div>
+
+      {/* Experiência do Cliente: aniversários da empresa e dos proprietários */}
+      <div className="space-y-3 p-3 rounded-lg border border-border bg-card">
+        <p className="text-sm font-semibold flex items-center gap-1.5">
+          <Award size={16} className="text-primary" /> Experiência do Cliente
+        </p>
+        <div className="space-y-1">
+          <Label className="flex items-center gap-1"><CalendarCheck size={12} /> Aniversário da Empresa</Label>
+          <Input
+            type="date"
+            value={form.companyBirthday || ''}
+            onChange={e => setForm({ ...form, companyBirthday: e.target.value })}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-1"><UsersIcon size={12} /> Proprietários</Label>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1"
+              onClick={() => setForm(prev => ({
+                ...prev,
+                owners: [...(prev.owners || []), { name: '', role: '', birthday: '', phone: '' }],
+              }))}
+            >
+              <Plus size={12} /> Adicionar
+            </Button>
+          </div>
+
+          {(form.owners || []).length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              Nenhum proprietário cadastrado. Adicione nomes e datas de aniversário para ações de relacionamento.
+            </p>
+          )}
+
+          {(form.owners || []).map((owner, index) => (
+            <div key={index} className="grid grid-cols-2 gap-2 p-2 rounded-md border border-border/60 bg-muted/30">
+              <div className="space-y-1">
+                <Label className="text-[11px]">Nome</Label>
+                <Input
+                  value={owner.name || ''}
+                  placeholder="Nome do proprietário"
+                  onChange={e => setForm(prev => ({
+                    ...prev,
+                    owners: (prev.owners || []).map((o, i) => i === index ? { ...o, name: e.target.value } : o),
+                  }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px]">Aniversário</Label>
+                <Input
+                  type="date"
+                  value={owner.birthday || ''}
+                  onChange={e => setForm(prev => ({
+                    ...prev,
+                    owners: (prev.owners || []).map((o, i) => i === index ? { ...o, birthday: e.target.value } : o),
+                  }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px]">Cargo / Relação</Label>
+                <Input
+                  value={owner.role || ''}
+                  placeholder="Sócio, Diretor..."
+                  onChange={e => setForm(prev => ({
+                    ...prev,
+                    owners: (prev.owners || []).map((o, i) => i === index ? { ...o, role: e.target.value } : o),
+                  }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px]">WhatsApp</Label>
+                <div className="flex gap-1">
+                  <Input
+                    value={owner.phone || ''}
+                    placeholder="5562999999999"
+                    onChange={e => setForm(prev => ({
+                      ...prev,
+                      owners: (prev.owners || []).map((o, i) => i === index ? { ...o, phone: e.target.value } : o),
+                    }))}
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="shrink-0 text-destructive"
+                    onClick={() => setForm(prev => ({
+                      ...prev,
+                      owners: (prev.owners || []).filter((_, i) => i !== index),
+                    }))}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 

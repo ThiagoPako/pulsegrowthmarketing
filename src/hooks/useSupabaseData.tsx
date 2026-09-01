@@ -75,6 +75,8 @@ function rowToClient(r: any): Client {
     cancellationDate: r.cancellation_date || null,
     cancellationReason: r.cancellation_reason || null,
     briefingData: r.briefing_data || {},
+    companyBirthday: r.company_birthday ? String(r.company_birthday).split('T')[0] : '',
+    owners: Array.isArray(r.client_owners) ? r.client_owners : [],
   } as Client & { status: string; cancellationDate: string | null; cancellationReason: string | null; briefingData: any };
 }
 

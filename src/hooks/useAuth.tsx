@@ -26,6 +26,8 @@ export interface Profile {
   role: AppRole;
   /** Todas as funções do colaborador (principal + adicionais em user_roles). */
   roles?: AppRole[];
+  /** IDs equivalentes do mesmo colaborador em bases antigas (perfil/autenticação). */
+  identity_ids?: string[];
   avatar_url?: string;
   display_name?: string;
   job_title?: string;
@@ -39,6 +41,13 @@ export function profileHasRole(profile: Profile | null | undefined, ...roles: Ap
   if (!profile) return false;
   const all = profile.roles && profile.roles.length ? profile.roles : [profile.role];
   return roles.some(r => all.includes(r));
+}
+
+/** Reconhece tarefas antigas vinculadas a qualquer ID equivalente do colaborador. */
+export function profileOwnsUserId(profile: Profile | null | undefined, userId: string | null | undefined): boolean {
+  if (!profile || !userId) return false;
+  const identities = profile.identity_ids?.length ? profile.identity_ids : [profile.id];
+  return identities.includes(userId);
 }
 
 
@@ -171,6 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         roles: mergeRoles(primary),
         email: authProfile?.email || (data as Profile).email,
         name: authProfile?.name || (data as Profile).name,
+        identity_ids: Array.from(new Set([userId, ...(authProfile?.identity_ids || [])])),
       });
       return;
     }
@@ -182,6 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: authProfile.email || '',
         role: authProfile.role as AppRole,
         roles: mergeRoles(authProfile.role as AppRole),
+        identity_ids: Array.from(new Set([userId, ...(authProfile.identity_ids || [])])),
         avatar_url: authProfile.avatar_url,
         display_name: authProfile.display_name || authProfile.name,
         job_title: authProfile.job_title,

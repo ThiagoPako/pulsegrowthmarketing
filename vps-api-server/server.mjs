@@ -2271,6 +2271,17 @@ app.get('/api/auth/me', async (req, res) => {
   try {
     await ensureAuthSupportTables();
     const { user } = await verifyUser(req);
+    // Instalações antigas podem ter IDs diferentes em profiles/auth_users para
+    // o mesmo e-mail. Todas essas identidades representam o mesmo colaborador.
+    const linkedUserIds = await getLinkedUserIds(user);
+    const effectiveUserIds = linkedUserIds.length ? linkedUserIds : [String(user.id)];
+    const { rows: linkedRoleRows } = await pool.query(
+      `SELECT DISTINCT role::text AS role
+         FROM user_roles
+        WHERE user_id::text = ANY($1::text[])`,
+      [effectiveUserIds]
+    ).catch(() => ({ rows: [] }));
+    const linkedRoles = linkedRoleRows.map((row) => row.role).filter(Boolean);
     const profileColumns = await getExistingColumns('profiles').catch(() => new Set());
     const roleColumns = await getExistingColumns('user_roles').catch(() => new Set());
     const hasRoleRelation = roleColumns.has('user_id') && roleColumns.has('role');
@@ -2304,6 +2315,8 @@ app.get('/api/auth/me', async (req, res) => {
           email: fallback.email,
           name: fallback.display_name || fallback.name,
           role: fallback.role || user.role || 'editor',
+          roles: Array.from(new Set([fallback.role, user.role, ...linkedRoles].filter(Boolean))),
+          identity_ids: effectiveUserIds,
           avatar_url: fallback.avatar_url,
           job_title: fallback.job_title,
           bio: fallback.bio,
@@ -2320,7 +2333,8 @@ app.get('/api/auth/me', async (req, res) => {
       email: profile.email,
       name: profile.display_name || profile.name,
       role: profile.role,
-      roles: Array.from(new Set([profile.role, ...(Array.isArray(profile.roles) ? profile.roles : [])].filter(Boolean))),
+      roles: Array.from(new Set([profile.role, ...linkedRoles, ...(Array.isArray(profile.roles) ? profile.roles : [])].filter(Boolean))),
+      identity_ids: effectiveUserIds,
       avatar_url: profile.avatar_url,
       job_title: profile.job_title,
       bio: profile.bio,

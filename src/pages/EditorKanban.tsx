@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { useAuth, profileHasRole } from '@/hooks/useAuth';
+import { useAuth, profileHasRole, profileOwnsUserId } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -432,18 +432,18 @@ export default function EditorKanban() {
       if (isEditorRole && user) {
         if (t.kanban_column === 'edicao') {
           // Show unassigned or assigned to me
-          if (t.assigned_to && t.assigned_to !== user.id) return false;
+          if (t.assigned_to && !profileOwnsUserId(profile, t.assigned_to)) return false;
         } else if (t.kanban_column === 'alteracao') {
           // RULE: Only the original editor (edited_by) can see/work on alterations
-          if (t.edited_by !== user.id) return false;
+          if (!profileOwnsUserId(profile, t.edited_by)) return false;
         } else {
           // For revisao/envio: only show tasks I worked on
-          if (t.edited_by && t.edited_by !== user.id) return false;
+          if (t.edited_by && !profileOwnsUserId(profile, t.edited_by)) return false;
         }
       }
       return true;
     });
-  }, [tasks, filterClient, searchQuery, clients, isEditorRole, user]);
+  }, [tasks, filterClient, searchQuery, clients, isEditorRole, user, profile]);
 
   const sortedTasksByColumn = useMemo(() => {
     const map: Record<string, EditorTask[]> = {};
@@ -532,7 +532,7 @@ export default function EditorKanban() {
     if (!draggedTask || draggedTask.kanban_column === targetColumn) { setDraggedTask(null); return; }
 
     // Block editors/videomakers from moving a task already claimed by someone else
-    if (isEditorRole && draggedTask.assigned_to && draggedTask.assigned_to !== user?.id) {
+    if (isEditorRole && draggedTask.assigned_to && !profileOwnsUserId(profile, draggedTask.assigned_to)) {
       toast.error('🚫 Este vídeo já foi pego por outra pessoa!');
       setDraggedTask(null);
       fetchTasks();

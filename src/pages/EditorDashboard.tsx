@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { useAuth, profileHasRole } from '@/hooks/useAuth';
+import { useAuth, profileHasRole, profileOwnsUserId } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
 import BonusCongratsBanner from '@/components/BonusCongratsBanner';
 import { Badge } from '@/components/ui/badge';
@@ -286,14 +286,14 @@ export default function EditorDashboard() {
   const visibleTasks = useMemo(() => {
     if (!isEditorRole || !user) return tasks;
     return tasks.filter(t => {
-      if (t.kanban_column === 'edicao') return !t.assigned_to || t.assigned_to === user.id;
+      if (t.kanban_column === 'edicao') return !t.assigned_to || profileOwnsUserId(profile, t.assigned_to);
       // For review tasks, only show tasks this editor edited
-      if (t.kanban_column === 'revisao') return t.edited_by === user.id || (!t.edited_by && !!t.editing_started_at);
+      if (t.kanban_column === 'revisao') return profileOwnsUserId(profile, t.edited_by) || (!t.edited_by && !!t.editing_started_at);
       // For alteration tasks, ONLY the original editor (edited_by) can see/work on them
-      if (t.kanban_column === 'alteracao') return t.edited_by === user.id;
-      return !t.assigned_to || t.assigned_to === user.id;
+      if (t.kanban_column === 'alteracao') return profileOwnsUserId(profile, t.edited_by);
+      return !t.assigned_to || profileOwnsUserId(profile, t.assigned_to);
     });
-  }, [tasks, isEditorRole, user]);
+  }, [tasks, isEditorRole, user, profile]);
 
   const pendingTasks = visibleTasks.filter(t => t.kanban_column === 'edicao' && !t.editing_started_at);
   const inEditTasks = visibleTasks.filter(t => t.kanban_column === 'edicao' && t.editing_started_at);

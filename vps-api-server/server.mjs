@@ -11109,6 +11109,123 @@ setInterval(async () => {
   }
 }, 1000 * 60 * 60); // Roda a cada 1 hora
 
+// ─── Contribuição pública (append-only) no Banco de Dados ───
+// O cliente acessa via token compartilhado e pode APENAS adicionar:
+// profissionais, unidades e mídias. Nenhuma rota aqui remove/edita dados.
+
+/** Resolve o client_id de um token público ativo. Lança se inválido. */
+async function resolveShareClientId(rawToken) {
+  const token = String(rawToken || '').replace(/[^a-zA-Z0-9]/g, '');
+  if (!token) { const e = new Error('Token inválido'); e.status = 400; throw e; }
+  await ensureClientDatabaseShareTable();
+  const share = await pool.query(
+    'SELECT client_id FROM client_database_shares WHERE token = $1 AND active = true LIMIT 1',
+    [token],
+  );
+  if (share.rows.length === 0) { const e = new Error('Link inválido ou revogado'); e.status = 404; throw e; }
+  return share.rows[0].client_id;
+}
+
+function sanitizeText(value, max = 500) {
+  if (typeof value !== 'string') return '';
+  return value.trim().slice(0, max);
+}
+
+/** Upload público de mídia, restrito a um token de compartilhamento válido. */
+app.post('/api/public/client-database/:token/upload', (req, res) => {
+  uploadHandler.single('file')(req, res, async (err) => {
+    try {
+      if (err) return res.status(uploadErrorStatus(err)).json({ error: err.message || 'Falha no upload' });
+      if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+      await resolveShareClientId(req.params.token);
+      const relative = path
+        .relative(path.resolve(UPLOAD_ROOT), req.file.path)
+        .split(path.sep)
+        .join('/');
+      return res.json({ path: relative, url: `/uploads/${relative}` });
+    } catch (error) {
+      console.error('[public-clientdb:upload]', error);
+      return res.status(error.status || 500).json({ error: error.message || 'Falha no upload' });
+    }
+  });
+});
+
+/** Cliente adiciona um novo profissional (somente inclusão). */
+app.post('/api/public/client-database/:token/professionals', async (req, res) => {
+  try {
+    const clientId = await resolveShareClientId(req.params.token);
+    await ensureClientDatabaseTables();
+
+    const name = sanitizeText(req.body?.name, 160);
+    if (!name) return res.status(400).json({ error: 'Nome é obrigatório' });
+
+    const photos = Array.isArray(req.body?.photos)
+      ? req.body.photos.filter((u) => typeof u === 'string' && u.trim()).slice(0, 30)
+      : [];
+
+    const inserted = await pool.query(
+      `INSERT INTO client_professionals
+         (client_id, name, specialty, council_type, council_number, rqe, phone, email, bio, schedule_notes, photos, city)
+       SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, c.city
+         FROM clients c WHERE c.id = $1
+       RETURNING id, name, specialty, photos, videos`,
+      [
+        clientId,
+        name,
+        sanitizeText(req.body?.specialty, 160),
+        sanitizeText(req.body?.council_type, 20) || 'CRM',
+        sanitizeText(req.body?.council_number, 60),
+        sanitizeText(req.body?.rqe, 60),
+        sanitizeText(req.body?.phone, 40),
+        sanitizeText(req.body?.email, 160),
+        sanitizeText(req.body?.bio, 2000),
+        sanitizeText(req.body?.schedule_notes, 2000),
+        JSON.stringify(photos),
+      ],
+    );
+
+    if (inserted.rows.length === 0) return res.status(404).json({ error: 'Cliente não encontrado' });
+    return res.json({ professional: inserted.rows[0] });
+  } catch (error) {
+    console.error('[public-clientdb:professional]', error);
+    return res.status(error.status || 500).json({ error: error.message || 'Falha ao cadastrar profissional' });
+  }
+});
+
+/** Cliente anexa mídias a um profissional ou unidade (append-only). */
+app.post('/api/public/client-database/:token/media', async (req, res) => {
+  try {
+    const clientId = await resolveShareClientId(req.params.token);
+    await ensureClientDatabaseTables();
+
+    const kind = req.body?.kind === 'unit' ? 'unit' : 'professional';
+    const table = kind === 'unit' ? 'client_units' : 'client_professionals';
+    const column = req.body?.mediaType === 'videos' ? 'videos' : 'photos';
+    const targetId = String(req.body?.id || '');
+    if (!UUID_RE.test(targetId)) return res.status(400).json({ error: 'Registro inválido' });
+
+    const urls = Array.isArray(req.body?.urls)
+      ? req.body.urls.filter((u) => typeof u === 'string' && u.trim()).slice(0, 30)
+      : [];
+    if (urls.length === 0) return res.status(400).json({ error: 'Nenhuma mídia enviada' });
+
+    // COALESCE + concatenação garante que nada existente é removido.
+    const updated = await pool.query(
+      `UPDATE ${table}
+          SET ${column} = COALESCE(${column}, '[]'::jsonb) || $1::jsonb,
+              updated_at = now()
+        WHERE id = $2 AND client_id = $3
+        RETURNING id, ${column}`,
+      [JSON.stringify(urls), targetId, clientId],
+    );
+    if (updated.rows.length === 0) return res.status(404).json({ error: 'Registro não encontrado' });
+    return res.json({ success: true, record: updated.rows[0] });
+  } catch (error) {
+    console.error('[public-clientdb:media]', error);
+    return res.status(error.status || 500).json({ error: error.message || 'Falha ao anexar mídias' });
+  }
+});
+
 // ─── Start ──────────────────────────────────────────────────
 
 server.listen(PORT, () => {

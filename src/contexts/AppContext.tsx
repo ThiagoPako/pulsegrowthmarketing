@@ -81,6 +81,7 @@ function profileToUser(profile: Profile): User {
     email: profile.email,
     password: '',
     role: profile.role as UserRole,
+    roles: profile.roles as UserRole[] | undefined,
     avatarUrl: profile.avatar_url || undefined,
     displayName: profile.display_name || undefined,
     jobTitle: profile.job_title || undefined,
@@ -99,7 +100,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [myRoles, setMyRoles] = useState<UserRole[]>([]);
   const baseCurrentUser = profile ? profileToUser(profile) : null;
   const currentUser = baseCurrentUser
-    ? { ...baseCurrentUser, roles: Array.from(new Set([baseCurrentUser.role, ...myRoles])) }
+    ? {
+        ...baseCurrentUser,
+        roles: Array.from(new Set([
+          baseCurrentUser.role,
+          ...(baseCurrentUser.roles || []),
+          ...myRoles,
+        ])),
+      }
     : null;
 
   useEffect(() => {

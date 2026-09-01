@@ -121,6 +121,17 @@ function clientToRow(c: Client) {
     art_requests_limit: c.artRequestsLimit ?? null,
     client_type: c.clientType || 'novo',
     proposal_id: c.proposalId || null,
+    company_birthday: c.companyBirthday ? String(c.companyBirthday).slice(0, 10) : null,
+    client_owners: Array.isArray(c.owners)
+      ? c.owners
+          .filter((o) => o && String(o.name || '').trim())
+          .map((o) => ({
+            name: String(o.name).trim(),
+            role: o.role ? String(o.role).trim() : '',
+            birthday: o.birthday ? String(o.birthday).slice(0, 10) : null,
+            phone: o.phone ? String(o.phone).replace(/\D/g, '') : '',
+          }))
+      : [],
   };
 }
 

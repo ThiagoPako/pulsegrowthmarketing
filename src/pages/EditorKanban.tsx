@@ -423,6 +423,9 @@ export default function EditorKanban() {
 
   const { profile } = useAuth();
   const isEditorRole = profileHasRole(profile, 'editor', 'videomaker');
+  const hasFullBenchAccess =
+    profileHasRole(profile, 'admin', 'gestor_projetos') ||
+    (profileHasRole(profile, 'videomaker') && profileHasRole(profile, 'editor'));
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
@@ -433,7 +436,7 @@ export default function EditorKanban() {
         if (!t.title.toLowerCase().includes(q) && !client?.companyName.toLowerCase().includes(q)) return false;
       }
       // Editor role: only see unassigned tasks or tasks assigned to them
-      if (isEditorRole && user) {
+      if (isEditorRole && user && !hasFullBenchAccess) {
         if (t.kanban_column === 'edicao') {
           // Show unassigned or assigned to me
           if (t.assigned_to && !profileOwnsUserId(profile, t.assigned_to)) return false;
@@ -447,7 +450,7 @@ export default function EditorKanban() {
       }
       return true;
     });
-  }, [tasks, filterClient, searchQuery, clients, isEditorRole, user, profile]);
+  }, [tasks, filterClient, searchQuery, clients, isEditorRole, user, profile, hasFullBenchAccess]);
 
   const sortedTasksByColumn = useMemo(() => {
     const map: Record<string, EditorTask[]> = {};

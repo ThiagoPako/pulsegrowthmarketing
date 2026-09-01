@@ -1182,7 +1182,7 @@ export default function EditorDashboard() {
                 onStartEditing={() => handleStartEditing(task)}
                 onClaimTask={() => handleClaimTask(task)}
                 onUnclaimTask={() => handleUnclaimTask(task)}
-                currentUserId={user?.id}
+                currentUserIds={profile?.identity_ids?.length ? profile.identity_ids : (user?.id ? [user.id] : [])}
                 users={users} />
             ))}
           </div>
@@ -1247,9 +1247,9 @@ export default function EditorDashboard() {
 }
 
 /* ─── Queue Card ──────────────────────────────────────────── */
-function QueueCard({ task, clients, recordings, index, onStartEditing, onClaimTask, onUnclaimTask, currentUserId, users }: {
+function QueueCard({ task, clients, recordings, index, onStartEditing, onClaimTask, onUnclaimTask, currentUserIds, users }: {
   task: EditorTask; clients: any[]; recordings: any[]; index: number;
-  onStartEditing: () => void; onClaimTask: () => void; onUnclaimTask: () => void; currentUserId?: string; users?: any[];
+  onStartEditing: () => void; onClaimTask: () => void; onUnclaimTask: () => void; currentUserIds: string[]; users?: any[];
 }) {
   const client = clients.find(c => c.id === task.client_id);
   const recording = task.recording_id ? recordings.find((r: any) => r.id === task.recording_id) : null;
@@ -1257,7 +1257,7 @@ function QueueCard({ task, clients, recordings, index, onStartEditing, onClaimTa
   const cfg = getTypeConfig(task.content_type);
   const deadline = getDeadlineStatus(task.editing_deadline);
   const clientColor = client?.color || (recording?.prospectName ? '200 80% 55%' : '217 91% 60%');
-  const isMine = task.assigned_to === currentUserId;
+  const isMine = !!task.assigned_to && currentUserIds.includes(task.assigned_to);
   const claimedUser = task.assigned_to && users ? users.find((u: any) => u.id === task.assigned_to) : null;
 
   return (

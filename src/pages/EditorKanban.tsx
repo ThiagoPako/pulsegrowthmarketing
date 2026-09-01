@@ -88,7 +88,7 @@ function getTypeConfig(type: string) {
   return CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];
 }
 
-function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink, onClaimTask, onUnclaimTask, onReturnFromReview, onOpenDetail, draggedId, onDragStart, currentUserId, users }: {
+function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink, onClaimTask, onUnclaimTask, onReturnFromReview, onOpenDetail, draggedId, onDragStart, currentUserIds, users }: {
   task: EditorTask; clients: any[]; onOpenScript: (id: string) => void;
   onSendToReview: (task: EditorTask) => void;
   onAddVideoLink: (task: EditorTask) => void;
@@ -97,7 +97,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
   onReturnFromReview: (task: EditorTask) => void;
   onOpenDetail: (task: EditorTask) => void;
   draggedId: string | null; onDragStart: (e: React.DragEvent, task: EditorTask) => void;
-  currentUserId: string | undefined;
+  currentUserIds: string[];
   users: any[];
 }) {
   const client = clients.find(c => c.id === task.client_id);
@@ -108,7 +108,8 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
   const hasVideoLink = !!task.edited_video_link;
 
   const isReview = task.kanban_column === 'revisao';
-  const isMine = task.assigned_to === currentUserId;
+  const isMine = !!task.assigned_to && currentUserIds.includes(task.assigned_to);
+  const wasEditedByMe = !!task.edited_by && currentUserIds.includes(task.edited_by);
   const isOptimize = task.content_type === 'otimizacao';
 
   // Count filled optimization slots (parsed from description marker)
@@ -329,7 +330,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
             </Button>
           </motion.div>
         )}
-        {task.kanban_column === 'edicao' && task.assigned_to === currentUserId && (
+        {task.kanban_column === 'edicao' && isMine && (
           <Button size="sm" variant={hasVideoLink ? 'default' : 'outline'} 
             className={`w-full gap-1.5 h-7 text-xs mt-1 ${!hasVideoLink ? 'border-dashed' : ''}`} 
             onClick={(e) => { e.stopPropagation(); onAddVideoLink(task); }}>
@@ -357,7 +358,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
         )}
 
         {/* Ops! Volta aqui - editor can return review task to editing */}
-        {task.kanban_column === 'revisao' && task.edited_by === currentUserId && (
+        {task.kanban_column === 'revisao' && wasEditedByMe && (
           <motion.div whileTap={{ scale: 0.95 }} className="mt-1">
             <Button size="sm" variant="outline" className="w-full gap-1.5 h-7 text-xs border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
               onClick={(e) => { e.stopPropagation(); onReturnFromReview(task); }}>
@@ -802,7 +803,7 @@ export default function EditorKanban() {
                         onSendToReview={handleSendToReview} onAddVideoLink={openVideoLinkDialog}
                         onClaimTask={handleClaimTask} onUnclaimTask={handleUnclaimTask} onReturnFromReview={handleReturnFromReview}
                         onOpenDetail={setDetailTask}
-                        currentUserId={user?.id} users={users}
+                        currentUserIds={profile?.identity_ids?.length ? profile.identity_ids : (user?.id ? [user.id] : [])} users={users}
                         draggedId={draggedTask?.id || null} onDragStart={handleDragStart} />
                     ))}
                     {colTasks.length === 0 && (

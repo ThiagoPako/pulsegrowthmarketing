@@ -275,41 +275,67 @@ export default function CostByContentType() {
   const [customEnd, setCustomEnd] = useState('');
   const [includeProLabore, setIncludeProLabore] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    const [rRes, sRes, edRes, dRes, scRes, catRes, expRes, plRes] = await Promise.all([
-      supabase.from('delivery_records').select('client_id,videomaker_id,date,reels_produced,creatives_produced,stories_produced,arts_produced,delivery_status'),
-      supabase.from('social_media_deliveries').select('client_id,content_type,delivered_at,posted_at,created_at,updated_at,status,created_by'),
-      supabase.from('content_tasks').select('client_id,content_type,kanban_column,approved_at,updated_at,created_at,assigned_to,edited_by'),
-      supabase.from('design_tasks').select('client_id,kanban_column,completed_at,updated_at,created_at,attachment_url,attachment_urls,editable_file_url,mockup_url,assigned_to'),
-      supabase.from('scripts').select('client_id,content_format,created_by,created_at,updated_at'),
-      supabase.from('expense_categories').select('id,name'),
-      supabase.from('expenses').select('date,amount,description,responsible,category_id,expense_type'),
-      supabase.from('plans').select('id,name,price,reels_qty,creatives_qty,stories_qty,arts_qty,recording_sessions,status'),
-    ]);
-    if (rRes.data) setRecords(rRes.data as DeliveryRecord[]);
-    if (sRes.data) setSocialDeliveries(sRes.data as SocialDelivery[]);
-    if (edRes.data) setEditorTasks(edRes.data as EditorTask[]);
-    if (dRes.data) setDesignTasks(dRes.data as DesignTask[]);
-    if (scRes.data) setScripts(scRes.data as ScriptRecord[]);
-    if (plRes.data) setPlans(plRes.data as PlanRow[]);
-    if (catRes.data && expRes.data) {
-      const cats = catRes.data as ExpenseCategory[];
-      const salaryCategoryIds = new Set(
-        cats.filter(c => normalizeText(c.name).includes('salario')).map(c => c.id)
-      );
-      const prolaboreCategoryIds = new Set(
-        cats.filter(c => /pr[oó][- ]?labore/i.test(c.name || '')).map(c => c.id)
-      );
-      const allExp = expRes.data as SalaryExpense[];
-      setSalaryExpenses(allExp.filter(e => (
-        salaryCategoryIds.has(e.category_id || '')
-        || normalizeText(e.description).startsWith('salario -')
-      )));
-      setProlaboreExpenses(allExp.filter(e => prolaboreCategoryIds.has(e.category_id || '')));
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  /**
+   * Busca resiliente: se a lista de colunas falhar (coluna inexistente na VPS,
+   * que era a causa do painel aparecer vazio silenciosamente), refaz a consulta
+   * com `*` e só então desiste, registrando o erro para o usuário.
+   */
+  const safeSelect = useCallback(async <T,>(table: string, columns: string): Promise<T[]> => {
+    try {
+      const primary = await supabase.from(table).select(columns);
+      if (!primary.error && Array.isArray(primary.data)) return primary.data as T[];
+      console.warn(`[pente-fino] ${table} falhou com colunas explícitas:`, primary.error);
+
+      const fallback = await supabase.from(table).select('*');
+      if (!fallback.error && Array.isArray(fallback.data)) return fallback.data as T[];
+      console.error(`[pente-fino] ${table} indisponível:`, fallback.error);
+      setLoadError(`Não foi possível carregar "${table}".`);
+      return [];
+    } catch (error) {
+      console.error(`[pente-fino] ${table} erro inesperado:`, error);
+      setLoadError(`Não foi possível carregar "${table}".`);
+      return [];
     }
   }, []);
 
+  const fetchData = useCallback(async () => {
+    setLoadError(null);
+    const [rRes, sRes, edRes, dRes, scRes, catRes, expRes, plRes] = await Promise.all([
+      safeSelect<DeliveryRecord>('delivery_records', 'client_id,videomaker_id,date,reels_produced,creatives_produced,stories_produced,arts_produced,delivery_status'),
+      safeSelect<SocialDelivery>('social_media_deliveries', 'client_id,content_type,delivered_at,posted_at,created_at,updated_at,status,created_by'),
+      safeSelect<EditorTask>('content_tasks', 'client_id,content_type,kanban_column,approved_at,updated_at,created_at,assigned_to,edited_by'),
+      safeSelect<DesignTask>('design_tasks', 'client_id,kanban_column,completed_at,updated_at,created_at,attachment_url,attachment_urls,editable_file_url,mockup_url,assigned_to'),
+      safeSelect<ScriptRecord>('scripts', 'client_id,content_format,created_by,created_at,updated_at'),
+      safeSelect<ExpenseCategory>('expense_categories', 'id,name'),
+      safeSelect<SalaryExpense>('expenses', 'date,amount,description,responsible,category_id,expense_type'),
+      safeSelect<PlanRow>('plans', 'id,name,price,reels_qty,creatives_qty,stories_qty,arts_qty,recording_sessions,status'),
+    ]);
+    setRecords(rRes);
+    setSocialDeliveries(sRes);
+    setEditorTasks(edRes);
+    setDesignTasks(dRes);
+    setScripts(scRes);
+    setPlans(plRes);
+
+    const cats = catRes;
+    const salaryCategoryIds = new Set(
+      cats.filter(c => normalizeText(c.name).includes('salario')).map(c => c.id)
+    );
+    const prolaboreCategoryIds = new Set(
+      cats.filter(c => /pr[oó][- ]?labore/i.test(c.name || '')).map(c => c.id)
+    );
+    const allExp = expRes;
+    setSalaryExpenses(allExp.filter(e => (
+      salaryCategoryIds.has(e.category_id || '')
+      || normalizeText(e.description).startsWith('salario -')
+    )));
+    setProlaboreExpenses(allExp.filter(e => prolaboreCategoryIds.has(e.category_id || '')));
+  }, [safeSelect]);
+
   useEffect(() => { fetchData(); }, [fetchData]);
+
 
   const dateRange = useMemo(() => {
     const now = new Date();

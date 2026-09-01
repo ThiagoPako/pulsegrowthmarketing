@@ -48,6 +48,7 @@ const emptyClient = (): Partial<Client> & { clientType?: string } => ({
   clientLogin: '', clientPassword: '', driveLink: '', driveFotos: '', driveIdentidadeVisual: '',
   editorial: '',
   fullShiftRecording: false, preferredShift: 'manha',
+  companyBirthday: '', owners: [],
 });
 
 function timeToMinutes(t: string) {

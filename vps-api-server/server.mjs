@@ -6650,6 +6650,7 @@ app.post('/api/clients', async (req, res) => {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
     // Garante colunas NUMERIC antes de gravar metas fracionadas do plano especial
     await ensureClientFractionalGoalColumns().catch(() => {});
+    await ensureClientExperienceColumns().catch(() => {});
     const c = req.body;
 
     const { rows } = await pool.query(

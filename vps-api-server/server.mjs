@@ -6132,7 +6132,14 @@ app.post('/api/db/query', async (req, res) => {
       });
     }
 
+    if (PENTE_FINO_SCHEMA[safeTable]) {
+      await ensurePenteFinoTables().catch((error) => {
+        console.warn('Could not ensure pente-fino tables:', error?.message || error);
+      });
+    }
+
     if (safeTable === 'story_editing_sessions') {
+
       await ensureStoryEditingSessionsTable();
     }
 

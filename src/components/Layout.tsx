@@ -69,7 +69,7 @@ const navCategories: NavCategory[] = [
     color: 'emerald',
     items: [
       { path: '/controle-gravacoes', label: 'Controle Grav.', icon: Video, roles: ['admin', 'gestor_projetos'] },
-      { path: '/controle-edicao', label: 'Controle Edição', icon: Scissors, roles: ['admin', 'gestor_projetos'] },
+      { path: '/controle-edicao', label: 'Controle Edição', icon: Scissors, roles: ['admin', 'gestor_projetos', 'editor', 'videomaker'] },
       { path: '/agenda', label: 'Agenda', icon: Calendar, roles: ['admin', 'videomaker', 'social_media', 'gestor_projetos'] },
     ],
   },

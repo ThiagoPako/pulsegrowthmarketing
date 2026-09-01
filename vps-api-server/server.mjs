@@ -1000,6 +1000,153 @@ async function cleanupOldPortalVideos(options = {}) {
 
 let lastCleanupStats = { deletedCount: 0, freedBytes: 0, at: null };
 
+// ═══════════════════════════════════════════════════════════════
+// PENTE FINO — garantia de schema
+// ═══════════════════════════════════════════════════════════════
+// O painel "Pente Fino" (CostByContentType) consulta 8 tabelas com
+// colunas explícitas. Se qualquer uma delas não existir na VPS, a
+// consulta falha e o painel aparece vazio. Aqui criamos o que faltar
+// (tabela inteira ou colunas isoladas) de forma idempotente.
+const PENTE_FINO_SCHEMA = {
+  delivery_records: {
+    client_id: 'UUID',
+    videomaker_id: 'UUID',
+    date: 'DATE',
+    reels_produced: 'NUMERIC(10,2) DEFAULT 0',
+    creatives_produced: 'NUMERIC(10,2) DEFAULT 0',
+    stories_produced: 'NUMERIC(10,2) DEFAULT 0',
+    arts_produced: 'NUMERIC(10,2) DEFAULT 0',
+    delivery_status: 'TEXT',
+    city: 'TEXT',
+  },
+  social_media_deliveries: {
+    client_id: 'UUID',
+    content_type: 'TEXT',
+    delivered_at: 'TIMESTAMPTZ',
+    posted_at: 'TIMESTAMPTZ',
+    status: 'TEXT',
+    created_by: 'UUID',
+    city: 'TEXT',
+  },
+  content_tasks: {
+    client_id: 'UUID',
+    content_type: 'TEXT',
+    kanban_column: 'TEXT',
+    approved_at: 'TIMESTAMPTZ',
+    assigned_to: 'UUID',
+    edited_by: 'UUID',
+    city: 'TEXT',
+  },
+  design_tasks: {
+    client_id: 'UUID',
+    kanban_column: 'TEXT',
+    completed_at: 'TIMESTAMPTZ',
+    attachment_url: 'TEXT',
+    attachment_urls: 'JSONB DEFAULT \'[]\'::jsonb',
+    editable_file_url: 'TEXT',
+    mockup_url: 'TEXT',
+    assigned_to: 'UUID',
+    city: 'TEXT',
+  },
+  scripts: {
+    client_id: 'UUID',
+    content_format: 'TEXT',
+    created_by: 'UUID',
+    city: 'TEXT',
+  },
+  expense_categories: {
+    name: 'TEXT',
+  },
+  expenses: {
+    date: 'DATE',
+    amount: 'NUMERIC(12,2) DEFAULT 0',
+    description: 'TEXT',
+    responsible: 'TEXT',
+    category_id: 'UUID',
+    expense_type: 'TEXT',
+    city: 'TEXT',
+  },
+  plans: {
+    name: 'TEXT',
+    price: 'NUMERIC(12,2) DEFAULT 0',
+    reels_qty: 'NUMERIC(10,2) DEFAULT 0',
+    creatives_qty: 'NUMERIC(10,2) DEFAULT 0',
+    stories_qty: 'NUMERIC(10,2) DEFAULT 0',
+    arts_qty: 'NUMERIC(10,2) DEFAULT 0',
+    recording_sessions: 'NUMERIC(10,2) DEFAULT 0',
+    status: 'TEXT',
+    city: 'TEXT',
+  },
+};
+
+let penteFinoEnsuredPromise = null;
+
+/**
+ * Cria/repara as tabelas do Pente Fino. Erros de ownership (42501) são
+ * apenas logados: as colunas já existentes bastam para o painel carregar.
+ */
+async function ensurePenteFinoTables() {
+  if (!penteFinoEnsuredPromise) {
+    penteFinoEnsuredPromise = (async () => {
+      const missing = [];
+
+      for (const [table, columns] of Object.entries(PENTE_FINO_SCHEMA)) {
+        const { rows } = await pool.query(
+          `SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = $1 LIMIT 1`,
+          [table]
+        );
+
+        if (rows.length === 0) {
+          missing.push(table);
+          const columnSql = Object.entries(columns)
+            .map(([name, type]) => `${name} ${type}`)
+            .join(',\n            ');
+          await pool.query(`
+            CREATE TABLE public.${table} (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              ${columnSql},
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+          `);
+          tableColumnsPromiseCache.delete(table);
+          continue;
+        }
+
+        const existing = await getExistingColumns(table);
+        const alterClauses = Object.entries(columns)
+          .filter(([name]) => !existing.has(name))
+          .map(([name, type]) => `ADD COLUMN IF NOT EXISTS ${name} ${type}`);
+
+        if (!existing.has('created_at')) alterClauses.push('ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()');
+        if (!existing.has('updated_at')) alterClauses.push('ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()');
+
+        if (alterClauses.length > 0) {
+          await pool.query(`ALTER TABLE public.${table} ${alterClauses.join(', ')}`)
+            .then(() => { tableColumnsPromiseCache.delete(table); })
+            .catch((error) => {
+              if (error?.code === '42501' || /must be owner|permission denied/i.test(error?.message || '')) {
+                console.warn(`[pente-fino] ${table}: colunas opcionais ignoradas (ownership):`, error.message);
+                return;
+              }
+              throw error;
+            });
+        }
+      }
+
+      if (missing.length > 0) {
+        console.log('[pente-fino] Tabelas criadas na VPS:', missing.join(', '));
+      }
+    })().catch((error) => {
+      penteFinoEnsuredPromise = null;
+      throw error;
+    });
+  }
+
+  return penteFinoEnsuredPromise;
+}
+
 
 async function ensureStoryEditingSessionsTable() {
   if (!storyEditingSessionsEnsuredPromise) {

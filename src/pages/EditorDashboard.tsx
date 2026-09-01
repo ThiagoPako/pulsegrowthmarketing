@@ -305,7 +305,7 @@ export default function EditorDashboard() {
       if (t.kanban_column === 'alteracao') return profileOwnsUserId(profile, t.edited_by);
       return !t.assigned_to || profileOwnsUserId(profile, t.assigned_to);
     });
-  }, [tasks, isEditorRole, user, profile]);
+  }, [tasks, isEditorRole, user, profile, hasFullBenchAccess]);
 
   const pendingTasks = visibleTasks.filter(t => t.kanban_column === 'edicao' && !t.editing_started_at);
   const inEditTasks = visibleTasks.filter(t => t.kanban_column === 'edicao' && t.editing_started_at);

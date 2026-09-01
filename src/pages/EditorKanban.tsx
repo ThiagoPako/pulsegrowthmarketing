@@ -24,6 +24,7 @@ import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTask
 import { motion, AnimatePresence } from 'framer-motion';
 import EditorTaskDetail from '@/components/editor/EditorTaskDetail';
 import type { EditorTask as EditorTaskFull } from '@/pages/EditorDashboard';
+import { useCity } from '@/contexts/CityContext';
 
 const CONTENT_TYPES = [
   { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400', points: 10 },
@@ -375,6 +376,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
 export default function EditorKanban() {
   const { clients, scripts, users } = useApp();
   const { user } = useAuth();
+  const { activeCity, isLoading: cityLoading } = useCity();
   const [tasks, setTasks] = useState<EditorTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -411,11 +413,12 @@ export default function EditorKanban() {
   }, []);
 
   useEffect(() => {
-    fetchTasks();
+    if (cityLoading) return;
+    void fetchTasks();
     // Poll every 15s for near real-time updates (VPS has no websocket channels)
     const interval = setInterval(fetchTasks, 15000);
     return () => clearInterval(interval);
-  }, [fetchTasks]);
+  }, [activeCity, cityLoading, fetchTasks]);
 
   const { profile } = useAuth();
   const isEditorRole = profileHasRole(profile, 'editor', 'videomaker');

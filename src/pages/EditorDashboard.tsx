@@ -26,6 +26,7 @@ import { ptBR } from 'date-fns/locale';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 import { uploadFileToVps, deleteFileFromVps } from '@/services/vpsApi';
 import { EDITOR_SCORE, EDITOR_APPROVED_COLUMNS, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate } from '@/lib/scoringSystem';
+import { useCity } from '@/contexts/CityContext';
 
 const CONTENT_TYPES = [
   { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400', points: 10 },
@@ -197,6 +198,7 @@ function ScoreCelebration({ points, show, onDone }: { points: number; show: bool
 export default function EditorDashboard() {
   const { clients, scripts, users, recordings } = useApp();
   const { user, profile } = useAuth();
+  const { activeCity, isLoading: cityLoading } = useCity();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<EditorTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -256,13 +258,16 @@ export default function EditorDashboard() {
     setLoading(false);
   }, [activeEditTask?.id]);
 
-  useEffect(() => { fetchTasks(); }, []);
+  useEffect(() => {
+    if (!cityLoading) void fetchTasks();
+  }, [activeCity, cityLoading, fetchTasks]);
 
   // Polling every 15s for sync (realtime channel is a no-op with VPS client)
   useEffect(() => {
+    if (cityLoading) return;
     const interval = setInterval(fetchTasks, 15000);
     return () => clearInterval(interval);
-  }, [fetchTasks]);
+  }, [fetchTasks, cityLoading]);
 
   // Fetch script when active task changes
   useEffect(() => {

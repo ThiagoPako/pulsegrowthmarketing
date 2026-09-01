@@ -757,6 +757,16 @@ export default function CostByContentType() {
         <p className="text-sm text-muted-foreground">Custo líquido por conteúdo = soma dos salários (Editor/Social + Videomaker + Designer) alocados por esforço (Reels=1.0, Criativo=0.5, Story=0.2). Fonte: Financeiro &gt; Despesas &gt; Salários.</p>
       </div>
 
+      {loadError ? (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="p-4 text-sm text-destructive">
+            {loadError} Verifique se a API da VPS está liberando essa tabela e recarregue a página.
+          </CardContent>
+        </Card>
+      ) : null}
+
+
+
       <Card>
         <CardContent className="p-4 flex flex-wrap gap-4 items-end">
           <div className="space-y-1">

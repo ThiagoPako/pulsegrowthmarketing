@@ -187,6 +187,11 @@ function ProtectedRoute({
 function AppRoutes() {
   const { user, loading } = useAuth();
   const { currentUser } = useApp();
+  const currentRoles = currentUser?.roles?.length
+    ? currentUser.roles
+    : currentUser
+      ? [currentUser.role]
+      : [];
 
   if (loading) return <PageLoader />;
 
@@ -203,12 +208,12 @@ function AppRoutes() {
           <ProtectedRoute>
             {/* A role já está resolvida aqui (garantido pelo ProtectedRoute),
                 então o painel correto é renderizado direto, sem flash. */}
-            {currentUser?.role === 'videomaker' ? <VideomakerDashboard /> :
-             currentUser?.role === 'endomarketing' ? <EndomarketingDashboard /> :
-             currentUser?.role === 'editor' ? <EditorDashboard /> :
-             currentUser?.role === 'designer' ? <DesignerDashboard /> :
-             currentUser?.role === 'fotografo' ? <DesignerDashboard /> :
-             currentUser?.role === 'parceiro' ? <EndomarketingDashboard /> :
+            {currentRoles.includes('editor') ? <EditorDashboard /> :
+             currentRoles.includes('videomaker') ? <VideomakerDashboard /> :
+             currentRoles.includes('endomarketing') ? <EndomarketingDashboard /> :
+             currentRoles.includes('designer') ? <DesignerDashboard /> :
+             currentRoles.includes('fotografo') ? <DesignerDashboard /> :
+             currentRoles.includes('parceiro') ? <EndomarketingDashboard /> :
              <Dashboard />}
           </ProtectedRoute>
         } />

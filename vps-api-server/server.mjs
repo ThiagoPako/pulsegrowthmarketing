@@ -1324,6 +1324,49 @@ ensureClientFractionalGoalColumns().catch((error) => {
   console.error('Failed to ensure fractional client goals:', error);
 });
 
+/**
+ * Área "Experiência do Cliente": aniversário da empresa e lista de proprietários
+ * (nome, cargo, aniversário e WhatsApp). Criação idempotente das colunas.
+ */
+let clientExperienceColumnsPromise;
+async function ensureClientExperienceColumns() {
+  if (!clientExperienceColumnsPromise) {
+    clientExperienceColumnsPromise = (async () => {
+      await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS company_birthday DATE`);
+      await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS client_owners JSONB DEFAULT '[]'::jsonb`);
+    })().catch((error) => {
+      clientExperienceColumnsPromise = null;
+      throw error;
+    });
+  }
+  return clientExperienceColumnsPromise;
+}
+
+ensureClientExperienceColumns().catch((error) => {
+  console.error('Failed to ensure client experience columns:', error);
+});
+
+/** Normaliza datas vindas do formulário: '' => null, ISO => YYYY-MM-DD. */
+function parseDateOrNull(value) {
+  if (value === null || value === undefined) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  return raw.slice(0, 10);
+}
+
+/** Garante um array JSON válido de proprietários. */
+function normalizeClientOwners(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((owner) => owner && String(owner.name || '').trim())
+    .map((owner) => ({
+      name: String(owner.name).trim(),
+      role: owner.role ? String(owner.role).trim() : '',
+      birthday: parseDateOrNull(owner.birthday),
+      phone: owner.phone ? String(owner.phone).replace(/\D/g, '') : '',
+    }));
+}
+
 /** Converte metas semanais para número, aceitando "1,5" e "1.5". */
 function parseWeeklyGoal(value, fallback = 0) {
   if (value === null || value === undefined || value === '') return fallback;

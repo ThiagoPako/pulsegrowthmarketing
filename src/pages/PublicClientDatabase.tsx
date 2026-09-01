@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Database } from 'lucide-react';
 import MediaLibrary, { type MediaOwner } from '@/components/clientdb/MediaLibrary';
+import PublicContributionPanel, { type ContributionTarget } from '@/components/clientdb/PublicContributionPanel';
 
 const VPS_API_BASE = 'https://agenciapulse.tech/api';
 
@@ -22,6 +23,8 @@ export default function PublicClientDatabase() {
   const [data, setData] = useState<PublicPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,7 +48,7 @@ export default function PublicClientDatabase() {
     }
     load();
     return () => { cancelled = true; };
-  }, [token]);
+  }, [token, reloadKey]);
 
   const owners = useMemo<MediaOwner[]>(() => {
     if (!data) return [];
@@ -68,6 +71,11 @@ export default function PublicClientDatabase() {
       })),
     ];
   }, [data]);
+
+  const contributionTargets = useMemo<ContributionTarget[]>(
+    () => owners.map((owner) => ({ id: owner.id, label: owner.label, kind: owner.kind })),
+    [owners],
+  );
 
   useEffect(() => {
     document.title = data ? `Banco de Dados — ${data.client.company_name}` : 'Banco de Dados do Cliente';
@@ -102,6 +110,15 @@ export default function PublicClientDatabase() {
                 </div>
               </div>
             </header>
+
+            {token ? (
+              <PublicContributionPanel
+                token={token}
+                apiBase={VPS_API_BASE}
+                targets={contributionTargets}
+                onContributed={() => setReloadKey((value) => value + 1)}
+              />
+            ) : null}
 
             <MediaLibrary owners={owners} />
           </>

@@ -55,7 +55,38 @@ app.use(compression({ threshold: 1024 }));
 app.use(express.json({ limit: '10mb' }));
 
 // Health Check: endpoint leve para monitoramento do Nginx/Uptime e Banco de Dados
+// Diagnóstico do Pente Fino: mostra o que faltava e repara o schema.
+app.get('/api/diagnostics/pente-fino', async (req, res) => {
+  try {
+    const before = {};
+    for (const [table, columns] of Object.entries(PENTE_FINO_SCHEMA)) {
+      const { rows } = await pool.query(
+        `SELECT 1 FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = $1 LIMIT 1`,
+        [table]
+      );
+      if (rows.length === 0) {
+        before[table] = { exists: false, missingColumns: Object.keys(columns) };
+        continue;
+      }
+      const existing = await getExistingColumns(table);
+      before[table] = {
+        exists: true,
+        missingColumns: Object.keys(columns).filter((c) => !existing.has(c)),
+      };
+    }
+
+    penteFinoEnsuredPromise = null;
+    await ensurePenteFinoTables();
+
+    res.json({ repaired: true, before });
+  } catch (error) {
+    res.status(500).json({ error: error?.message || 'diagnostics failed' });
+  }
+});
+
 app.get('/api/health', async (req, res) => {
+
   let dbStatus = 'ok';
   let dbError = null;
   

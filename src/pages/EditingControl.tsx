@@ -12,6 +12,7 @@ import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useCity } from '@/contexts/CityContext';
 
 interface EditingTask {
   id: string;
@@ -43,6 +44,7 @@ const CONTENT_TYPE_LABELS: Record<string, string> = {
 
 export default function EditingControl() {
   const { clients, users } = useApp();
+  const { activeCity, isLoading: cityLoading } = useCity();
   const [tasks, setTasks] = useState<EditingTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [draggedTask, setDraggedTask] = useState<EditingTask | null>(null);
@@ -74,10 +76,11 @@ export default function EditingControl() {
   };
 
   useEffect(() => {
-    fetchTasks();
+    if (cityLoading) return;
+    void fetchTasks();
     const interval = setInterval(fetchTasks, 15000);
     return () => clearInterval(interval);
-  }, []);
+  }, [activeCity, cityLoading]);
 
   // Queue = tasks in edicao/alteracao with no editing_started_at (not yet picked up)
   const queueTasks = useMemo(() =>

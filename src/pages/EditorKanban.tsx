@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { useAuth, profileHasRole } from '@/hooks/useAuth';
+import { useAuth, profileHasRole, profileOwnsUserId } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTask
 import { motion, AnimatePresence } from 'framer-motion';
 import EditorTaskDetail from '@/components/editor/EditorTaskDetail';
 import type { EditorTask as EditorTaskFull } from '@/pages/EditorDashboard';
+import { useCity } from '@/contexts/CityContext';
 
 const CONTENT_TYPES = [
   { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400', points: 10 },
@@ -87,7 +88,7 @@ function getTypeConfig(type: string) {
   return CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];
 }
 
-function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink, onClaimTask, onUnclaimTask, onReturnFromReview, onOpenDetail, draggedId, onDragStart, currentUserId, users }: {
+function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink, onClaimTask, onUnclaimTask, onReturnFromReview, onOpenDetail, draggedId, onDragStart, currentUserIds, users }: {
   task: EditorTask; clients: any[]; onOpenScript: (id: string) => void;
   onSendToReview: (task: EditorTask) => void;
   onAddVideoLink: (task: EditorTask) => void;
@@ -96,7 +97,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
   onReturnFromReview: (task: EditorTask) => void;
   onOpenDetail: (task: EditorTask) => void;
   draggedId: string | null; onDragStart: (e: React.DragEvent, task: EditorTask) => void;
-  currentUserId: string | undefined;
+  currentUserIds: string[];
   users: any[];
 }) {
   const client = clients.find(c => c.id === task.client_id);
@@ -107,7 +108,8 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
   const hasVideoLink = !!task.edited_video_link;
 
   const isReview = task.kanban_column === 'revisao';
-  const isMine = task.assigned_to === currentUserId;
+  const isMine = !!task.assigned_to && currentUserIds.includes(task.assigned_to);
+  const wasEditedByMe = !!task.edited_by && currentUserIds.includes(task.edited_by);
   const isOptimize = task.content_type === 'otimizacao';
 
   // Count filled optimization slots (parsed from description marker)
@@ -328,7 +330,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
             </Button>
           </motion.div>
         )}
-        {task.kanban_column === 'edicao' && task.assigned_to === currentUserId && (
+        {task.kanban_column === 'edicao' && isMine && (
           <Button size="sm" variant={hasVideoLink ? 'default' : 'outline'} 
             className={`w-full gap-1.5 h-7 text-xs mt-1 ${!hasVideoLink ? 'border-dashed' : ''}`} 
             onClick={(e) => { e.stopPropagation(); onAddVideoLink(task); }}>
@@ -356,7 +358,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
         )}
 
         {/* Ops! Volta aqui - editor can return review task to editing */}
-        {task.kanban_column === 'revisao' && task.edited_by === currentUserId && (
+        {task.kanban_column === 'revisao' && wasEditedByMe && (
           <motion.div whileTap={{ scale: 0.95 }} className="mt-1">
             <Button size="sm" variant="outline" className="w-full gap-1.5 h-7 text-xs border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
               onClick={(e) => { e.stopPropagation(); onReturnFromReview(task); }}>
@@ -375,6 +377,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
 export default function EditorKanban() {
   const { clients, scripts, users } = useApp();
   const { user } = useAuth();
+  const { activeCity, isLoading: cityLoading } = useCity();
   const [tasks, setTasks] = useState<EditorTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -411,11 +414,12 @@ export default function EditorKanban() {
   }, []);
 
   useEffect(() => {
-    fetchTasks();
+    if (cityLoading) return;
+    void fetchTasks();
     // Poll every 15s for near real-time updates (VPS has no websocket channels)
     const interval = setInterval(fetchTasks, 15000);
     return () => clearInterval(interval);
-  }, [fetchTasks]);
+  }, [activeCity, cityLoading, fetchTasks]);
 
   const { profile } = useAuth();
   const isEditorRole = profileHasRole(profile, 'editor', 'videomaker');
@@ -432,18 +436,18 @@ export default function EditorKanban() {
       if (isEditorRole && user) {
         if (t.kanban_column === 'edicao') {
           // Show unassigned or assigned to me
-          if (t.assigned_to && t.assigned_to !== user.id) return false;
+          if (t.assigned_to && !profileOwnsUserId(profile, t.assigned_to)) return false;
         } else if (t.kanban_column === 'alteracao') {
           // RULE: Only the original editor (edited_by) can see/work on alterations
-          if (t.edited_by !== user.id) return false;
+          if (!profileOwnsUserId(profile, t.edited_by)) return false;
         } else {
           // For revisao/envio: only show tasks I worked on
-          if (t.edited_by && t.edited_by !== user.id) return false;
+          if (t.edited_by && !profileOwnsUserId(profile, t.edited_by)) return false;
         }
       }
       return true;
     });
-  }, [tasks, filterClient, searchQuery, clients, isEditorRole, user]);
+  }, [tasks, filterClient, searchQuery, clients, isEditorRole, user, profile]);
 
   const sortedTasksByColumn = useMemo(() => {
     const map: Record<string, EditorTask[]> = {};
@@ -532,7 +536,7 @@ export default function EditorKanban() {
     if (!draggedTask || draggedTask.kanban_column === targetColumn) { setDraggedTask(null); return; }
 
     // Block editors/videomakers from moving a task already claimed by someone else
-    if (isEditorRole && draggedTask.assigned_to && draggedTask.assigned_to !== user?.id) {
+    if (isEditorRole && draggedTask.assigned_to && !profileOwnsUserId(profile, draggedTask.assigned_to)) {
       toast.error('🚫 Este vídeo já foi pego por outra pessoa!');
       setDraggedTask(null);
       fetchTasks();
@@ -799,7 +803,7 @@ export default function EditorKanban() {
                         onSendToReview={handleSendToReview} onAddVideoLink={openVideoLinkDialog}
                         onClaimTask={handleClaimTask} onUnclaimTask={handleUnclaimTask} onReturnFromReview={handleReturnFromReview}
                         onOpenDetail={setDetailTask}
-                        currentUserId={user?.id} users={users}
+                        currentUserIds={profile?.identity_ids?.length ? profile.identity_ids : (user?.id ? [user.id] : [])} users={users}
                         draggedId={draggedTask?.id || null} onDragStart={handleDragStart} />
                     ))}
                     {colTasks.length === 0 && (

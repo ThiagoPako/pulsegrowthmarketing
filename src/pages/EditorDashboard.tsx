@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { useAuth, profileHasRole } from '@/hooks/useAuth';
+import { useAuth, profileHasRole, profileOwnsUserId } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
 import BonusCongratsBanner from '@/components/BonusCongratsBanner';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +26,7 @@ import { ptBR } from 'date-fns/locale';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 import { uploadFileToVps, deleteFileFromVps } from '@/services/vpsApi';
 import { EDITOR_SCORE, EDITOR_APPROVED_COLUMNS, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate } from '@/lib/scoringSystem';
+import { useCity } from '@/contexts/CityContext';
 
 const CONTENT_TYPES = [
   { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400', points: 10 },
@@ -197,6 +198,7 @@ function ScoreCelebration({ points, show, onDone }: { points: number; show: bool
 export default function EditorDashboard() {
   const { clients, scripts, users, recordings } = useApp();
   const { user, profile } = useAuth();
+  const { activeCity, isLoading: cityLoading } = useCity();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<EditorTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -256,13 +258,16 @@ export default function EditorDashboard() {
     setLoading(false);
   }, [activeEditTask?.id]);
 
-  useEffect(() => { fetchTasks(); }, []);
+  useEffect(() => {
+    if (!cityLoading) void fetchTasks();
+  }, [activeCity, cityLoading, fetchTasks]);
 
   // Polling every 15s for sync (realtime channel is a no-op with VPS client)
   useEffect(() => {
+    if (cityLoading) return;
     const interval = setInterval(fetchTasks, 15000);
     return () => clearInterval(interval);
-  }, [fetchTasks]);
+  }, [fetchTasks, cityLoading]);
 
   // Fetch script when active task changes
   useEffect(() => {
@@ -286,14 +291,14 @@ export default function EditorDashboard() {
   const visibleTasks = useMemo(() => {
     if (!isEditorRole || !user) return tasks;
     return tasks.filter(t => {
-      if (t.kanban_column === 'edicao') return !t.assigned_to || t.assigned_to === user.id;
+      if (t.kanban_column === 'edicao') return !t.assigned_to || profileOwnsUserId(profile, t.assigned_to);
       // For review tasks, only show tasks this editor edited
-      if (t.kanban_column === 'revisao') return t.edited_by === user.id || (!t.edited_by && !!t.editing_started_at);
+      if (t.kanban_column === 'revisao') return profileOwnsUserId(profile, t.edited_by) || (!t.edited_by && !!t.editing_started_at);
       // For alteration tasks, ONLY the original editor (edited_by) can see/work on them
-      if (t.kanban_column === 'alteracao') return t.edited_by === user.id;
-      return !t.assigned_to || t.assigned_to === user.id;
+      if (t.kanban_column === 'alteracao') return profileOwnsUserId(profile, t.edited_by);
+      return !t.assigned_to || profileOwnsUserId(profile, t.assigned_to);
     });
-  }, [tasks, isEditorRole, user]);
+  }, [tasks, isEditorRole, user, profile]);
 
   const pendingTasks = visibleTasks.filter(t => t.kanban_column === 'edicao' && !t.editing_started_at);
   const inEditTasks = visibleTasks.filter(t => t.kanban_column === 'edicao' && t.editing_started_at);
@@ -1177,7 +1182,7 @@ export default function EditorDashboard() {
                 onStartEditing={() => handleStartEditing(task)}
                 onClaimTask={() => handleClaimTask(task)}
                 onUnclaimTask={() => handleUnclaimTask(task)}
-                currentUserId={user?.id}
+                currentUserIds={profile?.identity_ids?.length ? profile.identity_ids : (user?.id ? [user.id] : [])}
                 users={users} />
             ))}
           </div>
@@ -1242,9 +1247,9 @@ export default function EditorDashboard() {
 }
 
 /* ─── Queue Card ──────────────────────────────────────────── */
-function QueueCard({ task, clients, recordings, index, onStartEditing, onClaimTask, onUnclaimTask, currentUserId, users }: {
+function QueueCard({ task, clients, recordings, index, onStartEditing, onClaimTask, onUnclaimTask, currentUserIds, users }: {
   task: EditorTask; clients: any[]; recordings: any[]; index: number;
-  onStartEditing: () => void; onClaimTask: () => void; onUnclaimTask: () => void; currentUserId?: string; users?: any[];
+  onStartEditing: () => void; onClaimTask: () => void; onUnclaimTask: () => void; currentUserIds: string[]; users?: any[];
 }) {
   const client = clients.find(c => c.id === task.client_id);
   const recording = task.recording_id ? recordings.find((r: any) => r.id === task.recording_id) : null;
@@ -1252,7 +1257,7 @@ function QueueCard({ task, clients, recordings, index, onStartEditing, onClaimTa
   const cfg = getTypeConfig(task.content_type);
   const deadline = getDeadlineStatus(task.editing_deadline);
   const clientColor = client?.color || (recording?.prospectName ? '200 80% 55%' : '217 91% 60%');
-  const isMine = task.assigned_to === currentUserId;
+  const isMine = !!task.assigned_to && currentUserIds.includes(task.assigned_to);
   const claimedUser = task.assigned_to && users ? users.find((u: any) => u.id === task.assigned_to) : null;
 
   return (

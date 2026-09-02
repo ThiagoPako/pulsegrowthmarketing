@@ -9305,7 +9305,7 @@ app.get('/api/public/bio/:slug', async (req, res) => {
   try {
     const slug = String(req.params.slug || '').toLowerCase();
     const { rows: bioRows } = await pool.query(
-      'SELECT id, client_id, slug, title, description, logo_url, theme_config FROM client_bio_links WHERE slug = $1 LIMIT 1',
+      'SELECT id, client_id, slug, title, description, logo_url, theme_config, sections FROM client_bio_links WHERE slug = $1 LIMIT 1',
       [slug]
     );
     if (!bioRows.length) return res.status(404).json({ error: 'Bio não encontrada' });

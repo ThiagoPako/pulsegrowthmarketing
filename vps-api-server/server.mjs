@@ -707,8 +707,10 @@ async function ensureBioLinksTables() {
       created_at TIMESTAMPTZ DEFAULT now(),
       updated_at TIMESTAMPTZ DEFAULT now()
     );
+    ALTER TABLE client_bio_links ADD COLUMN IF NOT EXISTS sections JSONB DEFAULT '{}'::jsonb;
     CREATE INDEX IF NOT EXISTS idx_bio_links_slug ON client_bio_links(slug);
     CREATE INDEX IF NOT EXISTS idx_bio_links_client ON client_bio_links(client_id);
+
 
     CREATE TABLE IF NOT EXISTS client_bio_buttons (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -9303,7 +9305,7 @@ app.get('/api/public/bio/:slug', async (req, res) => {
   try {
     const slug = String(req.params.slug || '').toLowerCase();
     const { rows: bioRows } = await pool.query(
-      'SELECT id, client_id, slug, title, description, logo_url, theme_config FROM client_bio_links WHERE slug = $1 LIMIT 1',
+      'SELECT id, client_id, slug, title, description, logo_url, theme_config, sections FROM client_bio_links WHERE slug = $1 LIMIT 1',
       [slug]
     );
     if (!bioRows.length) return res.status(404).json({ error: 'Bio não encontrada' });

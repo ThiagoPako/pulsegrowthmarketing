@@ -8,6 +8,8 @@ import {
   BUTTON_RADIUS,
   type BioThemeConfig,
 } from '@/lib/bioTheme';
+import { normalizeBioSections } from '@/lib/bioSections';
+import BioSectionsView from '@/components/bio/BioSectionsView';
 
 const API_BASE = 'https://agenciapulse.tech';
 
@@ -27,7 +29,9 @@ interface BioRecord {
   description?: string | null;
   logo_url?: string | null;
   theme_config?: unknown;
+  sections?: unknown;
 }
+
 
 function iconFor(type: BioButton['type']) {
   if (type === 'whatsapp') return MessageCircle;
@@ -144,10 +148,14 @@ export default function PublicBioLink() {
   }, [slug]);
 
   const theme = normalizeBioTheme(bio?.theme_config);
+  const sections = normalizeBioSections(bio?.sections);
 
   useEffect(() => {
     if (bio?.title) document.title = bio.title;
   }, [bio?.title]);
+
+
+
 
   if (loading) {
     return (
@@ -206,6 +214,9 @@ export default function PublicBioLink() {
         <div className="w-full">
           <BioButtonList buttons={buttons} theme={theme} />
         </div>
+
+        <BioSectionsView sections={sections} theme={theme} />
+
 
         <footer className="pt-4 text-[11px]" style={{ color: theme.mutedColor }}>
           feito por Pulse Growth Marketing

@@ -707,8 +707,10 @@ async function ensureBioLinksTables() {
       created_at TIMESTAMPTZ DEFAULT now(),
       updated_at TIMESTAMPTZ DEFAULT now()
     );
+    ALTER TABLE client_bio_links ADD COLUMN IF NOT EXISTS sections JSONB DEFAULT '{}'::jsonb;
     CREATE INDEX IF NOT EXISTS idx_bio_links_slug ON client_bio_links(slug);
     CREATE INDEX IF NOT EXISTS idx_bio_links_client ON client_bio_links(client_id);
+
 
     CREATE TABLE IF NOT EXISTS client_bio_buttons (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

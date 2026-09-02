@@ -8,6 +8,8 @@ import {
   BUTTON_RADIUS,
   type BioThemeConfig,
 } from '@/lib/bioTheme';
+import { normalizeBioSections } from '@/lib/bioSections';
+import BioSectionsView from '@/components/bio/BioSectionsView';
 
 const API_BASE = 'https://agenciapulse.tech';
 
@@ -27,7 +29,9 @@ interface BioRecord {
   description?: string | null;
   logo_url?: string | null;
   theme_config?: unknown;
+  sections?: unknown;
 }
+
 
 function iconFor(type: BioButton['type']) {
   if (type === 'whatsapp') return MessageCircle;

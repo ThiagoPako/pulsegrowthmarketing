@@ -150,6 +150,12 @@ export default function PublicBioLink() {
   const theme = normalizeBioTheme(bio?.theme_config);
   const sections = normalizeBioSections(bio?.sections);
 
+  useEffect(() => {
+    if (bio?.title) document.title = bio.title;
+  }, [bio?.title]);
+
+
+
 
   if (loading) {
     return (

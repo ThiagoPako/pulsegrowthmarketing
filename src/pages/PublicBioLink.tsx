@@ -215,6 +215,9 @@ export default function PublicBioLink() {
           <BioButtonList buttons={buttons} theme={theme} />
         </div>
 
+        <BioSectionsView sections={sections} theme={theme} />
+
+
         <footer className="pt-4 text-[11px]" style={{ color: theme.mutedColor }}>
           feito por Pulse Growth Marketing
         </footer>

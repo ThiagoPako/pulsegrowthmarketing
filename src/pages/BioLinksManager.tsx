@@ -15,6 +15,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { BioButtonList } from '@/pages/PublicBioLink';
+import BioSectionsEditor from '@/components/bio/BioSectionsEditor';
+import BioSectionsView from '@/components/bio/BioSectionsView';
 import {
   BIO_THEME_PRESETS,
   DEFAULT_BIO_THEME,
@@ -23,6 +25,11 @@ import {
   AVATAR_RADIUS,
   type BioThemeConfig,
 } from '@/lib/bioTheme';
+import {
+  DEFAULT_BIO_SECTIONS,
+  normalizeBioSections,
+  type BioSections,
+} from '@/lib/bioSections';
 
 const API_BASE = 'https://agenciapulse.tech';
 
@@ -34,7 +41,9 @@ interface BioLinkRecord {
   description?: string | null;
   logo_url?: string | null;
   theme_config?: unknown;
+  sections?: unknown;
 }
+
 
 interface BioFormState {
   id?: string;
@@ -104,6 +113,7 @@ export default function BioLinksManager() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formData, setFormData] = useState<BioFormState>(EMPTY_FORM);
   const [theme, setTheme] = useState<BioThemeConfig>({ ...DEFAULT_BIO_THEME });
+  const [sections, setSections] = useState<BioSections>({ ...DEFAULT_BIO_SECTIONS });
   const { activeCity } = useCity();
 
   async function load() {
@@ -131,6 +141,7 @@ export default function BioLinksManager() {
   function openCreate() {
     setFormData(EMPTY_FORM);
     setTheme({ ...DEFAULT_BIO_THEME });
+    setSections({ ...DEFAULT_BIO_SECTIONS });
     setDialogOpen(true);
   }
 
@@ -144,6 +155,7 @@ export default function BioLinksManager() {
       logo_url: link.logo_url || '',
     });
     setTheme(parseTheme(link.theme_config));
+    setSections(normalizeBioSections(link.sections));
     setDialogOpen(true);
   }
 
@@ -182,6 +194,36 @@ export default function BioLinksManager() {
     }
   }
 
+  /** Upload genérico usado pelas seções (fotos de vendedores e logos de marcas). */
+  async function uploadImage(file: File): Promise<string | null> {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Selecione um arquivo de imagem.');
+      return null;
+    }
+    setUploading(true);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      body.append('folder', 'bio-links');
+      body.append('path', 'bio-links');
+      const token = localStorage.getItem('pulse_jwt');
+      const response = await fetch(`${API_BASE}/api/upload`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body,
+      });
+      const result = await response.json();
+      const url = result?.url || result?.publicUrl || result?.path;
+      if (!response.ok || !url) throw new Error(result?.error || 'Falha no upload');
+      return String(url);
+    } catch (error: any) {
+      toast.error(error?.message || 'Erro ao enviar imagem');
+      return null;
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function handleSave() {
     const slug = formData.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
     if (!formData.client_id || !slug) {
@@ -197,6 +239,7 @@ export default function BioLinksManager() {
         description: formData.description.trim() || null,
         logo_url: formData.logo_url.trim() || null,
         theme_config: theme,
+        sections,
         city: activeCity || null,
         updated_at: new Date().toISOString(),
       };
@@ -334,6 +377,7 @@ export default function BioLinksManager() {
                   <Palette className="mr-2 h-4 w-4" /> Tema
                 </TabsTrigger>
                 <TabsTrigger value="layout" className="flex-1">Layout & Avatar</TabsTrigger>
+                <TabsTrigger value="secoes" className="flex-1">Seções</TabsTrigger>
               </TabsList>
 
               <TabsContent value="dados" className="space-y-4 pt-4">
@@ -533,6 +577,14 @@ export default function BioLinksManager() {
                   </div>
                 </div>
               </TabsContent>
+              <TabsContent value="secoes" className="pt-4">
+                <BioSectionsEditor
+                  sections={sections}
+                  onChange={setSections}
+                  onUpload={uploadImage}
+                  uploading={uploading}
+                />
+              </TabsContent>
             </Tabs>
 
             {/* Preview ao vivo */}
@@ -567,6 +619,7 @@ export default function BioLinksManager() {
                   <div className="w-full">
                     <BioButtonList buttons={previewButtons} theme={theme} />
                   </div>
+                  <BioSectionsView sections={sections} theme={theme} />
                 </div>
               </div>
             </div>

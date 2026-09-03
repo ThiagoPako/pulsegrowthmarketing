@@ -15,6 +15,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { BioButtonList } from '@/pages/PublicBioLink';
+import BioSectionsEditor from '@/components/bio/BioSectionsEditor';
+import BioSectionsView from '@/components/bio/BioSectionsView';
 import {
   BIO_THEME_PRESETS,
   DEFAULT_BIO_THEME,
@@ -23,6 +25,11 @@ import {
   AVATAR_RADIUS,
   type BioThemeConfig,
 } from '@/lib/bioTheme';
+import {
+  DEFAULT_BIO_SECTIONS,
+  normalizeBioSections,
+  type BioSections,
+} from '@/lib/bioSections';
 
 const API_BASE = 'https://agenciapulse.tech';
 
@@ -34,7 +41,9 @@ interface BioLinkRecord {
   description?: string | null;
   logo_url?: string | null;
   theme_config?: unknown;
+  sections?: unknown;
 }
+
 
 interface BioFormState {
   id?: string;

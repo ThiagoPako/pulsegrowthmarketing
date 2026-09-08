@@ -1,6 +1,8 @@
+import type React from 'react';
 import { BarChart, Bar, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ArrowUpRight, HelpCircle, type LucideIcon } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { ClientInsights } from '@/services/socialPostsApi';
 
@@ -44,12 +46,13 @@ const toneClasses: Record<InsightMetric['tone'], string> = {
 export function InsightMetricCard({ metric, selected, onSelect }: MetricCardProps) {
   const Icon = metric.icon;
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       onClick={() => onSelect(metric)}
       aria-label={`Ver detalhes de ${metric.label}`}
       className={cn(
-        'group min-h-[126px] rounded-lg border p-4 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+        'group h-auto min-h-[126px] w-full whitespace-normal rounded-lg border p-4 text-left transition-all duration-200 focus-visible:ring-primary',
         'bg-white/[0.04] hover:-translate-y-0.5 hover:bg-white/[0.07] hover:shadow-lg',
         selected ? toneClasses[metric.tone] : 'border-white/10',
       )}
@@ -61,7 +64,7 @@ export function InsightMetricCard({ metric, selected, onSelect }: MetricCardProp
       <p className="mt-3 text-2xl font-bold text-white">{metric.value == null ? '—' : metric.value.toLocaleString('pt-BR')}</p>
       <p className="text-xs font-medium text-white/65">{metric.label}</p>
       <p className="mt-1 line-clamp-1 text-[11px] text-white/35">{metric.description}</p>
-    </button>
+    </Button>
   );
 }
 

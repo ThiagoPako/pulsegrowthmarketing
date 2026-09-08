@@ -5284,7 +5284,7 @@ app.post('/api/meta-oauth', async (req, res) => {
          VALUES ($1,'instagram',NULL,$2,$3,$4,'connected',$5,'instagram')`,
         [client_id, igUserId, me.username || igUserId, token, new Date(Date.now() + expiresIn * 1000).toISOString()]
       );
-      await admin.from('integration_logs').insert({ client_id, platform: 'instagram', action: 'oauth_connect', status: 'success', message: `Instagram @${me.username} conectado via Login do Instagram.` }).catch?.(() => {});
+      try { await admin.from('integration_logs').insert({ client_id, platform: 'instagram', action: 'oauth_connect', status: 'success', message: `Instagram @${me.username} conectado via Login do Instagram.` }); } catch {}
 
       return res.json({
         success: true,

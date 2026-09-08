@@ -9,6 +9,9 @@ import { CityProvider } from "@/contexts/CityContext";
 import Layout from "@/components/Layout";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Login from "@/pages/Login";
+import PrivacyPolicy from "@/pages/legal/PrivacyPolicy";
+import TermsOfUse from "@/pages/legal/TermsOfUse";
+import DataDeletion from "@/pages/legal/DataDeletion";
 
 
 // Lazy-loaded pages for code splitting
@@ -201,6 +204,9 @@ function AppRoutes() {
     <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/politica-de-privacidade" element={<PrivacyPolicy />} />
+        <Route path="/termos-de-uso" element={<TermsOfUse />} />
+        <Route path="/exclusao-de-dados" element={<DataDeletion />} />
         <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
         <Route path="/gestao/login" element={<GestaoLogin />} />
         <Route path="/gestao" element={<RequireSocioGestor><GestaoDashboard /></RequireSocioGestor>} />

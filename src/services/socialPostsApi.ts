@@ -17,6 +17,9 @@ export interface ConnectedSocialAccount {
   token_expiration: string | null;
   status: string;
   has_token: boolean;
+  /** 'instagram' = login direto no perfil; 'facebook' = via Página */
+  api_base?: 'instagram' | 'facebook';
+  expiring_soon?: boolean;
 }
 
 export interface ScheduledPost {

@@ -1375,14 +1375,19 @@ export default function Clients() {
     </div>
   );
 
-  const connectViaOAuth = async () => {
+  /**
+   * flow 'meta'      → Facebook Login (Página + Instagram vinculado)
+   * flow 'instagram' → Login do Instagram direto no perfil (não precisa de Página)
+   */
+  const connectViaOAuth = async (flow: 'meta' | 'instagram' = 'meta') => {
     const clientId = editing?.id || 'new';
+    const exchangeAction = flow === 'instagram' ? 'exchange_instagram_code' : 'exchange_code';
     try {
       const redirectUri = `${window.location.origin}/`;
       
       const { data, error } = await supabase.functions.invoke('meta-oauth', {
         body: {
-          action: 'get_oauth_url',
+          action: flow === 'instagram' ? 'get_instagram_oauth_url' : 'get_oauth_url',
           client_id: clientId,
           redirect_uri: redirectUri,
         },
@@ -1396,6 +1401,7 @@ export default function Clients() {
       // Store client context for the callback
       sessionStorage.setItem('meta_oauth_client_id', clientId);
       sessionStorage.setItem('meta_oauth_redirect_uri', redirectUri);
+      sessionStorage.setItem('meta_oauth_flow', flow);
       sessionStorage.setItem('meta_oauth_company_name', form.companyName || '');
 
       // Open OAuth popup
@@ -1422,7 +1428,7 @@ export default function Clients() {
 
                 const { data: result, error: exchangeError } = await supabase.functions.invoke('meta-oauth', {
                   body: {
-                    action: 'exchange_code',
+                    action: exchangeAction,
                     code,
                     redirect_uri: redirectUri,
                     client_id: parsedClientId,
@@ -1436,10 +1442,10 @@ export default function Clients() {
                   const ig = accounts.find((a: any) => a.platform === 'instagram');
                   const fb = accounts.find((a: any) => a.platform === 'facebook');
 
-                  setSocialAccounts({
-                    instagram: ig ? { connected: true, accountName: ig.name, username: `@${ig.username || ig.name}`, pageId: ig.pageId || '', businessId: ig.businessId || '' } : emptySocialAccounts().instagram,
-                    facebook: fb ? { connected: true, accountName: fb.name, pageId: fb.pageId || '' } : emptySocialAccounts().facebook,
-                  });
+                  setSocialAccounts(prev => ({
+                    instagram: ig ? { connected: true, accountName: ig.name, username: `@${ig.username || ig.name}`, pageId: ig.pageId || '', businessId: ig.businessId || '' } : (flow === 'instagram' ? prev.instagram : emptySocialAccounts().instagram),
+                    facebook: fb ? { connected: true, accountName: fb.name, pageId: fb.pageId || '' } : (flow === 'instagram' ? prev.facebook : emptySocialAccounts().facebook),
+                  }));
 
                   toast.success(`✅ ${accounts.length} conta(s) conectada(s) automaticamente!`);
                 }
@@ -1467,10 +1473,11 @@ export default function Clients() {
     if (code) {
       const savedClientId = sessionStorage.getItem('meta_oauth_client_id');
       const savedRedirectUri = sessionStorage.getItem('meta_oauth_redirect_uri');
+      const savedFlow = sessionStorage.getItem('meta_oauth_flow') === 'instagram' ? 'instagram' : 'meta';
 
       if (savedClientId && savedRedirectUri) {
         (async () => {
-          toast.info('Finalizando conexão com Meta...');
+          toast.info(savedFlow === 'instagram' ? 'Finalizando conexão com o Instagram...' : 'Finalizando conexão com Meta...');
           
           let parsedClientId = savedClientId;
           try {
@@ -1480,7 +1487,7 @@ export default function Clients() {
 
           const { data: result, error } = await supabase.functions.invoke('meta-oauth', {
             body: {
-              action: 'exchange_code',
+              action: savedFlow === 'instagram' ? 'exchange_instagram_code' : 'exchange_code',
               code,
               redirect_uri: savedRedirectUri,
               client_id: parsedClientId,
@@ -1494,16 +1501,17 @@ export default function Clients() {
             const ig = accounts.find((a: any) => a.platform === 'instagram');
             const fb = accounts.find((a: any) => a.platform === 'facebook');
 
-            setSocialAccounts({
-              instagram: ig ? { connected: true, accountName: ig.name, username: `@${ig.username || ig.name}`, pageId: ig.pageId || '', businessId: ig.businessId || '' } : emptySocialAccounts().instagram,
-              facebook: fb ? { connected: true, accountName: fb.name, pageId: fb.pageId || '' } : emptySocialAccounts().facebook,
-            });
+            setSocialAccounts(prev => ({
+              instagram: ig ? { connected: true, accountName: ig.name, username: `@${ig.username || ig.name}`, pageId: ig.pageId || '', businessId: ig.businessId || '' } : (savedFlow === 'instagram' ? prev.instagram : emptySocialAccounts().instagram),
+              facebook: fb ? { connected: true, accountName: fb.name, pageId: fb.pageId || '' } : (savedFlow === 'instagram' ? prev.facebook : emptySocialAccounts().facebook),
+            }));
 
             toast.success(`✅ ${accounts.length} conta(s) conectada(s)!`);
           }
 
           sessionStorage.removeItem('meta_oauth_client_id');
           sessionStorage.removeItem('meta_oauth_redirect_uri');
+          sessionStorage.removeItem('meta_oauth_flow');
           sessionStorage.removeItem('meta_oauth_company_name');
           window.history.replaceState({}, '', window.location.pathname);
         })();
@@ -1534,13 +1542,16 @@ export default function Clients() {
       {/* Connect Button - Single OAuth for both platforms */}
       {!socialAccounts.instagram.connected && !socialAccounts.facebook.connected ? (
         <div className="space-y-3">
-          <Button className="w-full gap-2" onClick={connectViaOAuth}>
-            <Link2 size={16} /> Conectar Facebook e Instagram via Meta
+          <Button className="w-full gap-2" onClick={() => connectViaOAuth('instagram')}>
+            <Instagram size={16} /> Conectar Instagram do cliente (direto no perfil)
+          </Button>
+          <Button variant="outline" className="w-full gap-2" onClick={() => connectViaOAuth('meta')}>
+            <Link2 size={16} /> Conectar via Facebook (Página + Instagram vinculado)
           </Button>
           <div className="p-3 rounded-lg bg-accent/50 border border-accent flex gap-2 items-start">
             <Info size={16} className="text-muted-foreground shrink-0 mt-0.5" />
             <p className="text-xs text-muted-foreground">
-              Ao clicar, você será redirecionado para o Facebook. Após autorizar, as contas (Páginas e Instagram vinculado) serão conectadas automaticamente. Você pode conectar depois no perfil do cliente.
+              <strong>Instagram direto:</strong> o cliente entra com o login do Instagram (conta Profissional) e autoriza — não precisa de Página do Facebook. <strong>Via Facebook:</strong> conecta a Página e o Instagram vinculado a ela, permitindo postar nos dois. O robô publica de verdade no perfil conectado.
             </p>
           </div>
         </div>
@@ -1606,10 +1617,15 @@ export default function Clients() {
             </div>
           </div>
 
-          {/* Reconnect button */}
-          <Button variant="outline" className="w-full gap-2 text-xs" onClick={connectViaOAuth}>
-            <RefreshCw size={14} /> Reconectar contas via Meta
-          </Button>
+          {/* Reconnect buttons */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <Button variant="outline" className="w-full gap-2 text-xs" onClick={() => connectViaOAuth('instagram')}>
+              <Instagram size={14} /> {socialAccounts.instagram.connected ? 'Reconectar' : 'Conectar'} Instagram direto
+            </Button>
+            <Button variant="outline" className="w-full gap-2 text-xs" onClick={() => connectViaOAuth('meta')}>
+              <RefreshCw size={14} /> Reconectar via Facebook
+            </Button>
+          </div>
         </div>
       )}
     </div>

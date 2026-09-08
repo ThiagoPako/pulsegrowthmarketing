@@ -344,6 +344,29 @@ export default function SocialConnections() {
                     </Button>
                   </div>
 
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed p-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">Testar conexão</p>
+                      <p className="text-xs text-muted-foreground">
+                        Verifica o acesso ao perfil, o limite de postagens e as métricas.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 shrink-0"
+                      disabled={diagBusy === client.id}
+                      onClick={() => runDiagnostic(client)}
+                    >
+                      {diagBusy === client.id
+                        ? <Loader2 size={14} className="animate-spin" />
+                        : <Stethoscope size={14} />}
+                      Testar
+                    </Button>
+                  </div>
+
+
+
 
                   <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed p-3">
                     <div className="min-w-0">

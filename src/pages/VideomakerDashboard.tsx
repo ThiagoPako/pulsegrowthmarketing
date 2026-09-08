@@ -119,11 +119,26 @@ export default function VideomakerDashboard() {
   // Timer for waiting elapsed
   useEffect(() => {
     if (!waitingStartedAt) return;
-    const interval = setInterval(() => {
-      setWaitingElapsed(Math.floor((Date.now() - waitingStartedAt.getTime()) / 1000));
-    }, 1000);
+    const tick = () => setWaitingElapsed(Math.max(0, Math.floor((Date.now() - waitingStartedAt.getTime()) / 1000)));
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [waitingStartedAt]);
+
+  // Restaura espera em aberto ao abrir o app (celular fechou aba/navegador)
+  useEffect(() => {
+    const id = currentUser?.id;
+    if (!id) return;
+    let cancelled = false;
+    restoreOpenWaitSession({ videomakerId: id }).then(s => {
+      if (cancelled || !s) return;
+      setWaitingRecordingId(s.recordingId);
+      setWaitingLogId(s.logId);
+      setWaitingStartedAt(new Date(s.startedAt));
+      setWaitingElapsed(waitElapsedSeconds(s));
+    });
+    return () => { cancelled = true; };
+  }, [currentUser?.id]);
 
   const handleStartWaiting = async (rec: Recording) => {
     // Cronômetro local inicia sempre; persistência defensiva via recordingWait

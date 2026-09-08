@@ -148,6 +148,23 @@ export interface InsightPost {
   reach: number | null;
   saved: number | null;
   interactions: number | null;
+  shares: number | null;
+  views: number | null;
+  plays: number | null;
+  total_watch_time: number | null;
+  avg_watch_time: number | null;
+}
+
+export interface FacebookInsights {
+  account_name: string | null;
+  followers_total: number | null;
+  reach: number | null;
+  impressions: number | null;
+  engaged_users: number | null;
+  post_engagements: number | null;
+  video_views: number | null;
+  reactions: number | null;
+  unavailable?: string;
 }
 
 export interface ClientInsights {
@@ -162,11 +179,18 @@ export interface ClientInsights {
   website_clicks: number | null;
   accounts_engaged: number | null;
   interactions: number | null;
+  likes: number | null;
+  comments: number | null;
+  saves: number | null;
+  shares: number | null;
+  replies: number | null;
   posts_count: number;
   avg_reach_per_post: number | null;
   reach_series: { date: string; value: number }[];
   follower_series: { date: string; value: number }[];
   posts: InsightPost[];
+  instagram?: ClientInsights | null;
+  facebook?: FacebookInsights | null;
   cached?: boolean;
   fetched_at?: string;
   stale_error?: string;

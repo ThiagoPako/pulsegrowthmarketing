@@ -5675,7 +5675,7 @@ app.get('/api/social-connect/:token', async (req, res) => {
     }
 
     const { rows: accounts } = await pool.query(
-      `SELECT platform, account_name FROM social_accounts WHERE client_id = $1 AND status = 'connected'`,
+      `SELECT platform, account_name, username, profile_picture_url FROM social_accounts WHERE client_id = $1 AND status = 'connected'`,
       [rows[0].client_id]
     );
 

@@ -28,6 +28,10 @@ import OnboardingTracker from '@/components/social/OnboardingTracker';
 import SocialMediaKanban from '@/components/social/SocialMediaKanban';
 import CatStatusIndicator, { getCatStatus } from '@/components/social/CatStatusIndicator';
 import CatClickWrapper from '@/components/social/CatClickEffect';
+import { Loader2 } from 'lucide-react';
+import AutoPostScheduleForm, { type AutoPostFormValue } from '@/components/social/AutoPostScheduleForm';
+import AutoPostQueue from '@/components/social/AutoPostQueue';
+import { createScheduledPost, suggestPublishType } from '@/services/socialPostsApi';
 
 interface SocialDelivery {
   id: string;
@@ -160,6 +164,10 @@ export default function SocialMediaDeliveries() {
   const [schedDate, setSchedDate] = useState('');
   const [schedTime, setSchedTime] = useState('');
   const [schedPlatform, setSchedPlatform] = useState('');
+  const [schedSaving, setSchedSaving] = useState(false);
+  const [autoPost, setAutoPost] = useState<AutoPostFormValue>({
+    enabled: false, platform: 'instagram', publishType: 'reels', mediaUrl: '', caption: '',
+  });
 
   // Stories batch
   const [storiesDialogOpen, setStoriesDialogOpen] = useState(false);
@@ -369,21 +377,70 @@ export default function SocialMediaDeliveries() {
     setFormStatus(d.status); setDialogOpen(true);
   };
 
-  const openSchedule = (d: SocialDelivery) => {
+  const openSchedule = async (d: SocialDelivery) => {
     setSchedulingItem(d);
     setSchedDate(d.posted_at || '');
     setSchedTime(d.scheduled_time || '');
     setSchedPlatform(d.platform || '');
+    setAutoPost({
+      enabled: false,
+      platform: 'instagram',
+      publishType: suggestPublishType(d.content_type),
+      mediaUrl: '',
+      caption: (d as any).caption || '',
+    });
     setScheduleDialogOpen(true);
+    // Pré-preenche a mídia com o vídeo final enviado na edição (quando existir)
+    if (d.content_task_id) {
+      const { data: task } = await supabase.from('content_tasks')
+        .select('edited_video_link, edited_video_type').eq('id', d.content_task_id).maybeSingle();
+      const link = (task as any)?.edited_video_link as string | undefined;
+      if (link && /^https?:\/\//i.test(link)) setAutoPost(prev => ({ ...prev, mediaUrl: link }));
+    }
   };
 
   const handleSchedule = async () => {
     if (!schedulingItem || !schedDate) { toast.error('Selecione a data de postagem'); return; }
+
+    // Validação da postagem automática antes de gravar qualquer coisa
+    if (autoPost.enabled) {
+      if (!schedTime) { toast.error('Informe o horário para a postagem automática'); return; }
+      if (!/^https?:\/\//i.test(autoPost.mediaUrl.trim())) { toast.error('Informe o link direto do vídeo/imagem final'); return; }
+      if (autoPost.caption.length > 2200) { toast.error('Legenda acima de 2200 caracteres'); return; }
+      const when = new Date(`${schedDate}T${schedTime}:00`);
+      if (Number.isNaN(when.getTime())) { toast.error('Data/horário inválidos'); return; }
+      if (when.getTime() < Date.now() - 60_000) { toast.error('O horário já passou. Escolha um horário futuro.'); return; }
+    }
+
+    setSchedSaving(true);
+    try {
+    const platformLabel = autoPost.enabled
+      ? (autoPost.platform === 'both' ? 'Instagram, Facebook' : autoPost.platform === 'instagram' ? 'Instagram' : 'Facebook')
+      : 'Instagram, Facebook';
     const { error } = await supabase.from('social_media_deliveries').update({
       posted_at: schedDate, scheduled_time: schedTime || null,
-      platform: 'Instagram, Facebook', status: 'agendado',
+      platform: platformLabel, status: 'agendado',
+      ...(autoPost.enabled && autoPost.publishType !== 'stories' ? { caption: autoPost.caption } : {}),
     } as any).eq('id', schedulingItem.id);
     if (error) { toast.error('Erro ao agendar'); return; }
+
+    if (autoPost.enabled) {
+      try {
+        await createScheduledPost({
+          client_id: schedulingItem.client_id,
+          delivery_id: schedulingItem.id,
+          content_task_id: schedulingItem.content_task_id || null,
+          platform: autoPost.platform,
+          publish_type: autoPost.publishType,
+          media_url: autoPost.mediaUrl.trim(),
+          caption: autoPost.publishType === 'stories' ? '' : autoPost.caption,
+          scheduled_at: new Date(`${schedDate}T${schedTime}:00`).toISOString(),
+        });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Não foi possível criar a postagem automática');
+        return;
+      }
+    }
     // Move content_task to acompanhamento with full sync
     if (schedulingItem.content_task_id) {
       await supabase.from('content_tasks').update({
@@ -1350,7 +1407,14 @@ export default function SocialMediaDeliveries() {
           <TabsTrigger value="calendario" className="gap-1.5">
             <CalendarIcon size={14} /> Calendário de Postagens
           </TabsTrigger>
+          <TabsTrigger value="automaticas" className="gap-1.5">
+            <Zap size={14} /> Postagens Automáticas
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="automaticas" className="mt-4">
+          <AutoPostQueue />
+        </TabsContent>
 
         <TabsContent value="clientes" className="mt-4">
           {/* Client Cards Grid */}
@@ -1543,7 +1607,7 @@ export default function SocialMediaDeliveries() {
   function renderScheduleDialog() {
     return (
       <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CalendarClock size={18} className="text-primary" /> Agendar Postagem
@@ -1555,17 +1619,23 @@ export default function SocialMediaDeliveries() {
                 <p className="font-medium text-sm">{schedulingItem.title}</p>
                 <p className="text-xs text-muted-foreground mt-1">{clients.find(c => c.id === schedulingItem.client_id)?.companyName}</p>
               </div>
-              <div><Label>Data da postagem *</Label><Input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)} /></div>
-              <div><Label>Horário (opcional)</Label><Input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)} /></div>
-              <div className="p-3 rounded-lg bg-muted/30 border border-border">
-                <Label className="text-xs text-muted-foreground">Plataformas</Label>
-                <p className="text-sm font-medium mt-1">📸 Instagram + Facebook</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Data da postagem *</Label><Input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)} /></div>
+                <div><Label>Horário {autoPost.enabled ? '*' : '(opcional)'}</Label><Input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)} /></div>
               </div>
+              <AutoPostScheduleForm
+                clientId={schedulingItem.client_id}
+                value={autoPost}
+                onChange={setAutoPost}
+              />
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setScheduleDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSchedule} className="gap-1.5"><CalendarCheck size={14} /> Confirmar</Button>
+            <Button variant="outline" onClick={() => setScheduleDialogOpen(false)} disabled={schedSaving}>Cancelar</Button>
+            <Button onClick={handleSchedule} className="gap-1.5" disabled={schedSaving}>
+              {schedSaving ? <Loader2 size={14} className="animate-spin" /> : autoPost.enabled ? <Zap size={14} /> : <CalendarCheck size={14} />}
+              {autoPost.enabled ? 'Agendar postagem automática' : 'Confirmar'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -5957,6 +5957,117 @@ app.post('/api/social-accounts/disconnect', async (req, res) => {
   }
 });
 
+// ============================================================
+// Conformidade Meta (App Review): desautorização e exclusão de dados
+// Endpoints PÚBLICOS chamados pela Meta — autenticados via signed_request.
+// ============================================================
+
+/** Garante a tabela de solicitações de exclusão exigida pela Meta. */
+async function ensureMetaDeletionSchema() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS meta_deletion_requests (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      confirmation_code TEXT UNIQUE NOT NULL,
+      meta_user_id TEXT,
+      kind TEXT NOT NULL DEFAULT 'deletion',
+      status TEXT NOT NULL DEFAULT 'concluido',
+      accounts_removed INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+}
+
+/** Decodifica e valida o signed_request enviado pela Meta (HMAC-SHA256 com o App Secret). */
+function parseMetaSignedRequest(signedRequest, appSecret) {
+  if (typeof signedRequest !== 'string' || !signedRequest.includes('.')) return null;
+  const [encodedSig, payload] = signedRequest.split('.', 2);
+  const b64 = (s) => Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+  let data;
+  try {
+    data = JSON.parse(b64(payload).toString('utf8'));
+  } catch {
+    return null;
+  }
+  const expected = crypto.createHmac('sha256', appSecret).update(payload).digest();
+  const received = b64(encodedSig);
+  if (expected.length !== received.length || !crypto.timingSafeEqual(expected, received)) return null;
+  return data;
+}
+
+/** Lê o App Secret da integração Meta ativa. */
+async function getMetaAppSecret() {
+  const { rows } = await pool.query(
+    `SELECT config FROM api_integrations WHERE provider = 'meta_ads' AND status = 'ativo' ORDER BY created_at DESC LIMIT 1`
+  );
+  const config = rows[0]?.config || {};
+  return config.meta_app_secret_encrypted || config.instagram_app_secret_encrypted || null;
+}
+
+/** Remove todas as contas sociais vinculadas a um usuário Meta/Instagram. */
+async function purgeMetaUserData(metaUserId) {
+  if (!metaUserId) return 0;
+  const { rowCount } = await pool.query(
+    `DELETE FROM social_accounts
+      WHERE facebook_page_id = $1 OR instagram_business_id = $1 OR external_user_id = $1`,
+    [String(metaUserId)]
+  ).catch(async () => pool.query(
+    `DELETE FROM social_accounts WHERE facebook_page_id = $1 OR instagram_business_id = $1`,
+    [String(metaUserId)]
+  ));
+  return rowCount || 0;
+}
+
+async function handleMetaComplianceRequest(req, res, kind) {
+  try {
+    await ensureMetaDeletionSchema();
+    const appSecret = await getMetaAppSecret();
+    if (!appSecret) return res.status(503).json({ error: 'Meta integration not configured' });
+
+    const signedRequest = req.body?.signed_request || req.query?.signed_request;
+    const parsed = parseMetaSignedRequest(signedRequest, appSecret);
+    if (!parsed) return res.status(400).json({ error: 'Invalid signed_request' });
+
+    const metaUserId = parsed.user_id || parsed.user?.id || null;
+    const removed = await purgeMetaUserData(metaUserId);
+    const confirmationCode = crypto.randomBytes(12).toString('hex');
+
+    await pool.query(
+      `INSERT INTO meta_deletion_requests (confirmation_code, meta_user_id, kind, accounts_removed)
+       VALUES ($1, $2, $3, $4)`,
+      [confirmationCode, metaUserId ? String(metaUserId) : null, kind, removed]
+    );
+
+    const base = process.env.PUBLIC_APP_URL || 'https://agenciapulse.tech';
+    return res.json({
+      url: `${base}/exclusao-de-dados?code=${confirmationCode}`,
+      confirmation_code: confirmationCode,
+    });
+  } catch (error) {
+    console.error('[meta-compliance]', error);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+}
+
+// Callback de exclusão de dados (Data Deletion Request Callback)
+app.post('/api/meta/data-deletion', (req, res) => handleMetaComplianceRequest(req, res, 'deletion'));
+// Callback de desautorização (Deauthorize Callback)
+app.post('/api/meta/deauthorize', (req, res) => handleMetaComplianceRequest(req, res, 'deauthorize'));
+
+// Consulta pública do status de uma solicitação pelo código de confirmação
+app.get('/api/meta/deletion-status/:code', async (req, res) => {
+  try {
+    await ensureMetaDeletionSchema();
+    const { rows } = await pool.query(
+      `SELECT confirmation_code, kind, status, accounts_removed, created_at
+         FROM meta_deletion_requests WHERE confirmation_code = $1 LIMIT 1`,
+      [req.params.code]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Código não encontrado' });
+    res.json({ request: rows[0] });
+  } catch (error) {
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
 
 
 app.get('/api/social-posts', async (req, res) => {

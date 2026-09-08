@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { portalAction } from '@/lib/portalApi';
 import type { ClientInsights } from '@/services/socialPostsApi';
-import { Loader2, TrendingUp, Users, Eye, MousePointerClick, Heart, Instagram, Facebook, MessageCircle, Bookmark, Share2, Play, Sparkles, ChevronRight } from 'lucide-react';
+import { Loader2, TrendingUp, Users, Eye, MousePointerClick, Heart, Instagram, Facebook, MessageCircle, Bookmark, Share2, Play, Sparkles, ChevronRight, FileText } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { InsightDetailDialog, InsightMetricCard, PerformanceCharts, type InsightMetric } from './PortalInsightsVisuals';
+import { PortalInsightsReport } from './PortalInsightsReport';
 
 interface PortalInsightsTabProps {
   clientId: string;
   clientColor: string;
+  clientName?: string;
 }
 
 const MONTHS = [
@@ -19,16 +21,30 @@ const MONTHS = [
 const nf = (v: number | null | undefined) =>
   v === null || v === undefined ? '—' : v.toLocaleString('pt-BR');
 
-/** Aba opcional que mostra ao cliente o desempenho real do Instagram no mês. */
-export function PortalInsightsTab({ clientId, clientColor }: PortalInsightsTabProps) {
+const pad = (n: number) => String(n).padStart(2, '0');
+const toIso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const daysAgo = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return toIso(d); };
+
+/** Aba opcional que mostra ao cliente o desempenho real do Instagram no período escolhido. */
+export function PortalInsightsTab({ clientId, clientColor, clientName = 'Cliente' }: PortalInsightsTabProps) {
   const now = new Date();
+  const [mode, setMode] = useState<'month' | 'custom'>('month');
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+  const [customSince, setCustomSince] = useState(daysAgo(30));
+  const [customUntil, setCustomUntil] = useState(toIso(now));
   const [data, setData] = useState<ClientInsights | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [selectedMetric, setSelectedMetric] = useState<InsightMetric | null>(null);
   const [postSort, setPostSort] = useState<'recent' | 'reach' | 'engagement'>('reach');
+  const [reportOpen, setReportOpen] = useState(false);
+
+  const period = useMemo(() => {
+    if (mode === 'custom') return { since: customSince, until: customUntil };
+    const last = new Date(year, month, 0).getDate();
+    return { since: `${year}-${pad(month)}-01`, until: `${year}-${pad(month)}-${pad(last)}` };
+  }, [mode, customSince, customUntil, month, year]);
 
   useEffect(() => {
     let active = true;
@@ -36,13 +52,11 @@ export function PortalInsightsTab({ clientId, clientColor }: PortalInsightsTabPr
       setLoading(true);
       setMessage(null);
       try {
-        const pad = (n: number) => String(n).padStart(2, '0');
-        const last = new Date(year, month, 0).getDate();
         const res = await portalAction({
           action: 'get_insights',
           client_id: clientId,
-          since: `${year}-${pad(month)}-01`,
-          until: `${year}-${pad(month)}-${pad(last)}`,
+          since: period.since,
+          until: period.until,
         });
         if (!active) return;
         if (res?.insights) setData(res.insights as ClientInsights);

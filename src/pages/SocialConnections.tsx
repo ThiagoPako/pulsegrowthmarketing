@@ -33,6 +33,38 @@ export default function SocialConnections() {
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [oauthBusy, setOauthBusy] = useState<string | null>(null);
+  const [linkBusy, setLinkBusy] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState<{ name: string; url: string; expires: string } | null>(null);
+
+  /** Cria o link público para o cliente autorizar sozinho as próprias contas. */
+  const generateInviteLink = async (client: ClientConnection) => {
+    setLinkBusy(client.id);
+    try {
+      const { data, error } = await invokeVpsFunction('social-connect-links', {
+        body: { client_id: client.id },
+      });
+      if (error || data?.error || !data?.path) {
+        throw new Error(data?.error || error?.message || 'Não foi possível gerar o link.');
+      }
+      const url = `${window.location.origin}${data.path}`;
+      setInviteLink({
+        name: client.name,
+        url,
+        expires: new Date(data.expires_at).toLocaleDateString('pt-BR'),
+      });
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success('Link gerado e copiado.');
+      } catch {
+        toast.success('Link gerado.');
+      }
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setLinkBusy(null);
+    }
+  };
+
 
 
   /** Liga/desliga a aba de desempenho no portal daquele cliente. */

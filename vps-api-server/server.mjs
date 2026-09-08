@@ -5891,6 +5891,7 @@ app.get('/api/social-posts/accounts-overview', async (req, res) => {
   try {
     await verifyUser(req);
     await ensureSocialPostsSchema();
+    await ensureSocialInsightsSchema();
     const { rows: clients } = await pool.query(
       `SELECT id, company_name AS name, city, COALESCE(portal_insights_enabled, false) AS portal_insights_enabled
        FROM clients WHERE COALESCE(status,'ativo') <> 'inativo' ORDER BY company_name`

@@ -255,7 +255,9 @@ function AppRoutes() {
 
         <Route path="/entregas-social" element={<ProtectedRoute><SocialMediaDeliveries /></ProtectedRoute>} />
         <Route path="/conexoes-sociais" element={<ProtectedRoute><SocialConnections /></ProtectedRoute>} />
+        <Route path="/conectar-social/:token" element={<SocialConnectInvite />} />
         <Route path="/estudio-postagem" element={<ProtectedRoute><PostStudio /></ProtectedRoute>} />
+
         <Route path="/desempenho-social" element={<ProtectedRoute><SocialInsights /></ProtectedRoute>} />
         <Route path="/conteudo" element={<ProtectedRoute><ContentKanban /></ProtectedRoute>} />
         <Route path="/edicao" element={<ProtectedRoute><EditorDashboard /></ProtectedRoute>} />

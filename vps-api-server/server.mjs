@@ -262,6 +262,7 @@ const CLIENT_PORTAL_BASE_FIELDS = [
   'monthly_recordings',
   'plan_id',
   'show_metrics',
+  'COALESCE(portal_insights_enabled, false) AS portal_insights_enabled',
   'has_vehicle_flyer',
   'niche',
   'whatsapp',

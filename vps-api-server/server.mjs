@@ -5242,11 +5242,11 @@ app.post('/api/meta-oauth', async (req, res) => {
       await admin.from('social_accounts').delete().eq('client_id', client_id);
 
       for (const page of pages) {
-        await admin.from('social_accounts').insert({ client_id, platform: 'facebook', facebook_page_id: page.id, account_name: page.name, access_token: page.access_token, status: 'connected', token_expiration: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() });
+        await admin.from('social_accounts').insert({ client_id, platform: 'facebook', facebook_page_id: page.id, account_name: page.name, username: page.name, profile_picture_url: fbPagePictureUrl(page.id), access_token: page.access_token, status: 'connected', token_expiration: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() });
         connectedAccounts.push({ platform: 'facebook', name: page.name, pageId: page.id });
         if (page.instagram_business_account) {
           const ig = page.instagram_business_account;
-          await admin.from('social_accounts').insert({ client_id, platform: 'instagram', facebook_page_id: page.id, instagram_business_id: ig.id, account_name: ig.username || ig.name, access_token: page.access_token, status: 'connected', token_expiration: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() });
+          await admin.from('social_accounts').insert({ client_id, platform: 'instagram', facebook_page_id: page.id, instagram_business_id: ig.id, account_name: ig.username || ig.name, username: ig.username || ig.name, profile_picture_url: ig.profile_picture_url || null, access_token: page.access_token, status: 'connected', token_expiration: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() });
           connectedAccounts.push({ platform: 'instagram', name: ig.username || ig.name, username: ig.username, businessId: ig.id, profilePicture: ig.profile_picture_url, pageId: page.id });
         }
         await admin.from('integration_logs').insert({ client_id, platform: 'facebook', action: 'oauth_connect', status: 'success', message: `Página ${page.name} conectada via OAuth.` });
@@ -5304,9 +5304,9 @@ app.post('/api/meta-oauth', async (req, res) => {
       // Substitui só a conta de Instagram; mantém Facebook se existir
       await pool.query(`DELETE FROM social_accounts WHERE client_id = $1 AND platform = 'instagram'`, [client_id]);
       await pool.query(
-        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, access_token, status, token_expiration, api_base)
-         VALUES ($1,'instagram',NULL,$2,$3,$4,'connected',$5,'instagram')`,
-        [client_id, igUserId, me.username || igUserId, token, new Date(Date.now() + expiresIn * 1000).toISOString()]
+        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, username, profile_picture_url, access_token, status, token_expiration, api_base)
+         VALUES ($1,'instagram',NULL,$2,$3,$4,$5,$6,'connected',$7,'instagram')`,
+        [client_id, igUserId, me.username || igUserId, me.username || null, me.profile_picture_url || null, token, new Date(Date.now() + expiresIn * 1000).toISOString()]
       );
       await enablePortalInsights(client_id);
 
@@ -5375,9 +5375,9 @@ app.post('/api/social-accounts/manual-token', async (req, res) => {
       const name = me.username || account_name || igUserId;
       await pool.query(`DELETE FROM social_accounts WHERE client_id = $1 AND platform = 'instagram'`, [client_id]);
       await pool.query(
-        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, access_token, status, token_expiration, api_base)
-         VALUES ($1,'instagram',NULL,$2,$3,$4,'connected',$5,'instagram')`,
-        [client_id, igUserId, name, longToken, new Date(Date.now() + expiresIn * 1000).toISOString()]
+        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, username, profile_picture_url, access_token, status, token_expiration, api_base)
+         VALUES ($1,'instagram',NULL,$2,$3,$4,$5,$6,'connected',$7,'instagram')`,
+        [client_id, igUserId, name, me.username || null, me.profile_picture_url || null, longToken, new Date(Date.now() + expiresIn * 1000).toISOString()]
       );
       await enablePortalInsights(client_id);
       return res.json({ success: true, accounts: [{ platform: 'instagram', name, username: name, businessId: igUserId, api_base: 'instagram' }] });
@@ -5401,17 +5401,17 @@ app.post('/api/social-accounts/manual-token', async (req, res) => {
     const connectedAccounts = [];
     for (const page of pages) {
       await pool.query(
-        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, account_name, access_token, status, token_expiration, api_base)
-         VALUES ($1,'facebook',$2,$3,$4,'connected',$5,'facebook')`,
-        [client_id, page.id, page.name, page.access_token, new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()]
+        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, account_name, username, profile_picture_url, access_token, status, token_expiration, api_base)
+         VALUES ($1,'facebook',$2,$3,$4,$5,$6,'connected',$7,'facebook')`,
+        [client_id, page.id, page.name, page.name, fbPagePictureUrl(page.id), page.access_token, new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()]
       );
       connectedAccounts.push({ platform: 'facebook', name: page.name, pageId: page.id });
       if (page.instagram_business_account && !hasDirectIg) {
         const ig = page.instagram_business_account;
         await pool.query(
-          `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, access_token, status, token_expiration, api_base)
-           VALUES ($1,'instagram',$2,$3,$4,$5,'connected',$6,'facebook')`,
-          [client_id, page.id, ig.id, ig.username || ig.name, page.access_token, new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()]
+          `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, username, profile_picture_url, access_token, status, token_expiration, api_base)
+           VALUES ($1,'instagram',$2,$3,$4,$5,$6,$7,'connected',$8,'facebook')`,
+          [client_id, page.id, ig.id, ig.username || ig.name, ig.username || null, ig.profile_picture_url || null, page.access_token, new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()]
         );
         connectedAccounts.push({ platform: 'instagram', name: ig.username || ig.name, username: ig.username, businessId: ig.id, pageId: page.id });
       }
@@ -5602,6 +5602,8 @@ async function ensureSocialPostsSchema() {
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS access_token TEXT NOT NULL DEFAULT '';
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS token_expiration TIMESTAMPTZ;
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS api_base TEXT NOT NULL DEFAULT 'facebook';
+    ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS username TEXT;
+    ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS profile_picture_url TEXT;
     CREATE TABLE IF NOT EXISTS social_connect_links (
       token TEXT PRIMARY KEY,
       client_id UUID NOT NULL,
@@ -5673,7 +5675,7 @@ app.get('/api/social-connect/:token', async (req, res) => {
     }
 
     const { rows: accounts } = await pool.query(
-      `SELECT platform, account_name FROM social_accounts WHERE client_id = $1 AND status = 'connected'`,
+      `SELECT platform, account_name, username, profile_picture_url FROM social_accounts WHERE client_id = $1 AND status = 'connected'`,
       [rows[0].client_id]
     );
 
@@ -5907,9 +5909,37 @@ async function publishToClientAccount(account, post) {
 
 }
 
+/** URL pública da foto de uma Página do Facebook (redireciona para a imagem). */
+function fbPagePictureUrl(pageId) {
+  return pageId ? `${META_API_BASE}/${pageId}/picture?type=normal` : null;
+}
+
+/** Busca @usuário e foto do perfil na Meta e atualiza a linha (melhor esforço). */
+async function refreshAccountProfile(a) {
+  try {
+    const base = a.api_base === 'instagram' ? IG_API_BASE : META_API_BASE;
+    if (a.platform === 'instagram' && a.instagram_business_id) {
+      const r = await fetch(`${base}/${a.instagram_business_id}?fields=username,profile_picture_url&access_token=${a.access_token}`);
+      const d = await r.json().catch(() => ({}));
+      if (!d.error && (d.username || d.profile_picture_url)) {
+        await pool.query(`UPDATE social_accounts SET username = COALESCE($2, username), profile_picture_url = COALESCE($3, profile_picture_url) WHERE id = $1`,
+          [a.id, d.username || null, d.profile_picture_url || null]);
+        a.username = d.username || a.username;
+        a.profile_picture_url = d.profile_picture_url || a.profile_picture_url;
+      }
+    } else if (a.platform === 'facebook' && a.facebook_page_id) {
+      const pic = fbPagePictureUrl(a.facebook_page_id);
+      await pool.query(`UPDATE social_accounts SET username = COALESCE(username, $2), profile_picture_url = COALESCE($3, profile_picture_url) WHERE id = $1`,
+        [a.id, a.account_name, pic]);
+      a.username = a.username || a.account_name;
+      a.profile_picture_url = a.profile_picture_url || pic;
+    }
+  } catch { /* melhor esforço */ }
+}
+
 async function getConnectedAccounts(clientId) {
   const { rows } = await pool.query(
-    `SELECT id, client_id, platform, facebook_page_id, instagram_business_id, account_name, access_token, token_expiration, status, api_base
+    `SELECT id, client_id, platform, facebook_page_id, instagram_business_id, account_name, username, profile_picture_url, access_token, token_expiration, status, api_base
      FROM social_accounts WHERE client_id = $1 AND status = 'connected'`,
     [clientId]
   );
@@ -5919,6 +5949,8 @@ async function getConnectedAccounts(clientId) {
 function sanitizeAccount(a) {
   return {
     id: a.id, platform: a.platform, account_name: a.account_name,
+    username: a.username || a.account_name,
+    profile_picture_url: a.profile_picture_url || null,
     facebook_page_id: a.facebook_page_id, instagram_business_id: a.instagram_business_id,
     token_expiration: a.token_expiration, status: a.status,
     has_token: !!a.access_token,
@@ -6075,9 +6107,12 @@ app.get('/api/social-posts/accounts-overview', async (req, res) => {
        FROM clients WHERE COALESCE(status,'ativo') <> 'inativo' ORDER BY company_name`
     );
     const { rows: accounts } = await pool.query(
-      `SELECT id, client_id, platform, facebook_page_id, instagram_business_id, account_name, access_token, token_expiration, status, api_base
+      `SELECT id, client_id, platform, facebook_page_id, instagram_business_id, account_name, username, profile_picture_url, access_token, token_expiration, status, api_base
        FROM social_accounts WHERE status = 'connected'`
     );
+    // Preenche @usuário/foto de contas conectadas antes dessa melhoria (melhor esforço, sem travar a lista)
+    const missing = accounts.filter(a => !a.profile_picture_url);
+    await Promise.all(missing.slice(0, 20).map(a => refreshAccountProfile(a)));
     const byClient = new Map();
     for (const a of accounts) {
       if (!byClient.has(a.client_id)) byClient.set(a.client_id, []);

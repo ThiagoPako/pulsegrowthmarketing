@@ -18,6 +18,10 @@ export interface ConnectedSocialAccount {
   id: string;
   platform: 'instagram' | 'facebook';
   account_name: string;
+  /** @usuário do perfil (ex: ag.pulse) */
+  username?: string | null;
+  /** Foto do perfil para exibição */
+  profile_picture_url?: string | null;
   facebook_page_id: string | null;
   instagram_business_id: string | null;
   token_expiration: string | null;

@@ -5888,6 +5888,58 @@ app.get('/api/social-posts/accounts-overview', async (req, res) => {
   }
 });
 
+// Biblioteca de mídias já existentes no sistema para um cliente (artes e vídeos)
+app.get('/api/social-posts/media-library', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const clientId = String(req.query.client_id || '').trim();
+    if (!clientId) return res.status(400).json({ error: 'client_id é obrigatório' });
+
+    const isVideo = (u) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(u || '');
+    const items = [];
+    const seen = new Set();
+    const push = (item) => {
+      const url = (item.url || '').trim();
+      if (!/^https?:\/\//i.test(url) || seen.has(url)) return;
+      seen.add(url);
+      items.push({ ...item, url, kind: item.kind || (isVideo(url) ? 'video' : 'image') });
+    };
+
+    const [designs, portal, contents] = await Promise.all([
+      pool.query(
+        `SELECT id, title, mockup_url, attachment_url, format_type, updated_at
+           FROM design_tasks WHERE client_id = $1 ORDER BY updated_at DESC LIMIT 120`,
+        [clientId]
+      ).catch(() => ({ rows: [] })),
+      pool.query(
+        `SELECT id, title, file_url, thumbnail_url, content_type, created_at
+           FROM client_portal_contents WHERE client_id = $1 ORDER BY created_at DESC LIMIT 120`,
+        [clientId]
+      ).catch(() => ({ rows: [] })),
+      pool.query(
+        `SELECT id, title, edited_video_link, content_type, updated_at
+           FROM content_tasks WHERE client_id = $1 AND edited_video_link IS NOT NULL
+           ORDER BY updated_at DESC LIMIT 120`,
+        [clientId]
+      ).catch(() => ({ rows: [] })),
+    ]);
+
+    for (const d of designs.rows) {
+      push({ id: `design-${d.id}`, title: d.title || 'Arte', url: d.mockup_url || d.attachment_url, thumbnail: d.mockup_url || d.attachment_url, source: 'Design', tag: d.format_type, date: d.updated_at });
+    }
+    for (const c of portal.rows) {
+      push({ id: `portal-${c.id}`, title: c.title || 'Conteúdo', url: c.file_url, thumbnail: c.thumbnail_url || (isVideo(c.file_url) ? null : c.file_url), source: 'Portal', tag: c.content_type, date: c.created_at });
+    }
+    for (const t of contents.rows) {
+      push({ id: `video-${t.id}`, title: t.title || 'Vídeo editado', url: t.edited_video_link, thumbnail: null, source: 'Edição', tag: t.content_type, date: t.updated_at });
+    }
+
+    res.json({ items });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+  }
+});
+
 // Desconectar conta social de um cliente
 app.post('/api/social-accounts/disconnect', async (req, res) => {
   try {

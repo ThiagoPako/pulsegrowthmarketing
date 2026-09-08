@@ -20,7 +20,7 @@ import {
   Scissors, PlusCircle, ExternalLink, Pause, Sparkles, Film, Zap
 } from 'lucide-react';
 import LiveRecordingCard from '@/components/videomaker/LiveRecordingCard';
-import { startWaitSession, stopWaitSession, loadWaitSession, waitElapsedSeconds, formatWaitDuration } from '@/lib/recordingWait';
+import { startWaitSession, stopWaitSession, loadWaitSession, restoreOpenWaitSession, waitElapsedSeconds, formatWaitDuration } from '@/lib/recordingWait';
 import FieldworkButton from '@/components/videomaker/FieldworkButton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';

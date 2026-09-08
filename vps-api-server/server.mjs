@@ -5892,7 +5892,8 @@ app.get('/api/social-posts/accounts-overview', async (req, res) => {
     await verifyUser(req);
     await ensureSocialPostsSchema();
     const { rows: clients } = await pool.query(
-      `SELECT id, company_name AS name, city FROM clients WHERE COALESCE(status,'ativo') <> 'inativo' ORDER BY company_name`
+      `SELECT id, company_name AS name, city, COALESCE(portal_insights_enabled, false) AS portal_insights_enabled
+       FROM clients WHERE COALESCE(status,'ativo') <> 'inativo' ORDER BY company_name`
     );
     const { rows: accounts } = await pool.query(
       `SELECT id, client_id, platform, facebook_page_id, instagram_business_id, account_name, access_token, token_expiration, status, api_base

@@ -6585,7 +6585,9 @@ app.post('/api/social-posts/:id/publish-now', async (req, res) => {
     if (!rows[0]) return res.status(400).json({ error: 'Post não está agendado nem com erro' });
     await runScheduledPost({ ...rows[0], attempts: SOCIAL_POST_MAX_ATTEMPTS - 1 });
     const { rows: fresh } = await pool.query(`SELECT * FROM scheduled_posts WHERE id=$1`, [req.params.id]);
-    res.json({ success: fresh[0]?.status === 'publicado', post: fresh[0] });
+    const ok = fresh[0]?.status === 'publicado';
+    res.json({ success: ok, post: fresh[0], error: ok ? null : (fresh[0]?.last_error || 'Falha ao publicar') });
+
   } catch (error) {
     res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
   }

@@ -5175,6 +5175,8 @@ app.all('/api/portal-media-proxy', async (req, res) => {
 
 // ─── 8. Meta OAuth ──────────────────────────────────────────
 const META_API_BASE = 'https://graph.facebook.com/v21.0';
+// Base da API do Instagram com Login do Instagram (perfil conectado direto, sem Página do Facebook)
+const IG_API_BASE = 'https://graph.instagram.com/v21.0';
 
 app.post('/api/meta-oauth', async (req, res) => {
   try {
@@ -5226,6 +5228,68 @@ app.post('/api/meta-oauth', async (req, res) => {
         await admin.from('integration_logs').insert({ client_id, platform: 'facebook', action: 'oauth_connect', status: 'success', message: `Página ${page.name} conectada via OAuth.` });
       }
       return res.json({ success: true, accounts: connectedAccounts, pages_found: pages.length });
+    }
+
+    // ── Instagram Login direto (sem Página do Facebook) ──
+    // Usa a "API do Instagram com Login do Instagram": o cliente entra com a
+    // conta profissional do Instagram e autoriza a agência. Token fica só na VPS.
+    const igAppId = config?.instagram_app_id || appId;
+    const igAppSecret = config?.instagram_app_secret_encrypted || config?.meta_app_secret_encrypted;
+
+    if (action === 'get_instagram_oauth_url') {
+      if (!igAppId) return res.status(400).json({ error: 'Instagram App ID não configurado (Financeiro → Integrações → Meta)' });
+      const scopes = 'instagram_business_basic,instagram_business_content_publish';
+      const state = JSON.stringify({ client_id, flow: 'instagram' });
+      const oauthUrl = `https://www.instagram.com/oauth/authorize?client_id=${igAppId}&redirect_uri=${encodeURIComponent(redirect_uri)}&scope=${scopes}&state=${encodeURIComponent(state)}&response_type=code&force_reauth=true`;
+      return res.json({ oauth_url: oauthUrl });
+    }
+
+    if (action === 'exchange_instagram_code') {
+      if (!code || !redirect_uri || !client_id) return res.status(400).json({ error: 'Missing code, redirect_uri, or client_id' });
+      if (!igAppId || !igAppSecret) return res.status(400).json({ error: 'Instagram App ID/Secret não configurados' });
+
+      // 1) code → token curto (POST form-urlencoded)
+      const form = new URLSearchParams({
+        client_id: String(igAppId), client_secret: String(igAppSecret),
+        grant_type: 'authorization_code', redirect_uri, code: String(code).replace(/#_$/, ''),
+      });
+      const shortRes = await fetch('https://api.instagram.com/oauth/access_token', { method: 'POST', body: form });
+      const shortData = await shortRes.json().catch(() => ({}));
+      if (!shortData.access_token) {
+        return res.status(400).json({ error: 'Instagram recusou o código: ' + (shortData.error_message || shortData.error?.message || JSON.stringify(shortData)) });
+      }
+
+      // 2) token curto → token longo (60 dias)
+      const longRes = await fetch(`${IG_API_BASE}/access_token?grant_type=ig_exchange_token&client_secret=${igAppSecret}&access_token=${shortData.access_token}`);
+      const longData = await longRes.json().catch(() => ({}));
+      const token = longData.access_token || shortData.access_token;
+      const expiresIn = Number(longData.expires_in) || 60 * 24 * 60 * 60;
+
+      // 3) perfil
+      const meRes = await fetch(`${IG_API_BASE}/me?fields=user_id,username,account_type,profile_picture_url&access_token=${token}`);
+      const me = await meRes.json().catch(() => ({}));
+      if (me.error || !(me.user_id || me.id)) {
+        return res.status(400).json({ error: 'Não foi possível ler o perfil do Instagram: ' + (me.error?.message || JSON.stringify(me)) });
+      }
+      const igUserId = String(me.user_id || me.id);
+      if (me.account_type && !['BUSINESS', 'MEDIA_CREATOR', 'CREATOR'].includes(String(me.account_type).toUpperCase())) {
+        return res.status(400).json({ error: `A conta @${me.username} é pessoal. Converta para Profissional (Comercial ou Criador) nas configurações do Instagram e tente novamente.` });
+      }
+
+      await ensureSocialPostsSchema();
+      // Substitui só a conta de Instagram; mantém Facebook se existir
+      await pool.query(`DELETE FROM social_accounts WHERE client_id = $1 AND platform = 'instagram'`, [client_id]);
+      await pool.query(
+        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, access_token, status, token_expiration, api_base)
+         VALUES ($1,'instagram',NULL,$2,$3,$4,'connected',$5,'instagram')`,
+        [client_id, igUserId, me.username || igUserId, token, new Date(Date.now() + expiresIn * 1000).toISOString()]
+      );
+      await admin.from('integration_logs').insert({ client_id, platform: 'instagram', action: 'oauth_connect', status: 'success', message: `Instagram @${me.username} conectado via Login do Instagram.` }).catch?.(() => {});
+
+      return res.json({
+        success: true,
+        accounts: [{ platform: 'instagram', name: me.username, username: me.username, businessId: igUserId, profilePicture: me.profile_picture_url, pageId: '' }],
+      });
     }
 
     res.status(400).json({ error: 'Invalid action' });

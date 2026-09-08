@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Target, Film, Megaphone, Image as ImageIcon, Palette, DollarSign, Calculator, Check } from 'lucide-react';
+import { Target, Film, Megaphone, Image as ImageIcon, Palette, DollarSign, Calculator, Check, Timer } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths, differenceInCalendarMonths } from 'date-fns';
 
 interface DeliveryRecord {
@@ -316,7 +316,7 @@ export default function CostByContentType() {
   const fetchData = useCallback(async () => {
     setLoadError(null);
     const [rRes, sRes, edRes, dRes, scRes, catRes, expRes, plRes] = await Promise.all([
-      safeSelect<DeliveryRecord>('delivery_records', 'client_id,videomaker_id,date,reels_produced,creatives_produced,stories_produced,arts_produced,delivery_status'),
+      safeSelect<DeliveryRecord>('delivery_records', 'client_id,videomaker_id,date,reels_produced,creatives_produced,stories_produced,arts_produced,delivery_status,videos_recorded,recording_duration_seconds,wait_duration_seconds'),
       safeSelect<SocialDelivery>('social_media_deliveries', 'client_id,content_type,delivered_at,posted_at,created_at,updated_at,status,created_by'),
       safeSelect<EditorTask>('content_tasks', 'client_id,content_type,kanban_column,approved_at,updated_at,created_at,assigned_to,edited_by'),
       safeSelect<DesignTask>('design_tasks', 'client_id,kanban_column,completed_at,updated_at,created_at,attachment_url,attachment_urls,editable_file_url,mockup_url,assigned_to'),
@@ -717,7 +717,42 @@ export default function CostByContentType() {
       .map(([name, total]) => ({ name, total }))
       .sort((a, b) => b.total - a.total);
 
+    // === GRAVAÇÕES: espera e duração por cliente (fonte: delivery_records) ===
+    const recStatsMap = new Map<string, { sessions: number; videos: number; recSec: number; recCount: number; waitSec: number; waitCount: number }>();
+    realizadas.forEach(r => {
+      const key = r.client_id || 'sem-cliente';
+      const cur = recStatsMap.get(key) || { sessions: 0, videos: 0, recSec: 0, recCount: 0, waitSec: 0, waitCount: 0 };
+      cur.sessions += 1;
+      const vids = toNumber(r.videos_recorded);
+      cur.videos += vids > 0 ? vids : toNumber(r.reels_produced) + toNumber(r.creatives_produced) + toNumber(r.stories_produced);
+      const recSec = toNumber(r.recording_duration_seconds);
+      if (recSec > 0) { cur.recSec += recSec; cur.recCount += 1; }
+      const waitSec = toNumber(r.wait_duration_seconds);
+      if (waitSec > 0) { cur.waitSec += waitSec; cur.waitCount += 1; }
+      recStatsMap.set(key, cur);
+    });
+    const recordingStats = Array.from(recStatsMap.entries()).map(([cid, s]) => ({
+      clientId: cid,
+      clientName: clients.find(c => c.id === cid)?.companyName || (cid === 'sem-cliente' ? 'Sem cliente' : 'Cliente removido'),
+      sessions: s.sessions,
+      videos: s.videos,
+      avgVideos: s.sessions > 0 ? s.videos / s.sessions : 0,
+      totalRecSec: s.recSec,
+      avgRecSec: s.recCount > 0 ? s.recSec / s.recCount : 0,
+      totalWaitSec: s.waitSec,
+      avgWaitSec: s.waitCount > 0 ? s.waitSec / s.waitCount : 0,
+      waitCount: s.waitCount,
+    })).sort((a, b) => b.sessions - a.sessions || b.totalWaitSec - a.totalWaitSec);
+    const recordingTotals = recordingStats.reduce((acc, s) => ({
+      sessions: acc.sessions + s.sessions,
+      videos: acc.videos + s.videos,
+      recSec: acc.recSec + s.totalRecSec,
+      waitSec: acc.waitSec + s.totalWaitSec,
+      waitCount: acc.waitCount + s.waitCount,
+    }), { sessions: 0, videos: 0, recSec: 0, waitSec: 0, waitCount: 0 });
+
     return {
+      recordingStats, recordingTotals,
       totalSalaries, monthlyTotalSalaries, months,
       videoPool, editorPool, socialPool, copyPool, editorSocialPool, vmPool, vmEditingPool, designerPool,
       monthlyVideoPool, monthlyEditorPool, monthlySocialPool, monthlyCopyPool, monthlyVmPool, monthlyDesignerPool,
@@ -744,7 +779,7 @@ export default function CostByContentType() {
       prolaboreTotal,
       prolaborePerSocio,
     };
-  }, [records, editorTasks, designTasks, socialDeliveries, scripts, salaryExpenses, prolaboreExpenses, users, selectedClient, dateRange, plans, includeProLabore]);
+  }, [records, editorTasks, designTasks, socialDeliveries, scripts, salaryExpenses, prolaboreExpenses, users, clients, selectedClient, dateRange, plans, includeProLabore]);
 
   const fmt = (n: number) => Number.isFinite(n) && n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00';
   const formatCost = (cost: number, qty: number, pool: number) => {
@@ -1125,6 +1160,54 @@ export default function CostByContentType() {
                     <td className="px-3 py-2 text-right">{fmt(p.cost)}</td>
                     <td className={`px-3 py-2 text-right font-semibold ${p.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmt(p.margin)}</td>
                     <td className={`px-3 py-2 text-right font-bold ${p.marginPct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{p.marginPct.toFixed(1)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      </div>
+      {/* ===== GRAVAÇÕES: ESPERA E DURAÇÃO POR CLIENTE ===== */}
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold flex items-center gap-2"><Timer className="h-5 w-5" /> Gravações: espera e duração por cliente</h2>
+        <p className="text-sm text-muted-foreground">
+          Sessões realizadas no período, vídeos captados, tempo real de gravação (já descontada a espera) e tempo que o videomaker ficou aguardando o cliente. Médias consideram apenas sessões com tempo registrado.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase">Gravações</p><p className="text-2xl font-bold">{data.recordingTotals.sessions}</p></CardContent></Card>
+          <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase">Vídeos captados</p><p className="text-2xl font-bold">{data.recordingTotals.videos}</p><p className="text-xs text-muted-foreground">{data.recordingTotals.sessions > 0 ? (data.recordingTotals.videos / data.recordingTotals.sessions).toFixed(1) : '0'} por gravação</p></CardContent></Card>
+          <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase">Tempo gravando</p><p className="text-2xl font-bold">{fmtDuration(data.recordingTotals.recSec)}</p></CardContent></Card>
+          <Card className="border-l-4 border-l-amber-500"><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase">Tempo em espera</p><p className="text-2xl font-bold">{fmtDuration(data.recordingTotals.waitSec)}</p><p className="text-xs text-muted-foreground">média {fmtDuration(data.recordingTotals.waitCount > 0 ? data.recordingTotals.waitSec / data.recordingTotals.waitCount : 0)} · {data.recordingTotals.waitCount} {data.recordingTotals.waitCount === 1 ? 'espera' : 'esperas'}</p></CardContent></Card>
+        </div>
+        <Card>
+          <CardContent className="p-0 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="text-left px-3 py-2">Cliente</th>
+                  <th className="text-right px-3 py-2">Gravações</th>
+                  <th className="text-right px-3 py-2">Vídeos</th>
+                  <th className="text-right px-3 py-2">Média/grav.</th>
+                  <th className="text-right px-3 py-2">Duração média</th>
+                  <th className="text-right px-3 py-2">Duração total</th>
+                  <th className="text-right px-3 py-2">Espera média</th>
+                  <th className="text-right px-3 py-2">Espera total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.recordingStats.length === 0 && (
+                  <tr><td colSpan={8} className="text-center text-muted-foreground py-6">Nenhuma gravação realizada no período.</td></tr>
+                )}
+                {data.recordingStats.map((s, i) => (
+                  <tr key={s.clientId} className={`border-t border-border/50 transition-colors hover:bg-muted/40 ${i % 2 === 0 ? 'bg-muted/20' : ''} ${s.avgWaitSec >= 1800 ? 'border-l-4 border-l-red-500' : s.avgWaitSec >= 900 ? 'border-l-4 border-l-amber-500' : 'border-l-4 border-l-emerald-500'}`}>
+                    <td className="px-3 py-2 font-medium">{s.clientName}</td>
+                    <td className="px-3 py-2 text-right">{s.sessions}</td>
+                    <td className="px-3 py-2 text-right">{s.videos}</td>
+                    <td className="px-3 py-2 text-right">{s.avgVideos.toFixed(1)}</td>
+                    <td className="px-3 py-2 text-right">{fmtDuration(s.avgRecSec)}</td>
+                    <td className="px-3 py-2 text-right">{fmtDuration(s.totalRecSec)}</td>
+                    <td className={`px-3 py-2 text-right font-semibold ${s.avgWaitSec >= 1800 ? 'text-red-600' : s.avgWaitSec >= 900 ? 'text-amber-600' : ''}`}>{fmtDuration(s.avgWaitSec)}{s.waitCount > 0 ? <span className="text-xs text-muted-foreground font-normal"> ({s.waitCount})</span> : null}</td>
+                    <td className="px-3 py-2 text-right">{fmtDuration(s.totalWaitSec)}</td>
                   </tr>
                 ))}
               </tbody>

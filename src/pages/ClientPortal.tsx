@@ -29,6 +29,7 @@ import ProposalChecklist from '@/components/ProposalChecklist';
 import PortalRendimentoBovino from '@/components/portal/PortalRendimentoBovino';
 import PortalEvents from '@/components/portal/PortalEvents';
 import PortalTraining from '@/components/portal/PortalTraining';
+import { PortalInsightsTab } from '@/components/portal/PortalInsightsTab';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
   reel: 'Reel', criativo: 'Criativo', institucional: 'Institucional', anuncio: 'Anúncio', arte: 'Arte', otimizacao: 'Otimizado',

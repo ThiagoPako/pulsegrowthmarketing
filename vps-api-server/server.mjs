@@ -6599,6 +6599,83 @@ app.post('/api/social-posts/:id/publish-now', async (req, res) => {
   }
 });
 
+/**
+ * Diagnóstico da conexão de um cliente: token, perfil, limite de publicações,
+ * métricas e (opcionalmente) se a Meta consegue baixar uma mídia nossa.
+ * Devolve uma lista de checagens em português — nunca expõe tokens.
+ */
+app.post('/api/social-posts/diagnose', async (req, res) => {
+  try {
+    await verifyUser(req);
+    await ensureSocialPostsSchema();
+    const { client_id, media_url } = req.body || {};
+    if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
+
+    const checks = [];
+    const add = (label, ok, detail) => checks.push({ label, ok, detail: detail || null });
+
+    const accounts = await getConnectedAccounts(client_id);
+    add('Contas conectadas', accounts.length > 0,
+      accounts.length ? accounts.map(a => `${a.platform}: ${a.account_name}`).join(' · ') : 'Nenhuma conta conectada para este cliente.');
+
+    for (const acc of accounts) {
+      const base = acc.platform === 'instagram' && acc.api_base === 'instagram' ? IG_API_BASE : META_API_BASE;
+      const id = acc.platform === 'facebook' ? acc.facebook_page_id : acc.instagram_business_id;
+      try {
+        const d = await metaGetJson(`${base}/${id}?fields=id,name,username&access_token=${acc.access_token}`);
+        add(`Token de ${acc.account_name}`, true, `Válido (${d.username || d.name || id}).`);
+      } catch (err) {
+        add(`Token de ${acc.account_name}`, false, `${err.message}. Reconecte a conta.`);
+        continue;
+      }
+      if (acc.platform === 'instagram') {
+        try {
+          const q = await metaGetJson(`${base}/${acc.instagram_business_id}?fields=content_publishing_limit&access_token=${acc.access_token}`);
+          const used = q?.content_publishing_limit?.data?.[0]?.quota_usage;
+          add('Limite de publicações do Instagram', true, used === undefined ? 'Disponível.' : `${used} de 50 publicações usadas nas últimas 24h.`);
+        } catch (err) {
+          add('Limite de publicações do Instagram', false, err.message);
+        }
+        try {
+          await metaGetJson(`${base}/${acc.instagram_business_id}/insights?metric=reach&period=day&access_token=${acc.access_token}`);
+          add('Métricas do perfil', true, 'A Meta já libera os números para este perfil.');
+        } catch (err) {
+          add('Métricas do perfil', false, `${err.message} (a permissão de métricas pode ainda estar em análise).`);
+        }
+      }
+    }
+
+    if (media_url) {
+      try {
+        await assertPublicMedia(String(media_url));
+        add('Mídia acessível pela Meta', true, 'O arquivo abre publicamente.');
+      } catch (err) {
+        add('Mídia acessível pela Meta', false, err.message);
+      }
+    }
+
+    const { rows: portalRow } = await pool.query(
+      'SELECT COALESCE(portal_insights_enabled, false) AS on FROM clients WHERE id = $1',
+      [client_id]
+    );
+    add('Métricas visíveis no portal do cliente', !!portalRow[0]?.on,
+      portalRow[0]?.on ? 'A aba de desempenho aparece no portal.' : 'Ative o botão "Mostrar desempenho no portal".');
+
+    const { rows: lastErr } = await pool.query(
+      `SELECT last_error, updated_at FROM scheduled_posts
+        WHERE client_id = $1 AND last_error IS NOT NULL ORDER BY updated_at DESC LIMIT 1`,
+      [client_id]
+    );
+    if (lastErr[0]) add('Último erro registrado', false, lastErr[0].last_error);
+
+    res.json({ checks, ok: checks.every(c => c.ok) });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+  }
+});
+
+
+
 // ─── 12. Reset Password ────────────────────────────────────
 app.post('/api/reset-password', async (req, res) => {
   try {

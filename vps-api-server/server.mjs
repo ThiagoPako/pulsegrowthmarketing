@@ -5370,6 +5370,317 @@ app.post('/api/meta-token-refresh', async (req, res) => {
   }
 });
 
+// ─── 11b. Postagem automática (fila + robô) ────────────────
+// Fluxo: Social Media agenda (data/hora/legenda/mídia) → linha em scheduled_posts
+// → worker roda a cada 60s → publica no perfil do cliente usando o token salvo
+// em social_accounts (obtido via OAuth no cadastro do cliente).
+const SOCIAL_POST_STATUSES = ['agendado', 'publicando', 'publicado', 'erro', 'cancelado'];
+const SOCIAL_POST_MAX_ATTEMPTS = 3;
+let socialPostsSchemaReady = false;
+
+async function ensureSocialPostsSchema() {
+  if (socialPostsSchemaReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS scheduled_posts (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      client_id UUID NOT NULL,
+      delivery_id UUID,
+      content_task_id UUID,
+      platform TEXT NOT NULL DEFAULT 'instagram',
+      publish_type TEXT NOT NULL DEFAULT 'reels',
+      media_url TEXT NOT NULL,
+      caption TEXT DEFAULT '',
+      scheduled_at TIMESTAMPTZ NOT NULL,
+      status TEXT NOT NULL DEFAULT 'agendado',
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      result JSONB,
+      published_at TIMESTAMPTZ,
+      created_by UUID,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_scheduled_posts_due ON scheduled_posts(status, scheduled_at);
+    CREATE INDEX IF NOT EXISTS idx_scheduled_posts_client ON scheduled_posts(client_id);
+    ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS access_token TEXT NOT NULL DEFAULT '';
+    ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS token_expiration TIMESTAMPTZ;
+  `);
+  socialPostsSchemaReady = true;
+}
+ensureSocialPostsSchema().catch(err => console.error('[social-posts] schema init failed:', err.message));
+
+async function waitForIgContainer(containerId, token, maxTries = 30) {
+  for (let i = 0; i < maxTries; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    const sr = await fetchMetaWithRetry(`${META_API_BASE}/${containerId}?fields=status_code,status&access_token=${token}`, { method: 'GET' });
+    const sd = await sr.json();
+    if (sd.status_code === 'FINISHED') return true;
+    if (sd.status_code === 'ERROR' || sd.status_code === 'EXPIRED') throw new Error(`Meta recusou a mídia (${sd.status || sd.status_code}). Verifique formato/tamanho do arquivo.`);
+  }
+  throw new Error('Meta demorou demais para processar a mídia (timeout).');
+}
+
+/**
+ * Publica no perfil de UM cliente usando o token da conta conectada.
+ * @param account linha de social_accounts (instagram ou facebook)
+ * @param post { publish_type: 'reels'|'feed'|'stories', media_url, caption }
+ */
+async function publishToClientAccount(account, post) {
+  const token = account.access_token;
+  if (!token) throw new Error(`Conta ${account.platform} sem token. Reconecte a conta no cadastro do cliente.`);
+  const isVideo = /\.(mp4|mov|webm|m4v)(\?|$)/i.test(post.media_url);
+  const caption = post.caption || '';
+
+  if (account.platform === 'facebook') {
+    const pageId = account.facebook_page_id;
+    if (!pageId) throw new Error('Página do Facebook não identificada na conta conectada.');
+    if (isVideo) {
+      const params = new URLSearchParams({ file_url: post.media_url, description: caption, access_token: token });
+      const r = await fetchMetaWithRetry(`${META_API_BASE}/${pageId}/videos?${params}`, { method: 'POST' });
+      return r.json();
+    }
+    const params = new URLSearchParams({ url: post.media_url, caption, access_token: token });
+    const r = await fetchMetaWithRetry(`${META_API_BASE}/${pageId}/photos?${params}`, { method: 'POST' });
+    return r.json();
+  }
+
+  // Instagram (Business/Creator)
+  const igId = account.instagram_business_id;
+  if (!igId) throw new Error('Conta do Instagram não identificada. O perfil precisa ser Business/Criador e vinculado à página do Facebook.');
+  const cp = new URLSearchParams({ access_token: token });
+  if (post.publish_type === 'stories') {
+    cp.set('media_type', 'STORIES');
+    if (isVideo) cp.set('video_url', post.media_url); else cp.set('image_url', post.media_url);
+  } else if (post.publish_type === 'reels' || isVideo) {
+    cp.set('media_type', 'REELS');
+    cp.set('video_url', post.media_url);
+    if (caption) cp.set('caption', caption);
+  } else {
+    cp.set('image_url', post.media_url);
+    if (caption) cp.set('caption', caption);
+  }
+  const cr = await fetchMetaWithRetry(`${META_API_BASE}/${igId}/media?${cp}`, { method: 'POST' });
+  const cd = await cr.json();
+  if (!cd.id) throw new Error('Meta não criou o container de mídia: ' + JSON.stringify(cd));
+  if (isVideo) await waitForIgContainer(cd.id, token);
+  const pr = await fetchMetaWithRetry(`${META_API_BASE}/${igId}/media_publish?creation_id=${cd.id}&access_token=${token}`, { method: 'POST' });
+  return pr.json();
+}
+
+async function getConnectedAccounts(clientId) {
+  const { rows } = await pool.query(
+    `SELECT id, client_id, platform, facebook_page_id, instagram_business_id, account_name, access_token, token_expiration, status
+     FROM social_accounts WHERE client_id = $1 AND status = 'connected'`,
+    [clientId]
+  );
+  return rows;
+}
+
+function sanitizeAccount(a) {
+  return {
+    id: a.id, platform: a.platform, account_name: a.account_name,
+    facebook_page_id: a.facebook_page_id, instagram_business_id: a.instagram_business_id,
+    token_expiration: a.token_expiration, status: a.status,
+    has_token: !!a.access_token,
+  };
+}
+
+/** Executa um post da fila. Nunca lança — grava resultado/erro na linha. */
+async function runScheduledPost(post) {
+  const accounts = await getConnectedAccounts(post.client_id);
+  const targets = accounts.filter(a => post.platform === 'both' ? true : a.platform === post.platform);
+  const results = [];
+  const errors = [];
+  if (targets.length === 0) errors.push(`Nenhuma conta ${post.platform === 'both' ? '' : post.platform + ' '}conectada para este cliente.`);
+  for (const account of targets) {
+    try {
+      const r = await publishToClientAccount(account, post);
+      results.push({ platform: account.platform, account: account.account_name, id: r?.id || r?.post_id || null, raw: r });
+      await pool.query(
+        `INSERT INTO integration_logs (client_id, platform, action, status, message) VALUES ($1,$2,'auto_publish','success',$3)`,
+        [post.client_id, account.platform, `Publicado automaticamente (${post.publish_type}) em ${account.account_name}`]
+      ).catch(() => {});
+    } catch (err) {
+      errors.push(`${account.platform}: ${err.message}`);
+      await pool.query(
+        `INSERT INTO integration_logs (client_id, platform, action, status, message) VALUES ($1,$2,'auto_publish','error',$3)`,
+        [post.client_id, account.platform, err.message.slice(0, 900)]
+      ).catch(() => {});
+    }
+  }
+
+  const attempts = (post.attempts || 0) + 1;
+  if (errors.length === 0) {
+    await pool.query(
+      `UPDATE scheduled_posts SET status='publicado', published_at=now(), result=$2, last_error=NULL, attempts=$3, updated_at=now() WHERE id=$1`,
+      [post.id, JSON.stringify(results), attempts]
+    );
+    if (post.delivery_id) {
+      await pool.query(`UPDATE social_media_deliveries SET status='postado', posted_at=CURRENT_DATE, updated_at=now() WHERE id=$1`, [post.delivery_id]).catch(() => {});
+    }
+    if (post.content_task_id) {
+      await pool.query(`UPDATE content_tasks SET kanban_column='postado', updated_at=now() WHERE id=$1 AND kanban_column <> 'postado'`, [post.content_task_id]).catch(() => {});
+    }
+    await pool.query(
+      `INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1,'✅ Conteúdo publicado',$2,'success')`,
+      [post.client_id, `Seu conteúdo foi publicado automaticamente${results[0]?.account ? ' em ' + results[0].account : ''}.`]
+    ).catch(() => {});
+    return;
+  }
+
+  const partial = results.length > 0;
+  const retry = !partial && attempts < SOCIAL_POST_MAX_ATTEMPTS;
+  await pool.query(
+    `UPDATE scheduled_posts
+       SET status=$2, attempts=$3, last_error=$4, result=$5,
+           scheduled_at = CASE WHEN $2='agendado' THEN now() + interval '5 minutes' ELSE scheduled_at END,
+           published_at = CASE WHEN $6 THEN now() ELSE published_at END,
+           updated_at=now()
+     WHERE id=$1`,
+    [post.id, retry ? 'agendado' : (partial ? 'publicado' : 'erro'), attempts, errors.join(' | ').slice(0, 2000), JSON.stringify(results), partial]
+  );
+  if (!retry && !partial) {
+    // Avisa a equipe de social media que a postagem falhou
+    await pool.query(
+      `INSERT INTO notifications (user_id, title, message, type, link)
+       SELECT ur.user_id, '⚠️ Postagem automática falhou', $1, 'error', '/social-media'
+       FROM user_roles ur WHERE ur.role IN ('admin','social_media')`,
+      [`Cliente ${post.client_id}: ${errors[0]}`.slice(0, 500)]
+    ).catch(() => {});
+  }
+}
+
+let socialPostWorkerBusy = false;
+async function processDueScheduledPosts() {
+  if (socialPostWorkerBusy) return;
+  socialPostWorkerBusy = true;
+  try {
+    await ensureSocialPostsSchema();
+    // Claim atômico: evita publicar duas vezes se houver mais de uma instância
+    const { rows } = await pool.query(
+      `UPDATE scheduled_posts SET status='publicando', updated_at=now()
+       WHERE id IN (
+         SELECT id FROM scheduled_posts
+         WHERE status='agendado' AND scheduled_at <= now()
+         ORDER BY scheduled_at ASC LIMIT 5 FOR UPDATE SKIP LOCKED
+       ) RETURNING *`
+    );
+    for (const post of rows) {
+      try { await runScheduledPost(post); }
+      catch (err) {
+        console.error('[social-posts] unexpected failure', post.id, err.message);
+        await pool.query(`UPDATE scheduled_posts SET status='erro', last_error=$2, updated_at=now() WHERE id=$1`, [post.id, err.message]).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.error('[social-posts] worker error:', err.message);
+  } finally {
+    socialPostWorkerBusy = false;
+  }
+}
+setInterval(processDueScheduledPosts, 60_000);
+// Recupera posts que ficaram travados em 'publicando' após um restart do PM2
+pool.query(`UPDATE scheduled_posts SET status='agendado' WHERE status='publicando' AND updated_at < now() - interval '15 minutes'`).catch(() => {});
+
+// Status de conexão do cliente (sem expor tokens)
+app.get('/api/social-posts/accounts/:clientId', async (req, res) => {
+  try {
+    await verifyUser(req);
+    await ensureSocialPostsSchema();
+    const accounts = await getConnectedAccounts(req.params.clientId);
+    res.json({ accounts: accounts.map(sanitizeAccount) });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+  }
+});
+
+app.get('/api/social-posts', async (req, res) => {
+  try {
+    await verifyUser(req);
+    await ensureSocialPostsSchema();
+    const { client_id, status, limit } = req.query;
+    const params = [];
+    const where = [];
+    if (client_id) { params.push(client_id); where.push(`sp.client_id = $${params.length}`); }
+    if (status && SOCIAL_POST_STATUSES.includes(String(status))) { params.push(status); where.push(`sp.status = $${params.length}`); }
+    params.push(Math.min(Number(limit) || 200, 500));
+    const { rows } = await pool.query(
+      `SELECT sp.*, c.company_name AS client_name
+       FROM scheduled_posts sp LEFT JOIN clients c ON c.id = sp.client_id
+       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+       ORDER BY sp.scheduled_at DESC LIMIT $${params.length}`,
+      params
+    );
+    res.json({ posts: rows });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+  }
+});
+
+app.post('/api/social-posts', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    await ensureSocialPostsSchema();
+    const { client_id, delivery_id, content_task_id, platform = 'instagram', publish_type = 'reels', media_url, caption = '', scheduled_at } = req.body || {};
+
+    if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
+    if (!['instagram', 'facebook', 'both'].includes(platform)) return res.status(400).json({ error: 'platform inválida' });
+    if (!['reels', 'feed', 'stories'].includes(publish_type)) return res.status(400).json({ error: 'publish_type inválido' });
+    if (!media_url || !/^https?:\/\//i.test(media_url)) return res.status(400).json({ error: 'media_url precisa ser um link público (https://...) do vídeo ou imagem final' });
+    if (/drive\.google\.com|dropbox\.com\/s\//i.test(media_url) && !/uc\?export=download|dl=1/i.test(media_url)) {
+      return res.status(400).json({ error: 'Links de pasta/visualização do Drive/Dropbox não funcionam. Use o vídeo enviado na etapa de edição (link direto do arquivo).' });
+    }
+    const when = new Date(scheduled_at);
+    if (!scheduled_at || Number.isNaN(when.getTime())) return res.status(400).json({ error: 'scheduled_at inválido' });
+    if (caption.length > 2200) return res.status(400).json({ error: 'Legenda acima de 2200 caracteres (limite do Instagram)' });
+
+    const accounts = await getConnectedAccounts(client_id);
+    const needed = platform === 'both' ? ['instagram', 'facebook'] : [platform];
+    const missing = needed.filter(p => !accounts.some(a => a.platform === p && a.access_token));
+    if (missing.length) return res.status(400).json({ error: `Cliente sem conta conectada: ${missing.join(', ')}. Conecte em Clientes → editar → Redes Sociais.` });
+
+    // Evita duplicar a mesma entrega na fila
+    if (delivery_id) {
+      await pool.query(`UPDATE scheduled_posts SET status='cancelado', updated_at=now() WHERE delivery_id=$1 AND status IN ('agendado')`, [delivery_id]);
+    }
+    const { rows } = await pool.query(
+      `INSERT INTO scheduled_posts (client_id, delivery_id, content_task_id, platform, publish_type, media_url, caption, scheduled_at, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [client_id, delivery_id || null, content_task_id || null, platform, publish_type, media_url, caption, when.toISOString(), user?.id || null]
+    );
+    res.json({ success: true, post: rows[0] });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+  }
+});
+
+app.post('/api/social-posts/:id/cancel', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { rowCount } = await pool.query(`UPDATE scheduled_posts SET status='cancelado', updated_at=now() WHERE id=$1 AND status IN ('agendado','erro')`, [req.params.id]);
+    if (!rowCount) return res.status(400).json({ error: 'Só é possível cancelar posts agendados ou com erro' });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+  }
+});
+
+app.post('/api/social-posts/:id/publish-now', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { rows } = await pool.query(
+      `UPDATE scheduled_posts SET status='publicando', updated_at=now() WHERE id=$1 AND status IN ('agendado','erro') RETURNING *`,
+      [req.params.id]
+    );
+    if (!rows[0]) return res.status(400).json({ error: 'Post não está agendado nem com erro' });
+    await runScheduledPost({ ...rows[0], attempts: SOCIAL_POST_MAX_ATTEMPTS - 1 });
+    const { rows: fresh } = await pool.query(`SELECT * FROM scheduled_posts WHERE id=$1`, [req.params.id]);
+    res.json({ success: fresh[0]?.status === 'publicado', post: fresh[0] });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+  }
+});
+
 // ─── 12. Reset Password ────────────────────────────────────
 app.post('/api/reset-password', async (req, res) => {
   try {
@@ -5860,7 +6171,7 @@ const ALLOWED_TABLES = [
   'endomarketing_profissionais','endomarketing_logs','endomarketing_packages',
   'endomarketing_partner_tasks','client_endomarketing_contracts','partners',
   'traffic_campaigns','whatsapp_config','whatsapp_messages','whatsapp_confirmations',
-  'recording_wait_logs','portal_videos','portal_video_views','commercial_proposals','proposal_comments','scheduled_recordings',
+  'recording_wait_logs','portal_videos','portal_video_views','commercial_proposals','proposal_comments','scheduled_recordings','scheduled_posts',
   'event_recordings','client_testimonials','proposal_checklist_items','holidays',
   'tv_settings','fieldwork_activities',
   'training_presentations','training_slides',
@@ -5894,7 +6205,7 @@ const TABLES_WITH_CITY = new Set([
   'endomarketing_logs','endomarketing_packages','endomarketing_partner_tasks',
   'client_endomarketing_contracts',
   'traffic_campaigns','whatsapp_messages','whatsapp_confirmations',
-  'recording_wait_logs','portal_videos','portal_video_views',
+  'recording_wait_logs','portal_videos','portal_video_views','scheduled_posts',
   'commercial_proposals','proposal_comments','event_recordings',
   'client_testimonials','proposal_checklist_items',
   'fieldwork_activities','goals','notifications',

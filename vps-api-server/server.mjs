@@ -6020,7 +6020,7 @@ async function processDueScheduledPosts() {
     socialPostWorkerBusy = false;
   }
 }
-setInterval(processDueScheduledPosts, 60_000);
+setInterval(processDueScheduledPosts, 15_000);
 
 // Renova tokens do Instagram (login direto) a cada 24h; tokens longos duram 60 dias
 // e só podem ser renovados quando têm mais de 24h de vida e faltam menos de 60 dias.

@@ -912,6 +912,8 @@ export default function ClientPortal() {
               </div>
             )}
           </motion.div>
+        ) : activeTab === 'insights' && client.portal_insights_enabled ? (
+          <PortalInsightsTab clientId={client.id} clientColor={clientColor} />
         ) : activeTab === 'criativa' ? (
           <ZonaCriativa clientId={client.id} clientColor={clientColor} isAuthenticated={isAuthenticated} />
         ) : activeTab === 'designer' ? (

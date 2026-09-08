@@ -212,13 +212,27 @@ export default function SocialConnections() {
                   ].map(({ plat, icon: Icon, label, account }) => (
                     <div key={plat} className="flex items-center justify-between gap-2 rounded-lg border p-3">
                       <div className="flex items-center gap-2 min-w-0">
-                        <Icon size={16} className="shrink-0 text-muted-foreground" />
+                        {account?.profile_picture_url ? (
+                          <img
+                            src={account.profile_picture_url}
+                            alt={`Foto do perfil ${account.username || account.account_name}`}
+                            className="h-9 w-9 rounded-full object-cover shrink-0 border"
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <span className="h-9 w-9 rounded-full bg-muted flex items-center justify-center shrink-0">
+                            <Icon size={16} className="text-muted-foreground" />
+                          </span>
+                        )}
                         <div className="min-w-0">
                           <p className="text-sm font-medium truncate">{label}</p>
                           {account ? (
                             <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
-                              <CheckCircle2 size={12} className="text-primary" />
-                              {account.account_name}
+                              <CheckCircle2 size={12} className="text-primary shrink-0" />
+                              {plat === 'instagram' && account.username
+                                ? `@${account.username.replace(/^@/, '')}`
+                                : account.account_name}
                               {account.expiring_soon && (
                                 <span className="text-destructive flex items-center gap-1"><AlertTriangle size={12} /> token expirando</span>
                               )}

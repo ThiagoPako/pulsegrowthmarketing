@@ -12,6 +12,8 @@ type Platform = 'instagram' | 'facebook';
 interface LinkedAccount {
   platform: string;
   account_name: string;
+  username?: string | null;
+  profile_picture_url?: string | null;
 }
 
 interface InviteData {

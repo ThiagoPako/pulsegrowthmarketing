@@ -5602,6 +5602,8 @@ async function ensureSocialPostsSchema() {
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS access_token TEXT NOT NULL DEFAULT '';
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS token_expiration TIMESTAMPTZ;
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS api_base TEXT NOT NULL DEFAULT 'facebook';
+    ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS username TEXT;
+    ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS profile_picture_url TEXT;
     CREATE TABLE IF NOT EXISTS social_connect_links (
       token TEXT PRIMARY KEY,
       client_id UUID NOT NULL,

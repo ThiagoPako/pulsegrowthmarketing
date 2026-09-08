@@ -423,9 +423,8 @@ export default function EditorKanban() {
 
   const { profile } = useAuth();
   const isEditorRole = profileHasRole(profile, 'editor', 'videomaker');
-  const hasFullBenchAccess =
-    profileHasRole(profile, 'admin', 'gestor_projetos') ||
-    (profileHasRole(profile, 'videomaker') && profileHasRole(profile, 'editor'));
+  // Todos os videomakers têm a mesma visão completa da bancada (igual admin/editor multi-função)
+  const hasFullBenchAccess = profileHasRole(profile, 'admin', 'gestor_projetos', 'videomaker');
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {

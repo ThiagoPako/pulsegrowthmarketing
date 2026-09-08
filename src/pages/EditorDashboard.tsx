@@ -288,11 +288,9 @@ export default function EditorDashboard() {
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
 
-  // Multi-role operators (ex.: videomaker + editor) and managers get the same
-  // full bench visibility as an administrator.
-  const hasFullBenchAccess =
-    profileHasRole(profile, 'admin', 'gestor_projetos') ||
-    (profileHasRole(profile, 'videomaker') && profileHasRole(profile, 'editor'));
+  // Managers and ALL videomakers get the same full bench visibility as an
+  // administrator (regra: videomakers veem e gerenciam edições como editores).
+  const hasFullBenchAccess = profileHasRole(profile, 'admin', 'gestor_projetos', 'videomaker');
 
   const visibleTasks = useMemo(() => {
     if (hasFullBenchAccess) return tasks;

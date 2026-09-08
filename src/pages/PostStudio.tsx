@@ -20,8 +20,9 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
   Images, Loader2, Plus, Trash2, ArrowUp, ArrowDown, CalendarClock, Zap, AlertTriangle, Link2, X,
-  LayoutGrid, Square, Clapperboard, CircleDashed, FolderOpen, Link as LinkIcon,
+  LayoutGrid, Square, Clapperboard, CircleDashed, FolderOpen, Link as LinkIcon, UploadCloud,
 } from 'lucide-react';
+import { PostMediaDropzone, type UploadedMedia } from '@/components/social/PostMediaDropzone';
 
 interface ClientConnection {
   id: string;
@@ -139,6 +140,16 @@ export default function PostStudio() {
         return prev;
       }
       return [...current, { url, label: asset.title }];
+    });
+  };
+
+  /** Arquivos enviados pelo computador/celular entram na ordem do post. */
+  const addUploaded = (media: UploadedMedia[]) => {
+    if (!media.length) return;
+    setItems(prev => {
+      const current = prev.filter(i => i.url.trim());
+      const merged = [...current, ...media.map(m => ({ url: m.url, label: m.label }))].slice(0, maxItems);
+      return merged.length ? merged : [emptyItem()];
     });
   };
 
@@ -292,11 +303,17 @@ export default function PostStudio() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="library">
-                  <TabsList className="grid w-full grid-cols-2">
+                <Tabs defaultValue="upload">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="upload" className="text-xs"><UploadCloud size={13} className="mr-1" /> Enviar arquivo</TabsTrigger>
                     <TabsTrigger value="library" className="text-xs"><FolderOpen size={13} className="mr-1" /> Biblioteca do cliente</TabsTrigger>
                     <TabsTrigger value="links" className="text-xs"><LinkIcon size={13} className="mr-1" /> Colar links</TabsTrigger>
                   </TabsList>
+
+                  <TabsContent value="upload" className="mt-3">
+                    <PostMediaDropzone remaining={maxItems - filledItems.length} onUploaded={addUploaded} />
+                  </TabsContent>
+
 
                   <TabsContent value="library" className="mt-3">
                     {!clientId ? (

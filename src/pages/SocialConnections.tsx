@@ -16,6 +16,7 @@ interface ClientConnection {
   name: string;
   city: string | null;
   accounts: ConnectedSocialAccount[];
+  portal_insights_enabled?: boolean;
 }
 
 type Platform = 'instagram' | 'facebook';
@@ -30,6 +31,22 @@ export default function SocialConnections() {
   const [platform, setPlatform] = useState<Platform>('instagram');
   const [token, setToken] = useState('');
   const [saving, setSaving] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  /** Liga/desliga a aba de desempenho no portal daquele cliente. */
+  const togglePortalInsights = async (client: ClientConnection, enabled: boolean) => {
+    setTogglingId(client.id);
+    try {
+      await setPortalInsightsEnabled(client.id, enabled);
+      setClients(prev => prev.map(c => (c.id === client.id ? { ...c, portal_insights_enabled: enabled } : c)));
+      toast.success(enabled ? 'Desempenho liberado no portal' : 'Desempenho ocultado do portal');
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
 
   const load = async () => {
     setLoading(true);

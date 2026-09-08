@@ -5470,8 +5470,8 @@ app.post('/api/meta-publish', async (req, res) => {
       let ready = false;
       for (let i = 0; i < 30; i++) { await new Promise(r => setTimeout(r, 2000)); const sr = await fetchMetaWithRetry(`${META_API_BASE}/${cd.id}?fields=status_code&access_token=${pageToken}`, { method: 'GET' }); const sd = await sr.json(); if (sd.status_code === 'FINISHED') { ready = true; break; } if (sd.status_code === 'ERROR') throw new Error('Media processing failed'); }
       if (!ready) throw new Error('Media processing timed out');
-      const pr = await fetchMetaWithRetry(`${META_API_BASE}/${igBusinessId}/media_publish?creation_id=${cd.id}&access_token=${pageToken}`, { method: 'POST' });
-      result = await pr.json();
+      result = await publishIgContainer(META_API_BASE, igBusinessId, cd.id, pageToken);
+
     } else if (publish_type === 'stories') {
       const isVideo = /\.(mp4|mov|webm)/i.test(media_url);
       const cp = new URLSearchParams({ media_type: 'STORIES', access_token: pageToken });

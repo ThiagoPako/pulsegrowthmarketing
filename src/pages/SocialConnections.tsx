@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Instagram, Facebook, Search, Link2, Loader2, RefreshCw, Unlink, CheckCircle2, AlertTriangle, LogIn } from 'lucide-react';
+import { Instagram, Facebook, Search, Link2, Loader2, RefreshCw, Unlink, CheckCircle2, AlertTriangle, LogIn, Share2, Copy } from 'lucide-react';
 
 interface ClientConnection {
   id: string;

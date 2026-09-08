@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
-import type { ConnectedSocialAccount } from '@/services/socialPostsApi';
+import { setPortalInsightsEnabled, type ConnectedSocialAccount } from '@/services/socialPostsApi';
+import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

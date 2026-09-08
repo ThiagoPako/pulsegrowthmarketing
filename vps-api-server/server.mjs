@@ -5700,13 +5700,22 @@ app.post('/api/social-connect/:token/complete', async (req, res) => {
 });
 
 
+/**
+ * Aguarda o container ficar pronto. Faz a primeira checagem quase imediata e usa
+ * backoff curto (250ms → 2s), em vez de dormir 2s fixos antes de cada tentativa.
+ * `maxTries` é mantido por compatibilidade e vira um orçamento de tempo (~2s por tentativa).
+ */
 async function waitForIgContainer(containerId, token, maxTries = 30, base = META_API_BASE) {
-  for (let i = 0; i < maxTries; i++) {
-    await new Promise(r => setTimeout(r, 2000));
+  const deadline = Date.now() + maxTries * 2000;
+  let delay = 250;
+  for (;;) {
     const sr = await fetchMetaWithRetry(`${base}/${containerId}?fields=status_code,status&access_token=${token}`, { method: 'GET' });
     const sd = await sr.json();
     if (sd.status_code === 'FINISHED') return true;
     if (sd.status_code === 'ERROR' || sd.status_code === 'EXPIRED') throw new Error(`Meta recusou a mídia (${sd.status || sd.status_code}). Verifique formato/tamanho do arquivo.`);
+    if (Date.now() >= deadline) break;
+    await new Promise(r => setTimeout(r, delay));
+    delay = Math.min(delay * 2, 2000);
   }
   throw new Error('Meta demorou demais para processar a mídia (timeout).');
 }
@@ -5714,10 +5723,12 @@ async function waitForIgContainer(containerId, token, maxTries = 30, base = META
 /**
  * Publica um container já criado. A Meta às vezes devolve "Media ID is not available"
  * (código 9007 / subcódigo 2207027) mesmo depois do status FINISHED, porque o
- * processamento interno ainda está terminando. Nesse caso tentamos de novo.
+ * processamento interno ainda está terminando. Nesse caso tentamos de novo com
+ * espera curta e crescente (500ms → 4s) para publicar o quanto antes.
  */
 async function publishIgContainer(base, igId, containerId, token, maxTries = 12) {
   let last = null;
+  let delay = 500;
   for (let i = 0; i < maxTries; i++) {
     const r = await fetchMetaWithRetry(`${base}/${igId}/media_publish?creation_id=${containerId}&access_token=${token}`, { method: 'POST' });
     const d = await r.json();
@@ -5726,10 +5737,12 @@ async function publishIgContainer(base, igId, containerId, token, maxTries = 12)
     const err = d && d.error;
     const transient = err && (err.code === 9007 || err.error_subcode === 2207027 || err.code === 4 || err.code === 2);
     if (!transient) return d;
-    await new Promise(res => setTimeout(res, 5000));
+    await new Promise(res => setTimeout(res, delay));
+    delay = Math.min(delay * 2, 4000);
   }
   return last;
 }
+
 
 
 const IS_VIDEO_RE = /\.(mp4|mov|webm|m4v)(\?|$)/i;

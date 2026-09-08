@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { portalAction } from '@/lib/portalApi';
 import type { ClientInsights } from '@/services/socialPostsApi';
-import { Loader2, TrendingUp, Users, Eye, MousePointerClick, Heart, Instagram, Facebook, MessageCircle, Bookmark, Share2, Play, Sparkles, ChevronRight } from 'lucide-react';
+import { Loader2, TrendingUp, Users, Eye, MousePointerClick, Heart, Instagram, Facebook, MessageCircle, Bookmark, Share2, Play, Sparkles, ChevronRight, FileText } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { InsightDetailDialog, InsightMetricCard, PerformanceCharts, type InsightMetric } from './PortalInsightsVisuals';
+import { PortalInsightsReport } from './PortalInsightsReport';
 
 interface PortalInsightsTabProps {
   clientId: string;
   clientColor: string;
+  clientName?: string;
 }
 
 const MONTHS = [
@@ -19,16 +21,30 @@ const MONTHS = [
 const nf = (v: number | null | undefined) =>
   v === null || v === undefined ? '—' : v.toLocaleString('pt-BR');
 
-/** Aba opcional que mostra ao cliente o desempenho real do Instagram no mês. */
-export function PortalInsightsTab({ clientId, clientColor }: PortalInsightsTabProps) {
+const pad = (n: number) => String(n).padStart(2, '0');
+const toIso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const daysAgo = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return toIso(d); };
+
+/** Aba opcional que mostra ao cliente o desempenho real do Instagram no período escolhido. */
+export function PortalInsightsTab({ clientId, clientColor, clientName = 'Cliente' }: PortalInsightsTabProps) {
   const now = new Date();
+  const [mode, setMode] = useState<'month' | 'custom'>('month');
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+  const [customSince, setCustomSince] = useState(daysAgo(30));
+  const [customUntil, setCustomUntil] = useState(toIso(now));
   const [data, setData] = useState<ClientInsights | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [selectedMetric, setSelectedMetric] = useState<InsightMetric | null>(null);
   const [postSort, setPostSort] = useState<'recent' | 'reach' | 'engagement'>('reach');
+  const [reportOpen, setReportOpen] = useState(false);
+
+  const period = useMemo(() => {
+    if (mode === 'custom') return { since: customSince, until: customUntil };
+    const last = new Date(year, month, 0).getDate();
+    return { since: `${year}-${pad(month)}-01`, until: `${year}-${pad(month)}-${pad(last)}` };
+  }, [mode, customSince, customUntil, month, year]);
 
   useEffect(() => {
     let active = true;
@@ -36,13 +52,11 @@ export function PortalInsightsTab({ clientId, clientColor }: PortalInsightsTabPr
       setLoading(true);
       setMessage(null);
       try {
-        const pad = (n: number) => String(n).padStart(2, '0');
-        const last = new Date(year, month, 0).getDate();
         const res = await portalAction({
           action: 'get_insights',
           client_id: clientId,
-          since: `${year}-${pad(month)}-01`,
-          until: `${year}-${pad(month)}-${pad(last)}`,
+          since: period.since,
+          until: period.until,
         });
         if (!active) return;
         if (res?.insights) setData(res.insights as ClientInsights);
@@ -57,7 +71,7 @@ export function PortalInsightsTab({ clientId, clientColor }: PortalInsightsTabPr
       }
     })();
     return () => { active = false; };
-  }, [clientId, month, year]);
+  }, [clientId, period.since, period.until]);
 
   const cards: InsightMetric[] = data ? [
     { id: 'reach', label: 'Pessoas alcançadas', value: data.reach, icon: TrendingUp, tone: 'primary', description: 'Contas únicas que viram seu conteúdo.', detail: 'Mostra quantas pessoas diferentes foram impactadas pelas suas publicações no período.' },
@@ -96,16 +110,67 @@ export function PortalInsightsTab({ clientId, clientColor }: PortalInsightsTabPr
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <select value={month} onChange={e => setMonth(Number(e.target.value))} className={selectClass}>
-          {MONTHS.map((m, i) => <option key={m} value={i + 1} className="text-black">{m}</option>)}
-        </select>
-        <select value={year} onChange={e => setYear(Number(e.target.value))} className={selectClass}>
-          {Array.from({ length: 3 }, (_, i) => now.getFullYear() - i).map(y => (
-            <option key={y} value={y} className="text-black">{y}</option>
+      <div className="space-y-3 rounded-lg border border-white/10 bg-white/[0.035] p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {([['month', 'Por mês'], ['custom', 'Período personalizado']] as const).map(([value, label]) => (
+            <Button
+              key={value}
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setMode(value)}
+              className={mode === value ? 'bg-white/10 text-white' : 'text-white/45'}
+            >
+              {label}
+            </Button>
           ))}
-        </select>
-        {data?.account_name && <span className="text-xs text-white/50">@{data.account_name}</span>}
+          {data?.account_name && <span className="text-xs text-white/50">@{data.account_name}</span>}
+          <Button
+            type="button"
+            size="sm"
+            className="ml-auto gap-2"
+            disabled={!data}
+            onClick={() => setReportOpen(true)}
+          >
+            <FileText size={14} /> Gerar relatório
+          </Button>
+        </div>
+
+        {mode === 'month' ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <select value={month} onChange={e => setMonth(Number(e.target.value))} className={selectClass}>
+              {MONTHS.map((m, i) => <option key={m} value={i + 1} className="text-black">{m}</option>)}
+            </select>
+            <select value={year} onChange={e => setYear(Number(e.target.value))} className={selectClass}>
+              {Array.from({ length: 3 }, (_, i) => now.getFullYear() - i).map(y => (
+                <option key={y} value={y} className="text-black">{y}</option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            {([[7, 'Últimos 7 dias'], [30, 'Últimos 30 dias'], [90, 'Últimos 90 dias']] as const).map(([days, label]) => (
+              <Button
+                key={days}
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => { setCustomSince(daysAgo(days)); setCustomUntil(toIso(new Date())); }}
+                className="text-white/60 hover:text-white"
+              >
+                {label}
+              </Button>
+            ))}
+            <label className="flex items-center gap-2 text-xs text-white/50">
+              De
+              <input type="date" value={customSince} max={customUntil} onChange={e => setCustomSince(e.target.value)} className={selectClass} />
+            </label>
+            <label className="flex items-center gap-2 text-xs text-white/50">
+              até
+              <input type="date" value={customUntil} min={customSince} max={toIso(new Date())} onChange={e => setCustomUntil(e.target.value)} className={selectClass} />
+            </label>
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -212,6 +277,16 @@ export function PortalInsightsTab({ clientId, clientColor }: PortalInsightsTabPr
             ))}
           </div>
           <InsightDetailDialog metric={selectedMetric} onClose={() => setSelectedMetric(null)} />
+          <PortalInsightsReport
+            key={`${period.since}-${period.until}`}
+            open={reportOpen}
+            onOpenChange={setReportOpen}
+            clientName={clientName}
+            accountName={data.account_name}
+            period={period}
+            metrics={cards.map(({ id, label, value }) => ({ id, label, value }))}
+            data={data}
+          />
         </>
       )}
     </div>

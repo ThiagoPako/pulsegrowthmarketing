@@ -950,7 +950,7 @@ export default function ClientPortal() {
                   <h2 className="text-xl font-bold text-white">Insights Meta</h2>
                   <p className="text-sm text-white/45">Resultados do Instagram e Facebook no período selecionado.</p>
                 </div>
-                <PortalInsightsTab clientId={client.id} clientColor={clientColor} />
+                <PortalInsightsTab clientId={client.id} clientColor={clientColor} clientName={client.company_name} />
               </section>
             )}
             {/* Delivery percentage hero */}

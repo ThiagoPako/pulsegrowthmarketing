@@ -5711,6 +5711,27 @@ async function waitForIgContainer(containerId, token, maxTries = 30, base = META
   throw new Error('Meta demorou demais para processar a mídia (timeout).');
 }
 
+/**
+ * Publica um container já criado. A Meta às vezes devolve "Media ID is not available"
+ * (código 9007 / subcódigo 2207027) mesmo depois do status FINISHED, porque o
+ * processamento interno ainda está terminando. Nesse caso tentamos de novo.
+ */
+async function publishIgContainer(base, igId, containerId, token, maxTries = 12) {
+  let last = null;
+  for (let i = 0; i < maxTries; i++) {
+    const r = await fetchMetaWithRetry(`${base}/${igId}/media_publish?creation_id=${containerId}&access_token=${token}`, { method: 'POST' });
+    const d = await r.json();
+    if (d && d.id) return d;
+    last = d;
+    const err = d && d.error;
+    const transient = err && (err.code === 9007 || err.error_subcode === 2207027 || err.code === 4 || err.code === 2);
+    if (!transient) return d;
+    await new Promise(res => setTimeout(res, 5000));
+  }
+  return last;
+}
+
+
 const IS_VIDEO_RE = /\.(mp4|mov|webm|m4v)(\?|$)/i;
 
 /** Normaliza a lista de mídias do post (carrossel usa media_items, os demais usam media_url). */

@@ -63,6 +63,7 @@ interface ClientData {
   weekly_reels: number; weekly_creatives: number; weekly_stories: number;
   monthly_recordings: number; plan_id: string | null; show_metrics: boolean;
   has_vehicle_flyer: boolean; niche: string | null;
+  portal_insights_enabled?: boolean;
   whatsapp?: string; city?: string;
   client_type?: string;
 }

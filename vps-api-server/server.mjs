@@ -5719,6 +5719,44 @@ function postMediaList(post) {
 }
 
 /**
+ * A Meta baixa a mídia do nosso servidor. Se a URL não for pública e https,
+ * a publicação falha com uma mensagem genérica — então validamos antes.
+ */
+async function assertPublicMedia(url) {
+  if (!/^https:\/\//i.test(url)) {
+    throw new Error(`A mídia precisa estar em um endereço https público. Recebido: ${url}`);
+  }
+  try {
+    let r = await fetch(url, { method: 'HEAD', redirect: 'follow' });
+    if (r.status === 405 || r.status === 501) {
+      r = await fetch(url, { method: 'GET', headers: { Range: 'bytes=0-1024' }, redirect: 'follow' });
+    }
+    if (!r.ok && r.status !== 206) {
+      throw new Error(`o servidor respondeu ${r.status}`);
+    }
+    const type = (r.headers.get('content-type') || '').toLowerCase();
+    if (type && !/^(image|video|application\/octet-stream|binary)/.test(type)) {
+      throw new Error(`o endereço não devolveu um arquivo de imagem ou vídeo (${type})`);
+    }
+  } catch (err) {
+    throw new Error(`A Meta não conseguiu baixar a mídia (${url}): ${err.message}`);
+  }
+}
+
+/** Marca o cliente para exibir as métricas no portal assim que uma conta é conectada. */
+async function enablePortalInsights(clientId) {
+  try {
+    await ensureSocialInsightsSchema();
+    await pool.query(
+      `UPDATE clients SET portal_insights_enabled = true WHERE id = $1`,
+      [clientId]
+    );
+  } catch (err) {
+    console.warn('[insights] não foi possível habilitar o portal:', err.message);
+  }
+}
+
+/**
  * Publica no perfil de UM cliente usando o token da conta conectada.
  * @param account linha de social_accounts (instagram ou facebook)
  * @param post { publish_type: 'reels'|'feed'|'stories'|'carousel', media_url, media_items, caption, story_link }
@@ -5728,9 +5766,11 @@ async function publishToClientAccount(account, post) {
   if (!token) throw new Error(`Conta ${account.platform} sem token. Reconecte a conta no cadastro do cliente.`);
   const media = postMediaList(post);
   if (!media.length) throw new Error('Post sem mídia válida.');
+  for (const item of media) await assertPublicMedia(item.url);
   const mainUrl = media[0].url;
   const isVideo = IS_VIDEO_RE.test(mainUrl);
   const caption = post.caption || '';
+
 
   if (account.platform === 'facebook') {
     const pageId = account.facebook_page_id;

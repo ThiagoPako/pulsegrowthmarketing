@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Instagram, Facebook, Search, Link2, Loader2, RefreshCw, Unlink, CheckCircle2, AlertTriangle, LogIn } from 'lucide-react';
+import { Instagram, Facebook, Search, Link2, Loader2, RefreshCw, Unlink, CheckCircle2, AlertTriangle, LogIn, Share2, Copy } from 'lucide-react';
 
 interface ClientConnection {
   id: string;
@@ -33,6 +33,38 @@ export default function SocialConnections() {
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [oauthBusy, setOauthBusy] = useState<string | null>(null);
+  const [linkBusy, setLinkBusy] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState<{ name: string; url: string; expires: string } | null>(null);
+
+  /** Cria o link público para o cliente autorizar sozinho as próprias contas. */
+  const generateInviteLink = async (client: ClientConnection) => {
+    setLinkBusy(client.id);
+    try {
+      const { data, error } = await invokeVpsFunction('social-connect-links', {
+        body: { client_id: client.id },
+      });
+      if (error || data?.error || !data?.path) {
+        throw new Error(data?.error || error?.message || 'Não foi possível gerar o link.');
+      }
+      const url = `${window.location.origin}${data.path}`;
+      setInviteLink({
+        name: client.name,
+        url,
+        expires: new Date(data.expires_at).toLocaleDateString('pt-BR'),
+      });
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success('Link gerado e copiado.');
+      } catch {
+        toast.success('Link gerado.');
+      }
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setLinkBusy(null);
+    }
+  };
+
 
 
   /** Liga/desliga a aba de desempenho no portal daquele cliente. */
@@ -310,6 +342,28 @@ export default function SocialConnections() {
 
                   <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed p-3">
                     <div className="min-w-0">
+                      <p className="text-sm font-medium">Link de autorização do cliente</p>
+                      <p className="text-xs text-muted-foreground">
+                        Gere um link e envie ao cliente para ele entrar na própria conta.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 shrink-0"
+                      disabled={linkBusy === client.id}
+                      onClick={() => generateInviteLink(client)}
+                    >
+                      {linkBusy === client.id
+                        ? <Loader2 size={14} className="animate-spin" />
+                        : <Share2 size={14} />}
+                      Gerar link
+                    </Button>
+                  </div>
+
+
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed p-3">
+                    <div className="min-w-0">
                       <p className="text-sm font-medium">Mostrar desempenho no portal</p>
                       <p className="text-xs text-muted-foreground">
                         O cliente vê alcance, seguidores e resultados das publicações.
@@ -329,7 +383,41 @@ export default function SocialConnections() {
         </div>
       )}
 
+      <Dialog open={!!inviteLink} onOpenChange={o => !o && setInviteLink(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Link de autorização</DialogTitle>
+            <DialogDescription>
+              Envie este link para {inviteLink?.name}. O cliente entra na conta dele na Meta e autoriza a agência.
+              Válido até {inviteLink?.expires}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Input readOnly value={inviteLink?.url ?? ''} onFocus={e => e.currentTarget.select()} />
+            <Button
+              variant="outline"
+              className="gap-1 shrink-0"
+              onClick={async () => {
+                if (!inviteLink) return;
+                try {
+                  await navigator.clipboard.writeText(inviteLink.url);
+                  toast.success('Link copiado');
+                } catch {
+                  toast.error('Copie manualmente o link acima.');
+                }
+              }}
+            >
+              <Copy size={14} /> Copiar
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInviteLink(null)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!target} onOpenChange={o => !o && setTarget(null)}>
+
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Conectar {platform === 'instagram' ? 'Instagram' : 'Facebook'}</DialogTitle>

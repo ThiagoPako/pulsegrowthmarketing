@@ -71,7 +71,7 @@ export function PortalInsightsTab({ clientId, clientColor, clientName = 'Cliente
       }
     })();
     return () => { active = false; };
-  }, [clientId, month, year]);
+  }, [clientId, period.since, period.until]);
 
   const cards: InsightMetric[] = data ? [
     { id: 'reach', label: 'Pessoas alcançadas', value: data.reach, icon: TrendingUp, tone: 'primary', description: 'Contas únicas que viram seu conteúdo.', detail: 'Mostra quantas pessoas diferentes foram impactadas pelas suas publicações no período.' },

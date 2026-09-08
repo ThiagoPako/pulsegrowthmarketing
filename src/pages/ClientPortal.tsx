@@ -182,6 +182,7 @@ export default function ClientPortal() {
       monthly_recordings: data.monthly_recordings || 0,
       plan_id: data.plan_id || null,
       show_metrics: data.show_metrics ?? true,
+      portal_insights_enabled: data.portal_insights_enabled ?? false,
       has_vehicle_flyer: data.has_vehicle_flyer ?? false,
       niche: data.niche || null,
       whatsapp: data.whatsapp,

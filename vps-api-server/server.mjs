@@ -5378,7 +5378,7 @@ app.post('/api/social-accounts/manual-token', async (req, res) => {
         [client_id, page.id, page.name, page.access_token, new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()]
       );
       connectedAccounts.push({ platform: 'facebook', name: page.name, pageId: page.id });
-      if (page.instagram_business_account) {
+      if (page.instagram_business_account && !hasDirectIg) {
         const ig = page.instagram_business_account;
         await pool.query(
           `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, access_token, status, token_expiration, api_base)

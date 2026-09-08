@@ -1685,6 +1685,44 @@ export default function Clients() {
           </div>
         </div>
       )}
+
+      {/* Token manual (fallback quando testadores estão bloqueados) */}
+      <div className="p-4 rounded-xl border border-dashed border-border bg-muted/30 space-y-3">
+        <p className="text-sm font-semibold flex items-center gap-2">
+          <KeyRound size={16} className="text-primary" /> Colar token gerado na Meta
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Se o botão de conexão der erro de testador, gere o token no painel da Meta e cole aqui.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Select value={manualPlatform} onValueChange={(v: 'instagram' | 'facebook') => setManualPlatform(v)}>
+            <SelectTrigger className="text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="instagram">Instagram (login direto)</SelectItem>
+              <SelectItem value="facebook">Facebook (Página + Instagram)</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="gap-1 text-xs"
+            onClick={saveManualToken}
+            disabled={savingManualToken || !manualToken.trim()}
+          >
+            {savingManualToken ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            Salvar token
+          </Button>
+        </div>
+        <Textarea
+          value={manualToken}
+          onChange={e => setManualToken(e.target.value)}
+          placeholder="Cole aqui o token gerado no Meta Developers..."
+          rows={3}
+          className="font-mono text-xs"
+        />
+      </div>
     </div>
   );
 

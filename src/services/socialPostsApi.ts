@@ -37,6 +37,9 @@ export interface ScheduledPost {
   platform: SocialPlatformTarget;
   publish_type: SocialPublishType;
   media_url: string;
+  media_items?: PostMediaItem[] | null;
+  story_link?: string | null;
+  story_link_text?: string | null;
   caption: string | null;
   scheduled_at: string;
   status: ScheduledPostStatus;
@@ -52,7 +55,10 @@ export interface CreateScheduledPostInput {
   content_task_id?: string | null;
   platform: SocialPlatformTarget;
   publish_type: SocialPublishType;
-  media_url: string;
+  media_url?: string;
+  media_items?: PostMediaItem[];
+  story_link?: string | null;
+  story_link_text?: string | null;
   caption?: string;
   /** ISO datetime */
   scheduled_at: string;

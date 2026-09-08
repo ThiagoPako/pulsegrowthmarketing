@@ -12,7 +12,7 @@ import UserAvatar from '@/components/UserAvatar';
 import ProfileDialog from '@/components/ProfileDialog';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
-  LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Bot, Plug, Car, Menu, X, Video, Handshake, Star, Rocket, Type, Gift, Monitor, UserMinus, BookOpen, Sun, Moon, Gauge, Flame, Pin, PinOff, Database, Link2
+  LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Bot, Plug, Car, Menu, X, Video, Handshake, Star, Rocket, Type, Gift, Monitor, UserMinus, BookOpen, Sun, Moon, Gauge, Flame, Pin, PinOff, Database, Link2, Images
   , Sparkles, type LucideIcon,
 } from 'lucide-react';
 
@@ -90,6 +90,7 @@ const navCategories: NavCategory[] = [
     items: [
       { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/conexoes-sociais', label: 'Conexões Sociais', icon: Plug, roles: ['admin', 'social_media', 'gestor_projetos'] },
+      { path: '/estudio-postagem', label: 'Estúdio de Postagem', icon: Images, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/copy', label: 'Copy', icon: FileText, roles: ['admin', 'social_media', 'copywriter', 'gestor_projetos'] },
       { path: '/roteiros', label: 'Roteiros', icon: FileText, roles: ['admin', 'social_media', 'videomaker', 'copywriter', 'gestor_projetos'] },
       { path: '/campanhas', label: 'Campanhas', icon: Megaphone, roles: ['admin', 'social_media', 'copywriter', 'gestor_projetos'] },

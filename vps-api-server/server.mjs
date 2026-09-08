@@ -5564,6 +5564,10 @@ async function ensureSocialPostsSchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_scheduled_posts_due ON scheduled_posts(status, scheduled_at);
     CREATE INDEX IF NOT EXISTS idx_scheduled_posts_client ON scheduled_posts(client_id);
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS media_items JSONB;
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS story_link TEXT;
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS story_link_text TEXT;
+    ALTER TABLE scheduled_posts ALTER COLUMN media_url DROP NOT NULL;
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS access_token TEXT NOT NULL DEFAULT '';
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS token_expiration TIMESTAMPTZ;
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS api_base TEXT NOT NULL DEFAULT 'facebook';
@@ -5583,26 +5587,58 @@ async function waitForIgContainer(containerId, token, maxTries = 30, base = META
   throw new Error('Meta demorou demais para processar a mídia (timeout).');
 }
 
+const IS_VIDEO_RE = /\.(mp4|mov|webm|m4v)(\?|$)/i;
+
+/** Normaliza a lista de mídias do post (carrossel usa media_items, os demais usam media_url). */
+function postMediaList(post) {
+  const raw = post.media_items;
+  const items = Array.isArray(raw) ? raw : (typeof raw === 'string' && raw ? JSON.parse(raw) : []);
+  const list = items
+    .map(i => (typeof i === 'string' ? { url: i } : i))
+    .filter(i => i && typeof i.url === 'string' && /^https?:\/\//i.test(i.url));
+  if (list.length) return list;
+  return post.media_url ? [{ url: post.media_url }] : [];
+}
+
 /**
  * Publica no perfil de UM cliente usando o token da conta conectada.
  * @param account linha de social_accounts (instagram ou facebook)
- * @param post { publish_type: 'reels'|'feed'|'stories', media_url, caption }
+ * @param post { publish_type: 'reels'|'feed'|'stories'|'carousel', media_url, media_items, caption, story_link }
  */
 async function publishToClientAccount(account, post) {
   const token = account.access_token;
   if (!token) throw new Error(`Conta ${account.platform} sem token. Reconecte a conta no cadastro do cliente.`);
-  const isVideo = /\.(mp4|mov|webm|m4v)(\?|$)/i.test(post.media_url);
+  const media = postMediaList(post);
+  if (!media.length) throw new Error('Post sem mídia válida.');
+  const mainUrl = media[0].url;
+  const isVideo = IS_VIDEO_RE.test(mainUrl);
   const caption = post.caption || '';
 
   if (account.platform === 'facebook') {
     const pageId = account.facebook_page_id;
     if (!pageId) throw new Error('Página do Facebook não identificada na conta conectada.');
+    if (post.publish_type === 'carousel' && media.length > 1) {
+      // Facebook: publica cada imagem sem aparecer no feed e junta tudo num único post
+      const attached = [];
+      for (const item of media) {
+        if (IS_VIDEO_RE.test(item.url)) throw new Error('Carrossel no Facebook aceita apenas imagens.');
+        const p = new URLSearchParams({ url: item.url, published: 'false', access_token: token });
+        const r = await fetchMetaWithRetry(`${META_API_BASE}/${pageId}/photos?${p}`, { method: 'POST' });
+        const d = await r.json();
+        if (!d.id) throw new Error('Facebook recusou uma das imagens: ' + JSON.stringify(d));
+        attached.push({ media_fbid: d.id });
+      }
+      const p = new URLSearchParams({ message: caption, access_token: token });
+      p.set('attached_media', JSON.stringify(attached));
+      const r = await fetchMetaWithRetry(`${META_API_BASE}/${pageId}/feed?${p}`, { method: 'POST' });
+      return r.json();
+    }
     if (isVideo) {
-      const params = new URLSearchParams({ file_url: post.media_url, description: caption, access_token: token });
+      const params = new URLSearchParams({ file_url: mainUrl, description: caption, access_token: token });
       const r = await fetchMetaWithRetry(`${META_API_BASE}/${pageId}/videos?${params}`, { method: 'POST' });
       return r.json();
     }
-    const params = new URLSearchParams({ url: post.media_url, caption, access_token: token });
+    const params = new URLSearchParams({ url: mainUrl, caption, access_token: token });
     const r = await fetchMetaWithRetry(`${META_API_BASE}/${pageId}/photos?${params}`, { method: 'POST' });
     return r.json();
   }
@@ -5611,20 +5647,59 @@ async function publishToClientAccount(account, post) {
   const igId = account.instagram_business_id;
   const IG_BASE = account.api_base === 'instagram' ? IG_API_BASE : META_API_BASE;
   if (!igId) throw new Error('Conta do Instagram não identificada. O perfil precisa ser Business/Criador e vinculado à página do Facebook.');
+
+  // ── Carrossel: N containers filhos → container pai → publish
+  if (post.publish_type === 'carousel') {
+    if (media.length < 2) throw new Error('Carrossel precisa de pelo menos 2 mídias.');
+    if (media.length > 10) throw new Error('Carrossel aceita no máximo 10 mídias.');
+    const childIds = [];
+    for (const item of media) {
+      const childVideo = IS_VIDEO_RE.test(item.url);
+      const p = new URLSearchParams({ access_token: token, is_carousel_item: 'true' });
+      if (childVideo) { p.set('media_type', 'VIDEO'); p.set('video_url', item.url); }
+      else p.set('image_url', item.url);
+      const r = await fetchMetaWithRetry(`${IG_BASE}/${igId}/media?${p}`, { method: 'POST' });
+      const d = await r.json();
+      if (!d.id) throw new Error('Meta recusou uma mídia do carrossel: ' + JSON.stringify(d));
+      if (childVideo) await waitForIgContainer(d.id, token, 30, IG_BASE);
+      childIds.push(d.id);
+    }
+    const pp = new URLSearchParams({ access_token: token, media_type: 'CAROUSEL', children: childIds.join(',') });
+    if (caption) pp.set('caption', caption);
+    const pr = await fetchMetaWithRetry(`${IG_BASE}/${igId}/media?${pp}`, { method: 'POST' });
+    const pd = await pr.json();
+    if (!pd.id) throw new Error('Meta não criou o carrossel: ' + JSON.stringify(pd));
+    await waitForIgContainer(pd.id, token, 30, IG_BASE).catch(() => {});
+    const fr = await fetchMetaWithRetry(`${IG_BASE}/${igId}/media_publish?creation_id=${pd.id}&access_token=${token}`, { method: 'POST' });
+    return fr.json();
+  }
+
   const cp = new URLSearchParams({ access_token: token });
   if (post.publish_type === 'stories') {
     cp.set('media_type', 'STORIES');
-    if (isVideo) cp.set('video_url', post.media_url); else cp.set('image_url', post.media_url);
+    if (isVideo) cp.set('video_url', mainUrl); else cp.set('image_url', mainUrl);
+    // Link no story (sticker) — só é aplicado por contas com permissão de link na API da Meta
+    if (post.story_link && /^https?:\/\//i.test(post.story_link)) {
+      cp.set('link', post.story_link);
+      cp.set('link_attachment', post.story_link);
+      if (post.story_link_text) cp.set('sticker_text', post.story_link_text);
+    }
   } else if (post.publish_type === 'reels' || isVideo) {
     cp.set('media_type', 'REELS');
-    cp.set('video_url', post.media_url);
+    cp.set('video_url', mainUrl);
     if (caption) cp.set('caption', caption);
   } else {
-    cp.set('image_url', post.media_url);
+    cp.set('image_url', mainUrl);
     if (caption) cp.set('caption', caption);
   }
-  const cr = await fetchMetaWithRetry(`${IG_BASE}/${igId}/media?${cp}`, { method: 'POST' });
-  const cd = await cr.json();
+  let cr = await fetchMetaWithRetry(`${IG_BASE}/${igId}/media?${cp}`, { method: 'POST' });
+  let cd = await cr.json();
+  // Se a Meta recusar por causa do parâmetro de link do story, tenta de novo sem o link.
+  if (!cd.id && post.publish_type === 'stories' && post.story_link) {
+    cp.delete('link'); cp.delete('link_attachment'); cp.delete('sticker_text');
+    cr = await fetchMetaWithRetry(`${IG_BASE}/${igId}/media?${cp}`, { method: 'POST' });
+    cd = await cr.json();
+  }
   if (!cd.id) throw new Error('Meta não criou o container de mídia: ' + JSON.stringify(cd));
   if (isVideo) await waitForIgContainer(cd.id, token, 30, IG_BASE);
   const pr = await fetchMetaWithRetry(`${IG_BASE}/${igId}/media_publish?creation_id=${cd.id}&access_token=${token}`, { method: 'POST' });
@@ -5859,15 +5934,30 @@ app.post('/api/social-posts', async (req, res) => {
   try {
     const { user } = await verifyUser(req);
     await ensureSocialPostsSchema();
-    const { client_id, delivery_id, content_task_id, platform = 'instagram', publish_type = 'reels', media_url, caption = '', scheduled_at } = req.body || {};
+    const {
+      client_id, delivery_id, content_task_id, platform = 'instagram', publish_type = 'reels',
+      media_url, media_items, caption = '', scheduled_at, story_link, story_link_text,
+    } = req.body || {};
 
     if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
     if (!['instagram', 'facebook', 'both'].includes(platform)) return res.status(400).json({ error: 'platform inválida' });
-    if (!['reels', 'feed', 'stories'].includes(publish_type)) return res.status(400).json({ error: 'publish_type inválido' });
-    if (!media_url || !/^https?:\/\//i.test(media_url)) return res.status(400).json({ error: 'media_url precisa ser um link público (https://...) do vídeo ou imagem final' });
-    if (/drive\.google\.com|dropbox\.com\/s\//i.test(media_url) && !/uc\?export=download|dl=1/i.test(media_url)) {
-      return res.status(400).json({ error: 'Links de pasta/visualização do Drive/Dropbox não funcionam. Use o vídeo enviado na etapa de edição (link direto do arquivo).' });
+    if (!['reels', 'feed', 'stories', 'carousel'].includes(publish_type)) return res.status(400).json({ error: 'publish_type inválido' });
+
+    const items = Array.isArray(media_items)
+      ? media_items.map(i => (typeof i === 'string' ? { url: i } : i)).filter(i => i && typeof i.url === 'string')
+      : [];
+    const urls = items.length ? items.map(i => i.url) : (media_url ? [media_url] : []);
+    if (!urls.length) return res.status(400).json({ error: 'Envie pelo menos uma mídia com link público (https://...)' });
+    for (const u of urls) {
+      if (!/^https?:\/\//i.test(u)) return res.status(400).json({ error: 'Todas as mídias precisam ser links públicos (https://...)' });
+      if (/drive\.google\.com|dropbox\.com\/s\//i.test(u) && !/uc\?export=download|dl=1/i.test(u)) {
+        return res.status(400).json({ error: 'Links de pasta/visualização do Drive/Dropbox não funcionam. Use o link direto do arquivo.' });
+      }
     }
+    if (publish_type === 'carousel' && urls.length < 2) return res.status(400).json({ error: 'Carrossel precisa de pelo menos 2 mídias.' });
+    if (publish_type === 'carousel' && urls.length > 10) return res.status(400).json({ error: 'Carrossel aceita no máximo 10 mídias.' });
+    if (story_link && !/^https?:\/\//i.test(story_link)) return res.status(400).json({ error: 'O link do story precisa começar com https://' });
+
     const when = new Date(scheduled_at);
     if (!scheduled_at || Number.isNaN(when.getTime())) return res.status(400).json({ error: 'scheduled_at inválido' });
     if (caption.length > 2200) return res.status(400).json({ error: 'Legenda acima de 2200 caracteres (limite do Instagram)' });
@@ -5882,9 +5972,13 @@ app.post('/api/social-posts', async (req, res) => {
       await pool.query(`UPDATE scheduled_posts SET status='cancelado', updated_at=now() WHERE delivery_id=$1 AND status IN ('agendado')`, [delivery_id]);
     }
     const { rows } = await pool.query(
-      `INSERT INTO scheduled_posts (client_id, delivery_id, content_task_id, platform, publish_type, media_url, caption, scheduled_at, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [client_id, delivery_id || null, content_task_id || null, platform, publish_type, media_url, caption, when.toISOString(), user?.id || null]
+      `INSERT INTO scheduled_posts (client_id, delivery_id, content_task_id, platform, publish_type, media_url, media_items, caption, scheduled_at, created_by, story_link, story_link_text)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      [
+        client_id, delivery_id || null, content_task_id || null, platform, publish_type,
+        urls[0], items.length ? JSON.stringify(items) : null, caption, when.toISOString(), user?.id || null,
+        story_link || null, story_link_text || null,
+      ]
     );
     res.json({ success: true, post: rows[0] });
   } catch (error) {

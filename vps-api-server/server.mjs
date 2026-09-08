@@ -5909,9 +5909,37 @@ async function publishToClientAccount(account, post) {
 
 }
 
+/** URL pública da foto de uma Página do Facebook (redireciona para a imagem). */
+function fbPagePictureUrl(pageId) {
+  return pageId ? `${META_API_BASE}/${pageId}/picture?type=normal` : null;
+}
+
+/** Busca @usuário e foto do perfil na Meta e atualiza a linha (melhor esforço). */
+async function refreshAccountProfile(a) {
+  try {
+    const base = a.api_base === 'instagram' ? IG_API_BASE : META_API_BASE;
+    if (a.platform === 'instagram' && a.instagram_business_id) {
+      const r = await fetch(`${base}/${a.instagram_business_id}?fields=username,profile_picture_url&access_token=${a.access_token}`);
+      const d = await r.json().catch(() => ({}));
+      if (!d.error && (d.username || d.profile_picture_url)) {
+        await pool.query(`UPDATE social_accounts SET username = COALESCE($2, username), profile_picture_url = COALESCE($3, profile_picture_url) WHERE id = $1`,
+          [a.id, d.username || null, d.profile_picture_url || null]);
+        a.username = d.username || a.username;
+        a.profile_picture_url = d.profile_picture_url || a.profile_picture_url;
+      }
+    } else if (a.platform === 'facebook' && a.facebook_page_id) {
+      const pic = fbPagePictureUrl(a.facebook_page_id);
+      await pool.query(`UPDATE social_accounts SET username = COALESCE(username, $2), profile_picture_url = COALESCE($3, profile_picture_url) WHERE id = $1`,
+        [a.id, a.account_name, pic]);
+      a.username = a.username || a.account_name;
+      a.profile_picture_url = a.profile_picture_url || pic;
+    }
+  } catch { /* melhor esforço */ }
+}
+
 async function getConnectedAccounts(clientId) {
   const { rows } = await pool.query(
-    `SELECT id, client_id, platform, facebook_page_id, instagram_business_id, account_name, access_token, token_expiration, status, api_base
+    `SELECT id, client_id, platform, facebook_page_id, instagram_business_id, account_name, username, profile_picture_url, access_token, token_expiration, status, api_base
      FROM social_accounts WHERE client_id = $1 AND status = 'connected'`,
     [clientId]
   );
@@ -5921,6 +5949,8 @@ async function getConnectedAccounts(clientId) {
 function sanitizeAccount(a) {
   return {
     id: a.id, platform: a.platform, account_name: a.account_name,
+    username: a.username || a.account_name,
+    profile_picture_url: a.profile_picture_url || null,
     facebook_page_id: a.facebook_page_id, instagram_business_id: a.instagram_business_id,
     token_expiration: a.token_expiration, status: a.status,
     has_token: !!a.access_token,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { portalAction } from '@/lib/portalApi';
 import type { ClientInsights } from '@/services/socialPostsApi';
-import { Loader2, TrendingUp, Users, Eye, MousePointerClick, Heart, Instagram } from 'lucide-react';
+import { Loader2, TrendingUp, Users, Eye, MousePointerClick, Heart, Instagram, Facebook, MessageCircle, Bookmark, Share2, Play, Clock } from 'lucide-react';
 
 interface PortalInsightsTabProps {
   clientId: string;
@@ -62,7 +62,24 @@ export function PortalInsightsTab({ clientId, clientColor }: PortalInsightsTabPr
     { label: 'Visitas ao perfil', value: data.profile_views, icon: Eye },
     { label: 'Cliques no link', value: data.website_clicks, icon: MousePointerClick },
     { label: 'Interações', value: data.interactions, icon: Heart },
+    { label: 'Contas engajadas', value: data.accounts_engaged, icon: Users },
+    { label: 'Curtidas', value: data.likes, icon: Heart },
+    { label: 'Comentários', value: data.comments, icon: MessageCircle },
+    { label: 'Salvamentos', value: data.saves, icon: Bookmark },
+    { label: 'Compartilhamentos', value: data.shares, icon: Share2 },
+    { label: 'Respostas', value: data.replies, icon: MessageCircle },
+    { label: 'Média de alcance', value: data.avg_reach_per_post, icon: TrendingUp },
     { label: 'Publicações', value: data.posts_count, icon: Instagram },
+  ] : [];
+
+  const facebookCards = data?.facebook && !data.facebook.unavailable ? [
+    { label: 'Seguidores', value: data.facebook.followers_total, icon: Users },
+    { label: 'Alcance', value: data.facebook.reach, icon: TrendingUp },
+    { label: 'Impressões', value: data.facebook.impressions, icon: Eye },
+    { label: 'Pessoas engajadas', value: data.facebook.engaged_users, icon: Users },
+    { label: 'Engajamentos', value: data.facebook.post_engagements, icon: Heart },
+    { label: 'Visualizações de vídeo', value: data.facebook.video_views, icon: Play },
+    { label: 'Reações', value: data.facebook.reactions, icon: Heart },
   ] : [];
 
   const selectClass = 'bg-white/10 text-white text-xs rounded-lg px-3 py-2 border border-white/10 outline-none';
@@ -91,6 +108,7 @@ export function PortalInsightsTab({ clientId, clientColor }: PortalInsightsTabPr
         </div>
       ) : (
         <>
+          <div className="flex items-center gap-2 text-sm font-semibold text-white"><Instagram size={16} /> Instagram</div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {cards.map(({ label, value, icon: Icon }) => (
               <div key={label} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
@@ -101,6 +119,24 @@ export function PortalInsightsTab({ clientId, clientColor }: PortalInsightsTabPr
               </div>
             ))}
           </div>
+
+          {(data.facebook || facebookCards.length > 0) && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-white"><Facebook size={16} /> Facebook {data.facebook?.account_name ? `· ${data.facebook.account_name}` : ''}</div>
+              {data.facebook?.unavailable ? (
+                <p className="rounded-lg border border-white/10 bg-white/[0.03] p-4 text-xs text-white/50">{data.facebook.unavailable}</p>
+              ) : (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  {facebookCards.map(({ label, value, icon: Icon }) => (
+                    <div key={label} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+                      <div className="flex items-center gap-2 text-white/50 text-xs"><Icon size={13} style={{ color: `hsl(${clientColor})` }} /> {label}</div>
+                      <p className="text-2xl font-bold text-white mt-1">{nf(value)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-2">
             <p className="text-sm font-semibold text-white">Suas publicações do mês</p>
@@ -125,9 +161,10 @@ export function PortalInsightsTab({ clientId, clientColor }: PortalInsightsTabPr
                     {p.media_type} · {p.timestamp ? new Date(p.timestamp).toLocaleDateString('pt-BR') : '—'}
                   </p>
                 </div>
-                <div className="text-right shrink-0">
-                  <p className="text-xs font-semibold text-white">{nf(p.reach)}</p>
-                  <p className="text-[11px] text-white/40">alcance</p>
+                <div className="hidden sm:grid grid-cols-3 gap-3 text-right shrink-0">
+                  <div><p className="text-xs font-semibold text-white">{nf(p.reach)}</p><p className="text-[11px] text-white/40">alcance</p></div>
+                  <div><p className="text-xs font-semibold text-white">{nf(p.shares)}</p><p className="text-[11px] text-white/40">compart.</p></div>
+                  <div><p className="text-xs font-semibold text-white">{nf(p.views ?? p.plays)}</p><p className="text-[11px] text-white/40">views</p></div>
                 </div>
               </a>
             ))}

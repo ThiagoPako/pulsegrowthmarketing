@@ -6159,6 +6159,19 @@ async function fetchTotalMetric(base, igId, token, metric, windows) {
   return ok ? total : null;
 }
 
+/** Tenta uma métrica de publicação isoladamente para que uma métrica negada não esconda as demais. */
+async function fetchMediaMetric(base, mediaId, token, metric) {
+  try {
+    const d = await metaGetJson(`${base}/${mediaId}/insights?metric=${metric}&access_token=${token}`);
+    const item = d?.data?.[0];
+    const value = item?.total_value?.value ?? item?.values?.[0]?.value;
+    return typeof value === 'number' ? value : null;
+  } catch (err) {
+    console.warn(`[insights] mídia ${mediaId}/${metric} indisponível:`, err.message);
+    return null;
+  }
+}
+
 const sumSeries = (series) => series.reduce((acc, i) => acc + (i.value || 0), 0);
 
 /**
@@ -6193,6 +6206,12 @@ async function fetchInstagramInsights(account, since, until) {
   const websiteClicks = await fetchTotalMetric(base, igId, token, 'website_clicks', windows);
   const accountsEngaged = await fetchTotalMetric(base, igId, token, 'accounts_engaged', windows);
   const impressions = await fetchTotalMetric(base, igId, token, 'views', windows);
+  const totalInteractions = await fetchTotalMetric(base, igId, token, 'total_interactions', windows);
+  const likes = await fetchTotalMetric(base, igId, token, 'likes', windows);
+  const comments = await fetchTotalMetric(base, igId, token, 'comments', windows);
+  const saves = await fetchTotalMetric(base, igId, token, 'saves', windows);
+  const shares = await fetchTotalMetric(base, igId, token, 'shares', windows);
+  const replies = await fetchTotalMetric(base, igId, token, 'replies', windows);
 
   // Publicações do período com desempenho individual
   const posts = [];
@@ -6200,7 +6219,6 @@ async function fetchInstagramInsights(account, since, until) {
     const fields = [
       'id', 'caption', 'media_type', 'media_product_type', 'media_url', 'thumbnail_url',
       'permalink', 'timestamp', 'like_count', 'comments_count',
-      'insights.metric(reach,saved,total_interactions)',
     ].join(',');
     let url = `${base}/${igId}/media?fields=${encodeURIComponent(fields)}&limit=50&access_token=${token}`;
     let pages = 0;
@@ -6209,8 +6227,11 @@ async function fetchInstagramInsights(account, since, until) {
       for (const m of page.data || []) {
         const ts = m.timestamp ? new Date(m.timestamp).getTime() : 0;
         if (!ts || ts < startMs || ts > endMs + DAY_SECONDS * 1000) continue;
-        const ins = {};
-        for (const i of m.insights?.data || []) ins[i.name] = i.values?.[0]?.value ?? 0;
+        const metricNames = m.media_product_type === 'REELS'
+          ? ['reach', 'saved', 'total_interactions', 'shares', 'views', 'plays', 'total_watch_time', 'avg_watch_time']
+          : ['reach', 'saved', 'total_interactions', 'shares', 'views'];
+        const values = await Promise.all(metricNames.map(name => fetchMediaMetric(base, m.id, token, name)));
+        const ins = Object.fromEntries(metricNames.map((name, index) => [name, values[index]]));
         posts.push({
           id: m.id,
           caption: (m.caption || '').slice(0, 220),
@@ -6223,6 +6244,11 @@ async function fetchInstagramInsights(account, since, until) {
           reach: ins.reach ?? null,
           saved: ins.saved ?? null,
           interactions: ins.total_interactions ?? null,
+          shares: ins.shares ?? null,
+          views: ins.views ?? null,
+          plays: ins.plays ?? null,
+          total_watch_time: ins.total_watch_time ?? null,
+          avg_watch_time: ins.avg_watch_time ?? null,
         });
       }
       const oldest = (page.data || []).slice(-1)[0]?.timestamp;
@@ -6250,7 +6276,12 @@ async function fetchInstagramInsights(account, since, until) {
     profile_views: profileViews,
     website_clicks: websiteClicks,
     accounts_engaged: accountsEngaged,
-    interactions: posts.length ? engagement : null,
+    interactions: totalInteractions ?? (posts.length ? engagement : null),
+    likes,
+    comments,
+    saves,
+    shares,
+    replies,
     posts_count: posts.length,
     avg_reach_per_post: posts.length && totalReach !== null
       ? Math.round(posts.reduce((a, p) => a + (p.reach ?? 0), 0) / posts.length)
@@ -6258,6 +6289,39 @@ async function fetchInstagramInsights(account, since, until) {
     reach_series: reachSeries,
     follower_series: followerSeries,
     posts: posts.slice(0, 30),
+  };
+}
+
+/** Métricas permitidas de uma Página do Facebook conectada ao mesmo cliente. */
+async function fetchFacebookInsights(account, since, until) {
+  const token = account.access_token;
+  const pageId = account.facebook_page_id;
+  if (!token || !pageId) throw new Error('Página do Facebook sem identificação ou token.');
+  const startMs = new Date(`${since}T00:00:00Z`).getTime();
+  const endMs = new Date(`${until}T00:00:00Z`).getTime();
+  const windows = insightWindows(startMs, endMs);
+  let profile = {};
+  try {
+    profile = await metaGetJson(`${META_API_BASE}/${pageId}?fields=name,followers_count,fan_count&access_token=${token}`);
+  } catch (err) {
+    console.warn('[insights] página Facebook indisponível:', err.message);
+  }
+  const metricMap = {
+    reach: 'page_impressions_unique',
+    impressions: 'page_impressions',
+    engaged_users: 'page_engaged_users',
+    post_engagements: 'page_post_engagements',
+    video_views: 'page_video_views',
+    reactions: 'page_actions_post_reactions_total',
+  };
+  const entries = await Promise.all(Object.entries(metricMap).map(async ([key, metric]) => {
+    const series = await fetchDailyMetric(META_API_BASE, pageId, token, metric, windows);
+    return [key, series.length ? sumSeries(series) : null];
+  }));
+  return {
+    account_name: profile.name || account.account_name || null,
+    followers_total: profile.followers_count ?? profile.fan_count ?? null,
+    ...Object.fromEntries(entries),
   };
 }
 
@@ -6273,16 +6337,29 @@ async function getClientInsights(clientId, since, until, { maxAgeMinutes = 180 }
   if (fresh) return { ...cached[0].data, cached: true, fetched_at: cached[0].fetched_at };
 
   const { rows: accounts } = await pool.query(
-    `SELECT * FROM social_accounts WHERE client_id = $1 AND platform = 'instagram' AND status = 'connected' LIMIT 1`,
+    `SELECT * FROM social_accounts WHERE client_id = $1 AND platform IN ('instagram', 'facebook') AND status = 'connected'`,
     [clientId]
   );
-  if (!accounts.length) {
+  const instagram = accounts.find(account => account.platform === 'instagram');
+  const facebook = accounts.find(account => account.platform === 'facebook');
+  if (!instagram && !facebook) {
     if (cached[0]) return { ...cached[0].data, cached: true, fetched_at: cached[0].fetched_at };
-    throw new Error('Cliente sem Instagram conectado.');
+    throw new Error('Cliente sem Instagram ou Facebook conectado.');
   }
 
   try {
-    const data = await fetchInstagramInsights(accounts[0], since, until);
+    const instagramData = instagram ? await fetchInstagramInsights(instagram, since, until) : null;
+    const facebookData = facebook ? await fetchFacebookInsights(facebook, since, until).catch(err => ({ unavailable: err.message })) : null;
+    const data = instagramData
+      ? { ...instagramData, instagram: instagramData, facebook: facebookData }
+      : {
+          account_name: facebookData?.account_name || null,
+          period: { since, until }, followers_total: null, followers_gained: null, media_total: null,
+          reach: null, views: null, profile_views: null, website_clicks: null, accounts_engaged: null,
+          interactions: null, likes: null, comments: null, saves: null, shares: null, replies: null,
+          posts_count: 0, avg_reach_per_post: null, reach_series: [], follower_series: [], posts: [],
+          instagram: null, facebook: facebookData,
+        };
     await pool.query(
       `INSERT INTO social_insights_snapshots (client_id, period_start, period_end, account_name, data, fetched_at)
        VALUES ($1,$2,$3,$4,$5, now())

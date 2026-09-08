@@ -593,14 +593,6 @@ export default function ClientPortal() {
                   Métricas
                 </button>
               )}
-              {client.portal_insights_enabled && (
-                <button
-                  onClick={() => setActiveTab('insights')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'insights' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
-                >
-                  Desempenho
-                </button>
-              )}
               {client.has_vehicle_flyer && (
                 <button
                   onClick={() => setActiveTab('panfletagem')}
@@ -722,11 +714,6 @@ export default function ClientPortal() {
         {(client.show_metrics || isTeamMember) && (
           <button onClick={() => setActiveTab('metrics')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'metrics' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'metrics' ? { borderColor: `hsl(${clientColor})` } : {}}>
             Métricas
-          </button>
-        )}
-        {client.portal_insights_enabled && (
-          <button onClick={() => setActiveTab('insights')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'insights' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'insights' ? { borderColor: `hsl(${clientColor})` } : {}}>
-            📈 Desempenho
           </button>
         )}
         <button onClick={() => setActiveTab('designer')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'designer' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'designer' ? { borderColor: `hsl(${clientColor})` } : {}}>
@@ -913,8 +900,6 @@ export default function ClientPortal() {
               </div>
             )}
           </motion.div>
-        ) : activeTab === 'insights' && client.portal_insights_enabled ? (
-          <PortalInsightsTab clientId={client.id} clientColor={clientColor} />
         ) : activeTab === 'criativa' ? (
           <ZonaCriativa clientId={client.id} clientColor={clientColor} isAuthenticated={isAuthenticated} />
         ) : activeTab === 'designer' ? (
@@ -959,6 +944,15 @@ export default function ClientPortal() {
         ) : (
           /* ── METRICS TAB ── */
           <motion.div key="metrics" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[1400px] mx-auto px-4 sm:px-8 py-8 pb-20 space-y-8">
+            {client.portal_insights_enabled && (
+              <section className="space-y-4">
+                <div>
+                  <h2 className="text-xl font-bold text-white">Insights Meta</h2>
+                  <p className="text-sm text-white/45">Resultados do Instagram e Facebook no período selecionado.</p>
+                </div>
+                <PortalInsightsTab clientId={client.id} clientColor={clientColor} />
+              </section>
+            )}
             {/* Delivery percentage hero */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-8">
               <p className="text-xs uppercase tracking-widest text-white/40 mb-2">Entrega da temporada</p>

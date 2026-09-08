@@ -722,6 +722,11 @@ export default function ClientPortal() {
             Métricas
           </button>
         )}
+        {client.portal_insights_enabled && (
+          <button onClick={() => setActiveTab('insights')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'insights' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'insights' ? { borderColor: `hsl(${clientColor})` } : {}}>
+            📈 Desempenho
+          </button>
+        )}
         <button onClick={() => setActiveTab('designer')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'designer' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'designer' ? { borderColor: `hsl(${clientColor})` } : {}}>
           🎨 Designer
         </button>

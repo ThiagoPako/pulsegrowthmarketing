@@ -1542,6 +1542,17 @@ export default function Clients() {
         </p>
       </div>
 
+      {!metaConfigured && (
+        <div className="p-3 rounded-lg border border-destructive/30 bg-destructive/5 flex gap-2 items-start">
+          <Info size={16} className="text-destructive shrink-0 mt-0.5" />
+          <p className="text-xs text-muted-foreground">
+            As chaves do Instagram/Facebook ainda não foram cadastradas. Vá em <strong>Financeiro → Integrações</strong> e informe o App ID e o App Secret antes de conectar o perfil do cliente.
+          </p>
+        </div>
+      )}
+
+
+
       {/* Connect Button - Single OAuth for both platforms */}
       {!socialAccounts.instagram.connected && !socialAccounts.facebook.connected ? (
         <div className="space-y-3">

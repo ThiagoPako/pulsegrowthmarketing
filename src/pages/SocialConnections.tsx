@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Instagram, Facebook, Search, Loader2, RefreshCw, Unlink, CheckCircle2, AlertTriangle, LogIn, Share2, Copy, Stethoscope, XCircle } from 'lucide-react';
+import { Instagram, Facebook, Search, Loader2, RefreshCw, Unlink, CheckCircle2, AlertTriangle, Share2, Copy, Stethoscope, XCircle } from 'lucide-react';
 
 interface ClientConnection {
   id: string;
@@ -28,7 +28,6 @@ export default function SocialConnections() {
   const [filter, setFilter] = useState<'all' | 'connected' | 'pending'>('all');
 
   const [togglingId, setTogglingId] = useState<string | null>(null);
-  const [oauthBusy, setOauthBusy] = useState<string | null>(null);
   const [linkBusy, setLinkBusy] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState<{ name: string; url: string; expires: string } | null>(null);
   const [diagBusy, setDiagBusy] = useState<string | null>(null);
@@ -127,79 +126,8 @@ export default function SocialConnections() {
     pending: clients.filter(c => c.accounts.length === 0).length,
   }), [clients]);
 
-  /**
-   * Login oficial pela Meta: abre a janela de autorização do Instagram/Facebook,
-   * espera o retorno com o `code` e troca por token no backend da VPS.
-   * Nenhum token passa pelo navegador — a troca acontece só no servidor.
-   */
-  const connectViaOAuth = async (client: ClientConnection, plat: Platform) => {
-    const busyKey = `${client.id}:${plat}`;
-    setOauthBusy(busyKey);
-    const redirectUri = `${window.location.origin}/`;
-    try {
-      const { data, error } = await invokeVpsFunction('meta-oauth', {
-        body: {
-          action: plat === 'instagram' ? 'get_instagram_oauth_url' : 'get_oauth_url',
-          client_id: client.id,
-          redirect_uri: redirectUri,
-        },
-      });
-      if (error || data?.error || !data?.oauth_url) {
-        throw new Error(data?.error || error?.message || 'Configure o App da Meta em Configurações → Integração Meta.');
-      }
 
-      const popup = window.open(data.oauth_url, 'meta_oauth', 'width=600,height=760,scrollbars=yes');
-      if (!popup) throw new Error('Permita janelas pop-up para concluir o login.');
 
-      const code = await new Promise<string>((resolve, reject) => {
-        const timer = window.setInterval(() => {
-          try {
-            if (popup.closed) {
-              window.clearInterval(timer);
-              reject(new Error('Janela de login fechada antes de concluir.'));
-              return;
-            }
-            // Só conseguimos ler quando a Meta devolveu para o nosso domínio.
-            const url = popup.location.href;
-            if (!url.startsWith(window.location.origin)) return;
-            const params = new URLSearchParams(popup.location.search);
-            const returnedCode = params.get('code');
-            const denied = params.get('error') || params.get('error_reason');
-            if (returnedCode) {
-              window.clearInterval(timer);
-              popup.close();
-              resolve(returnedCode);
-            } else if (denied) {
-              window.clearInterval(timer);
-              popup.close();
-              reject(new Error('Autorização recusada pelo usuário.'));
-            }
-          } catch {
-            /* enquanto está no domínio da Meta a leitura é bloqueada — apenas aguarda */
-          }
-        }, 600);
-      });
-
-      toast.info('Conectando conta…');
-      const { data: result, error: exchangeError } = await invokeVpsFunction('meta-oauth', {
-        body: {
-          action: plat === 'instagram' ? 'exchange_instagram_code' : 'exchange_code',
-          code,
-          redirect_uri: redirectUri,
-          client_id: client.id,
-        },
-      });
-      if (exchangeError || result?.error) {
-        throw new Error(result?.error || exchangeError?.message || 'Falha ao concluir a conexão.');
-      }
-      toast.success(`Conectado: ${(result?.accounts ?? []).length} conta(s)`);
-      await load();
-    } catch (err) {
-      toast.error((err as Error).message);
-    } finally {
-      setOauthBusy(null);
-    }
-  };
 
 
   const disconnect = async (client: ClientConnection, plat: Platform) => {
@@ -300,25 +228,12 @@ export default function SocialConnections() {
                           )}
                         </div>
                       </div>
-                      <div className="flex gap-1 shrink-0">
-                        <Button
-                          size="sm"
-                          variant={account ? 'outline' : 'default'}
-                          className="gap-1"
-                          disabled={oauthBusy === `${client.id}:${plat}`}
-                          onClick={() => connectViaOAuth(client, plat)}
-                        >
-                          {oauthBusy === `${client.id}:${plat}`
-                            ? <Loader2 size={14} className="animate-spin" />
-                            : <LogIn size={14} />}
-                          {account ? 'Reconectar' : 'Entrar'}
+                      {account && (
+                        <Button size="sm" variant="ghost" className="shrink-0" title="Desconectar" onClick={() => disconnect(client, plat)}>
+                          <Unlink size={14} />
                         </Button>
-                        {account && (
-                          <Button size="sm" variant="ghost" title="Desconectar" onClick={() => disconnect(client, plat)}>
-                            <Unlink size={14} />
-                          </Button>
-                        )}
-                      </div>
+                      )}
+
 
                     </div>
                   ))}

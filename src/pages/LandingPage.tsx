@@ -1377,7 +1377,10 @@ function Footer() {
           </div>
           <span className="font-display font-semibold text-foreground">Pulse Growth Marketing</span>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-center gap-4">
+          <a href="/politica-de-privacidade" className="hover:text-primary transition-colors">Privacidade</a>
+          <a href="/termos-de-uso" className="hover:text-primary transition-colors">Termos de Uso</a>
+          <a href="/exclusao-de-dados" className="hover:text-primary transition-colors">Exclusão de Dados</a>
           <p>© {new Date().getFullYear()} Todos os direitos reservados.</p>
           <button
             onClick={() => goToTeamArea()}

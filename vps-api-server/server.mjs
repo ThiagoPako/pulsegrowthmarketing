@@ -5428,8 +5428,10 @@ app.post('/api/social-accounts/manual-token', async (req, res) => {
 // ─── 9. Meta Publish ────────────────────────────────────────
 async function fetchMetaWithRetry(url, options, retries = 3) {
   for (let attempt = 0; attempt < retries; attempt++) {
-    await new Promise(r => setTimeout(r, 200));
+    // Sem espera na primeira chamada — só espaça entre retentativas.
+    if (attempt > 0) await new Promise(r => setTimeout(r, 200));
     const response = await fetch(url, options);
+
     if (response.ok) return response;
     const body = await response.text();
     if (response.status === 429 || body.includes('too many calls') || response.status >= 500) {

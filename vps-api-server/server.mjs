@@ -5477,7 +5477,7 @@ app.post('/api/meta-publish', async (req, res) => {
       if (isVideo) cp.set('video_url', media_url); else cp.set('image_url', media_url);
       const cr = await fetchMetaWithRetry(`${META_API_BASE}/${igBusinessId}/media?${cp}`, { method: 'POST' });
       const cd = await cr.json();
-      if (isVideo) for (let i = 0; i < 20; i++) { await new Promise(r => setTimeout(r, 2000)); const sr = await fetchMetaWithRetry(`${META_API_BASE}/${cd.id}?fields=status_code&access_token=${pageToken}`, { method: 'GET' }); const sd = await sr.json(); if (sd.status_code === 'FINISHED') break; if (sd.status_code === 'ERROR') throw new Error('Story video failed'); }
+      if (isVideo) await waitForIgContainer(cd.id, pageToken, 20, META_API_BASE);
       result = await publishIgContainer(META_API_BASE, igBusinessId, cd.id, pageToken);
 
     }

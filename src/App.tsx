@@ -246,6 +246,7 @@ function AppRoutes() {
         <Route path="/custo-conteudo" element={<ProtectedRoute><CostByContentType /></ProtectedRoute>} />
 
         <Route path="/entregas-social" element={<ProtectedRoute><SocialMediaDeliveries /></ProtectedRoute>} />
+        <Route path="/conexoes-sociais" element={<ProtectedRoute><SocialConnections /></ProtectedRoute>} />
         <Route path="/conteudo" element={<ProtectedRoute><ContentKanban /></ProtectedRoute>} />
         <Route path="/edicao" element={<ProtectedRoute><EditorDashboard /></ProtectedRoute>} />
         <Route path="/edicao/kanban" element={<ProtectedRoute><EditorKanban /></ProtectedRoute>} />

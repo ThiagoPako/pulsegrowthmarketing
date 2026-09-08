@@ -18,7 +18,20 @@ interface DeliveryRecord {
   stories_produced: number | string | null;
   arts_produced: number | string | null;
   delivery_status: string;
+  videos_recorded?: number | string | null;
+  recording_duration_seconds?: number | string | null;
+  wait_duration_seconds?: number | string | null;
 }
+
+/** Formata segundos como "1h 05min" / "12min" / "—". */
+const fmtDuration = (seconds: number): string => {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '—';
+  const total = Math.round(seconds / 60);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h === 0) return `${m}min`;
+  return `${h}h ${String(m).padStart(2, '0')}min`;
+};
 interface EditorTask {
   client_id: string | null;
   content_type: string | null;

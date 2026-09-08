@@ -105,6 +105,27 @@ export async function publishScheduledPostNow(id: string): Promise<ScheduledPost
   return data.post as ScheduledPost;
 }
 
+export interface ClientMediaAsset {
+  id: string;
+  title: string;
+  url: string;
+  thumbnail: string | null;
+  kind: 'image' | 'video';
+  source: string;
+  tag?: string | null;
+  date?: string | null;
+}
+
+/** Artes e vídeos já cadastrados no sistema para o cliente. */
+export async function fetchClientMediaLibrary(clientId: string): Promise<ClientMediaAsset[]> {
+  const { data, error } = await invokeVpsFunction('social-posts/media-library', {
+    method: 'GET',
+    body: { client_id: clientId },
+  });
+  if (error) throw new Error(error.message);
+  return (data?.items ?? []) as ClientMediaAsset[];
+}
+
 /** Sugere o tipo de publicação a partir do tipo de conteúdo da entrega. */
 export function suggestPublishType(contentType: string): SocialPublishType {
   if (contentType === 'story' || contentType === 'stories') return 'stories';

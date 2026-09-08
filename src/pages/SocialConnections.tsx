@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
-import type { ConnectedSocialAccount } from '@/services/socialPostsApi';
+import { setPortalInsightsEnabled, type ConnectedSocialAccount } from '@/services/socialPostsApi';
+import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +16,7 @@ interface ClientConnection {
   name: string;
   city: string | null;
   accounts: ConnectedSocialAccount[];
+  portal_insights_enabled?: boolean;
 }
 
 type Platform = 'instagram' | 'facebook';
@@ -29,6 +31,22 @@ export default function SocialConnections() {
   const [platform, setPlatform] = useState<Platform>('instagram');
   const [token, setToken] = useState('');
   const [saving, setSaving] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  /** Liga/desliga a aba de desempenho no portal daquele cliente. */
+  const togglePortalInsights = async (client: ClientConnection, enabled: boolean) => {
+    setTogglingId(client.id);
+    try {
+      await setPortalInsightsEnabled(client.id, enabled);
+      setClients(prev => prev.map(c => (c.id === client.id ? { ...c, portal_insights_enabled: enabled } : c)));
+      toast.success(enabled ? 'Desempenho liberado no portal' : 'Desempenho ocultado do portal');
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
 
   const load = async () => {
     setLoading(true);
@@ -199,7 +217,22 @@ export default function SocialConnections() {
                       </div>
                     </div>
                   ))}
+
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed p-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">Mostrar desempenho no portal</p>
+                      <p className="text-xs text-muted-foreground">
+                        O cliente vê alcance, seguidores e resultados das publicações.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={!!client.portal_insights_enabled}
+                      disabled={!ig || togglingId === client.id}
+                      onCheckedChange={v => togglePortalInsights(client, v)}
+                    />
+                  </div>
                 </CardContent>
+
               </Card>
             );
           })}

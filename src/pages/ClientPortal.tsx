@@ -29,6 +29,7 @@ import ProposalChecklist from '@/components/ProposalChecklist';
 import PortalRendimentoBovino from '@/components/portal/PortalRendimentoBovino';
 import PortalEvents from '@/components/portal/PortalEvents';
 import PortalTraining from '@/components/portal/PortalTraining';
+import { PortalInsightsTab } from '@/components/portal/PortalInsightsTab';
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
   reel: 'Reel', criativo: 'Criativo', institucional: 'Institucional', anuncio: 'Anúncio', arte: 'Arte', otimizacao: 'Otimizado',
@@ -63,11 +64,12 @@ interface ClientData {
   weekly_reels: number; weekly_creatives: number; weekly_stories: number;
   monthly_recordings: number; plan_id: string | null; show_metrics: boolean;
   has_vehicle_flyer: boolean; niche: string | null;
+  portal_insights_enabled?: boolean;
   whatsapp?: string; city?: string;
   client_type?: string;
 }
 
-type TabView = 'library' | 'metrics' | 'criativa' | 'agenda' | 'panfletagem' | 'designer' | 'descontos' | 'entregas' | 'rendimento' | 'eventos' | 'treinamento' | 'otimizados' | 'admin';
+type TabView = 'library' | 'metrics' | 'insights' | 'criativa' | 'agenda' | 'panfletagem' | 'designer' | 'descontos' | 'entregas' | 'rendimento' | 'eventos' | 'treinamento' | 'otimizados' | 'admin';
 
 const PORTAL_MEDIA_PROXY_URL = 'https://agenciapulse.tech/api/portal-media-proxy';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
@@ -590,6 +592,14 @@ export default function ClientPortal() {
                   Métricas
                 </button>
               )}
+              {client.portal_insights_enabled && (
+                <button
+                  onClick={() => setActiveTab('insights')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'insights' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+                >
+                  Desempenho
+                </button>
+              )}
               {client.has_vehicle_flyer && (
                 <button
                   onClick={() => setActiveTab('panfletagem')}
@@ -711,6 +721,11 @@ export default function ClientPortal() {
         {(client.show_metrics || isTeamMember) && (
           <button onClick={() => setActiveTab('metrics')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'metrics' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'metrics' ? { borderColor: `hsl(${clientColor})` } : {}}>
             Métricas
+          </button>
+        )}
+        {client.portal_insights_enabled && (
+          <button onClick={() => setActiveTab('insights')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'insights' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'insights' ? { borderColor: `hsl(${clientColor})` } : {}}>
+            📈 Desempenho
           </button>
         )}
         <button onClick={() => setActiveTab('designer')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'designer' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'designer' ? { borderColor: `hsl(${clientColor})` } : {}}>
@@ -897,6 +912,8 @@ export default function ClientPortal() {
               </div>
             )}
           </motion.div>
+        ) : activeTab === 'insights' && client.portal_insights_enabled ? (
+          <PortalInsightsTab clientId={client.id} clientColor={clientColor} />
         ) : activeTab === 'criativa' ? (
           <ZonaCriativa clientId={client.id} clientColor={clientColor} isAuthenticated={isAuthenticated} />
         ) : activeTab === 'designer' ? (

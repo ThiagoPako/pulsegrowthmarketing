@@ -1617,10 +1617,15 @@ export default function Clients() {
             </div>
           </div>
 
-          {/* Reconnect button */}
-          <Button variant="outline" className="w-full gap-2 text-xs" onClick={connectViaOAuth}>
-            <RefreshCw size={14} /> Reconectar contas via Meta
-          </Button>
+          {/* Reconnect buttons */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <Button variant="outline" className="w-full gap-2 text-xs" onClick={() => connectViaOAuth('instagram')}>
+              <Instagram size={14} /> {socialAccounts.instagram.connected ? 'Reconectar' : 'Conectar'} Instagram direto
+            </Button>
+            <Button variant="outline" className="w-full gap-2 text-xs" onClick={() => connectViaOAuth('meta')}>
+              <RefreshCw size={14} /> Reconectar via Facebook
+            </Button>
+          </div>
         </div>
       )}
     </div>

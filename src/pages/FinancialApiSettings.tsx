@@ -149,6 +149,8 @@ export default function FinancialApiSettings() {
     notes: '',
     metaAppId: '',
     metaAppSecret: '',
+    instagramAppId: '',
+    instagramAppSecret: '',
   });
 
   useEffect(() => { loadData(); loadAiConfig(); }, []);
@@ -256,7 +258,7 @@ export default function FinancialApiSettings() {
   };
 
   const storeMetaCredentialsSecurely = async (integrationId: string) => {
-    const hasSecrets = form.metaAppSecret || form.metaAppId;
+    const hasSecrets = form.metaAppSecret || form.metaAppId || form.instagramAppId || form.instagramAppSecret;
     if (!hasSecrets) return;
 
     try {
@@ -265,6 +267,8 @@ export default function FinancialApiSettings() {
           integration_id: integrationId,
           meta_app_id: form.metaAppId || undefined,
           meta_app_secret: form.metaAppSecret || undefined,
+          instagram_app_id: form.instagramAppId || undefined,
+          instagram_app_secret: form.instagramAppSecret || undefined,
         },
       });
       if (error) throw error;
@@ -426,6 +430,8 @@ export default function FinancialApiSettings() {
       notes: integration.config?.notes || '',
       metaAppId: integration.config?.meta_app_id || '',
       metaAppSecret: '',
+      instagramAppId: integration.config?.instagram_app_id || '',
+      instagramAppSecret: '',
     });
     setShowDialog(true);
   };
@@ -437,7 +443,7 @@ export default function FinancialApiSettings() {
   };
 
   const resetForm = () => {
-    setForm({ name: '', provider: 'meta_ads', api_type: 'rest', endpoint_url: '', notes: '', metaAppId: '', metaAppSecret: '' });
+    setForm({ name: '', provider: 'meta_ads', api_type: 'rest', endpoint_url: '', notes: '', metaAppId: '', metaAppSecret: '', instagramAppId: '', instagramAppSecret: '' });
     setEditingId(null);
   };
 
@@ -694,6 +700,20 @@ export default function FinancialApiSettings() {
                     <div>
                       <Label className="text-xs">App Secret *</Label>
                       <Input type="password" value={form.metaAppSecret} onChange={e => setForm({ ...form, metaAppSecret: e.target.value })} placeholder={editingId ? 'Deixe em branco para manter' : 'Ex: abc123def456...'} />
+                    </div>
+                  </div>
+                </div>
+                <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                  <p className="text-xs font-medium text-primary mb-1">📸 Login direto do Instagram (opcional)</p>
+                  <p className="text-[11px] text-muted-foreground mb-3">No painel da Meta: Produtos → Instagram → "Configuração da API com Login do Instagram". Permite conectar o perfil do cliente sem Página do Facebook. Se ficar em branco, usa o App ID/Secret acima.</p>
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="text-xs">Instagram App ID</Label>
+                      <Input value={form.instagramAppId} onChange={e => setForm({ ...form, instagramAppId: e.target.value })} placeholder="ID do app Instagram" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Instagram App Secret</Label>
+                      <Input type="password" value={form.instagramAppSecret} onChange={e => setForm({ ...form, instagramAppSecret: e.target.value })} placeholder={editingId ? 'Deixe em branco para manter' : 'Secret do app Instagram'} />
                     </div>
                   </div>
                 </div>

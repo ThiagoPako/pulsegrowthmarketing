@@ -292,11 +292,17 @@ export default function PostStudio() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="library">
-                  <TabsList className="grid w-full grid-cols-2">
+                <Tabs defaultValue="upload">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="upload" className="text-xs"><UploadCloud size={13} className="mr-1" /> Enviar arquivo</TabsTrigger>
                     <TabsTrigger value="library" className="text-xs"><FolderOpen size={13} className="mr-1" /> Biblioteca do cliente</TabsTrigger>
                     <TabsTrigger value="links" className="text-xs"><LinkIcon size={13} className="mr-1" /> Colar links</TabsTrigger>
                   </TabsList>
+
+                  <TabsContent value="upload" className="mt-3">
+                    <PostMediaDropzone remaining={maxItems - filledItems.length} onUploaded={addUploaded} />
+                  </TabsContent>
+
 
                   <TabsContent value="library" className="mt-3">
                     {!clientId ? (

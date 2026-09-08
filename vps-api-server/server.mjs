@@ -5886,9 +5886,10 @@ async function publishToClientAccount(account, post) {
     cd = await cr.json();
   }
   if (!cd.id) throw new Error('Meta não criou o container de mídia: ' + JSON.stringify(cd));
-  if (isVideo) await waitForIgContainer(cd.id, token, 30, IG_BASE);
-  const pr = await fetchMetaWithRetry(`${IG_BASE}/${igId}/media_publish?creation_id=${cd.id}&access_token=${token}`, { method: 'POST' });
-  return pr.json();
+  if (isVideo) await waitForIgContainer(cd.id, token, 60, IG_BASE);
+  else await waitForIgContainer(cd.id, token, 10, IG_BASE).catch(() => {});
+  return publishIgContainer(IG_BASE, igId, cd.id, token);
+
 }
 
 async function getConnectedAccounts(clientId) {

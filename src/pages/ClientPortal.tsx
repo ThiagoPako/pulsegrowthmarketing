@@ -591,6 +591,14 @@ export default function ClientPortal() {
                   Métricas
                 </button>
               )}
+              {client.portal_insights_enabled && (
+                <button
+                  onClick={() => setActiveTab('insights')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === 'insights' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+                >
+                  Desempenho
+                </button>
+              )}
               {client.has_vehicle_flyer && (
                 <button
                   onClick={() => setActiveTab('panfletagem')}

@@ -110,16 +110,67 @@ export function PortalInsightsTab({ clientId, clientColor, clientName = 'Cliente
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <select value={month} onChange={e => setMonth(Number(e.target.value))} className={selectClass}>
-          {MONTHS.map((m, i) => <option key={m} value={i + 1} className="text-black">{m}</option>)}
-        </select>
-        <select value={year} onChange={e => setYear(Number(e.target.value))} className={selectClass}>
-          {Array.from({ length: 3 }, (_, i) => now.getFullYear() - i).map(y => (
-            <option key={y} value={y} className="text-black">{y}</option>
+      <div className="space-y-3 rounded-lg border border-white/10 bg-white/[0.035] p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {([['month', 'Por mês'], ['custom', 'Período personalizado']] as const).map(([value, label]) => (
+            <Button
+              key={value}
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setMode(value)}
+              className={mode === value ? 'bg-white/10 text-white' : 'text-white/45'}
+            >
+              {label}
+            </Button>
           ))}
-        </select>
-        {data?.account_name && <span className="text-xs text-white/50">@{data.account_name}</span>}
+          {data?.account_name && <span className="text-xs text-white/50">@{data.account_name}</span>}
+          <Button
+            type="button"
+            size="sm"
+            className="ml-auto gap-2"
+            disabled={!data}
+            onClick={() => setReportOpen(true)}
+          >
+            <FileText size={14} /> Gerar relatório
+          </Button>
+        </div>
+
+        {mode === 'month' ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <select value={month} onChange={e => setMonth(Number(e.target.value))} className={selectClass}>
+              {MONTHS.map((m, i) => <option key={m} value={i + 1} className="text-black">{m}</option>)}
+            </select>
+            <select value={year} onChange={e => setYear(Number(e.target.value))} className={selectClass}>
+              {Array.from({ length: 3 }, (_, i) => now.getFullYear() - i).map(y => (
+                <option key={y} value={y} className="text-black">{y}</option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            {([[7, 'Últimos 7 dias'], [30, 'Últimos 30 dias'], [90, 'Últimos 90 dias']] as const).map(([days, label]) => (
+              <Button
+                key={days}
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => { setCustomSince(daysAgo(days)); setCustomUntil(toIso(new Date())); }}
+                className="text-white/60 hover:text-white"
+              >
+                {label}
+              </Button>
+            ))}
+            <label className="flex items-center gap-2 text-xs text-white/50">
+              De
+              <input type="date" value={customSince} max={customUntil} onChange={e => setCustomSince(e.target.value)} className={selectClass} />
+            </label>
+            <label className="flex items-center gap-2 text-xs text-white/50">
+              até
+              <input type="date" value={customUntil} min={customSince} max={toIso(new Date())} onChange={e => setCustomUntil(e.target.value)} className={selectClass} />
+            </label>
+          </div>
+        )}
       </div>
 
       {loading ? (

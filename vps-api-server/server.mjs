@@ -5564,6 +5564,10 @@ async function ensureSocialPostsSchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_scheduled_posts_due ON scheduled_posts(status, scheduled_at);
     CREATE INDEX IF NOT EXISTS idx_scheduled_posts_client ON scheduled_posts(client_id);
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS media_items JSONB;
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS story_link TEXT;
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS story_link_text TEXT;
+    ALTER TABLE scheduled_posts ALTER COLUMN media_url DROP NOT NULL;
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS access_token TEXT NOT NULL DEFAULT '';
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS token_expiration TIMESTAMPTZ;
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS api_base TEXT NOT NULL DEFAULT 'facebook';

@@ -5308,6 +5308,8 @@ app.post('/api/meta-oauth', async (req, res) => {
          VALUES ($1,'instagram',NULL,$2,$3,$4,'connected',$5,'instagram')`,
         [client_id, igUserId, me.username || igUserId, token, new Date(Date.now() + expiresIn * 1000).toISOString()]
       );
+      await enablePortalInsights(client_id);
+
       try { await admin.from('integration_logs').insert({ client_id, platform: 'instagram', action: 'oauth_connect', status: 'success', message: `Instagram @${me.username} conectado via Login do Instagram.` }); } catch {}
 
       return res.json({
@@ -5377,7 +5379,9 @@ app.post('/api/social-accounts/manual-token', async (req, res) => {
          VALUES ($1,'instagram',NULL,$2,$3,$4,'connected',$5,'instagram')`,
         [client_id, igUserId, name, longToken, new Date(Date.now() + expiresIn * 1000).toISOString()]
       );
+      await enablePortalInsights(client_id);
       return res.json({ success: true, accounts: [{ platform: 'instagram', name, username: name, businessId: igUserId, api_base: 'instagram' }] });
+
     }
 
     // ── Facebook (token de usuário → páginas) ──
@@ -5412,7 +5416,9 @@ app.post('/api/social-accounts/manual-token', async (req, res) => {
         connectedAccounts.push({ platform: 'instagram', name: ig.username || ig.name, username: ig.username, businessId: ig.id, pageId: page.id });
       }
     }
+    await enablePortalInsights(client_id);
     return res.json({ success: true, accounts: connectedAccounts, pages_found: pages.length });
+
   } catch (error) {
     console.error('Manual token error:', error);
     res.status(500).json({ error: error.message });
@@ -5719,6 +5725,44 @@ function postMediaList(post) {
 }
 
 /**
+ * A Meta baixa a mídia do nosso servidor. Se a URL não for pública e https,
+ * a publicação falha com uma mensagem genérica — então validamos antes.
+ */
+async function assertPublicMedia(url) {
+  if (!/^https:\/\//i.test(url)) {
+    throw new Error(`A mídia precisa estar em um endereço https público. Recebido: ${url}`);
+  }
+  try {
+    let r = await fetch(url, { method: 'HEAD', redirect: 'follow' });
+    if (r.status === 405 || r.status === 501) {
+      r = await fetch(url, { method: 'GET', headers: { Range: 'bytes=0-1024' }, redirect: 'follow' });
+    }
+    if (!r.ok && r.status !== 206) {
+      throw new Error(`o servidor respondeu ${r.status}`);
+    }
+    const type = (r.headers.get('content-type') || '').toLowerCase();
+    if (type && !/^(image|video|application\/octet-stream|binary)/.test(type)) {
+      throw new Error(`o endereço não devolveu um arquivo de imagem ou vídeo (${type})`);
+    }
+  } catch (err) {
+    throw new Error(`A Meta não conseguiu baixar a mídia (${url}): ${err.message}`);
+  }
+}
+
+/** Marca o cliente para exibir as métricas no portal assim que uma conta é conectada. */
+async function enablePortalInsights(clientId) {
+  try {
+    await ensureSocialInsightsSchema();
+    await pool.query(
+      `UPDATE clients SET portal_insights_enabled = true WHERE id = $1`,
+      [clientId]
+    );
+  } catch (err) {
+    console.warn('[insights] não foi possível habilitar o portal:', err.message);
+  }
+}
+
+/**
  * Publica no perfil de UM cliente usando o token da conta conectada.
  * @param account linha de social_accounts (instagram ou facebook)
  * @param post { publish_type: 'reels'|'feed'|'stories'|'carousel', media_url, media_items, caption, story_link }
@@ -5728,9 +5772,11 @@ async function publishToClientAccount(account, post) {
   if (!token) throw new Error(`Conta ${account.platform} sem token. Reconecte a conta no cadastro do cliente.`);
   const media = postMediaList(post);
   if (!media.length) throw new Error('Post sem mídia válida.');
+  for (const item of media) await assertPublicMedia(item.url);
   const mainUrl = media[0].url;
   const isVideo = IS_VIDEO_RE.test(mainUrl);
   const caption = post.caption || '';
+
 
   if (account.platform === 'facebook') {
     const pageId = account.facebook_page_id;
@@ -6545,11 +6591,90 @@ app.post('/api/social-posts/:id/publish-now', async (req, res) => {
     if (!rows[0]) return res.status(400).json({ error: 'Post não está agendado nem com erro' });
     await runScheduledPost({ ...rows[0], attempts: SOCIAL_POST_MAX_ATTEMPTS - 1 });
     const { rows: fresh } = await pool.query(`SELECT * FROM scheduled_posts WHERE id=$1`, [req.params.id]);
-    res.json({ success: fresh[0]?.status === 'publicado', post: fresh[0] });
+    const ok = fresh[0]?.status === 'publicado';
+    res.json({ success: ok, post: fresh[0], error: ok ? null : (fresh[0]?.last_error || 'Falha ao publicar') });
+
   } catch (error) {
     res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
   }
 });
+
+/**
+ * Diagnóstico da conexão de um cliente: token, perfil, limite de publicações,
+ * métricas e (opcionalmente) se a Meta consegue baixar uma mídia nossa.
+ * Devolve uma lista de checagens em português — nunca expõe tokens.
+ */
+app.post('/api/social-posts/diagnose', async (req, res) => {
+  try {
+    await verifyUser(req);
+    await ensureSocialPostsSchema();
+    const { client_id, media_url } = req.body || {};
+    if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
+
+    const checks = [];
+    const add = (label, ok, detail) => checks.push({ label, ok, detail: detail || null });
+
+    const accounts = await getConnectedAccounts(client_id);
+    add('Contas conectadas', accounts.length > 0,
+      accounts.length ? accounts.map(a => `${a.platform}: ${a.account_name}`).join(' · ') : 'Nenhuma conta conectada para este cliente.');
+
+    for (const acc of accounts) {
+      const base = acc.platform === 'instagram' && acc.api_base === 'instagram' ? IG_API_BASE : META_API_BASE;
+      const id = acc.platform === 'facebook' ? acc.facebook_page_id : acc.instagram_business_id;
+      try {
+        const d = await metaGetJson(`${base}/${id}?fields=id,name,username&access_token=${acc.access_token}`);
+        add(`Token de ${acc.account_name}`, true, `Válido (${d.username || d.name || id}).`);
+      } catch (err) {
+        add(`Token de ${acc.account_name}`, false, `${err.message}. Reconecte a conta.`);
+        continue;
+      }
+      if (acc.platform === 'instagram') {
+        try {
+          const q = await metaGetJson(`${base}/${acc.instagram_business_id}?fields=content_publishing_limit&access_token=${acc.access_token}`);
+          const used = q?.content_publishing_limit?.data?.[0]?.quota_usage;
+          add('Limite de publicações do Instagram', true, used === undefined ? 'Disponível.' : `${used} de 50 publicações usadas nas últimas 24h.`);
+        } catch (err) {
+          add('Limite de publicações do Instagram', false, err.message);
+        }
+        try {
+          await metaGetJson(`${base}/${acc.instagram_business_id}/insights?metric=reach&period=day&access_token=${acc.access_token}`);
+          add('Métricas do perfil', true, 'A Meta já libera os números para este perfil.');
+        } catch (err) {
+          add('Métricas do perfil', false, `${err.message} (a permissão de métricas pode ainda estar em análise).`);
+        }
+      }
+    }
+
+    if (media_url) {
+      try {
+        await assertPublicMedia(String(media_url));
+        add('Mídia acessível pela Meta', true, 'O arquivo abre publicamente.');
+      } catch (err) {
+        add('Mídia acessível pela Meta', false, err.message);
+      }
+    }
+
+    const { rows: portalRow } = await pool.query(
+      'SELECT COALESCE(portal_insights_enabled, false) AS on FROM clients WHERE id = $1',
+      [client_id]
+    );
+    add('Métricas visíveis no portal do cliente', !!portalRow[0]?.on,
+      portalRow[0]?.on ? 'A aba de desempenho aparece no portal.' : 'Ative o botão "Mostrar desempenho no portal".');
+
+    const { rows: lastErr } = await pool.query(
+      `SELECT last_error, updated_at FROM scheduled_posts
+        WHERE client_id = $1 AND last_error IS NOT NULL ORDER BY updated_at DESC LIMIT 1`,
+      [client_id]
+    );
+    if (lastErr[0]) add('Último erro registrado', false, lastErr[0].last_error);
+
+    res.json({ checks, ok: checks.every(c => c.ok) });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+  }
+});
+
+
 
 // ─── 12. Reset Password ────────────────────────────────────
 app.post('/api/reset-password', async (req, res) => {

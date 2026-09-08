@@ -195,3 +195,21 @@ export async function setPortalInsightsEnabled(clientId: string, enabled: boolea
   if (error || data?.error) throw new Error(data?.error || error?.message || 'Erro ao salvar');
 }
 
+
+export interface DiagnosticCheck {
+  label: string;
+  ok: boolean;
+  detail: string | null;
+}
+
+/** Testa a conexão do cliente com a Meta e devolve um checklist em português. */
+export async function diagnoseClientConnection(
+  clientId: string,
+  mediaUrl?: string,
+): Promise<DiagnosticCheck[]> {
+  const { data, error } = await invokeVpsFunction('social-posts/diagnose', {
+    body: { client_id: clientId, media_url: mediaUrl || null },
+  });
+  if (error || data?.error) throw new Error(data?.error || error?.message || 'Erro no diagnóstico');
+  return (data?.checks ?? []) as DiagnosticCheck[];
+}

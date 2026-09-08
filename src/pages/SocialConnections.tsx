@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
-import { setPortalInsightsEnabled, type ConnectedSocialAccount } from '@/services/socialPostsApi';
+import { setPortalInsightsEnabled, diagnoseClientConnection, type ConnectedSocialAccount, type DiagnosticCheck } from '@/services/socialPostsApi';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Instagram, Facebook, Search, Loader2, RefreshCw, Unlink, CheckCircle2, AlertTriangle, LogIn, Share2, Copy } from 'lucide-react';
+import { Instagram, Facebook, Search, Loader2, RefreshCw, Unlink, CheckCircle2, AlertTriangle, LogIn, Share2, Copy, Stethoscope, XCircle } from 'lucide-react';
 
 interface ClientConnection {
   id: string;
@@ -31,6 +31,22 @@ export default function SocialConnections() {
   const [oauthBusy, setOauthBusy] = useState<string | null>(null);
   const [linkBusy, setLinkBusy] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState<{ name: string; url: string; expires: string } | null>(null);
+  const [diagBusy, setDiagBusy] = useState<string | null>(null);
+  const [diag, setDiag] = useState<{ name: string; checks: DiagnosticCheck[] } | null>(null);
+
+  /** Roda o teste de conexão do cliente e mostra o resultado em linguagem simples. */
+  const runDiagnostic = async (client: ClientConnection) => {
+    setDiagBusy(client.id);
+    try {
+      const checks = await diagnoseClientConnection(client.id);
+      setDiag({ name: client.name, checks });
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setDiagBusy(null);
+    }
+  };
+
 
   /** Cria o link público para o cliente autorizar sozinho as próprias contas. */
   const generateInviteLink = async (client: ClientConnection) => {
@@ -328,6 +344,29 @@ export default function SocialConnections() {
                     </Button>
                   </div>
 
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed p-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">Testar conexão</p>
+                      <p className="text-xs text-muted-foreground">
+                        Verifica o acesso ao perfil, o limite de postagens e as métricas.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 shrink-0"
+                      disabled={diagBusy === client.id}
+                      onClick={() => runDiagnostic(client)}
+                    >
+                      {diagBusy === client.id
+                        ? <Loader2 size={14} className="animate-spin" />
+                        : <Stethoscope size={14} />}
+                      Testar
+                    </Button>
+                  </div>
+
+
+
 
                   <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed p-3">
                     <div className="min-w-0">
@@ -382,6 +421,35 @@ export default function SocialConnections() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!diag} onOpenChange={o => !o && setDiag(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Teste de conexão · {diag?.name}</DialogTitle>
+            <DialogDescription>
+              Resultado da verificação feita agora direto na Meta.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {diag?.checks.map((c, i) => (
+              <div key={i} className="flex items-start gap-2 rounded-lg border p-3">
+                {c.ok
+                  ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-500" />
+                  : <XCircle size={16} className="mt-0.5 shrink-0 text-destructive" />}
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{c.label}</p>
+                  {c.detail && <p className="text-xs text-muted-foreground break-words">{c.detail}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDiag(null)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
 
     </div>
   );

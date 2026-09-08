@@ -5782,6 +5782,50 @@ app.get('/api/social-posts/accounts/:clientId', async (req, res) => {
   }
 });
 
+// Visão geral de conexões de TODOS os clientes (sem expor tokens)
+app.get('/api/social-posts/accounts-overview', async (req, res) => {
+  try {
+    await verifyUser(req);
+    await ensureSocialPostsSchema();
+    const { rows: clients } = await pool.query(
+      `SELECT id, name, city FROM clients WHERE COALESCE(status,'ativo') <> 'inativo' ORDER BY name`
+    );
+    const { rows: accounts } = await pool.query(
+      `SELECT id, client_id, platform, facebook_page_id, instagram_business_id, account_name, access_token, token_expiration, status, api_base
+       FROM social_accounts WHERE status = 'connected'`
+    );
+    const byClient = new Map();
+    for (const a of accounts) {
+      if (!byClient.has(a.client_id)) byClient.set(a.client_id, []);
+      byClient.get(a.client_id).push(sanitizeAccount(a));
+    }
+    res.json({
+      clients: clients.map(c => ({ ...c, accounts: byClient.get(c.id) || [] })),
+    });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+  }
+});
+
+// Desconectar conta social de um cliente
+app.post('/api/social-accounts/disconnect', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const { client_id, platform } = req.body || {};
+    if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
+    if (platform) {
+      await pool.query(`DELETE FROM social_accounts WHERE client_id = $1 AND platform = $2`, [client_id, platform]);
+    } else {
+      await pool.query(`DELETE FROM social_accounts WHERE client_id = $1`, [client_id]);
+    }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+  }
+});
+
+
+
 app.get('/api/social-posts', async (req, res) => {
   try {
     await verifyUser(req);

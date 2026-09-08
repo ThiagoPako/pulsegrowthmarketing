@@ -1535,6 +1535,45 @@ export default function Clients() {
     toast.success(`${platform === 'instagram' ? 'Instagram' : 'Facebook'} desconectado`);
   };
 
+  const saveManualToken = async () => {
+    const clientId = editing?.id;
+    if (!clientId || clientId === 'new') {
+      toast.error('Salve o cliente primeiro antes de colar o token.');
+      return;
+    }
+    if (!manualToken.trim()) {
+      toast.error('Cole o token gerado no painel da Meta.');
+      return;
+    }
+    setSavingManualToken(true);
+    try {
+      const { data, error } = await invokeVpsFunction('social-accounts/manual-token', {
+        body: {
+          client_id: clientId,
+          platform: manualPlatform,
+          token: manualToken.trim(),
+        },
+      });
+      if (error || data?.error) {
+        toast.error(data?.error || error?.message || 'Erro ao salvar token');
+        return;
+      }
+      const accounts = data?.accounts || [];
+      const ig = accounts.find((a: any) => a.platform === 'instagram');
+      const fb = accounts.find((a: any) => a.platform === 'facebook');
+      setSocialAccounts(prev => ({
+        instagram: ig ? { connected: true, accountName: ig.name, username: `@${ig.username || ig.name}`, pageId: ig.pageId || '', businessId: ig.businessId || '' } : prev.instagram,
+        facebook: fb ? { connected: true, accountName: fb.name, pageId: fb.pageId || '' } : prev.facebook,
+      }));
+      setManualToken('');
+      toast.success(`✅ Token salvo — ${accounts.length} conta(s) conectada(s)!`);
+    } catch (err: any) {
+      toast.error('Erro: ' + err.message);
+    } finally {
+      setSavingManualToken(false);
+    }
+  };
+
   const renderStep1 = () => (
     <div className="space-y-5">
       <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-3">

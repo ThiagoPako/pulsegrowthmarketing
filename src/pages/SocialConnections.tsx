@@ -300,25 +300,12 @@ export default function SocialConnections() {
                           )}
                         </div>
                       </div>
-                      <div className="flex gap-1 shrink-0">
-                        <Button
-                          size="sm"
-                          variant={account ? 'outline' : 'default'}
-                          className="gap-1"
-                          disabled={oauthBusy === `${client.id}:${plat}`}
-                          onClick={() => connectViaOAuth(client, plat)}
-                        >
-                          {oauthBusy === `${client.id}:${plat}`
-                            ? <Loader2 size={14} className="animate-spin" />
-                            : <LogIn size={14} />}
-                          {account ? 'Reconectar' : 'Entrar'}
+                      {account && (
+                        <Button size="sm" variant="ghost" className="shrink-0" title="Desconectar" onClick={() => disconnect(client, plat)}>
+                          <Unlink size={14} />
                         </Button>
-                        {account && (
-                          <Button size="sm" variant="ghost" title="Desconectar" onClick={() => disconnect(client, plat)}>
-                            <Unlink size={14} />
-                          </Button>
-                        )}
-                      </div>
+                      )}
+
 
                     </div>
                   ))}

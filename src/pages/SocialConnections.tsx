@@ -310,6 +310,28 @@ export default function SocialConnections() {
 
                   <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed p-3">
                     <div className="min-w-0">
+                      <p className="text-sm font-medium">Link de autorização do cliente</p>
+                      <p className="text-xs text-muted-foreground">
+                        Gere um link e envie ao cliente para ele entrar na própria conta.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 shrink-0"
+                      disabled={linkBusy === client.id}
+                      onClick={() => generateInviteLink(client)}
+                    >
+                      {linkBusy === client.id
+                        ? <Loader2 size={14} className="animate-spin" />
+                        : <Share2 size={14} />}
+                      Gerar link
+                    </Button>
+                  </div>
+
+
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed p-3">
+                    <div className="min-w-0">
                       <p className="text-sm font-medium">Mostrar desempenho no portal</p>
                       <p className="text-xs text-muted-foreground">
                         O cliente vê alcance, seguidores e resultados das publicações.

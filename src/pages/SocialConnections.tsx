@@ -422,6 +422,35 @@ export default function SocialConnections() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!diag} onOpenChange={o => !o && setDiag(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Teste de conexão · {diag?.name}</DialogTitle>
+            <DialogDescription>
+              Resultado da verificação feita agora direto na Meta.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {diag?.checks.map((c, i) => (
+              <div key={i} className="flex items-start gap-2 rounded-lg border p-3">
+                {c.ok
+                  ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-500" />
+                  : <XCircle size={16} className="mt-0.5 shrink-0 text-destructive" />}
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{c.label}</p>
+                  {c.detail && <p className="text-xs text-muted-foreground break-words">{c.detail}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDiag(null)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
+
     </div>
   );
 }

@@ -110,6 +110,8 @@ export function AutoPostScheduleForm({ clientId, value, onChange, onAccountsLoad
             <Badge key={a.id} variant="secondary" className="gap-1 text-xs font-normal">
               <CheckCircle2 size={11} className="text-success" />
               {a.platform === 'instagram' ? '@' : ''}{a.account_name}
+              {a.api_base === 'instagram' && <span className="text-muted-foreground">· direto</span>}
+              {a.expiring_soon && <AlertTriangle size={11} className="text-warning" aria-label="Autorização expira em breve" />}
             </Badge>
           ))}
         </div>

@@ -151,6 +151,9 @@ export default function Clients() {
   const [existingSocialAccounts, setExistingSocialAccounts] = useState<any[]>([]);
   /** Indica se as chaves da Meta/Instagram já foram cadastradas em Financeiro → Integrações. */
   const [metaConfigured, setMetaConfigured] = useState(false);
+  const [manualToken, setManualToken] = useState('');
+  const [manualPlatform, setManualPlatform] = useState<'instagram' | 'facebook'>('instagram');
+  const [savingManualToken, setSavingManualToken] = useState(false);
   /** A etapa de conexão de redes sociais é sempre exibida — sem ela o botão de conectar ficava invisível. */
   const hasMetaApi = true;
 

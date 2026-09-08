@@ -5242,11 +5242,11 @@ app.post('/api/meta-oauth', async (req, res) => {
       await admin.from('social_accounts').delete().eq('client_id', client_id);
 
       for (const page of pages) {
-        await admin.from('social_accounts').insert({ client_id, platform: 'facebook', facebook_page_id: page.id, account_name: page.name, access_token: page.access_token, status: 'connected', token_expiration: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() });
+        await admin.from('social_accounts').insert({ client_id, platform: 'facebook', facebook_page_id: page.id, account_name: page.name, username: page.name, profile_picture_url: fbPagePictureUrl(page.id), access_token: page.access_token, status: 'connected', token_expiration: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() });
         connectedAccounts.push({ platform: 'facebook', name: page.name, pageId: page.id });
         if (page.instagram_business_account) {
           const ig = page.instagram_business_account;
-          await admin.from('social_accounts').insert({ client_id, platform: 'instagram', facebook_page_id: page.id, instagram_business_id: ig.id, account_name: ig.username || ig.name, access_token: page.access_token, status: 'connected', token_expiration: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() });
+          await admin.from('social_accounts').insert({ client_id, platform: 'instagram', facebook_page_id: page.id, instagram_business_id: ig.id, account_name: ig.username || ig.name, username: ig.username || ig.name, profile_picture_url: ig.profile_picture_url || null, access_token: page.access_token, status: 'connected', token_expiration: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() });
           connectedAccounts.push({ platform: 'instagram', name: ig.username || ig.name, username: ig.username, businessId: ig.id, profilePicture: ig.profile_picture_url, pageId: page.id });
         }
         await admin.from('integration_logs').insert({ client_id, platform: 'facebook', action: 'oauth_connect', status: 'success', message: `Página ${page.name} conectada via OAuth.` });

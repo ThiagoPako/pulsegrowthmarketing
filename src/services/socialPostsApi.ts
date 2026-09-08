@@ -133,3 +133,65 @@ export function suggestPublishType(contentType: string): SocialPublishType {
   if (contentType === 'carrossel' || contentType === 'carousel') return 'carousel';
   return 'feed';
 }
+
+/* ───────── Métricas do Instagram (relatório mensal) ───────── */
+
+export interface InsightPost {
+  id: string;
+  caption: string;
+  media_type: string;
+  thumbnail: string | null;
+  permalink: string | null;
+  timestamp: string | null;
+  likes: number;
+  comments: number;
+  reach: number | null;
+  saved: number | null;
+  interactions: number | null;
+}
+
+export interface ClientInsights {
+  account_name: string | null;
+  period: { since: string; until: string };
+  followers_total: number | null;
+  followers_gained: number | null;
+  media_total: number | null;
+  reach: number | null;
+  views: number | null;
+  profile_views: number | null;
+  website_clicks: number | null;
+  accounts_engaged: number | null;
+  interactions: number | null;
+  posts_count: number;
+  avg_reach_per_post: number | null;
+  reach_series: { date: string; value: number }[];
+  follower_series: { date: string; value: number }[];
+  posts: InsightPost[];
+  cached?: boolean;
+  fetched_at?: string;
+  stale_error?: string;
+}
+
+/** Métricas do período (equipe). Datas em YYYY-MM-DD. */
+export async function fetchClientInsights(
+  clientId: string,
+  since: string,
+  until: string,
+  refresh = false,
+): Promise<ClientInsights> {
+  const body: Record<string, string> = { client_id: clientId, since, until };
+  if (refresh) body.refresh = '1';
+  const { data, error } = await invokeVpsFunction('social-posts/insights', { method: 'GET', body });
+  if (error) throw new Error(error.message);
+  if (data?.error) throw new Error(data.error);
+  return data.insights as ClientInsights;
+}
+
+/** Liga/desliga a aba de desempenho no portal daquele cliente. */
+export async function setPortalInsightsEnabled(clientId: string, enabled: boolean): Promise<void> {
+  const { data, error } = await invokeVpsFunction('social-posts/portal-insights', {
+    body: { client_id: clientId, enabled },
+  });
+  if (error || data?.error) throw new Error(data?.error || error?.message || 'Erro ao salvar');
+}
+

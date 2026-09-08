@@ -5363,7 +5363,13 @@ app.post('/api/social-accounts/manual-token', async (req, res) => {
     const pages = pagesData.data || [];
     if (pages.length === 0) return res.status(400).json({ error: 'Nenhuma página do Facebook encontrada para esse token.' });
 
-    await pool.query(`DELETE FROM social_accounts WHERE client_id = $1`, [client_id]);
+    // Preserva conexão direta do Instagram (api_base='instagram'), remove apenas o que veio via Página
+    await pool.query(`DELETE FROM social_accounts WHERE client_id = $1 AND COALESCE(api_base,'facebook') = 'facebook'`, [client_id]);
+    const { rows: directIg } = await pool.query(
+      `SELECT 1 FROM social_accounts WHERE client_id = $1 AND platform = 'instagram' AND api_base = 'instagram' LIMIT 1`,
+      [client_id]
+    );
+    const hasDirectIg = directIg.length > 0;
     const connectedAccounts = [];
     for (const page of pages) {
       await pool.query(

@@ -199,7 +199,22 @@ export default function SocialConnections() {
                       </div>
                     </div>
                   ))}
+
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed p-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">Mostrar desempenho no portal</p>
+                      <p className="text-xs text-muted-foreground">
+                        O cliente vê alcance, seguidores e resultados das publicações.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={!!client.portal_insights_enabled}
+                      disabled={!ig || togglingId === client.id}
+                      onCheckedChange={v => togglePortalInsights(client, v)}
+                    />
+                  </div>
                 </CardContent>
+
               </Card>
             );
           })}

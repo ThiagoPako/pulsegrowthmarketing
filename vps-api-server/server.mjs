@@ -5308,6 +5308,8 @@ app.post('/api/meta-oauth', async (req, res) => {
          VALUES ($1,'instagram',NULL,$2,$3,$4,'connected',$5,'instagram')`,
         [client_id, igUserId, me.username || igUserId, token, new Date(Date.now() + expiresIn * 1000).toISOString()]
       );
+      await enablePortalInsights(client_id);
+
       try { await admin.from('integration_logs').insert({ client_id, platform: 'instagram', action: 'oauth_connect', status: 'success', message: `Instagram @${me.username} conectado via Login do Instagram.` }); } catch {}
 
       return res.json({
@@ -5377,7 +5379,9 @@ app.post('/api/social-accounts/manual-token', async (req, res) => {
          VALUES ($1,'instagram',NULL,$2,$3,$4,'connected',$5,'instagram')`,
         [client_id, igUserId, name, longToken, new Date(Date.now() + expiresIn * 1000).toISOString()]
       );
+      await enablePortalInsights(client_id);
       return res.json({ success: true, accounts: [{ platform: 'instagram', name, username: name, businessId: igUserId, api_base: 'instagram' }] });
+
     }
 
     // ── Facebook (token de usuário → páginas) ──
@@ -5412,7 +5416,9 @@ app.post('/api/social-accounts/manual-token', async (req, res) => {
         connectedAccounts.push({ platform: 'instagram', name: ig.username || ig.name, username: ig.username, businessId: ig.id, pageId: page.id });
       }
     }
+    await enablePortalInsights(client_id);
     return res.json({ success: true, accounts: connectedAccounts, pages_found: pages.length });
+
   } catch (error) {
     console.error('Manual token error:', error);
     res.status(500).json({ error: error.message });

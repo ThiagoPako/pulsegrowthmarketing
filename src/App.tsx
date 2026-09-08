@@ -204,6 +204,9 @@ function AppRoutes() {
     <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/politica-de-privacidade" element={<PrivacyPolicy />} />
+        <Route path="/termos-de-uso" element={<TermsOfUse />} />
+        <Route path="/exclusao-de-dados" element={<DataDeletion />} />
         <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
         <Route path="/gestao/login" element={<GestaoLogin />} />
         <Route path="/gestao" element={<RequireSocioGestor><GestaoDashboard /></RequireSocioGestor>} />

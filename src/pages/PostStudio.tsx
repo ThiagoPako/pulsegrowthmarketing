@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import {
   createScheduledPost, fetchScheduledPosts, cancelScheduledPost, publishScheduledPostNow,
-  SCHEDULED_POST_STATUS_LABELS,
-  type ConnectedSocialAccount, type PostMediaItem, type ScheduledPost,
+  fetchClientMediaLibrary, SCHEDULED_POST_STATUS_LABELS,
+  type ClientMediaAsset, type ConnectedSocialAccount, type PostMediaItem, type ScheduledPost,
   type SocialPlatformTarget, type SocialPublishType,
 } from '@/services/socialPostsApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,11 +13,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { InstagramPreview } from '@/components/social/InstagramPreview';
+import { MediaLibraryPicker } from '@/components/social/MediaLibraryPicker';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
   Images, Loader2, Plus, Trash2, ArrowUp, ArrowDown, CalendarClock, Zap, AlertTriangle, Link2, X,
+  LayoutGrid, Square, Clapperboard, CircleDashed, FolderOpen, Link as LinkIcon,
 } from 'lucide-react';
 
 interface ClientConnection {
@@ -27,14 +30,15 @@ interface ClientConnection {
   accounts: ConnectedSocialAccount[];
 }
 
-const TYPE_OPTIONS: { value: SocialPublishType; label: string; hint: string }[] = [
-  { value: 'carousel', label: 'Carrossel', hint: '2 a 10 imagens ou vídeos no mesmo post' },
-  { value: 'feed', label: 'Publicação', hint: 'Uma imagem no feed' },
-  { value: 'reels', label: 'Reels', hint: 'Um vídeo vertical' },
-  { value: 'stories', label: 'Story', hint: 'Some em 24h, aceita link' },
+const TYPE_OPTIONS: { value: SocialPublishType; label: string; hint: string; icon: typeof Square }[] = [
+  { value: 'carousel', label: 'Carrossel', hint: '2 a 10 imagens ou vídeos no mesmo post', icon: LayoutGrid },
+  { value: 'feed', label: 'Publicação', hint: 'Uma imagem no feed', icon: Square },
+  { value: 'reels', label: 'Reels', hint: 'Um vídeo vertical', icon: Clapperboard },
+  { value: 'stories', label: 'Story', hint: 'Some em 24h, aceita link', icon: CircleDashed },
 ];
 
 const emptyItem = (): PostMediaItem => ({ url: '', label: '' });
+const IS_VIDEO = /\.(mp4|mov|webm|m4v)(\?|$)/i;
 
 export default function PostStudio() {
   const [clients, setClients] = useState<ClientConnection[]>([]);
@@ -50,6 +54,8 @@ export default function PostStudio() {
   const [bulk, setBulk] = useState('');
   const [saving, setSaving] = useState(false);
   const [queue, setQueue] = useState<ScheduledPost[]>([]);
+  const [assets, setAssets] = useState<ClientMediaAsset[]>([]);
+  const [assetsLoading, setAssetsLoading] = useState(false);
 
   const loadClients = async () => {
     setLoading(true);
@@ -65,14 +71,28 @@ export default function PostStudio() {
     }
   };
 
-  const loadQueue = async () => {
+  const loadQueue = useCallback(async () => {
     try {
       setQueue(await fetchScheduledPosts(clientId ? { client_id: clientId } : undefined));
     } catch { /* fila é secundária */ }
-  };
+  }, [clientId]);
+
+  const loadAssets = useCallback(async () => {
+    if (!clientId) { setAssets([]); return; }
+    setAssetsLoading(true);
+    try {
+      setAssets(await fetchClientMediaLibrary(clientId));
+    } catch (err) {
+      toast.error('Erro ao carregar a biblioteca do cliente: ' + (err as Error).message);
+      setAssets([]);
+    } finally {
+      setAssetsLoading(false);
+    }
+  }, [clientId]);
 
   useEffect(() => { loadClients(); }, []);
-  useEffect(() => { loadQueue(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [clientId]);
+  useEffect(() => { loadQueue(); }, [loadQueue]);
+  useEffect(() => { loadAssets(); }, [loadAssets]);
 
   const client = clients.find(c => c.id === clientId) || null;
   const hasIg = !!client?.accounts.some(a => a.platform === 'instagram' && a.has_token);
@@ -89,6 +109,7 @@ export default function PostStudio() {
   const maxItems = publishType === 'carousel' ? 10 : 1;
   const visibleItems = useMemo(() => items.slice(0, maxItems), [items, maxItems]);
   const filledItems = visibleItems.filter(i => i.url.trim());
+  const selectedUrls = filledItems.map(i => i.url.trim());
 
   const updateItem = (i: number, patch: Partial<PostMediaItem>) =>
     setItems(prev => prev.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
@@ -101,6 +122,25 @@ export default function PostStudio() {
       [next[i], next[j]] = [next[j], next[i]];
       return next;
     });
+
+  /** Clique na galeria: adiciona no fim ou remove se já estiver escolhida. */
+  const toggleAsset = (asset: ClientMediaAsset) => {
+    const url = asset.url.trim();
+    setItems(prev => {
+      const current = prev.filter(i => i.url.trim());
+      const already = current.some(i => i.url.trim() === url);
+      if (already) {
+        const next = current.filter(i => i.url.trim() !== url);
+        return next.length ? next : [emptyItem()];
+      }
+      if (current.length >= maxItems) {
+        if (maxItems === 1) return [{ url, label: asset.title }];
+        toast.error(`Máximo de ${maxItems} mídias neste formato.`);
+        return prev;
+      }
+      return [...current, { url, label: asset.title }];
+    });
+  };
 
   const applyBulk = () => {
     const urls = bulk.split(/[\n,\s]+/).map(u => u.trim()).filter(u => /^https?:\/\//i.test(u));
@@ -153,9 +193,14 @@ export default function PostStudio() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-bold flex items-center gap-2"><Images className="text-primary" /> Estúdio de Postagem</h1>
-        <p className="text-sm text-muted-foreground">Monte carrosséis, publicações, reels e stories com prévia igual ao Instagram antes de publicar.</p>
+      <header className="overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-primary/10 via-card to-card p-5">
+        <h1 className="flex items-center gap-2 text-2xl font-bold">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary/15 text-primary"><Images size={18} /></span>
+          Estúdio de Postagem
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Escolha o cliente, selecione as artes e vídeos que já estão no sistema e veja a prévia igual ao Instagram antes de publicar.
+        </p>
       </header>
 
       {loading ? (
@@ -199,12 +244,30 @@ export default function PostStudio() {
 
                 <div>
                   <Label className="text-xs">Formato</Label>
-                  <Tabs value={publishType} onValueChange={v => setPublishType(v as SocialPublishType)}>
-                    <TabsList className="grid grid-cols-4 w-full">
-                      {TYPE_OPTIONS.map(o => <TabsTrigger key={o.value} value={o.value} className="text-xs">{o.label}</TabsTrigger>)}
-                    </TabsList>
-                  </Tabs>
-                  <p className="text-[11px] text-muted-foreground mt-1">{TYPE_OPTIONS.find(o => o.value === publishType)?.hint}</p>
+                  <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {TYPE_OPTIONS.map(o => {
+                      const Icon = o.icon;
+                      const active = publishType === o.value;
+                      return (
+                        <button
+                          key={o.value}
+                          type="button"
+                          onClick={() => setPublishType(o.value)}
+                          aria-pressed={active}
+                          className={cn(
+                            'flex flex-col items-center gap-1 rounded-xl border p-3 text-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                            active
+                              ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                              : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
+                          )}
+                        >
+                          <Icon size={18} />
+                          <span className="font-medium">{o.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-1 text-[11px] text-muted-foreground">{TYPE_OPTIONS.find(o => o.value === publishType)?.hint}</p>
                 </div>
 
                 {client && (
@@ -222,52 +285,91 @@ export default function PostStudio() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">
-                  2. Mídias {publishType === 'carousel' && <span className="text-xs font-normal text-muted-foreground">({filledItems.length}/10 · arraste a ordem com as setas)</span>}
+                  2. Mídias{' '}
+                  <span className="text-xs font-normal text-muted-foreground">
+                    ({filledItems.length}/{maxItems} selecionada{filledItems.length === 1 ? '' : 's'})
+                  </span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {visibleItems.map((item, i) => (
-                  <div key={i} className="rounded-lg border border-border p-2.5 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">{i + 1}</span>
-                      <Input
-                        value={item.url}
-                        onChange={e => updateItem(i, { url: e.target.value })}
-                        placeholder="https://… link direto da imagem ou vídeo"
-                        inputMode="url"
+              <CardContent>
+                <Tabs defaultValue="library">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="library" className="text-xs"><FolderOpen size={13} className="mr-1" /> Biblioteca do cliente</TabsTrigger>
+                    <TabsTrigger value="links" className="text-xs"><LinkIcon size={13} className="mr-1" /> Colar links</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="library" className="mt-3">
+                    {!clientId ? (
+                      <p className="rounded-lg border border-dashed border-border py-6 text-center text-xs text-muted-foreground">
+                        Escolha o cliente acima para ver as artes e vídeos já cadastrados.
+                      </p>
+                    ) : (
+                      <MediaLibraryPicker
+                        assets={assets}
+                        loading={assetsLoading}
+                        selectedUrls={selectedUrls}
+                        onToggle={toggleAsset}
+                        onRefresh={loadAssets}
                       />
-                      {publishType === 'carousel' && (
-                        <>
-                          <Button type="button" variant="ghost" size="icon" aria-label="Subir mídia" onClick={() => moveItem(i, -1)} disabled={i === 0}><ArrowUp size={14} /></Button>
-                          <Button type="button" variant="ghost" size="icon" aria-label="Descer mídia" onClick={() => moveItem(i, 1)} disabled={i === visibleItems.length - 1}><ArrowDown size={14} /></Button>
-                        </>
-                      )}
-                      <Button type="button" variant="ghost" size="icon" aria-label="Remover mídia" onClick={() => removeItem(i)}><Trash2 size={14} className="text-destructive" /></Button>
-                    </div>
-                    {item.url.trim() && (
-                      <div className="flex items-center gap-2">
-                        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-muted">
-                          {/\.(mp4|mov|webm|m4v)(\?|$)/i.test(item.url)
-                            ? <video src={item.url} className="h-full w-full object-cover" muted />
-                            : <img src={item.url} alt={`Mídia ${i + 1}`} className="h-full w-full object-cover" loading="lazy" />}
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="links" className="mt-3 space-y-3">
+                    {visibleItems.map((item, i) => (
+                      <div key={i} className="rounded-lg border border-border p-2.5 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">{i + 1}</span>
+                          <Input
+                            value={item.url}
+                            onChange={e => updateItem(i, { url: e.target.value })}
+                            placeholder="https://… link direto da imagem ou vídeo"
+                            inputMode="url"
+                          />
+                          <Button type="button" variant="ghost" size="icon" aria-label="Remover mídia" onClick={() => removeItem(i)}><Trash2 size={14} className="text-destructive" /></Button>
                         </div>
-                        <Input value={item.label || ''} onChange={e => updateItem(i, { label: e.target.value })} placeholder="Apelido interno (opcional)" className="h-8 text-xs" />
+                      </div>
+                    ))}
+                    {publishType === 'carousel' && visibleItems.length < 10 && (
+                      <Button type="button" variant="outline" size="sm" onClick={() => setItems(prev => [...prev, emptyItem()])}>
+                        <Plus size={14} className="mr-1" /> Adicionar campo
+                      </Button>
+                    )}
+                    {publishType === 'carousel' && (
+                      <div className="rounded-lg bg-muted/50 p-2.5 space-y-2">
+                        <Label className="text-xs">Colar vários links de uma vez</Label>
+                        <Textarea value={bulk} onChange={e => setBulk(e.target.value)} rows={3} placeholder="Um link por linha, na ordem do carrossel" className="text-xs" />
+                        <Button type="button" size="sm" variant="secondary" onClick={applyBulk}>Montar carrossel com esses links</Button>
                       </div>
                     )}
-                  </div>
-                ))}
+                  </TabsContent>
+                </Tabs>
 
-                {publishType === 'carousel' && visibleItems.length < 10 && (
-                  <Button type="button" variant="outline" size="sm" onClick={() => setItems(prev => [...prev, emptyItem()])}>
-                    <Plus size={14} className="mr-1" /> Adicionar mídia
-                  </Button>
-                )}
-
-                {publishType === 'carousel' && (
-                  <div className="rounded-lg bg-muted/50 p-2.5 space-y-2">
-                    <Label className="text-xs">Colar vários links de uma vez</Label>
-                    <Textarea value={bulk} onChange={e => setBulk(e.target.value)} rows={3} placeholder="Um link por linha, na ordem do carrossel" className="text-xs" />
-                    <Button type="button" size="sm" variant="secondary" onClick={applyBulk}>Montar carrossel com esses links</Button>
+                {filledItems.length > 0 && (
+                  <div className="mt-4 space-y-2 border-t border-border pt-3">
+                    <Label className="text-xs">Ordem da postagem</Label>
+                    {visibleItems.map((item, i) => item.url.trim() && (
+                      <div key={i} className="flex items-center gap-2 rounded-lg border border-border p-2">
+                        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">{i + 1}</span>
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
+                          {IS_VIDEO.test(item.url)
+                            ? <video src={item.url} className="h-full w-full object-cover" muted preload="metadata" />
+                            : <img src={item.url} alt={`Mídia ${i + 1}`} className="h-full w-full object-cover" loading="lazy" />}
+                        </div>
+                        <Input
+                          value={item.label || ''}
+                          onChange={e => updateItem(i, { label: e.target.value })}
+                          placeholder="Apelido interno (opcional)"
+                          className="h-8 text-xs"
+                        />
+                        {publishType === 'carousel' && (
+                          <>
+                            <Button type="button" variant="ghost" size="icon" aria-label="Subir mídia" onClick={() => moveItem(i, -1)} disabled={i === 0}><ArrowUp size={14} /></Button>
+                            <Button type="button" variant="ghost" size="icon" aria-label="Descer mídia" onClick={() => moveItem(i, 1)} disabled={i === visibleItems.length - 1}><ArrowDown size={14} /></Button>
+                          </>
+                        )}
+                        <Button type="button" variant="ghost" size="icon" aria-label="Remover mídia" onClick={() => removeItem(i)}><Trash2 size={14} className="text-destructive" /></Button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </CardContent>

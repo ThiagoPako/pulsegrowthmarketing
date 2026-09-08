@@ -168,12 +168,27 @@ export default function SocialConnectInvite() {
             return (
               <div key={plat} className="flex items-center justify-between gap-3 rounded-lg border p-4">
                 <div className="flex items-center gap-3 min-w-0">
-                  <Icon size={20} className="text-muted-foreground shrink-0" />
+                  {account?.profile_picture_url ? (
+                    <img
+                      src={account.profile_picture_url}
+                      alt={`Foto do perfil ${account.username || account.account_name}`}
+                      className="h-10 w-10 rounded-full object-cover shrink-0 border"
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0">
+                      <Icon size={20} className="text-muted-foreground" />
+                    </span>
+                  )}
                   <div className="min-w-0">
                     <p className="text-sm font-medium">{label}</p>
                     {account ? (
-                      <p className="text-xs text-primary flex items-center gap-1">
-                        <CheckCircle2 size={12} /> {account.account_name} autorizado
+                      <p className="text-xs text-primary flex items-center gap-1 truncate">
+                        <CheckCircle2 size={12} className="shrink-0" />
+                        {plat === 'instagram' && account.username
+                          ? `@${account.username.replace(/^@/, '')}`
+                          : account.account_name} autorizado
                       </p>
                     ) : (
                       <p className="text-xs text-muted-foreground">Ainda não autorizado</p>

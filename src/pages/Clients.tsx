@@ -1489,7 +1489,7 @@ export default function Clients() {
             parsedClientId = stateObj.client_id || savedClientId;
           } catch {}
 
-          const { data: result, error } = await supabase.functions.invoke('meta-oauth', {
+          const { data: result, error } = await invokeVpsFunction('meta-oauth', {
             body: {
               action: savedFlow === 'instagram' ? 'exchange_instagram_code' : 'exchange_code',
               code,

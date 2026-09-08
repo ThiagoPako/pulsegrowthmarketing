@@ -383,7 +383,41 @@ export default function SocialConnections() {
         </div>
       )}
 
+      <Dialog open={!!inviteLink} onOpenChange={o => !o && setInviteLink(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Link de autorização</DialogTitle>
+            <DialogDescription>
+              Envie este link para {inviteLink?.name}. O cliente entra na conta dele na Meta e autoriza a agência.
+              Válido até {inviteLink?.expires}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Input readOnly value={inviteLink?.url ?? ''} onFocus={e => e.currentTarget.select()} />
+            <Button
+              variant="outline"
+              className="gap-1 shrink-0"
+              onClick={async () => {
+                if (!inviteLink) return;
+                try {
+                  await navigator.clipboard.writeText(inviteLink.url);
+                  toast.success('Link copiado');
+                } catch {
+                  toast.error('Copie manualmente o link acima.');
+                }
+              }}
+            >
+              <Copy size={14} /> Copiar
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInviteLink(null)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!target} onOpenChange={o => !o && setTarget(null)}>
+
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Conectar {platform === 'instagram' ? 'Instagram' : 'Facebook'}</DialogTitle>

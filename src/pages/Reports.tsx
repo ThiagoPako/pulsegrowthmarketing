@@ -1099,12 +1099,14 @@ export default function Reports() {
       {/* KPI Cards - Captação */}
       <div>
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">📹 Captação</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
           {[
             { icon: CalendarCheck, label: 'Gravações', value: stats.realizadas, color: 'text-primary' },
             { icon: XCircle, label: 'Canceladas', value: stats.canceladas, color: 'text-destructive' },
-            { icon: Clock, label: 'Horas', value: `${stats.totalHours}h`, color: 'text-primary' },
-            { icon: TrendingUp, label: 'Média/Sessão', value: stats.avgPerSession, color: 'text-primary' },
+            { icon: Clock, label: 'Tempo gravando', value: `${stats.totalHours}h`, color: 'text-primary' },
+            { icon: Clock, label: 'Tempo de espera', value: `${stats.totalWaitMinutes} min`, color: 'text-amber-600' },
+            { icon: TrendingUp, label: 'Vídeos/Gravação', value: stats.avgVideosPerSession, color: 'text-primary' },
+            { icon: TrendingUp, label: 'Conteúdo/Sessão', value: stats.avgPerSession, color: 'text-primary' },
             { icon: Percent, label: 'Cancel.', value: `${stats.cancelRate}%`, color: 'text-destructive' },
             { icon: CheckCircle2, label: 'Entrega', value: comparison ? `${deliveryPct}%` : '—', color: deliveryPct > 100 ? 'text-green-600' : 'text-primary' },
           ].map((kpi, i) => (

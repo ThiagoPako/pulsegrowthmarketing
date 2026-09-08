@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { Clock, CheckCircle, Palette, TrendingUp, Image as ImageIcon } from 'lucide-react';
 
@@ -35,25 +36,44 @@ export default function DesignerReports() {
   const allTasks = tasksQuery.data || [];
 
   const [preset, setPreset] = useState<Preset>('month');
+  const [selectedClient, setSelectedClient] = useState<string>('all');
+  const [selectedDay, setSelectedDay] = useState<string>(''); // dia específico (opcional)
+  const [selectedMonth, setSelectedMonth] = useState<string>(''); // YYYY-MM (opcional)
   const now = new Date();
   const [from, setFrom] = useState<string>(toInput(new Date(now.getFullYear(), now.getMonth(), 1)));
   const [to, setTo] = useState<string>(toInput(now));
 
+  // Lista de clientes presentes nas tarefas (para o filtro)
+  const clientOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    allTasks.forEach(t => {
+      if (t.client_id) map.set(t.client_id, t.clients?.company_name || 'Cliente');
+    });
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [allTasks]);
+
   const range = useMemo(() => {
     const n = new Date();
+    // Dia/mês específico têm prioridade sobre os presets
+    if (selectedDay) { const d = new Date(selectedDay + 'T12:00:00'); return { from: startOfDay(d), to: endOfDay(d) }; }
+    if (selectedMonth) {
+      const [y, m] = selectedMonth.split('-').map(Number);
+      return { from: new Date(y, m - 1, 1), to: endOfDay(new Date(y, m, 0)) };
+    }
     if (preset === 'today') return { from: startOfDay(n), to: endOfDay(n) };
     if (preset === 'week') return { from: startOfWeek(n), to: endOfDay(n) };
     if (preset === 'month') return { from: new Date(n.getFullYear(), n.getMonth(), 1), to: endOfDay(n) };
     if (preset === 'all') return { from: new Date(2000, 0, 1), to: endOfDay(n) };
-    return { from: startOfDay(new Date(from)), to: endOfDay(new Date(to)) };
-  }, [preset, from, to]);
+    return { from: startOfDay(new Date(from + 'T12:00:00')), to: endOfDay(new Date(to + 'T12:00:00')) };
+  }, [preset, from, to, selectedDay, selectedMonth]);
 
   const tasks = useMemo(() => {
     return allTasks.filter(t => {
+      if (selectedClient !== 'all' && t.client_id !== selectedClient) return false;
       const ref = new Date(t.completed_at || t.updated_at || t.created_at);
       return ref >= range.from && ref <= range.to;
     });
-  }, [allTasks, range]);
+  }, [allTasks, range, selectedClient]);
 
   const stats = useMemo(() => {
     const total = tasks.length;
@@ -139,8 +159,33 @@ export default function DesignerReports() {
               </div>
             </div>
           )}
+          <div className="flex flex-wrap gap-3 items-end border-t pt-3">
+            <div className="min-w-[200px]">
+              <Label className="text-xs">Cliente</Label>
+              <Select value={selectedClient} onValueChange={setSelectedClient}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Todos os clientes" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os clientes</SelectItem>
+                  {clientOptions.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Dia específico</Label>
+              <Input type="date" value={selectedDay} onChange={e => { setSelectedDay(e.target.value); if (e.target.value) setSelectedMonth(''); }} className="w-40 h-9" />
+            </div>
+            <div>
+              <Label className="text-xs">Mês</Label>
+              <Input type="month" value={selectedMonth} onChange={e => { setSelectedMonth(e.target.value); if (e.target.value) setSelectedDay(''); }} className="w-40 h-9" />
+            </div>
+            {(selectedDay || selectedMonth || selectedClient !== 'all') && (
+              <Button size="sm" variant="ghost" onClick={() => { setSelectedDay(''); setSelectedMonth(''); setSelectedClient('all'); }}>Limpar</Button>
+            )}
+          </div>
           <p className="text-xs text-muted-foreground">
             Período: {range.from.toLocaleDateString('pt-BR')} → {range.to.toLocaleDateString('pt-BR')}
+            {selectedClient !== 'all' && ` · Cliente: ${clientOptions.find(([id]) => id === selectedClient)?.[1] || ''}`}
+            {' · '}<span className="font-semibold text-foreground">{stats.deliveredArts} arte(s) entregue(s)</span>
           </p>
         </CardContent>
       </Card>

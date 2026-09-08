@@ -11,7 +11,7 @@ interface DeletionRequest {
   created_at: string;
 }
 
-const API_BASE = (import.meta.env.VITE_VPS_API_URL as string | undefined) || '/api';
+const API_BASE = 'https://agenciapulse.tech/api';
 
 /**
  * Página pública exigida pela Meta (Data Deletion Instructions URL).

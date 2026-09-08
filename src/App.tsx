@@ -36,6 +36,7 @@ const CostByContentType = lazy(() => import("@/pages/CostByContentType"));
 const InternalReports = lazy(() => import("@/pages/InternalReports"));
 const SocialMediaDeliveries = lazy(() => import("@/pages/SocialMediaDeliveries"));
 const SocialConnections = lazy(() => import("@/pages/SocialConnections"));
+const PostStudio = lazy(() => import("@/pages/PostStudio"));
 const ContentKanban = lazy(() => import("@/pages/ContentKanban"));
 const EditorDashboard = lazy(() => import("@/pages/EditorDashboard"));
 const EditorKanban = lazy(() => import("@/pages/EditorKanban"));
@@ -247,6 +248,7 @@ function AppRoutes() {
 
         <Route path="/entregas-social" element={<ProtectedRoute><SocialMediaDeliveries /></ProtectedRoute>} />
         <Route path="/conexoes-sociais" element={<ProtectedRoute><SocialConnections /></ProtectedRoute>} />
+        <Route path="/estudio-postagem" element={<ProtectedRoute><PostStudio /></ProtectedRoute>} />
         <Route path="/conteudo" element={<ProtectedRoute><ContentKanban /></ProtectedRoute>} />
         <Route path="/edicao" element={<ProtectedRoute><EditorDashboard /></ProtectedRoute>} />
         <Route path="/edicao/kanban" element={<ProtectedRoute><EditorKanban /></ProtectedRoute>} />

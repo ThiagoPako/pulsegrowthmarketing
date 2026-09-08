@@ -477,8 +477,11 @@ export default function SocialMediaDeliveries() {
       message: `Seu conteúdo "${schedulingItem.title}" foi agendado para ${schedDate.split('-').reverse().join('/')}${schedTime ? ` às ${schedTime}` : ''}.`,
       type: 'info',
     } as any);
-    toast.success('Conteúdo agendado para postagem');
+    toast.success(autoPost.enabled ? 'Postagem automática agendada! O sistema publica sozinho no horário.' : 'Conteúdo agendado para postagem');
     setScheduleDialogOpen(false); setSchedulingItem(null); fetchData();
+    } finally {
+      setSchedSaving(false);
+    }
   };
 
   const handleMarkPosted = async (id: string) => {

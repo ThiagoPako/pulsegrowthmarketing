@@ -6107,9 +6107,12 @@ app.get('/api/social-posts/accounts-overview', async (req, res) => {
        FROM clients WHERE COALESCE(status,'ativo') <> 'inativo' ORDER BY company_name`
     );
     const { rows: accounts } = await pool.query(
-      `SELECT id, client_id, platform, facebook_page_id, instagram_business_id, account_name, access_token, token_expiration, status, api_base
+      `SELECT id, client_id, platform, facebook_page_id, instagram_business_id, account_name, username, profile_picture_url, access_token, token_expiration, status, api_base
        FROM social_accounts WHERE status = 'connected'`
     );
+    // Preenche @usuário/foto de contas conectadas antes dessa melhoria (melhor esforço, sem travar a lista)
+    const missing = accounts.filter(a => !a.profile_picture_url);
+    await Promise.all(missing.slice(0, 20).map(a => refreshAccountProfile(a)));
     const byClient = new Map();
     for (const a of accounts) {
       if (!byClient.has(a.client_id)) byClient.set(a.client_id, []);

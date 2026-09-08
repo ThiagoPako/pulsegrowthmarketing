@@ -9,6 +9,9 @@ import { CityProvider } from "@/contexts/CityContext";
 import Layout from "@/components/Layout";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Login from "@/pages/Login";
+import PrivacyPolicy from "@/pages/legal/PrivacyPolicy";
+import TermsOfUse from "@/pages/legal/TermsOfUse";
+import DataDeletion from "@/pages/legal/DataDeletion";
 
 
 // Lazy-loaded pages for code splitting

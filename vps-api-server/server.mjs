@@ -5428,8 +5428,10 @@ app.post('/api/social-accounts/manual-token', async (req, res) => {
 // ─── 9. Meta Publish ────────────────────────────────────────
 async function fetchMetaWithRetry(url, options, retries = 3) {
   for (let attempt = 0; attempt < retries; attempt++) {
-    await new Promise(r => setTimeout(r, 200));
+    // Sem espera na primeira chamada — só espaça entre retentativas.
+    if (attempt > 0) await new Promise(r => setTimeout(r, 200));
     const response = await fetch(url, options);
+
     if (response.ok) return response;
     const body = await response.text();
     if (response.status === 429 || body.includes('too many calls') || response.status >= 500) {
@@ -5467,9 +5469,8 @@ app.post('/api/meta-publish', async (req, res) => {
       const cr = await fetchMetaWithRetry(`${META_API_BASE}/${igBusinessId}/media?${cp}`, { method: 'POST' });
       const cd = await cr.json();
       if (!cd.id) throw new Error('Failed to create container');
-      let ready = false;
-      for (let i = 0; i < 30; i++) { await new Promise(r => setTimeout(r, 2000)); const sr = await fetchMetaWithRetry(`${META_API_BASE}/${cd.id}?fields=status_code&access_token=${pageToken}`, { method: 'GET' }); const sd = await sr.json(); if (sd.status_code === 'FINISHED') { ready = true; break; } if (sd.status_code === 'ERROR') throw new Error('Media processing failed'); }
-      if (!ready) throw new Error('Media processing timed out');
+      await waitForIgContainer(cd.id, pageToken, 30, META_API_BASE);
+
       result = await publishIgContainer(META_API_BASE, igBusinessId, cd.id, pageToken);
 
     } else if (publish_type === 'stories') {
@@ -5478,7 +5479,7 @@ app.post('/api/meta-publish', async (req, res) => {
       if (isVideo) cp.set('video_url', media_url); else cp.set('image_url', media_url);
       const cr = await fetchMetaWithRetry(`${META_API_BASE}/${igBusinessId}/media?${cp}`, { method: 'POST' });
       const cd = await cr.json();
-      if (isVideo) for (let i = 0; i < 20; i++) { await new Promise(r => setTimeout(r, 2000)); const sr = await fetchMetaWithRetry(`${META_API_BASE}/${cd.id}?fields=status_code&access_token=${pageToken}`, { method: 'GET' }); const sd = await sr.json(); if (sd.status_code === 'FINISHED') break; if (sd.status_code === 'ERROR') throw new Error('Story video failed'); }
+      if (isVideo) await waitForIgContainer(cd.id, pageToken, 20, META_API_BASE);
       result = await publishIgContainer(META_API_BASE, igBusinessId, cd.id, pageToken);
 
     }
@@ -5700,13 +5701,22 @@ app.post('/api/social-connect/:token/complete', async (req, res) => {
 });
 
 
+/**
+ * Aguarda o container ficar pronto. Faz a primeira checagem quase imediata e usa
+ * backoff curto (250ms → 2s), em vez de dormir 2s fixos antes de cada tentativa.
+ * `maxTries` é mantido por compatibilidade e vira um orçamento de tempo (~2s por tentativa).
+ */
 async function waitForIgContainer(containerId, token, maxTries = 30, base = META_API_BASE) {
-  for (let i = 0; i < maxTries; i++) {
-    await new Promise(r => setTimeout(r, 2000));
+  const deadline = Date.now() + maxTries * 2000;
+  let delay = 250;
+  for (;;) {
     const sr = await fetchMetaWithRetry(`${base}/${containerId}?fields=status_code,status&access_token=${token}`, { method: 'GET' });
     const sd = await sr.json();
     if (sd.status_code === 'FINISHED') return true;
     if (sd.status_code === 'ERROR' || sd.status_code === 'EXPIRED') throw new Error(`Meta recusou a mídia (${sd.status || sd.status_code}). Verifique formato/tamanho do arquivo.`);
+    if (Date.now() >= deadline) break;
+    await new Promise(r => setTimeout(r, delay));
+    delay = Math.min(delay * 2, 2000);
   }
   throw new Error('Meta demorou demais para processar a mídia (timeout).');
 }
@@ -5714,10 +5724,12 @@ async function waitForIgContainer(containerId, token, maxTries = 30, base = META
 /**
  * Publica um container já criado. A Meta às vezes devolve "Media ID is not available"
  * (código 9007 / subcódigo 2207027) mesmo depois do status FINISHED, porque o
- * processamento interno ainda está terminando. Nesse caso tentamos de novo.
+ * processamento interno ainda está terminando. Nesse caso tentamos de novo com
+ * espera curta e crescente (500ms → 4s) para publicar o quanto antes.
  */
 async function publishIgContainer(base, igId, containerId, token, maxTries = 12) {
   let last = null;
+  let delay = 500;
   for (let i = 0; i < maxTries; i++) {
     const r = await fetchMetaWithRetry(`${base}/${igId}/media_publish?creation_id=${containerId}&access_token=${token}`, { method: 'POST' });
     const d = await r.json();
@@ -5726,10 +5738,12 @@ async function publishIgContainer(base, igId, containerId, token, maxTries = 12)
     const err = d && d.error;
     const transient = err && (err.code === 9007 || err.error_subcode === 2207027 || err.code === 4 || err.code === 2);
     if (!transient) return d;
-    await new Promise(res => setTimeout(res, 5000));
+    await new Promise(res => setTimeout(res, delay));
+    delay = Math.min(delay * 2, 4000);
   }
   return last;
 }
+
 
 
 const IS_VIDEO_RE = /\.(mp4|mov|webm|m4v)(\?|$)/i;
@@ -5837,8 +5851,8 @@ async function publishToClientAccount(account, post) {
   if (post.publish_type === 'carousel') {
     if (media.length < 2) throw new Error('Carrossel precisa de pelo menos 2 mídias.');
     if (media.length > 10) throw new Error('Carrossel aceita no máximo 10 mídias.');
-    const childIds = [];
-    for (const item of media) {
+    // Cria todos os filhos em paralelo (mantendo a ordem) — antes era um de cada vez.
+    const childIds = await Promise.all(media.map(async (item) => {
       const childVideo = IS_VIDEO_RE.test(item.url);
       const p = new URLSearchParams({ access_token: token, is_carousel_item: 'true' });
       if (childVideo) { p.set('media_type', 'VIDEO'); p.set('video_url', item.url); }
@@ -5847,8 +5861,9 @@ async function publishToClientAccount(account, post) {
       const d = await r.json();
       if (!d.id) throw new Error('Meta recusou uma mídia do carrossel: ' + JSON.stringify(d));
       if (childVideo) await waitForIgContainer(d.id, token, 30, IG_BASE);
-      childIds.push(d.id);
-    }
+      return d.id;
+    }));
+
     const pp = new URLSearchParams({ access_token: token, media_type: 'CAROUSEL', children: childIds.join(',') });
     if (caption) pp.set('caption', caption);
     const pr = await fetchMetaWithRetry(`${IG_BASE}/${igId}/media?${pp}`, { method: 'POST' });
@@ -6005,7 +6020,7 @@ async function processDueScheduledPosts() {
     socialPostWorkerBusy = false;
   }
 }
-setInterval(processDueScheduledPosts, 60_000);
+setInterval(processDueScheduledPosts, 15_000);
 
 // Renova tokens do Instagram (login direto) a cada 24h; tokens longos duram 60 dias
 // e só podem ser renovados quando têm mais de 24h de vida e faltam menos de 60 dias.

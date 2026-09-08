@@ -277,6 +277,16 @@ export function PortalInsightsTab({ clientId, clientColor, clientName = 'Cliente
             ))}
           </div>
           <InsightDetailDialog metric={selectedMetric} onClose={() => setSelectedMetric(null)} />
+          <PortalInsightsReport
+            key={`${period.since}-${period.until}`}
+            open={reportOpen}
+            onOpenChange={setReportOpen}
+            clientName={clientName}
+            accountName={data.account_name}
+            period={period}
+            metrics={cards.map(({ id, label, value }) => ({ id, label, value }))}
+            data={data}
+          />
         </>
       )}
     </div>

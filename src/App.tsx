@@ -35,6 +35,7 @@ const ReportsHub = lazy(() => import("@/pages/ReportsHub"));
 const CostByContentType = lazy(() => import("@/pages/CostByContentType"));
 const InternalReports = lazy(() => import("@/pages/InternalReports"));
 const SocialMediaDeliveries = lazy(() => import("@/pages/SocialMediaDeliveries"));
+const SocialConnections = lazy(() => import("@/pages/SocialConnections"));
 const ContentKanban = lazy(() => import("@/pages/ContentKanban"));
 const EditorDashboard = lazy(() => import("@/pages/EditorDashboard"));
 const EditorKanban = lazy(() => import("@/pages/EditorKanban"));

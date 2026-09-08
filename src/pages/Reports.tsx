@@ -234,9 +234,12 @@ export default function Reports() {
     const totalContent = totalReels + totalCreatives + totalStories + totalArts + totalExtras;
     const avgPerSession = realizadas.length > 0 ? (totalContent / realizadas.length).toFixed(1) : '0';
 
-    // Hours dedicated (sessions × duration)
-    const totalMinutes = realizadas.length * recDuration;
+    // Hours dedicated: tempo real medido quando disponível; senão duração padrão
+    const measured = realizadas.filter(r => Number((r as any).recording_duration_seconds || 0) > 0);
+    const measuredMinutes = measured.reduce((a, r) => a + Number((r as any).recording_duration_seconds || 0) / 60, 0);
+    const totalMinutes = Math.round(measuredMinutes + (realizadas.length - measured.length) * recDuration);
     const totalHours = (totalMinutes / 60).toFixed(1);
+    const avgVideosPerSession = realizadas.length > 0 ? (totalVideos / realizadas.length).toFixed(1) : '0';
 
     // Wait time stats
     const totalWaitSeconds = filteredWaitLogs.reduce((a, w) => a + (w.wait_duration_seconds || 0), 0);
@@ -246,7 +249,7 @@ export default function Reports() {
     return {
       realizadas: realizadas.length, canceladas: canceladas.length, encaixes: encaixes.length, extras: extras.length,
       totalVideos, totalReels, totalCreatives, totalStories, totalArts, totalExtras, cancelRate,
-      totalContent, avgPerSession, totalHours, totalMinutes,
+      totalContent, avgPerSession, avgVideosPerSession, totalHours, totalMinutes,
       totalWaitSeconds, totalWaitMinutes, waitCount,
       socialReelsPosted, socialCriativosPosted, socialStoriesPosted, socialArtesDelivered, totalPosted, totalSocialDelivered,
     };

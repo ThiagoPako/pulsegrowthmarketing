@@ -19,7 +19,8 @@ interface DeliveryReport {
 const DEFAULT_DELIVERY_TEMPLATE = `Esse mês foi incrível e fizemos muita coisa juntos! 💪
 
 Estivemos juntos durante *{horas_gravacao}h de gravação* em {sessoes} sessão(ões) 📹
-Produzimos *{videos} vídeos* para sua marca 🎬
+Produzimos *{videos} vídeos* para sua marca 🎬 (média de {media_videos} por gravação)
+Nossa equipe aguardou *{tempo_espera} min* para gravar no seu tempo ⏳
 Publicamos *{reels} reels* no seu perfil 🎥
 Estivemos presentes nos stories com *{stories} publicações* 📱
 Criamos *{artes} artes* para seus canais 🎨

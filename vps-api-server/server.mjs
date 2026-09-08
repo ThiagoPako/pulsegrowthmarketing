@@ -5304,9 +5304,9 @@ app.post('/api/meta-oauth', async (req, res) => {
       // Substitui só a conta de Instagram; mantém Facebook se existir
       await pool.query(`DELETE FROM social_accounts WHERE client_id = $1 AND platform = 'instagram'`, [client_id]);
       await pool.query(
-        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, access_token, status, token_expiration, api_base)
-         VALUES ($1,'instagram',NULL,$2,$3,$4,'connected',$5,'instagram')`,
-        [client_id, igUserId, me.username || igUserId, token, new Date(Date.now() + expiresIn * 1000).toISOString()]
+        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, username, profile_picture_url, access_token, status, token_expiration, api_base)
+         VALUES ($1,'instagram',NULL,$2,$3,$4,$5,$6,'connected',$7,'instagram')`,
+        [client_id, igUserId, me.username || igUserId, me.username || null, me.profile_picture_url || null, token, new Date(Date.now() + expiresIn * 1000).toISOString()]
       );
       await enablePortalInsights(client_id);
 
@@ -5375,9 +5375,9 @@ app.post('/api/social-accounts/manual-token', async (req, res) => {
       const name = me.username || account_name || igUserId;
       await pool.query(`DELETE FROM social_accounts WHERE client_id = $1 AND platform = 'instagram'`, [client_id]);
       await pool.query(
-        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, access_token, status, token_expiration, api_base)
-         VALUES ($1,'instagram',NULL,$2,$3,$4,'connected',$5,'instagram')`,
-        [client_id, igUserId, name, longToken, new Date(Date.now() + expiresIn * 1000).toISOString()]
+        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, username, profile_picture_url, access_token, status, token_expiration, api_base)
+         VALUES ($1,'instagram',NULL,$2,$3,$4,$5,$6,'connected',$7,'instagram')`,
+        [client_id, igUserId, name, me.username || null, me.profile_picture_url || null, longToken, new Date(Date.now() + expiresIn * 1000).toISOString()]
       );
       await enablePortalInsights(client_id);
       return res.json({ success: true, accounts: [{ platform: 'instagram', name, username: name, businessId: igUserId, api_base: 'instagram' }] });
@@ -5401,17 +5401,17 @@ app.post('/api/social-accounts/manual-token', async (req, res) => {
     const connectedAccounts = [];
     for (const page of pages) {
       await pool.query(
-        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, account_name, access_token, status, token_expiration, api_base)
-         VALUES ($1,'facebook',$2,$3,$4,'connected',$5,'facebook')`,
-        [client_id, page.id, page.name, page.access_token, new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()]
+        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, account_name, username, profile_picture_url, access_token, status, token_expiration, api_base)
+         VALUES ($1,'facebook',$2,$3,$4,$5,$6,'connected',$7,'facebook')`,
+        [client_id, page.id, page.name, page.name, fbPagePictureUrl(page.id), page.access_token, new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()]
       );
       connectedAccounts.push({ platform: 'facebook', name: page.name, pageId: page.id });
       if (page.instagram_business_account && !hasDirectIg) {
         const ig = page.instagram_business_account;
         await pool.query(
-          `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, access_token, status, token_expiration, api_base)
-           VALUES ($1,'instagram',$2,$3,$4,$5,'connected',$6,'facebook')`,
-          [client_id, page.id, ig.id, ig.username || ig.name, page.access_token, new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()]
+          `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, username, profile_picture_url, access_token, status, token_expiration, api_base)
+           VALUES ($1,'instagram',$2,$3,$4,$5,$6,$7,'connected',$8,'facebook')`,
+          [client_id, page.id, ig.id, ig.username || ig.name, ig.username || null, ig.profile_picture_url || null, page.access_token, new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()]
         );
         connectedAccounts.push({ platform: 'instagram', name: ig.username || ig.name, username: ig.username, businessId: ig.id, pageId: page.id });
       }

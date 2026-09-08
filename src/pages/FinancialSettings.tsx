@@ -32,8 +32,10 @@ const PAYMENT_DATA_VARS = [
 ];
 
 const DELIVERY_REPORT_VARS = [
-  { var: '{horas_gravacao}', desc: 'Total de horas gravadas' },
+  { var: '{horas_gravacao}', desc: 'Total de horas gravadas (tempo real medido)' },
   { var: '{sessoes}', desc: 'Número de sessões de gravação' },
+  { var: '{tempo_espera}', desc: 'Minutos de espera pelo cliente' },
+  { var: '{media_videos}', desc: 'Média de vídeos por gravação' },
   { var: '{videos}', desc: 'Vídeos produzidos' },
   { var: '{reels}', desc: 'Reels publicados' },
   { var: '{stories}', desc: 'Stories publicados' },

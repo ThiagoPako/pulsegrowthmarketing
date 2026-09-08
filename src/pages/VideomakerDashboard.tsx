@@ -125,38 +125,25 @@ export default function VideomakerDashboard() {
   }, [waitingStartedAt]);
 
   const handleStartWaiting = async (rec: Recording) => {
-
-    const logId = crypto.randomUUID();
-    const now = new Date();
-    const { error } = await supabase.from('recording_wait_logs').insert({
-      id: logId,
-      recording_id: rec.id,
-      videomaker_id: vmId,
-      client_id: rec.clientId,
-      started_at: now.toISOString(),
-    } as any);
-    if (error) {
-      toast.error('Erro ao registrar espera');
-      console.error(error);
-      return;
-    }
+    // Cronômetro local inicia sempre; persistência defensiva via recordingWait
+    const session = await startWaitSession({ recordingId: rec.id, videomakerId: vmId, clientId: rec.clientId });
     setWaitingRecordingId(rec.id);
-    setWaitingLogId(logId);
-    setWaitingStartedAt(now);
-    setWaitingElapsed(0);
+    setWaitingLogId(session.logId);
+    setWaitingStartedAt(new Date(session.startedAt));
+    setWaitingElapsed(waitElapsedSeconds(session));
     toast.info(`Aguardando cliente ${getClientName(rec.clientId, rec)}...`, { icon: '⏳' });
   };
 
   const handleStopWaiting = async () => {
-    if (!waitingLogId || !waitingStartedAt) return;
-    const durationSec = Math.floor((Date.now() - waitingStartedAt.getTime()) / 1000);
-    await supabase.from('recording_wait_logs').update({
-      ended_at: new Date().toISOString(),
-      wait_duration_seconds: durationSec,
-    } as any).eq('id', waitingLogId);
-    const mins = Math.floor(durationSec / 60);
-    const secs = durationSec % 60;
-    toast.success(`Espera encerrada: ${mins}m ${secs}s registrados`);
+    if (!waitingRecordingId || !waitingStartedAt) return;
+    const session = loadWaitSession(waitingRecordingId);
+    if (!session) {
+      setWaitingRecordingId(null); setWaitingLogId(null); setWaitingStartedAt(null); setWaitingElapsed(0);
+      return;
+    }
+    const { seconds, persisted } = await stopWaitSession(session);
+    if (persisted) toast.success(`Espera encerrada: ${formatWaitDuration(seconds)} registrados`);
+    else toast.warning(`Espera de ${formatWaitDuration(seconds)} — não foi possível salvar no servidor`);
     setWaitingRecordingId(null);
     setWaitingLogId(null);
     setWaitingStartedAt(null);

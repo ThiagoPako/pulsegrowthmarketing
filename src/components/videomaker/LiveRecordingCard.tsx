@@ -1,10 +1,17 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Square, Clock, Video, FileText, Zap, Rocket, Hourglass, Play, RotateCcw, Coffee } from 'lucide-react';
+import { Clock, Video, FileText, Zap, Rocket, Hourglass, Play, RotateCcw, Coffee } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { supabase } from '@/lib/vpsDb';
 import { toast } from 'sonner';
+import {
+  loadWaitSession,
+  startWaitSession,
+  stopWaitSession,
+  waitElapsedSeconds,
+  formatWaitDuration,
+  type WaitSession,
+} from '@/lib/recordingWait';
 
 interface LiveRecordingCardProps {
   clientName: string;
@@ -38,12 +45,14 @@ export default function LiveRecordingCard({
   const [elapsed, setElapsed] = useState(0);
   const [isLunchBreak, setIsLunchBreak] = useState(false);
   const [lunchStartedAt, setLunchStartedAt] = useState<Date | null>(null);
-  const [isWaiting, setIsWaiting] = useState(false);
-  const [waitLogId, setWaitLogId] = useState<string | null>(null);
-  const [waitStartedAt, setWaitStartedAt] = useState<Date | null>(null);
-  const [waitElapsed, setWaitElapsed] = useState(0);
+  // Sessão de espera restaurada do localStorage (sobrevive a re-render/reload)
+  const [waitSession, setWaitSession] = useState<WaitSession | null>(() => loadWaitSession(recordingId));
+  const [waitBusy, setWaitBusy] = useState(false);
+  const [waitElapsed, setWaitElapsed] = useState(() => waitElapsedSeconds(loadWaitSession(recordingId)));
   const [totalWaitSeconds, setTotalWaitSeconds] = useState(0);
   const [totalLunchSeconds, setTotalLunchSeconds] = useState(0);
+  const isWaiting = !!waitSession;
+  const waitStartedAt = waitSession ? new Date(waitSession.startedAt) : null;
 
   const totalSeconds = recordingDurationMinutes * 60;
 

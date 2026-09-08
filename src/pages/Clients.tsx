@@ -1430,7 +1430,7 @@ export default function Clients() {
                   parsedClientId = stateObj.client_id || clientId;
                 } catch {}
 
-                const { data: result, error: exchangeError } = await supabase.functions.invoke('meta-oauth', {
+                const { data: result, error: exchangeError } = await invokeVpsFunction('meta-oauth', {
                   body: {
                     action: exchangeAction,
                     code,

@@ -1389,7 +1389,7 @@ export default function Clients() {
     try {
       const redirectUri = `${window.location.origin}/`;
       
-      const { data, error } = await supabase.functions.invoke('meta-oauth', {
+      const { data, error } = await invokeVpsFunction('meta-oauth', {
         body: {
           action: flow === 'instagram' ? 'get_instagram_oauth_url' : 'get_oauth_url',
           client_id: clientId,

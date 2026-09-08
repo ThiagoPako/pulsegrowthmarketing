@@ -32,6 +32,8 @@ export default function SocialConnections() {
   const [token, setToken] = useState('');
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [oauthBusy, setOauthBusy] = useState<string | null>(null);
+
 
   /** Liga/desliga a aba de desempenho no portal daquele cliente. */
   const togglePortalInsights = async (client: ClientConnection, enabled: boolean) => {

@@ -87,6 +87,81 @@ export default function SocialConnections() {
     setToken('');
   };
 
+  /**
+   * Login oficial pela Meta: abre a janela de autorização do Instagram/Facebook,
+   * espera o retorno com o `code` e troca por token no backend da VPS.
+   * Nenhum token passa pelo navegador — a troca acontece só no servidor.
+   */
+  const connectViaOAuth = async (client: ClientConnection, plat: Platform) => {
+    const busyKey = `${client.id}:${plat}`;
+    setOauthBusy(busyKey);
+    const redirectUri = `${window.location.origin}/`;
+    try {
+      const { data, error } = await invokeVpsFunction('meta-oauth', {
+        body: {
+          action: plat === 'instagram' ? 'get_instagram_oauth_url' : 'get_oauth_url',
+          client_id: client.id,
+          redirect_uri: redirectUri,
+        },
+      });
+      if (error || data?.error || !data?.oauth_url) {
+        throw new Error(data?.error || error?.message || 'Configure o App da Meta em Configurações → Integração Meta.');
+      }
+
+      const popup = window.open(data.oauth_url, 'meta_oauth', 'width=600,height=760,scrollbars=yes');
+      if (!popup) throw new Error('Permita janelas pop-up para concluir o login.');
+
+      const code = await new Promise<string>((resolve, reject) => {
+        const timer = window.setInterval(() => {
+          try {
+            if (popup.closed) {
+              window.clearInterval(timer);
+              reject(new Error('Janela de login fechada antes de concluir.'));
+              return;
+            }
+            // Só conseguimos ler quando a Meta devolveu para o nosso domínio.
+            const url = popup.location.href;
+            if (!url.startsWith(window.location.origin)) return;
+            const params = new URLSearchParams(popup.location.search);
+            const returnedCode = params.get('code');
+            const denied = params.get('error') || params.get('error_reason');
+            if (returnedCode) {
+              window.clearInterval(timer);
+              popup.close();
+              resolve(returnedCode);
+            } else if (denied) {
+              window.clearInterval(timer);
+              popup.close();
+              reject(new Error('Autorização recusada pelo usuário.'));
+            }
+          } catch {
+            /* enquanto está no domínio da Meta a leitura é bloqueada — apenas aguarda */
+          }
+        }, 600);
+      });
+
+      toast.info('Conectando conta…');
+      const { data: result, error: exchangeError } = await invokeVpsFunction('meta-oauth', {
+        body: {
+          action: plat === 'instagram' ? 'exchange_instagram_code' : 'exchange_code',
+          code,
+          redirect_uri: redirectUri,
+          client_id: client.id,
+        },
+      });
+      if (exchangeError || result?.error) {
+        throw new Error(result?.error || exchangeError?.message || 'Falha ao concluir a conexão.');
+      }
+      toast.success(`Conectado: ${(result?.accounts ?? []).length} conta(s)`);
+      await load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setOauthBusy(null);
+    }
+  };
+
+
   const saveToken = async () => {
     if (!target) return;
     if (!token.trim()) { toast.error('Cole o token gerado no painel da Meta.'); return; }

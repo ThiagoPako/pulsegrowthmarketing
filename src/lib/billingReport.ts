@@ -19,7 +19,8 @@ interface DeliveryReport {
 const DEFAULT_DELIVERY_TEMPLATE = `Esse mês foi incrível e fizemos muita coisa juntos! 💪
 
 Estivemos juntos durante *{horas_gravacao}h de gravação* em {sessoes} sessão(ões) 📹
-Produzimos *{videos} vídeos* para sua marca 🎬
+Produzimos *{videos} vídeos* para sua marca 🎬 (média de {media_videos} por gravação)
+Nossa equipe aguardou *{tempo_espera} min* para gravar no seu tempo ⏳
 Publicamos *{reels} reels* no seu perfil 🎥
 Estivemos presentes nos stories com *{stories} publicações* 📱
 Criamos *{artes} artes* para seus canais 🎨
@@ -73,6 +74,7 @@ export async function generateDeliveryReport(
   const socialDeliveries = socialResult.data || [];
 
   let gravacoes = 0, videos = 0, reels = 0, stories = 0, artes = 0, criativos = 0, extras = 0;
+  let realRecordingSeconds = 0, sessionsWithDuration = 0, waitSecondsFromRecords = 0;
 
   deliveries.forEach(d => {
     gravacoes += 1;
@@ -82,14 +84,34 @@ export async function generateDeliveryReport(
     artes += d.arts_produced || 0;
     criativos += d.creatives_produced || 0;
     extras += d.extras_produced || 0;
+    const dur = Number((d as any).recording_duration_seconds || 0);
+    if (dur > 0) { realRecordingSeconds += dur; sessionsWithDuration += 1; }
+    waitSecondsFromRecords += Number((d as any).wait_duration_seconds || 0);
   });
+
+  // Tempo de espera: soma dos logs do período (fonte primária) ou dos registros de entrega
+  let waitSeconds = waitSecondsFromRecords;
+  try {
+    const { data: waitLogs } = await supabase
+      .from('recording_wait_logs')
+      .select('wait_duration_seconds, started_at')
+      .eq('client_id', clientId)
+      .gte('started_at', `${monthStart}T00:00:00`)
+      .lte('started_at', `${monthEnd}T23:59:59`);
+    const fromLogs = (waitLogs || []).reduce((a: number, w: any) => a + Number(w.wait_duration_seconds || 0), 0);
+    waitSeconds = Math.max(waitSeconds, fromLogs);
+  } catch { /* tabela pode não existir em instâncias antigas */ }
 
   const socialReels = socialDeliveries.filter(d => d.content_type === 'reels' && d.status === 'postado').length;
   const socialStories = socialDeliveries.filter(d => d.content_type === 'story' && d.status === 'postado').length;
 
   const totalReels = Math.max(socialReels, reels);
   const totalStories = Math.max(socialStories, stories);
-  const recordingHours = gravacoes * (plan?.recording_hours || 2);
+  // Horas: tempo real medido quando existir; sessões sem medição usam a duração do plano
+  const plannedHours = (gravacoes - sessionsWithDuration) * (plan?.recording_hours || 2);
+  const recordingHours = Math.round((realRecordingSeconds / 3600 + plannedHours) * 10) / 10;
+  const waitMinutes = Math.round(waitSeconds / 60);
+  const mediaVideos = gravacoes > 0 ? Math.round((videos / gravacoes) * 10) / 10 : 0;
 
   // If no deliveries at all, return empty
   if (gravacoes === 0 && videos === 0 && totalReels === 0 && totalStories === 0 && artes === 0 && criativos === 0 && extras === 0) {
@@ -102,6 +124,8 @@ export async function generateDeliveryReport(
   const varMap: Record<string, number> = {
     '{horas_gravacao}': recordingHours,
     '{sessoes}': gravacoes,
+    '{tempo_espera}': waitMinutes,
+    '{media_videos}': mediaVideos,
     '{videos}': videos,
     '{reels}': totalReels,
     '{stories}': totalStories,

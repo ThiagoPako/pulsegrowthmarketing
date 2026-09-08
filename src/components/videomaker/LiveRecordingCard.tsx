@@ -1,10 +1,17 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Square, Clock, Video, FileText, Zap, Rocket, Hourglass, Play, RotateCcw, Coffee } from 'lucide-react';
+import { Clock, Video, FileText, Zap, Rocket, Hourglass, Play, RotateCcw, Coffee } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { supabase } from '@/lib/vpsDb';
 import { toast } from 'sonner';
+import {
+  loadWaitSession,
+  startWaitSession,
+  stopWaitSession,
+  waitElapsedSeconds,
+  formatWaitDuration,
+  type WaitSession,
+} from '@/lib/recordingWait';
 
 interface LiveRecordingCardProps {
   clientName: string;
@@ -38,12 +45,14 @@ export default function LiveRecordingCard({
   const [elapsed, setElapsed] = useState(0);
   const [isLunchBreak, setIsLunchBreak] = useState(false);
   const [lunchStartedAt, setLunchStartedAt] = useState<Date | null>(null);
-  const [isWaiting, setIsWaiting] = useState(false);
-  const [waitLogId, setWaitLogId] = useState<string | null>(null);
-  const [waitStartedAt, setWaitStartedAt] = useState<Date | null>(null);
-  const [waitElapsed, setWaitElapsed] = useState(0);
+  // Sessão de espera restaurada do localStorage (sobrevive a re-render/reload)
+  const [waitSession, setWaitSession] = useState<WaitSession | null>(() => loadWaitSession(recordingId));
+  const [waitBusy, setWaitBusy] = useState(false);
+  const [waitElapsed, setWaitElapsed] = useState(() => waitElapsedSeconds(loadWaitSession(recordingId)));
   const [totalWaitSeconds, setTotalWaitSeconds] = useState(0);
   const [totalLunchSeconds, setTotalLunchSeconds] = useState(0);
+  const isWaiting = !!waitSession;
+  const waitStartedAt = waitSession ? new Date(waitSession.startedAt) : null;
 
   const totalSeconds = recordingDurationMinutes * 60;
 
@@ -101,12 +110,12 @@ export default function LiveRecordingCard({
 
   // Wait timer
   useEffect(() => {
-    if (!waitStartedAt) return;
-    const interval = setInterval(() => {
-      setWaitElapsed(Math.floor((Date.now() - waitStartedAt.getTime()) / 1000));
-    }, 1000);
+    if (!waitSession) { setWaitElapsed(0); return; }
+    const tickWait = () => setWaitElapsed(waitElapsedSeconds(waitSession));
+    tickWait();
+    const interval = setInterval(tickWait, 1000);
     return () => clearInterval(interval);
-  }, [waitStartedAt]);
+  }, [waitSession]);
 
   const progress = Math.min((elapsed / totalSeconds) * 100, 100);
   const remaining = Math.max(totalSeconds - elapsed, 0);
@@ -123,42 +132,35 @@ export default function LiveRecordingCard({
   };
 
   const handleStartWaiting = async () => {
-    const id = crypto.randomUUID();
-    const now = new Date();
-    const { error } = await supabase.from('recording_wait_logs').insert({
-      id,
-      recording_id: recordingId,
-      videomaker_id: videomakerId,
-      client_id: clientId,
-      started_at: now.toISOString(),
-    } as any);
-    if (error) {
-      console.error('Wait log insert error:', error);
-      toast.error('Erro ao registrar espera: ' + (error.message || JSON.stringify(error)));
-      return;
+    if (waitBusy || waitSession) return;
+    setWaitBusy(true);
+    try {
+      // Cronômetro inicia imediatamente; persistência é tentada em paralelo.
+      const session = await startWaitSession({ recordingId, videomakerId, clientId });
+      setWaitSession(session);
+      toast.info(
+        session.persisted
+          ? 'Gravação em espera — aguardando cliente...'
+          : 'Espera iniciada (será sincronizada ao encerrar).',
+        { icon: '⏳' }
+      );
+    } finally {
+      setWaitBusy(false);
     }
-    setIsWaiting(true);
-    setWaitLogId(id);
-    setWaitStartedAt(now);
-    setWaitElapsed(0);
-    toast.info('Gravação em espera — aguardando cliente...', { icon: '⏳' });
   };
 
   const handleStopWaiting = async () => {
-    if (!waitLogId || !waitStartedAt) return;
-    const durationSec = Math.floor((Date.now() - waitStartedAt.getTime()) / 1000);
-    await supabase.from('recording_wait_logs').update({
-      ended_at: new Date().toISOString(),
-      wait_duration_seconds: durationSec,
-    } as any).eq('id', waitLogId);
-    setTotalWaitSeconds(prev => prev + durationSec);
-    setIsWaiting(false);
-    setWaitLogId(null);
-    setWaitStartedAt(null);
-    setWaitElapsed(0);
-    const mins = Math.floor(durationSec / 60);
-    const secs = durationSec % 60;
-    toast.success(`Cliente retornou! Espera de ${mins}m${secs}s registrada.`);
+    if (!waitSession || waitBusy) return;
+    setWaitBusy(true);
+    try {
+      const { seconds, persisted } = await stopWaitSession(waitSession);
+      setTotalWaitSeconds(prev => prev + seconds);
+      setWaitSession(null);
+      if (persisted) toast.success(`Cliente retornou! Espera de ${formatWaitDuration(seconds)} registrada.`);
+      else toast.warning(`Espera de ${formatWaitDuration(seconds)} — não foi possível salvar no servidor.`);
+    } finally {
+      setWaitBusy(false);
+    }
   };
 
   return (

@@ -7572,10 +7572,41 @@ app.delete('/api/active-recordings/:recordingId', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ---------------------------------------------------------------------------
+// Métricas de gravação (tempo real de gravação, espera, vídeos por gravação)
+// Schema idempotente: garante recording_wait_logs e colunas de duração em
+// delivery_records mesmo em instâncias que não rodaram o schema SQL completo.
+// ---------------------------------------------------------------------------
+let recordingMetricsSchemaReady = false;
+async function ensureRecordingMetricsSchema() {
+  if (recordingMetricsSchemaReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS recording_wait_logs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      recording_id UUID,
+      videomaker_id UUID,
+      client_id UUID,
+      started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      ended_at TIMESTAMPTZ,
+      wait_duration_seconds INTEGER,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_recording_wait_logs_client ON recording_wait_logs(client_id);
+    CREATE INDEX IF NOT EXISTS idx_recording_wait_logs_recording ON recording_wait_logs(recording_id);
+    ALTER TABLE delivery_records ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
+    ALTER TABLE delivery_records ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ;
+    ALTER TABLE delivery_records ADD COLUMN IF NOT EXISTS recording_duration_seconds INTEGER;
+    ALTER TABLE delivery_records ADD COLUMN IF NOT EXISTS wait_duration_seconds INTEGER;
+  `);
+  recordingMetricsSchemaReady = true;
+}
+ensureRecordingMetricsSchema().catch(err => console.error('[recording-metrics] schema init failed:', err.message));
+
 // Stop active recording with delivery record creation
 app.post('/api/active-recordings/:recordingId/stop', async (req, res) => {
   try {
     await verifyUser(req);
+    await ensureRecordingMetricsSchema().catch(() => {});
     const { recordingId } = req.params;
     const { deliveryOverrides, completedScriptIds } = req.body;
     
@@ -7584,14 +7615,42 @@ app.post('/api/active-recordings/:recordingId/stop', async (req, res) => {
     
     const active = activeRows[0];
     if (active) {
+      const finishedAt = new Date();
+      const startedAt = active.started_at ? new Date(active.started_at) : null;
+
+      // Fecha esperas ainda abertas dessa gravação e soma o total de espera
+      let waitSeconds = 0;
+      try {
+        await pool.query(
+          `UPDATE recording_wait_logs
+              SET ended_at = NOW(),
+                  wait_duration_seconds = GREATEST(0, EXTRACT(EPOCH FROM (NOW() - started_at))::int)
+            WHERE recording_id = $1 AND ended_at IS NULL`,
+          [recordingId]
+        );
+        const { rows: waitRows } = await pool.query(
+          'SELECT COALESCE(SUM(wait_duration_seconds), 0)::int AS total FROM recording_wait_logs WHERE recording_id = $1',
+          [recordingId]
+        );
+        waitSeconds = Number(waitRows[0]?.total || 0);
+      } catch (waitErr) {
+        console.warn('[recording-metrics] wait aggregation failed:', waitErr.message);
+      }
+
+      // Duração efetiva = total decorrido - espera (nunca negativa)
+      const grossSeconds = startedAt ? Math.max(0, Math.floor((finishedAt - startedAt) / 1000)) : null;
+      const recordingSeconds = grossSeconds === null ? null : Math.max(0, grossSeconds - waitSeconds);
+
       await pool.query(
-        `INSERT INTO delivery_records (recording_id, client_id, videomaker_id, date, reels_produced, creatives_produced, stories_produced, arts_produced, extras_produced, videos_recorded, delivery_status, observations)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-        [recordingId, active.client_id, active.videomaker_id, new Date().toISOString().split('T')[0],
+        `INSERT INTO delivery_records (recording_id, client_id, videomaker_id, date, reels_produced, creatives_produced, stories_produced, arts_produced, extras_produced, videos_recorded, delivery_status, observations,
+                                       started_at, finished_at, recording_duration_seconds, wait_duration_seconds)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+        [recordingId, active.client_id, active.videomaker_id, finishedAt.toISOString().split('T')[0],
          deliveryOverrides?.reels_produced ?? 0, deliveryOverrides?.creatives_produced ?? 0,
          deliveryOverrides?.stories_produced ?? 0, deliveryOverrides?.arts_produced ?? 0,
          deliveryOverrides?.extras_produced ?? 0, deliveryOverrides?.videos_recorded ?? 1,
-         'realizada', 'Registro automático ao finalizar gravação']
+         'realizada', 'Registro automático ao finalizar gravação',
+         startedAt ? startedAt.toISOString() : null, finishedAt.toISOString(), recordingSeconds, waitSeconds]
       );
       
       if (completedScriptIds?.length > 0) {

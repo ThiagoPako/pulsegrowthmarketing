@@ -234,9 +234,12 @@ export default function Reports() {
     const totalContent = totalReels + totalCreatives + totalStories + totalArts + totalExtras;
     const avgPerSession = realizadas.length > 0 ? (totalContent / realizadas.length).toFixed(1) : '0';
 
-    // Hours dedicated (sessions × duration)
-    const totalMinutes = realizadas.length * recDuration;
+    // Hours dedicated: tempo real medido quando disponível; senão duração padrão
+    const measured = realizadas.filter(r => Number((r as any).recording_duration_seconds || 0) > 0);
+    const measuredMinutes = measured.reduce((a, r) => a + Number((r as any).recording_duration_seconds || 0) / 60, 0);
+    const totalMinutes = Math.round(measuredMinutes + (realizadas.length - measured.length) * recDuration);
     const totalHours = (totalMinutes / 60).toFixed(1);
+    const avgVideosPerSession = realizadas.length > 0 ? (totalVideos / realizadas.length).toFixed(1) : '0';
 
     // Wait time stats
     const totalWaitSeconds = filteredWaitLogs.reduce((a, w) => a + (w.wait_duration_seconds || 0), 0);
@@ -246,7 +249,7 @@ export default function Reports() {
     return {
       realizadas: realizadas.length, canceladas: canceladas.length, encaixes: encaixes.length, extras: extras.length,
       totalVideos, totalReels, totalCreatives, totalStories, totalArts, totalExtras, cancelRate,
-      totalContent, avgPerSession, totalHours, totalMinutes,
+      totalContent, avgPerSession, avgVideosPerSession, totalHours, totalMinutes,
       totalWaitSeconds, totalWaitMinutes, waitCount,
       socialReelsPosted, socialCriativosPosted, socialStoriesPosted, socialArtesDelivered, totalPosted, totalSocialDelivered,
     };
@@ -1096,12 +1099,14 @@ export default function Reports() {
       {/* KPI Cards - Captação */}
       <div>
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">📹 Captação</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
           {[
             { icon: CalendarCheck, label: 'Gravações', value: stats.realizadas, color: 'text-primary' },
             { icon: XCircle, label: 'Canceladas', value: stats.canceladas, color: 'text-destructive' },
-            { icon: Clock, label: 'Horas', value: `${stats.totalHours}h`, color: 'text-primary' },
-            { icon: TrendingUp, label: 'Média/Sessão', value: stats.avgPerSession, color: 'text-primary' },
+            { icon: Clock, label: 'Tempo gravando', value: `${stats.totalHours}h`, color: 'text-primary' },
+            { icon: Clock, label: 'Tempo de espera', value: `${stats.totalWaitMinutes} min`, color: 'text-amber-600' },
+            { icon: TrendingUp, label: 'Vídeos/Gravação', value: stats.avgVideosPerSession, color: 'text-primary' },
+            { icon: TrendingUp, label: 'Conteúdo/Sessão', value: stats.avgPerSession, color: 'text-primary' },
             { icon: Percent, label: 'Cancel.', value: `${stats.cancelRate}%`, color: 'text-destructive' },
             { icon: CheckCircle2, label: 'Entrega', value: comparison ? `${deliveryPct}%` : '—', color: deliveryPct > 100 ? 'text-green-600' : 'text-primary' },
           ].map((kpi, i) => (

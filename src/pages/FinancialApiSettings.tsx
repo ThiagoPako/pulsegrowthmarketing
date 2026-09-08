@@ -346,6 +346,8 @@ export default function FinancialApiSettings() {
     if (form.provider === 'meta_ads') {
       configData.meta_app_id = form.metaAppId;
       if (form.metaAppSecret) configData.meta_app_secret = '••••' + form.metaAppSecret.slice(-4);
+      configData.instagram_app_id = form.instagramAppId;
+      if (form.instagramAppSecret) configData.instagram_app_secret = '••••' + form.instagramAppSecret.slice(-4);
     }
 
     const payload: any = {
@@ -354,6 +356,7 @@ export default function FinancialApiSettings() {
       api_type: form.api_type,
       endpoint_url: form.provider === 'meta_ads' ? 'https://graph.facebook.com/v21.0' : form.endpoint_url,
       config: configData,
+      status: 'ativo',
       updated_at: new Date().toISOString(),
     };
 

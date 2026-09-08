@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
   loadWaitSession,
+  restoreOpenWaitSession,
   startWaitSession,
   stopWaitSession,
   waitElapsedSeconds,
@@ -107,6 +108,17 @@ export default function LiveRecordingCard({
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [startedAt, isLunchBreak, isWaiting, totalLunchSeconds, lunchStartedAt, totalWaitSeconds, waitStartedAt]);
+
+  // Restaura espera em aberto (navegador fechado / outro aparelho) a partir do servidor
+  useEffect(() => {
+    if (waitSession) return;
+    let cancelled = false;
+    restoreOpenWaitSession({ videomakerId, recordingId }).then(s => {
+      if (!cancelled && s) setWaitSession(s);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordingId, videomakerId]);
 
   // Wait timer
   useEffect(() => {

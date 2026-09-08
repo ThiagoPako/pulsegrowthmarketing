@@ -44,6 +44,63 @@ export function clearWaitSession(recordingId: string) {
   try { localStorage.removeItem(storageKey(recordingId)); } catch { /* ignore */ }
 }
 
+/**
+ * Recupera uma espera em aberto (ended_at NULL) do servidor — fonte de verdade
+ * quando o videomaker fechou o navegador/aba ou trocou de aparelho.
+ * Se `recordingId` for informado, busca só daquela gravação; senão, a mais
+ * recente do videomaker. Nunca lança.
+ */
+export async function restoreOpenWaitSession(params: {
+  videomakerId: string;
+  recordingId?: string;
+}): Promise<WaitSession | null> {
+  // 1) Local primeiro (mais rápido e funciona offline)
+  if (params.recordingId) {
+    const local = loadWaitSession(params.recordingId);
+    if (local) return local;
+  } else {
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k?.startsWith(STORAGE_PREFIX)) {
+          const s = loadWaitSession(k.slice(STORAGE_PREFIX.length));
+          if (s && s.videomakerId === params.videomakerId) return s;
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
+  // 2) Servidor
+  try {
+    let q = supabase
+      .from('recording_wait_logs')
+      .select('id, recording_id, videomaker_id, client_id, started_at')
+      .eq('videomaker_id', params.videomakerId)
+      .is('ended_at', null)
+      .order('started_at', { ascending: false })
+      .limit(1);
+    if (params.recordingId) q = q.eq('recording_id', params.recordingId);
+    const { data, error } = await q;
+    if (error || !data || data.length === 0) return null;
+    const row: any = data[0];
+    // Esperas com mais de 12h são consideradas lixo (esquecidas) — ignorar
+    if (Date.now() - new Date(row.started_at).getTime() > 12 * 3600 * 1000) return null;
+    const session: WaitSession = {
+      logId: row.id,
+      recordingId: row.recording_id,
+      videomakerId: row.videomaker_id,
+      clientId: row.client_id,
+      startedAt: row.started_at,
+      persisted: true,
+    };
+    saveWaitSession(session);
+    return session;
+  } catch (err) {
+    console.warn('[recordingWait] restore from server failed:', err);
+    return null;
+  }
+}
+
 /** Inicia uma espera. Nunca lança — retorna a sessão (persistida ou não). */
 export async function startWaitSession(params: {
   recordingId: string;

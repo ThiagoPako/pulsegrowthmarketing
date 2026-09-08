@@ -5214,7 +5214,7 @@ app.post('/api/meta-oauth', async (req, res) => {
 
     if (action === 'get_oauth_url') {
       if (!appId) return res.status(400).json({ error: 'Meta App ID not found' });
-      const scopes = 'pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish';
+      const scopes = 'pages_show_list,pages_read_engagement,pages_manage_posts,read_insights,instagram_basic,instagram_content_publish,instagram_manage_insights';
       const state = JSON.stringify({ client_id });
       const oauthUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirect_uri)}&scope=${scopes}&state=${encodeURIComponent(state)}&response_type=code`;
       return res.json({ oauth_url: oauthUrl });
@@ -5262,7 +5262,7 @@ app.post('/api/meta-oauth', async (req, res) => {
 
     if (action === 'get_instagram_oauth_url') {
       if (!igAppId) return res.status(400).json({ error: 'Instagram App ID não configurado (Financeiro → Integrações → Meta)' });
-      const scopes = 'instagram_business_basic,instagram_business_content_publish';
+      const scopes = 'instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights';
       const state = JSON.stringify({ client_id, flow: 'instagram' });
       const oauthUrl = `https://www.instagram.com/oauth/authorize?client_id=${igAppId}&redirect_uri=${encodeURIComponent(redirect_uri)}&scope=${scopes}&state=${encodeURIComponent(state)}&response_type=code&force_reauth=true`;
       return res.json({ oauth_url: oauthUrl });

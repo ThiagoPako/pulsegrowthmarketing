@@ -5470,8 +5470,8 @@ app.post('/api/meta-publish', async (req, res) => {
       let ready = false;
       for (let i = 0; i < 30; i++) { await new Promise(r => setTimeout(r, 2000)); const sr = await fetchMetaWithRetry(`${META_API_BASE}/${cd.id}?fields=status_code&access_token=${pageToken}`, { method: 'GET' }); const sd = await sr.json(); if (sd.status_code === 'FINISHED') { ready = true; break; } if (sd.status_code === 'ERROR') throw new Error('Media processing failed'); }
       if (!ready) throw new Error('Media processing timed out');
-      const pr = await fetchMetaWithRetry(`${META_API_BASE}/${igBusinessId}/media_publish?creation_id=${cd.id}&access_token=${pageToken}`, { method: 'POST' });
-      result = await pr.json();
+      result = await publishIgContainer(META_API_BASE, igBusinessId, cd.id, pageToken);
+
     } else if (publish_type === 'stories') {
       const isVideo = /\.(mp4|mov|webm)/i.test(media_url);
       const cp = new URLSearchParams({ media_type: 'STORIES', access_token: pageToken });
@@ -5479,8 +5479,8 @@ app.post('/api/meta-publish', async (req, res) => {
       const cr = await fetchMetaWithRetry(`${META_API_BASE}/${igBusinessId}/media?${cp}`, { method: 'POST' });
       const cd = await cr.json();
       if (isVideo) for (let i = 0; i < 20; i++) { await new Promise(r => setTimeout(r, 2000)); const sr = await fetchMetaWithRetry(`${META_API_BASE}/${cd.id}?fields=status_code&access_token=${pageToken}`, { method: 'GET' }); const sd = await sr.json(); if (sd.status_code === 'FINISHED') break; if (sd.status_code === 'ERROR') throw new Error('Story video failed'); }
-      const pr = await fetchMetaWithRetry(`${META_API_BASE}/${igBusinessId}/media_publish?creation_id=${cd.id}&access_token=${pageToken}`, { method: 'POST' });
-      result = await pr.json();
+      result = await publishIgContainer(META_API_BASE, igBusinessId, cd.id, pageToken);
+
     }
 
     await admin.from('api_integration_logs').insert({ integration_id, action: `publicação ${publish_type}`, status: 'success', details: { client_id, media_id: result?.id, publish_type } });
@@ -5711,6 +5711,27 @@ async function waitForIgContainer(containerId, token, maxTries = 30, base = META
   throw new Error('Meta demorou demais para processar a mídia (timeout).');
 }
 
+/**
+ * Publica um container já criado. A Meta às vezes devolve "Media ID is not available"
+ * (código 9007 / subcódigo 2207027) mesmo depois do status FINISHED, porque o
+ * processamento interno ainda está terminando. Nesse caso tentamos de novo.
+ */
+async function publishIgContainer(base, igId, containerId, token, maxTries = 12) {
+  let last = null;
+  for (let i = 0; i < maxTries; i++) {
+    const r = await fetchMetaWithRetry(`${base}/${igId}/media_publish?creation_id=${containerId}&access_token=${token}`, { method: 'POST' });
+    const d = await r.json();
+    if (d && d.id) return d;
+    last = d;
+    const err = d && d.error;
+    const transient = err && (err.code === 9007 || err.error_subcode === 2207027 || err.code === 4 || err.code === 2);
+    if (!transient) return d;
+    await new Promise(res => setTimeout(res, 5000));
+  }
+  return last;
+}
+
+
 const IS_VIDEO_RE = /\.(mp4|mov|webm|m4v)(\?|$)/i;
 
 /** Normaliza a lista de mídias do post (carrossel usa media_items, os demais usam media_url). */
@@ -5834,8 +5855,8 @@ async function publishToClientAccount(account, post) {
     const pd = await pr.json();
     if (!pd.id) throw new Error('Meta não criou o carrossel: ' + JSON.stringify(pd));
     await waitForIgContainer(pd.id, token, 30, IG_BASE).catch(() => {});
-    const fr = await fetchMetaWithRetry(`${IG_BASE}/${igId}/media_publish?creation_id=${pd.id}&access_token=${token}`, { method: 'POST' });
-    return fr.json();
+    return publishIgContainer(IG_BASE, igId, pd.id, token);
+
   }
 
   const cp = new URLSearchParams({ access_token: token });
@@ -5865,9 +5886,10 @@ async function publishToClientAccount(account, post) {
     cd = await cr.json();
   }
   if (!cd.id) throw new Error('Meta não criou o container de mídia: ' + JSON.stringify(cd));
-  if (isVideo) await waitForIgContainer(cd.id, token, 30, IG_BASE);
-  const pr = await fetchMetaWithRetry(`${IG_BASE}/${igId}/media_publish?creation_id=${cd.id}&access_token=${token}`, { method: 'POST' });
-  return pr.json();
+  if (isVideo) await waitForIgContainer(cd.id, token, 60, IG_BASE);
+  else await waitForIgContainer(cd.id, token, 10, IG_BASE).catch(() => {});
+  return publishIgContainer(IG_BASE, igId, cd.id, token);
+
 }
 
 async function getConnectedAccounts(clientId) {

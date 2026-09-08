@@ -5855,8 +5855,8 @@ async function publishToClientAccount(account, post) {
     const pd = await pr.json();
     if (!pd.id) throw new Error('Meta não criou o carrossel: ' + JSON.stringify(pd));
     await waitForIgContainer(pd.id, token, 30, IG_BASE).catch(() => {});
-    const fr = await fetchMetaWithRetry(`${IG_BASE}/${igId}/media_publish?creation_id=${pd.id}&access_token=${token}`, { method: 'POST' });
-    return fr.json();
+    return publishIgContainer(IG_BASE, igId, pd.id, token);
+
   }
 
   const cp = new URLSearchParams({ access_token: token });

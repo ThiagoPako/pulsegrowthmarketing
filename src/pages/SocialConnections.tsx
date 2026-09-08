@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Instagram, Facebook, Search, Link2, Loader2, RefreshCw, Unlink, CheckCircle2, AlertTriangle, LogIn, Share2, Copy } from 'lucide-react';
+import { Instagram, Facebook, Search, Loader2, RefreshCw, Unlink, CheckCircle2, AlertTriangle, LogIn, Share2, Copy } from 'lucide-react';
 
 interface ClientConnection {
   id: string;
@@ -27,10 +27,6 @@ export default function SocialConnections() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'connected' | 'pending'>('all');
 
-  const [target, setTarget] = useState<ClientConnection | null>(null);
-  const [platform, setPlatform] = useState<Platform>('instagram');
-  const [token, setToken] = useState('');
-  const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [oauthBusy, setOauthBusy] = useState<string | null>(null);
   const [linkBusy, setLinkBusy] = useState<string | null>(null);
@@ -115,12 +111,6 @@ export default function SocialConnections() {
     pending: clients.filter(c => c.accounts.length === 0).length,
   }), [clients]);
 
-  const openConnect = (client: ClientConnection, plat: Platform) => {
-    setTarget(client);
-    setPlatform(plat);
-    setToken('');
-  };
-
   /**
    * Login oficial pela Meta: abre a janela de autorização do Instagram/Facebook,
    * espera o retorno com o `code` e troca por token no backend da VPS.
@@ -195,26 +185,6 @@ export default function SocialConnections() {
     }
   };
 
-
-  const saveToken = async () => {
-    if (!target) return;
-    if (!token.trim()) { toast.error('Cole o token gerado no painel da Meta.'); return; }
-    setSaving(true);
-    try {
-      const { data, error } = await invokeVpsFunction('social-accounts/manual-token', {
-        body: { client_id: target.id, platform, token: token.trim() },
-      });
-      if (error || data?.error) throw new Error(data?.error || error?.message || 'Erro ao salvar token');
-      toast.success(`Conectado: ${(data?.accounts ?? []).length} conta(s)`);
-      setTarget(null);
-      setToken('');
-      await load();
-    } catch (err) {
-      toast.error((err as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const disconnect = async (client: ClientConnection, plat: Platform) => {
     try {
@@ -327,9 +297,6 @@ export default function SocialConnections() {
                             : <LogIn size={14} />}
                           {account ? 'Reconectar' : 'Entrar'}
                         </Button>
-                        <Button size="sm" variant="ghost" className="gap-1" title="Colar token manualmente" onClick={() => openConnect(client, plat)}>
-                          <Link2 size={14} />
-                        </Button>
                         {account && (
                           <Button size="sm" variant="ghost" title="Desconectar" onClick={() => disconnect(client, plat)}>
                             <Unlink size={14} />
@@ -416,44 +383,6 @@ export default function SocialConnections() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!target} onOpenChange={o => !o && setTarget(null)}>
-
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Conectar {platform === 'instagram' ? 'Instagram' : 'Facebook'}</DialogTitle>
-            <DialogDescription>
-              {target?.name} — cole o token gerado no painel da Meta para esta conta.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Select value={platform} onValueChange={(v: Platform) => setPlatform(v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="instagram">Instagram (login direto no perfil)</SelectItem>
-                <SelectItem value="facebook">Facebook (Página + Instagram vinculado)</SelectItem>
-              </SelectContent>
-            </Select>
-            <Input
-              type="password"
-              value={token}
-              onChange={e => setToken(e.target.value)}
-              placeholder="Cole aqui o token"
-              autoComplete="off"
-            />
-            <p className="text-xs text-muted-foreground">
-              {platform === 'instagram'
-                ? 'A conta precisa ser Profissional (Comercial ou Criador). O token é validado na hora e trocado por um token longo.'
-                : 'Use um token de usuário com acesso às Páginas. Todas as Páginas do token serão conectadas.'}
-            </p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setTarget(null)}>Cancelar</Button>
-            <Button onClick={saveToken} disabled={saving} className="gap-2">
-              {saving && <Loader2 size={14} className="animate-spin" />} Salvar token
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

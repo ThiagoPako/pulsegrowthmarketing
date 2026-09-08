@@ -5370,7 +5370,7 @@ app.post('/api/meta-publish', async (req, res) => {
 app.post('/api/meta-store-credentials', async (req, res) => {
   try {
     const { user, admin } = await verifyAdmin(req);
-    const { integration_id, secret_name, secret_value, meta_app_id, meta_app_secret, meta_page_token, meta_ig_business_id, meta_page_id } = req.body;
+    const { integration_id, secret_name, secret_value, meta_app_id, meta_app_secret, meta_page_token, meta_ig_business_id, meta_page_id, instagram_app_id, instagram_app_secret } = req.body;
 
     if (secret_name && secret_value) {
       const keyToProviderMap = { GOOGLE_GEMINI_API_KEY: 'ai_gemini', OPENAI_API_KEY: 'ai_openai', ANTHROPIC_API_KEY: 'ai_claude' };
@@ -5396,6 +5396,8 @@ app.post('/api/meta-store-credentials', async (req, res) => {
     if (meta_page_token) { updatedConfig.meta_page_token_encrypted = meta_page_token; updatedConfig.meta_page_token = '••••' + meta_page_token.slice(-4); }
     if (meta_ig_business_id) updatedConfig.meta_ig_business_id = meta_ig_business_id;
     if (meta_page_id) updatedConfig.meta_page_id = meta_page_id;
+    if (instagram_app_id) updatedConfig.instagram_app_id = instagram_app_id;
+    if (instagram_app_secret) { updatedConfig.instagram_app_secret_encrypted = instagram_app_secret; updatedConfig.instagram_app_secret = '••••' + instagram_app_secret.slice(-4); }
     updatedConfig.credentials_updated_at = new Date().toISOString();
     await admin.from('api_integrations').update({ config: updatedConfig, updated_at: new Date().toISOString() }).eq('id', integration_id);
     await admin.from('api_integration_logs').insert({ integration_id, action: 'credenciais atualizadas via backend seguro', status: 'success', details: { fields_updated: [meta_app_id && 'app_id', meta_app_secret && 'app_secret', meta_page_token && 'page_token', meta_ig_business_id && 'ig_business_id', meta_page_id && 'page_id'].filter(Boolean) }, performed_by: user.id });
@@ -5468,15 +5470,16 @@ async function ensureSocialPostsSchema() {
     CREATE INDEX IF NOT EXISTS idx_scheduled_posts_client ON scheduled_posts(client_id);
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS access_token TEXT NOT NULL DEFAULT '';
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS token_expiration TIMESTAMPTZ;
+    ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS api_base TEXT NOT NULL DEFAULT 'facebook';
   `);
   socialPostsSchemaReady = true;
 }
 ensureSocialPostsSchema().catch(err => console.error('[social-posts] schema init failed:', err.message));
 
-async function waitForIgContainer(containerId, token, maxTries = 30) {
+async function waitForIgContainer(containerId, token, maxTries = 30, base = META_API_BASE) {
   for (let i = 0; i < maxTries; i++) {
     await new Promise(r => setTimeout(r, 2000));
-    const sr = await fetchMetaWithRetry(`${META_API_BASE}/${containerId}?fields=status_code,status&access_token=${token}`, { method: 'GET' });
+    const sr = await fetchMetaWithRetry(`${base}/${containerId}?fields=status_code,status&access_token=${token}`, { method: 'GET' });
     const sd = await sr.json();
     if (sd.status_code === 'FINISHED') return true;
     if (sd.status_code === 'ERROR' || sd.status_code === 'EXPIRED') throw new Error(`Meta recusou a mídia (${sd.status || sd.status_code}). Verifique formato/tamanho do arquivo.`);
@@ -5508,8 +5511,9 @@ async function publishToClientAccount(account, post) {
     return r.json();
   }
 
-  // Instagram (Business/Creator)
+  // Instagram (Business/Creator) — via Página do Facebook OU Login direto do Instagram
   const igId = account.instagram_business_id;
+  const IG_BASE = account.api_base === 'instagram' ? IG_API_BASE : META_API_BASE;
   if (!igId) throw new Error('Conta do Instagram não identificada. O perfil precisa ser Business/Criador e vinculado à página do Facebook.');
   const cp = new URLSearchParams({ access_token: token });
   if (post.publish_type === 'stories') {
@@ -5523,17 +5527,17 @@ async function publishToClientAccount(account, post) {
     cp.set('image_url', post.media_url);
     if (caption) cp.set('caption', caption);
   }
-  const cr = await fetchMetaWithRetry(`${META_API_BASE}/${igId}/media?${cp}`, { method: 'POST' });
+  const cr = await fetchMetaWithRetry(`${IG_BASE}/${igId}/media?${cp}`, { method: 'POST' });
   const cd = await cr.json();
   if (!cd.id) throw new Error('Meta não criou o container de mídia: ' + JSON.stringify(cd));
-  if (isVideo) await waitForIgContainer(cd.id, token);
-  const pr = await fetchMetaWithRetry(`${META_API_BASE}/${igId}/media_publish?creation_id=${cd.id}&access_token=${token}`, { method: 'POST' });
+  if (isVideo) await waitForIgContainer(cd.id, token, 30, IG_BASE);
+  const pr = await fetchMetaWithRetry(`${IG_BASE}/${igId}/media_publish?creation_id=${cd.id}&access_token=${token}`, { method: 'POST' });
   return pr.json();
 }
 
 async function getConnectedAccounts(clientId) {
   const { rows } = await pool.query(
-    `SELECT id, client_id, platform, facebook_page_id, instagram_business_id, account_name, access_token, token_expiration, status
+    `SELECT id, client_id, platform, facebook_page_id, instagram_business_id, account_name, access_token, token_expiration, status, api_base
      FROM social_accounts WHERE client_id = $1 AND status = 'connected'`,
     [clientId]
   );
@@ -5546,6 +5550,8 @@ function sanitizeAccount(a) {
     facebook_page_id: a.facebook_page_id, instagram_business_id: a.instagram_business_id,
     token_expiration: a.token_expiration, status: a.status,
     has_token: !!a.access_token,
+    api_base: a.api_base || 'facebook',
+    expiring_soon: !!a.token_expiration && new Date(a.token_expiration).getTime() - Date.now() < 7 * 86400000,
   };
 }
 
@@ -5643,6 +5649,34 @@ async function processDueScheduledPosts() {
   }
 }
 setInterval(processDueScheduledPosts, 60_000);
+
+// Renova tokens do Instagram (login direto) a cada 24h; tokens longos duram 60 dias
+// e só podem ser renovados quando têm mais de 24h de vida e faltam menos de 60 dias.
+async function refreshInstagramDirectTokens() {
+  try {
+    await ensureSocialPostsSchema();
+    const { rows } = await pool.query(
+      `SELECT id, client_id, account_name, access_token FROM social_accounts
+       WHERE platform='instagram' AND api_base='instagram' AND status='connected' AND access_token <> ''
+         AND (token_expiration IS NULL OR token_expiration < now() + interval '30 days')`
+    );
+    for (const acc of rows) {
+      try {
+        const r = await fetch(`${IG_API_BASE}/refresh_access_token?grant_type=ig_refresh_token&access_token=${acc.access_token}`);
+        const d = await r.json();
+        if (d.access_token) {
+          await pool.query(`UPDATE social_accounts SET access_token=$2, token_expiration=$3 WHERE id=$1`,
+            [acc.id, d.access_token, new Date(Date.now() + (Number(d.expires_in) || 5184000) * 1000).toISOString()]);
+        } else if (d.error) {
+          console.warn('[ig-refresh] falhou para', acc.account_name, d.error.message);
+          if (d.error.code === 190) await pool.query(`UPDATE social_accounts SET status='expired' WHERE id=$1`, [acc.id]);
+        }
+      } catch (err) { console.warn('[ig-refresh] erro', acc.account_name, err.message); }
+    }
+  } catch (err) { console.error('[ig-refresh] job error', err.message); }
+}
+setInterval(refreshInstagramDirectTokens, 24 * 60 * 60 * 1000);
+setTimeout(refreshInstagramDirectTokens, 30_000);
 // Recupera posts que ficaram travados em 'publicando' após um restart do PM2
 pool.query(`UPDATE scheduled_posts SET status='agendado' WHERE status='publicando' AND updated_at < now() - interval '15 minutes'`).catch(() => {});
 

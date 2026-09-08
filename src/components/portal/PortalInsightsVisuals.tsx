@@ -52,7 +52,7 @@ export function InsightMetricCard({ metric, selected, onSelect }: MetricCardProp
       onClick={() => onSelect(metric)}
       aria-label={`Ver detalhes de ${metric.label}`}
       className={cn(
-        'group h-auto min-h-[126px] w-full whitespace-normal rounded-lg border p-4 text-left transition-all duration-200 focus-visible:ring-primary',
+        'group h-auto min-h-[126px] w-full flex-col items-stretch justify-start whitespace-normal rounded-lg border p-4 text-left transition-all duration-200 focus-visible:ring-primary',
         'bg-white/[0.04] hover:-translate-y-0.5 hover:bg-white/[0.07] hover:shadow-lg',
         selected ? toneClasses[metric.tone] : 'border-white/10',
       )}

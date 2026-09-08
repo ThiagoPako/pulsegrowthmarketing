@@ -5299,6 +5299,96 @@ app.post('/api/meta-oauth', async (req, res) => {
   }
 });
 
+async function getMetaConfigFromDb() {
+  const { rows } = await pool.query(
+    "SELECT config FROM api_integrations WHERE provider = 'meta_ads' AND status = 'ativo' LIMIT 1"
+  );
+  return rows[0]?.config || {};
+}
+
+/**
+ * Salva um token gerado manualmente no painel da Meta (ex: token da conta ag.pulse).
+ * Valida o token na API do Instagram/Facebook e insere/atualiza social_accounts.
+ */
+app.post('/api/social-accounts/manual-token', async (req, res) => {
+  try {
+    const { client_id, platform, token: rawToken, account_name, instagram_business_id, facebook_page_id, api_base } = req.body;
+    if (!client_id || client_id === 'new') return res.status(400).json({ error: 'Salve o cliente primeiro antes de colar o token.' });
+    if (!platform || !['instagram', 'facebook'].includes(platform)) return res.status(400).json({ error: 'platform deve ser instagram ou facebook' });
+    if (!rawToken || typeof rawToken !== 'string') return res.status(400).json({ error: 'token é obrigatório' });
+
+    await ensureSocialPostsSchema();
+    const token = rawToken.trim();
+    const config = await getMetaConfigFromDb();
+
+    // ── Instagram direto ──
+    if (platform === 'instagram') {
+      const meRes = await fetch(`${IG_API_BASE}/me?fields=user_id,username,account_type,profile_picture_url&access_token=${token}`);
+      const me = await meRes.json().catch(() => ({}));
+      if (me.error || !(me.user_id || me.id)) {
+        return res.status(400).json({ error: 'Token inválido ou expirado: ' + (me.error?.message || JSON.stringify(me)) });
+      }
+      const igUserId = String(me.user_id || me.id);
+      if (me.account_type && !['BUSINESS', 'MEDIA_CREATOR', 'CREATOR'].includes(String(me.account_type).toUpperCase())) {
+        return res.status(400).json({ error: `A conta @${me.username} é pessoal. Converta para Profissional (Comercial ou Criador) e tente novamente.` });
+      }
+
+      // Troca por token longo (60 dias) quando possível
+      let longToken = token;
+      let expiresIn = 60 * 24 * 60 * 60;
+      const igAppSecret = config?.instagram_app_secret_encrypted || config?.meta_app_secret_encrypted;
+      if (igAppSecret) {
+        const longRes = await fetch(`${IG_API_BASE}/access_token?grant_type=ig_exchange_token&client_secret=${igAppSecret}&access_token=${token}`);
+        const longData = await longRes.json().catch(() => ({}));
+        if (longData.access_token) {
+          longToken = longData.access_token;
+          expiresIn = Number(longData.expires_in) || expiresIn;
+        }
+      }
+
+      const name = me.username || account_name || igUserId;
+      await pool.query(`DELETE FROM social_accounts WHERE client_id = $1 AND platform = 'instagram'`, [client_id]);
+      await pool.query(
+        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, access_token, status, token_expiration, api_base)
+         VALUES ($1,'instagram',NULL,$2,$3,$4,'connected',$5,'instagram')`,
+        [client_id, igUserId, name, longToken, new Date(Date.now() + expiresIn * 1000).toISOString()]
+      );
+      return res.json({ success: true, accounts: [{ platform: 'instagram', name, username: name, businessId: igUserId, api_base: 'instagram' }] });
+    }
+
+    // ── Facebook (token de usuário → páginas) ──
+    const pagesRes = await fetch(`${META_API_BASE}/me/accounts?fields=id,name,access_token,instagram_business_account{id,name,username,profile_picture_url}&access_token=${token}`);
+    const pagesData = await pagesRes.json().catch(() => ({}));
+    if (pagesData.error) return res.status(400).json({ error: 'Token inválido: ' + pagesData.error.message });
+    const pages = pagesData.data || [];
+    if (pages.length === 0) return res.status(400).json({ error: 'Nenhuma página do Facebook encontrada para esse token.' });
+
+    await pool.query(`DELETE FROM social_accounts WHERE client_id = $1`, [client_id]);
+    const connectedAccounts = [];
+    for (const page of pages) {
+      await pool.query(
+        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, account_name, access_token, status, token_expiration, api_base)
+         VALUES ($1,'facebook',$2,$3,$4,'connected',$5,'facebook')`,
+        [client_id, page.id, page.name, page.access_token, new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()]
+      );
+      connectedAccounts.push({ platform: 'facebook', name: page.name, pageId: page.id });
+      if (page.instagram_business_account) {
+        const ig = page.instagram_business_account;
+        await pool.query(
+          `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, access_token, status, token_expiration, api_base)
+           VALUES ($1,'instagram',$2,$3,$4,$5,'connected',$6,'facebook')`,
+          [client_id, page.id, ig.id, ig.username || ig.name, page.access_token, new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()]
+        );
+        connectedAccounts.push({ platform: 'instagram', name: ig.username || ig.name, username: ig.username, businessId: ig.id, pageId: page.id });
+      }
+    }
+    return res.json({ success: true, accounts: connectedAccounts, pages_found: pages.length });
+  } catch (error) {
+    console.error('Manual token error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ─── 9. Meta Publish ────────────────────────────────────────
 async function fetchMetaWithRetry(url, options, retries = 3) {
   for (let attempt = 0; attempt < retries; attempt++) {

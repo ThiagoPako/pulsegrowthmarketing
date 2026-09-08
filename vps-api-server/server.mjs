@@ -5850,8 +5850,8 @@ async function publishToClientAccount(account, post) {
   if (post.publish_type === 'carousel') {
     if (media.length < 2) throw new Error('Carrossel precisa de pelo menos 2 mídias.');
     if (media.length > 10) throw new Error('Carrossel aceita no máximo 10 mídias.');
-    const childIds = [];
-    for (const item of media) {
+    // Cria todos os filhos em paralelo (mantendo a ordem) — antes era um de cada vez.
+    const childIds = await Promise.all(media.map(async (item) => {
       const childVideo = IS_VIDEO_RE.test(item.url);
       const p = new URLSearchParams({ access_token: token, is_carousel_item: 'true' });
       if (childVideo) { p.set('media_type', 'VIDEO'); p.set('video_url', item.url); }
@@ -5860,8 +5860,9 @@ async function publishToClientAccount(account, post) {
       const d = await r.json();
       if (!d.id) throw new Error('Meta recusou uma mídia do carrossel: ' + JSON.stringify(d));
       if (childVideo) await waitForIgContainer(d.id, token, 30, IG_BASE);
-      childIds.push(d.id);
-    }
+      return d.id;
+    }));
+
     const pp = new URLSearchParams({ access_token: token, media_type: 'CAROUSEL', children: childIds.join(',') });
     if (caption) pp.set('caption', caption);
     const pr = await fetchMetaWithRetry(`${IG_BASE}/${igId}/media?${pp}`, { method: 'POST' });

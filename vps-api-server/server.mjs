@@ -3945,6 +3945,29 @@ app.post('/api/portal-actions', async (req, res) => {
       return res.json({ contents: rows });
     }
 
+    // ── Métricas do Instagram (só se a agência liberou para este cliente) ──
+    if (action === 'get_insights') {
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      await ensureSocialInsightsSchema();
+      const { rows } = await pool.query(
+        'SELECT portal_insights_enabled FROM clients WHERE id = $1 LIMIT 1',
+        [client_id]
+      );
+      if (!rows.length) return res.status(404).json({ error: 'Cliente não encontrado' });
+      if (!rows[0].portal_insights_enabled) return res.json({ disabled: true });
+
+      const isDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
+      const { since, until } = req.body;
+      if (!isDate(since) || !isDate(until)) return res.status(400).json({ error: 'Período inválido' });
+      try {
+        const insights = await getClientInsights(client_id, since, until, { maxAgeMinutes: 360 });
+        return res.json({ insights });
+      } catch (err) {
+        return res.json({ insights: null, unavailable: err.message });
+      }
+    }
+
+
     // ── Get notifications ──
     if (action === 'get_notifications') {
       if (!client_id) return res.status(400).json({ error: 'client_id required' });

@@ -5467,9 +5467,8 @@ app.post('/api/meta-publish', async (req, res) => {
       const cr = await fetchMetaWithRetry(`${META_API_BASE}/${igBusinessId}/media?${cp}`, { method: 'POST' });
       const cd = await cr.json();
       if (!cd.id) throw new Error('Failed to create container');
-      let ready = false;
-      for (let i = 0; i < 30; i++) { await new Promise(r => setTimeout(r, 2000)); const sr = await fetchMetaWithRetry(`${META_API_BASE}/${cd.id}?fields=status_code&access_token=${pageToken}`, { method: 'GET' }); const sd = await sr.json(); if (sd.status_code === 'FINISHED') { ready = true; break; } if (sd.status_code === 'ERROR') throw new Error('Media processing failed'); }
-      if (!ready) throw new Error('Media processing timed out');
+      await waitForIgContainer(cd.id, pageToken, 30, META_API_BASE);
+
       result = await publishIgContainer(META_API_BASE, igBusinessId, cd.id, pageToken);
 
     } else if (publish_type === 'stories') {

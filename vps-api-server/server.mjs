@@ -5595,10 +5595,104 @@ async function ensureSocialPostsSchema() {
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS access_token TEXT NOT NULL DEFAULT '';
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS token_expiration TIMESTAMPTZ;
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS api_base TEXT NOT NULL DEFAULT 'facebook';
+    CREATE TABLE IF NOT EXISTS social_connect_links (
+      token TEXT PRIMARY KEY,
+      client_id UUID NOT NULL,
+      created_by UUID,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_social_connect_links_client ON social_connect_links(client_id);
   `);
   socialPostsSchemaReady = true;
 }
 ensureSocialPostsSchema().catch(err => console.error('[social-posts] schema init failed:', err.message));
+
+// ─── Links públicos de conexão (o próprio cliente autoriza sua conta) ───
+// A agência gera um link com token temporário e envia ao cliente. O cliente
+// abre o link, faz o login oficial na Meta e autoriza. Nenhuma senha ou token
+// do cliente passa pelo nosso frontend — a troca acontece só nesta API.
+
+/** Cria (ou renova) o link de autorização de um cliente. */
+app.post('/api/social-connect-links', async (req, res) => {
+  try {
+    const { client_id, created_by = null, days = 14 } = req.body || {};
+    if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
+    await ensureSocialPostsSchema();
+
+    const { rows: clientRows } = await pool.query(
+      `SELECT id, company_name FROM clients WHERE id = $1 LIMIT 1`,
+      [client_id]
+    );
+    if (!clientRows.length) return res.status(404).json({ error: 'Cliente não encontrado' });
+
+    const token = crypto.randomBytes(24).toString('hex');
+    const validDays = Math.min(Math.max(Number(days) || 14, 1), 90);
+    const expiresAt = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000);
+
+    await pool.query(`DELETE FROM social_connect_links WHERE client_id = $1`, [client_id]);
+    await pool.query(
+      `INSERT INTO social_connect_links (token, client_id, created_by, expires_at) VALUES ($1,$2,$3,$4)`,
+      [token, client_id, created_by, expiresAt.toISOString()]
+    );
+
+    return res.json({
+      token,
+      path: `/conectar-social/${token}`,
+      client_name: clientRows[0].company_name,
+      expires_at: expiresAt.toISOString(),
+    });
+  } catch (error) {
+    console.error('social-connect-links error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/** Página pública lê os dados mínimos do link (sem expor tokens). */
+app.get('/api/social-connect/:token', async (req, res) => {
+  try {
+    await ensureSocialPostsSchema();
+    const { rows } = await pool.query(
+      `SELECT l.client_id, l.expires_at, c.company_name
+         FROM social_connect_links l
+         JOIN clients c ON c.id = l.client_id
+        WHERE l.token = $1 LIMIT 1`,
+      [req.params.token]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Link inválido ou removido.' });
+    if (new Date(rows[0].expires_at).getTime() < Date.now()) {
+      return res.status(410).json({ error: 'Este link expirou. Peça um novo para a agência.' });
+    }
+
+    const { rows: accounts } = await pool.query(
+      `SELECT platform, account_name FROM social_accounts WHERE client_id = $1 AND status = 'connected'`,
+      [rows[0].client_id]
+    );
+
+    return res.json({
+      client_id: rows[0].client_id,
+      client_name: rows[0].company_name,
+      expires_at: rows[0].expires_at,
+      accounts,
+    });
+  } catch (error) {
+    console.error('social-connect read error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/** Marca o link como usado depois que o cliente concluiu a autorização. */
+app.post('/api/social-connect/:token/complete', async (req, res) => {
+  try {
+    await ensureSocialPostsSchema();
+    await pool.query(`UPDATE social_connect_links SET used_at = now() WHERE token = $1`, [req.params.token]);
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 
 async function waitForIgContainer(containerId, token, maxTries = 30, base = META_API_BASE) {
   for (let i = 0; i < maxTries; i++) {

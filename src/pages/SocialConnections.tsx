@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Instagram, Facebook, Search, Loader2, RefreshCw, Unlink, CheckCircle2, AlertTriangle, LogIn, Share2, Copy, Stethoscope, XCircle } from 'lucide-react';
+import { Instagram, Facebook, Search, Loader2, RefreshCw, Unlink, CheckCircle2, AlertTriangle, Share2, Copy, Stethoscope, XCircle } from 'lucide-react';
 
 interface ClientConnection {
   id: string;
@@ -28,7 +28,6 @@ export default function SocialConnections() {
   const [filter, setFilter] = useState<'all' | 'connected' | 'pending'>('all');
 
   const [togglingId, setTogglingId] = useState<string | null>(null);
-  const [oauthBusy, setOauthBusy] = useState<string | null>(null);
   const [linkBusy, setLinkBusy] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState<{ name: string; url: string; expires: string } | null>(null);
   const [diagBusy, setDiagBusy] = useState<string | null>(null);

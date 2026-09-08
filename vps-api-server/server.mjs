@@ -5888,6 +5888,261 @@ app.get('/api/social-posts/accounts-overview', async (req, res) => {
   }
 });
 
+// ─── 11c. Métricas do Instagram (relatório mensal + portal do cliente) ───────
+// Busca alcance, seguidores, visitas ao perfil, cliques no link e desempenho
+// por publicação direto na API da Meta usando o token já salvo em social_accounts.
+let socialInsightsSchemaReady = false;
+async function ensureSocialInsightsSchema() {
+  if (socialInsightsSchemaReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS social_insights_snapshots (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      client_id UUID NOT NULL,
+      period_start DATE NOT NULL,
+      period_end DATE NOT NULL,
+      account_name TEXT,
+      data JSONB NOT NULL,
+      fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      CONSTRAINT social_insights_period_uniq UNIQUE (client_id, period_start, period_end)
+    );
+    CREATE INDEX IF NOT EXISTS idx_social_insights_client ON social_insights_snapshots(client_id);
+    ALTER TABLE clients ADD COLUMN IF NOT EXISTS portal_insights_enabled BOOLEAN NOT NULL DEFAULT false;
+  `);
+  socialInsightsSchemaReady = true;
+}
+ensureSocialInsightsSchema().catch(err => console.error('[insights] schema init failed:', err.message));
+
+/** GET simples na Graph API, lançando o erro devolvido pela Meta. */
+async function metaGetJson(url) {
+  const r = await fetchMetaWithRetry(url, { method: 'GET' });
+  const d = await r.json().catch(() => ({}));
+  if (d && d.error) throw new Error(d.error.message || 'Erro na API da Meta');
+  return d || {};
+}
+
+const DAY_SECONDS = 86400;
+
+/** Quebra o período em janelas de no máximo 30 dias (limite da Meta). */
+function insightWindows(startMs, endMs) {
+  const out = [];
+  let cursor = startMs;
+  while (cursor <= endMs) {
+    const next = Math.min(cursor + 29 * DAY_SECONDS * 1000, endMs);
+    out.push([Math.floor(cursor / 1000), Math.floor(next / 1000)]);
+    cursor = next + DAY_SECONDS * 1000;
+  }
+  return out;
+}
+
+/** Série diária de uma métrica de conta. Nunca lança — devolve [] em caso de erro. */
+async function fetchDailyMetric(base, igId, token, metric, windows, extra = '') {
+  const series = [];
+  for (const [s, u] of windows) {
+    try {
+      const d = await metaGetJson(
+        `${base}/${igId}/insights?metric=${metric}&period=day&since=${s}&until=${u}${extra}&access_token=${token}`
+      );
+      const values = d?.data?.[0]?.values || [];
+      for (const v of values) {
+        series.push({ date: (v.end_time || '').slice(0, 10), value: Number(v.value) || 0 });
+      }
+    } catch (err) {
+      console.warn(`[insights] métrica ${metric} indisponível:`, err.message);
+    }
+  }
+  return series;
+}
+
+/** Valor total de uma métrica (API v21 exige metric_type=total_value para várias). */
+async function fetchTotalMetric(base, igId, token, metric, windows) {
+  let total = 0;
+  let ok = false;
+  for (const [s, u] of windows) {
+    try {
+      const d = await metaGetJson(
+        `${base}/${igId}/insights?metric=${metric}&metric_type=total_value&period=day&since=${s}&until=${u}&access_token=${token}`
+      );
+      const tv = d?.data?.[0]?.total_value?.value;
+      if (typeof tv === 'number') { total += tv; ok = true; }
+    } catch (err) {
+      console.warn(`[insights] total ${metric} indisponível:`, err.message);
+    }
+  }
+  return ok ? total : null;
+}
+
+const sumSeries = (series) => series.reduce((acc, i) => acc + (i.value || 0), 0);
+
+/**
+ * Reúne todas as métricas do período para uma conta do Instagram.
+ * Cada bloco é tolerante a falha: se a Meta negar uma métrica, ela vem como null.
+ */
+async function fetchInstagramInsights(account, since, until) {
+  const token = account.access_token;
+  if (!token) throw new Error('Conta sem token. Reconecte o Instagram do cliente.');
+  const direct = (account.api_base || 'facebook') === 'instagram';
+  const base = direct ? IG_API_BASE : META_API_BASE;
+  const igId = direct ? (account.instagram_business_id || 'me') : account.instagram_business_id;
+  if (!igId) throw new Error('Conta do Instagram não identificada.');
+
+  const startMs = new Date(`${since}T00:00:00Z`).getTime();
+  const endMs = new Date(`${until}T00:00:00Z`).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) {
+    throw new Error('Período inválido.');
+  }
+  const windows = insightWindows(startMs, endMs);
+
+  let profile = {};
+  try {
+    profile = await metaGetJson(`${base}/${igId}?fields=username,followers_count,media_count&access_token=${token}`);
+  } catch (err) {
+    console.warn('[insights] perfil indisponível:', err.message);
+  }
+
+  const reachSeries = await fetchDailyMetric(base, igId, token, 'reach', windows);
+  const followerSeries = await fetchDailyMetric(base, igId, token, 'follower_count', windows);
+  const profileViews = await fetchTotalMetric(base, igId, token, 'profile_views', windows);
+  const websiteClicks = await fetchTotalMetric(base, igId, token, 'website_clicks', windows);
+  const accountsEngaged = await fetchTotalMetric(base, igId, token, 'accounts_engaged', windows);
+  const impressions = await fetchTotalMetric(base, igId, token, 'views', windows);
+
+  // Publicações do período com desempenho individual
+  const posts = [];
+  try {
+    const fields = [
+      'id', 'caption', 'media_type', 'media_product_type', 'media_url', 'thumbnail_url',
+      'permalink', 'timestamp', 'like_count', 'comments_count',
+      'insights.metric(reach,saved,total_interactions)',
+    ].join(',');
+    let url = `${base}/${igId}/media?fields=${encodeURIComponent(fields)}&limit=50&access_token=${token}`;
+    let pages = 0;
+    while (url && pages < 6) {
+      const page = await metaGetJson(url);
+      for (const m of page.data || []) {
+        const ts = m.timestamp ? new Date(m.timestamp).getTime() : 0;
+        if (!ts || ts < startMs || ts > endMs + DAY_SECONDS * 1000) continue;
+        const ins = {};
+        for (const i of m.insights?.data || []) ins[i.name] = i.values?.[0]?.value ?? 0;
+        posts.push({
+          id: m.id,
+          caption: (m.caption || '').slice(0, 220),
+          media_type: m.media_product_type === 'REELS' ? 'REELS' : (m.media_type || 'IMAGE'),
+          thumbnail: m.thumbnail_url || m.media_url || null,
+          permalink: m.permalink || null,
+          timestamp: m.timestamp || null,
+          likes: m.like_count ?? 0,
+          comments: m.comments_count ?? 0,
+          reach: ins.reach ?? null,
+          saved: ins.saved ?? null,
+          interactions: ins.total_interactions ?? null,
+        });
+      }
+      const oldest = (page.data || []).slice(-1)[0]?.timestamp;
+      if (oldest && new Date(oldest).getTime() < startMs) break;
+      url = page.paging?.next || null;
+      pages += 1;
+    }
+  } catch (err) {
+    console.warn('[insights] publicações indisponíveis:', err.message);
+  }
+  posts.sort((a, b) => (b.reach ?? 0) - (a.reach ?? 0));
+
+  const totalReach = reachSeries.length ? sumSeries(reachSeries) : null;
+  const followersGained = followerSeries.length ? sumSeries(followerSeries) : null;
+  const engagement = posts.reduce((acc, p) => acc + (p.interactions ?? (p.likes + p.comments)), 0);
+
+  return {
+    account_name: profile.username || account.account_name || null,
+    period: { since, until },
+    followers_total: profile.followers_count ?? null,
+    followers_gained: followersGained,
+    media_total: profile.media_count ?? null,
+    reach: totalReach,
+    views: impressions,
+    profile_views: profileViews,
+    website_clicks: websiteClicks,
+    accounts_engaged: accountsEngaged,
+    interactions: posts.length ? engagement : null,
+    posts_count: posts.length,
+    avg_reach_per_post: posts.length && totalReach !== null
+      ? Math.round(posts.reduce((a, p) => a + (p.reach ?? 0), 0) / posts.length)
+      : null,
+    reach_series: reachSeries,
+    follower_series: followerSeries,
+    posts: posts.slice(0, 30),
+  };
+}
+
+/** Busca (com cache) as métricas do cliente no período. */
+async function getClientInsights(clientId, since, until, { maxAgeMinutes = 180 } = {}) {
+  await ensureSocialInsightsSchema();
+  const { rows: cached } = await pool.query(
+    `SELECT data, fetched_at FROM social_insights_snapshots
+     WHERE client_id = $1 AND period_start = $2 AND period_end = $3`,
+    [clientId, since, until]
+  );
+  const fresh = cached[0] && (Date.now() - new Date(cached[0].fetched_at).getTime()) < maxAgeMinutes * 60000;
+  if (fresh) return { ...cached[0].data, cached: true, fetched_at: cached[0].fetched_at };
+
+  const { rows: accounts } = await pool.query(
+    `SELECT * FROM social_accounts WHERE client_id = $1 AND platform = 'instagram' AND status = 'connected' LIMIT 1`,
+    [clientId]
+  );
+  if (!accounts.length) {
+    if (cached[0]) return { ...cached[0].data, cached: true, fetched_at: cached[0].fetched_at };
+    throw new Error('Cliente sem Instagram conectado.');
+  }
+
+  try {
+    const data = await fetchInstagramInsights(accounts[0], since, until);
+    await pool.query(
+      `INSERT INTO social_insights_snapshots (client_id, period_start, period_end, account_name, data, fetched_at)
+       VALUES ($1,$2,$3,$4,$5, now())
+       ON CONFLICT ON CONSTRAINT social_insights_period_uniq
+       DO UPDATE SET data = EXCLUDED.data, account_name = EXCLUDED.account_name, fetched_at = now()`,
+      [clientId, since, until, data.account_name, JSON.stringify(data)]
+    );
+    return { ...data, cached: false, fetched_at: new Date().toISOString() };
+  } catch (err) {
+    if (cached[0]) return { ...cached[0].data, cached: true, stale_error: err.message, fetched_at: cached[0].fetched_at };
+    throw err;
+  }
+}
+
+// Métricas de um cliente (equipe)
+app.get('/api/social-posts/insights', async (req, res) => {
+  try {
+    await verifyUser(req);
+    const clientId = String(req.query.client_id || '').trim();
+    const since = String(req.query.since || '').trim();
+    const until = String(req.query.until || '').trim();
+    const isDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v);
+    if (!clientId) return res.status(400).json({ error: 'client_id é obrigatório' });
+    if (!isDate(since) || !isDate(until)) return res.status(400).json({ error: 'Período inválido (use YYYY-MM-DD)' });
+    const refresh = String(req.query.refresh || '') === '1';
+    const insights = await getClientInsights(clientId, since, until, { maxAgeMinutes: refresh ? 0 : 180 });
+    res.json({ insights });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+  }
+});
+
+// Liga/desliga a exibição das métricas no portal do cliente
+app.post('/api/social-posts/portal-insights', async (req, res) => {
+  try {
+    await verifyUser(req);
+    await ensureSocialInsightsSchema();
+    const { client_id, enabled } = req.body || {};
+    if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
+    await pool.query(`UPDATE clients SET portal_insights_enabled = $2 WHERE id = $1`, [client_id, !!enabled]);
+    res.json({ success: true, enabled: !!enabled });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+  }
+});
+
+
+
 // Biblioteca de mídias já existentes no sistema para um cliente (artes e vídeos)
 app.get('/api/social-posts/media-library', async (req, res) => {
   try {

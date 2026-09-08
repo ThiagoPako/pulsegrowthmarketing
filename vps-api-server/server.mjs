@@ -5934,15 +5934,30 @@ app.post('/api/social-posts', async (req, res) => {
   try {
     const { user } = await verifyUser(req);
     await ensureSocialPostsSchema();
-    const { client_id, delivery_id, content_task_id, platform = 'instagram', publish_type = 'reels', media_url, caption = '', scheduled_at } = req.body || {};
+    const {
+      client_id, delivery_id, content_task_id, platform = 'instagram', publish_type = 'reels',
+      media_url, media_items, caption = '', scheduled_at, story_link, story_link_text,
+    } = req.body || {};
 
     if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
     if (!['instagram', 'facebook', 'both'].includes(platform)) return res.status(400).json({ error: 'platform inválida' });
-    if (!['reels', 'feed', 'stories'].includes(publish_type)) return res.status(400).json({ error: 'publish_type inválido' });
-    if (!media_url || !/^https?:\/\//i.test(media_url)) return res.status(400).json({ error: 'media_url precisa ser um link público (https://...) do vídeo ou imagem final' });
-    if (/drive\.google\.com|dropbox\.com\/s\//i.test(media_url) && !/uc\?export=download|dl=1/i.test(media_url)) {
-      return res.status(400).json({ error: 'Links de pasta/visualização do Drive/Dropbox não funcionam. Use o vídeo enviado na etapa de edição (link direto do arquivo).' });
+    if (!['reels', 'feed', 'stories', 'carousel'].includes(publish_type)) return res.status(400).json({ error: 'publish_type inválido' });
+
+    const items = Array.isArray(media_items)
+      ? media_items.map(i => (typeof i === 'string' ? { url: i } : i)).filter(i => i && typeof i.url === 'string')
+      : [];
+    const urls = items.length ? items.map(i => i.url) : (media_url ? [media_url] : []);
+    if (!urls.length) return res.status(400).json({ error: 'Envie pelo menos uma mídia com link público (https://...)' });
+    for (const u of urls) {
+      if (!/^https?:\/\//i.test(u)) return res.status(400).json({ error: 'Todas as mídias precisam ser links públicos (https://...)' });
+      if (/drive\.google\.com|dropbox\.com\/s\//i.test(u) && !/uc\?export=download|dl=1/i.test(u)) {
+        return res.status(400).json({ error: 'Links de pasta/visualização do Drive/Dropbox não funcionam. Use o link direto do arquivo.' });
+      }
     }
+    if (publish_type === 'carousel' && urls.length < 2) return res.status(400).json({ error: 'Carrossel precisa de pelo menos 2 mídias.' });
+    if (publish_type === 'carousel' && urls.length > 10) return res.status(400).json({ error: 'Carrossel aceita no máximo 10 mídias.' });
+    if (story_link && !/^https?:\/\//i.test(story_link)) return res.status(400).json({ error: 'O link do story precisa começar com https://' });
+
     const when = new Date(scheduled_at);
     if (!scheduled_at || Number.isNaN(when.getTime())) return res.status(400).json({ error: 'scheduled_at inválido' });
     if (caption.length > 2200) return res.status(400).json({ error: 'Legenda acima de 2200 caracteres (limite do Instagram)' });
@@ -5957,9 +5972,13 @@ app.post('/api/social-posts', async (req, res) => {
       await pool.query(`UPDATE scheduled_posts SET status='cancelado', updated_at=now() WHERE delivery_id=$1 AND status IN ('agendado')`, [delivery_id]);
     }
     const { rows } = await pool.query(
-      `INSERT INTO scheduled_posts (client_id, delivery_id, content_task_id, platform, publish_type, media_url, caption, scheduled_at, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [client_id, delivery_id || null, content_task_id || null, platform, publish_type, media_url, caption, when.toISOString(), user?.id || null]
+      `INSERT INTO scheduled_posts (client_id, delivery_id, content_task_id, platform, publish_type, media_url, media_items, caption, scheduled_at, created_by, story_link, story_link_text)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      [
+        client_id, delivery_id || null, content_task_id || null, platform, publish_type,
+        urls[0], items.length ? JSON.stringify(items) : null, caption, when.toISOString(), user?.id || null,
+        story_link || null, story_link_text || null,
+      ]
     );
     res.json({ success: true, post: rows[0] });
   } catch (error) {

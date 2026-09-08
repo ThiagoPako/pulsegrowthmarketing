@@ -5,8 +5,14 @@
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 
 export type SocialPlatformTarget = 'instagram' | 'facebook' | 'both';
-export type SocialPublishType = 'reels' | 'feed' | 'stories';
+export type SocialPublishType = 'reels' | 'feed' | 'stories' | 'carousel';
 export type ScheduledPostStatus = 'agendado' | 'publicando' | 'publicado' | 'erro' | 'cancelado';
+
+export interface PostMediaItem {
+  url: string;
+  /** rótulo opcional para organizar o carrossel */
+  label?: string;
+}
 
 export interface ConnectedSocialAccount {
   id: string;

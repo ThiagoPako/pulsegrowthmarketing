@@ -13,11 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink, Database, FileText as FileTextIcon, MonitorPlay, Loader2, UserMinus, Sparkles, Palette, Users as UsersIcon, Megaphone, Lightbulb, Camera, Award, Layers, MoveHorizontal, ArrowRightLeft } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink, Database, FileText as FileTextIcon, MonitorPlay, Loader2, UserMinus, Sparkles, Palette, Users as UsersIcon, Megaphone, Lightbulb, Camera, Award, Layers, MoveHorizontal, ArrowRightLeft, Save } from 'lucide-react';
 import { TransferClientDialog } from '@/components/TransferClientDialog';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/vpsDb';
+import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { uploadFileToVps } from '@/services/vpsApi';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
 import { Textarea } from '@/components/ui/textarea';
@@ -150,6 +151,9 @@ export default function Clients() {
   const [existingSocialAccounts, setExistingSocialAccounts] = useState<any[]>([]);
   /** Indica se as chaves da Meta/Instagram já foram cadastradas em Financeiro → Integrações. */
   const [metaConfigured, setMetaConfigured] = useState(false);
+  const [manualToken, setManualToken] = useState('');
+  const [manualPlatform, setManualPlatform] = useState<'instagram' | 'facebook'>('instagram');
+  const [savingManualToken, setSavingManualToken] = useState(false);
   /** A etapa de conexão de redes sociais é sempre exibida — sem ela o botão de conectar ficava invisível. */
   const hasMetaApi = true;
 
@@ -1388,7 +1392,7 @@ export default function Clients() {
     try {
       const redirectUri = `${window.location.origin}/`;
       
-      const { data, error } = await supabase.functions.invoke('meta-oauth', {
+      const { data, error } = await invokeVpsFunction('meta-oauth', {
         body: {
           action: flow === 'instagram' ? 'get_instagram_oauth_url' : 'get_oauth_url',
           client_id: clientId,
@@ -1429,7 +1433,7 @@ export default function Clients() {
                   parsedClientId = stateObj.client_id || clientId;
                 } catch {}
 
-                const { data: result, error: exchangeError } = await supabase.functions.invoke('meta-oauth', {
+                const { data: result, error: exchangeError } = await invokeVpsFunction('meta-oauth', {
                   body: {
                     action: exchangeAction,
                     code,
@@ -1488,7 +1492,7 @@ export default function Clients() {
             parsedClientId = stateObj.client_id || savedClientId;
           } catch {}
 
-          const { data: result, error } = await supabase.functions.invoke('meta-oauth', {
+          const { data: result, error } = await invokeVpsFunction('meta-oauth', {
             body: {
               action: savedFlow === 'instagram' ? 'exchange_instagram_code' : 'exchange_code',
               code,
@@ -1529,6 +1533,45 @@ export default function Clients() {
       setSocialAccounts(prev => ({ ...prev, facebook: emptySocialAccounts().facebook }));
     }
     toast.success(`${platform === 'instagram' ? 'Instagram' : 'Facebook'} desconectado`);
+  };
+
+  const saveManualToken = async () => {
+    const clientId = editing?.id;
+    if (!clientId || clientId === 'new') {
+      toast.error('Salve o cliente primeiro antes de colar o token.');
+      return;
+    }
+    if (!manualToken.trim()) {
+      toast.error('Cole o token gerado no painel da Meta.');
+      return;
+    }
+    setSavingManualToken(true);
+    try {
+      const { data, error } = await invokeVpsFunction('social-accounts/manual-token', {
+        body: {
+          client_id: clientId,
+          platform: manualPlatform,
+          token: manualToken.trim(),
+        },
+      });
+      if (error || data?.error) {
+        toast.error(data?.error || error?.message || 'Erro ao salvar token');
+        return;
+      }
+      const accounts = data?.accounts || [];
+      const ig = accounts.find((a: any) => a.platform === 'instagram');
+      const fb = accounts.find((a: any) => a.platform === 'facebook');
+      setSocialAccounts(prev => ({
+        instagram: ig ? { connected: true, accountName: ig.name, username: `@${ig.username || ig.name}`, pageId: ig.pageId || '', businessId: ig.businessId || '' } : prev.instagram,
+        facebook: fb ? { connected: true, accountName: fb.name, pageId: fb.pageId || '' } : prev.facebook,
+      }));
+      setManualToken('');
+      toast.success(`✅ Token salvo — ${accounts.length} conta(s) conectada(s)!`);
+    } catch (err: any) {
+      toast.error('Erro: ' + err.message);
+    } finally {
+      setSavingManualToken(false);
+    }
   };
 
   const renderStep1 = () => (
@@ -1642,6 +1685,44 @@ export default function Clients() {
           </div>
         </div>
       )}
+
+      {/* Token manual (fallback quando testadores estão bloqueados) */}
+      <div className="p-4 rounded-xl border border-dashed border-border bg-muted/30 space-y-3">
+        <p className="text-sm font-semibold flex items-center gap-2">
+          <KeyRound size={16} className="text-primary" /> Colar token gerado na Meta
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Se o botão de conexão der erro de testador, gere o token no painel da Meta e cole aqui.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Select value={manualPlatform} onValueChange={(v: 'instagram' | 'facebook') => setManualPlatform(v)}>
+            <SelectTrigger className="text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="instagram">Instagram (login direto)</SelectItem>
+              <SelectItem value="facebook">Facebook (Página + Instagram)</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="gap-1 text-xs"
+            onClick={saveManualToken}
+            disabled={savingManualToken || !manualToken.trim()}
+          >
+            {savingManualToken ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            Salvar token
+          </Button>
+        </div>
+        <Textarea
+          value={manualToken}
+          onChange={e => setManualToken(e.target.value)}
+          placeholder="Cole aqui o token gerado no Meta Developers..."
+          rows={3}
+          className="font-mono text-xs"
+        />
+      </div>
     </div>
   );
 

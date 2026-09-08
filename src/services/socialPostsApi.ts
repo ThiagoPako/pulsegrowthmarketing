@@ -109,5 +109,6 @@ export async function publishScheduledPostNow(id: string): Promise<ScheduledPost
 export function suggestPublishType(contentType: string): SocialPublishType {
   if (contentType === 'story' || contentType === 'stories') return 'stories';
   if (contentType === 'reels') return 'reels';
+  if (contentType === 'carrossel' || contentType === 'carousel') return 'carousel';
   return 'feed';
 }

@@ -148,7 +148,10 @@ export default function Clients() {
   // Social accounts state
   const [socialAccounts, setSocialAccounts] = useState<SocialAccountState>(emptySocialAccounts());
   const [existingSocialAccounts, setExistingSocialAccounts] = useState<any[]>([]);
-  const [hasMetaApi, setHasMetaApi] = useState(false);
+  /** Indica se as chaves da Meta/Instagram já foram cadastradas em Financeiro → Integrações. */
+  const [metaConfigured, setMetaConfigured] = useState(false);
+  /** A etapa de conexão de redes sociais é sempre exibida — sem ela o botão de conectar ficava invisível. */
+  const hasMetaApi = true;
 
   // ============ Validação de coerência das metas x plano ============
   // Regras:
@@ -199,7 +202,7 @@ export default function Clients() {
       if (data) setPlans(data as any[]);
     });
     supabase.from('api_integrations').select('id').in('provider', ['meta', 'meta_ads']).eq('status', 'ativo').limit(1).then(({ data }) => {
-      setHasMetaApi(!!(data && data.length > 0));
+      setMetaConfigured(!!(data && data.length > 0));
     });
     supabase.from('commercial_proposals').select('id, client_name, client_company, status, proposal_type, bonus_services, plan_snapshot, whatsapp_number, system_data').eq('status', 'aceita').then(({ data }) => {
       if (data) setProposals(data as any[]);
@@ -1538,6 +1541,17 @@ export default function Clients() {
           Para permitir publicação automática de conteúdo, conecte as contas da empresa.
         </p>
       </div>
+
+      {!metaConfigured && (
+        <div className="p-3 rounded-lg border border-destructive/30 bg-destructive/5 flex gap-2 items-start">
+          <Info size={16} className="text-destructive shrink-0 mt-0.5" />
+          <p className="text-xs text-muted-foreground">
+            As chaves do Instagram/Facebook ainda não foram cadastradas. Vá em <strong>Financeiro → Integrações</strong> e informe o App ID e o App Secret antes de conectar o perfil do cliente.
+          </p>
+        </div>
+      )}
+
+
 
       {/* Connect Button - Single OAuth for both platforms */}
       {!socialAccounts.instagram.connected && !socialAccounts.facebook.connected ? (

@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Copy, Download, Gift, Image as ImageIcon, Loader2, Plus, Printer, Sparkles, Ticket, Trash2, Upload, X } from 'lucide-react';
+import { Camera, Copy, Download, Gift, Image as ImageIcon, Loader2, Plus, Printer, Sparkles, Ticket, Trash2, Upload, X } from 'lucide-react';
 import TicketPrintSheet from '@/components/promo/TicketPrintSheet';
 import {
   deletePromoCampaign,
@@ -68,15 +68,33 @@ interface ImageFieldProps {
 /** Campo de upload visual com prévia, dimensões recomendadas e botão de remover. */
 function ImageField({ label, hint, value, uploading, aspect = 'aspect-video', onSelect, onClear }: ImageFieldProps) {
   const inputId = `upload-${label.toLowerCase().replace(/\s+/g, '-')}`;
+  const cameraId = `${inputId}-camera`;
   const preview = promoAssetUrl(value);
   const [broken, setBroken] = useState(false);
   useEffect(() => setBroken(false), [preview]);
+
+  const fileInput = (id: string, camera: boolean) => (
+    <input
+      id={id}
+      type="file"
+      accept="image/png,image/jpeg,image/webp"
+      {...(camera ? { capture: 'environment' as const } : {})}
+      className="hidden"
+      disabled={uploading}
+      onChange={(e) => {
+        const file = e.target.files?.[0];
+        if (file) onSelect(file);
+        e.target.value = '';
+      }}
+    />
+  );
+
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <Label>{label}</Label>
       <label
         htmlFor={inputId}
-        className={`relative flex ${aspect} max-h-56 w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/40 transition-colors hover:border-primary hover:bg-muted`}
+        className={`relative flex ${aspect} max-h-64 w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/40 transition-colors hover:border-primary hover:bg-muted`}
       >
         {preview && !broken ? (
           <img src={preview} alt={label} className="h-full w-full object-contain p-1" onError={() => setBroken(true)} />
@@ -84,37 +102,39 @@ function ImageField({ label, hint, value, uploading, aspect = 'aspect-video', on
           <div className="flex flex-col items-center gap-1 p-4 text-center text-destructive">
             <X className="h-6 w-6" />
             <span className="text-xs font-medium">Imagem não encontrada no servidor</span>
-            <span className="text-[10px] text-muted-foreground">Clique para enviar novamente</span>
+            <span className="text-[10px] text-muted-foreground">Toque para enviar novamente</span>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-1 p-4 text-center text-muted-foreground">
-            {uploading ? <Loader2 className="h-6 w-6 animate-spin" /> : <Upload className="h-6 w-6" />}
-            <span className="text-xs font-medium">Clique para enviar</span>
+            {uploading ? <Loader2 className="h-7 w-7 animate-spin" /> : <Upload className="h-7 w-7" />}
+            <span className="text-xs font-medium">Toque para escolher da galeria</span>
           </div>
         )}
-        <input
-          id={inputId}
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          className="hidden"
-          disabled={uploading}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) onSelect(file);
-            e.target.value = '';
-          }}
-        />
+        {fileInput(inputId, false)}
       </label>
-      <div className="flex items-center justify-between gap-2">
-        <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
-          <ImageIcon className="h-3 w-3" /> {hint}
-        </p>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" variant="outline" size="sm" className="h-9 flex-1 min-w-[130px]" disabled={uploading} asChild>
+          <label htmlFor={inputId} className="cursor-pointer">
+            <Upload className="mr-2 h-4 w-4" /> Galeria
+          </label>
+        </Button>
+        <Button type="button" variant="outline" size="sm" className="h-9 flex-1 min-w-[130px] sm:hidden" disabled={uploading} asChild>
+          <label htmlFor={cameraId} className="cursor-pointer">
+            <Camera className="mr-2 h-4 w-4" /> Câmera
+          </label>
+        </Button>
         {value ? (
-          <button type="button" onClick={onClear} className="flex items-center gap-1 text-[11px] text-destructive hover:underline">
-            <X className="h-3 w-3" /> Remover
-          </button>
+          <Button type="button" variant="ghost" size="sm" className="h-9 text-destructive" onClick={onClear}>
+            <X className="mr-1 h-4 w-4" /> Remover
+          </Button>
         ) : null}
       </div>
+      {fileInput(cameraId, true)}
+
+      <p className="flex items-start gap-1 text-[11px] leading-snug text-muted-foreground">
+        <ImageIcon className="mt-0.5 h-3 w-3 shrink-0" /> {hint}
+      </p>
     </div>
   );
 }
@@ -320,13 +340,14 @@ export default function PromoAdmin() {
   }
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
+    <div className="space-y-5 p-3 pb-24 sm:space-y-6 sm:p-6 sm:pb-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Sorteios de Prêmios</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">Sorteios de Prêmios</h1>
           <p className="text-sm text-muted-foreground">Roleta e raspadinha com QR Code descartável.</p>
         </div>
         <Button
+          className="hidden sm:inline-flex"
           onClick={() => {
             setCampaignForm(EMPTY_CAMPAIGN);
             setCampaignDialog(true);
@@ -335,6 +356,18 @@ export default function PromoAdmin() {
           <Plus className="mr-2 h-4 w-4" /> Novo sorteio
         </Button>
       </div>
+
+      {/* Botão fixo para cadastro pelo celular */}
+      <Button
+        size="lg"
+        className="fixed bottom-4 left-3 right-3 z-40 h-12 shadow-lg sm:hidden"
+        onClick={() => {
+          setCampaignForm(EMPTY_CAMPAIGN);
+          setCampaignDialog(true);
+        }}
+      >
+        <Plus className="mr-2 h-5 w-5" /> Novo sorteio
+      </Button>
 
       {loading ? (
         <div className="flex items-center gap-2 text-muted-foreground">
@@ -348,12 +381,12 @@ export default function PromoAdmin() {
         </Card>
       ) : (
         <>
-          <div className="flex flex-wrap gap-2">
+          <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
             {campaigns.map((campaign) => (
               <button
                 key={campaign.id}
                 onClick={() => setSelectedId(campaign.id)}
-                className={`rounded-full border px-4 py-1.5 text-sm transition-colors ${
+                className={`shrink-0 rounded-full border px-4 py-2 text-sm transition-colors ${
                   campaign.id === selectedId ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:bg-muted'
                 }`}
               >
@@ -364,7 +397,7 @@ export default function PromoAdmin() {
 
           {selected ? (
             <>
-              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
                 {[
                   { label: 'Cupons gerados', value: num(selected.tickets_total) },
                   { label: 'Cupons escaneados', value: num(selected.tickets_opened) },
@@ -373,22 +406,24 @@ export default function PromoAdmin() {
                   { label: 'Leads capturados', value: num(selected.leads_total) },
                 ].map((metric) => (
                   <Card key={metric.label}>
-                    <CardContent className="p-4">
-                      <p className="text-xs text-muted-foreground">{metric.label}</p>
-                      <p className="mt-1 text-2xl font-bold">{metric.value}</p>
+                    <CardContent className="p-3 sm:p-4">
+                      <p className="text-[11px] text-muted-foreground sm:text-xs">{metric.label}</p>
+                      <p className="mt-1 text-xl font-bold sm:text-2xl">{metric.value}</p>
                     </CardContent>
                   </Card>
                 ))}
               </div>
 
               <Tabs defaultValue="premios">
-                <TabsList>
-                  <TabsTrigger value="premios">Prêmios</TabsTrigger>
-                  <TabsTrigger value="cupons">Cupons e impressão</TabsTrigger>
-                  <TabsTrigger value="resgatados">Prêmios resgatados</TabsTrigger>
-                  <TabsTrigger value="leads">Leads</TabsTrigger>
-                  <TabsTrigger value="config">Configurações</TabsTrigger>
-                </TabsList>
+                <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
+                  <TabsList className="w-max">
+                    <TabsTrigger value="premios">Prêmios</TabsTrigger>
+                    <TabsTrigger value="cupons">Cupons e impressão</TabsTrigger>
+                    <TabsTrigger value="resgatados">Prêmios resgatados</TabsTrigger>
+                    <TabsTrigger value="leads">Leads</TabsTrigger>
+                    <TabsTrigger value="config">Configurações</TabsTrigger>
+                  </TabsList>
+                </div>
 
                 <TabsContent value="premios" className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -462,7 +497,7 @@ export default function PromoAdmin() {
                       <CardTitle className="text-base">Gerar lote de cupons</CardTitle>
                     </CardHeader>
                     <CardContent className="flex flex-wrap items-end gap-3">
-                      <div className="w-32">
+                      <div className="w-full sm:w-32">
                         <Label>Quantidade</Label>
                         <Input type="number" min={1} max={1000} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
                       </div>
@@ -471,7 +506,7 @@ export default function PromoAdmin() {
                           {preset}
                         </Button>
                       ))}
-                      <Button onClick={handleGenerate} disabled={saving}>
+                      <Button className="w-full sm:w-auto" onClick={handleGenerate} disabled={saving}>
                         {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Ticket className="mr-2 h-4 w-4" />}
                         Gerar e imprimir
                       </Button>
@@ -683,11 +718,11 @@ export default function PromoAdmin() {
 
       {/* Dialog de campanha */}
       <Dialog open={campaignDialog} onOpenChange={setCampaignDialog}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
+        <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col gap-3 overflow-hidden rounded-none p-4 sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-lg sm:rounded-lg sm:p-6">
+          <DialogHeader className="shrink-0 text-left">
             <DialogTitle>{campaignForm.id ? 'Editar sorteio' : 'Novo sorteio'}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="flex-1 space-y-4 overflow-y-auto pb-2 pr-1">
             <div>
               <Label>Título</Label>
               <Input
@@ -790,8 +825,8 @@ export default function PromoAdmin() {
               <Switch checked={campaignForm.is_active !== false} onCheckedChange={(v) => setCampaignForm((f) => ({ ...f, is_active: v }))} />
             </div>
           </div>
-          <DialogFooter>
-            <Button onClick={handleSaveCampaign} disabled={saving || !campaignForm.title}>
+          <DialogFooter className="shrink-0 border-t border-border pt-3">
+            <Button className="h-12 w-full sm:h-10 sm:w-auto" onClick={handleSaveCampaign} disabled={saving || !campaignForm.title}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Salvar
             </Button>
           </DialogFooter>
@@ -800,11 +835,11 @@ export default function PromoAdmin() {
 
       {/* Dialog de prêmio */}
       <Dialog open={prizeDialog} onOpenChange={setPrizeDialog}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col gap-3 overflow-hidden rounded-none p-4 sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-md sm:rounded-lg sm:p-6">
+          <DialogHeader className="shrink-0 text-left">
             <DialogTitle>{prizeForm.id ? 'Editar prêmio' : 'Novo prêmio'}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="flex-1 space-y-4 overflow-y-auto pb-2 pr-1">
             <div>
               <Label>Nome do prêmio</Label>
               <Input value={prizeForm.name || ''} onChange={(e) => setPrizeForm((f) => ({ ...f, name: e.target.value }))} placeholder="Liquidificador Mondial" />
@@ -843,8 +878,8 @@ export default function PromoAdmin() {
               <Switch checked={prizeForm.is_active !== false} onCheckedChange={(v) => setPrizeForm((f) => ({ ...f, is_active: v }))} />
             </div>
           </div>
-          <DialogFooter>
-            <Button onClick={handleSavePrize} disabled={saving || !prizeForm.name}>
+          <DialogFooter className="shrink-0 border-t border-border pt-3">
+            <Button className="h-12 w-full sm:h-10 sm:w-auto" onClick={handleSavePrize} disabled={saving || !prizeForm.name}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Salvar prêmio
             </Button>
           </DialogFooter>

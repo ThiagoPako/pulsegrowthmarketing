@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { syncFinancialContract } from '@/lib/financialContracts';
+import { PLACEHOLDER_CLIENT_ID, toAmount } from '@/lib/financialCalc';
+
 
 /** Normalize date strings like "2026-03-01T00:00:00.000Z" to "2026-03-01" */
 export const normalizeDate = (d: string | null | undefined): string => {
@@ -54,13 +56,20 @@ const deduplicateRevenues = (items: any[]) => {
   const byKey = new Map<string, any>();
 
   for (const revenue of items) {
-    const key = `${revenue.client_id}_${normalizeDate(revenue.reference_month)}`;
+    // Receitas avulsas/importadas (sem cliente real) nunca podem ser agrupadas:
+    // várias entradas do mesmo mês são lançamentos diferentes.
+    const clientId = revenue.client_id;
+    const isPlaceholderClient = !clientId || clientId === PLACEHOLDER_CLIENT_ID;
+    const key = isPlaceholderClient
+      ? `avulsa_${revenue.id}`
+      : `${clientId}_${normalizeDate(revenue.reference_month)}`;
     const existing = byKey.get(key);
     byKey.set(key, existing ? chooseCanonicalRevenue(existing, revenue) : revenue);
   }
 
   return Array.from(byKey.values());
 };
+
 
 export interface FinancialContract {
   id: string;
@@ -216,6 +225,10 @@ export function useFinancialData() {
 
       const uniqueRevenues = deduplicateRevenues(revenueData);
 
+      // Receitas avulsas/importadas não têm cliente real e não podem ser descartadas
+      const isVisibleRevenue = (r: any) =>
+        !r.client_id || r.client_id === PLACEHOLDER_CLIENT_ID || activeClientIds.has(r.client_id);
+
       const overdueIds: string[] = [];
       for (const r of uniqueRevenues) {
         if (r.status === 'prevista' && r.due_date && normalizeDate(r.due_date) < today) {
@@ -229,21 +242,16 @@ export function useFinancialData() {
             supabase.from('revenues').update({ status: 'em_atraso' } as any).eq('id', id)
           )
         );
-        const updated = await supabase.from('revenues').select('*').order('due_date', { ascending: false });
-        if (updated.data) {
-          const deduplicated = deduplicateRevenues(updated.data as any[]);
-          setRevenues(deduplicated.filter(r => activeClientIds.has(r.client_id)));
-        } else {
-          setRevenues(
-            uniqueRevenues
-              .map(r => (overdueIds.includes(r.id) ? { ...r, status: 'em_atraso' } : r))
-              .filter(r => activeClientIds.has(r.client_id))
-          );
-        }
-      } else {
-        setRevenues(uniqueRevenues.filter(r => activeClientIds.has(r.client_id)));
       }
+
+      const overdueSet = new Set(overdueIds);
+      setRevenues(
+        uniqueRevenues
+          .map(r => (overdueSet.has(r.id) ? { ...r, status: 'em_atraso' } : r))
+          .filter(isVisibleRevenue)
+      );
     }
+
 
 
     setLoading(false);
@@ -314,16 +322,35 @@ export function useFinancialData() {
 
 
   // Revenue CRUD
-  const addRevenue = async (r: Partial<Revenue>) => {
-    const { error } = await supabase.from('revenues').insert(r as any);
+  const addRevenue = async (r: Partial<Revenue>, clientName?: string) => {
+    const { data: inserted, error } = await supabase.from('revenues').insert(r as any).select('id').single();
     if (error) {
       console.error('[useFinancialData] addRevenue error:', error);
       return false;
     }
-    await logActivity('criação', 'receita', `Registrou receita - R$ ${Number(r.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, undefined, r);
+
+    // Receita já cadastrada como recebida entra no saldo da conta na hora,
+    // sempre com o ID vinculado para poder ser revertida/excluída depois.
+    const revenueId = (inserted as any)?.id;
+    const amountNum = toAmount(r.amount);
+    if (revenueId && (r.status === 'recebida' || r.status === 'pago') && amountNum > 0) {
+      const label = clientName
+        ? `${clientName} - ${amountNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+        : `Receita avulsa - ${amountNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+      await supabase.from('cash_reserve_movements').insert({
+        amount: amountNum,
+        type: 'entrada',
+        description: `[Receita] ${label} - ID: ${revenueId}`,
+        date: normalizeDate(r.paid_at || r.due_date || new Date().toISOString().split('T')[0]),
+        is_reserve: false,
+      } as any);
+    }
+
+    await logActivity('criação', 'receita', `Registrou receita - R$ ${amountNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, revenueId, r);
     await fetchAll();
     return true;
   };
+
 
   const updateRevenue = async (id: string, updates: Partial<Revenue>, clientName?: string) => {
     try {
@@ -336,10 +363,22 @@ export function useFinancialData() {
       }
 
       const action = updates.status === 'recebida' ? 'Marcou receita como paga' : updates.status === 'prevista' ? 'Reverteu receita para pendente' : 'Atualizou receita';
-      const revenueAmount = Number(updates.amount || previousRevenue?.amount || 0);
+      const revenueAmount = toAmount(updates.amount ?? previousRevenue?.amount);
+      const wasReceived = previousRevenue?.status === 'recebida' || previousRevenue?.status === 'pago';
+      const isReceived = updates.status !== undefined
+        ? (updates.status === 'recebida' || updates.status === 'pago')
+        : wasReceived;
+
+      const linkedReceita = async () => {
+        const { data } = await supabase
+          .from('cash_reserve_movements')
+          .select('id')
+          .ilike('description', `%[Receita]%ID: ${id}%`);
+        return (data as any[]) || [];
+      };
 
       // Sync with account balance (cash_reserve_movements)
-      if (updates.status === 'recebida' && previousRevenue?.status !== 'recebida') {
+      if (isReceived && !wasReceived) {
         // Resolve client name for description
         let companyLabel = clientName || '';
         if (!companyLabel && previousRevenue?.client_id) {
@@ -352,21 +391,26 @@ export function useFinancialData() {
           amount: revenueAmount,
           type: 'entrada',
           description: `[Receita] ${descLabel} - ID: ${id}`,
-          date: updates.paid_at || new Date().toISOString().split('T')[0],
+          date: normalizeDate(updates.paid_at || previousRevenue?.due_date || new Date().toISOString().split('T')[0]),
           is_reserve: false,
         } as any);
-      } else if (updates.status === 'prevista' && previousRevenue?.status === 'recebida') {
+      } else if (!isReceived && wasReceived) {
         // Revenue reverted → remove the linked cash movement
-        const { data: linked } = await supabase
-          .from('cash_reserve_movements')
-          .select('id')
-          .ilike('description', `%[Receita]%ID: ${id}%`);
-        if (linked && linked.length > 0) {
-          for (const l of linked) {
-            await supabase.from('cash_reserve_movements').delete().eq('id', l.id);
+        for (const l of await linkedReceita()) {
+          await supabase.from('cash_reserve_movements').delete().eq('id', l.id);
+        }
+      } else if (isReceived && wasReceived) {
+        // Valor ou data do recebimento mudou → o saldo precisa acompanhar
+        const cashUpdates: any = {};
+        if (updates.amount !== undefined) cashUpdates.amount = revenueAmount;
+        if (updates.paid_at) cashUpdates.date = normalizeDate(updates.paid_at);
+        if (Object.keys(cashUpdates).length > 0) {
+          for (const l of await linkedReceita()) {
+            await supabase.from('cash_reserve_movements').update(cashUpdates).eq('id', l.id);
           }
         }
       }
+
 
       await logActivity('edição', 'receita', `${action} - R$ ${revenueAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, updates);
       await fetchAll();
@@ -535,6 +579,24 @@ export function useFinancialData() {
   };
 
   // Expense CRUD
+  const findLinkedExpenseMovements = async (expenseId: string) => {
+    const { data } = await supabase
+      .from('cash_reserve_movements')
+      .select('id')
+      .ilike('description', `%[Despesa]%ID: ${expenseId}%`);
+    return (data as any[]) || [];
+  };
+
+  const createExpenseCashMovement = async (expenseId: string, e: Partial<Expense>) => {
+    await supabase.from('cash_reserve_movements').insert({
+      amount: toAmount(e.amount),
+      type: 'saida',
+      description: `[Despesa] ${e.description || 'Despesa'} - ID: ${expenseId}`,
+      date: normalizeDate(e.date) || new Date().toISOString().split('T')[0],
+      is_reserve: false,
+    } as any);
+  };
+
   const addExpense = async (e: Partial<Expense>) => {
     try {
       const payload = { ...e };
@@ -545,20 +607,15 @@ export function useFinancialData() {
         return false;
       }
 
-      // Create cash movement (saida) linked to this expense
+      // Só sai do caixa o que foi efetivamente pago. Salário/bônus apenas
+      // provisionado não gera movimentação até ser marcado como PAGO.
       const expenseId = (inserted as any)?.id;
-      if (expenseId) {
-        await supabase.from('cash_reserve_movements').insert({
-          amount: Number(e.amount || 0),
-          type: 'saida',
-          description: `[Despesa] ${e.description || 'Despesa'} - ID: ${expenseId}`,
-          date: payload.date || new Date().toISOString().split('T')[0],
-          is_reserve: false,
-        } as any);
+      if (expenseId && isExpensePaid(payload as Expense)) {
+        await createExpenseCashMovement(expenseId, payload);
       }
 
       await fetchAll();
-      await logActivity('criação', 'despesa', `Registrou despesa - R$ ${Number(e.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${e.description}`, expenseId, payload);
+      await logActivity('criação', 'despesa', `Registrou despesa - R$ ${toAmount(e.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${e.description}`, expenseId, payload);
       return true;
     } catch (err) {
       console.error('[useFinancialData] addExpense unexpected error:', err);
@@ -568,6 +625,7 @@ export function useFinancialData() {
 
   const updateExpense = async (id: string, updates: Partial<Expense>) => {
     try {
+      const previous = expenses.find(ex => ex.id === id);
       const payload = { ...updates };
       if (payload.date) payload.date = normalizeDate(payload.date);
       const { error } = await supabase.from('expenses').update(payload as any).eq('id', id);
@@ -576,14 +634,22 @@ export function useFinancialData() {
         return false;
       }
 
-      // Update linked cash movement if amount or date changed
-      const { data: linked } = await supabase
-        .from('cash_reserve_movements')
-        .select('id')
-        .ilike('description', `%[Despesa]%ID: ${id}%`);
-      if (linked && linked.length > 0) {
+      // Estado final da despesa após a edição
+      const merged = { ...(previous || {}), ...payload } as Expense;
+      const linked = await findLinkedExpenseMovements(id);
+      const shouldHaveMovement = isExpensePaid(merged);
+
+      if (shouldHaveMovement && linked.length === 0) {
+        // Marcou como PAGO → agora sim entra como saída de caixa
+        await createExpenseCashMovement(id, merged);
+      } else if (!shouldHaveMovement && linked.length > 0) {
+        // Reverteu o pagamento → volta a ser apenas provisão
+        for (const l of linked) {
+          await supabase.from('cash_reserve_movements').delete().eq('id', l.id);
+        }
+      } else if (shouldHaveMovement && linked.length > 0) {
         const cashUpdates: any = {};
-        if (updates.amount !== undefined) cashUpdates.amount = Number(updates.amount);
+        if (updates.amount !== undefined) cashUpdates.amount = toAmount(updates.amount);
         if (updates.date) cashUpdates.date = normalizeDate(updates.date);
         if (updates.description) cashUpdates.description = `[Despesa] ${updates.description} - ID: ${id}`;
         if (Object.keys(cashUpdates).length > 0) {
@@ -594,13 +660,14 @@ export function useFinancialData() {
       }
 
       await fetchAll();
-      await logActivity('edição', 'despesa', `Editou despesa - R$ ${Number(updates.amount || expenses.find(ex => ex.id === id)?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, payload);
+      await logActivity('edição', 'despesa', `Editou despesa - R$ ${toAmount(updates.amount ?? previous?.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, payload);
       return true;
     } catch (err) {
       console.error('[useFinancialData] updateExpense unexpected error:', err);
       return false;
     }
   };
+
 
   const deleteExpense = async (id: string) => {
     const expense = expenses.find(e => e.id === id);

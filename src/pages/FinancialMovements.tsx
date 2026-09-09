@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react';
-import { useFinancialData, normalizeDate, isExpensePaid, type Revenue, type Expense, type CashMovement } from '@/hooks/useFinancialData';
+import { useFinancialData, normalizeDate, isExpensePaid, isSalaryLikeExpense, type Revenue, type Expense, type CashMovement } from '@/hooks/useFinancialData';
+import { isMirroredCashMovement, toAmount, sumAmounts, isRevenueReceived } from '@/lib/financialCalc';
+
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -111,13 +113,13 @@ export default function FinancialMovements() {
       const d = new Date(expDate + 'T12:00:00');
       if (d >= monthStart && d <= monthEnd) {
         const cat = categories.find(c => c.id === e.category_id);
-        const isSalary = cat?.name?.toLowerCase() === 'salários' || e.description?.startsWith('Salário -') || e.description?.startsWith('Bônus -');
+        const isSalary = isSalaryLikeExpense(e) || cat?.name?.toLowerCase() === 'salários';
         movements.push({
           id: e.id,
           date: expDate,
           type: 'despesa',
           description: e.description || 'Despesa',
-          amount: Number(e.amount),
+          amount: toAmount(e.amount),
           category: cat?.name,
           sourceType: 'despesa',
           isSalary,
@@ -126,8 +128,11 @@ export default function FinancialMovements() {
       }
     });
 
-    // Cash movements
+
+    // Cash movements — exclui os espelhos automáticos de receita/despesa,
+    // que já estão listados acima (senão o mesmo valor contaria duas vezes).
     cashMovements.forEach(m => {
+      if (isMirroredCashMovement(m)) return;
       const cashDate = normalizeDate(m.date);
       const d = new Date(cashDate + 'T12:00:00');
       if (d >= monthStart && d <= monthEnd) {
@@ -136,7 +141,7 @@ export default function FinancialMovements() {
           date: cashDate,
           type: m.type === 'entrada' ? 'caixa_entrada' : 'caixa_saida',
           description: m.description.replace(/\s*-\s*ID:\s*[a-f0-9-]+/gi, ''),
-          amount: Number(m.amount),
+          amount: toAmount(m.amount),
           sourceType: 'caixa',
           original: m,
         });
@@ -147,6 +152,7 @@ export default function FinancialMovements() {
     movements.sort((a, b) => b.date.localeCompare(a.date));
     return movements;
   }, [revenues, expenses, cashMovements, clients, categories, monthStart, monthEnd]);
+
 
   const filtered = useMemo(() => {
     let result = unified;
@@ -167,30 +173,32 @@ export default function FinancialMovements() {
 
   // Totals
   const totals = useMemo(() => {
-    const r = unified.filter(m => m.type === 'receita').reduce((s, m) => s + m.amount, 0);
-    const e = unified.filter(m => m.type === 'despesa' && !m.isSalary).reduce((s, m) => s + m.amount, 0);
-    const ci = unified.filter(m => m.type === 'caixa_entrada').reduce((s, m) => s + m.amount, 0);
-    const co = unified.filter(m => m.type === 'caixa_saida').reduce((s, m) => s + m.amount, 0);
-    const sal = unified.filter(m => m.isSalary).reduce((s, m) => s + m.amount, 0);
+    const r = sumAmounts(unified.filter(m => m.type === 'receita'));
+    const e = sumAmounts(unified.filter(m => m.type === 'despesa' && !m.isSalary));
+    const ci = sumAmounts(unified.filter(m => m.type === 'caixa_entrada'));
+    const co = sumAmounts(unified.filter(m => m.type === 'caixa_saida'));
+    const sal = sumAmounts(unified.filter(m => m.isSalary));
     return { receitas: r, despesas: e, caixaIn: ci, caixaOut: co, salarios: sal };
   }, [unified]);
 
-  // System movements for reconciliation
+  // System movements for reconciliation (sem espelhos automáticos, para não duplicar)
   const reconciliationMovements = useMemo(() => {
     const movs: { id: string; date: string; description: string; amount: number; type: 'entrada' | 'saida' }[] = [];
     revenues.forEach(r => {
-      if (r.status === 'recebida') {
+      if (isRevenueReceived(r)) {
         const client = clients.find(c => c.id === r.client_id);
-        movs.push({ id: r.id, date: normalizeDate(r.due_date), description: `Mensalidade - ${client?.companyName || 'Cliente'}`, amount: Number(r.amount), type: 'entrada' });
+        movs.push({ id: r.id, date: normalizeDate(r.paid_at || r.due_date), description: `Mensalidade - ${client?.companyName || 'Cliente'}`, amount: toAmount(r.amount), type: 'entrada' });
       }
     });
     expenses.forEach(e => {
       if (!isExpensePaid(e)) return;
-      movs.push({ id: e.id, date: normalizeDate(e.date), description: e.description || 'Despesa', amount: Number(e.amount), type: 'saida' });
+      movs.push({ id: e.id, date: normalizeDate(e.date), description: e.description || 'Despesa', amount: toAmount(e.amount), type: 'saida' });
     });
     cashMovements.forEach(m => {
-      movs.push({ id: m.id, date: normalizeDate(m.date), description: m.description, amount: Number(m.amount), type: m.type === 'entrada' ? 'entrada' : 'saida' });
+      if (isMirroredCashMovement(m)) return;
+      movs.push({ id: m.id, date: normalizeDate(m.date), description: m.description, amount: toAmount(m.amount), type: m.type === 'entrada' ? 'entrada' : 'saida' });
     });
+
     return movs;
   }, [revenues, expenses, cashMovements, clients]);
 
@@ -238,16 +246,22 @@ export default function FinancialMovements() {
   const handleEditSave = async () => {
     if (!editTarget) return;
     const val = parseFloat(editAmount);
-    if (!val || val <= 0) { toast.error('Informe um valor válido'); return; }
+    if (!Number.isFinite(val) || val <= 0) { toast.error('Informe um valor válido'); return; }
 
     let ok = false;
     if (editTarget.sourceType === 'receita') {
+      const originalRevenue = editTarget.original as Revenue;
+      // Mantém a data original do pagamento — editar valor não pode mudar quando foi pago
+      const paidAt = editStatus === 'recebida'
+        ? normalizeDate(originalRevenue.paid_at || '') || new Date().toISOString().split('T')[0]
+        : null;
       ok = await updateRevenue(editTarget.id, {
         amount: val,
         due_date: editDate,
         status: editStatus,
-        paid_at: editStatus === 'recebida' ? new Date().toISOString().split('T')[0] : null,
+        paid_at: paidAt,
       });
+
     } else if (editTarget.sourceType === 'despesa') {
       if (!editDescription.trim()) { toast.error('Informe uma descrição'); return; }
       ok = await updateExpense(editTarget.id, {

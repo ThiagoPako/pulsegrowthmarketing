@@ -273,7 +273,7 @@ export default function FinancialExpenses() {
         if (adv.category && adv.category !== 'all' && e.category_id !== adv.category) return false;
         if (adv.type && adv.type !== 'all' && e.expense_type !== adv.type) return false;
         if (activeTab === 'salarios' && adv.status && adv.status !== 'all') {
-          const paid = e.description?.endsWith(' - PAGO');
+          const paid = isExpensePaid(e);
           if (adv.status === 'pago' && !paid) return false;
           if (adv.status === 'pendente' && paid) return false;
         }
@@ -458,7 +458,7 @@ export default function FinancialExpenses() {
     else toast.error('Erro ao reverter');
   }, [updateExpense]);
 
-  const isSalaryPaid = (e: Expense) => e.description?.endsWith(' - PAGO');
+  const isSalaryPaid = (e: Expense) => isExpensePaid(e);
 
   const salaryPaidCount = filtered.filter(e => isSalaryPaid(e)).length;
   const salaryTotalCount = filtered.length;

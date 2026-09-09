@@ -255,23 +255,10 @@ export default function FinancialRevenues() {
     if (newRev.client_id) payload.client_id = newRev.client_id;
     if (desc) payload.description = desc;
 
-    console.log('[FinancialRevenues] Creating revenue with payload:', payload);
-    const ok = await addRevenue(payload);
+    // A movimentação de caixa da receita paga é criada pelo próprio addRevenue,
+    // sempre vinculada ao ID — evita entrada duplicada ou órfã no saldo.
+    const ok = await addRevenue(payload, clientName);
     if (ok) {
-      // If marked as paid, also create the cash movement
-      if (newRev.mark_paid) {
-        const amountNum = Number(newRev.amount);
-        const descLabel = clientName
-          ? `${clientName} - ${amountNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
-          : `Receita avulsa - ${amountNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
-        await supabase.from('cash_reserve_movements').insert({
-          amount: amountNum,
-          type: 'entrada',
-          description: `[Receita] ${descLabel}`,
-          date: newRev.due_date,
-          is_reserve: false,
-        } as any);
-      }
       toast.success('Receita cadastrada com sucesso!');
       setShowNewDialog(false);
       setNewRev({ client_id: '', amount: '', due_date: '', description: '', category: '', is_recurring: false, mark_paid: false });
@@ -279,6 +266,7 @@ export default function FinancialRevenues() {
       toast.error('Erro ao cadastrar receita');
     }
   };
+
 
   const [animatingPaid, setAnimatingPaid] = useState<string | null>(null);
   const [confirmPaidId, setConfirmPaidId] = useState<string | null>(null);

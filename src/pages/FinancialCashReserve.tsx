@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import FinancialFilters, { applyFinancialFilters, buildEmptyFilters, type FinancialFiltersValue } from '@/components/financial/FinancialFilters';
 import { useFinancialData, normalizeDate } from '@/hooks/useFinancialData';
+import { accountBalance, sumAmounts } from '@/lib/financialCalc';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,20 +31,19 @@ export default function FinancialCashReserve() {
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  const balance = useMemo(() =>
-    cashMovements.reduce((acc, m) => acc + (m.type === 'entrada' ? Number(m.amount) : -Number(m.amount)), 0),
-    [cashMovements]
-  );
+  // Saldo da conta (sem a reserva) — mesma regra do painel, para não divergir
+  const balance = useMemo(() => accountBalance(cashMovements as any), [cashMovements]);
 
   const totalIn = useMemo(() =>
-    cashMovements.filter(m => m.type === 'entrada').reduce((acc, m) => acc + Number(m.amount), 0),
+    sumAmounts(cashMovements.filter((m: any) => m.type === 'entrada' && !m.is_reserve)),
     [cashMovements]
   );
 
   const totalOut = useMemo(() =>
-    cashMovements.filter(m => m.type === 'saida').reduce((acc, m) => acc + Number(m.amount), 0),
+    sumAmounts(cashMovements.filter((m: any) => m.type === 'saida' && !m.is_reserve)),
     [cashMovements]
   );
+
 
   const displayed = useMemo(() =>
     applyFinancialFilters(cashMovements, filters, {

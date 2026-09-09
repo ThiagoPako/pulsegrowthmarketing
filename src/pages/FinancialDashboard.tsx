@@ -1,6 +1,8 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFinancialData, normalizeDate, isExpensePaid } from '@/hooks/useFinancialData';
+import { computeClientProfitability, sumAmounts, toAmount, accountBalance, reserveBalance, isRevenueReceived, isRevenueOverdue, isRevenuePending, safeDivide, safePercent, isSameMonth } from '@/lib/financialCalc';
+
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -203,38 +205,33 @@ export default function FinancialDashboard() {
     [contracts]
   );
 
-  const mrr = useMemo(() =>
-    activeContracts.reduce((sum, c) => sum + Number(c.contract_value), 0),
-    [activeContracts]
-  );
+  const mrr = useMemo(() => sumAmounts(activeContracts, c => c.contract_value), [activeContracts]);
 
-  const revenuePrevista = useMemo(() => monthRevenues.filter(r => Number(r.amount) > 0).reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
-  const revenueRecebida = useMemo(() => monthRevenues.filter(r => r.status === 'recebida').reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
-  const revenueAtraso = useMemo(() => monthRevenues.filter(r => ['em_atraso', 'vencido'].includes(r.status)).reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
-  const totalExpenses = useMemo(() => monthExpenses.reduce((s, e) => s + Number(e.amount), 0), [monthExpenses]);
-  // Lucro uses received + expected (prevista) revenues minus expenses for a more realistic view
-  const revenuePendente = useMemo(() => monthRevenues.filter(r => r.status === 'prevista').reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
-  
-  const structureExpenses = useMemo(() => monthExpenses.filter(e => e.structure_investment).reduce((s, e) => s + Number(e.amount), 0), [monthExpenses]);
-  
+  // Receita total do mês (todos os status) — não confundir com "prevista"
+  const revenueTotal = useMemo(() => sumAmounts(monthRevenues), [monthRevenues]);
+  const revenueRecebida = useMemo(() => sumAmounts(monthRevenues.filter(isRevenueReceived)), [monthRevenues]);
+  const revenueAtraso = useMemo(() => sumAmounts(monthRevenues.filter(isRevenueOverdue)), [monthRevenues]);
+  const totalExpenses = useMemo(() => sumAmounts(monthExpenses), [monthExpenses]);
+  // Receita ainda a receber no mês
+  const revenuePendente = useMemo(() => sumAmounts(monthRevenues.filter(isRevenuePending)), [monthRevenues]);
+  const revenuePrevista = revenueTotal;
+
+  const structureExpenses = useMemo(() => sumAmounts(monthExpenses.filter(e => e.structure_investment)), [monthExpenses]);
+
   const lucro = revenueRecebida - totalExpenses;
-  const lucroProjetado = revenuePrevista - totalExpenses;
+  // Projeção = o que já entrou + o que ainda deve entrar (pendente e em atraso)
+  const lucroProjetado = revenueTotal - totalExpenses;
   const activeClientsCount = activeContracts.length;
-  const ticketMedio = activeClientsCount > 0 ? mrr / activeClientsCount : 0;
+  const ticketMedio = safeDivide(mrr, activeClientsCount);
   const cancelados = contracts.filter(c => c.status === 'cancelado').length;
-  const taxaCancelamento = contracts.length > 0 ? (cancelados / contracts.length * 100) : 0;
+  const taxaCancelamento = safePercent(cancelados, contracts.length);
 
   // Cash reserve balance (saldo do caixa = saldo real da conta, exclui reserva do porquinho)
-  const saldoCaixa = useMemo(() =>
-    cashMovements.filter((m: any) => !m.is_reserve).reduce((acc, m) => acc + (m.type === 'entrada' ? Number(m.amount) : -Number(m.amount)), 0),
-    [cashMovements]
-  );
+  const saldoCaixa = useMemo(() => accountBalance(cashMovements as any), [cashMovements]);
 
   // Piggy bank reserve balance (only is_reserve entries)
-  const piggyBalance = useMemo(() =>
-    cashMovements.filter((m: any) => m.is_reserve).reduce((acc, m) => acc + (m.type === 'entrada' ? Number(m.amount) : -Number(m.amount)), 0),
-    [cashMovements]
-  );
+  const piggyBalance = useMemo(() => reserveBalance(cashMovements as any), [cashMovements]);
+
 
   // Expense by category chart
   const expenseByCat = useMemo(() => {
@@ -264,34 +261,22 @@ export default function FinancialDashboard() {
     return data;
   }, [revenues, expenses]);
 
-  // Profitability per client
-  const clientProfitability = useMemo(() => {
-    const totalMonthExpenses = totalExpenses;
-    const totalDeliveries = monthRevenues.length || 1;
-
-    return activeContracts.map(contract => {
-      const client = clients.find(cl => cl.id === contract.client_id);
-      const clientRevenues = monthRevenues.filter(r => r.client_id === contract.client_id);
-      const faturamento = clientRevenues.reduce((s, r) => s + Number(r.amount), 0) || Number(contract.contract_value);
-
-      // Proportional cost based on content volume
-      const clientRecordings = recordings.filter(r => r.clientId === contract.client_id);
-      const totalRecs = recordings.length || 1;
-      const proportion = clientRecordings.length / totalRecs;
-      const custo = totalMonthExpenses * proportion;
-      const lucroCliente = faturamento - custo;
-      const margem = faturamento > 0 ? (lucroCliente / faturamento * 100) : 0;
-
-      return {
+  // Profitability per client — regra única compartilhada com os relatórios
+  const clientProfitability = useMemo(() =>
+    computeClientProfitability(
+      activeContracts.map(contract => ({
         clientId: contract.client_id,
-        clientName: client?.companyName || 'Cliente',
-        faturamento,
-        custo: Math.round(custo * 100) / 100,
-        lucro: Math.round(lucroCliente * 100) / 100,
-        margem: Math.round(margem * 10) / 10,
-      };
-    }).sort((a, b) => b.lucro - a.lucro);
-  }, [contracts, monthRevenues, clients, recordings, totalExpenses]);
+        clientName: clients.find(cl => cl.id === contract.client_id)?.companyName || 'Cliente',
+        contractValue: contract.contract_value,
+        clientRevenueTotal: sumAmounts(monthRevenues.filter(r => r.client_id === contract.client_id)),
+        clientVolume: recordings.filter(r => r.clientId === contract.client_id).length,
+      })),
+      totalExpenses,
+      recordings.length,
+    ),
+    [activeContracts, monthRevenues, clients, recordings, totalExpenses]
+  );
+
 
   const clientsComPrejuizo = clientProfitability.filter(c => c.lucro < 0);
 

@@ -165,11 +165,15 @@ export default function FinancialCashReserve() {
   return (
     <div className="space-y-6 p-6">
       <FinancialQuickNav />
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Caixa (Reserva)</h1>
           <p className="text-sm text-muted-foreground">Controle da reserva financeira da empresa</p>
         </div>
+        <Button variant="outline" onClick={handleSync} disabled={syncing}>
+          <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+          {syncing ? 'Sincronizando...' : 'Sincronizar com lançamentos'}
+        </Button>
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
             <Button onClick={openNew}><Plus className="w-4 h-4 mr-2" /> Nova Movimentação</Button>

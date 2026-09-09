@@ -280,6 +280,29 @@ export default function PromoAdmin() {
     URL.revokeObjectURL(link.href);
   }
 
+  /** Exporta a lista de prêmios efetivamente entregues no caixa. */
+  function exportRedemptionsCsv() {
+    const header = ['Cliente', 'WhatsApp', 'Prêmio', 'Código', 'Entregue em', 'Operador', 'Lote'];
+    const lines = redemptions.map((item) => [
+      item.participant_name || '',
+      item.participant_phone || '',
+      item.prize_name || '',
+      item.redemption_code || '',
+      item.redeemed_at ? new Date(item.redeemed_at).toLocaleString('pt-BR') : '',
+      item.redeemed_by || '',
+      item.batch_label || '',
+    ]);
+    const csv = [header, ...lines].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `resgatados-${selected?.slug || 'sorteio'}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
+
+
   if (printTickets) {
     return (
       <div className="min-h-screen bg-white p-6">

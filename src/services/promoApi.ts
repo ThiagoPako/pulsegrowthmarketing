@@ -21,6 +21,14 @@ export interface PromoCampaign {
   accent_color: string;
   code_prefix?: string;
   validation_pin?: string;
+  /** Nicho de atuação do cliente (posto, restaurante, loja...). Define os textos padrão. */
+  business_segment?: string;
+  /** Texto que explica como o cliente final ganha um novo cupom. */
+  earn_ticket_text?: string;
+  /** Instrução de onde/para quem apresentar o código de resgate. */
+  redeem_instruction_text?: string;
+  /** Como chamar quem valida o prêmio (atendente, caixa, frentista, recepção...). */
+  operator_label?: string;
   is_active: boolean;
   created_at?: string;
   tickets_total?: string | number;

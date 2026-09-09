@@ -1080,6 +1080,32 @@ export default function ContentKanban() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Visualização por praça — evita trocar a cidade ativa só para consultar */}
+          {availableCities.length > 1 && (
+            <div className="inline-flex items-center gap-1 rounded-xl bg-secondary/50 border border-border/50 p-1">
+              {([
+                { value: 'all' as CityView, label: 'Todas' },
+                ...availableCities.map(c => ({ value: c as CityView, label: CITY_LABELS[c] })),
+              ]).map(opt => {
+                const isActive = cityView === opt.value || (cityView === 'active' && opt.value === activeCity);
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setCityView(opt.value)}
+                    className={`h-7 px-3 rounded-lg text-xs font-semibold transition-colors ${
+                      isActive
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           <div className="relative">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input

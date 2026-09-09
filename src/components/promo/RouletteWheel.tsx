@@ -184,10 +184,31 @@ export default function RouletteWheel({ slices, targetIndex, continuousSpin = fa
           const end = start + sliceAngle;
           const mid = start + sliceAngle / 2;
           const theme = SLICE_THEMES[index % SLICE_THEMES.length];
-          const textPos = polarToCartesian(100, 100, 56, mid);
+          const hasImage = Boolean(slice.imageUrl);
+          // Com foto: imagem na parte externa da fatia e nome mais perto do centro.
+          const textPos = polarToCartesian(100, 100, hasImage ? 42 : 56, mid);
+          const imgPos = polarToCartesian(100, 100, 72, mid);
+          const imgR = Math.min(13, Math.max(8, sliceAngle / 9));
           return (
             <g key={slice.id}>
               <path d={slicePath(100, 100, 89, start, end)} fill={`url(#slice-${index % SLICE_THEMES.length})`} stroke="#F5C64B" strokeWidth="0.6" />
+              {hasImage ? (
+                <>
+                  <clipPath id={`clip-${slice.id}`}>
+                    <circle cx={imgPos.x} cy={imgPos.y} r={imgR} />
+                  </clipPath>
+                  <circle cx={imgPos.x} cy={imgPos.y} r={imgR + 1.2} fill="#FFF8DC" opacity={0.9} />
+                  <image
+                    href={slice.imageUrl as string}
+                    x={imgPos.x - imgR}
+                    y={imgPos.y - imgR}
+                    width={imgR * 2}
+                    height={imgR * 2}
+                    preserveAspectRatio="xMidYMid slice"
+                    clipPath={`url(#clip-${slice.id})`}
+                  />
+                </>
+              ) : null}
               <text
                 x={textPos.x}
                 y={textPos.y}

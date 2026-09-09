@@ -381,12 +381,12 @@ export default function PromoAdmin() {
         </Card>
       ) : (
         <>
-          <div className="flex flex-wrap gap-2">
+          <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
             {campaigns.map((campaign) => (
               <button
                 key={campaign.id}
                 onClick={() => setSelectedId(campaign.id)}
-                className={`rounded-full border px-4 py-1.5 text-sm transition-colors ${
+                className={`shrink-0 rounded-full border px-4 py-2 text-sm transition-colors ${
                   campaign.id === selectedId ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:bg-muted'
                 }`}
               >
@@ -397,7 +397,7 @@ export default function PromoAdmin() {
 
           {selected ? (
             <>
-              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
                 {[
                   { label: 'Cupons gerados', value: num(selected.tickets_total) },
                   { label: 'Cupons escaneados', value: num(selected.tickets_opened) },
@@ -406,22 +406,24 @@ export default function PromoAdmin() {
                   { label: 'Leads capturados', value: num(selected.leads_total) },
                 ].map((metric) => (
                   <Card key={metric.label}>
-                    <CardContent className="p-4">
-                      <p className="text-xs text-muted-foreground">{metric.label}</p>
-                      <p className="mt-1 text-2xl font-bold">{metric.value}</p>
+                    <CardContent className="p-3 sm:p-4">
+                      <p className="text-[11px] text-muted-foreground sm:text-xs">{metric.label}</p>
+                      <p className="mt-1 text-xl font-bold sm:text-2xl">{metric.value}</p>
                     </CardContent>
                   </Card>
                 ))}
               </div>
 
               <Tabs defaultValue="premios">
-                <TabsList>
-                  <TabsTrigger value="premios">Prêmios</TabsTrigger>
-                  <TabsTrigger value="cupons">Cupons e impressão</TabsTrigger>
-                  <TabsTrigger value="resgatados">Prêmios resgatados</TabsTrigger>
-                  <TabsTrigger value="leads">Leads</TabsTrigger>
-                  <TabsTrigger value="config">Configurações</TabsTrigger>
-                </TabsList>
+                <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
+                  <TabsList className="w-max">
+                    <TabsTrigger value="premios">Prêmios</TabsTrigger>
+                    <TabsTrigger value="cupons">Cupons e impressão</TabsTrigger>
+                    <TabsTrigger value="resgatados">Prêmios resgatados</TabsTrigger>
+                    <TabsTrigger value="leads">Leads</TabsTrigger>
+                    <TabsTrigger value="config">Configurações</TabsTrigger>
+                  </TabsList>
+                </div>
 
                 <TabsContent value="premios" className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">

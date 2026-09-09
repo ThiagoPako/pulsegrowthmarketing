@@ -173,30 +173,32 @@ export default function FinancialMovements() {
 
   // Totals
   const totals = useMemo(() => {
-    const r = unified.filter(m => m.type === 'receita').reduce((s, m) => s + m.amount, 0);
-    const e = unified.filter(m => m.type === 'despesa' && !m.isSalary).reduce((s, m) => s + m.amount, 0);
-    const ci = unified.filter(m => m.type === 'caixa_entrada').reduce((s, m) => s + m.amount, 0);
-    const co = unified.filter(m => m.type === 'caixa_saida').reduce((s, m) => s + m.amount, 0);
-    const sal = unified.filter(m => m.isSalary).reduce((s, m) => s + m.amount, 0);
+    const r = sumAmounts(unified.filter(m => m.type === 'receita'));
+    const e = sumAmounts(unified.filter(m => m.type === 'despesa' && !m.isSalary));
+    const ci = sumAmounts(unified.filter(m => m.type === 'caixa_entrada'));
+    const co = sumAmounts(unified.filter(m => m.type === 'caixa_saida'));
+    const sal = sumAmounts(unified.filter(m => m.isSalary));
     return { receitas: r, despesas: e, caixaIn: ci, caixaOut: co, salarios: sal };
   }, [unified]);
 
-  // System movements for reconciliation
+  // System movements for reconciliation (sem espelhos automáticos, para não duplicar)
   const reconciliationMovements = useMemo(() => {
     const movs: { id: string; date: string; description: string; amount: number; type: 'entrada' | 'saida' }[] = [];
     revenues.forEach(r => {
-      if (r.status === 'recebida') {
+      if (isRevenueReceived(r)) {
         const client = clients.find(c => c.id === r.client_id);
-        movs.push({ id: r.id, date: normalizeDate(r.due_date), description: `Mensalidade - ${client?.companyName || 'Cliente'}`, amount: Number(r.amount), type: 'entrada' });
+        movs.push({ id: r.id, date: normalizeDate(r.paid_at || r.due_date), description: `Mensalidade - ${client?.companyName || 'Cliente'}`, amount: toAmount(r.amount), type: 'entrada' });
       }
     });
     expenses.forEach(e => {
       if (!isExpensePaid(e)) return;
-      movs.push({ id: e.id, date: normalizeDate(e.date), description: e.description || 'Despesa', amount: Number(e.amount), type: 'saida' });
+      movs.push({ id: e.id, date: normalizeDate(e.date), description: e.description || 'Despesa', amount: toAmount(e.amount), type: 'saida' });
     });
     cashMovements.forEach(m => {
-      movs.push({ id: m.id, date: normalizeDate(m.date), description: m.description, amount: Number(m.amount), type: m.type === 'entrada' ? 'entrada' : 'saida' });
+      if (isMirroredCashMovement(m)) return;
+      movs.push({ id: m.id, date: normalizeDate(m.date), description: m.description, amount: toAmount(m.amount), type: m.type === 'entrada' ? 'entrada' : 'saida' });
     });
+
     return movs;
   }, [revenues, expenses, cashMovements, clients]);
 

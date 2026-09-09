@@ -174,6 +174,7 @@ export default function PromoAdmin() {
       setPrizes([]);
       setTickets([]);
       setLeads([]);
+      setRedemptions([]);
       return;
     }
     listPromoPrizes(selectedId).then((r) => setPrizes(r.prizes)).catch(() => setPrizes([]));
@@ -182,6 +183,7 @@ export default function PromoAdmin() {
       setBatches(r.batches);
     }).catch(() => setTickets([]));
     listPromoLeads(selectedId).then((r) => setLeads(r.leads)).catch(() => setLeads([]));
+    listPromoRedemptions(selectedId).then((r) => setRedemptions(r.redemptions)).catch(() => setRedemptions([]));
   }, [selectedId]);
 
   async function refreshTickets(batch = batchFilter) {

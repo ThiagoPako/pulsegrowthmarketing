@@ -42,6 +42,24 @@ export interface ClientUnit {
   created_at?: string;
 }
 
+export interface ClientCollaborator {
+  id: string;
+  client_id: string;
+  name: string;
+  job_role: string | null;
+  department: string | null;
+  birthday: string | null; // YYYY-MM-DD
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+  photos: string[] | null;
+  videos: string[] | null;
+  active: boolean;
+  created_at?: string;
+}
+
+export type ClientDatabaseTable = 'client_professionals' | 'client_units' | 'client_collaborators';
+
 const asArray = (value: unknown): string[] => (Array.isArray(value) ? (value as string[]) : []);
 
 function normalizeMedia<T extends { photos?: unknown; videos?: unknown }>(row: T) {
@@ -80,13 +98,28 @@ export function useClientDatabase(clientId?: string) {
     },
   });
 
+  const collaborators = useQuery({
+    queryKey: ['client-collaborators', clientId],
+    enabled: !!clientId,
+    queryFn: async (): Promise<ClientCollaborator[]> => {
+      const { data, error } = await supabase
+        .from('client_collaborators')
+        .select('*')
+        .eq('client_id', clientId as string)
+        .order('name', { ascending: true });
+      if (error) throw error;
+      return (data || []).map((row: any) => normalizeMedia(row)) as ClientCollaborator[];
+    },
+  });
+
   const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['client-collaborators', clientId] });
     queryClient.invalidateQueries({ queryKey: ['client-professionals', clientId] });
     queryClient.invalidateQueries({ queryKey: ['client-units', clientId] });
   };
 
   const saveRecord = useMutation({
-    mutationFn: async ({ table, payload }: { table: 'client_professionals' | 'client_units'; payload: Record<string, unknown> }) => {
+    mutationFn: async ({ table, payload }: { table: ClientDatabaseTable; payload: Record<string, unknown> }) => {
       const { id, ...rest } = payload as { id?: string };
       if (id) {
         const { error } = await supabase.from(table).update(rest as any).eq('id', id);
@@ -104,7 +137,7 @@ export function useClientDatabase(clientId?: string) {
   });
 
   const deleteRecord = useMutation({
-    mutationFn: async ({ table, id }: { table: 'client_professionals' | 'client_units'; id: string }) => {
+    mutationFn: async ({ table, id }: { table: ClientDatabaseTable; id: string }) => {
       const { error } = await supabase.from(table).delete().eq('id', id);
       if (error) throw error;
     },
@@ -115,5 +148,5 @@ export function useClientDatabase(clientId?: string) {
     onError: (error: any) => toast.error(error?.message || 'Erro ao remover registro'),
   });
 
-  return { professionals, units, saveRecord, deleteRecord };
+  return { professionals, units, collaborators, saveRecord, deleteRecord };
 }

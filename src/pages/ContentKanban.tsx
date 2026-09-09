@@ -1791,7 +1791,16 @@ function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, lin
           isDragging ? 'opacity-40 scale-95 shadow-none' : 'shadow-sm hover:shadow-lg'
         } ${isOverdue ? 'ring-1 ring-destructive/40' : ''} hover:-translate-y-0.5`}
       >
+        {/* Selo de praça: identifica cartões de outra cidade (somente leitura) */}
+        {cityLabel && (
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-secondary/80 border-b border-border/50">
+            <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+              {cityLabel} · somente leitura
+            </span>
+          </div>
+        )}
         {/* Status tag banner (top) */}
+
         {isCaptacao && !isAwaitingLink && (
           <div className="flex items-center gap-2 px-3 py-1 bg-orange-500">
             <span className="relative flex h-1.5 w-1.5 shrink-0">

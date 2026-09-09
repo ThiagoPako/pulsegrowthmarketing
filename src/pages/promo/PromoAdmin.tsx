@@ -718,11 +718,11 @@ export default function PromoAdmin() {
 
       {/* Dialog de campanha */}
       <Dialog open={campaignDialog} onOpenChange={setCampaignDialog}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
+        <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col gap-3 overflow-hidden rounded-none p-4 sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-lg sm:rounded-lg sm:p-6">
+          <DialogHeader className="shrink-0 text-left">
             <DialogTitle>{campaignForm.id ? 'Editar sorteio' : 'Novo sorteio'}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="flex-1 space-y-4 overflow-y-auto pb-2 pr-1">
             <div>
               <Label>Título</Label>
               <Input

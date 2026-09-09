@@ -10834,6 +10834,623 @@ app.get('/api/public/bio/:slug', async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// SORTEIOS DE PRÊMIOS (roleta / raspadinha com QR Code descartável)
+// ═══════════════════════════════════════════════════════════════
+let promoTablesPromise = null;
+async function ensurePromoTables() {
+  if (promoTablesPromise) return promoTablesPromise;
+  promoTablesPromise = pool.query(`
+    CREATE TABLE IF NOT EXISTS promo_campaigns (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      title TEXT NOT NULL,
+      slug TEXT UNIQUE NOT NULL,
+      rules_text TEXT DEFAULT '',
+      require_lead_capture BOOLEAN NOT NULL DEFAULT false,
+      require_document BOOLEAN NOT NULL DEFAULT false,
+      lgpd_terms_text TEXT DEFAULT '',
+      banner_url TEXT,
+      logo_url TEXT,
+      accent_color TEXT NOT NULL DEFAULT '#E11D48',
+      code_prefix TEXT NOT NULL DEFAULT 'A3P',
+      validation_pin TEXT NOT NULL DEFAULT '1234',
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      city TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS promo_prizes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      campaign_id UUID NOT NULL REFERENCES promo_campaigns(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      image_url TEXT,
+      total_quantity INTEGER NOT NULL DEFAULT 0,
+      remaining_quantity INTEGER NOT NULL DEFAULT 0,
+      win_probability_percent NUMERIC(6,3) NOT NULL DEFAULT 0,
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_promo_prizes_campaign ON promo_prizes(campaign_id);
+
+    CREATE TABLE IF NOT EXISTS promo_tickets (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      campaign_id UUID NOT NULL REFERENCES promo_campaigns(id) ON DELETE CASCADE,
+      token TEXT UNIQUE NOT NULL,
+      batch_label TEXT,
+      status TEXT NOT NULL DEFAULT 'available'
+        CHECK (status IN ('available','opened','revealed','redeemed','expired')),
+      game_type TEXT,
+      prize_id UUID REFERENCES promo_prizes(id) ON DELETE SET NULL,
+      redemption_code TEXT UNIQUE,
+      participant_name TEXT,
+      participant_phone TEXT,
+      participant_document TEXT,
+      lgpd_accepted BOOLEAN NOT NULL DEFAULT false,
+      opened_at TIMESTAMPTZ,
+      revealed_at TIMESTAMPTZ,
+      redeemed_at TIMESTAMPTZ,
+      redeemed_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_promo_tickets_token ON promo_tickets(token);
+    CREATE INDEX IF NOT EXISTS idx_promo_tickets_campaign ON promo_tickets(campaign_id);
+    CREATE INDEX IF NOT EXISTS idx_promo_tickets_code ON promo_tickets(redemption_code);
+    CREATE INDEX IF NOT EXISTS idx_promo_tickets_batch ON promo_tickets(campaign_id, batch_label);
+  `).catch((error) => {
+    console.error('ensurePromoTables error:', error);
+    promoTablesPromise = null;
+  });
+  return promoTablesPromise;
+}
+ensurePromoTables();
+
+const PROMO_TOKEN_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function promoRandomToken(length = 10) {
+  const bytes = crypto.randomBytes(length);
+  let out = '';
+  for (let i = 0; i < length; i += 1) {
+    out += PROMO_TOKEN_ALPHABET[bytes[i] % PROMO_TOKEN_ALPHABET.length];
+  }
+  return out;
+}
+
+function promoPublicCampaign(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    slug: row.slug,
+    rules_text: row.rules_text || '',
+    require_lead_capture: !!row.require_lead_capture,
+    require_document: !!row.require_document,
+    lgpd_terms_text: row.lgpd_terms_text || '',
+    banner_url: row.banner_url || null,
+    logo_url: row.logo_url || null,
+    accent_color: row.accent_color || '#E11D48',
+    is_active: !!row.is_active,
+  };
+}
+
+// Limite simples de tentativas por IP (protege o motor de sorteio contra abuso).
+const promoRateBuckets = new Map();
+function promoRateLimited(key, limit = 30, windowMs = 60_000) {
+  const now = Date.now();
+  const bucket = promoRateBuckets.get(key);
+  if (!bucket || now > bucket.reset) {
+    promoRateBuckets.set(key, { count: 1, reset: now + windowMs });
+    return false;
+  }
+  bucket.count += 1;
+  return bucket.count > limit;
+}
+
+/** GET /api/promo/public/:slug/:token — estado do cupom para a página pública */
+app.get('/api/promo/public/:slug/:token', async (req, res) => {
+  try {
+    await ensurePromoTables();
+    const slug = String(req.params.slug || '').toLowerCase();
+    const token = String(req.params.token || '').toUpperCase();
+
+    const { rows: campaignRows } = await pool.query(
+      'SELECT * FROM promo_campaigns WHERE lower(slug) = $1 LIMIT 1',
+      [slug]
+    );
+    if (!campaignRows.length) return res.status(404).json({ error: 'Sorteio não encontrado' });
+    const campaign = campaignRows[0];
+    if (!campaign.is_active) return res.status(403).json({ error: 'Este sorteio está encerrado.' });
+
+    const { rows: ticketRows } = await pool.query(
+      `SELECT t.id, t.status, t.game_type, t.redemption_code, t.participant_name, t.revealed_at,
+              p.name AS prize_name, p.description AS prize_description, p.image_url AS prize_image_url
+         FROM promo_tickets t
+         LEFT JOIN promo_prizes p ON p.id = t.prize_id
+        WHERE t.campaign_id = $1 AND upper(t.token) = $2
+        LIMIT 1`,
+      [campaign.id, token]
+    );
+
+    if (!ticketRows.length) {
+      return res.json({ campaign: promoPublicCampaign(campaign), ticket: null, reason: 'not_found' });
+    }
+    const ticket = ticketRows[0];
+
+    // Mostra os prêmios possíveis (sem probabilidades) para montar a roleta.
+    const { rows: prizes } = await pool.query(
+      `SELECT id, name, image_url FROM promo_prizes
+        WHERE campaign_id = $1 AND is_active = true
+        ORDER BY created_at ASC`,
+      [campaign.id]
+    );
+
+    if (ticket.status === 'available' || ticket.status === 'opened') {
+      if (ticket.status === 'available') {
+        await pool.query(
+          "UPDATE promo_tickets SET status = 'opened', opened_at = COALESCE(opened_at, now()) WHERE id = $1",
+          [ticket.id]
+        );
+      }
+      return res.json({
+        campaign: promoPublicCampaign(campaign),
+        prizes,
+        ticket: { status: 'playable' },
+      });
+    }
+
+    return res.json({
+      campaign: promoPublicCampaign(campaign),
+      prizes,
+      ticket: {
+        status: ticket.status,
+        game_type: ticket.game_type,
+        redemption_code: ticket.redemption_code,
+        participant_name: ticket.participant_name,
+        revealed_at: ticket.revealed_at,
+        prize: ticket.prize_name
+          ? { name: ticket.prize_name, description: ticket.prize_description, image_url: ticket.prize_image_url }
+          : null,
+      },
+    });
+  } catch (error) {
+    console.error('[promo/public] error:', error);
+    res.status(500).json({ error: 'Falha ao carregar o sorteio' });
+  }
+});
+
+/** POST /api/promo/play — motor de sorteio (100% servidor) */
+app.post('/api/promo/play', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await ensurePromoTables();
+    const ip = req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || 'unknown';
+    if (promoRateLimited(`play:${ip}`)) {
+      return res.status(429).json({ error: 'Muitas tentativas. Aguarde um instante.' });
+    }
+
+    const slug = String(req.body?.slug || '').toLowerCase();
+    const token = String(req.body?.token || '').toUpperCase();
+    const gameType = req.body?.game_type === 'scratch' ? 'scratch' : 'roulette';
+    const name = String(req.body?.name || '').trim().slice(0, 120);
+    const phone = String(req.body?.phone || '').trim().slice(0, 30);
+    const document = String(req.body?.document || '').trim().slice(0, 20);
+    const lgpdAccepted = req.body?.lgpd_accepted === true;
+
+    if (!slug || !token) return res.status(400).json({ error: 'Cupom inválido' });
+
+    await client.query('BEGIN');
+
+    const { rows: campaignRows } = await client.query(
+      'SELECT * FROM promo_campaigns WHERE lower(slug) = $1 LIMIT 1',
+      [slug]
+    );
+    if (!campaignRows.length || !campaignRows[0].is_active) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Sorteio indisponível' });
+    }
+    const campaign = campaignRows[0];
+
+    if (campaign.require_lead_capture) {
+      if (name.length < 2 || phone.length < 8 || !lgpdAccepted) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Preencha nome, WhatsApp e aceite os termos para jogar.' });
+      }
+      if (campaign.require_document && document.length < 11) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Informe um CPF válido.' });
+      }
+    }
+
+    const { rows: ticketRows } = await client.query(
+      'SELECT * FROM promo_tickets WHERE campaign_id = $1 AND upper(token) = $2 FOR UPDATE',
+      [campaign.id, token]
+    );
+    if (!ticketRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Cupom inválido' });
+    }
+    const ticket = ticketRows[0];
+    if (ticket.status !== 'available' && ticket.status !== 'opened') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Este QR Code já foi utilizado.' });
+    }
+
+    const { rows: prizes } = await client.query(
+      `SELECT * FROM promo_prizes
+        WHERE campaign_id = $1 AND is_active = true AND remaining_quantity > 0
+        ORDER BY created_at ASC
+        FOR UPDATE`,
+      [campaign.id]
+    );
+
+    // Sorteio ponderado: cada prêmio ocupa sua faixa de 0 a 100; a sobra é "tente novamente".
+    const draw = Math.random() * 100;
+    let cursor = 0;
+    let winner = null;
+    for (const prize of prizes) {
+      const weight = Number(prize.win_probability_percent) || 0;
+      if (weight <= 0) continue;
+      if (draw >= cursor && draw < cursor + weight) {
+        winner = prize;
+        break;
+      }
+      cursor += weight;
+    }
+
+    let redemptionCode = null;
+    if (winner) {
+      await client.query(
+        'UPDATE promo_prizes SET remaining_quantity = remaining_quantity - 1 WHERE id = $1 AND remaining_quantity > 0',
+        [winner.id]
+      );
+      const prefix = (campaign.code_prefix || 'A3P').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'A3P';
+      for (let attempt = 0; attempt < 12 && !redemptionCode; attempt += 1) {
+        const candidate = `${prefix}-${String(crypto.randomInt(1000, 9999))}`;
+        const { rows: exists } = await client.query(
+          'SELECT 1 FROM promo_tickets WHERE redemption_code = $1 LIMIT 1',
+          [candidate]
+        );
+        if (!exists.length) redemptionCode = candidate;
+      }
+      if (!redemptionCode) redemptionCode = `${prefix}-${promoRandomToken(6)}`;
+    }
+
+    await client.query(
+      `UPDATE promo_tickets
+          SET status = 'revealed',
+              game_type = $2,
+              prize_id = $3,
+              redemption_code = $4,
+              participant_name = NULLIF($5, ''),
+              participant_phone = NULLIF($6, ''),
+              participant_document = NULLIF($7, ''),
+              lgpd_accepted = $8,
+              opened_at = COALESCE(opened_at, now()),
+              revealed_at = now()
+        WHERE id = $1`,
+      [ticket.id, gameType, winner?.id || null, redemptionCode, name, phone, document, lgpdAccepted]
+    );
+
+    await client.query('COMMIT');
+
+    res.json({
+      won: !!winner,
+      prize: winner
+        ? { id: winner.id, name: winner.name, description: winner.description, image_url: winner.image_url }
+        : null,
+      redemption_code: redemptionCode,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[promo/play] error:', error);
+    res.status(500).json({ error: 'Falha ao realizar o sorteio' });
+  } finally {
+    client.release();
+  }
+});
+
+async function promoFindCampaignBySlug(slug) {
+  const { rows } = await pool.query(
+    'SELECT * FROM promo_campaigns WHERE lower(slug) = $1 LIMIT 1',
+    [String(slug || '').toLowerCase()]
+  );
+  return rows[0] || null;
+}
+
+/** POST /api/promo/validate — consulta / confirma a entrega do prêmio no caixa */
+app.post('/api/promo/validate', async (req, res) => {
+  try {
+    await ensurePromoTables();
+    const ip = req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || 'unknown';
+    if (promoRateLimited(`validate:${ip}`, 60)) {
+      return res.status(429).json({ error: 'Muitas tentativas. Aguarde um instante.' });
+    }
+
+    const campaign = await promoFindCampaignBySlug(req.body?.slug);
+    if (!campaign) return res.status(404).json({ error: 'Sorteio não encontrado' });
+
+    const pin = String(req.body?.pin || '');
+    if (pin !== String(campaign.validation_pin || '')) {
+      return res.status(401).json({ error: 'PIN incorreto' });
+    }
+
+    const code = String(req.body?.code || '').trim().toUpperCase();
+    if (!code) return res.status(400).json({ error: 'Informe o código de resgate' });
+
+    const { rows } = await pool.query(
+      `SELECT t.*, p.name AS prize_name, p.description AS prize_description, p.image_url AS prize_image_url
+         FROM promo_tickets t
+         LEFT JOIN promo_prizes p ON p.id = t.prize_id
+        WHERE t.campaign_id = $1 AND upper(t.redemption_code) = $2
+        LIMIT 1`,
+      [campaign.id, code]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Código inválido' });
+    const ticket = rows[0];
+
+    const payload = {
+      code: ticket.redemption_code,
+      participant_name: ticket.participant_name,
+      participant_phone: ticket.participant_phone,
+      prize: ticket.prize_name
+        ? { name: ticket.prize_name, description: ticket.prize_description, image_url: ticket.prize_image_url }
+        : null,
+      redeemed_at: ticket.redeemed_at,
+      redeemed_by: ticket.redeemed_by,
+    };
+
+    if (ticket.status === 'redeemed') {
+      return res.status(409).json({ status: 'redeemed', ...payload });
+    }
+    if (ticket.status !== 'revealed') {
+      return res.status(409).json({ status: 'invalid', error: 'Cupom sem prêmio liberado' });
+    }
+
+    if (req.body?.confirm === true) {
+      const operator = String(req.body?.operator_name || '').trim().slice(0, 80) || 'Operador';
+      const { rows: updated } = await pool.query(
+        `UPDATE promo_tickets
+            SET status = 'redeemed', redeemed_at = now(), redeemed_by = $2
+          WHERE id = $1 AND status = 'revealed'
+          RETURNING redeemed_at, redeemed_by`,
+        [ticket.id, operator]
+      );
+      if (!updated.length) return res.status(409).json({ status: 'redeemed', ...payload });
+      return res.json({ status: 'confirmed', ...payload, redeemed_at: updated[0].redeemed_at, redeemed_by: updated[0].redeemed_by });
+    }
+
+    res.json({ status: 'allowed', ...payload });
+  } catch (error) {
+    console.error('[promo/validate] error:', error);
+    res.status(500).json({ error: 'Falha ao validar o código' });
+  }
+});
+
+// ─── Administração (autenticado) ───────────────────────────
+async function promoRequireAuth(req, res) {
+  try {
+    await verifyUser(req);
+    await ensurePromoTables();
+    return true;
+  } catch {
+    res.status(401).json({ error: 'Unauthorized' });
+    return false;
+  }
+}
+
+app.get('/api/promo/campaigns', async (req, res) => {
+  if (!(await promoRequireAuth(req, res))) return;
+  try {
+    const { rows } = await pool.query(`
+      SELECT c.*,
+             (SELECT count(*) FROM promo_tickets t WHERE t.campaign_id = c.id) AS tickets_total,
+             (SELECT count(*) FROM promo_tickets t WHERE t.campaign_id = c.id AND t.status <> 'available') AS tickets_opened,
+             (SELECT count(*) FROM promo_tickets t WHERE t.campaign_id = c.id AND t.prize_id IS NOT NULL) AS prizes_drawn,
+             (SELECT count(*) FROM promo_tickets t WHERE t.campaign_id = c.id AND t.status = 'redeemed') AS prizes_redeemed,
+             (SELECT count(*) FROM promo_tickets t WHERE t.campaign_id = c.id AND t.participant_phone IS NOT NULL) AS leads_total
+        FROM promo_campaigns c
+       ORDER BY c.created_at DESC
+    `);
+    res.json({ campaigns: rows });
+  } catch (error) {
+    console.error('[promo/campaigns] error:', error);
+    res.status(500).json({ error: 'Falha ao carregar sorteios' });
+  }
+});
+
+app.post('/api/promo/campaigns', async (req, res) => {
+  if (!(await promoRequireAuth(req, res))) return;
+  try {
+    const b = req.body || {};
+    const slug = String(b.slug || '').toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    if (!b.title || !slug) return res.status(400).json({ error: 'Informe título e slug' });
+
+    if (b.id) {
+      const { rows } = await pool.query(
+        `UPDATE promo_campaigns SET
+            title = $2, slug = $3, rules_text = $4, require_lead_capture = $5, require_document = $6,
+            lgpd_terms_text = $7, banner_url = $8, logo_url = $9, accent_color = $10,
+            code_prefix = $11, validation_pin = $12, is_active = $13, updated_at = now()
+          WHERE id = $1 RETURNING *`,
+        [b.id, b.title, slug, b.rules_text || '', !!b.require_lead_capture, !!b.require_document,
+         b.lgpd_terms_text || '', b.banner_url || null, b.logo_url || null, b.accent_color || '#E11D48',
+         b.code_prefix || 'A3P', String(b.validation_pin || '1234'), b.is_active !== false]
+      );
+      return res.json({ campaign: rows[0] });
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO promo_campaigns
+         (title, slug, rules_text, require_lead_capture, require_document, lgpd_terms_text,
+          banner_url, logo_url, accent_color, code_prefix, validation_pin, is_active)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      [b.title, slug, b.rules_text || '', !!b.require_lead_capture, !!b.require_document,
+       b.lgpd_terms_text || '', b.banner_url || null, b.logo_url || null, b.accent_color || '#E11D48',
+       b.code_prefix || 'A3P', String(b.validation_pin || '1234'), b.is_active !== false]
+    );
+    res.json({ campaign: rows[0] });
+  } catch (error) {
+    if (error?.code === '23505') return res.status(409).json({ error: 'Já existe um sorteio com este slug' });
+    console.error('[promo/campaigns:save] error:', error);
+    res.status(500).json({ error: 'Falha ao salvar o sorteio' });
+  }
+});
+
+app.delete('/api/promo/campaigns/:id', async (req, res) => {
+  if (!(await promoRequireAuth(req, res))) return;
+  try {
+    await pool.query('DELETE FROM promo_campaigns WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[promo/campaigns:delete] error:', error);
+    res.status(500).json({ error: 'Falha ao excluir o sorteio' });
+  }
+});
+
+app.get('/api/promo/campaigns/:id/prizes', async (req, res) => {
+  if (!(await promoRequireAuth(req, res))) return;
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM promo_prizes WHERE campaign_id = $1 ORDER BY created_at ASC',
+      [req.params.id]
+    );
+    res.json({ prizes: rows });
+  } catch (error) {
+    console.error('[promo/prizes] error:', error);
+    res.status(500).json({ error: 'Falha ao carregar prêmios' });
+  }
+});
+
+app.post('/api/promo/prizes', async (req, res) => {
+  if (!(await promoRequireAuth(req, res))) return;
+  try {
+    const b = req.body || {};
+    if (!b.campaign_id || !b.name) return res.status(400).json({ error: 'Dados incompletos' });
+    const total = Math.max(0, Number(b.total_quantity) || 0);
+    const probability = Math.min(100, Math.max(0, Number(b.win_probability_percent) || 0));
+
+    if (b.id) {
+      const remaining = b.remaining_quantity === undefined || b.remaining_quantity === null
+        ? null
+        : Math.max(0, Number(b.remaining_quantity) || 0);
+      const { rows } = await pool.query(
+        `UPDATE promo_prizes SET
+            name = $2, description = $3, image_url = $4, total_quantity = $5,
+            remaining_quantity = COALESCE($6, remaining_quantity),
+            win_probability_percent = $7, is_active = $8
+          WHERE id = $1 RETURNING *`,
+        [b.id, b.name, b.description || '', b.image_url || null, total, remaining, probability, b.is_active !== false]
+      );
+      return res.json({ prize: rows[0] });
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO promo_prizes
+         (campaign_id, name, description, image_url, total_quantity, remaining_quantity, win_probability_percent, is_active)
+       VALUES ($1,$2,$3,$4,$5,$5,$6,$7) RETURNING *`,
+      [b.campaign_id, b.name, b.description || '', b.image_url || null, total, probability, b.is_active !== false]
+    );
+    res.json({ prize: rows[0] });
+  } catch (error) {
+    console.error('[promo/prizes:save] error:', error);
+    res.status(500).json({ error: 'Falha ao salvar o prêmio' });
+  }
+});
+
+app.delete('/api/promo/prizes/:id', async (req, res) => {
+  if (!(await promoRequireAuth(req, res))) return;
+  try {
+    await pool.query('DELETE FROM promo_prizes WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[promo/prizes:delete] error:', error);
+    res.status(500).json({ error: 'Falha ao excluir o prêmio' });
+  }
+});
+
+/** Gera um lote de cupons e devolve os tokens para impressão. */
+app.post('/api/promo/tickets/generate', async (req, res) => {
+  if (!(await promoRequireAuth(req, res))) return;
+  try {
+    const campaignId = req.body?.campaign_id;
+    const quantity = Math.min(1000, Math.max(1, Number(req.body?.quantity) || 0));
+    if (!campaignId || !quantity) return res.status(400).json({ error: 'Informe o sorteio e a quantidade' });
+
+    const batchLabel = `LOTE-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}`;
+    const created = [];
+    for (let i = 0; i < quantity; i += 1) {
+      let inserted = null;
+      for (let attempt = 0; attempt < 5 && !inserted; attempt += 1) {
+        try {
+          const { rows } = await pool.query(
+            `INSERT INTO promo_tickets (campaign_id, token, batch_label)
+             VALUES ($1, $2, $3) RETURNING id, token, batch_label, created_at`,
+            [campaignId, promoRandomToken(10), batchLabel]
+          );
+          inserted = rows[0];
+        } catch (error) {
+          if (error?.code !== '23505') throw error;
+        }
+      }
+      if (inserted) created.push(inserted);
+    }
+
+    res.json({ batch_label: batchLabel, tickets: created });
+  } catch (error) {
+    console.error('[promo/tickets:generate] error:', error);
+    res.status(500).json({ error: 'Falha ao gerar os cupons' });
+  }
+});
+
+app.get('/api/promo/campaigns/:id/tickets', async (req, res) => {
+  if (!(await promoRequireAuth(req, res))) return;
+  try {
+    const params = [req.params.id];
+    let where = 'WHERE campaign_id = $1';
+    if (req.query.batch) {
+      params.push(String(req.query.batch));
+      where += ` AND batch_label = $${params.length}`;
+    }
+    const { rows } = await pool.query(
+      `SELECT id, token, batch_label, status, created_at FROM promo_tickets ${where}
+        ORDER BY created_at DESC LIMIT 2000`,
+      params
+    );
+    const { rows: batches } = await pool.query(
+      `SELECT batch_label, count(*)::int AS total, min(created_at) AS created_at
+         FROM promo_tickets WHERE campaign_id = $1 AND batch_label IS NOT NULL
+        GROUP BY batch_label ORDER BY min(created_at) DESC LIMIT 50`,
+      [req.params.id]
+    );
+    res.json({ tickets: rows, batches });
+  } catch (error) {
+    console.error('[promo/tickets] error:', error);
+    res.status(500).json({ error: 'Falha ao carregar os cupons' });
+  }
+});
+
+app.get('/api/promo/campaigns/:id/leads', async (req, res) => {
+  if (!(await promoRequireAuth(req, res))) return;
+  try {
+    const { rows } = await pool.query(
+      `SELECT t.participant_name, t.participant_phone, t.participant_document, t.lgpd_accepted,
+              t.status, t.redemption_code, t.revealed_at, t.redeemed_at, p.name AS prize_name
+         FROM promo_tickets t
+         LEFT JOIN promo_prizes p ON p.id = t.prize_id
+        WHERE t.campaign_id = $1 AND (t.participant_phone IS NOT NULL OR t.participant_name IS NOT NULL)
+        ORDER BY t.revealed_at DESC NULLS LAST
+        LIMIT 5000`,
+      [req.params.id]
+    );
+    res.json({ leads: rows });
+  } catch (error) {
+    console.error('[promo/leads] error:', error);
+    res.status(500).json({ error: 'Falha ao carregar os leads' });
+  }
+});
+
+
 // ─── WebSocket Server for real-time presence & chat ─────────
 
 // WebSocketServer already uses the global server instance initialized at the top

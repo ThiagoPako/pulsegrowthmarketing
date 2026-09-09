@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/vpsDb';
-import { VM_SCORE, calcVmDeliveryScore, calcWaitPoints } from '@/lib/scoringSystem';
+import { VM_SCORE, calcVmDeliveryScore, calcWaitPoints, dedupeDeliveryRecords } from '@/lib/scoringSystem';
 import { DAY_LABELS } from '@/types';
 import { fetchAISeasonalAlerts, NICHE_OPTIONS, type AISeasonalAlert, clearSeasonalCache } from '@/lib/seasonalDates';
 import { motion, AnimatePresence } from 'framer-motion';

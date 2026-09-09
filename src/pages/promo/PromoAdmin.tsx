@@ -17,6 +17,7 @@ import {
   generatePromoTickets,
   listPromoCampaigns,
   listPromoLeads,
+  listPromoRedemptions,
   listPromoPrizes,
   listPromoTickets,
   savePromoCampaign,
@@ -27,6 +28,7 @@ import {
   type PromoBatch,
   type PromoCampaign,
   type PromoLead,
+  type PromoRedemption,
   type PromoPrize,
   type PromoTicket,
 } from '@/services/promoApi';

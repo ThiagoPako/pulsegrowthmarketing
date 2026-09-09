@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Copy, Download, Gift, Image as ImageIcon, Loader2, Plus, Printer, Sparkles, Ticket, Trash2, Upload, X } from 'lucide-react';
+import { Camera, Copy, Download, Gift, Image as ImageIcon, Loader2, Plus, Printer, Sparkles, Ticket, Trash2, Upload, X } from 'lucide-react';
 import TicketPrintSheet from '@/components/promo/TicketPrintSheet';
 import {
   deletePromoCampaign,

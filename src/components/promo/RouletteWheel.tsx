@@ -4,6 +4,8 @@ import { cn } from '@/lib/utils';
 export interface RouletteSlice {
   id: string;
   label: string;
+  /** URL da foto do prêmio — exibida dentro da fatia quando disponível. */
+  imageUrl?: string | null;
 }
 
 interface RouletteWheelProps {

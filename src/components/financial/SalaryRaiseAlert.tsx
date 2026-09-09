@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/vpsDb';
-import { VM_SCORE, EDITOR_SCORE, DESIGNER_SCORE, PARCEIRO_SCORE, EDITOR_APPROVED_COLUMNS, getScriptReferenceDate, getSocialDeliveryReferenceDate, getSocialMediaScoreBreakdown, getSocialTaskReferenceDate } from '@/lib/scoringSystem';
+import { VM_SCORE, PARCEIRO_SCORE, dedupeDeliveryRecords, getDesignTaskReferenceDate, getDesignerScoreBreakdown, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate, getScriptReferenceDate, getSocialDeliveryReferenceDate, getSocialMediaScoreBreakdown, getSocialTaskReferenceDate, sumDeliveryProduction } from '@/lib/scoringSystem';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';

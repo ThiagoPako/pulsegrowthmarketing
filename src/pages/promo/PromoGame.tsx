@@ -124,7 +124,11 @@ export default function PromoGame() {
         const index = played.prize
           ? Math.max(0, wheelSlices.findIndex((s) => s.id === played.prize?.id))
           : wheelSlices.findIndex((s) => s.id.startsWith('retry'));
-        setTargetIndex(index >= 0 ? index : 0);
+        // O resultado já está decidido no servidor, mas só revelamos quando o
+        // jogador clicar em "Parar" — assim ele sente que controla a roleta.
+        setPendingIndex(index >= 0 ? index : 0);
+        setTargetIndex(null);
+        setWheelPhase('idle');
         setStep('roulette');
       } else {
         setStep('scratch');
@@ -287,9 +291,46 @@ export default function PromoGame() {
   if (step === 'roulette') {
     return shell(
       <div className="flex flex-1 flex-col items-center justify-center">
-        <h1 className="mb-6 text-center text-xl font-extrabold">Boa sorte!</h1>
-        <RouletteWheel slices={wheelSlices} targetIndex={targetIndex} accentColor={accent} onSpinEnd={finishReveal} />
-        <p className="mt-6 text-xs text-white/50">A roleta está girando…</p>
+        <h1 className="mb-6 text-center text-xl font-extrabold">
+          {wheelPhase === 'idle' ? 'É sua vez! Toque em GIRAR' : wheelPhase === 'spinning' ? 'Girando… toque em PARAR!' : 'A roleta está parando…'}
+        </h1>
+        <RouletteWheel
+          slices={wheelSlices}
+          targetIndex={targetIndex}
+          continuousSpin={wheelPhase === 'spinning'}
+          accentColor={accent}
+          onSpinEnd={finishReveal}
+        />
+        <div className="mt-8 flex w-full justify-center">
+          {wheelPhase === 'idle' ? (
+            <button
+              type="button"
+              onClick={() => {
+                setWheelPhase('spinning');
+                if (navigator.vibrate) navigator.vibrate(15);
+              }}
+              className="h-20 w-40 rounded-2xl text-xl font-black uppercase tracking-widest text-black shadow-[0_10px_40px_rgba(250,204,21,.35)] transition-transform active:scale-95"
+              style={{ background: 'linear-gradient(180deg,#FDE68A,#FACC15 45%,#B45309)' }}
+            >
+              Girar
+            </button>
+          ) : wheelPhase === 'spinning' ? (
+            <button
+              type="button"
+              onClick={() => {
+                setWheelPhase('stopping');
+                setTargetIndex(pendingIndex ?? 0);
+                if (navigator.vibrate) navigator.vibrate([10, 40, 10]);
+              }}
+              className="h-20 w-40 animate-pulse rounded-2xl text-xl font-black uppercase tracking-widest text-white shadow-[0_10px_40px_rgba(225,29,72,.45)] transition-transform active:scale-95"
+              style={{ background: 'linear-gradient(180deg,#FB7185,#E11D48 45%,#7F1D1D)' }}
+            >
+              Parar
+            </button>
+          ) : (
+            <p className="text-xs text-white/50">Prendendo a respiração…</p>
+          )}
+        </div>
       </div>
     );
   }

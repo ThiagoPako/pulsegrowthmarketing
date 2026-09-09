@@ -175,6 +175,7 @@ const navCategories: NavCategory[] = [
       { path: '/clube-descontos', label: 'Clube Descontos', icon: Gift, roles: ['admin', 'social_media'] },
       { path: '/regulamentos', label: 'Regulamentos', icon: FileText, roles: ['admin', 'social_media'] },
       { path: '/bio-links', label: 'Bio Links', icon: Link2, roles: ['admin', 'social_media'] },
+      { path: '/sorteios-premios', label: 'Sorteios de Prêmios', icon: Gift, roles: ['admin', 'social_media'] },
     ],
   },
 

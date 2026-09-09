@@ -37,6 +37,7 @@ export const AVAILABLE_MODULES: ModuleDef[] = [
   { key: 'configuracoes', label: 'Configurações', icon: '⚙️', description: 'Configurações do sistema', paths: ['/configuracoes'] },
   { key: 'portal_videos', label: 'Vídeos Portal', icon: '🎬', description: 'Vídeos de boas-vindas e novidades', paths: ['/portal-videos'] },
   { key: 'bio_links', label: 'Link Bio', icon: '🔗', description: 'Módulo de árvore de links', paths: ['/bio-links'] },
+  { key: 'sorteios', label: 'Sorteios de Prêmios', icon: '🎁', description: 'Roleta e raspadinha com QR Code', paths: ['/sorteios-premios'] },
 ];
 
 export function useUserPermissions(userId?: string) {

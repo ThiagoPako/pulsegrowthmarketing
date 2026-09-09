@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { useFinancialData, normalizeDate, isExpensePaid } from '@/hooks/useFinancialData';
-import { isSameMonth, sumAmounts, toAmount, isRevenueReceived, safeDivide, safePercent, roundMoney } from '@/lib/financialCalc';
+import { isSameMonth, sumAmounts, toAmount, isRevenueReceived, computeClientProfitability } from '@/lib/financialCalc';
 
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';

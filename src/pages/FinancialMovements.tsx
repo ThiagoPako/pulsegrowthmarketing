@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react';
-import { useFinancialData, normalizeDate, isExpensePaid, type Revenue, type Expense, type CashMovement } from '@/hooks/useFinancialData';
+import { useFinancialData, normalizeDate, isExpensePaid, isSalaryLikeExpense, type Revenue, type Expense, type CashMovement } from '@/hooks/useFinancialData';
+import { isMirroredCashMovement, toAmount, sumAmounts, isRevenueReceived } from '@/lib/financialCalc';
+
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -111,13 +113,13 @@ export default function FinancialMovements() {
       const d = new Date(expDate + 'T12:00:00');
       if (d >= monthStart && d <= monthEnd) {
         const cat = categories.find(c => c.id === e.category_id);
-        const isSalary = cat?.name?.toLowerCase() === 'salários' || e.description?.startsWith('Salário -') || e.description?.startsWith('Bônus -');
+        const isSalary = isSalaryLikeExpense(e) || cat?.name?.toLowerCase() === 'salários';
         movements.push({
           id: e.id,
           date: expDate,
           type: 'despesa',
           description: e.description || 'Despesa',
-          amount: Number(e.amount),
+          amount: toAmount(e.amount),
           category: cat?.name,
           sourceType: 'despesa',
           isSalary,
@@ -126,8 +128,11 @@ export default function FinancialMovements() {
       }
     });
 
-    // Cash movements
+
+    // Cash movements — exclui os espelhos automáticos de receita/despesa,
+    // que já estão listados acima (senão o mesmo valor contaria duas vezes).
     cashMovements.forEach(m => {
+      if (isMirroredCashMovement(m)) return;
       const cashDate = normalizeDate(m.date);
       const d = new Date(cashDate + 'T12:00:00');
       if (d >= monthStart && d <= monthEnd) {
@@ -136,7 +141,7 @@ export default function FinancialMovements() {
           date: cashDate,
           type: m.type === 'entrada' ? 'caixa_entrada' : 'caixa_saida',
           description: m.description.replace(/\s*-\s*ID:\s*[a-f0-9-]+/gi, ''),
-          amount: Number(m.amount),
+          amount: toAmount(m.amount),
           sourceType: 'caixa',
           original: m,
         });
@@ -147,6 +152,7 @@ export default function FinancialMovements() {
     movements.sort((a, b) => b.date.localeCompare(a.date));
     return movements;
   }, [revenues, expenses, cashMovements, clients, categories, monthStart, monthEnd]);
+
 
   const filtered = useMemo(() => {
     let result = unified;

@@ -385,6 +385,7 @@ export default function PromoAdmin() {
                 <TabsList>
                   <TabsTrigger value="premios">Prêmios</TabsTrigger>
                   <TabsTrigger value="cupons">Cupons e impressão</TabsTrigger>
+                  <TabsTrigger value="resgatados">Prêmios resgatados</TabsTrigger>
                   <TabsTrigger value="leads">Leads</TabsTrigger>
                   <TabsTrigger value="config">Configurações</TabsTrigger>
                 </TabsList>

@@ -213,6 +213,25 @@ export default function FinancialCashReserve() {
         </Dialog>
       </div>
 
+      {pending && pending.total > 0 && (
+        <Card className="border-amber-500/50 bg-amber-500/5">
+          <CardContent className="flex flex-wrap items-center gap-3 py-4">
+            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+            <div className="flex-1 min-w-[240px] text-sm">
+              <p className="font-medium">Existem lançamentos fora do caixa</p>
+              <p className="text-muted-foreground">
+                {pending.missingExpenses} despesa(s) paga(s) e {pending.missingRevenues} receita(s) recebida(s) ainda não aparecem aqui
+                {pending.orphans + pending.duplicates > 0 && `, além de ${pending.orphans + pending.duplicates} movimentação(ões) sobrando`}.
+              </p>
+            </div>
+            <Button size="sm" onClick={handleSync} disabled={syncing}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+              Corrigir agora
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>

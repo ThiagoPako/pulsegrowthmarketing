@@ -114,6 +114,114 @@ export function calcWaitPoints(totalWaitSeconds: number): number {
   return Math.floor(totalWaitSeconds / 600) * VM_SCORE.WAIT_PER_10MIN;
 }
 
+// ── Delivery records (entregas de videomaker) ──
+
+export type DeliveryScoreRecord = {
+  id?: string | null;
+  recording_id?: string | null;
+  videomaker_id?: string | null;
+  client_id?: string | null;
+  date?: string | null;
+  reels_produced?: number | null;
+  creatives_produced?: number | null;
+  stories_produced?: number | null;
+  arts_produced?: number | null;
+  extras_produced?: number | null;
+  updated_at?: string | null;
+  created_at?: string | null;
+};
+
+/**
+ * Remove registros de entrega duplicados.
+ * Duplicidade real acontece quando a mesma gravação (recording_id) gera
+ * mais de um delivery_record — o banco não tem UNIQUE nessa coluna.
+ * Mantém sempre o registro mais recente.
+ */
+export function dedupeDeliveryRecords<T extends DeliveryScoreRecord>(records: T[]): T[] {
+  const unique = new Map<string, T>();
+
+  records.forEach((record, index) => {
+    const key = record.recording_id
+      ? `rec:${record.recording_id}`
+      : `row:${record.id ?? `idx-${index}`}`;
+    const current = unique.get(key);
+    const stamp = Math.max(toTimestamp(record.updated_at), toTimestamp(record.created_at));
+    const currentStamp = current
+      ? Math.max(toTimestamp(current.updated_at), toTimestamp(current.created_at))
+      : -1;
+
+    if (!current || stamp >= currentStamp) unique.set(key, record);
+  });
+
+  return Array.from(unique.values());
+}
+
+/** Soma os itens produzidos em uma lista de entregas (já deduplicada). */
+export function sumDeliveryProduction(records: DeliveryScoreRecord[]) {
+  return records.reduce(
+    (acc, r) => ({
+      reels: acc.reels + (r.reels_produced || 0),
+      creatives: acc.creatives + (r.creatives_produced || 0),
+      stories: acc.stories + (r.stories_produced || 0),
+      arts: acc.arts + (r.arts_produced || 0),
+      extras: acc.extras + (r.extras_produced || 0),
+    }),
+    { reels: 0, creatives: 0, stories: 0, arts: 0, extras: 0 },
+  );
+}
+
+// ── Designer ──
+
+/** Colunas reais do kanban de design (fonte: useDesignTasks.DESIGN_COLUMNS). */
+export const DESIGNER_COMPLETED_COLUMNS = ['aprovado', 'enviar_cliente', 'postado'] as const;
+export const DESIGNER_IN_PROGRESS_COLUMNS = ['executando', 'ajustes', 'em_analise'] as const;
+
+export type DesignerScoreTask = {
+  kanban_column: string;
+  time_spent_seconds?: number | null;
+  version?: number | null;
+  priority?: string | null;
+  completed_at?: string | null;
+  updated_at?: string | null;
+  created_at?: string | null;
+};
+
+export function getDesignTaskReferenceDate(
+  task: Pick<DesignerScoreTask, 'completed_at' | 'updated_at' | 'created_at'>,
+) {
+  return task.completed_at ?? task.updated_at ?? task.created_at ?? null;
+}
+
+export function getDesignerScoreBreakdown(tasks: DesignerScoreTask[]) {
+  const completed = tasks.filter(t =>
+    DESIGNER_COMPLETED_COLUMNS.includes(t.kanban_column as (typeof DESIGNER_COMPLETED_COLUMNS)[number]),
+  ).length;
+  const inProgress = tasks.filter(t =>
+    DESIGNER_IN_PROGRESS_COLUMNS.includes(t.kanban_column as (typeof DESIGNER_IN_PROGRESS_COLUMNS)[number]),
+  ).length;
+  const totalTimeSeconds = tasks.reduce((a, t) => a + (t.time_spent_seconds || 0), 0);
+  const hours = Math.round(totalTimeSeconds / 3600);
+  const versions = tasks.reduce((a, t) => a + Math.max((t.version || 1) - 1, 0), 0);
+  const priorityTasks = tasks.filter(t => t.priority === 'alta' || t.priority === 'urgente').length;
+
+  return {
+    completed,
+    inProgress,
+    hours,
+    totalTimeSeconds,
+    versions,
+    priorityTasks,
+    score:
+      completed * DESIGNER_SCORE.CONCLUIDO +
+      inProgress * DESIGNER_SCORE.EM_PROGRESSO +
+      hours * DESIGNER_SCORE.POR_HORA +
+      versions * DESIGNER_SCORE.POR_VERSAO +
+      priorityTasks * DESIGNER_SCORE.PRIORIDADE,
+  };
+}
+
+
+
 export type EditorScoreTask = {
   kanban_column: string;
   approved_at?: string | null;

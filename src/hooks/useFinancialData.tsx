@@ -363,10 +363,22 @@ export function useFinancialData() {
       }
 
       const action = updates.status === 'recebida' ? 'Marcou receita como paga' : updates.status === 'prevista' ? 'Reverteu receita para pendente' : 'Atualizou receita';
-      const revenueAmount = Number(updates.amount || previousRevenue?.amount || 0);
+      const revenueAmount = toAmount(updates.amount ?? previousRevenue?.amount);
+      const wasReceived = previousRevenue?.status === 'recebida' || previousRevenue?.status === 'pago';
+      const isReceived = updates.status !== undefined
+        ? (updates.status === 'recebida' || updates.status === 'pago')
+        : wasReceived;
+
+      const linkedReceita = async () => {
+        const { data } = await supabase
+          .from('cash_reserve_movements')
+          .select('id')
+          .ilike('description', `%[Receita]%ID: ${id}%`);
+        return (data as any[]) || [];
+      };
 
       // Sync with account balance (cash_reserve_movements)
-      if (updates.status === 'recebida' && previousRevenue?.status !== 'recebida') {
+      if (isReceived && !wasReceived) {
         // Resolve client name for description
         let companyLabel = clientName || '';
         if (!companyLabel && previousRevenue?.client_id) {
@@ -379,21 +391,26 @@ export function useFinancialData() {
           amount: revenueAmount,
           type: 'entrada',
           description: `[Receita] ${descLabel} - ID: ${id}`,
-          date: updates.paid_at || new Date().toISOString().split('T')[0],
+          date: normalizeDate(updates.paid_at || previousRevenue?.due_date || new Date().toISOString().split('T')[0]),
           is_reserve: false,
         } as any);
-      } else if (updates.status === 'prevista' && previousRevenue?.status === 'recebida') {
+      } else if (!isReceived && wasReceived) {
         // Revenue reverted → remove the linked cash movement
-        const { data: linked } = await supabase
-          .from('cash_reserve_movements')
-          .select('id')
-          .ilike('description', `%[Receita]%ID: ${id}%`);
-        if (linked && linked.length > 0) {
-          for (const l of linked) {
-            await supabase.from('cash_reserve_movements').delete().eq('id', l.id);
+        for (const l of await linkedReceita()) {
+          await supabase.from('cash_reserve_movements').delete().eq('id', l.id);
+        }
+      } else if (isReceived && wasReceived) {
+        // Valor ou data do recebimento mudou → o saldo precisa acompanhar
+        const cashUpdates: any = {};
+        if (updates.amount !== undefined) cashUpdates.amount = revenueAmount;
+        if (updates.paid_at) cashUpdates.date = normalizeDate(updates.paid_at);
+        if (Object.keys(cashUpdates).length > 0) {
+          for (const l of await linkedReceita()) {
+            await supabase.from('cash_reserve_movements').update(cashUpdates).eq('id', l.id);
           }
         }
       }
+
 
       await logActivity('edição', 'receita', `${action} - R$ ${revenueAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, updates);
       await fetchAll();

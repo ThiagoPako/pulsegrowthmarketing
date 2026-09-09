@@ -144,6 +144,7 @@ export default function PromoAdmin() {
   const [printTickets, setPrintTickets] = useState<PromoTicket[] | null>(null);
 
   const [leads, setLeads] = useState<PromoLead[]>([]);
+  const [redemptions, setRedemptions] = useState<PromoRedemption[]>([]);
 
   const selected = useMemo(() => campaigns.find((c) => c.id === selectedId) || null, [campaigns, selectedId]);
   const probabilityTotal = useMemo(

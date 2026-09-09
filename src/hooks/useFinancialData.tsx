@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { syncFinancialContract } from '@/lib/financialContracts';
+import { PLACEHOLDER_CLIENT_ID, toAmount } from '@/lib/financialCalc';
+
 
 /** Normalize date strings like "2026-03-01T00:00:00.000Z" to "2026-03-01" */
 export const normalizeDate = (d: string | null | undefined): string => {
@@ -54,13 +56,20 @@ const deduplicateRevenues = (items: any[]) => {
   const byKey = new Map<string, any>();
 
   for (const revenue of items) {
-    const key = `${revenue.client_id}_${normalizeDate(revenue.reference_month)}`;
+    // Receitas avulsas/importadas (sem cliente real) nunca podem ser agrupadas:
+    // várias entradas do mesmo mês são lançamentos diferentes.
+    const clientId = revenue.client_id;
+    const isPlaceholderClient = !clientId || clientId === PLACEHOLDER_CLIENT_ID;
+    const key = isPlaceholderClient
+      ? `avulsa_${revenue.id}`
+      : `${clientId}_${normalizeDate(revenue.reference_month)}`;
     const existing = byKey.get(key);
     byKey.set(key, existing ? chooseCanonicalRevenue(existing, revenue) : revenue);
   }
 
   return Array.from(byKey.values());
 };
+
 
 export interface FinancialContract {
   id: string;

@@ -11473,6 +11473,29 @@ app.get('/api/promo/campaigns/:id/leads', async (req, res) => {
   }
 });
 
+/** Prêmios efetivamente entregues no caixa. */
+app.get('/api/promo/campaigns/:id/redemptions', async (req, res) => {
+  if (!(await promoRequireAuth(req, res))) return;
+  try {
+    await ensurePromoTables();
+    const { rows } = await pool.query(
+      `SELECT t.id, t.participant_name, t.participant_phone, t.participant_document,
+              t.redemption_code, t.revealed_at, t.redeemed_at, t.redeemed_by, t.batch_label,
+              p.name AS prize_name, p.image_url AS prize_image_url
+         FROM promo_tickets t
+         LEFT JOIN promo_prizes p ON p.id = t.prize_id
+        WHERE t.campaign_id = $1 AND t.status = 'redeemed'
+        ORDER BY t.redeemed_at DESC NULLS LAST
+        LIMIT 5000`,
+      [req.params.id]
+    );
+    res.json({ redemptions: rows });
+  } catch (error) {
+    console.error('[promo/redemptions] error:', error);
+    res.status(500).json({ error: 'Falha ao carregar os resgates' });
+  }
+});
+
 
 // ─── WebSocket Server for real-time presence & chat ─────────
 

@@ -340,13 +340,14 @@ export default function PromoAdmin() {
   }
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
+    <div className="space-y-5 p-3 pb-24 sm:space-y-6 sm:p-6 sm:pb-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Sorteios de Prêmios</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">Sorteios de Prêmios</h1>
           <p className="text-sm text-muted-foreground">Roleta e raspadinha com QR Code descartável.</p>
         </div>
         <Button
+          className="hidden sm:inline-flex"
           onClick={() => {
             setCampaignForm(EMPTY_CAMPAIGN);
             setCampaignDialog(true);
@@ -355,6 +356,18 @@ export default function PromoAdmin() {
           <Plus className="mr-2 h-4 w-4" /> Novo sorteio
         </Button>
       </div>
+
+      {/* Botão fixo para cadastro pelo celular */}
+      <Button
+        size="lg"
+        className="fixed bottom-4 left-3 right-3 z-40 h-12 shadow-lg sm:hidden"
+        onClick={() => {
+          setCampaignForm(EMPTY_CAMPAIGN);
+          setCampaignDialog(true);
+        }}
+      >
+        <Plus className="mr-2 h-5 w-5" /> Novo sorteio
+      </Button>
 
       {loading ? (
         <div className="flex items-center gap-2 text-muted-foreground">

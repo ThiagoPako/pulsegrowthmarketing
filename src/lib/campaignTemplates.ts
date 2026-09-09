@@ -35,6 +35,7 @@ export const RECOMMENDED_QUANTITIES: Record<CampaignType, { videos: number; crea
   evento: { videos: 7, creatives: 4 },
   agro: { videos: 6, creatives: 3 },
   sorteio: { videos: 6, creatives: 4 },
+  sorteio_qr: { videos: 5, creatives: 4 },
 };
 
 /**
@@ -105,6 +106,13 @@ const VIDEO_TEMPLATES: Record<CampaignType, SlotTemplate[]> = {
     { kind: 'video', title: 'Última chamada — encerramento das participações', phase: 'fundo', weight: 0.82, notes: 'Contagem regressiva com prazo exato de encerramento.' },
     { kind: 'video', title: 'Sorteio ao vivo + entrega do prêmio ao ganhador', phase: 'pos', weight: 1.0, notes: 'Transparência é obrigatória: mostrar o sorteio e a entrega real. É o vídeo que sustenta o próximo sorteio.' },
   ],
+  sorteio_qr: [
+    { kind: 'video', title: 'Chamada — "comprou, ganhou o cupom e já joga na hora"', phase: 'topo', weight: 0.0, notes: 'Explicar em 20s: comprou/abasteceu, recebe o cupom impresso com QR Code e joga no próprio celular.' },
+    { kind: 'video', title: 'Demonstração da roleta e da raspadinha na tela do celular', phase: 'topo', weight: 0.2, notes: 'Gravar a tela real do jogo do módulo Sorteios de Prêmios: escanear o QR, girar a roleta e raspar.' },
+    { kind: 'video', title: 'Mostra dos prêmios disponíveis e como retirar', phase: 'meio', weight: 0.45, notes: 'Mostrar os prêmios cadastrados na campanha e explicar que a retirada é feita com o código do voucher no balcão.' },
+    { kind: 'video', title: 'Cliente real ganhando e retirando o prêmio', phase: 'meio', weight: 0.7, notes: 'Prova social: filmar do jogo ao momento da entrega, com autorização de imagem.' },
+    { kind: 'video', title: 'Última chamada — cupons acabando / campanha encerrando', phase: 'fundo', weight: 0.95, notes: 'Usar o saldo real de prêmios do painel do módulo para dar urgência verdadeira.' },
+  ],
 };
 
 /**
@@ -154,6 +162,12 @@ const CREATIVE_TEMPLATES: Record<CampaignType, SlotTemplate[]> = {
     { kind: 'creative', title: 'Card regulamento resumido (quem pode, prazo, data do sorteio)', phase: 'meio', weight: 0.5 },
     { kind: 'creative', title: 'Card do ganhador + agradecimento e próximo sorteio', phase: 'pos', weight: 1.0 },
   ],
+  sorteio_qr: [
+    { kind: 'creative', title: 'Arte principal — "escaneou, girou, ganhou" (mecânica em 3 passos)', phase: 'topo', weight: 0.08 },
+    { kind: 'creative', title: 'Vitrine dos prêmios da roleta/raspadinha', phase: 'meio', weight: 0.4 },
+    { kind: 'creative', title: 'Card de regulamento e prazo de retirada do voucher', phase: 'meio', weight: 0.65 },
+    { kind: 'creative', title: 'Card dos ganhadores da semana (prova de entrega)', phase: 'pos', weight: 1.0 },
+  ],
 };
 
 /**
@@ -191,6 +205,10 @@ export const EDITORIAL_BRIEFINGS: Record<CampaignType, { title: string; notes: s
   sorteio: {
     title: 'Editorial — Campanha de Sorteio de Brindes',
     notes: 'Objetivo comercial: explodir alcance, captar contatos e levar gente à loja — convertendo os participantes em clientes depois do sorteio.\n\nDefina antes de gravar:\n• Prêmio(s) e valor real de mercado (quanto mais desejado e útil, maior a participação).\n• Mecânica de participação (seguir + comentar + marcar, cadastro com WhatsApp, QR Code na loja, cupom por compra).\n• Período de participação e data/hora do sorteio ao vivo.\n• Regulamento publicado em link fixo (quem pode participar, critério de desempate, prazo de retirada do prêmio).\n• Como o contato entra no funil (lista de WhatsApp, etiqueta no CRM).\n• Oferta de consolação para quem não ganhou (cupom válido por 7 dias) — é aqui que o sorteio vira venda.\n• Prova de entrega: foto/vídeo do ganhador recebendo o prêmio.\n\nObservação: sorteios com QR Code descartável, roleta ou raspadinha podem ser operados pelo módulo Sorteios de Prêmios do sistema.',
+  },
+  sorteio_qr: {
+    title: 'Editorial — Sorteio de Prêmios com QR Code (módulo do sistema)',
+    notes: 'Campanha operada dentro do módulo Sorteios de Prêmios (menu Sorteios de Prêmios do sistema).\n\nAntes de gravar, deixe pronto no módulo:\n• Campanha criada com nome, slug, banner, cor e nicho do cliente.\n• Prêmios cadastrados com foto, estoque e % de chance (a soma não pode passar de 100%).\n• Regulamento e texto de LGPD preenchidos, com captura de contato ligada se o cliente quiser os leads.\n• PIN do caixa definido e equipe treinada na tela de validação (/sorteio/slug/validar).\n• Lote de cupons gerado e impresso em A4 (24 por folha) para entrega no balcão.\n\nNa comunicação:\n• Mecânica sempre em 3 passos: comprou → recebeu o cupom → escaneou e jogou.\n• Deixar claro que o prêmio só é retirado com o código do voucher, dentro do prazo.\n• Usar o saldo real de prêmios do painel para dar urgência verdadeira na reta final.\n• Fechar com prova de entrega (foto/vídeo dos ganhadores) e com a oferta para quem não ganhou.',
   },
 };
 

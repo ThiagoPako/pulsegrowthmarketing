@@ -1,4 +1,4 @@
-export type CampaignType = 'institucional' | 'promocional' | 'sazonal' | 'lancamento' | 'responsabilidade_social' | 'evento' | 'agro' | 'sorteio';
+export type CampaignType = 'institucional' | 'promocional' | 'sazonal' | 'lancamento' | 'responsabilidade_social' | 'evento' | 'agro' | 'sorteio' | 'sorteio_qr';
 export type SlotKind = 'editorial' | 'video' | 'creative';
 export type SlotStatus = 'pendente' | 'roteiro_pronto' | 'gravado' | 'editado' | 'postado';
 export type CampaignStatus = 'rascunho' | 'ativa' | 'concluida' | 'arquivada';
@@ -12,6 +12,7 @@ export const CAMPAIGN_TYPE_LABELS: Record<CampaignType, string> = {
   evento: 'Evento (captura de leads)',
   agro: 'Agro (calendário do agronegócio)',
   sorteio: 'Sorteio de Brindes (engajamento + captura)',
+  sorteio_qr: 'Sorteio de Prêmios com QR Code (Roleta/Raspadinha)',
 };
 
 export const CAMPAIGN_TYPE_DESCRIPTIONS: Record<CampaignType, string> = {
@@ -23,6 +24,7 @@ export const CAMPAIGN_TYPE_DESCRIPTIONS: Record<CampaignType, string> = {
   evento: 'Corrida, palestra, competição ou workshop para captar WhatsApp e e-mail e alimentar o funil.',
   agro: 'Encaixa a marca na janela atual do agro (plantio, safra, entressafra, feiras) para vender no momento certo do produtor.',
   sorteio: 'Sorteia brindes ou prêmios para explodir alcance, captar contatos e levar gente à loja — com regulamento e transparência na entrega.',
+  sorteio_qr: 'Campanha operada pelo módulo Sorteios de Prêmios: cupom impresso com QR Code, roleta ou raspadinha no celular e retirada do prêmio no balcão.',
 };
 
 export const SLOT_STATUS_LABELS: Record<SlotStatus, string> = {

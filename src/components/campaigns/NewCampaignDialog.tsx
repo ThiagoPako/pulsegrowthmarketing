@@ -9,7 +9,7 @@ import { CAMPAIGN_TYPE_LABELS, CAMPAIGN_TYPE_DESCRIPTIONS, CampaignType, formatB
 import { buildCampaignSlots, RECOMMENDED_QUANTITIES } from '@/lib/campaignTemplates';
 import {
   Sparkles, FileText, Palette, BookOpen, Megaphone, Users, Target, Calendar,
-  Check, ChevronRight, ChevronLeft, Building2, Rocket, PartyPopper, Heart, Tag, CalendarDays, Sprout, Gift,
+  Check, ChevronRight, ChevronLeft, Building2, Rocket, PartyPopper, Heart, Tag, CalendarDays, Sprout, Gift, QrCode,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -28,6 +28,7 @@ const TYPE_META: Record<CampaignType, { icon: any; color: string; accent: string
   evento: { icon: PartyPopper, color: 'from-amber-500/20 to-transparent', accent: '#f59e0b' },
   agro: { icon: Sprout, color: 'from-lime-500/20 to-transparent', accent: '#84cc16' },
   sorteio: { icon: Gift, color: 'from-pink-500/20 to-transparent', accent: '#ec4899' },
+  sorteio_qr: { icon: QrCode, color: 'from-violet-500/20 to-transparent', accent: '#8b5cf6' },
 };
 
 const STEPS = [

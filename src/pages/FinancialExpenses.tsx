@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { useFinancialData, type Expense, normalizeDate } from '@/hooks/useFinancialData';
+import { useFinancialData, type Expense, normalizeDate, isExpensePaid } from '@/hooks/useFinancialData';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -303,6 +303,10 @@ export default function FinancialExpenses() {
   ], [categories]);
 
   const total = filtered.reduce((s, e) => s + Number(e.amount), 0);
+  // Salário só é despesa quando marcado como pago; até lá fica provisionado.
+  const totalPago = filtered.filter(e => isExpensePaid(e)).reduce((s, e) => s + Number(e.amount), 0);
+  const totalPendente = total - totalPago;
+
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   const monthOptions = useMemo(() => {
@@ -553,8 +557,9 @@ export default function FinancialExpenses() {
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-rose-500/20 flex items-center justify-center"><TrendingDown size={16} className="text-rose-600" /></div>
                   <div>
-                    <p className="text-[10px] text-muted-foreground font-medium">Total Despesas</p>
-                    <p className="text-sm font-bold text-foreground">{fmt(total)}</p>
+                    <p className="text-[10px] text-muted-foreground font-medium">Total Despesas (pagas)</p>
+                    <p className="text-sm font-bold text-foreground">{fmt(totalPago)}</p>
+                    {totalPendente > 0 && <p className="text-[10px] text-amber-600 font-medium">{fmt(totalPendente)} a pagar</p>}
                   </div>
                 </div>
               </CardContent>
@@ -600,8 +605,9 @@ export default function FinancialExpenses() {
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center"><Users size={16} className="text-emerald-600" /></div>
                   <div>
-                    <p className="text-[10px] text-muted-foreground font-medium">Total Salários</p>
-                    <p className="text-sm font-bold text-foreground">{fmt(total)}</p>
+                    <p className="text-[10px] text-muted-foreground font-medium">Salários Pagos</p>
+                    <p className="text-sm font-bold text-foreground">{fmt(totalPago)}</p>
+                    {totalPendente > 0 && <p className="text-[10px] text-amber-600 font-medium">{fmt(totalPendente)} pendente</p>}
                   </div>
                 </div>
               </CardContent>

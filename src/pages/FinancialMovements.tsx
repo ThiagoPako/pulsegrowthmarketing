@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useFinancialData, normalizeDate, type Revenue, type Expense, type CashMovement } from '@/hooks/useFinancialData';
+import { useFinancialData, normalizeDate, isExpensePaid, type Revenue, type Expense, type CashMovement } from '@/hooks/useFinancialData';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -106,6 +106,7 @@ export default function FinancialMovements() {
 
     // Expenses
     expenses.forEach(e => {
+      if (!isExpensePaid(e)) return; // salário pendente ainda não é saída de caixa
       const expDate = normalizeDate(e.date);
       const d = new Date(expDate + 'T12:00:00');
       if (d >= monthStart && d <= monthEnd) {
@@ -184,6 +185,7 @@ export default function FinancialMovements() {
       }
     });
     expenses.forEach(e => {
+      if (!isExpensePaid(e)) return;
       movs.push({ id: e.id, date: normalizeDate(e.date), description: e.description || 'Despesa', amount: Number(e.amount), type: 'saida' });
     });
     cashMovements.forEach(m => {

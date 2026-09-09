@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useFinancialData, normalizeDate } from '@/hooks/useFinancialData';
+import { useFinancialData, normalizeDate, isExpensePaid } from '@/hooks/useFinancialData';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -188,6 +188,8 @@ export default function FinancialDashboard() {
   const monthExpenses = useMemo(() =>
     expenses.filter(e => {
       if (!e.date) return false;
+      // Salário só conta como despesa depois de marcado como PAGO
+      if (!isExpensePaid(e)) return false;
       const normalized = normalizeDate(e.date);
       const ym = format(monthStart, 'yyyy-MM');
       return normalized.startsWith(ym);
@@ -256,7 +258,7 @@ export default function FinancialDashboard() {
       const label = format(m, 'MMM', { locale: ptBR });
       const rec = revenues.filter(r => normalizeDate(r.reference_month) === ref && r.status === 'recebida').reduce((s, r) => s + Number(r.amount), 0);
       const ym = format(mStart, 'yyyy-MM');
-      const desp = expenses.filter(e => e.date && normalizeDate(e.date).startsWith(ym)).reduce((s, e) => s + Number(e.amount), 0);
+      const desp = expenses.filter(e => e.date && isExpensePaid(e) && normalizeDate(e.date).startsWith(ym)).reduce((s, e) => s + Number(e.amount), 0);
       data.push({ name: label, receita: rec, despesa: desp, lucro: rec - desp });
     }
     return data;

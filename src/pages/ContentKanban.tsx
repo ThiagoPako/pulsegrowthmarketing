@@ -533,7 +533,12 @@ export default function ContentKanban() {
   }, [highlightId, tasks, loading, setSearchParams]);
 
   // ─── HELPERS ───────────────────────────────────────────────
-  const getClient = (id: string) => clients.find(c => c.id === id);
+  const getClient = (id: string) => clients.find(c => c.id === id) || (foreignClients[id] as any);
+  // Tarefas de outra praça são apenas para consulta: edições continuam na cidade ativa.
+  const normalizeCity = (value?: string | null) =>
+    String(value || activeCity).trim().toLowerCase().replace('ç', 'c');
+  const isForeignTask = (task: ContentTask) => normalizeCity(task.city) !== activeCity;
+
   const getTypeConfig = (type: string) => CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];
   const getUser = (id: string | null) => id ? users.find(u => u.id === id) : null;
 

@@ -43,6 +43,7 @@ const SocialConnectInvite = lazy(() => import("@/pages/SocialConnectInvite"));
 
 const SocialInsights = lazy(() => import("@/pages/SocialInsights"));
 const PostStudio = lazy(() => import("@/pages/PostStudio"));
+const TestClients = lazy(() => import("@/pages/TestClients"));
 const ContentKanban = lazy(() => import("@/pages/ContentKanban"));
 const EditorDashboard = lazy(() => import("@/pages/EditorDashboard"));
 const EditorKanban = lazy(() => import("@/pages/EditorKanban"));
@@ -167,6 +168,7 @@ const META_REVIEWER_PATHS = [
   '/estudio-postagem',
   '/conteudos-portal',
   '/perfil',
+  '/clientes-teste',
 ];
 const META_REVIEWER_HOME = '/estudio-postagem';
 
@@ -283,6 +285,7 @@ function AppRoutes() {
         <Route path="/conexoes-sociais" element={<ProtectedRoute><SocialConnections /></ProtectedRoute>} />
         <Route path="/conectar-social/:token" element={<SocialConnectInvite />} />
         <Route path="/estudio-postagem" element={<ProtectedRoute><PostStudio /></ProtectedRoute>} />
+        <Route path="/clientes-teste" element={<ProtectedRoute><TestClients /></ProtectedRoute>} />
 
         <Route path="/desempenho-social" element={<ProtectedRoute><SocialInsights /></ProtectedRoute>} />
         <Route path="/conteudo" element={<ProtectedRoute><ContentKanban /></ProtectedRoute>} />

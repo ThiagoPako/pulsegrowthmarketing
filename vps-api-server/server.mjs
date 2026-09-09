@@ -970,7 +970,7 @@ app.get('/api/public/client-database/:token', async (req, res) => {
     const clientId = share.rows[0].client_id;
     pool.query('UPDATE client_database_shares SET views = views + 1 WHERE token = $1', [token]).catch(() => {});
 
-    const [client, professionals, units] = await Promise.all([
+    const [client, professionals, units, collaborators] = await Promise.all([
       pool.query('SELECT id, company_name, logo_url FROM clients WHERE id = $1 LIMIT 1', [clientId]),
       pool.query(
         `SELECT id, name, specialty, council_type, council_number, rqe, bio, schedule_notes, photos, videos, active
@@ -982,6 +982,11 @@ app.get('/api/public/client-database/:token', async (req, res) => {
          FROM client_units WHERE client_id = $1 ORDER BY city_name ASC`,
         [clientId],
       ),
+      pool.query(
+        `SELECT id, name, job_role, department, birthday, notes, photos, videos, active
+         FROM client_collaborators WHERE client_id = $1 ORDER BY name ASC`,
+        [clientId],
+      ).catch(() => ({ rows: [] })),
     ]);
 
     if (client.rows.length === 0) return res.status(404).json({ error: 'Cliente não encontrado' });
@@ -990,6 +995,7 @@ app.get('/api/public/client-database/:token', async (req, res) => {
       client: client.rows[0],
       professionals: professionals.rows,
       units: units.rows,
+      collaborators: collaborators.rows,
     });
   } catch (error) {
     console.error('public client-database error:', error);
@@ -13677,14 +13683,60 @@ app.post('/api/public/client-database/:token/professionals', async (req, res) =>
   }
 });
 
+/** Cliente adiciona um novo colaborador (somente inclusão). */
+app.post('/api/public/client-database/:token/collaborators', async (req, res) => {
+  try {
+    const clientId = await resolveShareClientId(req.params.token);
+    await ensureClientDatabaseTables();
+
+    const name = sanitizeText(req.body?.name, 160);
+    if (!name) return res.status(400).json({ error: 'Nome é obrigatório' });
+
+    const rawBirthday = sanitizeText(req.body?.birthday, 10);
+    const birthday = /^\d{4}-\d{2}-\d{2}$/.test(rawBirthday) ? rawBirthday : null;
+
+    const photos = Array.isArray(req.body?.photos)
+      ? req.body.photos.filter((u) => typeof u === 'string' && u.trim()).slice(0, 30)
+      : [];
+
+    const inserted = await pool.query(
+      `INSERT INTO client_collaborators
+         (client_id, name, job_role, department, birthday, phone, email, notes, photos, active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, true)
+       RETURNING id, name, job_role, department, birthday, photos, videos`,
+      [
+        clientId,
+        name,
+        sanitizeText(req.body?.job_role, 160),
+        sanitizeText(req.body?.department, 160),
+        birthday,
+        sanitizeText(req.body?.phone, 40),
+        sanitizeText(req.body?.email, 160),
+        sanitizeText(req.body?.notes, 2000),
+        JSON.stringify(photos),
+      ],
+    );
+
+    return res.json({ collaborator: inserted.rows[0] });
+  } catch (error) {
+    console.error('[public-clientdb:collaborator]', error);
+    return res.status(error.status || 500).json({ error: error.message || 'Falha ao cadastrar colaborador' });
+  }
+});
+
 /** Cliente anexa mídias a um profissional ou unidade (append-only). */
 app.post('/api/public/client-database/:token/media', async (req, res) => {
   try {
     const clientId = await resolveShareClientId(req.params.token);
     await ensureClientDatabaseTables();
 
-    const kind = req.body?.kind === 'unit' ? 'unit' : 'professional';
-    const table = kind === 'unit' ? 'client_units' : 'client_professionals';
+    const kindMap = {
+      unit: 'client_units',
+      collaborator: 'client_collaborators',
+      professional: 'client_professionals',
+    };
+    const kind = kindMap[req.body?.kind] ? req.body.kind : 'professional';
+    const table = kindMap[kind];
     const column = req.body?.mediaType === 'videos' ? 'videos' : 'photos';
     const targetId = String(req.body?.id || '');
     if (!UUID_RE.test(targetId)) return res.status(400).json({ error: 'Registro inválido' });

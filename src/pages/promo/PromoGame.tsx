@@ -56,6 +56,8 @@ export default function PromoGame() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<PromoPlayResult | null>(null);
   const [targetIndex, setTargetIndex] = useState<number | null>(null);
+  const [pendingIndex, setPendingIndex] = useState<number | null>(null);
+  const [wheelPhase, setWheelPhase] = useState<'idle' | 'spinning' | 'stopping'>('idle');
   const [form, setForm] = useState({ name: '', phone: '', document: '', lgpd: false });
 
   const campaign = state?.campaign;

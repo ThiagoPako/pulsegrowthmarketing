@@ -64,8 +64,8 @@ export default function PromoGame() {
   const accent = campaign?.accent_color || '#E11D48';
 
   const wheelSlices = useMemo(() => {
-    const prizes = (state?.prizes || []).map((p) => ({ id: p.id, label: p.name }));
-    const filler = { id: 'retry', label: 'Tente novamente' };
+    const prizes = (state?.prizes || []).map((p) => ({ id: p.id, label: p.name, imageUrl: p.image_url ? promoAssetUrl(p.image_url) : null }));
+    const filler = { id: 'retry', label: 'Tente novamente', imageUrl: null as string | null };
     const base = prizes.length ? prizes : [filler];
     return base.length < 6 ? [...base, ...Array.from({ length: 6 - base.length }, (_, i) => ({ ...filler, id: `retry-${i}` }))] : base;
   }, [state?.prizes]);

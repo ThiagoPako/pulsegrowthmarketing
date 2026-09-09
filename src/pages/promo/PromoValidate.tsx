@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { CheckCircle2, Loader2, Lock, ShieldAlert, Ticket } from 'lucide-react';
-import { validatePromoCode } from '@/services/promoApi';
+import { validatePromoCode, promoAssetUrl } from '@/services/promoApi';
 
 interface LookupResult {
   status: 'allowed' | 'redeemed' | 'confirmed' | 'invalid';
@@ -140,7 +140,7 @@ export default function PromoValidate() {
             <CheckCircle2 className="h-8 w-8 text-emerald-400" />
             <p className="mt-3 text-xs uppercase tracking-widest text-emerald-300">Liberado para entrega</p>
             {result.prize?.image_url ? (
-              <img src={result.prize.image_url} alt={result.prize.name} className="mt-4 h-32 w-32 rounded-xl object-cover" />
+              <img src={promoAssetUrl(result.prize.image_url)} alt={result.prize.name} className="mt-4 h-32 w-32 rounded-xl object-cover" />
             ) : null}
             <p className="mt-3 text-xl font-bold">{result.prize?.name || 'Prêmio'}</p>
             {result.prize?.description ? <p className="mt-1 text-sm text-white/60">{result.prize.description}</p> : null}

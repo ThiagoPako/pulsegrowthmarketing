@@ -14,6 +14,7 @@ import {
   fetchPromoTicketState,
   playPromoTicket,
   type PromoPlayResult,
+  promoAssetUrl,
   type PromoPublicState,
 } from '@/services/promoApi';
 
@@ -149,7 +150,7 @@ export default function PromoGame() {
         <header className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {campaign?.logo_url ? (
-              <img src={campaign.logo_url} alt={campaign.title} className="h-9 w-auto" />
+              <img src={promoAssetUrl(campaign.logo_url)} alt={campaign.title} className="h-9 w-auto" />
             ) : (
               <Ticket className="h-6 w-6" style={{ color: accent }} />
             )}
@@ -209,7 +210,7 @@ export default function PromoGame() {
   if (step === 'lead') {
     return shell(
       <div className="flex flex-1 flex-col justify-center">
-        {campaign?.banner_url ? <img src={campaign.banner_url} alt="" className="mb-6 w-full rounded-2xl" /> : null}
+        {campaign?.banner_url ? <img src={promoAssetUrl(campaign.banner_url)} alt="" className="mb-6 w-full rounded-2xl" /> : null}
         <h1 className="text-2xl font-extrabold leading-tight">{campaign?.title}</h1>
         <p className="mt-2 text-sm text-white/60">Preencha seus dados para liberar o seu bilhete da sorte.</p>
         <div className="mt-6 space-y-4">
@@ -298,7 +299,7 @@ export default function PromoGame() {
         <ScratchCard className="h-64 w-full border border-yellow-500/40" onRevealed={finishReveal}>
           <div className="flex h-64 w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-neutral-900 to-black p-6 text-center">
             {result?.prize?.image_url ? (
-              <img src={result.prize.image_url} alt={result.prize.name} className="h-24 w-24 rounded-xl object-cover" />
+              <img src={promoAssetUrl(result.prize.image_url)} alt={result.prize.name} className="h-24 w-24 rounded-xl object-cover" />
             ) : (
               <Gift className="h-12 w-12" style={{ color: accent }} />
             )}
@@ -317,7 +318,7 @@ export default function PromoGame() {
         <div className="rounded-3xl border border-yellow-500/50 bg-gradient-to-b from-neutral-900 to-black p-6 text-center">
           <p className="text-xs font-semibold uppercase tracking-widest text-yellow-400">Você ganhou</p>
           {result.prize?.image_url ? (
-            <img src={result.prize.image_url} alt={result.prize.name} className="mx-auto mt-4 h-36 w-36 rounded-2xl object-cover" />
+            <img src={promoAssetUrl(result.prize.image_url)} alt={result.prize.name} className="mx-auto mt-4 h-36 w-36 rounded-2xl object-cover" />
           ) : (
             <Gift className="mx-auto mt-4 h-16 w-16" style={{ color: accent }} />
           )}

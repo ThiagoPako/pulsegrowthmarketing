@@ -67,15 +67,23 @@ interface ImageFieldProps {
 function ImageField({ label, hint, value, uploading, aspect = 'aspect-video', onSelect, onClear }: ImageFieldProps) {
   const inputId = `upload-${label.toLowerCase().replace(/\s+/g, '-')}`;
   const preview = promoAssetUrl(value);
+  const [broken, setBroken] = useState(false);
+  useEffect(() => setBroken(false), [preview]);
   return (
     <div className="space-y-1.5">
       <Label>{label}</Label>
       <label
         htmlFor={inputId}
-        className={`relative flex ${aspect} w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/40 transition-colors hover:border-primary hover:bg-muted`}
+        className={`relative flex ${aspect} max-h-56 w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/40 transition-colors hover:border-primary hover:bg-muted`}
       >
-        {preview ? (
-          <img src={preview} alt={label} className="h-full w-full object-contain p-1" />
+        {preview && !broken ? (
+          <img src={preview} alt={label} className="h-full w-full object-contain p-1" onError={() => setBroken(true)} />
+        ) : preview && broken ? (
+          <div className="flex flex-col items-center gap-1 p-4 text-center text-destructive">
+            <X className="h-6 w-6" />
+            <span className="text-xs font-medium">Imagem não encontrada no servidor</span>
+            <span className="text-[10px] text-muted-foreground">Clique para enviar novamente</span>
+          </div>
         ) : (
           <div className="flex flex-col items-center gap-1 p-4 text-center text-muted-foreground">
             {uploading ? <Loader2 className="h-6 w-6 animate-spin" /> : <Upload className="h-6 w-6" />}
@@ -374,7 +382,7 @@ export default function PromoAdmin() {
                       <Card key={prize.id}>
                         <CardContent className="flex gap-3 p-4">
                           {prize.image_url ? (
-                            <img src={promoAssetUrl(prize.image_url)} alt={prize.name} className="h-20 w-20 rounded-lg border border-border object-cover" />
+                            <img src={promoAssetUrl(prize.image_url)} alt={prize.name} className="h-20 w-20 rounded-lg border border-border bg-muted object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                           ) : (
                             <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-muted">
                               <Gift className="h-6 w-6 text-muted-foreground" />

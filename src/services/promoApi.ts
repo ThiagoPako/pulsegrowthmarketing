@@ -3,6 +3,8 @@
  * Endpoints públicos (jogo e validação) não exigem token; os administrativos usam o JWT do sistema.
  */
 
+import { uploadFileToVps } from '@/services/vpsApi';
+
 const API_BASE = 'https://agenciapulse.tech/api';
 const TOKEN_KEY = 'pulse_jwt';
 
@@ -209,20 +211,11 @@ ${lista}
 6.3. A participação implica aceitação integral deste regulamento.`;
 }
 
-/** Upload de imagem (banner / foto de prêmio) reutilizando o fluxo padrão da VPS. */
+/**
+ * Upload de imagem reutilizando o helper oficial da VPS
+ * (com retentativas e verificação de que o arquivo já está acessível).
+ */
 export async function uploadPromoImage(file: File): Promise<string> {
-  const body = new FormData();
-  body.append('file', file);
-  body.append('folder', 'sorteios');
-  body.append('path', 'sorteios');
-  const token = localStorage.getItem(TOKEN_KEY);
-  const response = await fetch(`${API_BASE}/upload`, {
-    method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    body,
-  });
-  const result = await response.json().catch(() => null);
-  const url = result?.url || result?.path;
-  if (!response.ok || !url) throw new Error(result?.error || 'Falha no upload da imagem');
+  const url = await uploadFileToVps(file, { folder: 'sorteios', retries: 2 });
   return promoAssetUrl(url);
 }

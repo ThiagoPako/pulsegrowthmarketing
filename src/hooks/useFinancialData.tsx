@@ -323,16 +323,35 @@ export function useFinancialData() {
 
 
   // Revenue CRUD
-  const addRevenue = async (r: Partial<Revenue>) => {
-    const { error } = await supabase.from('revenues').insert(r as any);
+  const addRevenue = async (r: Partial<Revenue>, clientName?: string) => {
+    const { data: inserted, error } = await supabase.from('revenues').insert(r as any).select('id').single();
     if (error) {
       console.error('[useFinancialData] addRevenue error:', error);
       return false;
     }
-    await logActivity('criação', 'receita', `Registrou receita - R$ ${Number(r.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, undefined, r);
+
+    // Receita já cadastrada como recebida entra no saldo da conta na hora,
+    // sempre com o ID vinculado para poder ser revertida/excluída depois.
+    const revenueId = (inserted as any)?.id;
+    const amountNum = toAmount(r.amount);
+    if (revenueId && (r.status === 'recebida' || r.status === 'pago') && amountNum > 0) {
+      const label = clientName
+        ? `${clientName} - ${amountNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+        : `Receita avulsa - ${amountNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+      await supabase.from('cash_reserve_movements').insert({
+        amount: amountNum,
+        type: 'entrada',
+        description: `[Receita] ${label} - ID: ${revenueId}`,
+        date: normalizeDate(r.paid_at || r.due_date || new Date().toISOString().split('T')[0]),
+        is_reserve: false,
+      } as any);
+    }
+
+    await logActivity('criação', 'receita', `Registrou receita - R$ ${amountNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, revenueId, r);
     await fetchAll();
     return true;
   };
+
 
   const updateRevenue = async (id: string, updates: Partial<Revenue>, clientName?: string) => {
     try {

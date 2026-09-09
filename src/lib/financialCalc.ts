@@ -129,3 +129,9 @@ export const computeClientProfitability = (
       };
     })
     .sort((a, b) => b.lucro - a.lucro);
+
+/**
+ * Início da régua de inadimplência: cobranças anteriores a esta competência
+ * vieram da migração e não devem ser cobradas.
+ */
+export const DELINQUENCY_START = '2026-04-01';

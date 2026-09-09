@@ -153,7 +153,7 @@ export default function Scripts() {
     return stored !== null ? stored === 'true' : true;
   });
   const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [downloadingBatch, setDownloadingBatch] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPages, setPreviewPages] = useState<HTMLDivElement[]>([]);
@@ -1064,23 +1064,23 @@ export default function Scripts() {
   }, [buildPdfPages, exportPdfPages]);
 
   const toggleSelect = (id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
   };
 
   const selectAll = () => {
-    if (selectedIds.size === filteredScripts.length) {
-      setSelectedIds(new Set());
+    if (selectedIds.length === filteredScripts.length) {
+      setSelectedIds([]);
     } else {
-      setSelectedIds(new Set(filteredScripts.map(s => s.id)));
+      setSelectedIds(filteredScripts.map(s => s.id));
     }
   };
 
   const handleDownloadSelectedPdf = useCallback(async (scriptsOverride?: Script[]) => {
-    const selected = scriptsOverride ?? filteredScripts.filter(s => selectedIds.has(s.id));
+    const selected = scriptsOverride ?? selectedIds
+      .map(id => filteredScripts.find(s => s.id === id))
+      .filter((s): s is Script => Boolean(s));
     if (selected.length === 0) { toast.error('Selecione ao menos um roteiro'); return; }
 
     setDownloadingBatch(true);
@@ -1096,7 +1096,7 @@ export default function Scripts() {
       toast.success(`PDF com ${selected.length} roteiro(s) baixado!`);
       if (!scriptsOverride) {
         setSelectMode(false);
-        setSelectedIds(new Set());
+        setSelectedIds([]);
       }
     } catch (err) {
       console.error('Batch PDF error:', err);
@@ -1107,7 +1107,9 @@ export default function Scripts() {
   }, [buildPdfPages, exportPdfPages, filteredScripts, selectedIds]);
 
   const handlePreviewSelectedPdf = useCallback(async () => {
-    const selected = filteredScripts.filter(s => selectedIds.has(s.id));
+    const selected = selectedIds
+      .map(id => filteredScripts.find(s => s.id === id))
+      .filter((s): s is Script => Boolean(s));
     if (selected.length === 0) { toast.error('Selecione ao menos um roteiro'); return; }
     setPreviewingBatch(true);
     try {
@@ -1228,15 +1230,15 @@ export default function Scripts() {
             <>
               <Button variant="outline" size="sm" onClick={selectAll} className="gap-1.5">
                 <CheckSquare size={14} />
-                {selectedIds.size === filteredScripts.length ? 'Desmarcar todos' : 'Selecionar todos'}
+                {selectedIds.length === filteredScripts.length ? 'Desmarcar todos' : 'Selecionar todos'}
               </Button>
               <Button variant="outline" size="sm" onClick={handlePreviewSelectedPdf}
-                disabled={selectedIds.size === 0 || previewingBatch}
+                disabled={selectedIds.length === 0 || previewingBatch}
                 className="gap-1.5">
                 <Eye size={14} className={previewingBatch ? 'animate-pulse' : ''} />
-                {previewingBatch ? 'Gerando...' : `Prévia A4 (${selectedIds.size})`}
+                {previewingBatch ? 'Gerando...' : `Prévia A4 (${selectedIds.length})`}
               </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setSelectMode(false); setSelectedIds([]); }}>
                 <X size={16} />
               </Button>
             </>
@@ -1335,13 +1337,13 @@ export default function Scripts() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filteredScripts.map(script => (
             <div key={script.id} 
-              className={`glass-card p-4 flex flex-col gap-3 transition-all cursor-pointer ${script.recorded ? 'opacity-50 grayscale-[30%]' : ''} ${selectMode && selectedIds.has(script.id) ? 'ring-2 ring-primary bg-primary/5' : ''}`}
+              className={`glass-card p-4 flex flex-col gap-3 transition-all cursor-pointer ${script.recorded ? 'opacity-50 grayscale-[30%]' : ''} ${selectMode && selectedIds.includes(script.id) ? 'ring-2 ring-primary bg-primary/5' : ''}`}
               style={{ borderLeftWidth: 4, borderLeftColor: `hsl(${getClientColor(script.clientId, script)})` }}
               onClick={selectMode ? () => toggleSelect(script.id) : undefined}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1 flex items-start gap-2">
                   {selectMode && (
-                    <Checkbox checked={selectedIds.has(script.id)} onCheckedChange={() => toggleSelect(script.id)} className="mt-0.5 shrink-0" />
+                    <Checkbox checked={selectedIds.includes(script.id)} onCheckedChange={() => toggleSelect(script.id)} className="mt-0.5 shrink-0" />
                   )}
                   <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">

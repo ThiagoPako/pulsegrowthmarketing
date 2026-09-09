@@ -11213,15 +11213,26 @@ app.post('/api/promo/validate', async (req, res) => {
 
     if (req.body?.confirm === true) {
       const operator = String(req.body?.operator_name || '').trim().slice(0, 80) || 'Operador';
+      // Nome informado pelo operador no momento da entrega (opcional; substitui o cadastrado se enviado).
+      const winnerName = String(req.body?.winner_name || '').trim().slice(0, 120);
       const { rows: updated } = await pool.query(
         `UPDATE promo_tickets
-            SET status = 'redeemed', redeemed_at = now(), redeemed_by = $2
+            SET status = 'redeemed',
+                redeemed_at = now(),
+                redeemed_by = $2,
+                participant_name = COALESCE(NULLIF($3, ''), participant_name)
           WHERE id = $1 AND status = 'revealed'
-          RETURNING redeemed_at, redeemed_by`,
-        [ticket.id, operator]
+          RETURNING redeemed_at, redeemed_by, participant_name`,
+        [ticket.id, operator, winnerName]
       );
       if (!updated.length) return res.status(409).json({ status: 'redeemed', ...payload });
-      return res.json({ status: 'confirmed', ...payload, redeemed_at: updated[0].redeemed_at, redeemed_by: updated[0].redeemed_by });
+      return res.json({
+        status: 'confirmed',
+        ...payload,
+        participant_name: updated[0].participant_name,
+        redeemed_at: updated[0].redeemed_at,
+        redeemed_by: updated[0].redeemed_by,
+      });
     }
 
     res.json({ status: 'allowed', ...payload });
@@ -11459,6 +11470,29 @@ app.get('/api/promo/campaigns/:id/leads', async (req, res) => {
   } catch (error) {
     console.error('[promo/leads] error:', error);
     res.status(500).json({ error: 'Falha ao carregar os leads' });
+  }
+});
+
+/** Prêmios efetivamente entregues no caixa. */
+app.get('/api/promo/campaigns/:id/redemptions', async (req, res) => {
+  if (!(await promoRequireAuth(req, res))) return;
+  try {
+    await ensurePromoTables();
+    const { rows } = await pool.query(
+      `SELECT t.id, t.participant_name, t.participant_phone, t.participant_document,
+              t.redemption_code, t.revealed_at, t.redeemed_at, t.redeemed_by, t.batch_label,
+              p.name AS prize_name, p.image_url AS prize_image_url
+         FROM promo_tickets t
+         LEFT JOIN promo_prizes p ON p.id = t.prize_id
+        WHERE t.campaign_id = $1 AND t.status = 'redeemed'
+        ORDER BY t.redeemed_at DESC NULLS LAST
+        LIMIT 5000`,
+      [req.params.id]
+    );
+    res.json({ redemptions: rows });
+  } catch (error) {
+    console.error('[promo/redemptions] error:', error);
+    res.status(500).json({ error: 'Falha ao carregar os resgates' });
   }
 });
 

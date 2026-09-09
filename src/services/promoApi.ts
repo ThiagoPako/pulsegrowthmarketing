@@ -126,6 +126,8 @@ export const validatePromoCode = (body: {
   pin: string;
   code: string;
   operator_name?: string;
+  /** Nome do cliente informado pelo operador na hora da entrega. */
+  winner_name?: string;
   confirm?: boolean;
 }) => request<any>('/promo/validate', { method: 'POST', body: JSON.stringify(body) });
 
@@ -163,6 +165,23 @@ export const listPromoTickets = (campaignId: string, batch?: string) =>
 
 export const listPromoLeads = (campaignId: string) =>
   request<{ leads: PromoLead[] }>(`/promo/campaigns/${campaignId}/leads`, { auth: true });
+
+export interface PromoRedemption {
+  id: string;
+  participant_name: string | null;
+  participant_phone: string | null;
+  participant_document: string | null;
+  redemption_code: string | null;
+  revealed_at: string | null;
+  redeemed_at: string | null;
+  redeemed_by: string | null;
+  batch_label: string | null;
+  prize_name: string | null;
+  prize_image_url: string | null;
+}
+
+export const listPromoRedemptions = (campaignId: string) =>
+  request<{ redemptions: PromoRedemption[] }>(`/promo/campaigns/${campaignId}/redemptions`, { auth: true });
 
 /**
  * Converte caminhos relativos de upload (`/uploads/...`) em URL absoluta da VPS.

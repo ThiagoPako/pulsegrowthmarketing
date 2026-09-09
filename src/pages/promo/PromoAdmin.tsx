@@ -17,6 +17,7 @@ import {
   generatePromoTickets,
   listPromoCampaigns,
   listPromoLeads,
+  listPromoRedemptions,
   listPromoPrizes,
   listPromoTickets,
   savePromoCampaign,
@@ -27,6 +28,7 @@ import {
   type PromoBatch,
   type PromoCampaign,
   type PromoLead,
+  type PromoRedemption,
   type PromoPrize,
   type PromoTicket,
 } from '@/services/promoApi';
@@ -142,6 +144,7 @@ export default function PromoAdmin() {
   const [printTickets, setPrintTickets] = useState<PromoTicket[] | null>(null);
 
   const [leads, setLeads] = useState<PromoLead[]>([]);
+  const [redemptions, setRedemptions] = useState<PromoRedemption[]>([]);
 
   const selected = useMemo(() => campaigns.find((c) => c.id === selectedId) || null, [campaigns, selectedId]);
   const probabilityTotal = useMemo(
@@ -171,6 +174,7 @@ export default function PromoAdmin() {
       setPrizes([]);
       setTickets([]);
       setLeads([]);
+      setRedemptions([]);
       return;
     }
     listPromoPrizes(selectedId).then((r) => setPrizes(r.prizes)).catch(() => setPrizes([]));
@@ -179,6 +183,7 @@ export default function PromoAdmin() {
       setBatches(r.batches);
     }).catch(() => setTickets([]));
     listPromoLeads(selectedId).then((r) => setLeads(r.leads)).catch(() => setLeads([]));
+    listPromoRedemptions(selectedId).then((r) => setRedemptions(r.redemptions)).catch(() => setRedemptions([]));
   }, [selectedId]);
 
   async function refreshTickets(batch = batchFilter) {
@@ -275,6 +280,29 @@ export default function PromoAdmin() {
     URL.revokeObjectURL(link.href);
   }
 
+  /** Exporta a lista de prêmios efetivamente entregues no caixa. */
+  function exportRedemptionsCsv() {
+    const header = ['Cliente', 'WhatsApp', 'Prêmio', 'Código', 'Entregue em', 'Operador', 'Lote'];
+    const lines = redemptions.map((item) => [
+      item.participant_name || '',
+      item.participant_phone || '',
+      item.prize_name || '',
+      item.redemption_code || '',
+      item.redeemed_at ? new Date(item.redeemed_at).toLocaleString('pt-BR') : '',
+      item.redeemed_by || '',
+      item.batch_label || '',
+    ]);
+    const csv = [header, ...lines].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `resgatados-${selected?.slug || 'sorteio'}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
+
+
   if (printTickets) {
     return (
       <div className="min-h-screen bg-white p-6">
@@ -357,6 +385,7 @@ export default function PromoAdmin() {
                 <TabsList>
                   <TabsTrigger value="premios">Prêmios</TabsTrigger>
                   <TabsTrigger value="cupons">Cupons e impressão</TabsTrigger>
+                  <TabsTrigger value="resgatados">Prêmios resgatados</TabsTrigger>
                   <TabsTrigger value="leads">Leads</TabsTrigger>
                   <TabsTrigger value="config">Configurações</TabsTrigger>
                 </TabsList>
@@ -497,6 +526,66 @@ export default function PromoAdmin() {
                     </CardContent>
                   </Card>
                 </TabsContent>
+
+                <TabsContent value="resgatados" className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm text-muted-foreground">
+                      {redemptions.length} prêmio(s) entregues no caixa.
+                    </p>
+                    <Button size="sm" variant="outline" onClick={exportRedemptionsCsv} disabled={!redemptions.length}>
+                      <Download className="mr-2 h-4 w-4" /> Exportar CSV
+                    </Button>
+                  </div>
+                  <Card>
+                    <CardContent className="overflow-x-auto p-0">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
+                          <tr>
+                            <th className="p-3">Prêmio</th>
+                            <th className="p-3">Cliente</th>
+                            <th className="p-3">WhatsApp</th>
+                            <th className="p-3">Código</th>
+                            <th className="p-3">Entregue em</th>
+                            <th className="p-3">Operador</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {redemptions.map((item) => (
+                            <tr key={item.id} className="border-t border-border">
+                              <td className="p-3">
+                                <div className="flex items-center gap-2">
+                                  {item.prize_image_url ? (
+                                    <img
+                                      src={promoAssetUrl(item.prize_image_url)}
+                                      alt={item.prize_name || 'Prêmio'}
+                                      className="h-9 w-9 rounded object-cover"
+                                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                                    />
+                                  ) : null}
+                                  <span>{item.prize_name || '—'}</span>
+                                </div>
+                              </td>
+                              <td className="p-3 font-medium">{item.participant_name || '—'}</td>
+                              <td className="p-3">{item.participant_phone || '—'}</td>
+                              <td className="p-3 font-mono text-xs">{item.redemption_code || '—'}</td>
+                              <td className="p-3">{item.redeemed_at ? new Date(item.redeemed_at).toLocaleString('pt-BR') : '—'}</td>
+                              <td className="p-3">{item.redeemed_by || '—'}</td>
+                            </tr>
+                          ))}
+                          {redemptions.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="p-6 text-center text-muted-foreground">
+                                Nenhum prêmio resgatado ainda.
+                              </td>
+                            </tr>
+                          ) : null}
+                        </tbody>
+                      </table>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+
 
                 <TabsContent value="leads" className="space-y-3">
                   <div className="flex justify-end">

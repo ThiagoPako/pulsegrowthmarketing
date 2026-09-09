@@ -225,6 +225,10 @@ export function useFinancialData() {
 
       const uniqueRevenues = deduplicateRevenues(revenueData);
 
+      // Receitas avulsas/importadas não têm cliente real e não podem ser descartadas
+      const isVisibleRevenue = (r: any) =>
+        !r.client_id || r.client_id === PLACEHOLDER_CLIENT_ID || activeClientIds.has(r.client_id);
+
       const overdueIds: string[] = [];
       for (const r of uniqueRevenues) {
         if (r.status === 'prevista' && r.due_date && normalizeDate(r.due_date) < today) {
@@ -238,21 +242,16 @@ export function useFinancialData() {
             supabase.from('revenues').update({ status: 'em_atraso' } as any).eq('id', id)
           )
         );
-        const updated = await supabase.from('revenues').select('*').order('due_date', { ascending: false });
-        if (updated.data) {
-          const deduplicated = deduplicateRevenues(updated.data as any[]);
-          setRevenues(deduplicated.filter(r => activeClientIds.has(r.client_id)));
-        } else {
-          setRevenues(
-            uniqueRevenues
-              .map(r => (overdueIds.includes(r.id) ? { ...r, status: 'em_atraso' } : r))
-              .filter(r => activeClientIds.has(r.client_id))
-          );
-        }
-      } else {
-        setRevenues(uniqueRevenues.filter(r => activeClientIds.has(r.client_id)));
       }
+
+      const overdueSet = new Set(overdueIds);
+      setRevenues(
+        uniqueRevenues
+          .map(r => (overdueSet.has(r.id) ? { ...r, status: 'em_atraso' } : r))
+          .filter(isVisibleRevenue)
+      );
     }
+
 
 
     setLoading(false);

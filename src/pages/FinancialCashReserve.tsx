@@ -19,7 +19,9 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 
 export default function FinancialCashReserve() {
-  const { cashMovements, addCashMovement, updateCashMovement, deleteCashMovement, loading } = useFinancialData();
+  const { cashMovements, addCashMovement, updateCashMovement, deleteCashMovement, reconcileCash, loading } = useFinancialData();
+  const [pending, setPending] = useState<{ missingExpenses: number; missingRevenues: number; orphans: number; duplicates: number; total: number } | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [open, setOpen] = useState(false);
   const [filters, setFilters] = useState<FinancialFiltersValue>(buildEmptyFilters);
   const [editingId, setEditingId] = useState<string | null>(null);

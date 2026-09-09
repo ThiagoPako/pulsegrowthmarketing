@@ -95,3 +95,37 @@ export const reserveBalance = (movements: { type?: string; amount?: unknown; is_
       .filter(m => Boolean(m.is_reserve))
       .reduce((acc, m) => acc + (m.type === 'entrada' ? toAmount(m.amount) : -toAmount(m.amount)), 0),
   );
+
+export interface ProfitabilityInput {
+  clientId: string;
+  clientName: string;
+  contractValue: unknown;
+  clientRevenueTotal: number;
+  clientVolume: number;
+}
+
+/**
+ * Rentabilidade por cliente com rateio de custo pelo volume de gravações.
+ * Regra única usada pelo painel e pelos relatórios, para nunca divergirem.
+ */
+export const computeClientProfitability = (
+  items: ProfitabilityInput[],
+  totalExpenses: number,
+  totalVolume: number,
+) =>
+  items
+    .map(item => {
+      const faturamento = item.clientRevenueTotal > 0 ? item.clientRevenueTotal : toAmount(item.contractValue);
+      const proportion = safeDivide(item.clientVolume, totalVolume);
+      const custo = roundMoney(totalExpenses * proportion);
+      const lucro = roundMoney(faturamento - custo);
+      return {
+        clientId: item.clientId,
+        clientName: item.clientName,
+        faturamento: roundMoney(faturamento),
+        custo,
+        lucro,
+        margem: Math.round(safePercent(lucro, faturamento) * 10) / 10,
+      };
+    })
+    .sort((a, b) => b.lucro - a.lucro);

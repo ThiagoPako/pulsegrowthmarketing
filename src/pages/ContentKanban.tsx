@@ -1284,7 +1284,9 @@ export default function ContentKanban() {
                           whileHover={{ y: -3, transition: { duration: 0.15 } }}
                         >
                           <TaskCard
-                            viewOnly={!isColumnInteractive(col.id)}
+                            viewOnly={!isColumnInteractive(col.id) || isForeignTask(task)}
+                            cityLabel={isForeignTask(task) ? CITY_LABELS[normalizeCity(task.city) as CityCode] || undefined : undefined}
+
                             task={task}
                             client={getClient(task.client_id)}
                             assignedUser={getUser(

@@ -159,9 +159,21 @@ export default function PromoValidate() {
             ) : null}
             <p className="mt-3 text-xl font-bold">{result.prize?.name || 'Prêmio'}</p>
             {result.prize?.description ? <p className="mt-1 text-sm text-white/60">{result.prize.description}</p> : null}
-            {result.participant_name ? <p className="mt-3 text-sm text-white/70">Cliente: {result.participant_name}</p> : null}
-            {result.participant_phone ? <p className="text-sm text-white/50">{result.participant_phone}</p> : null}
-            <Button className="mt-6 h-14 w-full bg-emerald-500 text-base font-bold text-black hover:bg-emerald-400" disabled={loading} onClick={confirmDelivery}>
+            {result.participant_phone ? <p className="mt-2 text-sm text-white/50">{result.participant_phone}</p> : null}
+            <div className="mt-5">
+              <Label className="text-white/70">Nome do cliente que está retirando</Label>
+              <Input
+                value={winnerName}
+                onChange={(e) => setWinnerName(e.target.value)}
+                placeholder="Nome completo"
+                className="mt-1 h-12 border-white/15 bg-black/40 text-white"
+              />
+            </div>
+            <Button
+              className="mt-6 h-14 w-full bg-emerald-500 text-base font-bold text-black hover:bg-emerald-400"
+              disabled={loading || !winnerName.trim()}
+              onClick={confirmDelivery}
+            >
               Confirmar entrega do prêmio
             </Button>
           </div>
@@ -172,7 +184,8 @@ export default function PromoValidate() {
             <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-400" />
             <p className="mt-3 text-lg font-bold">Entrega confirmada</p>
             <p className="mt-1 text-sm text-white/60">
-              {result.prize?.name} — {formatMoment(result.redeemed_at)} por {result.redeemed_by}
+              {result.prize?.name} — {result.participant_name ? `${result.participant_name} — ` : ''}
+              {formatMoment(result.redeemed_at)} por {result.redeemed_by}
             </p>
           </div>
         ) : null}

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useFinancialData, normalizeDate } from '@/hooks/useFinancialData';
+import { useFinancialData, normalizeDate, isExpensePaid } from '@/hooks/useFinancialData';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

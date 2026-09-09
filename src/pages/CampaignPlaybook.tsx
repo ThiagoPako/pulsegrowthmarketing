@@ -183,6 +183,19 @@ const CAMPAIGN_TYPES = [
     example: 'Sorteio de um kit de R$ 1.500: teaser → revelação com regras → prova de valor → última chamada → sorteio ao vivo → cupom de consolação de 7 dias para todos que participaram.',
     highlight: true,
   },
+  {
+    icon: QrCode,
+    label: 'Sorteio de Prêmios com QR Code',
+    tagline: 'Roleta e raspadinha no celular — operado pelo módulo do sistema',
+    color: '#8b5cf6',
+    objective: 'Premiar na hora quem compra: o cliente recebe um cupom impresso com QR Code, joga na roleta ou na raspadinha pelo celular e retira o prêmio no balcão com o código do voucher.',
+    whenToUse: 'Aumentar ticket e recompra no ponto de venda, movimentar loja em data forte, inauguração, e sempre que o cliente quiser capturar contato de quem compra.',
+    triggers: ['Prêmio imediato', 'Surpresa', 'Jogo', 'Escassez de prêmios', 'Prova de entrega'],
+    kpi: 'Cupons entregues, cupons jogados, prêmios sorteados, prêmios retirados no balcão e leads captados com aceite de LGPD.',
+    example: 'Campanha de 30 dias: 500 cupons impressos, prêmios com estoque e chance configurados no módulo, validação do voucher no caixa por PIN e relatório de leads ao final.',
+    module: 'Sorteios de Prêmios',
+    highlight: true,
+  },
 ];
 
 export default function CampaignPlaybook() {

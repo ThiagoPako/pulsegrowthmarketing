@@ -878,8 +878,8 @@ export default function PromoAdmin() {
               <Switch checked={prizeForm.is_active !== false} onCheckedChange={(v) => setPrizeForm((f) => ({ ...f, is_active: v }))} />
             </div>
           </div>
-          <DialogFooter>
-            <Button onClick={handleSavePrize} disabled={saving || !prizeForm.name}>
+          <DialogFooter className="shrink-0 border-t border-border pt-3">
+            <Button className="h-12 w-full sm:h-10 sm:w-auto" onClick={handleSavePrize} disabled={saving || !prizeForm.name}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Salvar prêmio
             </Button>
           </DialogFooter>

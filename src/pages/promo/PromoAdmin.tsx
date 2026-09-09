@@ -68,15 +68,33 @@ interface ImageFieldProps {
 /** Campo de upload visual com prévia, dimensões recomendadas e botão de remover. */
 function ImageField({ label, hint, value, uploading, aspect = 'aspect-video', onSelect, onClear }: ImageFieldProps) {
   const inputId = `upload-${label.toLowerCase().replace(/\s+/g, '-')}`;
+  const cameraId = `${inputId}-camera`;
   const preview = promoAssetUrl(value);
   const [broken, setBroken] = useState(false);
   useEffect(() => setBroken(false), [preview]);
+
+  const fileInput = (id: string, camera: boolean) => (
+    <input
+      id={id}
+      type="file"
+      accept="image/png,image/jpeg,image/webp"
+      {...(camera ? { capture: 'environment' as const } : {})}
+      className="hidden"
+      disabled={uploading}
+      onChange={(e) => {
+        const file = e.target.files?.[0];
+        if (file) onSelect(file);
+        e.target.value = '';
+      }}
+    />
+  );
+
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <Label>{label}</Label>
       <label
         htmlFor={inputId}
-        className={`relative flex ${aspect} max-h-56 w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/40 transition-colors hover:border-primary hover:bg-muted`}
+        className={`relative flex ${aspect} max-h-64 w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/40 transition-colors hover:border-primary hover:bg-muted`}
       >
         {preview && !broken ? (
           <img src={preview} alt={label} className="h-full w-full object-contain p-1" onError={() => setBroken(true)} />
@@ -84,37 +102,39 @@ function ImageField({ label, hint, value, uploading, aspect = 'aspect-video', on
           <div className="flex flex-col items-center gap-1 p-4 text-center text-destructive">
             <X className="h-6 w-6" />
             <span className="text-xs font-medium">Imagem não encontrada no servidor</span>
-            <span className="text-[10px] text-muted-foreground">Clique para enviar novamente</span>
+            <span className="text-[10px] text-muted-foreground">Toque para enviar novamente</span>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-1 p-4 text-center text-muted-foreground">
-            {uploading ? <Loader2 className="h-6 w-6 animate-spin" /> : <Upload className="h-6 w-6" />}
-            <span className="text-xs font-medium">Clique para enviar</span>
+            {uploading ? <Loader2 className="h-7 w-7 animate-spin" /> : <Upload className="h-7 w-7" />}
+            <span className="text-xs font-medium">Toque para escolher da galeria</span>
           </div>
         )}
-        <input
-          id={inputId}
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          className="hidden"
-          disabled={uploading}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) onSelect(file);
-            e.target.value = '';
-          }}
-        />
+        {fileInput(inputId, false)}
       </label>
-      <div className="flex items-center justify-between gap-2">
-        <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
-          <ImageIcon className="h-3 w-3" /> {hint}
-        </p>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" variant="outline" size="sm" className="h-9 flex-1 min-w-[130px]" disabled={uploading} asChild>
+          <label htmlFor={inputId} className="cursor-pointer">
+            <Upload className="mr-2 h-4 w-4" /> Galeria
+          </label>
+        </Button>
+        <Button type="button" variant="outline" size="sm" className="h-9 flex-1 min-w-[130px] sm:hidden" disabled={uploading} asChild>
+          <label htmlFor={cameraId} className="cursor-pointer">
+            <Camera className="mr-2 h-4 w-4" /> Câmera
+          </label>
+        </Button>
         {value ? (
-          <button type="button" onClick={onClear} className="flex items-center gap-1 text-[11px] text-destructive hover:underline">
-            <X className="h-3 w-3" /> Remover
-          </button>
+          <Button type="button" variant="ghost" size="sm" className="h-9 text-destructive" onClick={onClear}>
+            <X className="mr-1 h-4 w-4" /> Remover
+          </Button>
         ) : null}
       </div>
+      {fileInput(cameraId, true)}
+
+      <p className="flex items-start gap-1 text-[11px] leading-snug text-muted-foreground">
+        <ImageIcon className="mt-0.5 h-3 w-3 shrink-0" /> {hint}
+      </p>
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { CAMPAIGN_TYPE_LABELS, CAMPAIGN_TYPE_DESCRIPTIONS, CampaignType, formatB
 import { buildCampaignSlots, RECOMMENDED_QUANTITIES } from '@/lib/campaignTemplates';
 import {
   Sparkles, FileText, Palette, BookOpen, Megaphone, Users, Target, Calendar,
-  Check, ChevronRight, ChevronLeft, Building2, Rocket, PartyPopper, Heart, Tag, CalendarDays, Sprout,
+  Check, ChevronRight, ChevronLeft, Building2, Rocket, PartyPopper, Heart, Tag, CalendarDays, Sprout, Gift,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 

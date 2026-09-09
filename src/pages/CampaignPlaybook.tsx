@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft, Target, TrendingUp, Megaphone, Sparkles, Users, ShoppingBag,
   Calendar, Zap, Trophy, Flame, Rocket, Eye, Heart, MousePointerClick, DollarSign,
-  Film, Image as ImageIcon, PenTool, Clock, ChevronRight, Wand2, PartyPopper, UserPlus, Sprout,
+  Film, Image as ImageIcon, PenTool, Clock, ChevronRight, Wand2, PartyPopper, UserPlus, Sprout, Gift, ShieldCheck,
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { NICHE_OPTIONS } from '@/lib/seasonalDates';
@@ -171,6 +171,18 @@ const CAMPAIGN_TYPES = [
     example: 'Pré-plantio soja MT: leitura de mercado + dor com percevejo + solução aplicada + depoimento no talhão + condição com pagamento pós-colheita.',
     highlightAgro: true,
   },
+  {
+    icon: Gift,
+    label: 'Sorteio de Brindes',
+    tagline: 'Explode alcance — captura contato e leva gente à loja',
+    color: '#ec4899',
+    objective: 'Usar um prêmio desejado como isca para multiplicar alcance orgânico, capturar WhatsApp da base e criar fluxo de pessoas na loja — convertendo os participantes em clientes depois do sorteio.',
+    whenToUse: 'Perfil parado ou com pouco alcance, inauguração, aniversário da loja, datas fortes, lançamento de unidade, necessidade de crescer base de contatos rápido.',
+    triggers: ['Prêmio desejado', 'Gratuidade', 'Prazo curto', 'Efeito manada', 'Transparência na entrega'],
+    kpi: 'Participações registradas, WhatsApp captados, novos seguidores, visitas à loja e vendas convertidas na oferta pós-sorteio.',
+    example: 'Sorteio de um kit de R$ 1.500: teaser → revelação com regras → prova de valor → última chamada → sorteio ao vivo → cupom de consolação de 7 dias para todos que participaram.',
+    highlight: true,
+  },
 ];
 
 export default function CampaignPlaybook() {
@@ -270,7 +282,7 @@ export default function CampaignPlaybook() {
             <CategoryHeader
               badge="Categoria 02"
               title="Campanhas de captura de leads"
-              subtitle="Usam um evento como isca. Métrica principal: leads no funil (WhatsApp + e-mail) e conversão pós-evento."
+              subtitle="Usam um evento ou um sorteio como isca. Métrica principal: leads no funil (WhatsApp + e-mail) e conversão depois da ação."
               color="#f59e0b"
               icon={UserPlus}
               count={CAMPAIGN_TYPES.filter(t => t.highlight).length}
@@ -1162,6 +1174,7 @@ const TYPE_ACCENT: Record<CampaignType, string> = {
   responsabilidade_social: '#10b981',
   evento: '#f59e0b',
   agro: '#84cc16',
+  sorteio: '#ec4899',
 };
 
 function NicheSuggestionsGrid() {

@@ -59,6 +59,8 @@ export default function PromoValidate() {
     try {
       const data = await validatePromoCode({ slug, pin, code });
       setResult(data);
+      // Pré-preenche com o nome já capturado no jogo, se houver.
+      setWinnerName(data?.participant_name || '');
     } catch (error: any) {
       const payload = error?.payload;
       if (payload?.status === 'redeemed') setResult(payload);
@@ -69,12 +71,24 @@ export default function PromoValidate() {
   }
 
   async function confirmDelivery() {
+    if (!winnerName.trim()) {
+      toast.error('Informe o nome do cliente que está retirando o prêmio.');
+      return;
+    }
     setLoading(true);
     try {
-      const data = await validatePromoCode({ slug, pin, code, operator_name: operator, confirm: true });
+      const data = await validatePromoCode({
+        slug,
+        pin,
+        code,
+        operator_name: operator,
+        winner_name: winnerName.trim(),
+        confirm: true,
+      });
       setResult(data);
       toast.success('Entrega confirmada!');
       setCode('');
+      setWinnerName('');
     } catch (error: any) {
       const payload = error?.payload;
       if (payload?.status === 'redeemed') setResult(payload);

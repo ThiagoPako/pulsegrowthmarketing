@@ -303,6 +303,10 @@ export default function FinancialExpenses() {
   ], [categories]);
 
   const total = filtered.reduce((s, e) => s + Number(e.amount), 0);
+  // Salário só é despesa quando marcado como pago; até lá fica provisionado.
+  const totalPago = filtered.filter(e => isExpensePaid(e)).reduce((s, e) => s + Number(e.amount), 0);
+  const totalPendente = total - totalPago;
+
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   const monthOptions = useMemo(() => {

@@ -176,6 +176,9 @@ interface ContentTask {
   reviewing_by_name: string | null;
   reviewing_at: string | null;
   prospect_name: string | null;
+  /** Praça de origem da tarefa (usada na visualização multi-cidade). */
+  city?: string | null;
+
 }
 
 export default function ContentKanban() {

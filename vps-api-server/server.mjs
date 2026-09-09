@@ -11213,15 +11213,26 @@ app.post('/api/promo/validate', async (req, res) => {
 
     if (req.body?.confirm === true) {
       const operator = String(req.body?.operator_name || '').trim().slice(0, 80) || 'Operador';
+      // Nome informado pelo operador no momento da entrega (opcional; substitui o cadastrado se enviado).
+      const winnerName = String(req.body?.winner_name || '').trim().slice(0, 120);
       const { rows: updated } = await pool.query(
         `UPDATE promo_tickets
-            SET status = 'redeemed', redeemed_at = now(), redeemed_by = $2
+            SET status = 'redeemed',
+                redeemed_at = now(),
+                redeemed_by = $2,
+                participant_name = COALESCE(NULLIF($3, ''), participant_name)
           WHERE id = $1 AND status = 'revealed'
-          RETURNING redeemed_at, redeemed_by`,
-        [ticket.id, operator]
+          RETURNING redeemed_at, redeemed_by, participant_name`,
+        [ticket.id, operator, winnerName]
       );
       if (!updated.length) return res.status(409).json({ status: 'redeemed', ...payload });
-      return res.json({ status: 'confirmed', ...payload, redeemed_at: updated[0].redeemed_at, redeemed_by: updated[0].redeemed_by });
+      return res.json({
+        status: 'confirmed',
+        ...payload,
+        participant_name: updated[0].participant_name,
+        redeemed_at: updated[0].redeemed_at,
+        redeemed_by: updated[0].redeemed_by,
+      });
     }
 
     res.json({ status: 'allowed', ...payload });

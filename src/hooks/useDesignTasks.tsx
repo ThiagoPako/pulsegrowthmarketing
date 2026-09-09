@@ -45,6 +45,7 @@ export interface DesignTask {
   timer_started_at: string | null;
   version: number;
   mockup_url: string | null;
+  collaborator_id?: string | null;
   due_date: string | null;
   position: number;
   created_at: string;
@@ -111,7 +112,7 @@ export function useDesignTasks() {
     'priority','copy_text','attachment_url','attachment_urls','editable_file_url',
     'assigned_to','started_at','completed_at','sent_to_client_at','client_approved_at',
     'auto_approved','time_spent_seconds','timer_running','timer_started_at','version',
-    'mockup_url','due_date','position','created_at','updated_at'
+    'mockup_url','due_date','position','created_at','updated_at','collaborator_id'
   ].join(',');
 
   const tasksQuery = useQuery({

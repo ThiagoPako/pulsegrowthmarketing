@@ -1,4 +1,7 @@
 import { useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/lib/vpsDb';
+import { Switch } from '@/components/ui/switch';
 import { useApp } from '@/contexts/AppContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -7,13 +10,14 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Building2, Check, Copy, Link2, Loader2, MapPin, Pencil, Plus, Search, Stethoscope, Trash2, FolderOpen, Share2 } from 'lucide-react';
+import { Building2, Cake, Check, Copy, Link2, Loader2, MapPin, Pencil, Plus, Search, Stethoscope, Trash2, Users, FolderOpen, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { vpsAuthedFetch } from '@/lib/vpsDb';
 import MediaLibrary, { type MediaOwner } from '@/components/clientdb/MediaLibrary';
 import ProfessionalDialog from '@/components/clientdb/ProfessionalDialog';
 import UnitDialog, { UNIT_TYPES } from '@/components/clientdb/UnitDialog';
-import { useClientDatabase, type ClientProfessional, type ClientUnit } from '@/hooks/useClientDatabase';
+import CollaboratorDialog from '@/components/clientdb/CollaboratorDialog';
+import { useClientDatabase, type ClientCollaborator, type ClientProfessional, type ClientUnit } from '@/hooks/useClientDatabase';
 
 /**
  * Banco de Dados de Clientes Pulse.
@@ -28,11 +32,42 @@ export default function ClientDatabase() {
   const [unitDialogOpen, setUnitDialogOpen] = useState(false);
   const [editingPro, setEditingPro] = useState<ClientProfessional | null>(null);
   const [editingUnit, setEditingUnit] = useState<ClientUnit | null>(null);
+  const [collabDialogOpen, setCollabDialogOpen] = useState(false);
+  const [editingCollab, setEditingCollab] = useState<ClientCollaborator | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const { professionals, units, saveRecord, deleteRecord } = useClientDatabase(clientId || undefined);
+  const { professionals, units, collaborators, saveRecord, deleteRecord } = useClientDatabase(clientId || undefined);
+  const queryClient = useQueryClient();
+
+  /** Flag do cliente: gerar artes dos aniversariantes do mês automaticamente. */
+  const birthdayFlag = useQuery({
+    queryKey: ['client-birthday-arts', clientId],
+    enabled: !!clientId,
+    queryFn: async (): Promise<boolean> => {
+      const { data } = await supabase
+        .from('clients')
+        .select('birthday_arts_enabled')
+        .eq('id', clientId as string);
+      const row = Array.isArray(data) ? data[0] : data;
+      return !!(row as any)?.birthday_arts_enabled;
+    },
+  });
+
+  const toggleBirthdayArts = async (enabled: boolean) => {
+    if (!clientId) return;
+    const { error } = await supabase
+      .from('clients')
+      .update({ birthday_arts_enabled: enabled })
+      .eq('id', clientId);
+    if (error) {
+      toast.error('Não foi possível salvar a marcação.');
+      return;
+    }
+    queryClient.setQueryData(['client-birthday-arts', clientId], enabled);
+    toast.success(enabled ? 'Artes de aniversariantes ativadas.' : 'Artes de aniversariantes desativadas.');
+  };
 
   const sortedClients = useMemo(
     () => [...(clients || [])].sort((a, b) => a.companyName.localeCompare(b.companyName)),
@@ -45,6 +80,9 @@ export default function ClientDatabase() {
   );
   const filteredUnits = (units.data || []).filter((u) =>
     !term || `${u.unit_name} ${u.city_name || ''}`.toLowerCase().includes(term),
+  );
+  const filteredCollabs = (collaborators.data || []).filter((c) =>
+    !term || `${c.name} ${c.job_role || ''} ${c.department || ''}`.toLowerCase().includes(term),
   );
 
   /** Dados achatados para o playbook visual (fotos + vídeos por dono). */
@@ -142,6 +180,9 @@ export default function ClientDatabase() {
             </TabsTrigger>
             <TabsTrigger value="unidades">
               <Building2 className="mr-1.5 h-4 w-4" /> Rede / Unidades ({filteredUnits.length})
+            </TabsTrigger>
+            <TabsTrigger value="colaboradores">
+              <Users className="mr-1.5 h-4 w-4" /> Colaboradores ({filteredCollabs.length})
             </TabsTrigger>
             <TabsTrigger value="acervo">
               <FolderOpen className="mr-1.5 h-4 w-4" /> Acervo de mídia
@@ -264,6 +305,87 @@ export default function ClientDatabase() {
             )}
           </TabsContent>
 
+          <TabsContent value="colaboradores" className="space-y-4 pt-4">
+            <Card className="flex flex-wrap items-center gap-3 p-4">
+              <div className="min-w-0">
+                <p className="flex items-center gap-1.5 text-sm font-medium">
+                  <Cake className="h-4 w-4 text-primary" /> Artes de aniversariantes do mês
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Se marcado, a demanda entra automaticamente na fila da designer 15 dias antes de cada aniversário.
+                </p>
+              </div>
+              <Switch
+                className="ml-auto"
+                checked={!!birthdayFlag.data}
+                onCheckedChange={toggleBirthdayArts}
+                aria-label="Gerar artes de aniversariantes"
+              />
+            </Card>
+
+            <Button onClick={() => { setEditingCollab(null); setCollabDialogOpen(true); }}>
+              <Plus className="mr-1.5 h-4 w-4" /> Novo colaborador
+            </Button>
+
+            {collaborators.isLoading ? (
+              <div className="flex justify-center p-10"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+            ) : filteredCollabs.length === 0 ? (
+              <Card className="p-8 text-center text-sm text-muted-foreground">Nenhum colaborador cadastrado.</Card>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {filteredCollabs.map((collab) => (
+                  <Card key={collab.id} className="space-y-3 p-4">
+                    <div className="flex items-start gap-3">
+                      {collab.photos?.[0] ? (
+                        <img src={collab.photos[0]} alt={collab.name} loading="lazy" className="h-14 w-14 rounded-full object-cover" />
+                      ) : (
+                        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                          <Users className="h-5 w-5" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-semibold">{collab.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {[collab.job_role, collab.department].filter(Boolean).join(' · ') || 'Sem cargo informado'}
+                        </p>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {collab.birthday && (
+                            <Badge variant="secondary">
+                              <Cake className="mr-1 h-3 w-3" />
+                              {String(collab.birthday).slice(0, 10).split('-').reverse().join('/')}
+                            </Badge>
+                          )}
+                          {!collab.active && <Badge variant="destructive">Inativo</Badge>}
+                        </div>
+                      </div>
+                    </div>
+
+                    {collab.notes && (
+                      <p className="rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">{collab.notes}</p>
+                    )}
+
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{(collab.photos?.length || 0)} fotos · {(collab.videos?.length || 0)} vídeos</span>
+                      <div className="flex gap-1">
+                        <Button size="icon" variant="ghost" aria-label="Editar" onClick={() => { setEditingCollab(collab); setCollabDialogOpen(true); }}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          aria-label="Remover"
+                          onClick={() => deleteRecord.mutate({ table: 'client_collaborators', id: collab.id })}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
           <TabsContent value="acervo" className="space-y-4 pt-4">
             <Card className="flex flex-wrap items-center gap-3 p-4">
               <div className="min-w-0">
@@ -317,6 +439,17 @@ export default function ClientDatabase() {
         saving={saveRecord.isPending}
         onSave={(payload) =>
           saveRecord.mutate({ table: 'client_professionals', payload }, { onSuccess: () => setProDialogOpen(false) })
+        }
+      />
+
+      <CollaboratorDialog
+        open={collabDialogOpen}
+        onOpenChange={setCollabDialogOpen}
+        clientId={clientId}
+        collaborator={editingCollab}
+        saving={saveRecord.isPending}
+        onSave={(payload) =>
+          saveRecord.mutate({ table: 'client_collaborators', payload }, { onSuccess: () => setCollabDialogOpen(false) })
         }
       />
 

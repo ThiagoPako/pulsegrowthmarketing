@@ -27,6 +27,7 @@ import {
 import { downloadSingleArt, downloadArtsAsPdf } from '@/lib/designerDownload';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
+import CollaboratorInfoCard from '@/components/designer/CollaboratorInfoCard';
 
 interface Props {
   task: DesignTask;
@@ -923,6 +924,11 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                   )}
 
 
+
+                  {/* Dados do colaborador aniversariante (Banco de Dados do cliente) */}
+                  {(task as any).collaborator_id && (
+                    <CollaboratorInfoCard collaboratorId={(task as any).collaborator_id as string} />
+                  )}
 
                   {/* Adjustment notes */}
                   {task.observations && task.kanban_column === 'ajustes' && (

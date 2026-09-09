@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import UserAvatar from '@/components/UserAvatar';
 import { ROLE_LABELS } from '@/types';
 import type { UserRole } from '@/types';
-import { EDITOR_SCORE, VM_SCORE, DESIGNER_SCORE, EDITOR_APPROVED_COLUMNS, getSocialDeliveryReferenceDate, getSocialMediaScoreBreakdown, getSocialTaskReferenceDate, getScriptReferenceDate } from '@/lib/scoringSystem';
+import { VM_SCORE, dedupeDeliveryRecords, getDesignTaskReferenceDate, getDesignerScoreBreakdown, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate, getSocialDeliveryReferenceDate, getSocialMediaScoreBreakdown, getSocialTaskReferenceDate, getScriptReferenceDate, sumDeliveryProduction } from '@/lib/scoringSystem';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Clock, Trophy, CheckCircle2, TrendingUp, Film, Palette, BarChart3, DollarSign } from 'lucide-react';
@@ -185,10 +185,8 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
     const [{ data: tasks }, { data: history }] = await Promise.all([
       supabase
         .from('content_tasks')
-        .select('id, kanban_column, content_type, editing_started_at, approved_at, updated_at, edited_by')
-        .eq('edited_by', userId)
-        .gte('editing_started_at', startStr)
-        .lte('editing_started_at', endStr),
+        .select('id, kanban_column, content_type, editing_started_at, approved_at, approval_sent_at, editing_priority, created_at, updated_at, edited_by, assigned_to')
+        .gte('updated_at', startStr),
       supabase
         .from('task_history')
         .select('task_id, action, created_at, user_id')
@@ -198,7 +196,14 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
         .order('created_at', { ascending: true }),
     ]);
 
-    const editorTasks = tasks || [];
+    const startKeyE = startStr.slice(0, 10);
+    const endKeyE = endStr.slice(0, 10);
+    const editorTasks = (tasks || []).filter((t: any) => {
+      if (getEditorTaskOwnerId(t) !== userId) return false;
+      const key = getEditorTaskReferenceDate(t)?.slice(0, 10);
+      return !!key && key >= startKeyE && key <= endKeyE;
+    });
+
     const historyByTask = new Map<string, Array<{ action: string; created_at: string }>>();
 
     (history || []).forEach((entry: any) => {
@@ -251,16 +256,10 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
       totalEditingTime += activeSeconds;
       if (activeSeconds > 0) tasksWithTime++;
 
-      if (!!task.approved_at || EDITOR_APPROVED_COLUMNS.includes(col as any)) {
-        score += EDITOR_SCORE.APROVADO;
-      } else if (col === 'edicao') {
-        score += EDITOR_SCORE.EM_EDICAO;
-      } else if (col === 'revisao') {
-        score += EDITOR_SCORE.REVISAO;
-      } else if (col === 'alteracao') {
-        score += EDITOR_SCORE.ALTERACAO;
-      }
     });
+
+    score = getEditorScoreBreakdown(editorTasks as any[]).score;
+
 
     const byContentTypeMetrics: Record<string, ContentTypeMetric> = {};
     Object.entries(metricsMap).forEach(([type, metric]) => {
@@ -297,7 +296,7 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
       .gte('date', startStr.slice(0, 10))
       .lte('date', endStr.slice(0, 10));
 
-    const recs = deliveries || [];
+    const recs = dedupeDeliveryRecords((deliveries || []) as any[]);
     const byContentType: Record<string, number> = {};
     let score = 0;
     let totalProduced = 0;
@@ -335,35 +334,30 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
   const loadDesignerStats = async (userId: string, startStr: string, endStr: string) => {
     const { data: tasks } = await supabase
       .from('design_tasks')
-      .select('id, kanban_column, format_type, time_spent_seconds, started_at, completed_at, version, priority')
+      .select('id, kanban_column, format_type, time_spent_seconds, started_at, completed_at, updated_at, created_at, version, priority')
       .eq('assigned_to', userId)
-      .gte('created_at', startStr)
-      .lte('created_at', endStr);
+      .gte('created_at', startStr);
 
-    const designTasks = tasks || [];
+    const startKeyD = startStr.slice(0, 10);
+    const endKeyD = endStr.slice(0, 10);
+    const designTasks = (tasks || []).filter((t: any) => {
+      const key = getDesignTaskReferenceDate(t)?.slice(0, 10);
+      return !!key && key >= startKeyD && key <= endKeyD;
+    });
     const byStatus: Record<string, number> = {};
     const byContentType: Record<string, number> = {};
-    let totalTime = 0;
     let tasksWithTime = 0;
-    let score = 0;
 
-    designTasks.forEach(t => {
+    designTasks.forEach((t: any) => {
       byStatus[t.kanban_column] = (byStatus[t.kanban_column] || 0) + 1;
       byContentType[t.format_type] = (byContentType[t.format_type] || 0) + 1;
-
-      if (t.time_spent_seconds > 0) {
-        totalTime += t.time_spent_seconds;
-        tasksWithTime++;
-      }
-
-      if (t.kanban_column === 'concluida') {
-        score += DESIGNER_SCORE.CONCLUIDO;
-      } else if (['em_progresso', 'revisao_interna'].includes(t.kanban_column)) {
-        score += DESIGNER_SCORE.EM_PROGRESSO;
-      }
-      score += (t.version - 1) * DESIGNER_SCORE.POR_VERSAO;
-      if (t.priority === 'alta' || t.priority === 'urgente') score += DESIGNER_SCORE.PRIORIDADE;
+      if (t.time_spent_seconds > 0) tasksWithTime++;
     });
+
+    const breakdown = getDesignerScoreBreakdown(designTasks as any[]);
+    const totalTime = breakdown.totalTimeSeconds;
+    const score = breakdown.score;
+
 
     setStats({
       totalTasks: designTasks.length,

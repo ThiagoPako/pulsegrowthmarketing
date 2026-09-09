@@ -1035,7 +1035,7 @@ export default function VideomakerDashboard() {
     if (returnedCount > 0) msg += ` · ${returnedCount} retornado(s) ao banco`;
 
     // Show celebration popup with score
-    const score = reelsCount * 10;
+    const score = reelsCount * VM_SCORE.REEL;
     setCelebrationScore(score);
     setShowCelebration(true);
     setTimeout(() => setShowCelebration(false), 3500);

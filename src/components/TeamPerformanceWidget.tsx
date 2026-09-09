@@ -8,7 +8,7 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isWithinInter
 import { Badge } from '@/components/ui/badge';
 import UserAvatar from '@/components/UserAvatar';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { VM_SCORE, DESIGNER_SCORE, PARCEIRO_SCORE, calcWaitPoints, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate, getScriptReferenceDate, getSocialDeliveryReferenceDate, getSocialMediaScoreBreakdown, getSocialTaskReferenceDate } from '@/lib/scoringSystem';
+import { VM_SCORE, PARCEIRO_SCORE, calcWaitPoints, dedupeDeliveryRecords, getDesignTaskReferenceDate, getDesignerScoreBreakdown, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate, getScriptReferenceDate, getSocialDeliveryReferenceDate, getSocialMediaScoreBreakdown, getSocialTaskReferenceDate, sumDeliveryProduction } from '@/lib/scoringSystem';
 
 interface MemberPerformance {
   id: string;
@@ -99,12 +99,9 @@ export default function TeamPerformanceWidget() {
       const metrics: { label: string; value: number }[] = [];
 
       if (user.role === 'videomaker') {
-        const vmDeliveries = deliveryRecords.filter(r => r.videomaker_id === user.id);
-        const reels = vmDeliveries.reduce((a, r) => a + (r.reels_produced || 0), 0);
-        const creatives = vmDeliveries.reduce((a, r) => a + (r.creatives_produced || 0), 0);
-        const stories = vmDeliveries.reduce((a, r) => a + (r.stories_produced || 0), 0);
-        const extras = vmDeliveries.reduce((a, r) => a + (r.extras_produced || 0), 0);
-        const arts = vmDeliveries.reduce((a, r) => a + (r.arts_produced || 0), 0);
+        const vmDeliveries = dedupeDeliveryRecords(deliveryRecords.filter(r => r.videomaker_id === user.id));
+        const produced = sumDeliveryProduction(vmDeliveries);
+        const { reels, creatives, stories, extras, arts } = produced;
         const monthStart2 = format(startOfMonth(new Date()), 'yyyy-MM-dd');
         const monthEnd2 = format(endOfMonth(new Date()), 'yyyy-MM-dd');
         const monthRecs = recordings.filter(r =>
@@ -149,22 +146,19 @@ export default function TeamPerformanceWidget() {
 
       } else if (user.role === 'designer' || user.role === 'fotografo') {
         // Designer/Fotógrafo: criação visual exige conceito, execução e revisões
-        const dTasks = designTasks.filter(t => t.assigned_to === user.id);
-        const completed = dTasks.filter(t => ['concluida', 'aprovada_cliente'].includes(t.kanban_column)).length;
-        const inProgress = dTasks.filter(t => ['em_andamento', 'revisao'].includes(t.kanban_column)).length;
-        const totalTime = dTasks.reduce((a, t) => a + (t.time_spent_seconds || 0), 0);
-        const totalVersions = dTasks.reduce((a, t) => a + Math.max((t.version || 1) - 1, 0), 0);
-        const highPriority = dTasks.filter(t => t.priority === 'alta' || t.priority === 'urgente').length;
-        score = completed * DESIGNER_SCORE.CONCLUIDO + inProgress * DESIGNER_SCORE.EM_PROGRESSO +
-          Math.round(totalTime / 3600) * DESIGNER_SCORE.POR_HORA + totalVersions * DESIGNER_SCORE.POR_VERSAO +
-          highPriority * DESIGNER_SCORE.PRIORIDADE;
+        const dTasks = designTasks.filter(
+          t => t.assigned_to === user.id && isInCurrentMonth(getDesignTaskReferenceDate(t)),
+        );
+        const breakdown = getDesignerScoreBreakdown(dTasks);
+        score = breakdown.score;
         metrics.push(
-          { label: 'Concluídos', value: completed },
-          { label: 'Em progresso', value: inProgress },
-          { label: 'Tempo (h)', value: Math.round(totalTime / 3600) },
-          { label: 'Versões', value: totalVersions },
+          { label: 'Concluídos', value: breakdown.completed },
+          { label: 'Em progresso', value: breakdown.inProgress },
+          { label: 'Tempo (h)', value: breakdown.hours },
+          { label: 'Versões', value: breakdown.versions },
         );
         maxScore = Math.max(score, 120);
+
 
       } else if (user.role === 'social_media') {
         const scopedTasks = contentTasks.filter(t => isInCurrentMonth(getSocialTaskReferenceDate(t)));

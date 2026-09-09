@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/vpsDb';
-import { VM_SCORE, calcVmDeliveryScore, calcWaitPoints } from '@/lib/scoringSystem';
+import { VM_SCORE, calcVmDeliveryScore, calcWaitPoints, dedupeDeliveryRecords } from '@/lib/scoringSystem';
 import { DAY_LABELS } from '@/types';
 import { fetchAISeasonalAlerts, NICHE_OPTIONS, type AISeasonalAlert, clearSeasonalCache } from '@/lib/seasonalDates';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -295,10 +295,10 @@ export default function Dashboard() {
     const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
     const monthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
     return videomakers.map(vm => {
-      const vmRecs = deliveryRecords.filter((r: any) =>
+      const vmRecs = dedupeDeliveryRecords(deliveryRecords.filter((r: any) =>
         r.videomaker_id === vm.id && r.date >= monthStart && r.date <= monthEnd &&
         (r.delivery_status === 'realizada' || r.delivery_status === 'encaixe' || r.delivery_status === 'extra')
-      );
+      ) as any[]);
       const deliveryScore = vmRecs.reduce((a: number, r: any) =>
         a + r.reels_produced * SCORE_WEIGHTS.reel + r.creatives_produced * SCORE_WEIGHTS.criativo +
         r.stories_produced * SCORE_WEIGHTS.story + r.arts_produced * SCORE_WEIGHTS.arte +

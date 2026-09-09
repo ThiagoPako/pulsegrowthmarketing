@@ -19,7 +19,7 @@ import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, Cell } from 'recharts';
 import jsPDF from 'jspdf';
 import pulseHeaderImg from '@/assets/pulse_header.png';
-import { VM_SCORE, EDITOR_SCORE, calcVmDeliveryScore, calcWaitPoints, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate } from '@/lib/scoringSystem';
+import { VM_SCORE, EDITOR_SCORE, calcVmDeliveryScore, calcWaitPoints, dedupeDeliveryRecords, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate } from '@/lib/scoringSystem';
 
 interface DeliveryRecord {
   id: string;
@@ -87,7 +87,7 @@ export default function InternalReports() {
       supabase.from('recording_wait_logs').select('*'),
       supabase.from('story_editing_sessions').select('*'),
     ]);
-    if (deliveries.data) setRecords(deliveries.data as DeliveryRecord[]);
+    if (deliveries.data) setRecords(dedupeDeliveryRecords(deliveries.data as any[]) as DeliveryRecord[]);
     if (tasks.data) setEditorTasks(tasks.data as EditorTask[]);
     if (wl.data) setWaitLogs(wl.data);
     if (ss.data) setStorySessions(ss.data as any[]);

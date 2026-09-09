@@ -83,6 +83,11 @@ const ROLE_INFO: Record<UserRole, { label: string; whatIDo: string }> = {
     whatIDo:
       'Cuido da gestão executiva da agência: acompanho margens, custos, contratos e o desempenho global da operação.',
   },
+  revisor_meta: {
+    label: 'Revisor Meta',
+    whatIDo:
+      'Conta de avaliação usada para revisar os recursos de agendamento e publicação em redes sociais do sistema.',
+  },
 };
 
 /* ---------- Card único e igualitário ---------- */

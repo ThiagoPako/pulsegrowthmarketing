@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Toaster as Sonner, Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AppProvider, useApp } from "@/contexts/AppContext";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { CityProvider } from "@/contexts/CityContext";
@@ -160,6 +160,20 @@ function PageLoader() {
  * Fallback de segurança: se o perfil não resolver em 8s (ex.: erro de rede),
  * liberamos a renderização para não travar o app em loader infinito.
  */
+/** Telas liberadas para o cargo "Revisor Meta" (conta de avaliação da Meta). */
+const META_REVIEWER_PATHS = [
+  '/entregas-social',
+  '/conexoes-sociais',
+  '/estudio-postagem',
+  '/conteudos-portal',
+  '/perfil',
+];
+const META_REVIEWER_HOME = '/estudio-postagem';
+
+function isMetaReviewerPath(pathname: string) {
+  return META_REVIEWER_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'));
+}
+
 function ProtectedRoute({
   children,
   noLayout = false,
@@ -171,6 +185,7 @@ function ProtectedRoute({
 }) {
   const { user, loading } = useAuth();
   const { currentUser } = useApp();
+  const location = useLocation();
   const [profileTimedOut, setProfileTimedOut] = useState(false);
   const profileResolvedOnce = useRef(false);
 
@@ -188,6 +203,14 @@ function ProtectedRoute({
   if (loading) return <PageLoader />;
   if (!user) return <Navigate to="/login" replace />;
   if (requireProfile && !currentUser && !profileResolvedOnce.current && !profileTimedOut) return <PageLoader />;
+
+  // Cargo de revisão da Meta: escopo restrito às telas que precisam ser avaliadas.
+  const roles = currentUser?.roles?.length ? currentUser.roles : currentUser ? [currentUser.role] : [];
+  const isMetaReviewer = roles.length > 0 && roles.every(r => r === 'revisor_meta');
+  if (isMetaReviewer && !isMetaReviewerPath(location.pathname)) {
+    return <Navigate to={META_REVIEWER_HOME} replace />;
+  }
+
   if (noLayout) return <>{children}</>;
   return <Layout>{children}</Layout>;
 }
@@ -219,7 +242,8 @@ function AppRoutes() {
           <ProtectedRoute>
             {/* A role já está resolvida aqui (garantido pelo ProtectedRoute),
                 então o painel correto é renderizado direto, sem flash. */}
-            {currentRoles.includes('editor') ? <EditorDashboard /> :
+            {currentRoles.includes('revisor_meta') ? <Navigate to="/estudio-postagem" replace /> :
+             currentRoles.includes('editor') ? <EditorDashboard /> :
              currentRoles.includes('videomaker') ? <VideomakerDashboard /> :
              currentRoles.includes('endomarketing') ? <EndomarketingDashboard /> :
              currentRoles.includes('designer') ? <DesignerDashboard /> :

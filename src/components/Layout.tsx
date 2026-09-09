@@ -88,9 +88,9 @@ const navCategories: NavCategory[] = [
     label: 'Produção Criativa',
     color: 'cyan',
     items: [
-      { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media', 'gestor_projetos'] },
-      { path: '/conexoes-sociais', label: 'Conexões Sociais', icon: Plug, roles: ['admin', 'social_media', 'gestor_projetos'] },
-      { path: '/estudio-postagem', label: 'Estúdio de Postagem', icon: Images, roles: ['admin', 'social_media', 'gestor_projetos'] },
+      { path: '/entregas-social', label: 'Social', icon: Share2, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },
+      { path: '/conexoes-sociais', label: 'Conexões Sociais', icon: Plug, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },
+      { path: '/estudio-postagem', label: 'Estúdio de Postagem', icon: Images, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },
       { path: '/desempenho-social', label: 'Desempenho Social', icon: TrendingUp, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/copy', label: 'Copy', icon: FileText, roles: ['admin', 'social_media', 'copywriter', 'gestor_projetos'] },
       { path: '/roteiros', label: 'Roteiros', icon: FileText, roles: ['admin', 'social_media', 'videomaker', 'copywriter', 'gestor_projetos'] },
@@ -105,7 +105,7 @@ const navCategories: NavCategory[] = [
     color: 'violet',
     highlight: true,
     items: [
-      { path: '/conteudos-portal', label: 'Portal', icon: MonitorPlay, roles: ['admin', 'social_media', 'editor'] },
+      { path: '/conteudos-portal', label: 'Portal', icon: MonitorPlay, roles: ['admin', 'social_media', 'editor', 'revisor_meta'] },
     ],
   },
 

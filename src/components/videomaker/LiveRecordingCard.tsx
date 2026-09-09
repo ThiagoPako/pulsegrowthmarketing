@@ -336,6 +336,15 @@ export default function LiveRecordingCard({
                   <span className="text-sm font-medium text-muted-foreground">Retorno às 13:30</span>
                 </div>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={keepRecordingThroughLunch}
+                className="mt-3 w-full gap-1 border-blue-400/50 text-blue-400 hover:bg-blue-400/10 hover:text-blue-400 text-xs"
+              >
+                Estou trabalhando — continuar gravação
+              </Button>
+
             </motion.div>
           )}
         </AnimatePresence>

@@ -57,7 +57,7 @@ export default function FinancialEmpresaSaude() {
     const receivedRevenues = revenues.filter(r => (r.status === 'recebida' || r.status === 'pago') && inRange(r.paid_at || r.due_date));
     const totalRevenue = receivedRevenues.reduce((a, r) => a + Number(r.amount || 0), 0);
 
-    const periodExpenses = expenses.filter(e => inRange(e.date));
+    const periodExpenses = expenses.filter(e => isExpensePaid(e) && inRange(e.date));
     const ownerExpenses = periodExpenses.filter(isOwnerExpense);
     const companyExpenses = periodExpenses.filter(e => !isOwnerExpense(e));
 

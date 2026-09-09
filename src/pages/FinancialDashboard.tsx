@@ -66,7 +66,8 @@ export default function FinancialDashboard() {
       if (type === 'entrada') {
         // Import as standalone revenues (not linked to any specific client/contract)
         for (const item of items) {
-          await supabase.from('revenues').insert({
+          // Espelho no caixa junto com a receita, para o saldo não divergir
+          const { data: insertedRev } = await supabase.from('revenues').insert({
             client_id: '00000000-0000-0000-0000-000000000000',
             contract_id: '00000000-0000-0000-0000-000000000000',
             reference_month: item.date.slice(0, 8) + '01',
@@ -74,7 +75,17 @@ export default function FinancialDashboard() {
             due_date: item.date,
             status: 'recebida',
             paid_at: item.date,
-          } as any);
+          } as any).select('id').single();
+          const revId = (insertedRev as any)?.id;
+          if (revId) {
+            await supabase.from('cash_reserve_movements').insert({
+              amount: item.amount,
+              type: 'entrada',
+              description: `[Receita] ${item.description || 'Extrato bancário'} - ID: ${revId}`,
+              date: item.date,
+              is_reserve: false,
+            } as any);
+          }
         }
       } else {
         // Import as expenses — ensure category exists
@@ -89,14 +100,24 @@ export default function FinancialDashboard() {
           return false;
         }
         for (const item of items) {
-          await supabase.from('expenses').insert({
+          const { data: insertedExp } = await supabase.from('expenses').insert({
             date: item.date,
             amount: item.amount,
             description: item.description,
             category_id: catId,
             expense_type: 'variavel',
             responsible: 'Extrato Bancário',
-          } as any);
+          } as any).select('id').single();
+          const expId = (insertedExp as any)?.id;
+          if (expId) {
+            await supabase.from('cash_reserve_movements').insert({
+              amount: item.amount,
+              type: 'saida',
+              description: `[Despesa] ${item.description || 'Extrato bancário'} - ID: ${expId}`,
+              date: item.date,
+              is_reserve: false,
+            } as any);
+          }
         }
       }
       await refetch();

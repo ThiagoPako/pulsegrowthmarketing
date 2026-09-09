@@ -738,6 +738,115 @@ export function useFinancialData() {
     } catch (err) { console.error('[useFinancialData] updateCashMovement unexpected:', err); return false; }
   };
 
+  /**
+   * Reconciliação do caixa.
+   *
+   * Alguns lançamentos entram no sistema por caminhos que não passam pelo
+   * addExpense/updateRevenue (importação de extrato, endomarketing, dados
+   * antigos). Nesses casos a despesa paga / receita recebida aparece em
+   * "Movimentações" mas não no "Caixa", e o saldo final fica errado.
+   *
+   * Esta rotina compara as duas pontas e:
+   *  - cria o espelho no caixa para o que foi pago/recebido e não tem espelho;
+   *  - apaga espelhos órfãos (o lançamento de origem já não existe).
+   *
+   * Lançamentos anteriores ao "Start Financeiro" são ignorados: aquele saldo
+   * já é um retrato fechado do extrato e somá-los duplicaria o dinheiro.
+   */
+  const reconcileCash = async (options?: { dryRun?: boolean }) => {
+    const dryRun = options?.dryRun ?? false;
+    const { data: movsData } = await supabase.from('cash_reserve_movements').select('*');
+    const movs = (movsData as any[]) || [];
+
+    const startDate = movs
+      .filter(m => /Start Financeiro/i.test(m.description || ''))
+      .map(m => normalizeDate(m.date))
+      .sort()
+      .pop() || '';
+
+    const extractSourceId = (description: string | null | undefined): string | null => {
+      const match = String(description || '').match(/\[(?:Receita|Despesa)\][^]*ID:\s*([0-9a-f-]{36})/i);
+      return match ? match[1] : null;
+    };
+
+    const mirrored = new Map<string, any[]>();
+    for (const m of movs) {
+      const sourceId = extractSourceId(m.description);
+      if (!sourceId) continue;
+      mirrored.set(sourceId, [...(mirrored.get(sourceId) || []), m]);
+    }
+
+    const beforeStart = (date: string) => Boolean(startDate) && date <= startDate;
+
+    const missingExpenses = expenses.filter(e =>
+      isExpensePaid(e) &&
+      !mirrored.has(e.id) &&
+      !beforeStart(normalizeDate(e.date)) &&
+      toAmount(e.amount) > 0
+    );
+
+    const missingRevenues = revenues.filter(r =>
+      (r.status === 'recebida' || r.status === 'pago') &&
+      !mirrored.has(r.id) &&
+      !beforeStart(normalizeDate(r.paid_at || r.due_date)) &&
+      toAmount(r.amount) > 0
+    );
+
+    const expenseIds = new Set(expenses.map(e => e.id));
+    const revenueIds = new Set(revenues.map(r => r.id));
+    const orphans: any[] = [];
+    const duplicates: any[] = [];
+
+    for (const [sourceId, group] of mirrored) {
+      const stillExists = expenseIds.has(sourceId) || revenueIds.has(sourceId);
+      if (!stillExists) {
+        orphans.push(...group);
+        continue;
+      }
+      // Espelho duplicado: mantém o primeiro e remove o resto
+      if (group.length > 1) duplicates.push(...group.slice(1));
+    }
+
+    const report = {
+      missingExpenses: missingExpenses.length,
+      missingRevenues: missingRevenues.length,
+      orphans: orphans.length,
+      duplicates: duplicates.length,
+      total: missingExpenses.length + missingRevenues.length + orphans.length + duplicates.length,
+    };
+
+    if (dryRun || report.total === 0) return report;
+
+    for (const e of missingExpenses) {
+      await createExpenseCashMovement(e.id, e);
+    }
+
+    for (const r of missingRevenues) {
+      const amountNum = toAmount(r.amount);
+      await supabase.from('cash_reserve_movements').insert({
+        amount: amountNum,
+        type: 'entrada',
+        description: `[Receita] Recebimento - ${amountNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} - ID: ${r.id}`,
+        date: normalizeDate(r.paid_at || r.due_date) || new Date().toISOString().split('T')[0],
+        is_reserve: false,
+      } as any);
+    }
+
+    for (const m of [...orphans, ...duplicates]) {
+      await supabase.from('cash_reserve_movements').delete().eq('id', m.id);
+    }
+
+    await logActivity(
+      'sincronização',
+      'caixa',
+      `Sincronizou o caixa: ${report.missingExpenses} despesa(s) e ${report.missingRevenues} receita(s) adicionadas, ${report.orphans + report.duplicates} movimentação(ões) removida(s)`,
+      undefined,
+      report,
+    );
+    await fetchAll();
+    return report;
+  };
+
   const deleteCashMovement = async (id: string) => {
     try {
       const mov = cashMovements.find(m => m.id === id);
@@ -756,7 +865,7 @@ export function useFinancialData() {
     upsertContract, deleteContract,
     addRevenue, updateRevenue, deleteRevenue, generateMonthlyRevenues,
     addExpense, updateExpense, deleteExpense,
-    addCategory, updatePaymentConfig, addCashMovement, updateCashMovement, deleteCashMovement,
+    addCategory, updatePaymentConfig, addCashMovement, updateCashMovement, deleteCashMovement, reconcileCash,
     refetch: fetchAll,
   };
 }

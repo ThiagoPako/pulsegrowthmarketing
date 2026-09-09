@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import FinancialFilters, { applyFinancialFilters, buildEmptyFilters, type FinancialFiltersValue } from '@/components/financial/FinancialFilters';
 import { useFinancialData, normalizeDate } from '@/hooks/useFinancialData';
@@ -14,12 +14,14 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Wallet, TrendingUp, TrendingDown, ArrowUpCircle, ArrowDownCircle, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Wallet, TrendingUp, TrendingDown, ArrowUpCircle, ArrowDownCircle, Pencil, Trash2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
 export default function FinancialCashReserve() {
-  const { cashMovements, addCashMovement, updateCashMovement, deleteCashMovement, loading } = useFinancialData();
+  const { cashMovements, addCashMovement, updateCashMovement, deleteCashMovement, reconcileCash, loading } = useFinancialData();
+  const [pending, setPending] = useState<{ missingExpenses: number; missingRevenues: number; orphans: number; duplicates: number; total: number } | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [open, setOpen] = useState(false);
   const [filters, setFilters] = useState<FinancialFiltersValue>(buildEmptyFilters);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -30,6 +32,41 @@ export default function FinancialCashReserve() {
   const [date, setDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  // Confere se existe lançamento pago/recebido que ainda não chegou no caixa
+  const checkPending = useCallback(async () => {
+    try {
+      const report = await reconcileCash({ dryRun: true });
+      setPending(report);
+    } catch (err) {
+      console.error('[FinancialCashReserve] verificação de sincronização falhou:', err);
+    }
+  }, [reconcileCash]);
+
+  useEffect(() => {
+    if (!loading) void checkPending();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, cashMovements.length]);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const report = await reconcileCash();
+      if (report.total === 0) {
+        toast.success('Caixa já está sincronizado com os lançamentos');
+      } else {
+        toast.success(
+          `Caixa sincronizado: ${report.missingExpenses + report.missingRevenues} lançamento(s) adicionado(s), ${report.orphans + report.duplicates} corrigido(s)`,
+        );
+      }
+      setPending({ missingExpenses: 0, missingRevenues: 0, orphans: 0, duplicates: 0, total: 0 });
+    } catch (err) {
+      console.error('[FinancialCashReserve] sincronização falhou:', err);
+      toast.error('Não foi possível sincronizar o caixa');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // Saldo da conta (sem a reserva) — mesma regra do painel, para não divergir
   const balance = useMemo(() => accountBalance(cashMovements as any), [cashMovements]);
@@ -128,11 +165,15 @@ export default function FinancialCashReserve() {
   return (
     <div className="space-y-6 p-6">
       <FinancialQuickNav />
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Caixa (Reserva)</h1>
           <p className="text-sm text-muted-foreground">Controle da reserva financeira da empresa</p>
         </div>
+        <Button variant="outline" onClick={handleSync} disabled={syncing}>
+          <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+          {syncing ? 'Sincronizando...' : 'Sincronizar com lançamentos'}
+        </Button>
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
             <Button onClick={openNew}><Plus className="w-4 h-4 mr-2" /> Nova Movimentação</Button>
@@ -171,6 +212,25 @@ export default function FinancialCashReserve() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {pending && pending.total > 0 && (
+        <Card className="border-amber-500/50 bg-amber-500/5">
+          <CardContent className="flex flex-wrap items-center gap-3 py-4">
+            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+            <div className="flex-1 min-w-[240px] text-sm">
+              <p className="font-medium">Existem lançamentos fora do caixa</p>
+              <p className="text-muted-foreground">
+                {pending.missingExpenses} despesa(s) paga(s) e {pending.missingRevenues} receita(s) recebida(s) ainda não aparecem aqui
+                {pending.orphans + pending.duplicates > 0 && `, além de ${pending.orphans + pending.duplicates} movimentação(ões) sobrando`}.
+              </p>
+            </div>
+            <Button size="sm" onClick={handleSync} disabled={syncing}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+              Corrigir agora
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

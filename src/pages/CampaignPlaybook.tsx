@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft, Target, TrendingUp, Megaphone, Sparkles, Users, ShoppingBag,
   Calendar, Zap, Trophy, Flame, Rocket, Eye, Heart, MousePointerClick, DollarSign,
-  Film, Image as ImageIcon, PenTool, Clock, ChevronRight, Wand2, PartyPopper, UserPlus, Sprout, Gift, ShieldCheck,
+  Film, Image as ImageIcon, PenTool, Clock, ChevronRight, Wand2, PartyPopper, UserPlus, Sprout, Gift, ShieldCheck, QrCode,
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { NICHE_OPTIONS } from '@/lib/seasonalDates';

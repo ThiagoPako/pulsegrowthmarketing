@@ -34,6 +34,7 @@ export const RECOMMENDED_QUANTITIES: Record<CampaignType, { videos: number; crea
   responsabilidade_social: { videos: 4, creatives: 2 },
   evento: { videos: 7, creatives: 4 },
   agro: { videos: 6, creatives: 3 },
+  sorteio: { videos: 6, creatives: 4 },
 };
 
 /**
@@ -96,6 +97,14 @@ const VIDEO_TEMPLATES: Record<CampaignType, SlotTemplate[]> = {
     { kind: 'video', title: 'Condição comercial da janela (financiamento, barter, safra)', phase: 'fundo', weight: 0.8, notes: 'Foco em prazo de pagamento casado com colheita, troca-troca ou desconto por antecipação.' },
     { kind: 'video', title: 'Última chamada antes do fim da janela agrícola', phase: 'fundo', weight: 0.98 },
   ],
+  sorteio: [
+    { kind: 'video', title: 'Teaser — "vem sorteio grande por aí"', phase: 'topo', weight: 0.0, notes: 'Mostrar só o contorno do prêmio. Objetivo é curiosidade e comentário.' },
+    { kind: 'video', title: 'Revelação do prêmio + regras de participação', phase: 'topo', weight: 0.15, notes: 'Explicar em até 30s: como participar, prazo, quem pode e quando sai o resultado. Regulamento sempre no link.' },
+    { kind: 'video', title: 'Prova de valor do prêmio (por que vale a pena)', phase: 'meio', weight: 0.35, notes: 'Mostrar o brinde de perto, preço de mercado e utilidade real.' },
+    { kind: 'video', title: 'Bastidor / pessoas participando (prova social)', phase: 'meio', weight: 0.55, notes: 'Gravar clientes cadastrando ou comentando. Gera efeito manada.' },
+    { kind: 'video', title: 'Última chamada — encerramento das participações', phase: 'fundo', weight: 0.82, notes: 'Contagem regressiva com prazo exato de encerramento.' },
+    { kind: 'video', title: 'Sorteio ao vivo + entrega do prêmio ao ganhador', phase: 'pos', weight: 1.0, notes: 'Transparência é obrigatória: mostrar o sorteio e a entrega real. É o vídeo que sustenta o próximo sorteio.' },
+  ],
 };
 
 /**
@@ -139,6 +148,12 @@ const CREATIVE_TEMPLATES: Record<CampaignType, SlotTemplate[]> = {
     { kind: 'creative', title: 'Card comparativo — resultado no talhão / ROI por hectare', phase: 'meio', weight: 0.5 },
     { kind: 'creative', title: 'Card oferta comercial da safra (financiamento/barter)', phase: 'fundo', weight: 0.9 },
   ],
+  sorteio: [
+    { kind: 'creative', title: 'Card teaser — "prepara que vem sorteio"', phase: 'topo', weight: 0.05 },
+    { kind: 'creative', title: 'Arte principal do sorteio (prêmio + prazo + como participar)', phase: 'topo', weight: 0.2 },
+    { kind: 'creative', title: 'Card regulamento resumido (quem pode, prazo, data do sorteio)', phase: 'meio', weight: 0.5 },
+    { kind: 'creative', title: 'Card do ganhador + agradecimento e próximo sorteio', phase: 'pos', weight: 1.0 },
+  ],
 };
 
 /**
@@ -172,6 +187,10 @@ export const EDITORIAL_BRIEFINGS: Record<CampaignType, { title: string; notes: s
   agro: {
     title: 'Editorial — Campanha Agro (janela sazonal)',
     notes: 'Objetivo comercial: vender no timing da janela agrícola atual do produtor.\n\nDefina antes de gravar:\n• Janela atual (plantio soja/milho, safra café, colheita algodão, entressafra, feira do setor).\n• Cultura(s) foco e região (MT, GO, MG, MS, BA, PR, RS).\n• Dor do momento (praga, clima, cotação, crédito, mão de obra, logística).\n• Condição comercial casada com a janela (barter, troca-troca, prazo safra, financiamento).\n• Prova social local — nome do produtor + fazenda + resultado por hectare.\n• Feiras próximas (Agrishow, Expointer, Show Rural, Bahia Farm Show, Coopavel, Tecnoshow).\n• CTA: WhatsApp do consultor técnico da região.',
+  },
+  sorteio: {
+    title: 'Editorial — Campanha de Sorteio de Brindes',
+    notes: 'Objetivo comercial: explodir alcance, captar contatos e levar gente à loja — convertendo os participantes em clientes depois do sorteio.\n\nDefina antes de gravar:\n• Prêmio(s) e valor real de mercado (quanto mais desejado e útil, maior a participação).\n• Mecânica de participação (seguir + comentar + marcar, cadastro com WhatsApp, QR Code na loja, cupom por compra).\n• Período de participação e data/hora do sorteio ao vivo.\n• Regulamento publicado em link fixo (quem pode participar, critério de desempate, prazo de retirada do prêmio).\n• Como o contato entra no funil (lista de WhatsApp, etiqueta no CRM).\n• Oferta de consolação para quem não ganhou (cupom válido por 7 dias) — é aqui que o sorteio vira venda.\n• Prova de entrega: foto/vídeo do ganhador recebendo o prêmio.\n\nObservação: sorteios com QR Code descartável, roleta ou raspadinha podem ser operados pelo módulo Sorteios de Prêmios do sistema.',
   },
 };
 

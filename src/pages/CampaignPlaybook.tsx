@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft, Target, TrendingUp, Megaphone, Sparkles, Users, ShoppingBag,
   Calendar, Zap, Trophy, Flame, Rocket, Eye, Heart, MousePointerClick, DollarSign,
-  Film, Image as ImageIcon, PenTool, Clock, ChevronRight, Wand2, PartyPopper, UserPlus, Sprout,
+  Film, Image as ImageIcon, PenTool, Clock, ChevronRight, Wand2, PartyPopper, UserPlus, Sprout, Gift, ShieldCheck,
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { NICHE_OPTIONS } from '@/lib/seasonalDates';
@@ -171,6 +171,18 @@ const CAMPAIGN_TYPES = [
     example: 'Pré-plantio soja MT: leitura de mercado + dor com percevejo + solução aplicada + depoimento no talhão + condição com pagamento pós-colheita.',
     highlightAgro: true,
   },
+  {
+    icon: Gift,
+    label: 'Sorteio de Brindes',
+    tagline: 'Explode alcance — captura contato e leva gente à loja',
+    color: '#ec4899',
+    objective: 'Usar um prêmio desejado como isca para multiplicar alcance orgânico, capturar WhatsApp da base e criar fluxo de pessoas na loja — convertendo os participantes em clientes depois do sorteio.',
+    whenToUse: 'Perfil parado ou com pouco alcance, inauguração, aniversário da loja, datas fortes, lançamento de unidade, necessidade de crescer base de contatos rápido.',
+    triggers: ['Prêmio desejado', 'Gratuidade', 'Prazo curto', 'Efeito manada', 'Transparência na entrega'],
+    kpi: 'Participações registradas, WhatsApp captados, novos seguidores, visitas à loja e vendas convertidas na oferta pós-sorteio.',
+    example: 'Sorteio de um kit de R$ 1.500: teaser → revelação com regras → prova de valor → última chamada → sorteio ao vivo → cupom de consolação de 7 dias para todos que participaram.',
+    highlight: true,
+  },
 ];
 
 export default function CampaignPlaybook() {
@@ -270,7 +282,7 @@ export default function CampaignPlaybook() {
             <CategoryHeader
               badge="Categoria 02"
               title="Campanhas de captura de leads"
-              subtitle="Usam um evento como isca. Métrica principal: leads no funil (WhatsApp + e-mail) e conversão pós-evento."
+              subtitle="Usam um evento ou um sorteio como isca. Métrica principal: leads no funil (WhatsApp + e-mail) e conversão depois da ação."
               color="#f59e0b"
               icon={UserPlus}
               count={CAMPAIGN_TYPES.filter(t => t.highlight).length}
@@ -318,6 +330,70 @@ export default function CampaignPlaybook() {
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70 mt-1">{step}</div>
                 </div>
               ))}
+            </div>
+          </motion.div>
+
+          {/* Callout específico do tipo Sorteio de Brindes */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="mt-6 rounded-2xl border border-pink-500/20 bg-gradient-to-br from-pink-500/[0.06] via-transparent to-transparent p-6"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <Gift size={16} className="text-pink-400" />
+              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-pink-400">Foco especial · Campanha de Sorteio de Brindes</span>
+            </div>
+            <p className="text-sm text-white/70 leading-relaxed mb-5">
+              Sorteio não é "dar brinde de graça": é <strong className="text-white">comprar atenção e contato barato</strong>. O prêmio paga o
+              alcance, mas o lucro está no que vem depois — a base captada e a oferta de consolação para quem não ganhou. Sorteio sem
+              regulamento claro e sem entrega mostrada em vídeo queima a marca do cliente.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {[
+                { icon: Gift, title: 'Prêmio desejado', desc: 'Tem que ser algo que o público-alvo realmente quer. Prêmio fraco = participação fraca.' },
+                { icon: Users, title: 'Mecânica simples', desc: 'Seguir + comentar + marcar, cadastro com WhatsApp ou QR Code na loja. Nunca mais de 3 passos.' },
+                { icon: ShieldCheck, title: 'Regulamento público', desc: 'Link fixo com quem pode participar, prazo, data do sorteio, critério e prazo de retirada.' },
+              ].map(f => (
+                <div key={f.title} className="p-4 rounded-xl bg-black/30 border border-white/5">
+                  <f.icon size={16} className="text-pink-400 mb-2" />
+                  <div className="text-sm font-bold mb-1">{f.title}</div>
+                  <p className="text-[11px] text-white/50 leading-relaxed">{f.desc}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 md:grid-cols-6 gap-2 text-center">
+              {['Teaser do prêmio', 'Revelação + regras', 'Prova de valor', 'Última chamada', 'Sorteio ao vivo', 'Oferta pós-sorteio'].map((step, i) => (
+                <div key={step} className="p-3 rounded-lg bg-white/[0.03] border border-white/5">
+                  <div className="text-2xl font-black italic text-pink-400/60">{i + 1}</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70 mt-1">{step}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="p-4 rounded-xl bg-black/30 border border-white/5">
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-pink-400 mb-2">Regras da casa</div>
+                <ul className="space-y-1.5 text-[11px] text-white/60 leading-relaxed">
+                  <li>• Período de participação curto: 7 a 14 dias. Mais que isso esfria.</li>
+                  <li>• Sorteio ao vivo, sempre gravado — é a prova que sustenta o próximo sorteio.</li>
+                  <li>• Entrega do prêmio vira conteúdo: foto e vídeo do ganhador recebendo.</li>
+                  <li>• Todo participante entra na lista de WhatsApp e é etiquetado no CRM.</li>
+                  <li>• Quem não ganhou recebe cupom de consolação válido por 7 dias.</li>
+                  <li>• Sem promessa que o cliente não pode cumprir. Prêmio precisa existir antes da divulgação.</li>
+                </ul>
+              </div>
+              <div className="p-4 rounded-xl bg-black/30 border border-white/5">
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-pink-400 mb-2">Operação no sistema</div>
+                <ul className="space-y-1.5 text-[11px] text-white/60 leading-relaxed">
+                  <li>• Sorteios com QR Code, roleta ou raspadinha são operados no módulo Sorteios de Prêmios.</li>
+                  <li>• O regulamento fica publicado em link fixo pelo módulo de Regulamentos.</li>
+                  <li>• A campanha aqui gera as peças (vídeos e artes) e o cronograma de postagem.</li>
+                  <li>• Meça no fim: participações, contatos novos, cupons usados e venda gerada.</li>
+                </ul>
+              </div>
             </div>
           </motion.div>
         </section>
@@ -1162,6 +1238,7 @@ const TYPE_ACCENT: Record<CampaignType, string> = {
   responsabilidade_social: '#10b981',
   evento: '#f59e0b',
   agro: '#84cc16',
+  sorteio: '#ec4899',
 };
 
 function NicheSuggestionsGrid() {

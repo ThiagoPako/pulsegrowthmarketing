@@ -11232,15 +11232,23 @@ app.post('/api/promo/validate', async (req, res) => {
 });
 
 // ─── Administração (autenticado) ───────────────────────────
+const PROMO_ADMIN_ROLES = new Set(['admin', 'social_media']);
 async function promoRequireAuth(req, res) {
+  let user;
   try {
-    await verifyUser(req);
-    await ensurePromoTables();
-    return true;
+    user = await verifyUser(req);
   } catch {
     res.status(401).json({ error: 'Unauthorized' });
     return false;
   }
+  const role = user?.role || user?.profile?.role;
+  if (!PROMO_ADMIN_ROLES.has(role)) {
+    res.status(403).json({ error: 'Sem permissão para gerenciar sorteios' });
+    return false;
+  }
+  await ensurePromoTables();
+  req.promoUser = user;
+  return true;
 }
 
 app.get('/api/promo/campaigns', async (req, res) => {

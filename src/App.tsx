@@ -126,6 +126,9 @@ const Copy = lazy(() => import("@/pages/Copy"));
 const RepairAuth = lazy(() => import("@/pages/RepairAuth"));
 const BioLinksManager = lazy(() => import("@/pages/BioLinksManager"));
 const PublicBioLink = lazy(() => import("@/pages/PublicBioLink"));
+const PromoGame = lazy(() => import("@/pages/promo/PromoGame"));
+const PromoValidate = lazy(() => import("@/pages/promo/PromoValidate"));
+const PromoAdmin = lazy(() => import("@/pages/promo/PromoAdmin"));
 
 
 

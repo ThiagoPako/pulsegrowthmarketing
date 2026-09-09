@@ -46,6 +46,23 @@ export default function LiveRecordingCard({
   const [elapsed, setElapsed] = useState(0);
   const [isLunchBreak, setIsLunchBreak] = useState(false);
   const [lunchStartedAt, setLunchStartedAt] = useState<Date | null>(null);
+  /**
+   * Quando o colaborador está trabalhando durante o horário de almoço,
+   * a pausa automática não pode acontecer. O override fica salvo por gravação
+   * (sobrevive a reload / troca de aba no celular).
+   */
+  const lunchOverrideKey = `pulse:lunch-override:${recordingId}`;
+  const [lunchOverride, setLunchOverride] = useState<boolean>(() => {
+    try {
+      if (localStorage.getItem(lunchOverrideKey) === '1') return true;
+    } catch {
+      /* localStorage indisponível */
+    }
+    // Gravação iniciada dentro da janela de almoço = expediente estendido
+    const start = new Date(startedAt);
+    const startStr = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
+    return startStr >= '12:00' && startStr < '13:30';
+  });
   // Sessão de espera restaurada do localStorage (sobrevive a re-render/reload)
   const [waitSession, setWaitSession] = useState<WaitSession | null>(() => loadWaitSession(recordingId));
   const [waitBusy, setWaitBusy] = useState(false);
@@ -57,8 +74,27 @@ export default function LiveRecordingCard({
 
   const totalSeconds = recordingDurationMinutes * 60;
 
+  const keepRecordingThroughLunch = () => {
+    const now = new Date();
+    if (lunchStartedAt) {
+      const duration = Math.floor((now.getTime() - lunchStartedAt.getTime()) / 1000);
+      setTotalLunchSeconds(prev => prev + duration);
+    }
+    setLunchStartedAt(null);
+    setIsLunchBreak(false);
+    setLunchOverride(true);
+    try {
+      localStorage.setItem(lunchOverrideKey, '1');
+    } catch {
+      /* localStorage indisponível */
+    }
+    toast.success('Cronômetro retomado. Continuando a gravação no horário de almoço.', { icon: '🎬' });
+  };
+
   // LUNCH BREAK AUTO-DETECTION & TIMER
   useEffect(() => {
+    if (lunchOverride) return;
+
     const checkLunch = () => {
       const now = new Date();
       const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -87,7 +123,8 @@ export default function LiveRecordingCard({
     checkLunch();
     const interval = setInterval(checkLunch, 30000); // Check every 30s
     return () => clearInterval(interval);
-  }, [isLunchBreak, lunchStartedAt]);
+  }, [isLunchBreak, lunchStartedAt, lunchOverride]);
+
 
   useEffect(() => {
     const start = new Date(startedAt).getTime();

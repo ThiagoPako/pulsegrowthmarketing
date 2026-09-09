@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Copy, Download, Gift, Loader2, Plus, Printer, Ticket, Trash2 } from 'lucide-react';
+import { Copy, Download, Gift, Image as ImageIcon, Loader2, Plus, Printer, Sparkles, Ticket, Trash2, Upload, X } from 'lucide-react';
 import TicketPrintSheet from '@/components/promo/TicketPrintSheet';
 import {
   deletePromoCampaign,
@@ -22,6 +22,8 @@ import {
   savePromoCampaign,
   savePromoPrize,
   uploadPromoImage,
+  promoAssetUrl,
+  defaultPromoRules,
   type PromoBatch,
   type PromoCampaign,
   type PromoLead,
@@ -50,6 +52,62 @@ const EMPTY_PRIZE: Partial<PromoPrize> = {
   win_probability_percent: 10,
   is_active: true,
 };
+
+interface ImageFieldProps {
+  label: string;
+  hint: string;
+  value?: string | null;
+  uploading?: boolean;
+  aspect?: string;
+  onSelect: (file: File) => void;
+  onClear: () => void;
+}
+
+/** Campo de upload visual com prévia, dimensões recomendadas e botão de remover. */
+function ImageField({ label, hint, value, uploading, aspect = 'aspect-video', onSelect, onClear }: ImageFieldProps) {
+  const inputId = `upload-${label.toLowerCase().replace(/\s+/g, '-')}`;
+  const preview = promoAssetUrl(value);
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <label
+        htmlFor={inputId}
+        className={`relative flex ${aspect} w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/40 transition-colors hover:border-primary hover:bg-muted`}
+      >
+        {preview ? (
+          <img src={preview} alt={label} className="h-full w-full object-contain p-1" />
+        ) : (
+          <div className="flex flex-col items-center gap-1 p-4 text-center text-muted-foreground">
+            {uploading ? <Loader2 className="h-6 w-6 animate-spin" /> : <Upload className="h-6 w-6" />}
+            <span className="text-xs font-medium">Clique para enviar</span>
+          </div>
+        )}
+        <input
+          id={inputId}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          disabled={uploading}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onSelect(file);
+            e.target.value = '';
+          }}
+        />
+      </label>
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          <ImageIcon className="h-3 w-3" /> {hint}
+        </p>
+        {value ? (
+          <button type="button" onClick={onClear} className="flex items-center gap-1 text-[11px] text-destructive hover:underline">
+            <X className="h-3 w-3" /> Remover
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 function num(value: unknown) {
   return Number(value || 0);
@@ -125,7 +183,11 @@ export default function PromoAdmin() {
   async function handleSaveCampaign() {
     setSaving(true);
     try {
-      const { campaign } = await savePromoCampaign(campaignForm);
+      const payload = {
+        ...campaignForm,
+        rules_text: (campaignForm.rules_text || '').trim() || defaultPromoRules(campaignForm.title || 'Promoção', prizes.map((p) => p.name)),
+      };
+      const { campaign } = await savePromoCampaign(payload);
       toast.success('Sorteio salvo!');
       setCampaignDialog(false);
       await loadCampaigns();
@@ -312,7 +374,7 @@ export default function PromoAdmin() {
                       <Card key={prize.id}>
                         <CardContent className="flex gap-3 p-4">
                           {prize.image_url ? (
-                            <img src={prize.image_url} alt={prize.name} className="h-20 w-20 rounded-lg object-cover" />
+                            <img src={promoAssetUrl(prize.image_url)} alt={prize.name} className="h-20 w-20 rounded-lg border border-border object-cover" />
                           ) : (
                             <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-muted">
                               <Gift className="h-6 w-6 text-muted-foreground" />
@@ -563,19 +625,49 @@ export default function PromoAdmin() {
                 <Input value={campaignForm.validation_pin || ''} onChange={(e) => setCampaignForm((f) => ({ ...f, validation_pin: e.target.value }))} placeholder="1234" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Banner</Label>
-                <Input type="file" accept="image/*" disabled={uploading} onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0], 'banner')} />
-              </div>
-              <div>
-                <Label>Logo</Label>
-                <Input type="file" accept="image/*" disabled={uploading} onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0], 'logo')} />
-              </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <ImageField
+                label="Banner do sorteio"
+                hint="1080 x 608 px (16:9) · JPG/PNG até 2 MB"
+                value={campaignForm.banner_url}
+                uploading={uploading}
+                onSelect={(file) => handleUpload(file, 'banner')}
+                onClear={() => setCampaignForm((f) => ({ ...f, banner_url: '' }))}
+              />
+              <ImageField
+                label="Logo do posto"
+                hint="512 x 512 px (quadrada) · PNG com fundo transparente"
+                value={campaignForm.logo_url}
+                uploading={uploading}
+                aspect="aspect-square"
+                onSelect={(file) => handleUpload(file, 'logo')}
+                onClear={() => setCampaignForm((f) => ({ ...f, logo_url: '' }))}
+              />
             </div>
             <div>
-              <Label>Regulamento</Label>
-              <Textarea rows={4} value={campaignForm.rules_text || ''} onChange={(e) => setCampaignForm((f) => ({ ...f, rules_text: e.target.value }))} />
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <Label>Regulamento</Label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setCampaignForm((f) => ({
+                      ...f,
+                      rules_text: defaultPromoRules(f.title || 'Promoção', prizes.map((p) => p.name)),
+                    }))
+                  }
+                >
+                  <Sparkles className="mr-2 h-3.5 w-3.5" /> Gerar regulamento padrão
+                </Button>
+              </div>
+              <Textarea
+                rows={6}
+                value={campaignForm.rules_text || ''}
+                onChange={(e) => setCampaignForm((f) => ({ ...f, rules_text: e.target.value }))}
+                placeholder="Se ficar vazio, um regulamento padrão completo será gerado automaticamente ao salvar."
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">Deixe em branco para o sistema gerar o regulamento padrão ao salvar.</p>
             </div>
             <div className="flex items-center justify-between rounded-lg border border-border p-3">
               <div>
@@ -624,11 +716,15 @@ export default function PromoAdmin() {
               <Label>Descrição / instruções de retirada</Label>
               <Textarea rows={3} value={prizeForm.description || ''} onChange={(e) => setPrizeForm((f) => ({ ...f, description: e.target.value }))} />
             </div>
-            <div>
-              <Label>Foto do prêmio</Label>
-              <Input type="file" accept="image/*" disabled={uploading} onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0], 'prize')} />
-              {prizeForm.image_url ? <img src={prizeForm.image_url} alt="" className="mt-2 h-24 w-24 rounded-lg object-cover" /> : null}
-            </div>
+            <ImageField
+              label="Foto do prêmio"
+              hint="800 x 800 px (quadrada) · aparece na raspadinha e no voucher"
+              value={prizeForm.image_url}
+              uploading={uploading}
+              aspect="aspect-square"
+              onSelect={(file) => handleUpload(file, 'prize')}
+              onClear={() => setPrizeForm((f) => ({ ...f, image_url: '' }))}
+            />
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Quantidade total</Label>

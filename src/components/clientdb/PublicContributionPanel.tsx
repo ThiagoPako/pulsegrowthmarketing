@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 export interface ContributionTarget {
   id: string;
   label: string;
-  kind: 'professional' | 'unit';
+  kind: 'professional' | 'unit' | 'collaborator';
 }
 
 export interface PublicContributionPanelProps extends ComponentProps<'section'> {
@@ -42,6 +42,15 @@ export default function PublicContributionPanel({
   const [phone, setPhone] = useState('');
   const [bio, setBio] = useState('');
   const [savingPro, setSavingPro] = useState(false);
+  const [entryKind, setEntryKind] = useState<'professional' | 'collaborator'>('professional');
+
+  const [collabName, setCollabName] = useState('');
+  const [collabRole, setCollabRole] = useState('');
+  const [collabDepartment, setCollabDepartment] = useState('');
+  const [collabBirthday, setCollabBirthday] = useState('');
+  const [collabPhone, setCollabPhone] = useState('');
+  const [collabNotes, setCollabNotes] = useState('');
+  const [savingCollab, setSavingCollab] = useState(false);
 
   const [targetKey, setTargetKey] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -75,6 +84,39 @@ export default function PublicContributionPanel({
       toast.error(error instanceof Error ? error.message : 'Falha ao cadastrar profissional.');
     } finally {
       setSavingPro(false);
+    }
+  }
+
+  async function handleCreateCollaborator() {
+    const trimmed = collabName.trim();
+    if (!trimmed) {
+      toast.error('Informe o nome do colaborador.');
+      return;
+    }
+    setSavingCollab(true);
+    try {
+      const response = await fetch(`${apiBase}/public/client-database/${encodeURIComponent(token)}/collaborators`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: trimmed,
+          job_role: collabRole.trim(),
+          department: collabDepartment.trim(),
+          birthday: collabBirthday,
+          phone: collabPhone.trim(),
+          notes: collabNotes.trim(),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.error || 'Falha ao cadastrar colaborador.');
+      toast.success('Colaborador adicionado! Agora envie a foto dele abaixo.');
+      setCollabName(''); setCollabRole(''); setCollabDepartment('');
+      setCollabBirthday(''); setCollabPhone(''); setCollabNotes('');
+      onContributed();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao cadastrar colaborador.');
+    } finally {
+      setSavingCollab(false);
     }
   }
 
@@ -128,8 +170,64 @@ export default function PublicContributionPanel({
       <Card className="space-y-3 p-5">
         <div className="flex items-center gap-2">
           <UserPlus className="h-4 w-4 text-primary" />
-          <h2 className="font-display text-base font-bold">Cadastrar profissional</h2>
+          <h2 className="font-display text-base font-bold">Cadastrar pessoa</h2>
         </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          <Button
+            type="button"
+            size="sm"
+            variant={entryKind === 'professional' ? 'default' : 'outline'}
+            onClick={() => setEntryKind('professional')}
+          >
+            Profissional
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={entryKind === 'collaborator' ? 'default' : 'outline'}
+            onClick={() => setEntryKind('collaborator')}
+          >
+            Colaborador
+          </Button>
+        </div>
+
+        {entryKind === 'collaborator' ? (
+          <>
+            <div className="space-y-1.5">
+              <Label htmlFor="col-name">Nome *</Label>
+              <Input id="col-name" value={collabName} onChange={(e) => setCollabName(e.target.value)} placeholder="Maria Silva" />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="col-role">Cargo / função</Label>
+                <Input id="col-role" value={collabRole} onChange={(e) => setCollabRole(e.target.value)} placeholder="Atendente" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="col-dep">Setor</Label>
+                <Input id="col-dep" value={collabDepartment} onChange={(e) => setCollabDepartment(e.target.value)} placeholder="Recepção" />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="col-birthday">Data de aniversário</Label>
+                <Input id="col-birthday" type="date" value={collabBirthday} onChange={(e) => setCollabBirthday(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="col-phone">WhatsApp</Label>
+                <Input id="col-phone" value={collabPhone} onChange={(e) => setCollabPhone(e.target.value)} placeholder="(62) 90000-0000" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="col-notes">Observações</Label>
+              <Textarea id="col-notes" rows={3} value={collabNotes} onChange={(e) => setCollabNotes(e.target.value)} placeholder="Apelido, cores preferidas, frase..." />
+            </div>
+            <Button onClick={handleCreateCollaborator} disabled={savingCollab} className="w-full">
+              {savingCollab ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
+              Adicionar colaborador
+            </Button>
+          </>
+        ) : (
+        <>
         <div className="space-y-1.5">
           <Label htmlFor="pro-name">Nome *</Label>
           <Input id="pro-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Dr. João Silva" />
@@ -156,6 +254,8 @@ export default function PublicContributionPanel({
           {savingPro ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
           Adicionar profissional
         </Button>
+        </>
+        )}
       </Card>
 
       <Card className="space-y-3 p-5">
@@ -166,11 +266,11 @@ export default function PublicContributionPanel({
         <div className="space-y-1.5">
           <Label>Destino</Label>
           <Select value={targetKey} onValueChange={setTargetKey}>
-            <SelectTrigger><SelectValue placeholder="Escolha o profissional ou unidade" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Escolha a pessoa ou unidade" /></SelectTrigger>
             <SelectContent>
               {targets.map((target) => (
                 <SelectItem key={`${target.kind}:${target.id}`} value={`${target.kind}:${target.id}`}>
-                  {target.kind === 'unit' ? 'Unidade — ' : 'Profissional — '}{target.label}
+                  {target.kind === 'unit' ? 'Unidade — ' : target.kind === 'collaborator' ? 'Colaborador — ' : 'Profissional — '}{target.label}
                 </SelectItem>
               ))}
             </SelectContent>

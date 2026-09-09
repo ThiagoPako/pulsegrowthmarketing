@@ -12,6 +12,7 @@ interface PublicPayload {
   client: { id: string; company_name: string; logo_url: string | null };
   professionals: Array<{ id: string; name: string; specialty: string | null; photos: string[] | null; videos: string[] | null }>;
   units: Array<{ id: string; unit_name: string; city_name: string | null; state: string | null; photos: string[] | null; videos: string[] | null }>;
+  collaborators?: Array<{ id: string; name: string; job_role: string | null; department: string | null; photos: string[] | null; videos: string[] | null }>;
 }
 
 /**
@@ -61,6 +62,14 @@ export default function PublicClientDatabase() {
         photos: pro.photos,
         videos: pro.videos,
       })),
+      ...(data.collaborators || []).map((collaborator) => ({
+        id: collaborator.id,
+        label: collaborator.name || 'Colaborador',
+        sublabel: [collaborator.job_role, collaborator.department].filter(Boolean).join(' · ') || null,
+        kind: 'collaborator' as const,
+        photos: collaborator.photos,
+        videos: collaborator.videos,
+      })),
       ...data.units.map((unit) => ({
         id: unit.id,
         label: unit.unit_name || 'Unidade',
@@ -106,6 +115,7 @@ export default function PublicClientDatabase() {
                 <h1 className="font-display text-2xl font-bold">Banco de Dados — {data.client.company_name}</h1>
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   <Badge variant="secondary">{data.professionals.length} profissionais</Badge>
+                  <Badge variant="secondary">{(data.collaborators || []).length} colaboradores</Badge>
                   <Badge variant="outline">{data.units.length} unidades</Badge>
                 </div>
               </div>

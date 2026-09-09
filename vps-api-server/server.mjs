@@ -654,6 +654,34 @@ async function ensureClientDatabaseTables() {
 
       CREATE INDEX IF NOT EXISTS idx_client_units_client
         ON client_units (client_id);
+
+      CREATE TABLE IF NOT EXISTS client_collaborators (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        unit_id UUID,
+        name TEXT NOT NULL DEFAULT ''::text,
+        job_role TEXT DEFAULT ''::text,
+        department TEXT DEFAULT ''::text,
+        birthday DATE,
+        phone TEXT DEFAULT ''::text,
+        email TEXT DEFAULT ''::text,
+        notes TEXT DEFAULT ''::text,
+        photos JSONB DEFAULT '[]'::jsonb,
+        videos JSONB DEFAULT '[]'::jsonb,
+        active BOOLEAN NOT NULL DEFAULT true,
+        city TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_client_collaborators_client
+        ON client_collaborators (client_id);
+
+      ALTER TABLE clients ADD COLUMN IF NOT EXISTS birthday_arts_enabled BOOLEAN NOT NULL DEFAULT false;
+      ALTER TABLE design_tasks ADD COLUMN IF NOT EXISTS collaborator_id UUID;
+      ALTER TABLE design_tasks ADD COLUMN IF NOT EXISTS auto_ref TEXT;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_design_tasks_auto_ref
+        ON design_tasks (auto_ref) WHERE auto_ref IS NOT NULL;
     `).catch((error) => {
       clientDatabaseTablesPromise = null;
       throw error;
@@ -666,6 +694,68 @@ async function ensureClientDatabaseTables() {
 ensureClientDatabaseTables().catch((error) => {
   console.error('Failed to ensure client database tables:', error);
 });
+
+// ─── Geração automática de artes de aniversário de colaboradores ───
+// Roda no boot e a cada 6h: para clientes com `birthday_arts_enabled`,
+// cria uma tarefa de design 15 dias antes do aniversário de cada colaborador.
+const BIRTHDAY_ART_LEAD_DAYS = 15;
+
+async function generateCollaboratorBirthdayTasks() {
+  try {
+    await ensureClientDatabaseTables();
+
+    // Colaboradores ativos cujo aniversário cai exatamente daqui a 15 dias.
+    const { rows } = await pool.query(
+      `SELECT col.id, col.name, col.job_role, col.birthday, col.client_id,
+              c.company_name, c.city
+         FROM client_collaborators col
+         JOIN clients c ON c.id = col.client_id
+        WHERE col.active = true
+          AND col.birthday IS NOT NULL
+          AND c.birthday_arts_enabled = true
+          AND to_char(col.birthday, 'MM-DD')
+              = to_char((CURRENT_DATE + ($1 || ' days')::interval), 'MM-DD')`,
+      [String(BIRTHDAY_ART_LEAD_DAYS)],
+    );
+
+    for (const row of rows) {
+      const targetYear = new Date().getFullYear();
+      const autoRef = `birthday:${row.id}:${targetYear}`;
+      const dueDate = new Date(Date.now() + BIRTHDAY_ART_LEAD_DAYS * 86400000)
+        .toISOString()
+        .slice(0, 10);
+      const dayLabel = String(row.birthday).slice(0, 10).split('-').reverse().slice(0, 2).join('/');
+
+      await pool.query(
+        `INSERT INTO design_tasks
+           (client_id, title, description, format_type, kanban_column, priority,
+            due_date, city, collaborator_id, auto_ref)
+         VALUES ($1, $2, $3, 'feed', 'nova_tarefa', 'media', $4, $5, $6, $7)
+         ON CONFLICT (auto_ref) DO NOTHING`,
+        [
+          row.client_id,
+          `Aniversário — ${row.name}`,
+          `Arte de aniversário do colaborador ${row.name}${row.job_role ? ` (${row.job_role})` : ''} — ${row.company_name}. Data do aniversário: ${dayLabel}. Dados e fotos disponíveis no Banco de Dados do cliente.`,
+          dueDate,
+          row.city || null,
+          row.id,
+          autoRef,
+        ],
+      ).catch((error) => {
+        console.warn('birthday art task insert failed:', error?.message || error);
+      });
+    }
+
+    if (rows.length) {
+      console.log(`[birthday-arts] ${rows.length} colaborador(es) processado(s).`);
+    }
+  } catch (error) {
+    console.error('generateCollaboratorBirthdayTasks error:', error?.message || error);
+  }
+}
+
+setTimeout(generateCollaboratorBirthdayTasks, 20_000);
+setInterval(generateCollaboratorBirthdayTasks, 6 * 60 * 60 * 1000);
 
 // ─── Compartilhamento público do banco de dados de um cliente ───
 let clientDatabaseSharePromise = null;

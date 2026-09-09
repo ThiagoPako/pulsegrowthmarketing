@@ -24,6 +24,8 @@ import NotificationBell from '@/components/NotificationBell';
 import MentionPopupListener from '@/components/MentionPopupListener';
 import MentionsIndicator from '@/components/MentionsIndicator';
 import BirthdayOverlay from '@/components/BirthdayOverlay';
+import ClientAnniversaryAlert from '@/components/ClientAnniversaryAlert';
+
 import ProductionAssistant from '@/components/ProductionAssistant';
 import WelcomeRocket from '@/components/WelcomeRocket';
 import VirtualOffice from '@/components/VirtualOffice';
@@ -560,6 +562,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <BirthdayOverlay />
+      <ClientAnniversaryAlert />
+
 
       {/* Desktop sidebar */}
       <aside

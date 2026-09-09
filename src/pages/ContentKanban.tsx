@@ -2,7 +2,12 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/lib/vpsDb';
+import { supabase, vpsAuthedFetch } from '@/lib/vpsDb';
+import { useCity, CITY_LABELS, type CityCode } from '@/contexts/CityContext';
+
+/** Escopo de visualização do quadro: cidade ativa, uma praça específica ou todas. */
+type CityView = 'active' | 'all' | CityCode;
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -171,13 +176,22 @@ interface ContentTask {
   reviewing_by_name: string | null;
   reviewing_at: string | null;
   prospect_name: string | null;
+  /** Praça de origem da tarefa (usada na visualização multi-cidade). */
+  city?: string | null;
+
 }
 
 export default function ContentKanban() {
   const { clients, recordings, scripts, users } = useApp();
   const { user, profile } = useAuth();
+  const { activeCity, availableCities } = useCity();
   const [tasks, setTasks] = useState<ContentTask[]>([]);
+  // Visualização por cidade: permite ver todas as praças sem trocar de cidade ativa.
+  const [cityView, setCityView] = useState<CityView>('active');
+  // Clientes de outras cidades (somente leitura) para exibir o nome no cartão.
+  const [foreignClients, setForeignClients] = useState<Record<string, { id: string; companyName: string; color: string; logoUrl?: string }>>({});
   const [loading, setLoading] = useState(true);
+
   const [searchParams, setSearchParams] = useSearchParams();
   const highlightId = searchParams.get('highlight');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -229,30 +243,62 @@ export default function ContentKanban() {
   // Tracks which highlight IDs have already been opened (avoids re-opening after close)
   const handledHighlightRef = useRef<Set<string>>(new Set());
   // ─── FETCH ─────────────────────────────────────────────────
+  // Cidades que devem ser carregadas conforme o botão de visualização escolhido.
+  const citiesToLoad = useMemo<CityCode[]>(() => {
+    if (cityView === 'active') return [activeCity];
+    if (cityView === 'all') {
+      const list = availableCities.length ? availableCities : [activeCity];
+      return Array.from(new Set([activeCity, ...list])) as CityCode[];
+    }
+    return [cityView];
+  }, [cityView, activeCity, availableCities]);
+
+  /**
+   * Consulta as tarefas de uma cidade específica.
+   * O header `x-pulse-city` é sobrescrito por requisição, então é possível ler
+   * outra praça sem alterar a cidade ativa do usuário (que continua sendo a
+   * única em que ele pode editar).
+   */
+  const fetchTasksForCity = useCallback(async (city: CityCode): Promise<ContentTask[]> => {
+    const response = await vpsAuthedFetch('/db/query', {
+      method: 'POST',
+      headers: { 'x-pulse-city': city },
+      body: JSON.stringify({ table: 'content_tasks', operation: 'select', select: '*' }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payload?.error?.message || payload?.error || `HTTP ${response.status}`);
+    }
+    const rows: ContentTask[] = Array.isArray(payload?.data) ? payload.data : [];
+    // Marca a praça de origem para exibir o selo e bloquear edição fora da cidade ativa.
+    return rows.map(t => ({ ...t, city: (t as any).city || city } as ContentTask));
+  }, []);
+
   // Retry com backoff exponencial para resistir a falhas transitórias de rede
   // (ex.: PM2 restart, picos de latência). Não exibe erro ao usuário até esgotar.
   const fetchTasks = useCallback(async () => {
     const MAX_ATTEMPTS = 3;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        const { data, error } = await supabase
-          .from('content_tasks')
-          .select('*');
-        if (error) throw error;
-        if (data) {
-          // Fallback: tarefas sem recording_id presas em 'captacao' voltam visualmente para 'ideias'
-          const normalized = (data as ContentTask[]).map(t =>
-            (t.kanban_column === 'captacao' && !t.recording_id)
-              ? { ...t, kanban_column: 'ideias' }
-              : t
-          ).sort((a, b) => {
-            const posA = typeof a.position === 'number' ? a.position : Number.MAX_SAFE_INTEGER;
-            const posB = typeof b.position === 'number' ? b.position : Number.MAX_SAFE_INTEGER;
-            if (posA !== posB) return posA - posB;
-            return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
-          });
-          setTasks(normalized);
+        const results = await Promise.all(citiesToLoad.map(city => fetchTasksForCity(city)));
+        // Tarefas sem cidade definida aparecem em todas as consultas — deduplicar por id.
+        const byId = new Map<string, ContentTask>();
+        for (const list of results) {
+          for (const task of list) if (!byId.has(task.id)) byId.set(task.id, task);
         }
+        const data = Array.from(byId.values());
+        // Fallback: tarefas sem recording_id presas em 'captacao' voltam visualmente para 'ideias'
+        const normalized = data.map(t =>
+          (t.kanban_column === 'captacao' && !t.recording_id)
+            ? { ...t, kanban_column: 'ideias' }
+            : t
+        ).sort((a, b) => {
+          const posA = typeof a.position === 'number' ? a.position : Number.MAX_SAFE_INTEGER;
+          const posB = typeof b.position === 'number' ? b.position : Number.MAX_SAFE_INTEGER;
+          if (posA !== posB) return posA - posB;
+          return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+        });
+        setTasks(normalized);
         setLoading(false);
         return;
       } catch (err: any) {
@@ -266,7 +312,41 @@ export default function ContentKanban() {
         await new Promise(r => setTimeout(r, attempt * 500 + 500 * (attempt - 1)));
       }
     }
-  }, []);
+  }, [citiesToLoad, fetchTasksForCity]);
+
+  // Carrega os clientes das outras praças apenas para leitura dos cartões.
+  useEffect(() => {
+    const foreignCities = citiesToLoad.filter(c => c !== activeCity);
+    if (foreignCities.length === 0) { setForeignClients({}); return; }
+    let cancelled = false;
+    (async () => {
+      const map: Record<string, { id: string; companyName: string; color: string; logoUrl?: string }> = {};
+      await Promise.all(foreignCities.map(async city => {
+        try {
+          const response = await vpsAuthedFetch('/db/query', {
+            method: 'POST',
+            headers: { 'x-pulse-city': city },
+            body: JSON.stringify({ table: 'clients', operation: 'select', select: 'id,company_name,color,logo_url' }),
+          });
+          const payload = await response.json().catch(() => null);
+          if (!response.ok || !Array.isArray(payload?.data)) return;
+          for (const row of payload.data) {
+            map[row.id] = {
+              id: row.id,
+              companyName: row.company_name || 'Cliente',
+              color: row.color || '220 10% 50%',
+              logoUrl: row.logo_url || undefined,
+            };
+          }
+        } catch {
+          /* silencioso: a visualização de outra praça é apenas informativa */
+        }
+      }));
+      if (!cancelled) setForeignClients(map);
+    })();
+    return () => { cancelled = true; };
+  }, [citiesToLoad, activeCity]);
+
 
   // ─── AUTO-FIX agora roda no backend (edge function content-tasks-autofix via cron 1x/min) ──
   // Mantemos um disparo silencioso ao montar para acelerar a primeira correção visível.
@@ -453,7 +533,12 @@ export default function ContentKanban() {
   }, [highlightId, tasks, loading, setSearchParams]);
 
   // ─── HELPERS ───────────────────────────────────────────────
-  const getClient = (id: string) => clients.find(c => c.id === id);
+  const getClient = (id: string) => clients.find(c => c.id === id) || (foreignClients[id] as any);
+  // Tarefas de outra praça são apenas para consulta: edições continuam na cidade ativa.
+  const normalizeCity = (value?: string | null) =>
+    String(value || activeCity).trim().toLowerCase().replace('ç', 'c');
+  const isForeignTask = (task: ContentTask) => normalizeCity(task.city) !== activeCity;
+
   const getTypeConfig = (type: string) => CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];
   const getUser = (id: string | null) => id ? users.find(u => u.id === id) : null;
 
@@ -995,6 +1080,32 @@ export default function ContentKanban() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Visualização por praça — evita trocar a cidade ativa só para consultar */}
+          {availableCities.length > 1 && (
+            <div className="inline-flex items-center gap-1 rounded-xl bg-secondary/50 border border-border/50 p-1">
+              {([
+                { value: 'all' as CityView, label: 'Todas' },
+                ...availableCities.map(c => ({ value: c as CityView, label: CITY_LABELS[c] })),
+              ]).map(opt => {
+                const isActive = cityView === opt.value || (cityView === 'active' && opt.value === activeCity);
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setCityView(opt.value)}
+                    className={`h-7 px-3 rounded-lg text-xs font-semibold transition-colors ${
+                      isActive
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           <div className="relative">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -1199,7 +1310,9 @@ export default function ContentKanban() {
                           whileHover={{ y: -3, transition: { duration: 0.15 } }}
                         >
                           <TaskCard
-                            viewOnly={!isColumnInteractive(col.id)}
+                            viewOnly={!isColumnInteractive(col.id) || isForeignTask(task)}
+                            cityLabel={isForeignTask(task) ? CITY_LABELS[normalizeCity(task.city) as CityCode] || undefined : undefined}
+
                             task={task}
                             client={getClient(task.client_id)}
                             assignedUser={getUser(
@@ -1634,6 +1747,9 @@ interface TaskCardProps {
   linkedScript?: Script;
   isDragging: boolean;
   viewOnly?: boolean;
+  /** Nome da praça exibido quando o cartão vem de outra cidade (somente leitura). */
+  cityLabel?: string;
+
   onDragStart: (e: React.DragEvent) => void;
   onEdit: () => void;
   onDelete?: () => void;
@@ -1653,7 +1769,7 @@ interface TaskCardProps {
   backwardLabel?: string;
 }
 
-function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, linkedScript, isDragging, viewOnly, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit, onMoveForward, onMoveBackward, forwardLabel, backwardLabel }: TaskCardProps) {
+function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, linkedScript, isDragging, viewOnly, cityLabel, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit, onMoveForward, onMoveBackward, forwardLabel, backwardLabel }: TaskCardProps) {
   const [scriptPreviewOpen, setScriptPreviewOpen] = useState(false);
   const typeConfig = CONTENT_TYPES.find(t => t.value === task.content_type) || CONTENT_TYPES[0];
   const TypeIcon = typeConfig.icon;
@@ -1701,7 +1817,16 @@ function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, lin
           isDragging ? 'opacity-40 scale-95 shadow-none' : 'shadow-sm hover:shadow-lg'
         } ${isOverdue ? 'ring-1 ring-destructive/40' : ''} hover:-translate-y-0.5`}
       >
+        {/* Selo de praça: identifica cartões de outra cidade (somente leitura) */}
+        {cityLabel && (
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-secondary/80 border-b border-border/50">
+            <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+              {cityLabel} · somente leitura
+            </span>
+          </div>
+        )}
         {/* Status tag banner (top) */}
+
         {isCaptacao && !isAwaitingLink && (
           <div className="flex items-center gap-2 px-3 py-1 bg-orange-500">
             <span className="relative flex h-1.5 w-1.5 shrink-0">

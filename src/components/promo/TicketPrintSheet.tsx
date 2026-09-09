@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import type { PromoCampaign, PromoTicket } from '@/services/promoApi';
+import { promoCampaignTexts, type PromoCampaign, type PromoTicket } from '@/services/promoApi';
 
 interface TicketPrintSheetProps {
   campaign: PromoCampaign;
@@ -13,6 +13,8 @@ interface TicketPrintSheetProps {
  */
 export default function TicketPrintSheet({ campaign, tickets }: TicketPrintSheetProps) {
   const [qrCodes, setQrCodes] = useState<Record<string, string>>({});
+  // A chamada impressa acompanha o nicho do cliente (abasteceu, comprou, pediu...).
+  const callout = promoCampaignTexts(campaign).ticketCallout;
 
   useEffect(() => {
     let cancelled = false;
@@ -62,7 +64,7 @@ export default function TicketPrintSheet({ campaign, tickets }: TicketPrintSheet
           <div className="promo-ticket" key={ticket.id}>
             {campaign.logo_url ? <img src={campaign.logo_url} alt="" style={{ height: '6mm' }} /> : null}
             <h4>Sorteios de Prêmios</h4>
-            <p>Abasteceu, raspou ou girou, ganhou! Aponte a câmera do seu celular para descobrir seu prêmio.</p>
+            <p>{callout}</p>
             {qrCodes[ticket.token] ? <img className="qr" src={qrCodes[ticket.token]} alt={ticket.token} /> : <div style={{ height: '20mm' }} />}
             <span className="token">{ticket.token}</span>
           </div>

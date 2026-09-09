@@ -21,6 +21,14 @@ export interface PromoCampaign {
   accent_color: string;
   code_prefix?: string;
   validation_pin?: string;
+  /** Nicho de atuação do cliente (posto, restaurante, loja...). Define os textos padrão. */
+  business_segment?: string;
+  /** Texto que explica como o cliente final ganha um novo cupom. */
+  earn_ticket_text?: string;
+  /** Instrução de onde/para quem apresentar o código de resgate. */
+  redeem_instruction_text?: string;
+  /** Como chamar quem valida o prêmio (atendente, caixa, frentista, recepção...). */
+  operator_label?: string;
   is_active: boolean;
   created_at?: string;
   tickets_total?: string | number;
@@ -183,6 +191,12 @@ export interface PromoRedemption {
 export const listPromoRedemptions = (campaignId: string) =>
   request<{ redemptions: PromoRedemption[] }>(`/promo/campaigns/${campaignId}/redemptions`, { auth: true });
 
+/** Dados públicos da campanha (sem cupom) — usado na tela de validação. */
+export async function fetchPromoCampaignPublic(slug: string): Promise<PromoCampaign> {
+  const data = await request<{ campaign: PromoCampaign }>(`/promo/public/${encodeURIComponent(slug)}`);
+  return data.campaign;
+}
+
 /**
  * Converte caminhos relativos de upload (`/uploads/...`) em URL absoluta da VPS.
  * Sem isso as fotos quebram quando o app roda em outro domínio (preview).
@@ -195,15 +209,126 @@ export function promoAssetUrl(url?: string | null): string {
   return `https://agenciapulse.tech${normalized}`;
 }
 
+/**
+ * Nichos suportados. Cada nicho define a linguagem usada nas telas públicas,
+ * no cupom impresso e no regulamento — o módulo não é exclusivo de postos.
+ */
+export interface PromoSegmentPreset {
+  value: string;
+  label: string;
+  /** Ação que gera o cupom ("a cada abastecimento", "a cada compra"...). */
+  earnAction: string;
+  earnTicketText: string;
+  redeemInstructionText: string;
+  operatorLabel: string;
+  ticketCallout: string;
+}
+
+export const PROMO_SEGMENTS: PromoSegmentPreset[] = [
+  {
+    value: 'generico',
+    label: 'Geral / outro nicho',
+    earnAction: 'a cada compra que atenda ao valor mínimo divulgado',
+    earnTicketText: 'Volte e faça uma nova compra para ganhar outro bilhete.',
+    redeemInstructionText: 'Apresente este código no atendimento para retirar seu prêmio.',
+    operatorLabel: 'Operador / atendente',
+    ticketCallout: 'Comprou, raspou ou girou, ganhou! Aponte a câmera do celular e descubra seu prêmio.',
+  },
+  {
+    value: 'posto',
+    label: 'Posto de combustível',
+    earnAction: 'a cada abastecimento que atenda ao valor mínimo divulgado',
+    earnTicketText: 'Abasteça novamente e ganhe um novo bilhete para tentar a sorte.',
+    redeemInstructionText: 'Apresente este código ao frentista ou no caixa da conveniência para retirar seu prêmio.',
+    operatorLabel: 'Operador / frentista',
+    ticketCallout: 'Abasteceu, raspou ou girou, ganhou! Aponte a câmera do celular e descubra seu prêmio.',
+  },
+  {
+    value: 'restaurante',
+    label: 'Restaurante / lanchonete',
+    earnAction: 'a cada pedido que atenda ao valor mínimo divulgado',
+    earnTicketText: 'Peça novamente e ganhe um novo bilhete para tentar a sorte.',
+    redeemInstructionText: 'Apresente este código ao garçom ou no caixa para retirar seu prêmio.',
+    operatorLabel: 'Operador / caixa',
+    ticketCallout: 'Pediu, raspou ou girou, ganhou! Aponte a câmera do celular e descubra seu prêmio.',
+  },
+  {
+    value: 'loja',
+    label: 'Loja / varejo',
+    earnAction: 'a cada compra que atenda ao valor mínimo divulgado',
+    earnTicketText: 'Faça uma nova compra e ganhe outro bilhete para tentar a sorte.',
+    redeemInstructionText: 'Apresente este código no caixa da loja para retirar seu prêmio.',
+    operatorLabel: 'Operador / vendedor',
+    ticketCallout: 'Comprou, raspou ou girou, ganhou! Aponte a câmera do celular e descubra seu prêmio.',
+  },
+  {
+    value: 'supermercado',
+    label: 'Supermercado',
+    earnAction: 'a cada compra que atenda ao valor mínimo divulgado',
+    earnTicketText: 'Volte às compras e ganhe um novo bilhete para tentar a sorte.',
+    redeemInstructionText: 'Apresente este código no caixa ou no balcão de trocas para retirar seu prêmio.',
+    operatorLabel: 'Operador de caixa',
+    ticketCallout: 'Comprou, raspou ou girou, ganhou! Aponte a câmera do celular e descubra seu prêmio.',
+  },
+  {
+    value: 'farmacia',
+    label: 'Farmácia',
+    earnAction: 'a cada compra que atenda ao valor mínimo divulgado',
+    earnTicketText: 'Volte à farmácia e ganhe um novo bilhete para tentar a sorte.',
+    redeemInstructionText: 'Apresente este código no balcão de atendimento para retirar seu prêmio.',
+    operatorLabel: 'Atendente / balconista',
+    ticketCallout: 'Comprou, raspou ou girou, ganhou! Aponte a câmera do celular e descubra seu prêmio.',
+  },
+  {
+    value: 'academia',
+    label: 'Academia / estúdio',
+    earnAction: 'a cada matrícula, renovação ou check-in válido',
+    earnTicketText: 'Faça um novo check-in e ganhe outro bilhete para tentar a sorte.',
+    redeemInstructionText: 'Apresente este código na recepção para retirar seu prêmio.',
+    operatorLabel: 'Recepção',
+    ticketCallout: 'Treinou, raspou ou girou, ganhou! Aponte a câmera do celular e descubra seu prêmio.',
+  },
+  {
+    value: 'salao',
+    label: 'Salão / clínica / estética',
+    earnAction: 'a cada atendimento realizado',
+    earnTicketText: 'Agende um novo atendimento e ganhe outro bilhete para tentar a sorte.',
+    redeemInstructionText: 'Apresente este código na recepção para retirar seu prêmio.',
+    operatorLabel: 'Recepção / atendente',
+    ticketCallout: 'Foi atendido, raspou ou girou, ganhou! Aponte a câmera do celular e descubra seu prêmio.',
+  },
+];
+
+const FALLBACK_SEGMENT = PROMO_SEGMENTS[0];
+
+/** Retorna o preset do nicho informado (com fallback genérico). */
+export function promoSegmentPreset(segment?: string | null): PromoSegmentPreset {
+  const value = String(segment || '').trim().toLowerCase();
+  return PROMO_SEGMENTS.find((s) => s.value === value) || FALLBACK_SEGMENT;
+}
+
+/** Texto efetivo da campanha, respeitando o que foi personalizado no cadastro. */
+export function promoCampaignTexts(campaign?: Partial<PromoCampaign> | null) {
+  const preset = promoSegmentPreset(campaign?.business_segment);
+  return {
+    preset,
+    earnTicketText: (campaign?.earn_ticket_text || '').trim() || preset.earnTicketText,
+    redeemInstructionText: (campaign?.redeem_instruction_text || '').trim() || preset.redeemInstructionText,
+    operatorLabel: (campaign?.operator_label || '').trim() || preset.operatorLabel,
+    ticketCallout: preset.ticketCallout,
+  };
+}
+
 /** Regulamento padrão gerado quando o usuário não escreve um. */
-export function defaultPromoRules(title: string, prizes: string[] = []): string {
+export function defaultPromoRules(title: string, prizes: string[] = [], segment?: string | null): string {
   const hoje = new Date().toLocaleDateString('pt-BR');
+  const preset = promoSegmentPreset(segment);
   const lista = prizes.length ? prizes.map((p, i) => `   ${i + 1}. ${p}`).join('\n') : '   Prêmios divulgados no ponto de venda.';
   return `REGULAMENTO — ${title || 'Promoção'}
 Vigência a partir de ${hoje}.
 
 1. PARTICIPAÇÃO
-1.1. A cada compra/abastecimento que atenda ao valor mínimo divulgado no ponto de venda, o cliente recebe 1 (um) cupom com QR Code exclusivo.
+1.1. Em ${preset.earnAction}, o cliente recebe 1 (um) cupom com QR Code exclusivo.
 1.2. Cada QR Code é pessoal, de uso único e perde a validade imediatamente após ser aberto.
 1.3. Podem participar pessoas físicas maiores de 18 anos.
 

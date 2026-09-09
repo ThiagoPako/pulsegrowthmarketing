@@ -60,3 +60,9 @@ CREATE INDEX IF NOT EXISTS idx_promo_tickets_token ON promo_tickets(token);
 CREATE INDEX IF NOT EXISTS idx_promo_tickets_campaign ON promo_tickets(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_promo_tickets_code ON promo_tickets(redemption_code);
 CREATE INDEX IF NOT EXISTS idx_promo_tickets_batch ON promo_tickets(campaign_id, batch_label);
+
+-- Nicho de atuação (o módulo atende qualquer segmento, não apenas postos)
+ALTER TABLE promo_campaigns ADD COLUMN IF NOT EXISTS business_segment TEXT DEFAULT 'generico';
+ALTER TABLE promo_campaigns ADD COLUMN IF NOT EXISTS earn_ticket_text TEXT;
+ALTER TABLE promo_campaigns ADD COLUMN IF NOT EXISTS redeem_instruction_text TEXT;
+ALTER TABLE promo_campaigns ADD COLUMN IF NOT EXISTS operator_label TEXT;

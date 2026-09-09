@@ -25,6 +25,8 @@ import {
   uploadPromoImage,
   promoAssetUrl,
   defaultPromoRules,
+  PROMO_SEGMENTS,
+  promoSegmentPreset,
   type PromoBatch,
   type PromoCampaign,
   type PromoLead,
@@ -41,8 +43,12 @@ const EMPTY_CAMPAIGN: Partial<PromoCampaign> = {
   require_lead_capture: false,
   require_document: false,
   accent_color: '#E11D48',
-  code_prefix: 'A3P',
+  code_prefix: 'PULSE',
   validation_pin: '1234',
+  business_segment: 'generico',
+  earn_ticket_text: '',
+  redeem_instruction_text: '',
+  operator_label: '',
   is_active: true,
 };
 
@@ -218,7 +224,9 @@ export default function PromoAdmin() {
     try {
       const payload = {
         ...campaignForm,
-        rules_text: (campaignForm.rules_text || '').trim() || defaultPromoRules(campaignForm.title || 'Promoção', prizes.map((p) => p.name)),
+        rules_text:
+          (campaignForm.rules_text || '').trim() ||
+          defaultPromoRules(campaignForm.title || 'Promoção', prizes.map((p) => p.name), campaignForm.business_segment),
       };
       const { campaign } = await savePromoCampaign(payload);
       toast.success('Sorteio salvo!');
@@ -734,18 +742,61 @@ export default function PromoAdmin() {
                     slug: f.id ? f.slug : e.target.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
                   }))
                 }
-                placeholder="Sorteios de Prêmios - Posto A3P Mara Rosa"
+                placeholder="Sorteios de Prêmios - Nome do cliente"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Slug (URL)</Label>
-                <Input value={campaignForm.slug || ''} onChange={(e) => setCampaignForm((f) => ({ ...f, slug: e.target.value }))} placeholder="a3p-mara-rosa" />
+                <Input value={campaignForm.slug || ''} onChange={(e) => setCampaignForm((f) => ({ ...f, slug: e.target.value }))} placeholder="nome-do-cliente" />
               </div>
               <div>
                 <Label>Prefixo do código</Label>
-                <Input value={campaignForm.code_prefix || ''} onChange={(e) => setCampaignForm((f) => ({ ...f, code_prefix: e.target.value.toUpperCase() }))} placeholder="A3P" />
+                <Input value={campaignForm.code_prefix || ''} onChange={(e) => setCampaignForm((f) => ({ ...f, code_prefix: e.target.value.toUpperCase() }))} placeholder="PULSE" />
               </div>
+            </div>
+            <div>
+              <Label>Nicho de atuação do cliente</Label>
+              <select
+                className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={campaignForm.business_segment || 'generico'}
+                onChange={(e) => setCampaignForm((f) => ({ ...f, business_segment: e.target.value }))}
+              >
+                {PROMO_SEGMENTS.map((segment) => (
+                  <option key={segment.value} value={segment.value}>
+                    {segment.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Define automaticamente as frases do jogo, do cupom impresso e do regulamento.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label>Como ganhar outro bilhete (opcional)</Label>
+                <Input
+                  value={campaignForm.earn_ticket_text || ''}
+                  onChange={(e) => setCampaignForm((f) => ({ ...f, earn_ticket_text: e.target.value }))}
+                  placeholder={promoSegmentPreset(campaignForm.business_segment).earnTicketText}
+                />
+              </div>
+              <div>
+                <Label>Como retirar o prêmio (opcional)</Label>
+                <Input
+                  value={campaignForm.redeem_instruction_text || ''}
+                  onChange={(e) => setCampaignForm((f) => ({ ...f, redeem_instruction_text: e.target.value }))}
+                  placeholder={promoSegmentPreset(campaignForm.business_segment).redeemInstructionText}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Quem valida o prêmio (opcional)</Label>
+              <Input
+                value={campaignForm.operator_label || ''}
+                onChange={(e) => setCampaignForm((f) => ({ ...f, operator_label: e.target.value }))}
+                placeholder={promoSegmentPreset(campaignForm.business_segment).operatorLabel}
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -767,7 +818,7 @@ export default function PromoAdmin() {
                 onClear={() => setCampaignForm((f) => ({ ...f, banner_url: '' }))}
               />
               <ImageField
-                label="Logo do posto"
+                label="Logo do cliente"
                 hint="512 x 512 px (quadrada) · PNG com fundo transparente"
                 value={campaignForm.logo_url}
                 uploading={uploading}
@@ -786,7 +837,7 @@ export default function PromoAdmin() {
                   onClick={() =>
                     setCampaignForm((f) => ({
                       ...f,
-                      rules_text: defaultPromoRules(f.title || 'Promoção', prizes.map((p) => p.name)),
+                      rules_text: defaultPromoRules(f.title || 'Promoção', prizes.map((p) => p.name), f.business_segment),
                     }))
                   }
                 >

@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { CheckCircle2, Loader2, Lock, ShieldAlert, Ticket } from 'lucide-react';
-import { validatePromoCode, promoAssetUrl } from '@/services/promoApi';
+import { validatePromoCode, promoAssetUrl, fetchPromoCampaignPublic, promoCampaignTexts } from '@/services/promoApi';
 
 interface LookupResult {
   status: 'allowed' | 'redeemed' | 'confirmed' | 'invalid';
@@ -24,7 +24,7 @@ function formatMoment(value?: string | null) {
   return `${date.toLocaleDateString('pt-BR')} às ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-/** Portal do caixa/frentista: valida e confirma a entrega dos prêmios. */
+/** Portal do atendimento: valida e confirma a entrega dos prêmios. */
 export default function PromoValidate() {
   const { slug = '' } = useParams();
   const [pin, setPin] = useState('');
@@ -34,6 +34,23 @@ export default function PromoValidate() {
   const [winnerName, setWinnerName] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<LookupResult | null>(null);
+  // Rótulo do operador depende do nicho do cliente (frentista, caixa, recepção...).
+  const [operatorLabel, setOperatorLabel] = useState('Operador / atendente');
+
+  useEffect(() => {
+    if (!slug) return;
+    let cancelled = false;
+    fetchPromoCampaignPublic(slug)
+      .then((campaign) => {
+        if (!cancelled) setOperatorLabel(promoCampaignTexts(campaign).operatorLabel);
+      })
+      .catch(() => {
+        /* rótulo padrão já cobre o caso de falha */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
 
   async function unlock() {
     setLoading(true);
@@ -104,7 +121,7 @@ export default function PromoValidate() {
         <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-white/5 p-8">
           <Lock className="mx-auto h-10 w-10 text-yellow-400" />
           <h1 className="mt-4 text-center text-xl font-bold">Validação de prêmios</h1>
-          <p className="mt-1 text-center text-xs text-white/50">Digite o PIN do posto para acessar.</p>
+          <p className="mt-1 text-center text-xs text-white/50">Digite o PIN do estabelecimento para acessar.</p>
           <Input
             value={pin}
             onChange={(e) => setPin(e.target.value)}
@@ -132,7 +149,7 @@ export default function PromoValidate() {
 
         <div className="mt-6 space-y-4">
           <div>
-            <Label className="text-white/70">Operador / frentista</Label>
+            <Label className="text-white/70">{operatorLabel}</Label>
             <Input value={operator} onChange={(e) => setOperator(e.target.value)} placeholder="Seu nome" className="mt-1 border-white/15 bg-white/5 text-white" />
           </div>
           <div>

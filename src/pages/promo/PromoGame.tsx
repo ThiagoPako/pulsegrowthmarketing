@@ -15,6 +15,7 @@ import {
   playPromoTicket,
   type PromoPlayResult,
   promoAssetUrl,
+  promoCampaignTexts,
   type PromoPublicState,
 } from '@/services/promoApi';
 
@@ -62,6 +63,8 @@ export default function PromoGame() {
 
   const campaign = state?.campaign;
   const accent = campaign?.accent_color || '#E11D48';
+  // Toda a linguagem do jogo vem do nicho do cliente (posto, loja, restaurante...).
+  const campaignTexts = useMemo(() => promoCampaignTexts(campaign), [campaign]);
 
   const wheelSlices = useMemo(() => {
     const prizes = (state?.prizes || []).map((p) => ({ id: p.id, label: p.name, imageUrl: p.image_url ? promoAssetUrl(p.image_url) : null }));
@@ -78,7 +81,7 @@ export default function PromoGame() {
         if (cancelled) return;
         setState(data);
         if (!data.ticket) {
-          setBlockedMessage('Este QR Code não é válido. Abasteça na rede para garantir um novo bilhete!');
+          setBlockedMessage('Este QR Code não é válido.');
           setStep('blocked');
         } else if (data.ticket.status === 'playable') {
           setStep(data.campaign.require_lead_capture ? 'lead' : 'choose');
@@ -92,7 +95,7 @@ export default function PromoGame() {
           });
           setStep('voucher');
         } else {
-          setBlockedMessage('Este QR Code já foi utilizado. Abasteça na rede para garantir um novo bilhete!');
+          setBlockedMessage('Este QR Code já foi utilizado.');
           setStep('blocked');
         }
       } catch (error: any) {
@@ -136,7 +139,7 @@ export default function PromoGame() {
     } catch (error: any) {
       toast.error(error?.message || 'Não foi possível jogar agora.');
       if (error?.status === 409) {
-        setBlockedMessage('Este QR Code já foi utilizado. Abasteça na rede para garantir um novo bilhete!');
+        setBlockedMessage('Este QR Code já foi utilizado.');
         setStep('blocked');
       }
     } finally {
@@ -377,8 +380,7 @@ export default function PromoGame() {
           </div>
 
           <p className="mt-5 text-xs leading-relaxed text-white/60">
-            Atenção: apresente este código ao frentista ou no caixa da conveniência para retirar seu prêmio.
-            Não é possível resgatar sem o código de validação!
+            Atenção: {campaignTexts.redeemInstructionText} Não é possível resgatar sem o código de validação!
           </p>
           <Button className="mt-6 h-12 w-full font-bold" style={{ backgroundColor: accent }} onClick={() => window.print()}>
             Salvar comprovante
@@ -388,7 +390,7 @@ export default function PromoGame() {
         <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center">
           <p className="text-4xl">🍀</p>
           <h1 className="mt-4 text-xl font-bold">Não foi dessa vez!</h1>
-          <p className="mt-2 text-sm text-white/60">Abasteça novamente e ganhe um novo bilhete para tentar a sorte.</p>
+          <p className="mt-2 text-sm text-white/60">{campaignTexts.earnTicketText}</p>
         </div>
       )}
     </div>

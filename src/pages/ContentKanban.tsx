@@ -176,8 +176,14 @@ interface ContentTask {
 export default function ContentKanban() {
   const { clients, recordings, scripts, users } = useApp();
   const { user, profile } = useAuth();
+  const { activeCity, availableCities } = useCity();
   const [tasks, setTasks] = useState<ContentTask[]>([]);
+  // Visualização por cidade: permite ver todas as praças sem trocar de cidade ativa.
+  const [cityView, setCityView] = useState<CityView>('active');
+  // Clientes de outras cidades (somente leitura) para exibir o nome no cartão.
+  const [foreignClients, setForeignClients] = useState<Record<string, { id: string; companyName: string; color: string; logoUrl?: string }>>({});
   const [loading, setLoading] = useState(true);
+
   const [searchParams, setSearchParams] = useSearchParams();
   const highlightId = searchParams.get('highlight');
   const [dialogOpen, setDialogOpen] = useState(false);

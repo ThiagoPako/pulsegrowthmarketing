@@ -31,6 +31,7 @@ export default function PromoValidate() {
   const [unlocked, setUnlocked] = useState(false);
   const [operator, setOperator] = useState('');
   const [code, setCode] = useState('');
+  const [winnerName, setWinnerName] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<LookupResult | null>(null);
 

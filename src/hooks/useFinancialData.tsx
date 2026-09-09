@@ -865,7 +865,7 @@ export function useFinancialData() {
     upsertContract, deleteContract,
     addRevenue, updateRevenue, deleteRevenue, generateMonthlyRevenues,
     addExpense, updateExpense, deleteExpense,
-    addCategory, updatePaymentConfig, addCashMovement, updateCashMovement, deleteCashMovement,
+    addCategory, updatePaymentConfig, addCashMovement, updateCashMovement, deleteCashMovement, reconcileCash,
     refetch: fetchAll,
   };
 }

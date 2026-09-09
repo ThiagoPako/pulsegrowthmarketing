@@ -11100,10 +11100,14 @@ app.post('/api/promo/play', async (req, res) => {
 
     let redemptionCode = null;
     if (winner) {
-      await client.query(
+      // Baixa atômica do estoque: se outra transação levou a última unidade, o cupom vira "tente novamente".
+      const decrement = await client.query(
         'UPDATE promo_prizes SET remaining_quantity = remaining_quantity - 1 WHERE id = $1 AND remaining_quantity > 0',
         [winner.id]
       );
+      if (decrement.rowCount === 0) winner = null;
+    }
+    if (winner) {
       const prefix = (campaign.code_prefix || 'A3P').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'A3P';
       for (let attempt = 0; attempt < 12 && !redemptionCode; attempt += 1) {
         const candidate = `${prefix}-${String(crypto.randomInt(1000, 9999))}`;

@@ -24,6 +24,8 @@ import NotificationBell from '@/components/NotificationBell';
 import MentionPopupListener from '@/components/MentionPopupListener';
 import MentionsIndicator from '@/components/MentionsIndicator';
 import BirthdayOverlay from '@/components/BirthdayOverlay';
+import ClientAnniversaryAlert from '@/components/ClientAnniversaryAlert';
+
 import ProductionAssistant from '@/components/ProductionAssistant';
 import WelcomeRocket from '@/components/WelcomeRocket';
 import VirtualOffice from '@/components/VirtualOffice';

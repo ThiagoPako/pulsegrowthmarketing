@@ -557,8 +557,9 @@ export default function FinancialExpenses() {
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-rose-500/20 flex items-center justify-center"><TrendingDown size={16} className="text-rose-600" /></div>
                   <div>
-                    <p className="text-[10px] text-muted-foreground font-medium">Total Despesas</p>
-                    <p className="text-sm font-bold text-foreground">{fmt(total)}</p>
+                    <p className="text-[10px] text-muted-foreground font-medium">Total Despesas (pagas)</p>
+                    <p className="text-sm font-bold text-foreground">{fmt(totalPago)}</p>
+                    {totalPendente > 0 && <p className="text-[10px] text-amber-600 font-medium">{fmt(totalPendente)} a pagar</p>}
                   </div>
                 </div>
               </CardContent>
@@ -604,8 +605,9 @@ export default function FinancialExpenses() {
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center"><Users size={16} className="text-emerald-600" /></div>
                   <div>
-                    <p className="text-[10px] text-muted-foreground font-medium">Total Salários</p>
-                    <p className="text-sm font-bold text-foreground">{fmt(total)}</p>
+                    <p className="text-[10px] text-muted-foreground font-medium">Salários Pagos</p>
+                    <p className="text-sm font-bold text-foreground">{fmt(totalPago)}</p>
+                    {totalPendente > 0 && <p className="text-[10px] text-amber-600 font-medium">{fmt(totalPendente)} pendente</p>}
                   </div>
                 </div>
               </CardContent>

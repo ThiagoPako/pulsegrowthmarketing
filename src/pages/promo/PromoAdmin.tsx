@@ -497,7 +497,7 @@ export default function PromoAdmin() {
                       <CardTitle className="text-base">Gerar lote de cupons</CardTitle>
                     </CardHeader>
                     <CardContent className="flex flex-wrap items-end gap-3">
-                      <div className="w-32">
+                      <div className="w-full sm:w-32">
                         <Label>Quantidade</Label>
                         <Input type="number" min={1} max={1000} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
                       </div>

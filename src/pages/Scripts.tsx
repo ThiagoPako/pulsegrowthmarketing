@@ -153,7 +153,7 @@ export default function Scripts() {
     return stored !== null ? stored === 'true' : true;
   });
   const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [downloadingBatch, setDownloadingBatch] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPages, setPreviewPages] = useState<HTMLDivElement[]>([]);
@@ -1064,23 +1064,23 @@ export default function Scripts() {
   }, [buildPdfPages, exportPdfPages]);
 
   const toggleSelect = (id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
   };
 
   const selectAll = () => {
-    if (selectedIds.size === filteredScripts.length) {
-      setSelectedIds(new Set());
+    if (selectedIds.length === filteredScripts.length) {
+      setSelectedIds([]);
     } else {
-      setSelectedIds(new Set(filteredScripts.map(s => s.id)));
+      setSelectedIds(filteredScripts.map(s => s.id));
     }
   };
 
   const handleDownloadSelectedPdf = useCallback(async (scriptsOverride?: Script[]) => {
-    const selected = scriptsOverride ?? filteredScripts.filter(s => selectedIds.has(s.id));
+    const selected = scriptsOverride ?? selectedIds
+      .map(id => filteredScripts.find(s => s.id === id))
+      .filter((s): s is Script => Boolean(s));
     if (selected.length === 0) { toast.error('Selecione ao menos um roteiro'); return; }
 
     setDownloadingBatch(true);
@@ -1096,7 +1096,7 @@ export default function Scripts() {
       toast.success(`PDF com ${selected.length} roteiro(s) baixado!`);
       if (!scriptsOverride) {
         setSelectMode(false);
-        setSelectedIds(new Set());
+        setSelectedIds([]);
       }
     } catch (err) {
       console.error('Batch PDF error:', err);
@@ -1107,7 +1107,9 @@ export default function Scripts() {
   }, [buildPdfPages, exportPdfPages, filteredScripts, selectedIds]);
 
   const handlePreviewSelectedPdf = useCallback(async () => {
-    const selected = filteredScripts.filter(s => selectedIds.has(s.id));
+    const selected = selectedIds
+      .map(id => filteredScripts.find(s => s.id === id))
+      .filter((s): s is Script => Boolean(s));
     if (selected.length === 0) { toast.error('Selecione ao menos um roteiro'); return; }
     setPreviewingBatch(true);
     try {

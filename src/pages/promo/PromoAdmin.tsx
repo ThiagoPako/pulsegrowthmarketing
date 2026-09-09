@@ -755,6 +755,49 @@ export default function PromoAdmin() {
                 <Input value={campaignForm.code_prefix || ''} onChange={(e) => setCampaignForm((f) => ({ ...f, code_prefix: e.target.value.toUpperCase() }))} placeholder="PULSE" />
               </div>
             </div>
+            <div>
+              <Label>Nicho de atuação do cliente</Label>
+              <select
+                className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={campaignForm.business_segment || 'generico'}
+                onChange={(e) => setCampaignForm((f) => ({ ...f, business_segment: e.target.value }))}
+              >
+                {PROMO_SEGMENTS.map((segment) => (
+                  <option key={segment.value} value={segment.value}>
+                    {segment.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Define automaticamente as frases do jogo, do cupom impresso e do regulamento.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label>Como ganhar outro bilhete (opcional)</Label>
+                <Input
+                  value={campaignForm.earn_ticket_text || ''}
+                  onChange={(e) => setCampaignForm((f) => ({ ...f, earn_ticket_text: e.target.value }))}
+                  placeholder={promoSegmentPreset(campaignForm.business_segment).earnTicketText}
+                />
+              </div>
+              <div>
+                <Label>Como retirar o prêmio (opcional)</Label>
+                <Input
+                  value={campaignForm.redeem_instruction_text || ''}
+                  onChange={(e) => setCampaignForm((f) => ({ ...f, redeem_instruction_text: e.target.value }))}
+                  placeholder={promoSegmentPreset(campaignForm.business_segment).redeemInstructionText}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Quem valida o prêmio (opcional)</Label>
+              <Input
+                value={campaignForm.operator_label || ''}
+                onChange={(e) => setCampaignForm((f) => ({ ...f, operator_label: e.target.value }))}
+                placeholder={promoSegmentPreset(campaignForm.business_segment).operatorLabel}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Cor de destaque</Label>

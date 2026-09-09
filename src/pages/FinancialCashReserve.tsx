@@ -33,6 +33,41 @@ export default function FinancialCashReserve() {
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+  // Confere se existe lançamento pago/recebido que ainda não chegou no caixa
+  const checkPending = useCallback(async () => {
+    try {
+      const report = await reconcileCash({ dryRun: true });
+      setPending(report);
+    } catch (err) {
+      console.error('[FinancialCashReserve] verificação de sincronização falhou:', err);
+    }
+  }, [reconcileCash]);
+
+  useEffect(() => {
+    if (!loading) void checkPending();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, cashMovements.length]);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const report = await reconcileCash();
+      if (report.total === 0) {
+        toast.success('Caixa já está sincronizado com os lançamentos');
+      } else {
+        toast.success(
+          `Caixa sincronizado: ${report.missingExpenses + report.missingRevenues} lançamento(s) adicionado(s), ${report.orphans + report.duplicates} corrigido(s)`,
+        );
+      }
+      setPending({ missingExpenses: 0, missingRevenues: 0, orphans: 0, duplicates: 0, total: 0 });
+    } catch (err) {
+      console.error('[FinancialCashReserve] sincronização falhou:', err);
+      toast.error('Não foi possível sincronizar o caixa');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   // Saldo da conta (sem a reserva) — mesma regra do painel, para não divergir
   const balance = useMemo(() => accountBalance(cashMovements as any), [cashMovements]);
 

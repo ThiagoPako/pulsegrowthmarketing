@@ -296,7 +296,7 @@ export default function TeamMemberStats({ member, open, onOpenChange }: Props) {
       .gte('date', startStr.slice(0, 10))
       .lte('date', endStr.slice(0, 10));
 
-    const recs = deliveries || [];
+    const recs = dedupeDeliveryRecords((deliveries || []) as any[]);
     const byContentType: Record<string, number> = {};
     let score = 0;
     let totalProduced = 0;

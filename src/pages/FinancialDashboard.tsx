@@ -100,14 +100,24 @@ export default function FinancialDashboard() {
           return false;
         }
         for (const item of items) {
-          await supabase.from('expenses').insert({
+          const { data: insertedExp } = await supabase.from('expenses').insert({
             date: item.date,
             amount: item.amount,
             description: item.description,
             category_id: catId,
             expense_type: 'variavel',
             responsible: 'Extrato Bancário',
-          } as any);
+          } as any).select('id').single();
+          const expId = (insertedExp as any)?.id;
+          if (expId) {
+            await supabase.from('cash_reserve_movements').insert({
+              amount: item.amount,
+              type: 'saida',
+              description: `[Despesa] ${item.description || 'Extrato bancário'} - ID: ${expId}`,
+              date: item.date,
+              is_reserve: false,
+            } as any);
+          }
         }
       }
       await refetch();

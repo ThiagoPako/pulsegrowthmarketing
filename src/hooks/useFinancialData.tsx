@@ -563,6 +563,24 @@ export function useFinancialData() {
   };
 
   // Expense CRUD
+  const findLinkedExpenseMovements = async (expenseId: string) => {
+    const { data } = await supabase
+      .from('cash_reserve_movements')
+      .select('id')
+      .ilike('description', `%[Despesa]%ID: ${expenseId}%`);
+    return (data as any[]) || [];
+  };
+
+  const createExpenseCashMovement = async (expenseId: string, e: Partial<Expense>) => {
+    await supabase.from('cash_reserve_movements').insert({
+      amount: toAmount(e.amount),
+      type: 'saida',
+      description: `[Despesa] ${e.description || 'Despesa'} - ID: ${expenseId}`,
+      date: normalizeDate(e.date) || new Date().toISOString().split('T')[0],
+      is_reserve: false,
+    } as any);
+  };
+
   const addExpense = async (e: Partial<Expense>) => {
     try {
       const payload = { ...e };
@@ -573,20 +591,15 @@ export function useFinancialData() {
         return false;
       }
 
-      // Create cash movement (saida) linked to this expense
+      // Só sai do caixa o que foi efetivamente pago. Salário/bônus apenas
+      // provisionado não gera movimentação até ser marcado como PAGO.
       const expenseId = (inserted as any)?.id;
-      if (expenseId) {
-        await supabase.from('cash_reserve_movements').insert({
-          amount: Number(e.amount || 0),
-          type: 'saida',
-          description: `[Despesa] ${e.description || 'Despesa'} - ID: ${expenseId}`,
-          date: payload.date || new Date().toISOString().split('T')[0],
-          is_reserve: false,
-        } as any);
+      if (expenseId && isExpensePaid(payload as Expense)) {
+        await createExpenseCashMovement(expenseId, payload);
       }
 
       await fetchAll();
-      await logActivity('criação', 'despesa', `Registrou despesa - R$ ${Number(e.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${e.description}`, expenseId, payload);
+      await logActivity('criação', 'despesa', `Registrou despesa - R$ ${toAmount(e.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${e.description}`, expenseId, payload);
       return true;
     } catch (err) {
       console.error('[useFinancialData] addExpense unexpected error:', err);
@@ -596,6 +609,7 @@ export function useFinancialData() {
 
   const updateExpense = async (id: string, updates: Partial<Expense>) => {
     try {
+      const previous = expenses.find(ex => ex.id === id);
       const payload = { ...updates };
       if (payload.date) payload.date = normalizeDate(payload.date);
       const { error } = await supabase.from('expenses').update(payload as any).eq('id', id);
@@ -604,14 +618,22 @@ export function useFinancialData() {
         return false;
       }
 
-      // Update linked cash movement if amount or date changed
-      const { data: linked } = await supabase
-        .from('cash_reserve_movements')
-        .select('id')
-        .ilike('description', `%[Despesa]%ID: ${id}%`);
-      if (linked && linked.length > 0) {
+      // Estado final da despesa após a edição
+      const merged = { ...(previous || {}), ...payload } as Expense;
+      const linked = await findLinkedExpenseMovements(id);
+      const shouldHaveMovement = isExpensePaid(merged);
+
+      if (shouldHaveMovement && linked.length === 0) {
+        // Marcou como PAGO → agora sim entra como saída de caixa
+        await createExpenseCashMovement(id, merged);
+      } else if (!shouldHaveMovement && linked.length > 0) {
+        // Reverteu o pagamento → volta a ser apenas provisão
+        for (const l of linked) {
+          await supabase.from('cash_reserve_movements').delete().eq('id', l.id);
+        }
+      } else if (shouldHaveMovement && linked.length > 0) {
         const cashUpdates: any = {};
-        if (updates.amount !== undefined) cashUpdates.amount = Number(updates.amount);
+        if (updates.amount !== undefined) cashUpdates.amount = toAmount(updates.amount);
         if (updates.date) cashUpdates.date = normalizeDate(updates.date);
         if (updates.description) cashUpdates.description = `[Despesa] ${updates.description} - ID: ${id}`;
         if (Object.keys(cashUpdates).length > 0) {
@@ -622,13 +644,14 @@ export function useFinancialData() {
       }
 
       await fetchAll();
-      await logActivity('edição', 'despesa', `Editou despesa - R$ ${Number(updates.amount || expenses.find(ex => ex.id === id)?.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, payload);
+      await logActivity('edição', 'despesa', `Editou despesa - R$ ${toAmount(updates.amount ?? previous?.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, payload);
       return true;
     } catch (err) {
       console.error('[useFinancialData] updateExpense unexpected error:', err);
       return false;
     }
   };
+
 
   const deleteExpense = async (id: string) => {
     const expense = expenses.find(e => e.id === id);

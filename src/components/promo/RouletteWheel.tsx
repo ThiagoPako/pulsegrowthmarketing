@@ -8,8 +8,10 @@ export interface RouletteSlice {
 
 interface RouletteWheelProps {
   slices: RouletteSlice[];
-  /** Índice sorteado pelo servidor. Enquanto for null a roleta fica parada. */
+  /** Índice sorteado pelo servidor. Quando definido, a roleta desacelera até a fatia. */
   targetIndex: number | null;
+  /** true enquanto o jogador mantém a roleta girando (modo manual). */
+  continuousSpin?: boolean;
   onSpinEnd?: () => void;
   accentColor?: string;
   className?: string;
@@ -39,50 +41,92 @@ function truncate(label: string, max: number) {
   return label.length > max ? `${label.slice(0, max - 1)}…` : label;
 }
 
-/** Roleta em SVG que desacelera exatamente na fatia devolvida pelo servidor. */
-export default function RouletteWheel({ slices, targetIndex, onSpinEnd, accentColor = '#E11D48', className }: RouletteWheelProps) {
+/**
+ * Roleta em SVG controlada pelo jogador: gira continuamente enquanto
+ * `continuousSpin` estiver ativo e desacelera exatamente na fatia devolvida
+ * pelo servidor quando `targetIndex` é definido (botão "Parar").
+ */
+export default function RouletteWheel({ slices, targetIndex, continuousSpin = false, onSpinEnd, accentColor = '#E11D48', className }: RouletteWheelProps) {
   const [rotation, setRotation] = useState(0);
-  const [spinning, setSpinning] = useState(false);
+  const [decelerating, setDecelerating] = useState(false);
   const [settled, setSettled] = useState(false);
   const spunFor = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const rotRef = useRef(0);
 
   const sliceAngle = useMemo(() => (slices.length ? 360 / slices.length : 360), [slices.length]);
   // Lâmpadas decorativas na borda.
   const bulbs = useMemo(() => Array.from({ length: 24 }, (_, i) => polarToCartesian(100, 100, 94, (360 / 24) * i)), []);
 
+  // Giro contínuo enquanto o jogador segura o estado "girando".
+  useEffect(() => {
+    if (!continuousSpin) return;
+    let last = performance.now();
+    let speed = 0;
+    const loop = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      // Acelera suavemente até ~520°/s para dar sensação de partida real.
+      speed = Math.min(520, speed + 900 * dt);
+      rotRef.current += speed * dt;
+      setRotation(rotRef.current);
+      rafRef.current = requestAnimationFrame(loop);
+    };
+    rafRef.current = requestAnimationFrame(loop);
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    };
+  }, [continuousSpin]);
+
+  // Desaceleração até a fatia sorteada quando o jogador clica em "Parar".
   useEffect(() => {
     if (targetIndex === null || !slices.length) return;
     if (spunFor.current === targetIndex) return;
     spunFor.current = targetIndex;
 
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+
     const center = targetIndex * sliceAngle + sliceAngle / 2;
-    // 8 voltas + leve desvio dentro da fatia para não parar sempre no centro exato.
+    // Leve desvio dentro da fatia para não parar sempre no centro exato.
     const jitter = (Math.random() - 0.5) * sliceAngle * 0.5;
-    const final = 360 * 8 + (360 - center) - jitter;
-    setSpinning(true);
+    const targetMod = (((360 - center - jitter) % 360) + 360) % 360;
+    const currentMod = ((rotRef.current % 360) + 360) % 360;
+    let delta = targetMod - currentMod;
+    if (delta < 0) delta += 360;
+    // 3 voltas completas de desaceleração para dar suspense.
+    const final = rotRef.current + 360 * 3 + delta;
+
+    setDecelerating(true);
+    rotRef.current = final;
     setRotation(final);
     const timer = setTimeout(() => {
-      setSpinning(false);
+      setDecelerating(false);
       setSettled(true);
       if (navigator.vibrate) navigator.vibrate([18, 60, 30]);
       onSpinEnd?.();
-    }, 5600);
+    }, 3600);
     return () => clearTimeout(timer);
   }, [targetIndex, sliceAngle, slices.length, onSpinEnd]);
 
   if (!slices.length) return null;
+
+  const active = continuousSpin || decelerating;
 
   return (
     <div className={cn('relative mx-auto aspect-square w-full max-w-[340px]', className)}>
       {/* Brilho ambiente */}
       <div
         className="pointer-events-none absolute -inset-8 rounded-full blur-3xl transition-opacity duration-700"
-        style={{ background: `radial-gradient(circle, ${accentColor}55, transparent 70%)`, opacity: spinning ? 1 : 0.55 }}
+        style={{ background: `radial-gradient(circle, ${accentColor}55, transparent 70%)`, opacity: active ? 1 : 0.55 }}
         aria-hidden
       />
 
       {/* Ponteiro */}
-      <div className="absolute left-1/2 top-[-6px] z-20 -translate-x-1/2" aria-hidden>
+      <div className={cn('absolute left-1/2 top-[-6px] z-20 -translate-x-1/2 transition-transform', decelerating && 'animate-bounce')} aria-hidden>
         <svg width="38" height="46" viewBox="0 0 38 46">
           <defs>
             <linearGradient id="ptr" x1="0" y1="0" x2="0" y2="1">
@@ -101,7 +145,7 @@ export default function RouletteWheel({ slices, targetIndex, onSpinEnd, accentCo
         className="relative z-10 h-full w-full rounded-full"
         style={{
           transform: `rotate(${rotation}deg)`,
-          transition: spinning ? 'transform 5.4s cubic-bezier(0.08, 0.82, 0.12, 1)' : undefined,
+          transition: decelerating ? 'transform 3.4s cubic-bezier(0.1, 0.85, 0.1, 1)' : undefined,
           filter: `drop-shadow(0 18px 40px rgba(0,0,0,.7))`,
         }}
       >
@@ -161,7 +205,7 @@ export default function RouletteWheel({ slices, targetIndex, onSpinEnd, accentCo
 
         {/* Lâmpadas da borda */}
         {bulbs.map((bulb, i) => (
-          <circle key={i} cx={bulb.x} cy={bulb.y} r="2.1" fill={i % 2 ? '#FFF3C4' : '#F59E0B'} opacity={spinning ? 0.95 : 0.7} />
+          <circle key={i} cx={bulb.x} cy={bulb.y} r="2.1" fill={i % 2 ? '#FFF3C4' : '#F59E0B'} opacity={active ? 0.95 : 0.7} />
         ))}
 
         <circle cx="100" cy="100" r="99" fill="url(#gloss)" pointerEvents="none" />

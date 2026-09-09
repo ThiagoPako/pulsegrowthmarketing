@@ -121,30 +121,33 @@ export default function FinancialReports() {
           Valor: Number(e.amount),
         }));
       case 'inadimplencia':
-        return revenues.filter(r => r.status === 'em_atraso').map(r => ({
+        return revenues.filter(r => ['em_atraso', 'vencido'].includes(r.status)).map(r => ({
           Cliente: clients.find(c => c.id === r.client_id)?.companyName || '—',
-          Valor: Number(r.amount),
-          Vencimento: r.due_date,
+          Valor: toAmount(r.amount),
+          Vencimento: normalizeDate(r.due_date),
           Status: 'Em Atraso',
         }));
       case 'lucratividade': {
-        const totalDesp = monthExpenses.reduce((s, e) => s + Number(e.amount), 0);
-        const totalRecs = recordings.length || 1;
-        return contracts.filter(c => c.status === 'ativo').map(c => {
-          const client = clients.find(cl => cl.id === c.client_id);
-          const clientRecs = recordings.filter(r => r.clientId === c.client_id);
-          const proportion = clientRecs.length / totalRecs;
-          const custo = totalDesp * proportion;
-          const lucro = Number(c.contract_value) - custo;
-          return {
-            Cliente: client?.companyName || '—',
-            Faturamento: Number(c.contract_value),
-            Custo: Math.round(custo * 100) / 100,
-            Lucro: Math.round(lucro * 100) / 100,
-            'Margem (%)': Number(c.contract_value) > 0 ? Math.round(lucro / Number(c.contract_value) * 10000) / 100 : 0,
-          };
-        });
+        const totalDesp = sumAmounts(monthExpenses);
+        return computeClientProfitability(
+          contracts.filter(c => c.status === 'ativo').map(c => ({
+            clientId: c.client_id,
+            clientName: clients.find(cl => cl.id === c.client_id)?.companyName || '—',
+            contractValue: c.contract_value,
+            clientRevenueTotal: sumAmounts(monthRevenues.filter(r => r.client_id === c.client_id)),
+            clientVolume: recordings.filter(r => r.clientId === c.client_id).length,
+          })),
+          totalDesp,
+          recordings.length,
+        ).map(p => ({
+          Cliente: p.clientName,
+          Faturamento: p.faturamento,
+          Custo: p.custo,
+          Lucro: p.lucro,
+          'Margem (%)': p.margem,
+        }));
       }
+
       default: return [];
     }
   }, [reportType, monthRevenues, monthExpenses, revenues, contracts, clients, categories, recordings]);

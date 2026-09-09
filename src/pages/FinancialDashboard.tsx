@@ -264,34 +264,22 @@ export default function FinancialDashboard() {
     return data;
   }, [revenues, expenses]);
 
-  // Profitability per client
-  const clientProfitability = useMemo(() => {
-    const totalMonthExpenses = totalExpenses;
-    const totalDeliveries = monthRevenues.length || 1;
-
-    return activeContracts.map(contract => {
-      const client = clients.find(cl => cl.id === contract.client_id);
-      const clientRevenues = monthRevenues.filter(r => r.client_id === contract.client_id);
-      const faturamento = clientRevenues.reduce((s, r) => s + Number(r.amount), 0) || Number(contract.contract_value);
-
-      // Proportional cost based on content volume
-      const clientRecordings = recordings.filter(r => r.clientId === contract.client_id);
-      const totalRecs = recordings.length || 1;
-      const proportion = clientRecordings.length / totalRecs;
-      const custo = totalMonthExpenses * proportion;
-      const lucroCliente = faturamento - custo;
-      const margem = faturamento > 0 ? (lucroCliente / faturamento * 100) : 0;
-
-      return {
+  // Profitability per client — regra única compartilhada com os relatórios
+  const clientProfitability = useMemo(() =>
+    computeClientProfitability(
+      activeContracts.map(contract => ({
         clientId: contract.client_id,
-        clientName: client?.companyName || 'Cliente',
-        faturamento,
-        custo: Math.round(custo * 100) / 100,
-        lucro: Math.round(lucroCliente * 100) / 100,
-        margem: Math.round(margem * 10) / 10,
-      };
-    }).sort((a, b) => b.lucro - a.lucro);
-  }, [contracts, monthRevenues, clients, recordings, totalExpenses]);
+        clientName: clients.find(cl => cl.id === contract.client_id)?.companyName || 'Cliente',
+        contractValue: contract.contract_value,
+        clientRevenueTotal: sumAmounts(monthRevenues.filter(r => r.client_id === contract.client_id)),
+        clientVolume: recordings.filter(r => r.clientId === contract.client_id).length,
+      })),
+      totalExpenses,
+      recordings.length,
+    ),
+    [activeContracts, monthRevenues, clients, recordings, totalExpenses]
+  );
+
 
   const clientsComPrejuizo = clientProfitability.filter(c => c.lucro < 0);
 

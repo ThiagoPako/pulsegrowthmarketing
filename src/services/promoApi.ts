@@ -126,6 +126,8 @@ export const validatePromoCode = (body: {
   pin: string;
   code: string;
   operator_name?: string;
+  /** Nome do cliente informado pelo operador na hora da entrega. */
+  winner_name?: string;
   confirm?: boolean;
 }) => request<any>('/promo/validate', { method: 'POST', body: JSON.stringify(body) });
 

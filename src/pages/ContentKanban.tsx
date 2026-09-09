@@ -240,30 +240,62 @@ export default function ContentKanban() {
   // Tracks which highlight IDs have already been opened (avoids re-opening after close)
   const handledHighlightRef = useRef<Set<string>>(new Set());
   // ─── FETCH ─────────────────────────────────────────────────
+  // Cidades que devem ser carregadas conforme o botão de visualização escolhido.
+  const citiesToLoad = useMemo<CityCode[]>(() => {
+    if (cityView === 'active') return [activeCity];
+    if (cityView === 'all') {
+      const list = availableCities.length ? availableCities : [activeCity];
+      return Array.from(new Set([activeCity, ...list])) as CityCode[];
+    }
+    return [cityView];
+  }, [cityView, activeCity, availableCities]);
+
+  /**
+   * Consulta as tarefas de uma cidade específica.
+   * O header `x-pulse-city` é sobrescrito por requisição, então é possível ler
+   * outra praça sem alterar a cidade ativa do usuário (que continua sendo a
+   * única em que ele pode editar).
+   */
+  const fetchTasksForCity = useCallback(async (city: CityCode): Promise<ContentTask[]> => {
+    const response = await vpsAuthedFetch('/db/query', {
+      method: 'POST',
+      headers: { 'x-pulse-city': city },
+      body: JSON.stringify({ table: 'content_tasks', operation: 'select', select: '*' }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payload?.error?.message || payload?.error || `HTTP ${response.status}`);
+    }
+    const rows: ContentTask[] = Array.isArray(payload?.data) ? payload.data : [];
+    // Marca a praça de origem para exibir o selo e bloquear edição fora da cidade ativa.
+    return rows.map(t => ({ ...t, city: (t as any).city || city } as ContentTask));
+  }, []);
+
   // Retry com backoff exponencial para resistir a falhas transitórias de rede
   // (ex.: PM2 restart, picos de latência). Não exibe erro ao usuário até esgotar.
   const fetchTasks = useCallback(async () => {
     const MAX_ATTEMPTS = 3;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        const { data, error } = await supabase
-          .from('content_tasks')
-          .select('*');
-        if (error) throw error;
-        if (data) {
-          // Fallback: tarefas sem recording_id presas em 'captacao' voltam visualmente para 'ideias'
-          const normalized = (data as ContentTask[]).map(t =>
-            (t.kanban_column === 'captacao' && !t.recording_id)
-              ? { ...t, kanban_column: 'ideias' }
-              : t
-          ).sort((a, b) => {
-            const posA = typeof a.position === 'number' ? a.position : Number.MAX_SAFE_INTEGER;
-            const posB = typeof b.position === 'number' ? b.position : Number.MAX_SAFE_INTEGER;
-            if (posA !== posB) return posA - posB;
-            return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
-          });
-          setTasks(normalized);
+        const results = await Promise.all(citiesToLoad.map(city => fetchTasksForCity(city)));
+        // Tarefas sem cidade definida aparecem em todas as consultas — deduplicar por id.
+        const byId = new Map<string, ContentTask>();
+        for (const list of results) {
+          for (const task of list) if (!byId.has(task.id)) byId.set(task.id, task);
         }
+        const data = Array.from(byId.values());
+        // Fallback: tarefas sem recording_id presas em 'captacao' voltam visualmente para 'ideias'
+        const normalized = data.map(t =>
+          (t.kanban_column === 'captacao' && !t.recording_id)
+            ? { ...t, kanban_column: 'ideias' }
+            : t
+        ).sort((a, b) => {
+          const posA = typeof a.position === 'number' ? a.position : Number.MAX_SAFE_INTEGER;
+          const posB = typeof b.position === 'number' ? b.position : Number.MAX_SAFE_INTEGER;
+          if (posA !== posB) return posA - posB;
+          return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+        });
+        setTasks(normalized);
         setLoading(false);
         return;
       } catch (err: any) {
@@ -277,7 +309,41 @@ export default function ContentKanban() {
         await new Promise(r => setTimeout(r, attempt * 500 + 500 * (attempt - 1)));
       }
     }
-  }, []);
+  }, [citiesToLoad, fetchTasksForCity]);
+
+  // Carrega os clientes das outras praças apenas para leitura dos cartões.
+  useEffect(() => {
+    const foreignCities = citiesToLoad.filter(c => c !== activeCity);
+    if (foreignCities.length === 0) { setForeignClients({}); return; }
+    let cancelled = false;
+    (async () => {
+      const map: Record<string, { id: string; companyName: string; color: string; logoUrl?: string }> = {};
+      await Promise.all(foreignCities.map(async city => {
+        try {
+          const response = await vpsAuthedFetch('/db/query', {
+            method: 'POST',
+            headers: { 'x-pulse-city': city },
+            body: JSON.stringify({ table: 'clients', operation: 'select', select: 'id,company_name,color,logo_url' }),
+          });
+          const payload = await response.json().catch(() => null);
+          if (!response.ok || !Array.isArray(payload?.data)) return;
+          for (const row of payload.data) {
+            map[row.id] = {
+              id: row.id,
+              companyName: row.company_name || 'Cliente',
+              color: row.color || '220 10% 50%',
+              logoUrl: row.logo_url || undefined,
+            };
+          }
+        } catch {
+          /* silencioso: a visualização de outra praça é apenas informativa */
+        }
+      }));
+      if (!cancelled) setForeignClients(map);
+    })();
+    return () => { cancelled = true; };
+  }, [citiesToLoad, activeCity]);
+
 
   // ─── AUTO-FIX agora roda no backend (edge function content-tasks-autofix via cron 1x/min) ──
   // Mantemos um disparo silencioso ao montar para acelerar a primeira correção visível.

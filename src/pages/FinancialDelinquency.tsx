@@ -9,6 +9,8 @@ import { ArrowLeft, AlertTriangle } from 'lucide-react';
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import { useNavigate } from 'react-router-dom';
 import { differenceInDays } from 'date-fns';
+import { isRevenueOverdue, toDateKey, DELINQUENCY_START } from '@/lib/financialCalc';
+
 
 export default function FinancialDelinquency() {
   const navigate = useNavigate();
@@ -17,12 +19,14 @@ export default function FinancialDelinquency() {
 
   const today = new Date();
   const inadimplentes = useMemo(() => {
-    const APRIL_2026 = '2026-04-01';
     return revenues
-      .filter(r => ['em_atraso', 'vencido'].includes(r.status) && (r.reference_month || '') >= APRIL_2026)
+      .filter(r => isRevenueOverdue(r) && toDateKey(r.reference_month) >= DELINQUENCY_START)
       .map(r => {
         const client = clients.find(c => c.id === r.client_id);
-        const diasAtraso = differenceInDays(today, new Date(r.due_date));
+        // Data sem fuso: 'YYYY-MM-DD' precisa de hora fixa para não voltar um dia
+        const dueKey = toDateKey(r.due_date);
+        const diasAtraso = dueKey ? Math.max(0, differenceInDays(today, new Date(dueKey + 'T12:00:00'))) : 0;
+
         const lastMsg = billingMessages
           .filter(m => m.client_id === r.client_id && m.revenue_id === r.id)
           .sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime())[0];

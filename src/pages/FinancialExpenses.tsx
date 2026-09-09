@@ -458,7 +458,7 @@ export default function FinancialExpenses() {
     else toast.error('Erro ao reverter');
   }, [updateExpense]);
 
-  const isSalaryPaid = (e: Expense) => e.description?.endsWith(' - PAGO');
+  const isSalaryPaid = (e: Expense) => isExpensePaid(e);
 
   const salaryPaidCount = filtered.filter(e => isSalaryPaid(e)).length;
   const salaryTotalCount = filtered.length;

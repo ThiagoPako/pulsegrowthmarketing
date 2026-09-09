@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Download, FileVideo, Image as ImageIcon, Search, Stethoscope, Building2, ExternalLink } from 'lucide-react';
+import { Download, FileVideo, Image as ImageIcon, Search, Stethoscope, Building2, Cake, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface MediaOwner {
@@ -13,7 +13,7 @@ export interface MediaOwner {
   label: string;
   /** Informação secundária: especialidade / cidade. */
   sublabel?: string | null;
-  kind: 'professional' | 'unit';
+  kind: 'professional' | 'unit' | 'collaborator';
   photos?: string[] | null;
   videos?: string[] | null;
 }
@@ -23,13 +23,13 @@ export interface MediaAsset {
   type: 'image' | 'video';
   ownerId: string;
   ownerLabel: string;
-  ownerKind: 'professional' | 'unit';
+  ownerKind: 'professional' | 'unit' | 'collaborator';
   ownerSublabel?: string | null;
   fileName: string;
 }
 
 type TypeFilter = 'all' | 'image' | 'video';
-type SectionFilter = 'all' | 'professional' | 'unit';
+type SectionFilter = 'all' | 'professional' | 'unit' | 'collaborator';
 
 const asArray = (value: unknown): string[] => (Array.isArray(value) ? (value as string[]).filter(Boolean) : []);
 
@@ -94,7 +94,10 @@ export default function MediaLibrary({ owners, className }: MediaLibraryProps) {
       else map.set(asset.ownerId, { owner: asset, items: [asset] });
     });
     return Array.from(map.values()).sort((a, b) => {
-      if (a.owner.ownerKind !== b.owner.ownerKind) return a.owner.ownerKind === 'professional' ? -1 : 1;
+      if (a.owner.ownerKind !== b.owner.ownerKind) {
+        const order = { professional: 0, collaborator: 1, unit: 2 } as const;
+        return order[a.owner.ownerKind] - order[b.owner.ownerKind];
+      }
       return a.owner.ownerLabel.localeCompare(b.owner.ownerLabel);
     });
   }, [filtered]);
@@ -152,7 +155,7 @@ export default function MediaLibrary({ owners, className }: MediaLibraryProps) {
           </div>
 
           <div className="flex flex-wrap gap-1.5">
-            {([['all', 'Tudo'], ['professional', 'Profissionais'], ['unit', 'Unidades']] as const).map(([value, label]) => (
+            {([['all', 'Tudo'], ['professional', 'Profissionais'], ['collaborator', 'Colaboradores'], ['unit', 'Unidades']] as const).map(([value, label]) => (
               <Button
                 key={value}
                 type="button"
@@ -177,6 +180,8 @@ export default function MediaLibrary({ owners, className }: MediaLibraryProps) {
             <header className="flex items-center gap-2">
               {group.owner.ownerKind === 'professional' ? (
                 <Stethoscope className="h-4 w-4 text-primary" />
+              ) : group.owner.ownerKind === 'collaborator' ? (
+                <Cake className="h-4 w-4 text-primary" />
               ) : (
                 <Building2 className="h-4 w-4 text-primary" />
               )}

@@ -1721,6 +1721,9 @@ interface TaskCardProps {
   linkedScript?: Script;
   isDragging: boolean;
   viewOnly?: boolean;
+  /** Nome da praça exibido quando o cartão vem de outra cidade (somente leitura). */
+  cityLabel?: string;
+
   onDragStart: (e: React.DragEvent) => void;
   onEdit: () => void;
   onDelete?: () => void;

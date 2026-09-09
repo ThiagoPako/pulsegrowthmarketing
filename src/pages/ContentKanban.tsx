@@ -2,7 +2,12 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/lib/vpsDb';
+import { supabase, vpsAuthedFetch } from '@/lib/vpsDb';
+import { useCity, CITY_LABELS, type CityCode } from '@/contexts/CityContext';
+
+/** Escopo de visualização do quadro: cidade ativa, uma praça específica ou todas. */
+type CityView = 'active' | 'all' | CityCode;
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';

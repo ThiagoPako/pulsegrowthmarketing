@@ -11241,7 +11241,7 @@ async function promoRequireAuth(req, res) {
     res.status(401).json({ error: 'Unauthorized' });
     return false;
   }
-  const role = user?.role || user?.profile?.role;
+  const role = user?.user?.role || user?.role;
   if (!PROMO_ADMIN_ROLES.has(role)) {
     res.status(403).json({ error: 'Sem permissão para gerenciar sorteios' });
     return false;

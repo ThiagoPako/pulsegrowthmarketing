@@ -246,16 +246,22 @@ export default function FinancialMovements() {
   const handleEditSave = async () => {
     if (!editTarget) return;
     const val = parseFloat(editAmount);
-    if (!val || val <= 0) { toast.error('Informe um valor válido'); return; }
+    if (!Number.isFinite(val) || val <= 0) { toast.error('Informe um valor válido'); return; }
 
     let ok = false;
     if (editTarget.sourceType === 'receita') {
+      const originalRevenue = editTarget.original as Revenue;
+      // Mantém a data original do pagamento — editar valor não pode mudar quando foi pago
+      const paidAt = editStatus === 'recebida'
+        ? normalizeDate(originalRevenue.paid_at || '') || new Date().toISOString().split('T')[0]
+        : null;
       ok = await updateRevenue(editTarget.id, {
         amount: val,
         due_date: editDate,
         status: editStatus,
-        paid_at: editStatus === 'recebida' ? new Date().toISOString().split('T')[0] : null,
+        paid_at: paidAt,
       });
+
     } else if (editTarget.sourceType === 'despesa') {
       if (!editDescription.trim()) { toast.error('Informe uma descrição'); return; }
       ok = await updateExpense(editTarget.id, {

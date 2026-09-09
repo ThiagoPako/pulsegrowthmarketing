@@ -506,7 +506,7 @@ export default function PromoAdmin() {
                           {preset}
                         </Button>
                       ))}
-                      <Button onClick={handleGenerate} disabled={saving}>
+                      <Button className="w-full sm:w-auto" onClick={handleGenerate} disabled={saving}>
                         {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Ticket className="mr-2 h-4 w-4" />}
                         Gerar e imprimir
                       </Button>

@@ -162,6 +162,53 @@ export const listPromoTickets = (campaignId: string, batch?: string) =>
 export const listPromoLeads = (campaignId: string) =>
   request<{ leads: PromoLead[] }>(`/promo/campaigns/${campaignId}/leads`, { auth: true });
 
+/**
+ * Converte caminhos relativos de upload (`/uploads/...`) em URL absoluta da VPS.
+ * Sem isso as fotos quebram quando o app roda em outro domínio (preview).
+ */
+export function promoAssetUrl(url?: string | null): string {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  if (/^(https?:|data:|blob:)/i.test(raw)) return raw;
+  const normalized = raw.startsWith('/') ? raw : `/uploads/${raw.replace(/^uploads\//, '')}`;
+  return `https://agenciapulse.tech${normalized}`;
+}
+
+/** Regulamento padrão gerado quando o usuário não escreve um. */
+export function defaultPromoRules(title: string, prizes: string[] = []): string {
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const lista = prizes.length ? prizes.map((p, i) => `   ${i + 1}. ${p}`).join('\n') : '   Prêmios divulgados no ponto de venda.';
+  return `REGULAMENTO — ${title || 'Promoção'}
+Vigência a partir de ${hoje}.
+
+1. PARTICIPAÇÃO
+1.1. A cada compra/abastecimento que atenda ao valor mínimo divulgado no ponto de venda, o cliente recebe 1 (um) cupom com QR Code exclusivo.
+1.2. Cada QR Code é pessoal, de uso único e perde a validade imediatamente após ser aberto.
+1.3. Podem participar pessoas físicas maiores de 18 anos.
+
+2. COMO JOGAR
+2.1. Ao ler o QR Code, o participante escolhe entre Roleta ou Raspadinha e descobre na hora o resultado.
+2.2. O sorteio é eletrônico e o resultado é definido pelo sistema no momento da jogada, não sendo possível repetir a tentativa.
+
+3. PRÊMIOS
+${lista}
+3.1. Os prêmios são limitados ao estoque cadastrado e não são trocáveis por dinheiro.
+
+4. RETIRADA
+4.1. O ganhador deve apresentar o código de resgate exibido na tela ao caixa/atendente do estabelecimento.
+4.2. Sem o código de resgate válido não há entrega do prêmio.
+4.3. Cada código pode ser utilizado uma única vez; após a confirmação da entrega ele é invalidado.
+
+5. DADOS PESSOAIS (LGPD)
+5.1. Os dados informados são utilizados exclusivamente para identificação do ganhador e comunicações promocionais, conforme a Lei 13.709/2018.
+5.2. O participante pode solicitar exclusão dos seus dados a qualquer momento junto ao estabelecimento.
+
+6. DISPOSIÇÕES GERAIS
+6.1. Colaboradores do estabelecimento não podem participar.
+6.2. Cupons rasurados, copiados ou já utilizados serão automaticamente invalidados.
+6.3. A participação implica aceitação integral deste regulamento.`;
+}
+
 /** Upload de imagem (banner / foto de prêmio) reutilizando o fluxo padrão da VPS. */
 export async function uploadPromoImage(file: File): Promise<string> {
   const body = new FormData();
@@ -177,5 +224,5 @@ export async function uploadPromoImage(file: File): Promise<string> {
   const result = await response.json().catch(() => null);
   const url = result?.url || result?.path;
   if (!response.ok || !url) throw new Error(result?.error || 'Falha no upload da imagem');
-  return url;
+  return promoAssetUrl(url);
 }

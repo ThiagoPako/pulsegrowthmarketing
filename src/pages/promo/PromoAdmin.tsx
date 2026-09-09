@@ -527,6 +527,66 @@ export default function PromoAdmin() {
                   </Card>
                 </TabsContent>
 
+                <TabsContent value="resgatados" className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm text-muted-foreground">
+                      {redemptions.length} prêmio(s) entregues no caixa.
+                    </p>
+                    <Button size="sm" variant="outline" onClick={exportRedemptionsCsv} disabled={!redemptions.length}>
+                      <Download className="mr-2 h-4 w-4" /> Exportar CSV
+                    </Button>
+                  </div>
+                  <Card>
+                    <CardContent className="overflow-x-auto p-0">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
+                          <tr>
+                            <th className="p-3">Prêmio</th>
+                            <th className="p-3">Cliente</th>
+                            <th className="p-3">WhatsApp</th>
+                            <th className="p-3">Código</th>
+                            <th className="p-3">Entregue em</th>
+                            <th className="p-3">Operador</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {redemptions.map((item) => (
+                            <tr key={item.id} className="border-t border-border">
+                              <td className="p-3">
+                                <div className="flex items-center gap-2">
+                                  {item.prize_image_url ? (
+                                    <img
+                                      src={promoAssetUrl(item.prize_image_url)}
+                                      alt={item.prize_name || 'Prêmio'}
+                                      className="h-9 w-9 rounded object-cover"
+                                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                                    />
+                                  ) : null}
+                                  <span>{item.prize_name || '—'}</span>
+                                </div>
+                              </td>
+                              <td className="p-3 font-medium">{item.participant_name || '—'}</td>
+                              <td className="p-3">{item.participant_phone || '—'}</td>
+                              <td className="p-3 font-mono text-xs">{item.redemption_code || '—'}</td>
+                              <td className="p-3">{item.redeemed_at ? new Date(item.redeemed_at).toLocaleString('pt-BR') : '—'}</td>
+                              <td className="p-3">{item.redeemed_by || '—'}</td>
+                            </tr>
+                          ))}
+                          {redemptions.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="p-6 text-center text-muted-foreground">
+                                Nenhum prêmio resgatado ainda.
+                              </td>
+                            </tr>
+                          ) : null}
+                        </tbody>
+                      </table>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+
+
                 <TabsContent value="leads" className="space-y-3">
                   <div className="flex justify-end">
                     <Button size="sm" variant="outline" onClick={exportLeadsCsv} disabled={!leads.length}>

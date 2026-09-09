@@ -359,6 +359,10 @@ function AppRoutes() {
         <Route path="/bio-links" element={<ProtectedRoute><BioLinksManager /></ProtectedRoute>} />
         <Route path="/b/:slug" element={<PublicBioLink />} />
         <Route path="/bio/:slug" element={<PublicBioLink />} />
+        <Route path="/sorteios-premios" element={<ProtectedRoute><PromoAdmin /></ProtectedRoute>} />
+        <Route path="/sorteio/:slug/validar" element={<Suspense fallback={<PageLoader />}><PromoValidate /></Suspense>} />
+        <Route path="/sorteio/:slug/:token" element={<Suspense fallback={<PageLoader />}><PromoGame /></Suspense>} />
+
 
         <Route path="/encurtador" element={<ProtectedRoute><LinkShortener /></ProtectedRoute>} />
         <Route path="/campanhas" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />

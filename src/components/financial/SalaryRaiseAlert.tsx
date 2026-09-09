@@ -81,35 +81,25 @@ function calculateScoreForMonth(
   };
 
   if (role === 'videomaker') {
-    const vmDeliveries = deliveryRecords.filter(r => r.videomaker_id === userId);
-    const reels = vmDeliveries.reduce((a, r) => a + (r.reels_produced || 0), 0);
-    const creatives = vmDeliveries.reduce((a, r) => a + (r.creatives_produced || 0), 0);
-    const stories = vmDeliveries.reduce((a, r) => a + (r.stories_produced || 0), 0);
-    const extras = vmDeliveries.reduce((a, r) => a + (r.extras_produced || 0), 0);
-    const arts = vmDeliveries.reduce((a, r) => a + (r.arts_produced || 0), 0);
+    const vmDeliveries = dedupeDeliveryRecords(
+      deliveryRecords.filter(r => r.videomaker_id === userId && inRange(r.date)),
+    );
+    const { reels, creatives, stories, extras, arts } = sumDeliveryProduction(vmDeliveries);
     const recDone = recordings.filter(r => r.videomaker_id === userId && r.status === 'concluida' && (r as any).type !== 'endomarketing').length;
     const endoDone = recordings.filter(r => r.videomaker_id === userId && r.status === 'concluida' && (r as any).type === 'endomarketing').length;
     score = reels * VM_SCORE.REEL + creatives * VM_SCORE.CRIATIVO + stories * VM_SCORE.STORY +
       extras * VM_SCORE.EXTRA + arts * VM_SCORE.ARTE + recDone * VM_SCORE.GRAVACAO + endoDone * VM_SCORE.ENDO;
   } else if (role === 'editor') {
-    const editorTasks = contentTasks.filter(t => t.assigned_to === userId || t.edited_by === userId);
-    const approved = editorTasks.filter(t => !!t.approved_at || EDITOR_APPROVED_COLUMNS.includes(t.kanban_column as any)).length;
-    const inEditing = editorTasks.filter(t => t.kanban_column === 'edicao').length;
-    const inRevision = editorTasks.filter(t => t.kanban_column === 'revisao').length;
-    const alterations = editorTasks.filter(t => t.kanban_column === 'alteracao').length;
-    const priority = editorTasks.filter(t => t.editing_priority === true).length;
-    score = approved * EDITOR_SCORE.APROVADO + inEditing * EDITOR_SCORE.EM_EDICAO +
-      inRevision * EDITOR_SCORE.REVISAO + alterations * EDITOR_SCORE.ALTERACAO + priority * EDITOR_SCORE.PRIORIDADE;
+    const editorTasks = contentTasks.filter(
+      t => getEditorTaskOwnerId(t) === userId && inRange(getEditorTaskReferenceDate(t)),
+    );
+    score = getEditorScoreBreakdown(editorTasks).score;
   } else if (role === 'designer' || role === 'fotografo') {
-    const dTasks = designTasks.filter(t => t.assigned_to === userId);
-    const completed = dTasks.filter(t => ['concluida', 'aprovada_cliente'].includes(t.kanban_column)).length;
-    const inProgress = dTasks.filter(t => ['em_andamento', 'revisao'].includes(t.kanban_column)).length;
-    const totalTime = dTasks.reduce((a, t) => a + (t.time_spent_seconds || 0), 0);
-    const totalVersions = dTasks.reduce((a, t) => a + Math.max((t.version || 1) - 1, 0), 0);
-    const highPriority = dTasks.filter(t => t.priority === 'alta' || t.priority === 'urgente').length;
-    score = completed * DESIGNER_SCORE.CONCLUIDO + inProgress * DESIGNER_SCORE.EM_PROGRESSO +
-      Math.round(totalTime / 3600) * DESIGNER_SCORE.POR_HORA + totalVersions * DESIGNER_SCORE.POR_VERSAO +
-      highPriority * DESIGNER_SCORE.PRIORIDADE;
+    const dTasks = designTasks.filter(
+      t => t.assigned_to === userId && inRange(getDesignTaskReferenceDate(t)),
+    );
+    score = getDesignerScoreBreakdown(dTasks).score;
+
   } else if (role === 'social_media') {
     const scopedTasks = contentTasks.filter(t => inRange(getSocialTaskReferenceDate(t)));
     const scopedDeliveries = smDeliveries.filter(d => inRange(getSocialDeliveryReferenceDate(d)));

@@ -104,6 +104,11 @@ export default function DeliveryRecords() {
 
   const handleSave = async () => {
     if (!form.client_id || !form.videomaker_id) { toast.error('Selecione cliente e videomaker'); return; }
+    // Impede duplicidade: uma gravação só pode gerar um registro de entrega
+    if (form.recording_id) {
+      const duplicated = records.some(r => r.recording_id === form.recording_id && r.id !== editing?.id);
+      if (duplicated) { toast.error('Esta gravação já possui um registro de entrega'); return; }
+    }
     const payload = {
       recording_id: form.recording_id || null,
       client_id: form.client_id,

@@ -1239,6 +1239,7 @@ const TYPE_ACCENT: Record<CampaignType, string> = {
   evento: '#f59e0b',
   agro: '#84cc16',
   sorteio: '#ec4899',
+  sorteio_qr: '#8b5cf6',
 };
 
 function NicheSuggestionsGrid() {

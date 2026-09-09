@@ -8,7 +8,7 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isWithinInter
 import { Badge } from '@/components/ui/badge';
 import UserAvatar from '@/components/UserAvatar';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { VM_SCORE, DESIGNER_SCORE, PARCEIRO_SCORE, calcWaitPoints, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate, getScriptReferenceDate, getSocialDeliveryReferenceDate, getSocialMediaScoreBreakdown, getSocialTaskReferenceDate } from '@/lib/scoringSystem';
+import { VM_SCORE, PARCEIRO_SCORE, calcWaitPoints, dedupeDeliveryRecords, getDesignTaskReferenceDate, getDesignerScoreBreakdown, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate, getScriptReferenceDate, getSocialDeliveryReferenceDate, getSocialMediaScoreBreakdown, getSocialTaskReferenceDate, sumDeliveryProduction } from '@/lib/scoringSystem';
 
 interface MemberPerformance {
   id: string;

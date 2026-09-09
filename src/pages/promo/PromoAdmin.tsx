@@ -825,8 +825,8 @@ export default function PromoAdmin() {
               <Switch checked={campaignForm.is_active !== false} onCheckedChange={(v) => setCampaignForm((f) => ({ ...f, is_active: v }))} />
             </div>
           </div>
-          <DialogFooter>
-            <Button onClick={handleSaveCampaign} disabled={saving || !campaignForm.title}>
+          <DialogFooter className="shrink-0 border-t border-border pt-3">
+            <Button className="h-12 w-full sm:h-10 sm:w-auto" onClick={handleSaveCampaign} disabled={saving || !campaignForm.title}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Salvar
             </Button>
           </DialogFooter>
@@ -835,11 +835,11 @@ export default function PromoAdmin() {
 
       {/* Dialog de prêmio */}
       <Dialog open={prizeDialog} onOpenChange={setPrizeDialog}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col gap-3 overflow-hidden rounded-none p-4 sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-md sm:rounded-lg sm:p-6">
+          <DialogHeader className="shrink-0 text-left">
             <DialogTitle>{prizeForm.id ? 'Editar prêmio' : 'Novo prêmio'}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="flex-1 space-y-4 overflow-y-auto pb-2 pr-1">
             <div>
               <Label>Nome do prêmio</Label>
               <Input value={prizeForm.name || ''} onChange={(e) => setPrizeForm((f) => ({ ...f, name: e.target.value }))} placeholder="Liquidificador Mondial" />

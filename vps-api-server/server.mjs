@@ -10898,6 +10898,12 @@ async function ensurePromoTables() {
     CREATE INDEX IF NOT EXISTS idx_promo_tickets_campaign ON promo_tickets(campaign_id);
     CREATE INDEX IF NOT EXISTS idx_promo_tickets_code ON promo_tickets(redemption_code);
     CREATE INDEX IF NOT EXISTS idx_promo_tickets_batch ON promo_tickets(campaign_id, batch_label);
+
+    -- Nicho de atuação: o módulo atende postos, lojas, restaurantes, clínicas etc.
+    ALTER TABLE promo_campaigns ADD COLUMN IF NOT EXISTS business_segment TEXT DEFAULT 'generico';
+    ALTER TABLE promo_campaigns ADD COLUMN IF NOT EXISTS earn_ticket_text TEXT;
+    ALTER TABLE promo_campaigns ADD COLUMN IF NOT EXISTS redeem_instruction_text TEXT;
+    ALTER TABLE promo_campaigns ADD COLUMN IF NOT EXISTS operator_label TEXT;
   `).catch((error) => {
     console.error('ensurePromoTables error:', error);
     promoTablesPromise = null;
@@ -10930,6 +10936,10 @@ function promoPublicCampaign(row) {
     banner_url: row.banner_url || null,
     logo_url: row.logo_url || null,
     accent_color: row.accent_color || '#E11D48',
+    business_segment: row.business_segment || 'generico',
+    earn_ticket_text: row.earn_ticket_text || '',
+    redeem_instruction_text: row.redeem_instruction_text || '',
+    operator_label: row.operator_label || '',
     is_active: !!row.is_active,
   };
 }
@@ -11294,11 +11304,14 @@ app.post('/api/promo/campaigns', async (req, res) => {
         `UPDATE promo_campaigns SET
             title = $2, slug = $3, rules_text = $4, require_lead_capture = $5, require_document = $6,
             lgpd_terms_text = $7, banner_url = $8, logo_url = $9, accent_color = $10,
-            code_prefix = $11, validation_pin = $12, is_active = $13, updated_at = now()
+            code_prefix = $11, validation_pin = $12, is_active = $13,
+            business_segment = $14, earn_ticket_text = $15, redeem_instruction_text = $16, operator_label = $17,
+            updated_at = now()
           WHERE id = $1 RETURNING *`,
         [b.id, b.title, slug, b.rules_text || '', !!b.require_lead_capture, !!b.require_document,
          b.lgpd_terms_text || '', b.banner_url || null, b.logo_url || null, b.accent_color || '#E11D48',
-         b.code_prefix || 'A3P', String(b.validation_pin || '1234'), b.is_active !== false]
+         b.code_prefix || 'A3P', String(b.validation_pin || '1234'), b.is_active !== false,
+         b.business_segment || 'generico', b.earn_ticket_text || '', b.redeem_instruction_text || '', b.operator_label || '']
       );
       return res.json({ campaign: rows[0] });
     }
@@ -11306,11 +11319,13 @@ app.post('/api/promo/campaigns', async (req, res) => {
     const { rows } = await pool.query(
       `INSERT INTO promo_campaigns
          (title, slug, rules_text, require_lead_capture, require_document, lgpd_terms_text,
-          banner_url, logo_url, accent_color, code_prefix, validation_pin, is_active)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+          banner_url, logo_url, accent_color, code_prefix, validation_pin, is_active,
+          business_segment, earn_ticket_text, redeem_instruction_text, operator_label)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
       [b.title, slug, b.rules_text || '', !!b.require_lead_capture, !!b.require_document,
        b.lgpd_terms_text || '', b.banner_url || null, b.logo_url || null, b.accent_color || '#E11D48',
-       b.code_prefix || 'A3P', String(b.validation_pin || '1234'), b.is_active !== false]
+       b.code_prefix || 'A3P', String(b.validation_pin || '1234'), b.is_active !== false,
+       b.business_segment || 'generico', b.earn_ticket_text || '', b.redeem_instruction_text || '', b.operator_label || '']
     );
     res.json({ campaign: rows[0] });
   } catch (error) {

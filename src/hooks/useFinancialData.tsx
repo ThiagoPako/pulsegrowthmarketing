@@ -105,7 +105,8 @@ export interface Expense {
  * O cadastro apenas provisiona o valor; até lá não entra em nenhum total.
  */
 export const isSalaryLikeExpense = (e: Pick<Expense, 'description'>) =>
-  /^\s*(sal[áa]rio|b[ôo]nus|pr[óo]-?labore)\b/i.test(e.description || '');
+  /^\s*(sal[áa]rio|b[ôo]nus)\b/i.test(e.description || '');
+
 
 export const isExpensePaid = (e: Pick<Expense, 'description'>) =>
   !isSalaryLikeExpense(e) || / - PAGO\s*$/i.test(e.description || '');

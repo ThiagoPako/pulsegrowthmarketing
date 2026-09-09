@@ -134,8 +134,8 @@ export default function SalaryRaiseAlert() {
       const key = format(m, 'yyyy-MM');
       const [dr, ct, dt, smd, pt, rec] = await Promise.all([
         supabase.from('delivery_records').select('*').gte('date', mStart).lte('date', mEnd),
-        supabase.from('content_tasks').select('*').gte('updated_at', mStart + 'T00:00:00').lte('updated_at', mEnd + 'T23:59:59'),
-        supabase.from('design_tasks').select('*').gte('created_at', mStart + 'T00:00:00').lte('created_at', mEnd + 'T23:59:59'),
+        supabase.from('content_tasks').select('*').gte('updated_at', mStart + 'T00:00:00'),
+        supabase.from('design_tasks').select('*').gte('created_at', mStart + 'T00:00:00'),
         supabase.from('social_media_deliveries').select('*'),
         supabase.from('endomarketing_partner_tasks').select('*').gte('date', mStart).lte('date', mEnd),
         supabase.from('recordings').select('*').gte('date', mStart).lte('date', mEnd),

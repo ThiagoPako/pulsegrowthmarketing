@@ -7413,7 +7413,7 @@ const ALLOWED_TABLES = [
   'user_permissions','login_logs',
   'campaigns','campaign_slots',
   'story_editing_sessions','script_requests','manual_video_tasks','plan_promotions',
-  'client_professionals','client_units','short_links','client_bio_links','client_bio_buttons',
+  'client_professionals','client_units','client_collaborators','short_links','client_bio_links','client_bio_buttons',
   'warehouse_items','warehouse_movements','structure_investments',
 
 
@@ -7692,7 +7692,7 @@ app.post('/api/db/query', async (req, res) => {
       });
     }
 
-    if (safeTable === 'client_professionals' || safeTable === 'client_units') {
+    if (safeTable === 'client_professionals' || safeTable === 'client_units' || safeTable === 'client_collaborators') {
       await ensureClientDatabaseTables().catch((error) => {
         console.warn('Could not ensure client database tables:', error?.message || error);
       });

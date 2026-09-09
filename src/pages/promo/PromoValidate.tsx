@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { CheckCircle2, Loader2, Lock, ShieldAlert, Ticket } from 'lucide-react';
-import { validatePromoCode, promoAssetUrl } from '@/services/promoApi';
+import { validatePromoCode, promoAssetUrl, fetchPromoCampaignPublic, promoCampaignTexts } from '@/services/promoApi';
 
 interface LookupResult {
   status: 'allowed' | 'redeemed' | 'confirmed' | 'invalid';
@@ -34,6 +34,23 @@ export default function PromoValidate() {
   const [winnerName, setWinnerName] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<LookupResult | null>(null);
+  // Rótulo do operador depende do nicho do cliente (frentista, caixa, recepção...).
+  const [operatorLabel, setOperatorLabel] = useState('Operador / atendente');
+
+  useEffect(() => {
+    if (!slug) return;
+    let cancelled = false;
+    fetchPromoCampaignPublic(slug)
+      .then((campaign) => {
+        if (!cancelled) setOperatorLabel(promoCampaignTexts(campaign).operatorLabel);
+      })
+      .catch(() => {
+        /* rótulo padrão já cobre o caso de falha */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
 
   async function unlock() {
     setLoading(true);

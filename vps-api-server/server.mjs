@@ -10957,6 +10957,22 @@ function promoRateLimited(key, limit = 30, windowMs = 60_000) {
   return bucket.count > limit;
 }
 
+/** GET /api/promo/public/:slug — dados públicos da campanha (usado pela tela de validação) */
+app.get('/api/promo/public/:slug', async (req, res) => {
+  try {
+    await ensurePromoTables();
+    const { rows } = await pool.query(
+      'SELECT * FROM promo_campaigns WHERE lower(slug) = $1 LIMIT 1',
+      [String(req.params.slug || '').toLowerCase()]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Sorteio não encontrado' });
+    res.json({ campaign: promoPublicCampaign(rows[0]) });
+  } catch (error) {
+    console.error('[promo/public:campaign] error:', error);
+    res.status(500).json({ error: 'Falha ao carregar o sorteio' });
+  }
+});
+
 /** GET /api/promo/public/:slug/:token — estado do cupom para a página pública */
 app.get('/api/promo/public/:slug/:token', async (req, res) => {
   try {

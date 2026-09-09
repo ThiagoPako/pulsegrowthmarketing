@@ -191,6 +191,12 @@ export interface PromoRedemption {
 export const listPromoRedemptions = (campaignId: string) =>
   request<{ redemptions: PromoRedemption[] }>(`/promo/campaigns/${campaignId}/redemptions`, { auth: true });
 
+/** Dados públicos da campanha (sem cupom) — usado na tela de validação. */
+export async function fetchPromoCampaignPublic(slug: string): Promise<PromoCampaign> {
+  const data = await request<{ campaign: PromoCampaign }>(`/promo/public/${encodeURIComponent(slug)}`);
+  return data.campaign;
+}
+
 /**
  * Converte caminhos relativos de upload (`/uploads/...`) em URL absoluta da VPS.
  * Sem isso as fotos quebram quando o app roda em outro domínio (preview).

@@ -15,6 +15,7 @@ import {
   playPromoTicket,
   type PromoPlayResult,
   promoAssetUrl,
+  promoCampaignTexts,
   type PromoPublicState,
 } from '@/services/promoApi';
 

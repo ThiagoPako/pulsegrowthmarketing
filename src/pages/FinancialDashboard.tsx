@@ -205,38 +205,33 @@ export default function FinancialDashboard() {
     [contracts]
   );
 
-  const mrr = useMemo(() =>
-    activeContracts.reduce((sum, c) => sum + Number(c.contract_value), 0),
-    [activeContracts]
-  );
+  const mrr = useMemo(() => sumAmounts(activeContracts, c => c.contract_value), [activeContracts]);
 
-  const revenuePrevista = useMemo(() => monthRevenues.filter(r => Number(r.amount) > 0).reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
-  const revenueRecebida = useMemo(() => monthRevenues.filter(r => r.status === 'recebida').reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
-  const revenueAtraso = useMemo(() => monthRevenues.filter(r => ['em_atraso', 'vencido'].includes(r.status)).reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
-  const totalExpenses = useMemo(() => monthExpenses.reduce((s, e) => s + Number(e.amount), 0), [monthExpenses]);
-  // Lucro uses received + expected (prevista) revenues minus expenses for a more realistic view
-  const revenuePendente = useMemo(() => monthRevenues.filter(r => r.status === 'prevista').reduce((s, r) => s + Number(r.amount), 0), [monthRevenues]);
-  
-  const structureExpenses = useMemo(() => monthExpenses.filter(e => e.structure_investment).reduce((s, e) => s + Number(e.amount), 0), [monthExpenses]);
-  
+  // Receita total do mês (todos os status) — não confundir com "prevista"
+  const revenueTotal = useMemo(() => sumAmounts(monthRevenues), [monthRevenues]);
+  const revenueRecebida = useMemo(() => sumAmounts(monthRevenues.filter(isRevenueReceived)), [monthRevenues]);
+  const revenueAtraso = useMemo(() => sumAmounts(monthRevenues.filter(isRevenueOverdue)), [monthRevenues]);
+  const totalExpenses = useMemo(() => sumAmounts(monthExpenses), [monthExpenses]);
+  // Receita ainda a receber no mês
+  const revenuePendente = useMemo(() => sumAmounts(monthRevenues.filter(isRevenuePending)), [monthRevenues]);
+  const revenuePrevista = revenueTotal;
+
+  const structureExpenses = useMemo(() => sumAmounts(monthExpenses.filter(e => e.structure_investment)), [monthExpenses]);
+
   const lucro = revenueRecebida - totalExpenses;
-  const lucroProjetado = revenuePrevista - totalExpenses;
+  // Projeção = o que já entrou + o que ainda deve entrar (pendente e em atraso)
+  const lucroProjetado = revenueTotal - totalExpenses;
   const activeClientsCount = activeContracts.length;
-  const ticketMedio = activeClientsCount > 0 ? mrr / activeClientsCount : 0;
+  const ticketMedio = safeDivide(mrr, activeClientsCount);
   const cancelados = contracts.filter(c => c.status === 'cancelado').length;
-  const taxaCancelamento = contracts.length > 0 ? (cancelados / contracts.length * 100) : 0;
+  const taxaCancelamento = safePercent(cancelados, contracts.length);
 
   // Cash reserve balance (saldo do caixa = saldo real da conta, exclui reserva do porquinho)
-  const saldoCaixa = useMemo(() =>
-    cashMovements.filter((m: any) => !m.is_reserve).reduce((acc, m) => acc + (m.type === 'entrada' ? Number(m.amount) : -Number(m.amount)), 0),
-    [cashMovements]
-  );
+  const saldoCaixa = useMemo(() => accountBalance(cashMovements as any), [cashMovements]);
 
   // Piggy bank reserve balance (only is_reserve entries)
-  const piggyBalance = useMemo(() =>
-    cashMovements.filter((m: any) => m.is_reserve).reduce((acc, m) => acc + (m.type === 'entrada' ? Number(m.amount) : -Number(m.amount)), 0),
-    [cashMovements]
-  );
+  const piggyBalance = useMemo(() => reserveBalance(cashMovements as any), [cashMovements]);
+
 
   // Expense by category chart
   const expenseByCat = useMemo(() => {

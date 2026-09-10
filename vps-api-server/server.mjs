@@ -7859,6 +7859,14 @@ app.post('/api/db/query', async (req, res) => {
       });
     }
 
+    if (safeTable === 'campaigns' || safeTable === 'campaign_slots' || safeTable === 'scripts') {
+      await ensureCampaignTables().catch((error) => {
+        console.warn('Could not ensure campaign tables:', error?.message || error);
+      });
+    }
+
+
+
     // Multi-city: resolve cidade ativa e prepara flag de scoping
     // Só aplica se a tabela estiver na lista E realmente tiver a coluna `city` no DB.
     const scopeCity = TABLES_WITH_CITY.has(safeTable) && await tableHasCityColumn(safeTable);

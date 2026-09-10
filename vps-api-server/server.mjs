@@ -8615,6 +8615,7 @@ app.post('/api/clients', async (req, res) => {
     // Garante colunas NUMERIC antes de gravar metas fracionadas do plano especial
     await ensureClientFractionalGoalColumns().catch(() => {});
     await ensureClientExperienceColumns().catch(() => {});
+    await ensureGlobalClientSupport().catch(() => {});
     const c = req.body;
 
     const { rows } = await pool.query(

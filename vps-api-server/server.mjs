@@ -8646,7 +8646,15 @@ app.post('/api/clients', async (req, res) => {
         parseDateOrNull(c.company_birthday), JSON.stringify(normalizeClientOwners(c.client_owners))
       ]
     );
-    res.json(rows[0]);
+    let created = rows[0];
+    if (c.is_admin_client === true || c.is_admin_client === 'true') {
+      const upd = await pool.query(
+        `UPDATE clients SET is_admin_client = true WHERE id = $1 RETURNING *`,
+        [created.id]
+      );
+      created = upd.rows[0] || created;
+    }
+    res.json(created);
   } catch (e) {
     console.error('POST /api/clients error:', e);
     // 23505 = violação de índice único (ex.: client_login repetido)

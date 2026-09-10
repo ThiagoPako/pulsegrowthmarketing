@@ -1280,6 +1280,15 @@ export default function Clients() {
           </div>
           <Switch checked={showMetrics} onCheckedChange={setShowMetrics} />
         </div>
+        <div className="flex items-center justify-between p-3 rounded-lg border border-primary/30 bg-primary/5">
+          <div>
+            <p className="text-sm font-medium">Cliente Admin (interno)</p>
+            <p className="text-xs text-muted-foreground">
+              Não conta como cliente nos relatórios e aparece em todas as cidades, sem precisar trocar de praça.
+            </p>
+          </div>
+          <Switch checked={isAdminClient} onCheckedChange={setIsAdminClient} />
+        </div>
       </div>
 
       {/* Experiência do Cliente: aniversários da empresa e dos proprietários */}

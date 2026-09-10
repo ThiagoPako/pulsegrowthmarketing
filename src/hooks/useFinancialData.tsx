@@ -60,9 +60,16 @@ const deduplicateRevenues = (items: any[]) => {
     // várias entradas do mesmo mês são lançamentos diferentes.
     const clientId = revenue.client_id;
     const isPlaceholderClient = !clientId || clientId === PLACEHOLDER_CLIENT_ID;
+    // Receitas recorrentes extras (edição de vídeos, serviços avulsos recorrentes)
+    // convivem com a mensalidade do contrato: cada recorrência tem chave própria.
+    const recurrenceId = revenue.recurrence_id;
     const key = isPlaceholderClient
       ? `avulsa_${revenue.id}`
-      : `${clientId}_${normalizeDate(revenue.reference_month)}`;
+      : recurrenceId
+        ? `rec_${recurrenceId}_${normalizeDate(revenue.reference_month)}`
+        : revenue.description
+          ? `manual_${revenue.id}`
+          : `${clientId}_${normalizeDate(revenue.reference_month)}`;
     const existing = byKey.get(key);
     byKey.set(key, existing ? chooseCanonicalRevenue(existing, revenue) : revenue);
   }
@@ -95,6 +102,22 @@ export interface Revenue {
   paid_at: string | null;
   created_at: string;
   updated_at?: string;
+  description?: string | null;
+  category?: string | null;
+  recurrence_id?: string | null;
+}
+
+/** Cobrança recorrente extra de um cliente (além da mensalidade do contrato). */
+export interface RecurringRevenue {
+  id: string;
+  client_id: string | null;
+  description: string;
+  category: string;
+  amount: number;
+  due_day: number;
+  start_month: string;
+  active: boolean;
+  created_at?: string;
 }
 
 export interface Expense {
@@ -176,6 +199,7 @@ export interface FinancialActivity {
 export function useFinancialData() {
   const [contracts, setContracts] = useState<FinancialContract[]>([]);
   const [revenues, setRevenues] = useState<Revenue[]>([]);
+  const [recurringRevenues, setRecurringRevenues] = useState<RecurringRevenue[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [paymentConfig, setPaymentConfigState] = useState<PaymentConfig | null>(null);
@@ -200,6 +224,10 @@ export function useFinancialData() {
       supabase.from('cash_reserve_movements').select('*').order('date', { ascending: false }),
       supabase.from('financial_activity_log').select('*').order('created_at', { ascending: false }).limit(50),
     ]);
+
+    const recurringRes = await supabase.from('recurring_revenues').select('*').order('created_at', { ascending: false });
+    if (recurringRes.error) console.error('[useFinancialData] recurring revenues fetch error:', recurringRes.error);
+    setRecurringRevenues(((recurringRes.data as any[]) || []) as RecurringRevenue[]);
     // Debug logging removed for production
     if (cRes.data) {
       // Exclude contracts of canceled clients from main lists if they don't have recorded activity
@@ -468,7 +496,11 @@ export function useFinancialData() {
     for (const client of activeClients) {
       const contract = contractByClient.get(client.id);
       const name = client.company_name || 'Cliente sem nome';
-      const existing = revenuesByClient.get(client.id) || [];
+      // Só a mensalidade do contrato participa desta checagem — receitas
+      // recorrentes extras e lançamentos manuais têm vida própria.
+      const existing = (revenuesByClient.get(client.id) || []).filter(
+        (r: any) => !r.recurrence_id && !r.description
+      );
 
       if (!contract) {
         if (existing.length === 0) skipped.push({ client: name, reason: 'sem contrato financeiro cadastrado' });
@@ -522,6 +554,38 @@ export function useFinancialData() {
       });
     }
 
+    // ── Receitas recorrentes extras (ex.: edição de vídeos) ──
+    // Cada recorrência gera a sua própria receita no mês, sem conflitar
+    // com a mensalidade do contrato do mesmo cliente.
+    const freshRecurring = await supabase.from('recurring_revenues').select('*');
+    if (freshRecurring.error) {
+      failed.push({ client: 'Receitas recorrentes', reason: freshRecurring.error.message || 'erro ao carregar recorrências' });
+    }
+    const recurrences = ((freshRecurring.data as any[]) || []).filter((r: any) => r.active !== false);
+    const existingRecurrenceIds = new Set(
+      monthRevenues.filter((r: any) => r.recurrence_id).map((r: any) => String(r.recurrence_id))
+    );
+
+    for (const rec of recurrences) {
+      if (existingRecurrenceIds.has(String(rec.id))) continue;
+      const startMonth = normalizeDate(rec.start_month);
+      if (startMonth && startMonth.slice(0, 7) > monthStr) continue;
+      const amount = Number(rec.amount) || 0;
+      if (!(amount > 0)) continue;
+      const recDueDay = Math.min(Math.max(Number(rec.due_day) || 10, 1), lastDay);
+      newRevenues.push({
+        client_id: rec.client_id || null,
+        contract_id: null,
+        recurrence_id: rec.id,
+        reference_month: refMonth,
+        amount,
+        due_date: `${year}-${String(monthNum).padStart(2, '0')}-${String(recDueDay).padStart(2, '0')}`,
+        status: 'prevista',
+        description: rec.description || 'Receita recorrente',
+        category: rec.category || null,
+      });
+    }
+
     let inserted = 0;
 
     for (const rev of newRevenues) {
@@ -550,6 +614,48 @@ export function useFinancialData() {
   };
 
 
+
+  /** Cadastra uma cobrança recorrente extra e já lança a receita do mês inicial. */
+  const addRecurringRevenue = async (
+    input: { client_id?: string | null; description: string; category?: string; amount: number; due_day: number; start_month: string },
+    clientName?: string,
+  ) => {
+    const payload = {
+      client_id: input.client_id || null,
+      description: input.description || 'Receita recorrente',
+      category: input.category || 'outros',
+      amount: Number(input.amount) || 0,
+      due_day: Math.min(Math.max(Number(input.due_day) || 10, 1), 28),
+      start_month: `${normalizeDate(input.start_month).slice(0, 7)}-01`,
+      active: true,
+    };
+
+    const { data, error } = await supabase.from('recurring_revenues').insert(payload as any).select('id').single();
+    if (error) {
+      console.error('[useFinancialData] addRecurringRevenue error:', error);
+      return null;
+    }
+
+    const recurrenceId = (data as any)?.id as string;
+    await logActivity('criação', 'receita_recorrente', `Criou receita recorrente "${payload.description}"${clientName ? ` - ${clientName}` : ''}`, recurrenceId, payload);
+    await fetchAll();
+    return recurrenceId;
+  };
+
+  const updateRecurringRevenue = async (id: string, updates: Partial<RecurringRevenue>) => {
+    const { error } = await supabase.from('recurring_revenues').update(updates as any).eq('id', id);
+    if (error) { console.error('[useFinancialData] updateRecurringRevenue error:', error); return false; }
+    await fetchAll();
+    return true;
+  };
+
+  const deleteRecurringRevenue = async (id: string) => {
+    const { error } = await supabase.from('recurring_revenues').delete().eq('id', id);
+    if (error) { console.error('[useFinancialData] deleteRecurringRevenue error:', error); return false; }
+    await logActivity('exclusão', 'receita_recorrente', 'Excluiu receita recorrente', id);
+    await fetchAll();
+    return true;
+  };
 
   const deleteRevenue = async (id: string) => {
     try {
@@ -864,6 +970,7 @@ export function useFinancialData() {
     contracts, revenues, expenses, categories, paymentConfig, billingMessages, cashMovements, activityLog, loading,
     upsertContract, deleteContract,
     addRevenue, updateRevenue, deleteRevenue, generateMonthlyRevenues,
+    recurringRevenues, addRecurringRevenue, updateRecurringRevenue, deleteRecurringRevenue,
     addExpense, updateExpense, deleteExpense,
     addCategory, updatePaymentConfig, addCashMovement, updateCashMovement, deleteCashMovement, reconcileCash,
     refetch: fetchAll,

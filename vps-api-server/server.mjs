@@ -904,6 +904,50 @@ ensureWarehouseTables().catch((error) => {
   console.error('Failed to ensure warehouse tables:', error);
 });
 
+// ─── Receitas recorrentes avulsas (além do contrato fixo do cliente) ───
+// Permite mais de uma cobrança recorrente por cliente (ex.: contrato + edição de vídeos).
+let recurringRevenuesPromise = null;
+async function ensureRecurringRevenuesTables() {
+  if (!recurringRevenuesPromise) {
+    recurringRevenuesPromise = pool.query(`
+      CREATE TABLE IF NOT EXISTS recurring_revenues (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_id UUID,
+        description TEXT NOT NULL DEFAULT '',
+        category TEXT NOT NULL DEFAULT 'outros',
+        amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+        due_day INTEGER NOT NULL DEFAULT 10,
+        start_month DATE NOT NULL DEFAULT date_trunc('month', CURRENT_DATE)::date,
+        active BOOLEAN NOT NULL DEFAULT true,
+        city TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_recurring_revenues_client
+        ON recurring_revenues (client_id);
+
+      -- Receitas passam a aceitar lançamentos avulsos/recorrentes sem contrato fixo
+      ALTER TABLE revenues ADD COLUMN IF NOT EXISTS description TEXT;
+      ALTER TABLE revenues ADD COLUMN IF NOT EXISTS category TEXT;
+      ALTER TABLE revenues ADD COLUMN IF NOT EXISTS recurrence_id UUID;
+      ALTER TABLE revenues ALTER COLUMN contract_id DROP NOT NULL;
+      ALTER TABLE revenues ALTER COLUMN client_id DROP NOT NULL;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_revenues_recurrence_month
+        ON revenues (recurrence_id, reference_month) WHERE recurrence_id IS NOT NULL;
+    `).catch((error) => {
+      recurringRevenuesPromise = null;
+      throw error;
+    });
+  }
+  return recurringRevenuesPromise;
+}
+
+ensureRecurringRevenuesTables().catch((error) => {
+  console.error('Failed to ensure recurring revenues tables:', error);
+});
+
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

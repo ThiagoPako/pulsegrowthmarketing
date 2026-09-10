@@ -24,6 +24,8 @@ import {
   CAMPAIGN_TYPE_LABELS, SLOT_STATUS_LABELS, SlotKind, SlotStatus, CampaignType,
   formatBrDate, recordingDeadline, isSlotDelayed,
 } from '@/lib/campaignsUtils';
+import SlotScriptManager from '@/components/campaigns/SlotScriptManager';
+
 
 interface Campaign {
   id: string; client_id: string; name: string; type: CampaignType;

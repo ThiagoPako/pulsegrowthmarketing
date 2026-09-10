@@ -24,6 +24,8 @@ import {
   CAMPAIGN_TYPE_LABELS, SLOT_STATUS_LABELS, SlotKind, SlotStatus, CampaignType,
   formatBrDate, recordingDeadline, isSlotDelayed,
 } from '@/lib/campaignsUtils';
+import SlotScriptManager from '@/components/campaigns/SlotScriptManager';
+
 
 interface Campaign {
   id: string; client_id: string; name: string; type: CampaignType;
@@ -435,44 +437,27 @@ function SlotDialog({ slot, campaign, onClose, onSaved }: {
 
           {(slot.kind === 'video' || slot.kind === 'creative') && (
             <div className="space-y-2 border-t pt-3">
-              <Label className="text-base font-semibold flex items-center gap-2">
-                <Megaphone className="h-4 w-4 text-primary" />
-                Roteiro da campanha
-              </Label>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <Label className="text-base font-semibold flex items-center gap-2">
+                  <Megaphone className="h-4 w-4 text-primary" />
+                  Roteiro da campanha
+                </Label>
+                <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => goToScriptsModule()}>
+                  <BookOpen className="h-3.5 w-3.5" /> Abrir módulo Roteiros
+                </Button>
+              </div>
 
-              {loadingScript ? (
-                <p className="text-sm text-muted-foreground">Carregando roteiro vinculado...</p>
-              ) : linkedScript ? (
-                <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-primary">Roteiro vinculado</p>
-                      <p className="text-sm font-medium truncate">{linkedScript.title}</p>
-                    </div>
-                    <Button size="sm" onClick={() => goToScriptsModule(linkedScript.id)}>
-                      Ver roteiro
-                    </Button>
-                  </div>
-                  <Button variant="outline" size="sm" className="w-full" onClick={() => goToScriptsModule()}>
-                    Criar outro roteiro para este slot
-                  </Button>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-primary/40 bg-primary/[0.03] p-4 text-center space-y-2">
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum roteiro criado ainda para este slot.
-                  </p>
-                  <Button onClick={() => goToScriptsModule()} className="gap-1.5">
-                    <BookOpen className="h-4 w-4" />
-                    Criar roteiro no módulo Roteiros
-                  </Button>
-                  <p className="text-[11px] text-muted-foreground">
-                    O cliente e a tag de campanha já ficarão pré-configurados.
-                  </p>
-                </div>
-              )}
+              <SlotScriptManager
+                slotId={slot.id}
+                slotTitle={slot.title || ''}
+                slotKind={slot.kind}
+                clientId={campaign.client_id}
+                campaignName={campaign.name}
+                onChanged={onSaved}
+              />
             </div>
           )}
+
 
           {slot.kind === 'editorial' && (
             <p className="text-sm text-muted-foreground">

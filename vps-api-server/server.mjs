@@ -948,6 +948,67 @@ ensureRecurringRevenuesTables().catch((error) => {
   console.error('Failed to ensure recurring revenues tables:', error);
 });
 
+// ─── Campanhas: garante tabelas e o vínculo de roteiro/tarefas com o slot ───
+// Sem a coluna campaign_slot_id o roteiro criado pela campanha falha ao salvar
+// e não aparece no módulo Roteiros.
+let campaignTablesPromise = null;
+async function ensureCampaignTables() {
+  if (!campaignTablesPromise) {
+    campaignTablesPromise = pool.query(`
+      CREATE TABLE IF NOT EXISTS campaigns (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_id UUID,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'institucional',
+        objective TEXT,
+        start_date DATE,
+        end_date DATE,
+        videos_qty INTEGER NOT NULL DEFAULT 0,
+        creatives_qty INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'ativa',
+        owner_id UUID,
+        editorial JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
+      CREATE TABLE IF NOT EXISTS campaign_slots (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        campaign_id UUID,
+        position INTEGER NOT NULL DEFAULT 0,
+        kind TEXT NOT NULL DEFAULT 'video',
+        title TEXT,
+        post_date DATE,
+        status TEXT NOT NULL DEFAULT 'pendente',
+        script_id UUID,
+        content_task_id UUID,
+        design_task_id UUID,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_campaign_slots_campaign_pos ON campaign_slots (campaign_id, position);
+
+      ALTER TABLE scripts       ADD COLUMN IF NOT EXISTS campaign_slot_id UUID;
+      ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS campaign_slot_id UUID;
+      ALTER TABLE design_tasks  ADD COLUMN IF NOT EXISTS campaign_slot_id UUID;
+
+      CREATE INDEX IF NOT EXISTS idx_scripts_campaign_slot ON scripts (campaign_slot_id);
+    `).catch((error) => {
+      campaignTablesPromise = null;
+      throw error;
+    });
+  }
+  return campaignTablesPromise;
+}
+
+ensureCampaignTables().catch((error) => {
+  console.error('Failed to ensure campaign tables:', error);
+});
+
+
+
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -7797,6 +7858,14 @@ app.post('/api/db/query', async (req, res) => {
         console.warn('Could not ensure recurring revenues tables:', error?.message || error);
       });
     }
+
+    if (safeTable === 'campaigns' || safeTable === 'campaign_slots' || safeTable === 'scripts') {
+      await ensureCampaignTables().catch((error) => {
+        console.warn('Could not ensure campaign tables:', error?.message || error);
+      });
+    }
+
+
 
     // Multi-city: resolve cidade ativa e prepara flag de scoping
     // Só aplica se a tabela estiver na lista E realmente tiver a coluna `city` no DB.

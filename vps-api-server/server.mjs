@@ -7464,7 +7464,7 @@ const ALLOWED_TABLES = [
   'campaigns','campaign_slots',
   'story_editing_sessions','script_requests','manual_video_tasks','plan_promotions',
   'client_professionals','client_units','client_collaborators','short_links','client_bio_links','client_bio_buttons',
-  'warehouse_items','warehouse_movements','structure_investments',
+  'warehouse_items','warehouse_movements','structure_investments','recurring_revenues',
 
 
 
@@ -7478,7 +7478,7 @@ const TABLES_WITH_CITY = new Set([
   'clients','recordings','kanban_tasks','scripts','active_recordings',
   'content_tasks','task_history','task_comments',
   'design_tasks','design_task_history','delivery_records',
-  'revenues','expenses','financial_contracts','financial_activity_log',
+  'revenues','expenses','financial_contracts','financial_activity_log','recurring_revenues',
   'financial_chat_messages','cash_reserve_movements','billing_messages',
   'social_media_deliveries','social_accounts','integration_logs',
   'automation_flows','automation_logs','api_integrations','api_integration_logs',
@@ -7790,6 +7790,12 @@ app.post('/api/db/query', async (req, res) => {
 
     if (safeTable === 'short_links' || safeTable === 'short_link_clicks') {
       await ensureShortLinksTables();
+    }
+
+    if (safeTable === 'recurring_revenues' || safeTable === 'revenues') {
+      await ensureRecurringRevenuesTables().catch((error) => {
+        console.warn('Could not ensure recurring revenues tables:', error?.message || error);
+      });
     }
 
     // Multi-city: resolve cidade ativa e prepara flag de scoping

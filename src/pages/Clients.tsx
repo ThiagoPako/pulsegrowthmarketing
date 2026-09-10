@@ -768,6 +768,7 @@ export default function Clients() {
         if (!ok) { toast.error('Empresa já cadastrada'); return; }
 
         const clientMetaUpdate = await supabase.from('clients').update({
+          is_admin_client: isAdminClient,
           plan_id: planId || null,
           contract_start_date: contractStartDate || null,
           auto_renewal: autoRenewal,

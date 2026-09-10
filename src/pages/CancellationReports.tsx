@@ -67,8 +67,10 @@ export default function CancellationReports() {
   }, []);
 
   const stats = useMemo(() => {
-    const totalClients = clients.length;
-    const activeClients = clients.filter(c => (c as any).status !== 'cancelado').length;
+    // Clientes internos (admin) não contam como clientes
+    const realClients = clients.filter(c => !(c as any).isAdminClient);
+    const totalClients = realClients.length;
+    const activeClients = realClients.filter(c => (c as any).status !== 'cancelado').length;
     const totalCancelled = cancelledClients.length;
 
     // Cancellation rate

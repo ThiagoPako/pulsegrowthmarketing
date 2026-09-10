@@ -102,8 +102,10 @@ export default function Goals() {
     const clientGoals = allGoals.filter(g => g.type === 'clients' && g.status === 'em_andamento');
     if (clientGoals.length === 0) return allGoals;
 
-    const { count } = await supabase.from('clients').select('id', { count: 'exact', head: true });
-    if (count === null) return allGoals;
+    // Clientes internos (admin global) não contam como cliente real
+    const { data: clientRows } = await supabase.from('clients').select('id, is_admin_client');
+    if (!Array.isArray(clientRows)) return allGoals;
+    const count = clientRows.filter((r: any) => r?.is_admin_client !== true).length;
 
     const updated = [...allGoals];
     for (const goal of clientGoals) {

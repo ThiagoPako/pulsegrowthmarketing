@@ -118,7 +118,10 @@ const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'destruct
 
 export default function FinancialRevenues() {
   const navigate = useNavigate();
-  const { revenues, contracts, updateRevenue, deleteRevenue, addRevenue, generateMonthlyRevenues, paymentConfig, loading } = useFinancialData();
+  const {
+    revenues, contracts, updateRevenue, deleteRevenue, addRevenue, generateMonthlyRevenues, paymentConfig, loading,
+    recurringRevenues, addRecurringRevenue, deleteRecurringRevenue,
+  } = useFinancialData();
   const { clients } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
   const [filters, setFilters] = useState<FinancialFiltersValue>(buildEmptyFilters);
@@ -131,6 +134,7 @@ export default function FinancialRevenues() {
   const revenueCategories = [
     { value: 'contrato', label: '📋 Contrato Mensal' },
     { value: 'video_unitario', label: '🎬 Vídeo Unitário' },
+    { value: 'edicao_videos', label: '🎞️ Edição de Vídeos' },
     { value: 'evento', label: '🎉 Evento' },
     { value: 'site_sistemas', label: '🌐 Site e Sistemas' },
     { value: 'outros', label: '📦 Outros' },
@@ -235,16 +239,39 @@ export default function FinancialRevenues() {
       return;
     }
     const refMonth = newRev.due_date.slice(0, 7) + '-01';
+    const categoryLabel = newRev.category
+      ? revenueCategories.find(c => c.value === newRev.category)?.label?.replace(/^.\s/, '') || ''
+      : '';
     const desc = [
-      newRev.category ? revenueCategories.find(c => c.value === newRev.category)?.label?.replace(/^.\s/, '') : '',
+      categoryLabel,
       newRev.is_recurring ? '(Recorrente)' : '',
       newRev.description,
     ].filter(Boolean).join(' - ');
 
     const clientName = newRev.client_id ? clients.find(c => c.id === newRev.client_id)?.companyName || '' : '';
+    const amountNumber = Number(newRev.amount);
+
+    // Receita recorrente vira uma cobrança própria do cliente — ela convive com
+    // a mensalidade do contrato fixo e se repete nos meses seguintes.
+    let recurrenceId: string | null = null;
+    if (newRev.is_recurring) {
+      recurrenceId = await addRecurringRevenue({
+        client_id: newRev.client_id || null,
+        description: desc || 'Receita recorrente',
+        category: newRev.category || 'outros',
+        amount: amountNumber,
+        due_day: Number(newRev.due_date.slice(8, 10)) || 10,
+        start_month: refMonth,
+      }, clientName);
+
+      if (!recurrenceId) {
+        toast.error('Não foi possível criar a receita recorrente');
+        return;
+      }
+    }
 
     const payload: any = {
-      amount: Number(newRev.amount),
+      amount: amountNumber,
       due_date: newRev.due_date,
       reference_month: refMonth,
       status: newRev.mark_paid ? 'recebida' : 'prevista',
@@ -254,12 +281,14 @@ export default function FinancialRevenues() {
     }
     if (newRev.client_id) payload.client_id = newRev.client_id;
     if (desc) payload.description = desc;
+    if (newRev.category) payload.category = newRev.category;
+    if (recurrenceId) payload.recurrence_id = recurrenceId;
 
     // A movimentação de caixa da receita paga é criada pelo próprio addRevenue,
     // sempre vinculada ao ID — evita entrada duplicada ou órfã no saldo.
     const ok = await addRevenue(payload, clientName);
     if (ok) {
-      toast.success('Receita cadastrada com sucesso!');
+      toast.success(newRev.is_recurring ? 'Receita recorrente cadastrada! Vai se repetir todo mês.' : 'Receita cadastrada com sucesso!');
       setShowNewDialog(false);
       setNewRev({ client_id: '', amount: '', due_date: '', description: '', category: '', is_recurring: false, mark_paid: false });
     } else {
@@ -267,6 +296,12 @@ export default function FinancialRevenues() {
     }
   };
 
+  const handleDeleteRecurring = async (id: string) => {
+    if (!confirm('Parar esta cobrança recorrente? As receitas já lançadas continuam no sistema.')) return;
+    const ok = await deleteRecurringRevenue(id);
+    if (ok) toast.success('Cobrança recorrente encerrada');
+    else toast.error('Não foi possível encerrar a cobrança recorrente');
+  };
 
   const [animatingPaid, setAnimatingPaid] = useState<string | null>(null);
   const [confirmPaidId, setConfirmPaidId] = useState<string | null>(null);
@@ -537,6 +572,36 @@ export default function FinancialRevenues() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── Cobranças recorrentes extras ── */}
+      {recurringRevenues.length > 0 && (
+        <Card className="border-emerald-200/60 dark:border-emerald-900/60">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <RefreshCw size={14} className="text-emerald-600" /> Cobranças recorrentes
+              <span className="text-xs font-normal text-muted-foreground">— geradas todo mês além da mensalidade do contrato</span>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {recurringRevenues.map(rec => {
+                const client = clients.find(c => c.id === rec.client_id);
+                return (
+                  <div key={rec.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{client?.companyName || 'Sem cliente'}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {rec.description} • {fmt(Number(rec.amount))} • dia {rec.due_day}
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteRecurring(rec.id)} aria-label="Encerrar cobrança recorrente">
+                      <Trash2 size={14} className="text-destructive" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── BIG Cobrar Todos Button ── */}
       <AnimatePresence>

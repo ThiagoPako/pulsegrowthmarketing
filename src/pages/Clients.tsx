@@ -690,6 +690,7 @@ export default function Clients() {
           ...editing,
           ...form,
           clientType,
+          isAdminClient,
           proposalId: clientType === 'sem_contrato' ? proposalId : null,
           logoUrl: logoUrl || undefined,
         } as Client;
@@ -697,6 +698,7 @@ export default function Clients() {
         await updateClient(updatedClient);
 
         const clientMetaUpdate = await supabase.from('clients').update({
+          is_admin_client: isAdminClient,
           plan_id: planId || null,
           contract_start_date: contractStartDate || null,
           auto_renewal: autoRenewal,

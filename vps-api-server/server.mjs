@@ -8910,6 +8910,16 @@ app.put('/api/clients/:id', async (req, res) => {
       }
       
       await client.query('COMMIT');
+
+      // Marcou/desmarcou como admin global: propaga a cidade das demandas.
+      if (c.is_admin_client !== undefined) {
+        await syncGlobalClientCity(
+          id,
+          isGlobalRequested,
+          newCity || normalizedOldCity || activeCity || 'minacu',
+        ).catch(() => {});
+      }
+
       res.json(rows[0]);
 
     } catch (e) {

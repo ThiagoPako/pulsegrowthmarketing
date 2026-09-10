@@ -426,6 +426,7 @@ export default function Clients() {
       setPreferredShift(client.fullShiftRecording ? (client.preferredShift === 'tarde' ? 'turnoB' : 'turnoA') : 'ambos');
       // Restore clientType and proposalId from client data
       setClientType(((client as any).clientType as any) || 'novo');
+      setIsAdminClient(client.isAdminClient === true);
       setProposalId((client as any).proposalId || null);
       // Load plan data for editing
       supabase.from('clients').select('plan_id, contract_start_date, auto_renewal, contract_duration_months, client_type, proposal_id').eq('id', client.id).single().then(({ data }) => {

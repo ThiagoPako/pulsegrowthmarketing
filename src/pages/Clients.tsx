@@ -2592,6 +2592,9 @@ export default function Clients() {
                     </p>
                   )}
                   <div className="flex gap-1.5 mt-2 flex-wrap">
+                    {c.isAdminClient && (
+                      <Badge className="text-[10px] px-1.5 py-0.5 bg-primary/20 text-primary border-primary/30">🏢 Admin · Todas as cidades</Badge>
+                    )}
                     {(c as any).status === 'cancelado' && (
                       <Badge className="text-[10px] px-1.5 py-0.5 bg-destructive/20 text-destructive border-destructive/30">❌ Cancelado</Badge>
                     )}

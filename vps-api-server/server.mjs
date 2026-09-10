@@ -8829,9 +8829,11 @@ app.put('/api/clients/:id', async (req, res) => {
       'editorial','plan_id','contract_start_date','contract_duration_months','auto_renewal',
       'selected_weeks','has_photo_shoot','accepts_photo_shoot_cost','briefing_data','show_metrics',
       'photo_preference','client_type','onboarding_completed',
-      'company_birthday','client_owners'
+      'company_birthday','client_owners','is_admin_client'
     ];
     await ensureClientExperienceColumns().catch(() => {});
+    await ensureGlobalClientSupport().catch(() => {});
+    const isGlobalRequested = c.is_admin_client === true || c.is_admin_client === 'true';
     const sets = []; const vals = [];
     let idx = 1;
     for (const key of allowed) {

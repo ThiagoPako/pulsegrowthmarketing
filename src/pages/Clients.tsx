@@ -474,6 +474,7 @@ export default function Clients() {
       setAutoRenewal(false);
       setContractDurationMonths(12);
       setShowMetrics(true);
+      setIsAdminClient(false);
       setPreferredShift('ambos');
       setContractValue(0);
       setDueDay(10);

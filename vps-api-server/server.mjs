@@ -1707,6 +1707,113 @@ ensureClientFractionalGoalColumns().catch((error) => {
 });
 
 /**
+ * Cliente ADMIN GLOBAL (interno da agência).
+ *
+ * Regras:
+ *  - `clients.is_admin_client = true` marca o registro como interno (não conta
+ *    como cliente em relatórios/contagens).
+ *  - Registros globais têm `city = NULL`. Como `cityVisibilityExpression()` já
+ *    considera `city IS NULL` visível em qualquer cidade, o cliente e todas as
+ *    suas demandas aparecem em Minaçu e Uruaçu sem trocar de praça.
+ *  - Um trigger BEFORE INSERT/UPDATE em cada tabela com `city` + `client_id`
+ *    força `city = NULL` quando o cliente é admin global. Assim, nenhuma rota
+ *    de escrita precisa conhecer a regra (evita divergências).
+ */
+let globalClientSupportPromise;
+async function ensureGlobalClientSupport() {
+  if (!globalClientSupportPromise) {
+    globalClientSupportPromise = (async () => {
+      await pool.query(
+        `ALTER TABLE clients ADD COLUMN IF NOT EXISTS is_admin_client BOOLEAN NOT NULL DEFAULT false`
+      );
+      await pool.query(`ALTER TABLE clients ALTER COLUMN city DROP NOT NULL`).catch(() => {});
+
+      // Trigger de clientes: admin global nunca fica preso a uma cidade.
+      await pool.query(`
+        CREATE OR REPLACE FUNCTION public.apply_admin_client_city() RETURNS trigger
+        LANGUAGE plpgsql AS $fn$
+        BEGIN
+          IF NEW.is_admin_client THEN NEW.city := NULL; END IF;
+          RETURN NEW;
+        END $fn$;
+      `);
+      await pool.query(`DROP TRIGGER IF EXISTS trg_admin_client_city ON public.clients`);
+      await pool.query(`
+        CREATE TRIGGER trg_admin_client_city BEFORE INSERT OR UPDATE ON public.clients
+        FOR EACH ROW EXECUTE FUNCTION public.apply_admin_client_city();
+      `);
+
+      // Trigger genérico para as tabelas operacionais vinculadas a um cliente.
+      await pool.query(`
+        CREATE OR REPLACE FUNCTION public.apply_global_client_city() RETURNS trigger
+        LANGUAGE plpgsql AS $fn$
+        DECLARE v_global boolean;
+        BEGIN
+          IF NEW.client_id IS NULL THEN RETURN NEW; END IF;
+          SELECT c.is_admin_client INTO v_global
+          FROM public.clients c WHERE c.id::text = NEW.client_id::text;
+          IF COALESCE(v_global, false) THEN NEW.city := NULL; END IF;
+          RETURN NEW;
+        END $fn$;
+      `);
+      await pool.query(`
+        DO $do$
+        DECLARE t record;
+        BEGIN
+          FOR t IN
+            SELECT c1.table_name AS name
+            FROM information_schema.columns c1
+            JOIN information_schema.columns c2
+              ON c2.table_schema = c1.table_schema
+             AND c2.table_name = c1.table_name
+             AND c2.column_name = 'client_id'
+            JOIN information_schema.tables tb
+              ON tb.table_schema = c1.table_schema
+             AND tb.table_name = c1.table_name
+             AND tb.table_type = 'BASE TABLE'
+            WHERE c1.table_schema = 'public' AND c1.column_name = 'city'
+          LOOP
+            BEGIN
+              EXECUTE format('ALTER TABLE public.%I ALTER COLUMN city DROP NOT NULL', t.name);
+            EXCEPTION WHEN others THEN NULL;
+            END;
+            EXECUTE format('DROP TRIGGER IF EXISTS trg_global_client_city ON public.%I', t.name);
+            EXECUTE format(
+              'CREATE TRIGGER trg_global_client_city BEFORE INSERT OR UPDATE ON public.%I FOR EACH ROW EXECUTE FUNCTION public.apply_global_client_city()',
+              t.name
+            );
+          END LOOP;
+        END $do$;
+      `);
+    })().catch((error) => {
+      globalClientSupportPromise = null;
+      throw error;
+    });
+  }
+  return globalClientSupportPromise;
+}
+
+ensureGlobalClientSupport().catch((error) => {
+  console.error('Failed to ensure global admin client support:', error);
+});
+
+/** Propaga a marcação de cliente global para todas as tabelas com `city`. */
+async function syncGlobalClientCity(clientId, isGlobal, fallbackCity = 'minacu') {
+  const targetCity = isGlobal ? null : assertValidCity(fallbackCity);
+  for (const tableName of TABLES_WITH_CITY) {
+    if (tableName === 'clients') continue;
+    try {
+      if (!(await tableHasCityColumn(tableName))) continue;
+      const existingColumns = await getExistingColumns(tableName);
+      if (!existingColumns.has('client_id')) continue;
+      await pool.query(`UPDATE ${tableName} SET city = $1 WHERE client_id = $2`, [targetCity, clientId]);
+    } catch (err) {
+      console.warn(`[Global-Client] Falha ao sincronizar ${tableName}:`, err?.message || err);
+    }
+  }
+}
+
+/**
  * Área "Experiência do Cliente": aniversário da empresa e lista de proprietários
  * (nome, cargo, aniversário e WhatsApp). Criação idempotente das colunas.
  */

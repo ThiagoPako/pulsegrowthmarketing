@@ -268,7 +268,8 @@ export default function Dashboard() {
       weekDone: weekRecs.filter(r => r.status === 'concluida').length,
       weekScheduled: weekRecs.filter(r => r.status === 'agendada').length,
       monthDone: monthRecs.filter(r => r.status === 'concluida').length,
-      totalClients: clients.length,
+      // Clientes internos (admin) não entram na contagem de clientes
+      totalClients: clients.filter(c => !c.isAdminClient).length,
     };
   }, [recordings, today, weekStart, weekEnd, clients]);
 

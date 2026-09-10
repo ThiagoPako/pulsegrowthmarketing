@@ -75,6 +75,7 @@ function rowToClient(r: any): Client {
     cancellationDate: r.cancellation_date || null,
     cancellationReason: r.cancellation_reason || null,
     briefingData: r.briefing_data || {},
+    isAdminClient: r.is_admin_client === true,
     companyBirthday: r.company_birthday ? String(r.company_birthday).split('T')[0] : '',
     owners: Array.isArray(r.client_owners) ? r.client_owners : [],
   } as Client & { status: string; cancellationDate: string | null; cancellationReason: string | null; briefingData: any };
@@ -100,7 +101,8 @@ function clientToRow(c: Client) {
     whatsapp: c.whatsapp || '',
     whatsapp_group: c.whatsappGroup || null,
     email: c.email || '',
-    city: c.city || '',
+    is_admin_client: c.isAdminClient === true,
+    city: c.isAdminClient ? null : (c.city || ''),
     weekly_reels: c.weeklyReels,
     weekly_creatives: c.weeklyCreatives,
     weekly_goal: c.weeklyGoal,

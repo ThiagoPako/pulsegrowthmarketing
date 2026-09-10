@@ -79,6 +79,8 @@ export interface ClientOwner {
 }
 
 export interface Client {
+  /** Cliente interno da agência: não conta como cliente e aparece em todas as cidades. */
+  isAdminClient?: boolean;
   companyBirthday?: string | null; // YYYY-MM-DD (aniversário da empresa)
   owners?: ClientOwner[];
   id: string;

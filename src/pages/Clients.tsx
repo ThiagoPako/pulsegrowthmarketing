@@ -139,6 +139,8 @@ export default function Clients() {
   const [autoRenewal, setAutoRenewal] = useState(false);
   const [contractDurationMonths, setContractDurationMonths] = useState(12);
   const [showMetrics, setShowMetrics] = useState(true);
+  // Cliente interno da agência (admin global): não conta como cliente e aparece em todas as cidades
+  const [isAdminClient, setIsAdminClient] = useState(false);
   const [specialPlan, setSpecialPlan] = useState(false);
   
   // Financial contract state
@@ -424,6 +426,7 @@ export default function Clients() {
       setPreferredShift(client.fullShiftRecording ? (client.preferredShift === 'tarde' ? 'turnoB' : 'turnoA') : 'ambos');
       // Restore clientType and proposalId from client data
       setClientType(((client as any).clientType as any) || 'novo');
+      setIsAdminClient(client.isAdminClient === true);
       setProposalId((client as any).proposalId || null);
       // Load plan data for editing
       supabase.from('clients').select('plan_id, contract_start_date, auto_renewal, contract_duration_months, client_type, proposal_id').eq('id', client.id).single().then(({ data }) => {
@@ -471,6 +474,7 @@ export default function Clients() {
       setAutoRenewal(false);
       setContractDurationMonths(12);
       setShowMetrics(true);
+      setIsAdminClient(false);
       setPreferredShift('ambos');
       setContractValue(0);
       setDueDay(10);
@@ -686,6 +690,7 @@ export default function Clients() {
           ...editing,
           ...form,
           clientType,
+          isAdminClient,
           proposalId: clientType === 'sem_contrato' ? proposalId : null,
           logoUrl: logoUrl || undefined,
         } as Client;
@@ -693,6 +698,7 @@ export default function Clients() {
         await updateClient(updatedClient);
 
         const clientMetaUpdate = await supabase.from('clients').update({
+          is_admin_client: isAdminClient,
           plan_id: planId || null,
           contract_start_date: contractStartDate || null,
           auto_renewal: autoRenewal,
@@ -749,6 +755,7 @@ export default function Clients() {
           ...form,
           id: clientId,
           clientType,
+          isAdminClient,
           proposalId: clientType === 'sem_contrato' ? proposalId : null,
           logoUrl: logoUrl || undefined,
         } as Client;
@@ -761,6 +768,7 @@ export default function Clients() {
         if (!ok) { toast.error('Empresa já cadastrada'); return; }
 
         const clientMetaUpdate = await supabase.from('clients').update({
+          is_admin_client: isAdminClient,
           plan_id: planId || null,
           contract_start_date: contractStartDate || null,
           auto_renewal: autoRenewal,
@@ -1275,6 +1283,15 @@ export default function Clients() {
             <p className="text-xs text-muted-foreground">Permitir que o cliente veja as métricas no Pulse Club</p>
           </div>
           <Switch checked={showMetrics} onCheckedChange={setShowMetrics} />
+        </div>
+        <div className="flex items-center justify-between p-3 rounded-lg border border-primary/30 bg-primary/5">
+          <div>
+            <p className="text-sm font-medium">Cliente Admin (interno)</p>
+            <p className="text-xs text-muted-foreground">
+              Não conta como cliente nos relatórios e aparece em todas as cidades, sem precisar trocar de praça.
+            </p>
+          </div>
+          <Switch checked={isAdminClient} onCheckedChange={setIsAdminClient} />
         </div>
       </div>
 
@@ -2575,6 +2592,9 @@ export default function Clients() {
                     </p>
                   )}
                   <div className="flex gap-1.5 mt-2 flex-wrap">
+                    {c.isAdminClient && (
+                      <Badge className="text-[10px] px-1.5 py-0.5 bg-primary/20 text-primary border-primary/30">🏢 Admin · Todas as cidades</Badge>
+                    )}
                     {(c as any).status === 'cancelado' && (
                       <Badge className="text-[10px] px-1.5 py-0.5 bg-destructive/20 text-destructive border-destructive/30">❌ Cancelado</Badge>
                     )}

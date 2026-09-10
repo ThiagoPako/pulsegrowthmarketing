@@ -139,6 +139,8 @@ export default function Clients() {
   const [autoRenewal, setAutoRenewal] = useState(false);
   const [contractDurationMonths, setContractDurationMonths] = useState(12);
   const [showMetrics, setShowMetrics] = useState(true);
+  // Cliente interno da agência (admin global): não conta como cliente e aparece em todas as cidades
+  const [isAdminClient, setIsAdminClient] = useState(false);
   const [specialPlan, setSpecialPlan] = useState(false);
   
   // Financial contract state

@@ -8839,7 +8839,9 @@ app.put('/api/clients/:id', async (req, res) => {
     for (const key of allowed) {
       if (c[key] !== undefined) {
         let value = c[key];
-        if (key === 'city') value = newCity;
+        // Cliente admin global não pertence a nenhuma praça.
+        if (key === 'city') value = isGlobalRequested ? null : newCity;
+        if (key === 'is_admin_client') value = isGlobalRequested;
         if (key === 'briefing_data') value = JSON.stringify(c[key]);
         if (key === 'company_birthday') value = parseDateOrNull(c[key]);
         if (key === 'client_owners') value = JSON.stringify(normalizeClientOwners(c[key]));

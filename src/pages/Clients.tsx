@@ -755,6 +755,7 @@ export default function Clients() {
           ...form,
           id: clientId,
           clientType,
+          isAdminClient,
           proposalId: clientType === 'sem_contrato' ? proposalId : null,
           logoUrl: logoUrl || undefined,
         } as Client;

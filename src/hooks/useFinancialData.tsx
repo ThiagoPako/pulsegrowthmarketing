@@ -60,9 +60,16 @@ const deduplicateRevenues = (items: any[]) => {
     // várias entradas do mesmo mês são lançamentos diferentes.
     const clientId = revenue.client_id;
     const isPlaceholderClient = !clientId || clientId === PLACEHOLDER_CLIENT_ID;
+    // Receitas recorrentes extras (edição de vídeos, serviços avulsos recorrentes)
+    // convivem com a mensalidade do contrato: cada recorrência tem chave própria.
+    const recurrenceId = revenue.recurrence_id;
     const key = isPlaceholderClient
       ? `avulsa_${revenue.id}`
-      : `${clientId}_${normalizeDate(revenue.reference_month)}`;
+      : recurrenceId
+        ? `rec_${recurrenceId}_${normalizeDate(revenue.reference_month)}`
+        : revenue.description
+          ? `manual_${revenue.id}`
+          : `${clientId}_${normalizeDate(revenue.reference_month)}`;
     const existing = byKey.get(key);
     byKey.set(key, existing ? chooseCanonicalRevenue(existing, revenue) : revenue);
   }
@@ -95,6 +102,22 @@ export interface Revenue {
   paid_at: string | null;
   created_at: string;
   updated_at?: string;
+  description?: string | null;
+  category?: string | null;
+  recurrence_id?: string | null;
+}
+
+/** Cobrança recorrente extra de um cliente (além da mensalidade do contrato). */
+export interface RecurringRevenue {
+  id: string;
+  client_id: string | null;
+  description: string;
+  category: string;
+  amount: number;
+  due_day: number;
+  start_month: string;
+  active: boolean;
+  created_at?: string;
 }
 
 export interface Expense {
@@ -468,7 +491,11 @@ export function useFinancialData() {
     for (const client of activeClients) {
       const contract = contractByClient.get(client.id);
       const name = client.company_name || 'Cliente sem nome';
-      const existing = revenuesByClient.get(client.id) || [];
+      // Só a mensalidade do contrato participa desta checagem — receitas
+      // recorrentes extras e lançamentos manuais têm vida própria.
+      const existing = (revenuesByClient.get(client.id) || []).filter(
+        (r: any) => !r.recurrence_id && !r.description
+      );
 
       if (!contract) {
         if (existing.length === 0) skipped.push({ client: name, reason: 'sem contrato financeiro cadastrado' });

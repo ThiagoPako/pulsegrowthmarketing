@@ -808,7 +808,14 @@ export default function FinancialRevenues() {
                         <div className="w-7 h-7 rounded-md bg-muted" />
                       )}
                     </TableCell>
-                    <TableCell className="font-medium">{client?.companyName || '—'}</TableCell>
+                    <TableCell className="font-medium">
+                      <div>{client?.companyName || '—'}</div>
+                      {(r as any).description && (
+                        <div className="text-xs font-normal text-muted-foreground">
+                          {(r as any).recurrence_id ? '🔁 ' : ''}{(r as any).description}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell className="font-semibold">{fmt(Number(r.amount))}</TableCell>
                     <TableCell className="text-muted-foreground">{r.due_date ? format(new Date(normalizeDate(r.due_date) + 'T12:00:00'), 'dd/MM/yyyy') : '—'}</TableCell>
                     <TableCell>

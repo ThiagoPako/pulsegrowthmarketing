@@ -503,11 +503,25 @@ export default function FinancialExpenses() {
           </DialogContent>
         </Dialog>
         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+          <Button size="sm" variant="outline" className="shadow-sm gap-1.5" onClick={() => setImportOpen(true)}>
+            <FileSpreadsheet size={15} /> Importar planilha
+          </Button>
+        </motion.div>
+        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
           <Button size="sm" className="shadow-sm bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white" onClick={() => { setEditingExpense(null); setOpen(true); }}>
             <Plus size={16} className="mr-1" /> Nova Despesa
           </Button>
         </motion.div>
       </motion.div>
+
+      <StructureImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        categories={categories}
+        expenses={expenses}
+        onImported={refetch}
+      />
+
 
       <ExpenseFormDialog
         open={open}

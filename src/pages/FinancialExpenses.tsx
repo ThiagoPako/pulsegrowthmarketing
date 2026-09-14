@@ -9,7 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
-import { Plus, Pencil, Trash2, ArrowLeft, TrendingDown, Users, Wallet, CheckCircle, Undo2, Gift, Briefcase } from 'lucide-react';
+import { Plus, Pencil, Trash2, ArrowLeft, TrendingDown, Users, Wallet, CheckCircle, Undo2, Gift, Briefcase, FileSpreadsheet } from 'lucide-react';
+import StructureImportDialog from '@/components/financial/StructureImportDialog';
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import FinancialFilters, { applyFinancialFilters, buildEmptyFilters, type FinancialFiltersValue } from '@/components/financial/FinancialFilters';
 import { useNavigate } from 'react-router-dom';
@@ -228,8 +229,9 @@ const ROLE_LABELS: Record<string, string> = {
 
 export default function FinancialExpenses() {
   const navigate = useNavigate();
-  const { expenses, categories, addExpense, updateExpense, deleteExpense, addCategory } = useFinancialData();
+  const { expenses, categories, addExpense, updateExpense, deleteExpense, addCategory, refetch } = useFinancialData();
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
   const [newCat, setNewCat] = useState('');
@@ -503,11 +505,25 @@ export default function FinancialExpenses() {
           </DialogContent>
         </Dialog>
         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+          <Button size="sm" variant="outline" className="shadow-sm gap-1.5" onClick={() => setImportOpen(true)}>
+            <FileSpreadsheet size={15} /> Importar planilha
+          </Button>
+        </motion.div>
+        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
           <Button size="sm" className="shadow-sm bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white" onClick={() => { setEditingExpense(null); setOpen(true); }}>
             <Plus size={16} className="mr-1" /> Nova Despesa
           </Button>
         </motion.div>
       </motion.div>
+
+      <StructureImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        categories={categories}
+        expenses={expenses}
+        onImported={refetch}
+      />
+
 
       <ExpenseFormDialog
         open={open}

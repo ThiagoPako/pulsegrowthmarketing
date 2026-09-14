@@ -229,8 +229,9 @@ const ROLE_LABELS: Record<string, string> = {
 
 export default function FinancialExpenses() {
   const navigate = useNavigate();
-  const { expenses, categories, addExpense, updateExpense, deleteExpense, addCategory } = useFinancialData();
+  const { expenses, categories, addExpense, updateExpense, deleteExpense, addCategory, refetch } = useFinancialData();
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
   const [newCat, setNewCat] = useState('');

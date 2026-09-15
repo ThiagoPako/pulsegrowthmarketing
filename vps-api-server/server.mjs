@@ -12337,10 +12337,216 @@ app.post('/api/portal-videos/bulk-delete', async (req, res) => {
 });
 
 /**
+ * Pastas intocáveis: banco de dados de clientes, treinamentos e afins.
+ * Nunca entram na auditoria nem na remoção de órfãos.
+ */
+const ORPHAN_SKIP_DIRS = new Set([
+  'training-videos',
+  'client-database',
+  'clientdb',
+  'client-logos',
+  'professionals',
+  'collaborators',
+  'units',
+  'design-files',
+  'onboarding-contracts',
+  'promo',
+]);
+
+/**
+ * Varre TODAS as colunas textuais/JSON do schema public procurando
+ * referências a /uploads/. Assim nenhum módulo (banco de dados de
+ * clientes, artes, portal, campanhas...) pode ter arquivo apagado
+ * por engano só porque a tabela não estava numa lista fixa.
+ */
+async function collectReferencedUploads() {
+  const referenced = new Set();
+  const addFromText = (value) => {
+    const text = typeof value === 'string' ? value : JSON.stringify(value ?? '');
+    if (!text || !text.includes('uploads/')) return;
+    const matches = text.match(/[^"'\s,\\]*\/uploads\/[^"'\s,\\)\]]+/g) || [];
+    for (const m of matches) {
+      const rel = uploadRelativePath(m);
+      if (rel) referenced.add(rel);
+    }
+  };
+
+  const { rows: columns } = await pool.query(`
+    SELECT table_name, column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND data_type IN ('text','character varying','character','json','jsonb','ARRAY')
+  `);
+
+  for (const col of columns) {
+    const sql = `SELECT "${col.column_name}"::text AS u FROM public."${col.table_name}" WHERE "${col.column_name}"::text LIKE '%uploads/%'`;
+    try {
+      const { rows } = await pool.query(sql);
+      for (const row of rows) addFromText(row.u);
+    } catch {
+      // Coluna não convertível/tabela inacessível — ignora com segurança.
+    }
+  }
+  return referenced;
+}
+
+/**
+ * Lista arquivos em /uploads/ que não têm nenhuma referência no banco.
+ * Só leitura — não apaga nada. `minAgeDays` protege arquivos recentes.
+ */
+async function auditOrphanFiles({ minAgeDays = 7 } = {}) {
+  const referenced = await collectReferencedUploads();
+  if (referenced.size === 0) {
+    const err = new Error('Auditoria abortada: nenhuma referência encontrada no banco.');
+    err.status = 409;
+    throw err;
+  }
+
+  const minAgeMs = Math.max(0, Number(minAgeDays) || 0) * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const files = [];
+  let scanned = 0;
+  let skippedRecent = 0;
+
+  const walk = (root, dir) => {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (ORPHAN_SKIP_DIRS.has(entry.name)) continue;
+        walk(root, full);
+        continue;
+      }
+      const rel = path.relative(root, full).split(path.sep).join('/');
+      scanned += 1;
+      if (referenced.has(rel)) continue;
+      let stat;
+      try {
+        stat = fs.statSync(full);
+      } catch {
+        continue;
+      }
+      if (now - stat.mtimeMs < minAgeMs) { skippedRecent += 1; continue; }
+      files.push({
+        path: rel,
+        fullPath: full,
+        size: stat.size,
+        modifiedAt: new Date(stat.mtimeMs).toISOString(),
+        folder: rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '/',
+        ext: (path.extname(rel) || '').replace('.', '').toLowerCase(),
+      });
+    }
+  };
+
+  for (const root of uploadRoots()) {
+    if (fs.existsSync(root)) walk(root, root);
+  }
+
+  files.sort((a, b) => (a.modifiedAt < b.modifiedAt ? 1 : -1));
+  return { referenced, files, scanned, skippedRecent };
+}
+
+/**
+ * Auditoria (somente leitura) dos arquivos órfãos, com data e tamanho,
+ * para o administrador escolher exatamente o que apagar.
+ */
+app.get('/api/portal-videos/orphan-audit', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    if (!(await userHasAssignedRole(user, 'admin'))) {
+      return res.status(403).json({ error: 'Acesso restrito ao administrador' });
+    }
+    const minAgeDays = req.query.minAgeDays !== undefined ? Number(req.query.minAgeDays) : 7;
+    const { referenced, files, scanned, skippedRecent } = await auditOrphanFiles({ minAgeDays });
+
+    const byMonth = new Map();
+    let totalBytes = 0;
+    for (const f of files) {
+      totalBytes += f.size;
+      const month = f.modifiedAt.slice(0, 7);
+      const acc = byMonth.get(month) || { month, count: 0, bytes: 0 };
+      acc.count += 1;
+      acc.bytes += f.size;
+      byMonth.set(month, acc);
+    }
+
+    res.json({
+      success: true,
+      scanned,
+      skippedRecent,
+      protectedRefs: referenced.size,
+      totalFiles: files.length,
+      totalBytes,
+      totalMb: Number((totalBytes / 1048576).toFixed(1)),
+      months: [...byMonth.values()].sort((a, b) => (a.month < b.month ? 1 : -1)),
+      files: files.slice(0, 3000).map(({ fullPath, ...rest }) => rest),
+      truncated: files.length > 3000,
+    });
+  } catch (error) {
+    console.error('orphan-audit error:', error);
+    const message = error?.message || 'Erro interno';
+    const status = error?.status || (/unauthorized|token|jwt/i.test(message) ? 401 : 500);
+    res.status(status).json({ error: status === 401 ? 'Sessão expirada. Faça login novamente.' : message });
+  }
+});
+
+/**
+ * Apaga apenas os caminhos escolhidos pelo administrador, e só depois de
+ * revalidar no banco que continuam órfãos. Qualquer arquivo que voltou a ser
+ * referenciado é ignorado silenciosamente (protegido).
+ */
+app.post('/api/portal-videos/delete-orphans', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    if (!(await userHasAssignedRole(user, 'admin'))) {
+      return res.status(403).json({ error: 'Acesso restrito ao administrador' });
+    }
+    const requested = Array.isArray(req.body?.paths) ? req.body.paths.map(String) : [];
+    if (requested.length === 0) return res.status(400).json({ error: 'Nenhum arquivo selecionado' });
+
+    const minAgeDays = req.body?.minAgeDays !== undefined ? Number(req.body.minAgeDays) : 7;
+    const { files } = await auditOrphanFiles({ minAgeDays });
+    const allowed = new Map(files.map((f) => [f.path, f]));
+
+    let deletedFiles = 0;
+    let freedBytes = 0;
+    let protectedSkipped = 0;
+
+    for (const rel of requested) {
+      const target = allowed.get(rel);
+      if (!target) { protectedSkipped += 1; continue; }
+      try {
+        fs.unlinkSync(target.fullPath);
+        deletedFiles += 1;
+        freedBytes += target.size;
+      } catch (error) {
+        console.warn('[orphan-delete] falha ao remover:', target.fullPath, error?.message || error);
+      }
+    }
+
+    res.json({
+      success: true,
+      deletedFiles,
+      protectedSkipped,
+      freedBytes,
+      freedMb: Number((freedBytes / 1048576).toFixed(1)),
+    });
+  } catch (error) {
+    console.error('delete-orphans error:', error);
+    const message = error?.message || 'Erro interno';
+    const status = error?.status || (/unauthorized|token|jwt/i.test(message) ? 401 : 500);
+    res.status(status).json({ error: status === 401 ? 'Sessão expirada. Faça login novamente.' : message });
+  }
+});
+
+/**
  * Varredura de órfãos: remove do disco todo arquivo em /uploads/ que não é
- * mais referenciado por nenhum registro do banco. Resolve o caso em que a
- * linha foi deletada, mas o arquivo continuou ocupando espaço na VPS.
- * `dryRun: true` apenas relata, sem apagar.
+ * mais referenciado por nenhum registro do banco. `dryRun: true` apenas relata.
  */
 app.post('/api/portal-videos/sweep-orphans', async (req, res) => {
   try {
@@ -12350,107 +12556,25 @@ app.post('/api/portal-videos/sweep-orphans', async (req, res) => {
     }
     // Segurança: só apaga de fato quando o pedido confirma explicitamente.
     const dryRun = req.body?.dryRun !== false || req.body?.confirm !== true;
+    const { referenced, files, scanned, skippedRecent } = await auditOrphanFiles({ minAgeDays: 7 });
 
-    /**
-     * Varre TODAS as colunas textuais/JSON do schema public procurando
-     * referências a /uploads/. Assim nenhum módulo (banco de dados de
-     * clientes, artes, portal, campanhas...) pode ter arquivo apagado
-     * por engano só porque a tabela não estava numa lista fixa.
-     */
-    const referenced = new Set();
-    const addFromText = (value) => {
-      const text = typeof value === 'string' ? value : JSON.stringify(value ?? '');
-      if (!text || !text.includes('uploads/')) return;
-      const matches = text.match(/[^"'\s,\\]*\/uploads\/[^"'\s,\\)\]]+/g) || [];
-      for (const m of matches) {
-        const rel = uploadRelativePath(m);
-        if (rel) referenced.add(rel);
-      }
-    };
-
-    const { rows: columns } = await pool.query(`
-      SELECT table_name, column_name
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-        AND data_type IN ('text','character varying','character','json','jsonb','ARRAY')
-    `);
-
-    for (const col of columns) {
-      const sql = `SELECT "${col.column_name}"::text AS u FROM public."${col.table_name}" WHERE "${col.column_name}"::text LIKE '%uploads/%'`;
-      try {
-        const { rows } = await pool.query(sql);
-        for (const row of rows) addFromText(row.u);
-      } catch {
-        // Coluna não convertível/tabela inacessível — ignora com segurança.
-      }
-    }
-
-    // Se a varredura de referências falhar por completo, aborta: apagar
-    // arquivos sem lista de referências destruiria dados válidos.
-    if (referenced.size === 0) {
-      return res.status(409).json({
-        error: 'Varredura abortada: nenhuma referência encontrada no banco. Nada foi apagado.',
-      });
-    }
-
-    // Pastas intocáveis: banco de dados de clientes, treinamentos e afins.
-    const skipDirs = new Set([
-      'training-videos',
-      'client-database',
-      'clientdb',
-      'client-logos',
-      'professionals',
-      'collaborators',
-      'units',
-      'design-files',
-      'onboarding-contracts',
-      'promo',
-    ]);
-    const MIN_AGE_MS = 7 * 24 * 60 * 60 * 1000; // não toca em arquivos recentes
-    const now = Date.now();
     let deletedFiles = 0;
     let freedBytes = 0;
-    let scanned = 0;
-    let skipped = 0;
-
-    const walk = (root, dir) => {
-      let entries = [];
+    for (const f of files) {
       try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
+        if (!dryRun) fs.unlinkSync(f.fullPath);
+        deletedFiles += 1;
+        freedBytes += f.size;
+      } catch (error) {
+        console.warn('[sweep] falha ao remover:', f.fullPath, error?.message || error);
       }
-      for (const entry of entries) {
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          if (skipDirs.has(entry.name)) continue;
-          walk(root, full);
-          continue;
-        }
-        const rel = path.relative(root, full).split(path.sep).join('/');
-        scanned += 1;
-        if (referenced.has(rel)) continue;
-        try {
-          const stat = fs.statSync(full);
-          if (now - stat.mtimeMs < MIN_AGE_MS) { skipped += 1; continue; }
-          if (!dryRun) fs.unlinkSync(full);
-          deletedFiles += 1;
-          freedBytes += stat.size;
-        } catch (error) {
-          console.warn('[sweep] falha ao remover:', full, error?.message || error);
-        }
-      }
-    };
-
-    for (const root of uploadRoots()) {
-      if (fs.existsSync(root)) walk(root, root);
     }
 
     res.json({
       success: true,
       dryRun,
       scanned,
-      skipped,
+      skipped: skippedRecent,
       protectedRefs: referenced.size,
       deletedFiles,
       freedBytes,

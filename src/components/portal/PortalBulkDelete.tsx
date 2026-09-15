@@ -117,14 +117,36 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
     }
   };
 
-  /** Remove do disco arquivos que já não têm registro no banco. */
+  /**
+   * Varredura em duas etapas: primeiro simula e mostra o que seria removido,
+   * só apaga depois de confirmação explícita. Arquivos ainda usados por
+   * qualquer módulo (inclusive banco de dados de clientes) nunca entram.
+   */
   const handleSweep = async () => {
-    if (!confirm('Varrer e apagar arquivos órfãos do servidor (sem registro no banco)? Esta ação é irreversível.')) return;
     setSweeping(true);
     try {
+      const preview = await vpsAuthedFetch('/portal-videos/sweep-orphans', {
+        method: 'POST',
+        body: JSON.stringify({ dryRun: true }),
+      });
+      const prev = await preview.json().catch(() => ({}));
+      if (!preview.ok || !prev.success) throw new Error(prev.error || 'Falha na simulação');
+
+      if (!prev.deletedFiles) {
+        toast.success('Nenhum arquivo órfão encontrado. Nada foi apagado.');
+        return;
+      }
+
+      const ok = confirm(
+        `Simulação: ${prev.deletedFiles} arquivo(s) sem uso (${prev.freedMb} MB).\n` +
+        `${prev.protectedRefs} arquivos em uso ficam protegidos e ${prev.skipped} recentes serão preservados.\n\n` +
+        'Confirmar a remoção definitiva?'
+      );
+      if (!ok) return;
+
       const res = await vpsAuthedFetch('/portal-videos/sweep-orphans', {
         method: 'POST',
-        body: JSON.stringify({ dryRun: false }),
+        body: JSON.stringify({ dryRun: false, confirm: true }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.error || 'Falha na varredura');

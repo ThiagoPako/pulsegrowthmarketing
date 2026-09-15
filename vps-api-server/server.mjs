@@ -12450,6 +12450,8 @@ app.post('/api/portal-videos/sweep-orphans', async (req, res) => {
       success: true,
       dryRun,
       scanned,
+      skipped,
+      protectedRefs: referenced.size,
       deletedFiles,
       freedBytes,
       freedMb: Number((freedBytes / 1048576).toFixed(1)),

@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Trash2, Loader2 } from 'lucide-react';
 import { supabase, vpsAuthedFetch } from '@/lib/vpsDb';
 import { toast } from 'sonner';
+import OrphanFilesAudit from '@/components/portal/OrphanFilesAudit';
 
 interface VideoMonth {
   season_year: number;

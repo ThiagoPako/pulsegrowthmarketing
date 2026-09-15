@@ -12348,34 +12348,70 @@ app.post('/api/portal-videos/sweep-orphans', async (req, res) => {
     if (!(await userHasAssignedRole(user, 'admin'))) {
       return res.status(403).json({ error: 'Acesso restrito ao administrador' });
     }
-    const dryRun = req.body?.dryRun === true;
+    // Segurança: só apaga de fato quando o pedido confirma explicitamente.
+    const dryRun = req.body?.dryRun !== false || req.body?.confirm !== true;
 
-    // Todas as URLs ainda referenciadas em qualquer tabela relevante.
+    /**
+     * Varre TODAS as colunas textuais/JSON do schema public procurando
+     * referências a /uploads/. Assim nenhum módulo (banco de dados de
+     * clientes, artes, portal, campanhas...) pode ter arquivo apagado
+     * por engano só porque a tabela não estava numa lista fixa.
+     */
     const referenced = new Set();
-    const sources = [
-      'SELECT file_url AS u FROM client_portal_contents WHERE file_url IS NOT NULL',
-      'SELECT thumbnail_url AS u FROM client_portal_contents WHERE thumbnail_url IS NOT NULL',
-      'SELECT edited_video_link AS u FROM content_tasks WHERE edited_video_link IS NOT NULL',
-      'SELECT raw_video_link AS u FROM content_tasks WHERE raw_video_link IS NOT NULL',
-      'SELECT file_url AS u FROM design_tasks WHERE file_url IS NOT NULL',
-      'SELECT video_url AS u FROM portal_videos WHERE video_url IS NOT NULL',
-    ];
-    for (const sql of sources) {
+    const addFromText = (value) => {
+      const text = typeof value === 'string' ? value : JSON.stringify(value ?? '');
+      if (!text || !text.includes('uploads/')) return;
+      const matches = text.match(/[^"'\s,\\]*\/uploads\/[^"'\s,\\)\]]+/g) || [];
+      for (const m of matches) {
+        const rel = uploadRelativePath(m);
+        if (rel) referenced.add(rel);
+      }
+    };
+
+    const { rows: columns } = await pool.query(`
+      SELECT table_name, column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND data_type IN ('text','character varying','character','json','jsonb','ARRAY')
+    `);
+
+    for (const col of columns) {
+      const sql = `SELECT "${col.column_name}"::text AS u FROM public."${col.table_name}" WHERE "${col.column_name}"::text LIKE '%uploads/%'`;
       try {
         const { rows } = await pool.query(sql);
-        for (const row of rows) {
-          const rel = uploadRelativePath(row.u);
-          if (rel) referenced.add(rel);
-        }
+        for (const row of rows) addFromText(row.u);
       } catch {
-        // Coluna/tabela inexistente nesta instalação — ignora com segurança.
+        // Coluna não convertível/tabela inacessível — ignora com segurança.
       }
     }
 
-    const skipDirs = new Set(['training-videos']);
+    // Se a varredura de referências falhar por completo, aborta: apagar
+    // arquivos sem lista de referências destruiria dados válidos.
+    if (referenced.size === 0) {
+      return res.status(409).json({
+        error: 'Varredura abortada: nenhuma referência encontrada no banco. Nada foi apagado.',
+      });
+    }
+
+    // Pastas intocáveis: banco de dados de clientes, treinamentos e afins.
+    const skipDirs = new Set([
+      'training-videos',
+      'client-database',
+      'clientdb',
+      'client-logos',
+      'professionals',
+      'collaborators',
+      'units',
+      'design-files',
+      'onboarding-contracts',
+      'promo',
+    ]);
+    const MIN_AGE_MS = 7 * 24 * 60 * 60 * 1000; // não toca em arquivos recentes
+    const now = Date.now();
     let deletedFiles = 0;
     let freedBytes = 0;
     let scanned = 0;
+    let skipped = 0;
 
     const walk = (root, dir) => {
       let entries = [];
@@ -12395,10 +12431,11 @@ app.post('/api/portal-videos/sweep-orphans', async (req, res) => {
         scanned += 1;
         if (referenced.has(rel)) continue;
         try {
-          const size = fs.statSync(full).size;
+          const stat = fs.statSync(full);
+          if (now - stat.mtimeMs < MIN_AGE_MS) { skipped += 1; continue; }
           if (!dryRun) fs.unlinkSync(full);
           deletedFiles += 1;
-          freedBytes += size;
+          freedBytes += stat.size;
         } catch (error) {
           console.warn('[sweep] falha ao remover:', full, error?.message || error);
         }
@@ -12413,6 +12450,8 @@ app.post('/api/portal-videos/sweep-orphans', async (req, res) => {
       success: true,
       dryRun,
       scanned,
+      skipped,
+      protectedRefs: referenced.size,
       deletedFiles,
       freedBytes,
       freedMb: Number((freedBytes / 1048576).toFixed(1)),

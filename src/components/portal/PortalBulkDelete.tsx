@@ -280,6 +280,8 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
         </Button>
       </div>
 
+      <OrphanFilesAudit />
+
     </div>
   );
 }

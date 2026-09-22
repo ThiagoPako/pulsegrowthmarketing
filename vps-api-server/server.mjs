@@ -1212,18 +1212,28 @@ async function cleanupOldPortalVideos(options = {}) {
   const { rows, rowCount } = await pool.query(query, params);
 
   let freedBytes = 0;
+  // Proteção global: só remove do disco o arquivo que não é citado por
+  // NENHUM módulo (artes da designer, banco de dados de clientes, campanhas...).
+  let referenced = new Set();
+  let referencedNames = new Set();
+  if (rows.length > 0) {
+    try {
+      ({ referenced, referencedNames } = await collectReferencedUploads());
+    } catch (error) {
+      console.warn('[cleanup] varredura de referências falhou — nenhum arquivo será apagado do disco:', error?.message || error);
+      lastCleanupStats = { deletedCount: rowCount, freedBytes: 0, at: new Date().toISOString() };
+      return rowCount;
+    }
+  }
+
   for (const row of rows) {
     for (const url of [row.file_url, row.thumbnail_url]) {
       if (!url) continue;
-      // Não apaga se outro registro ainda usa o mesmo arquivo.
-      const { rows: [{ still_used }] } = await pool.query(
-        `SELECT EXISTS (
-           SELECT 1 FROM client_portal_contents
-           WHERE file_url = $1 OR thumbnail_url = $1
-         ) AS still_used`,
-        [url],
-      );
-      if (still_used) continue;
+      const rel = uploadRelativePath(url);
+      if (!rel) continue;
+      const name = rel.slice(rel.lastIndexOf('/') + 1);
+      if (referenced.has(rel) || referencedNames.has(name)) continue;
+      if (rel.toLowerCase().split('/').slice(0, -1).some((seg) => ORPHAN_SKIP_DIRS.has(seg))) continue;
       freedBytes += removeUploadFile(url);
     }
   }

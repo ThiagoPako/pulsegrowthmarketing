@@ -12389,14 +12389,22 @@ const UPLOAD_NAME_RE = /\d{10,16}_[0-9a-f]{8,32}(?:\.[A-Za-z0-9]{1,6})?/g;
  */
 async function collectReferencedUploads() {
   const referenced = new Set();
+  const referencedNames = new Set();
   const addFromText = (value) => {
     const text = typeof value === 'string' ? value : JSON.stringify(value ?? '');
-    if (!text || !text.includes('uploads/')) return;
+    if (!text) return;
     const matches = text.match(/[^"'\s,\\]*\/uploads\/[^"'\s,\\)\]]+/g) || [];
     for (const m of matches) {
       const rel = uploadRelativePath(m);
-      if (rel) referenced.add(rel);
+      if (rel) {
+        referenced.add(rel);
+        referencedNames.add(rel.slice(rel.lastIndexOf('/') + 1));
+      }
     }
+    // Segunda rede de proteção: qualquer nome de arquivo gerado pelo upload
+    // citado em qualquer lugar do banco (mesmo sem o prefixo /uploads/).
+    const names = text.match(UPLOAD_NAME_RE) || [];
+    for (const n of names) referencedNames.add(n);
   };
 
   const { rows: columns } = await pool.query(`
@@ -12407,7 +12415,12 @@ async function collectReferencedUploads() {
   `);
 
   for (const col of columns) {
-    const sql = `SELECT "${col.column_name}"::text AS u FROM public."${col.table_name}" WHERE "${col.column_name}"::text LIKE '%uploads/%'`;
+    const sql = `
+      SELECT "${col.column_name}"::text AS u
+      FROM public."${col.table_name}"
+      WHERE "${col.column_name}"::text LIKE '%uploads/%'
+         OR "${col.column_name}"::text ~ '[0-9]{10,16}_[0-9a-f]{8,32}'
+    `;
     try {
       const { rows } = await pool.query(sql);
       for (const row of rows) addFromText(row.u);
@@ -12415,7 +12428,7 @@ async function collectReferencedUploads() {
       // Coluna não convertível/tabela inacessível — ignora com segurança.
     }
   }
-  return referenced;
+  return { referenced, referencedNames };
 }
 
 /**

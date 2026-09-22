@@ -1212,18 +1212,28 @@ async function cleanupOldPortalVideos(options = {}) {
   const { rows, rowCount } = await pool.query(query, params);
 
   let freedBytes = 0;
+  // Proteção global: só remove do disco o arquivo que não é citado por
+  // NENHUM módulo (artes da designer, banco de dados de clientes, campanhas...).
+  let referenced = new Set();
+  let referencedNames = new Set();
+  if (rows.length > 0) {
+    try {
+      ({ referenced, referencedNames } = await collectReferencedUploads());
+    } catch (error) {
+      console.warn('[cleanup] varredura de referências falhou — nenhum arquivo será apagado do disco:', error?.message || error);
+      lastCleanupStats = { deletedCount: rowCount, freedBytes: 0, at: new Date().toISOString() };
+      return rowCount;
+    }
+  }
+
   for (const row of rows) {
     for (const url of [row.file_url, row.thumbnail_url]) {
       if (!url) continue;
-      // Não apaga se outro registro ainda usa o mesmo arquivo.
-      const { rows: [{ still_used }] } = await pool.query(
-        `SELECT EXISTS (
-           SELECT 1 FROM client_portal_contents
-           WHERE file_url = $1 OR thumbnail_url = $1
-         ) AS still_used`,
-        [url],
-      );
-      if (still_used) continue;
+      const rel = uploadRelativePath(url);
+      if (!rel) continue;
+      const name = rel.slice(rel.lastIndexOf('/') + 1);
+      if (referenced.has(rel) || referencedNames.has(name)) continue;
+      if (rel.toLowerCase().split('/').slice(0, -1).some((seg) => ORPHAN_SKIP_DIRS.has(seg))) continue;
       freedBytes += removeUploadFile(url);
     }
   }
@@ -12337,21 +12347,49 @@ app.post('/api/portal-videos/bulk-delete', async (req, res) => {
 });
 
 /**
- * Pastas intocáveis: banco de dados de clientes, treinamentos e afins.
- * Nunca entram na auditoria nem na remoção de órfãos.
+ * Pastas intocáveis: banco de dados de clientes, artes da designer,
+ * treinamentos, contratos, panfletagem, sorteios e afins.
+ * Nunca entram na auditoria nem na remoção de órfãos — nem no primeiro
+ * nível nem aninhadas (ex.: design/artes/<cliente>).
  */
 const ORPHAN_SKIP_DIRS = new Set([
-  'training-videos',
+  // Banco de dados de clientes
   'client-database',
   'clientdb',
   'client-logos',
+  'logos',
   'professionals',
   'collaborators',
   'units',
+  // Designer / artes — intocável
+  'design',
   'design-files',
+  'designs',
+  'artes',
+  'arte',
+  'mockups',
+  'referencias',
+  'flyers',
+  'flyer-templates',
+  'panfletagem',
+  'post-studio',
+  // Treinamento, contratos e financeiro
+  'training-videos',
   'onboarding-contracts',
+  'contracts',
+  'internal-invoices',
+  // Campanhas, sorteios e links
   'promo',
+  'sorteios',
+  'bio-links',
 ]);
+
+/**
+ * Nome de arquivo gerado pelo upload da VPS: <timestamp>_<hex>.
+ * Usado para proteger arquivos citados no banco por caminho relativo
+ * (sem o prefixo /uploads/), que a busca por "uploads/" não pegaria.
+ */
+const UPLOAD_NAME_RE = /\d{10,16}_[0-9a-f]{8,32}(?:\.[A-Za-z0-9]{1,6})?/g;
 
 /**
  * Varre TODAS as colunas textuais/JSON do schema public procurando
@@ -12361,14 +12399,22 @@ const ORPHAN_SKIP_DIRS = new Set([
  */
 async function collectReferencedUploads() {
   const referenced = new Set();
+  const referencedNames = new Set();
   const addFromText = (value) => {
     const text = typeof value === 'string' ? value : JSON.stringify(value ?? '');
-    if (!text || !text.includes('uploads/')) return;
+    if (!text) return;
     const matches = text.match(/[^"'\s,\\]*\/uploads\/[^"'\s,\\)\]]+/g) || [];
     for (const m of matches) {
       const rel = uploadRelativePath(m);
-      if (rel) referenced.add(rel);
+      if (rel) {
+        referenced.add(rel);
+        referencedNames.add(rel.slice(rel.lastIndexOf('/') + 1));
+      }
     }
+    // Segunda rede de proteção: qualquer nome de arquivo gerado pelo upload
+    // citado em qualquer lugar do banco (mesmo sem o prefixo /uploads/).
+    const names = text.match(UPLOAD_NAME_RE) || [];
+    for (const n of names) referencedNames.add(n);
   };
 
   const { rows: columns } = await pool.query(`
@@ -12379,7 +12425,12 @@ async function collectReferencedUploads() {
   `);
 
   for (const col of columns) {
-    const sql = `SELECT "${col.column_name}"::text AS u FROM public."${col.table_name}" WHERE "${col.column_name}"::text LIKE '%uploads/%'`;
+    const sql = `
+      SELECT "${col.column_name}"::text AS u
+      FROM public."${col.table_name}"
+      WHERE "${col.column_name}"::text LIKE '%uploads/%'
+         OR "${col.column_name}"::text ~ '[0-9]{10,16}_[0-9a-f]{8,32}'
+    `;
     try {
       const { rows } = await pool.query(sql);
       for (const row of rows) addFromText(row.u);
@@ -12387,7 +12438,7 @@ async function collectReferencedUploads() {
       // Coluna não convertível/tabela inacessível — ignora com segurança.
     }
   }
-  return referenced;
+  return { referenced, referencedNames };
 }
 
 /**
@@ -12395,8 +12446,8 @@ async function collectReferencedUploads() {
  * Só leitura — não apaga nada. `minAgeDays` protege arquivos recentes.
  */
 async function auditOrphanFiles({ minAgeDays = 7 } = {}) {
-  const referenced = await collectReferencedUploads();
-  if (referenced.size === 0) {
+  const { referenced, referencedNames } = await collectReferencedUploads();
+  if (referenced.size === 0 && referencedNames.size === 0) {
     const err = new Error('Auditoria abortada: nenhuma referência encontrada no banco.');
     err.status = 409;
     throw err;
@@ -12407,6 +12458,7 @@ async function auditOrphanFiles({ minAgeDays = 7 } = {}) {
   const files = [];
   let scanned = 0;
   let skippedRecent = 0;
+  let skippedProtectedDirs = 0;
 
   const walk = (root, dir) => {
     let entries = [];
@@ -12418,13 +12470,17 @@ async function auditOrphanFiles({ minAgeDays = 7 } = {}) {
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (ORPHAN_SKIP_DIRS.has(entry.name)) continue;
+        if (ORPHAN_SKIP_DIRS.has(entry.name.toLowerCase())) { skippedProtectedDirs += 1; continue; }
         walk(root, full);
         continue;
       }
       const rel = path.relative(root, full).split(path.sep).join('/');
       scanned += 1;
+      // Proteção tripla: caminho relativo, nome do arquivo citado em qualquer
+      // lugar do banco e pasta de módulo protegida em qualquer profundidade.
       if (referenced.has(rel)) continue;
+      if (referencedNames.has(entry.name)) continue;
+      if (rel.toLowerCase().split('/').slice(0, -1).some((seg) => ORPHAN_SKIP_DIRS.has(seg))) continue;
       let stat;
       try {
         stat = fs.statSync(full);
@@ -12448,7 +12504,7 @@ async function auditOrphanFiles({ minAgeDays = 7 } = {}) {
   }
 
   files.sort((a, b) => (a.modifiedAt < b.modifiedAt ? 1 : -1));
-  return { referenced, files, scanned, skippedRecent };
+  return { referenced, referencedNames, files, scanned, skippedRecent, skippedProtectedDirs };
 }
 
 /**
@@ -12462,7 +12518,8 @@ app.get('/api/portal-videos/orphan-audit', async (req, res) => {
       return res.status(403).json({ error: 'Acesso restrito ao administrador' });
     }
     const minAgeDays = req.query.minAgeDays !== undefined ? Number(req.query.minAgeDays) : 7;
-    const { referenced, files, scanned, skippedRecent } = await auditOrphanFiles({ minAgeDays });
+    const { referenced, referencedNames, files, scanned, skippedRecent, skippedProtectedDirs } =
+      await auditOrphanFiles({ minAgeDays });
 
     const byMonth = new Map();
     let totalBytes = 0;
@@ -12479,7 +12536,8 @@ app.get('/api/portal-videos/orphan-audit', async (req, res) => {
       success: true,
       scanned,
       skippedRecent,
-      protectedRefs: referenced.size,
+      skippedProtectedDirs,
+      protectedRefs: referenced.size + referencedNames.size,
       totalFiles: files.length,
       totalBytes,
       totalMb: Number((totalBytes / 1048576).toFixed(1)),
@@ -12508,6 +12566,9 @@ app.post('/api/portal-videos/delete-orphans', async (req, res) => {
     }
     const requested = Array.isArray(req.body?.paths) ? req.body.paths.map(String) : [];
     if (requested.length === 0) return res.status(400).json({ error: 'Nenhum arquivo selecionado' });
+    if (requested.length > 500) {
+      return res.status(400).json({ error: 'Selecione no máximo 500 arquivos por vez.' });
+    }
 
     const minAgeDays = req.body?.minAgeDays !== undefined ? Number(req.body.minAgeDays) : 7;
     const { files } = await auditOrphanFiles({ minAgeDays });
@@ -12524,6 +12585,7 @@ app.post('/api/portal-videos/delete-orphans', async (req, res) => {
         fs.unlinkSync(target.fullPath);
         deletedFiles += 1;
         freedBytes += target.size;
+        console.log('[orphan-delete] removido:', target.path);
       } catch (error) {
         console.warn('[orphan-delete] falha ao remover:', target.fullPath, error?.message || error);
       }
@@ -12545,8 +12607,9 @@ app.post('/api/portal-videos/delete-orphans', async (req, res) => {
 });
 
 /**
- * Varredura de órfãos: remove do disco todo arquivo em /uploads/ que não é
- * mais referenciado por nenhum registro do banco. `dryRun: true` apenas relata.
+ * Varredura de órfãos: SOMENTE RELATÓRIO. Nunca apaga nada — a remoção
+ * em massa foi desativada por segurança. Para liberar espaço, o
+ * administrador seleciona arquivo por arquivo em /delete-orphans.
  */
 app.post('/api/portal-videos/sweep-orphans', async (req, res) => {
   try {
@@ -12554,29 +12617,21 @@ app.post('/api/portal-videos/sweep-orphans', async (req, res) => {
     if (!(await userHasAssignedRole(user, 'admin'))) {
       return res.status(403).json({ error: 'Acesso restrito ao administrador' });
     }
-    // Segurança: só apaga de fato quando o pedido confirma explicitamente.
-    const dryRun = req.body?.dryRun !== false || req.body?.confirm !== true;
-    const { referenced, files, scanned, skippedRecent } = await auditOrphanFiles({ minAgeDays: 7 });
+    const { referenced, referencedNames, files, scanned, skippedRecent, skippedProtectedDirs } =
+      await auditOrphanFiles({ minAgeDays: 7 });
 
-    let deletedFiles = 0;
-    let freedBytes = 0;
-    for (const f of files) {
-      try {
-        if (!dryRun) fs.unlinkSync(f.fullPath);
-        deletedFiles += 1;
-        freedBytes += f.size;
-      } catch (error) {
-        console.warn('[sweep] falha ao remover:', f.fullPath, error?.message || error);
-      }
-    }
+    const freedBytes = files.reduce((sum, f) => sum + f.size, 0);
 
     res.json({
       success: true,
-      dryRun,
+      dryRun: true,
+      readOnly: true,
       scanned,
       skipped: skippedRecent,
-      protectedRefs: referenced.size,
-      deletedFiles,
+      skippedProtectedDirs,
+      protectedRefs: referenced.size + referencedNames.size,
+      deletedFiles: 0,
+      candidateFiles: files.length,
       freedBytes,
       freedMb: Number((freedBytes / 1048576).toFixed(1)),
     });

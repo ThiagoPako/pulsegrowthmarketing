@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, Loader2 } from 'lucide-react';
+import { Trash2, Loader2, Search } from 'lucide-react';
 import { supabase, vpsAuthedFetch } from '@/lib/vpsDb';
 import { toast } from 'sonner';
 import OrphanFilesAudit from '@/components/portal/OrphanFilesAudit';
@@ -119,41 +119,29 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
   };
 
   /**
-   * Varredura em duas etapas: primeiro simula e mostra o que seria removido,
-   * só apaga depois de confirmação explícita. Arquivos ainda usados por
-   * qualquer módulo (inclusive banco de dados de clientes) nunca entram.
+   * Somente diagnóstico: mostra quanto espaço há em arquivos sem uso.
+   * A remoção em massa foi desativada — apagar só pela auditoria, item a item.
    */
   const handleSweep = async () => {
     setSweeping(true);
     try {
-      const preview = await vpsAuthedFetch('/portal-videos/sweep-orphans', {
+      const res = await vpsAuthedFetch('/portal-videos/sweep-orphans', {
         method: 'POST',
         body: JSON.stringify({ dryRun: true }),
       });
-      const prev = await preview.json().catch(() => ({}));
-      if (!preview.ok || !prev.success) throw new Error(prev.error || 'Falha na simulação');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || 'Falha no diagnóstico');
 
-      if (!prev.deletedFiles) {
-        toast.success('Nenhum arquivo órfão encontrado. Nada foi apagado.');
+      const candidates = data.candidateFiles ?? 0;
+      if (!candidates) {
+        toast.success('Nenhum arquivo sem uso encontrado.');
         return;
       }
-
-      const ok = confirm(
-        `Simulação: ${prev.deletedFiles} arquivo(s) sem uso (${prev.freedMb} MB).\n` +
-        `${prev.protectedRefs} arquivos em uso ficam protegidos e ${prev.skipped} recentes serão preservados.\n\n` +
-        'Confirmar a remoção definitiva?'
+      toast.success(
+        `${candidates} arquivo(s) sem uso ocupando ${data.freedMb} MB. Selecione o que apagar na auditoria abaixo.`,
       );
-      if (!ok) return;
-
-      const res = await vpsAuthedFetch('/portal-videos/sweep-orphans', {
-        method: 'POST',
-        body: JSON.stringify({ dryRun: false, confirm: true }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) throw new Error(data.error || 'Falha na varredura');
-      toast.success(`${data.deletedFiles} arquivo(s) órfão(s) removido(s) — ${data.freedMb} MB liberados`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro na varredura de órfãos');
+      toast.error(err instanceof Error ? err.message : 'Erro no diagnóstico de arquivos');
     } finally {
       setSweeping(false);
     }
@@ -268,7 +256,8 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
 
       <div className="pt-2 border-t border-border space-y-2">
         <p className="text-[11px] text-muted-foreground">
-          Se o espaço da VPS não diminuiu, existem arquivos antigos sem registro no banco. Use a varredura abaixo.
+          Diagnóstico apenas: mostra quanto espaço está preso em arquivos sem uso. Nada é apagado aqui —
+          artes da designer, banco de dados de clientes, contratos e treinamentos ficam sempre protegidos.
         </p>
         <Button
           variant="outline"
@@ -276,8 +265,8 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
           disabled={sweeping}
           onClick={handleSweep}
         >
-          {sweeping ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
-          {sweeping ? 'Varrendo servidor...' : 'Liberar espaço (arquivos órfãos)'}
+          {sweeping ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
+          {sweeping ? 'Verificando servidor...' : 'Ver quanto espaço está sem uso'}
         </Button>
       </div>
 

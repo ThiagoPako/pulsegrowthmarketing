@@ -12436,8 +12436,8 @@ async function collectReferencedUploads() {
  * Só leitura — não apaga nada. `minAgeDays` protege arquivos recentes.
  */
 async function auditOrphanFiles({ minAgeDays = 7 } = {}) {
-  const referenced = await collectReferencedUploads();
-  if (referenced.size === 0) {
+  const { referenced, referencedNames } = await collectReferencedUploads();
+  if (referenced.size === 0 && referencedNames.size === 0) {
     const err = new Error('Auditoria abortada: nenhuma referência encontrada no banco.');
     err.status = 409;
     throw err;
@@ -12448,6 +12448,7 @@ async function auditOrphanFiles({ minAgeDays = 7 } = {}) {
   const files = [];
   let scanned = 0;
   let skippedRecent = 0;
+  let skippedProtectedDirs = 0;
 
   const walk = (root, dir) => {
     let entries = [];
@@ -12459,13 +12460,17 @@ async function auditOrphanFiles({ minAgeDays = 7 } = {}) {
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (ORPHAN_SKIP_DIRS.has(entry.name)) continue;
+        if (ORPHAN_SKIP_DIRS.has(entry.name.toLowerCase())) { skippedProtectedDirs += 1; continue; }
         walk(root, full);
         continue;
       }
       const rel = path.relative(root, full).split(path.sep).join('/');
       scanned += 1;
+      // Proteção tripla: caminho relativo, nome do arquivo citado em qualquer
+      // lugar do banco e pasta de módulo protegida em qualquer profundidade.
       if (referenced.has(rel)) continue;
+      if (referencedNames.has(entry.name)) continue;
+      if (rel.toLowerCase().split('/').slice(0, -1).some((seg) => ORPHAN_SKIP_DIRS.has(seg))) continue;
       let stat;
       try {
         stat = fs.statSync(full);
@@ -12489,7 +12494,7 @@ async function auditOrphanFiles({ minAgeDays = 7 } = {}) {
   }
 
   files.sort((a, b) => (a.modifiedAt < b.modifiedAt ? 1 : -1));
-  return { referenced, files, scanned, skippedRecent };
+  return { referenced, referencedNames, files, scanned, skippedRecent, skippedProtectedDirs };
 }
 
 /**

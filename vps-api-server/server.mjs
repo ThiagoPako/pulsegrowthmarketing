@@ -12556,6 +12556,9 @@ app.post('/api/portal-videos/delete-orphans', async (req, res) => {
     }
     const requested = Array.isArray(req.body?.paths) ? req.body.paths.map(String) : [];
     if (requested.length === 0) return res.status(400).json({ error: 'Nenhum arquivo selecionado' });
+    if (requested.length > 500) {
+      return res.status(400).json({ error: 'Selecione no máximo 500 arquivos por vez.' });
+    }
 
     const minAgeDays = req.body?.minAgeDays !== undefined ? Number(req.body.minAgeDays) : 7;
     const { files } = await auditOrphanFiles({ minAgeDays });
@@ -12572,6 +12575,7 @@ app.post('/api/portal-videos/delete-orphans', async (req, res) => {
         fs.unlinkSync(target.fullPath);
         deletedFiles += 1;
         freedBytes += target.size;
+        console.log('[orphan-delete] removido:', target.path);
       } catch (error) {
         console.warn('[orphan-delete] falha ao remover:', target.fullPath, error?.message || error);
       }

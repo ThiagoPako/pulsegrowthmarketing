@@ -12597,8 +12597,9 @@ app.post('/api/portal-videos/delete-orphans', async (req, res) => {
 });
 
 /**
- * Varredura de órfãos: remove do disco todo arquivo em /uploads/ que não é
- * mais referenciado por nenhum registro do banco. `dryRun: true` apenas relata.
+ * Varredura de órfãos: SOMENTE RELATÓRIO. Nunca apaga nada — a remoção
+ * em massa foi desativada por segurança. Para liberar espaço, o
+ * administrador seleciona arquivo por arquivo em /delete-orphans.
  */
 app.post('/api/portal-videos/sweep-orphans', async (req, res) => {
   try {
@@ -12606,29 +12607,21 @@ app.post('/api/portal-videos/sweep-orphans', async (req, res) => {
     if (!(await userHasAssignedRole(user, 'admin'))) {
       return res.status(403).json({ error: 'Acesso restrito ao administrador' });
     }
-    // Segurança: só apaga de fato quando o pedido confirma explicitamente.
-    const dryRun = req.body?.dryRun !== false || req.body?.confirm !== true;
-    const { referenced, files, scanned, skippedRecent } = await auditOrphanFiles({ minAgeDays: 7 });
+    const { referenced, referencedNames, files, scanned, skippedRecent, skippedProtectedDirs } =
+      await auditOrphanFiles({ minAgeDays: 7 });
 
-    let deletedFiles = 0;
-    let freedBytes = 0;
-    for (const f of files) {
-      try {
-        if (!dryRun) fs.unlinkSync(f.fullPath);
-        deletedFiles += 1;
-        freedBytes += f.size;
-      } catch (error) {
-        console.warn('[sweep] falha ao remover:', f.fullPath, error?.message || error);
-      }
-    }
+    const freedBytes = files.reduce((sum, f) => sum + f.size, 0);
 
     res.json({
       success: true,
-      dryRun,
+      dryRun: true,
+      readOnly: true,
       scanned,
       skipped: skippedRecent,
-      protectedRefs: referenced.size,
-      deletedFiles,
+      skippedProtectedDirs,
+      protectedRefs: referenced.size + referencedNames.size,
+      deletedFiles: 0,
+      candidateFiles: files.length,
       freedBytes,
       freedMb: Number((freedBytes / 1048576).toFixed(1)),
     });

@@ -256,7 +256,8 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
 
       <div className="pt-2 border-t border-border space-y-2">
         <p className="text-[11px] text-muted-foreground">
-          Se o espaço da VPS não diminuiu, existem arquivos antigos sem registro no banco. Use a varredura abaixo.
+          Diagnóstico apenas: mostra quanto espaço está preso em arquivos sem uso. Nada é apagado aqui —
+          artes da designer, banco de dados de clientes, contratos e treinamentos ficam sempre protegidos.
         </p>
         <Button
           variant="outline"
@@ -264,8 +265,8 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
           disabled={sweeping}
           onClick={handleSweep}
         >
-          {sweeping ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
-          {sweeping ? 'Varrendo servidor...' : 'Liberar espaço (arquivos órfãos)'}
+          {sweeping ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
+          {sweeping ? 'Verificando servidor...' : 'Ver quanto espaço está sem uso'}
         </Button>
       </div>
 

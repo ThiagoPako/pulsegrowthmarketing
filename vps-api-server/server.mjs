@@ -12508,7 +12508,8 @@ app.get('/api/portal-videos/orphan-audit', async (req, res) => {
       return res.status(403).json({ error: 'Acesso restrito ao administrador' });
     }
     const minAgeDays = req.query.minAgeDays !== undefined ? Number(req.query.minAgeDays) : 7;
-    const { referenced, files, scanned, skippedRecent } = await auditOrphanFiles({ minAgeDays });
+    const { referenced, referencedNames, files, scanned, skippedRecent, skippedProtectedDirs } =
+      await auditOrphanFiles({ minAgeDays });
 
     const byMonth = new Map();
     let totalBytes = 0;
@@ -12525,7 +12526,8 @@ app.get('/api/portal-videos/orphan-audit', async (req, res) => {
       success: true,
       scanned,
       skippedRecent,
-      protectedRefs: referenced.size,
+      skippedProtectedDirs,
+      protectedRefs: referenced.size + referencedNames.size,
       totalFiles: files.length,
       totalBytes,
       totalMb: Number((totalBytes / 1048576).toFixed(1)),

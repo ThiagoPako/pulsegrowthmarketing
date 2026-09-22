@@ -12337,21 +12337,49 @@ app.post('/api/portal-videos/bulk-delete', async (req, res) => {
 });
 
 /**
- * Pastas intocáveis: banco de dados de clientes, treinamentos e afins.
- * Nunca entram na auditoria nem na remoção de órfãos.
+ * Pastas intocáveis: banco de dados de clientes, artes da designer,
+ * treinamentos, contratos, panfletagem, sorteios e afins.
+ * Nunca entram na auditoria nem na remoção de órfãos — nem no primeiro
+ * nível nem aninhadas (ex.: design/artes/<cliente>).
  */
 const ORPHAN_SKIP_DIRS = new Set([
-  'training-videos',
+  // Banco de dados de clientes
   'client-database',
   'clientdb',
   'client-logos',
+  'logos',
   'professionals',
   'collaborators',
   'units',
+  // Designer / artes — intocável
+  'design',
   'design-files',
+  'designs',
+  'artes',
+  'arte',
+  'mockups',
+  'referencias',
+  'flyers',
+  'flyer-templates',
+  'panfletagem',
+  'post-studio',
+  // Treinamento, contratos e financeiro
+  'training-videos',
   'onboarding-contracts',
+  'contracts',
+  'internal-invoices',
+  // Campanhas, sorteios e links
   'promo',
+  'sorteios',
+  'bio-links',
 ]);
+
+/**
+ * Nome de arquivo gerado pelo upload da VPS: <timestamp>_<hex>.
+ * Usado para proteger arquivos citados no banco por caminho relativo
+ * (sem o prefixo /uploads/), que a busca por "uploads/" não pegaria.
+ */
+const UPLOAD_NAME_RE = /\d{10,16}_[0-9a-f]{8,32}(?:\.[A-Za-z0-9]{1,6})?/g;
 
 /**
  * Varre TODAS as colunas textuais/JSON do schema public procurando

@@ -196,6 +196,9 @@ export default function CommercialProposal() {
   const [bonusServices, setBonusServices] = useState<BonusService[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [customDiscount, setCustomDiscount] = useState(0);
+  // Descontos por duração de contrato (proposta personalizada) — ajustáveis manualmente por cliente
+  const [semestralDiscount, setSemestralDiscount] = useState(0);
+  const [anualDiscount, setAnualDiscount] = useState(5);
   const [observations, setObservations] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [showPreview, setShowPreview] = useState(false);
@@ -291,6 +294,8 @@ export default function CommercialProposal() {
     setBonusServices([]);
     setTeamMembers([]);
     setCustomDiscount(0);
+    setSemestralDiscount(0);
+    setAnualDiscount(5);
     setObservations('');
     setWhatsappNumber('');
     setShareLink('');
@@ -386,6 +391,8 @@ export default function CommercialProposal() {
         setAdditionalServices(Array.isArray(sys.additionalServices) ? sys.additionalServices : []);
         setPromo66Enabled(!!sys.promo66Enabled);
         setPromo66Value(sys.promo66Value != null ? String(sys.promo66Value) : '');
+        setSemestralDiscount(Number(sys.semestralDiscount) || 0);
+        setAnualDiscount(sys.anualDiscount != null ? Number(sys.anualDiscount) : 5);
       }
       // Cronograma
       if (p.proposal_type === 'cronograma') {
@@ -438,6 +445,8 @@ export default function CommercialProposal() {
       if (d.bonusServices?.length) setBonusServices(d.bonusServices);
       if (d.teamMembers?.length) setTeamMembers(d.teamMembers);
       if (d.customDiscount) setCustomDiscount(d.customDiscount);
+      if (d.semestralDiscount != null) setSemestralDiscount(d.semestralDiscount);
+      if (d.anualDiscount != null) setAnualDiscount(d.anualDiscount);
       if (d.observations) setObservations(d.observations);
       if (d.whatsappNumber) setWhatsappNumber(d.whatsappNumber);
       if (d.selectedPlanId) setSelectedPlanId(d.selectedPlanId);
@@ -495,8 +504,8 @@ export default function CommercialProposal() {
   useEffect(() => {
     if (proposalType !== 'personalizada') return;
     if (contractDuration === 'anual' && promo66Enabled) { setCustomDiscount(0); return; }
-    setCustomDiscount(contractDuration === 'anual' ? 5 : 0);
-  }, [contractDuration, proposalType, promo66Enabled]);
+    setCustomDiscount(contractDuration === 'anual' ? anualDiscount : semestralDiscount);
+  }, [contractDuration, proposalType, promo66Enabled, anualDiscount, semestralDiscount]);
 
   // A oferta 6+6 só existe em contrato anual
   useEffect(() => {
@@ -534,13 +543,13 @@ export default function CommercialProposal() {
       customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings,
       cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, cronogramaPricingMode, cronogramaTotalCustomValue,
       contractDuration, selectedBaseServices, selectedIncludedServices, additionalServices,
-      promo66Enabled, promo66Value
+      promo66Enabled, promo66Value, semestralDiscount, anualDiscount
     };
     const timer = setTimeout(() => {
       try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* quota */ }
     }, 500);
     return () => clearTimeout(timer);
-  }, [proposalType, clientName, clientCompany, validityDate, bonusServices, teamMembers, customDiscount, observations, whatsappNumber, selectedPlanId, hasContract, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription, customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings, cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, cronogramaPricingMode, cronogramaTotalCustomValue, contractDuration, selectedBaseServices, selectedIncludedServices, additionalServices, promo66Enabled, promo66Value]);
+  }, [proposalType, clientName, clientCompany, validityDate, bonusServices, teamMembers, customDiscount, semestralDiscount, anualDiscount, observations, whatsappNumber, selectedPlanId, hasContract, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription, customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings, cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, cronogramaPricingMode, cronogramaTotalCustomValue, contractDuration, selectedBaseServices, selectedIncludedServices, additionalServices, promo66Enabled, promo66Value]);
   const { data: plans = [] } = useQuery({
     queryKey: ['plans-proposal'],
     queryFn: async () => {
@@ -782,7 +791,9 @@ export default function CommercialProposal() {
         selectedIncludedServices,
         additionalServices,
         promo66Enabled,
-        promo66Value: parseFloat(promo66Value) || 0
+        promo66Value: parseFloat(promo66Value) || 0,
+        semestralDiscount,
+        anualDiscount
       } : {};
 
       const cronogramaSumValue = cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0);

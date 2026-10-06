@@ -196,6 +196,9 @@ export default function CommercialProposal() {
   const [bonusServices, setBonusServices] = useState<BonusService[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [customDiscount, setCustomDiscount] = useState(0);
+  // Descontos por duração de contrato (proposta personalizada) — ajustáveis manualmente por cliente
+  const [semestralDiscount, setSemestralDiscount] = useState(0);
+  const [anualDiscount, setAnualDiscount] = useState(5);
   const [observations, setObservations] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [showPreview, setShowPreview] = useState(false);
@@ -291,6 +294,8 @@ export default function CommercialProposal() {
     setBonusServices([]);
     setTeamMembers([]);
     setCustomDiscount(0);
+    setSemestralDiscount(0);
+    setAnualDiscount(5);
     setObservations('');
     setWhatsappNumber('');
     setShareLink('');
@@ -386,6 +391,8 @@ export default function CommercialProposal() {
         setAdditionalServices(Array.isArray(sys.additionalServices) ? sys.additionalServices : []);
         setPromo66Enabled(!!sys.promo66Enabled);
         setPromo66Value(sys.promo66Value != null ? String(sys.promo66Value) : '');
+        setSemestralDiscount(Number(sys.semestralDiscount) || 0);
+        setAnualDiscount(sys.anualDiscount != null ? Number(sys.anualDiscount) : 5);
       }
       // Cronograma
       if (p.proposal_type === 'cronograma') {
@@ -438,6 +445,8 @@ export default function CommercialProposal() {
       if (d.bonusServices?.length) setBonusServices(d.bonusServices);
       if (d.teamMembers?.length) setTeamMembers(d.teamMembers);
       if (d.customDiscount) setCustomDiscount(d.customDiscount);
+      if (d.semestralDiscount != null) setSemestralDiscount(d.semestralDiscount);
+      if (d.anualDiscount != null) setAnualDiscount(d.anualDiscount);
       if (d.observations) setObservations(d.observations);
       if (d.whatsappNumber) setWhatsappNumber(d.whatsappNumber);
       if (d.selectedPlanId) setSelectedPlanId(d.selectedPlanId);
@@ -495,8 +504,8 @@ export default function CommercialProposal() {
   useEffect(() => {
     if (proposalType !== 'personalizada') return;
     if (contractDuration === 'anual' && promo66Enabled) { setCustomDiscount(0); return; }
-    setCustomDiscount(contractDuration === 'anual' ? 5 : 0);
-  }, [contractDuration, proposalType, promo66Enabled]);
+    setCustomDiscount(contractDuration === 'anual' ? anualDiscount : semestralDiscount);
+  }, [contractDuration, proposalType, promo66Enabled, anualDiscount, semestralDiscount]);
 
   // A oferta 6+6 só existe em contrato anual
   useEffect(() => {
@@ -534,13 +543,13 @@ export default function CommercialProposal() {
       customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings,
       cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, cronogramaPricingMode, cronogramaTotalCustomValue,
       contractDuration, selectedBaseServices, selectedIncludedServices, additionalServices,
-      promo66Enabled, promo66Value
+      promo66Enabled, promo66Value, semestralDiscount, anualDiscount
     };
     const timer = setTimeout(() => {
       try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* quota */ }
     }, 500);
     return () => clearTimeout(timer);
-  }, [proposalType, clientName, clientCompany, validityDate, bonusServices, teamMembers, customDiscount, observations, whatsappNumber, selectedPlanId, hasContract, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription, customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings, cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, cronogramaPricingMode, cronogramaTotalCustomValue, contractDuration, selectedBaseServices, selectedIncludedServices, additionalServices, promo66Enabled, promo66Value]);
+  }, [proposalType, clientName, clientCompany, validityDate, bonusServices, teamMembers, customDiscount, semestralDiscount, anualDiscount, observations, whatsappNumber, selectedPlanId, hasContract, systemScope, systemDeliverables, systemValue, systemPaymentMethod, systemInstallments, systemAdditionalCosts, systemTimeline, endoPlan, endoDaysPerWeek, endoSessionDuration, endoStoriesPerDay, endoMonthlyValue, endoDescription, customVideos, customStories, customEventCoverage, customSocialMedia, customArts, customTrafficMgmt, customMonthlyValue, customDescription, customPaymentMethod, customInstallments, customRecordings, cronogramaDesc, cronogramaDeliverables, cronogramaPhases, cronogramaMethodology, cronogramaProjectName, cronogramaTotalDays, cronogramaPaymentMethod, cronogramaInstallments, cronogramaPricingMode, cronogramaTotalCustomValue, contractDuration, selectedBaseServices, selectedIncludedServices, additionalServices, promo66Enabled, promo66Value]);
   const { data: plans = [] } = useQuery({
     queryKey: ['plans-proposal'],
     queryFn: async () => {
@@ -782,7 +791,9 @@ export default function CommercialProposal() {
         selectedIncludedServices,
         additionalServices,
         promo66Enabled,
-        promo66Value: parseFloat(promo66Value) || 0
+        promo66Value: parseFloat(promo66Value) || 0,
+        semestralDiscount,
+        anualDiscount
       } : {};
 
       const cronogramaSumValue = cronogramaDeliverables.reduce((s, d) => s + (d.unitPrice * d.quantity), 0);
@@ -1244,8 +1255,8 @@ export default function CommercialProposal() {
               <span>Tempo de Contrato</span>
               <Badge variant={contractDuration === 'anual' ? 'default' : 'outline'} className={cn(contractDuration === 'anual' && "bg-green-500")}>
                 {contractDuration === 'anual'
-                  ? (promo66Enabled ? 'Oferta 6+6 Ativada' : '5% de Desconto Ativado')
-                  : 'Sem desconto'}
+                  ? (promo66Enabled ? 'Oferta 6+6 Ativada' : (anualDiscount > 0 ? `${anualDiscount}% de Desconto Ativado` : 'Sem desconto'))
+                  : (semestralDiscount > 0 ? `${semestralDiscount}% de Desconto Ativado` : 'Sem desconto')}
               </Badge>
             </CardTitle>
           </CardHeader>
@@ -1265,9 +1276,37 @@ export default function CommercialProposal() {
                 className="flex-1"
                 onClick={() => setContractDuration('anual')}
               >
-                Anual (5% OFF)
+                Anual ({anualDiscount}% OFF)
               </Button>
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Desconto Semestral (%)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={50}
+                  step="0.5"
+                  value={semestralDiscount}
+                  onChange={(e) => setSemestralDiscount(Math.max(0, Math.min(50, Number(e.target.value) || 0)))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Desconto Anual (%)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={50}
+                  step="0.5"
+                  value={anualDiscount}
+                  onChange={(e) => setAnualDiscount(Math.max(0, Math.min(50, Number(e.target.value) || 0)))}
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Ajuste livremente o desconto de cada duração para personalizar a proposta deste cliente. O desconto aplicado é o da duração escolhida.
+            </p>
 
             {contractDuration === 'anual' && (
               <div className="rounded-lg border border-dashed p-4 space-y-3">
@@ -2390,16 +2429,18 @@ export default function CommercialProposal() {
                     ) : (
                       <>
                         <div className="grid grid-cols-2 gap-3 pt-1">
-                          <div className="rounded-xl border-2 p-4 text-center" style={{ borderColor: contractDuration === 'semestral' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
+                          <div className="rounded-xl border-2 p-4 text-center relative" style={{ borderColor: contractDuration === 'semestral' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
+                            {semestralDiscount > 0 && <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">{semestralDiscount}% OFF</div>}
                             <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Semestral</div>
-                            <div className="text-xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
+                            <div className="text-xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val * (1 - semestralDiscount / 100))}<span className="text-xs font-normal text-gray-500">/mês</span></div>
                             <div className="text-[10px] text-gray-500 mt-1">Compromisso de 6 meses</div>
+                            {semestralDiscount > 0 && <div className="text-[10px] text-green-600 font-semibold mt-1">Economia total de {fmt(val * 6 * semestralDiscount / 100)}</div>}
                           </div>
                           <div className="rounded-xl border-2 p-4 text-center relative" style={{ borderColor: contractDuration === 'anual' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
-                            <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">5% OFF</div>
+                            {anualDiscount > 0 && <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">{anualDiscount}% OFF</div>}
                             <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Anual</div>
-                            <div className="text-xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val * 0.95)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
-                            <div className="text-[10px] text-green-600 font-semibold mt-1">Economia total de {fmt(val * 12 * 0.05)}</div>
+                            <div className="text-xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val * (1 - anualDiscount / 100))}<span className="text-xs font-normal text-gray-500">/mês</span></div>
+                            {anualDiscount > 0 && <div className="text-[10px] text-green-600 font-semibold mt-1">Economia total de {fmt(val * 12 * anualDiscount / 100)}</div>}
                           </div>
                         </div>
                         <p className="text-[11px] text-gray-500 text-center pt-1">O valor é pago mensalmente conforme a duração do contrato escolhida.</p>

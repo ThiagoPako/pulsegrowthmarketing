@@ -1255,8 +1255,8 @@ export default function CommercialProposal() {
               <span>Tempo de Contrato</span>
               <Badge variant={contractDuration === 'anual' ? 'default' : 'outline'} className={cn(contractDuration === 'anual' && "bg-green-500")}>
                 {contractDuration === 'anual'
-                  ? (promo66Enabled ? 'Oferta 6+6 Ativada' : '5% de Desconto Ativado')
-                  : 'Sem desconto'}
+                  ? (promo66Enabled ? 'Oferta 6+6 Ativada' : (anualDiscount > 0 ? `${anualDiscount}% de Desconto Ativado` : 'Sem desconto'))
+                  : (semestralDiscount > 0 ? `${semestralDiscount}% de Desconto Ativado` : 'Sem desconto')}
               </Badge>
             </CardTitle>
           </CardHeader>
@@ -1276,9 +1276,37 @@ export default function CommercialProposal() {
                 className="flex-1"
                 onClick={() => setContractDuration('anual')}
               >
-                Anual (5% OFF)
+                Anual ({anualDiscount}% OFF)
               </Button>
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Desconto Semestral (%)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={50}
+                  step="0.5"
+                  value={semestralDiscount}
+                  onChange={(e) => setSemestralDiscount(Math.max(0, Math.min(50, Number(e.target.value) || 0)))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Desconto Anual (%)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={50}
+                  step="0.5"
+                  value={anualDiscount}
+                  onChange={(e) => setAnualDiscount(Math.max(0, Math.min(50, Number(e.target.value) || 0)))}
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Ajuste livremente o desconto de cada duração para personalizar a proposta deste cliente. O desconto aplicado é o da duração escolhida.
+            </p>
 
             {contractDuration === 'anual' && (
               <div className="rounded-lg border border-dashed p-4 space-y-3">
@@ -2401,16 +2429,18 @@ export default function CommercialProposal() {
                     ) : (
                       <>
                         <div className="grid grid-cols-2 gap-3 pt-1">
-                          <div className="rounded-xl border-2 p-4 text-center" style={{ borderColor: contractDuration === 'semestral' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
+                          <div className="rounded-xl border-2 p-4 text-center relative" style={{ borderColor: contractDuration === 'semestral' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
+                            {semestralDiscount > 0 && <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">{semestralDiscount}% OFF</div>}
                             <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Semestral</div>
-                            <div className="text-xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
+                            <div className="text-xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val * (1 - semestralDiscount / 100))}<span className="text-xs font-normal text-gray-500">/mês</span></div>
                             <div className="text-[10px] text-gray-500 mt-1">Compromisso de 6 meses</div>
+                            {semestralDiscount > 0 && <div className="text-[10px] text-green-600 font-semibold mt-1">Economia total de {fmt(val * 6 * semestralDiscount / 100)}</div>}
                           </div>
                           <div className="rounded-xl border-2 p-4 text-center relative" style={{ borderColor: contractDuration === 'anual' ? 'hsl(16 82% 51%)' : '#e5e7eb' }}>
-                            <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">5% OFF</div>
+                            {anualDiscount > 0 && <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">{anualDiscount}% OFF</div>}
                             <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Anual</div>
-                            <div className="text-xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val * 0.95)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
-                            <div className="text-[10px] text-green-600 font-semibold mt-1">Economia total de {fmt(val * 12 * 0.05)}</div>
+                            <div className="text-xl font-bold mt-1" style={{ color: 'hsl(16 82% 51%)' }}>{fmt(val * (1 - anualDiscount / 100))}<span className="text-xs font-normal text-gray-500">/mês</span></div>
+                            {anualDiscount > 0 && <div className="text-[10px] text-green-600 font-semibold mt-1">Economia total de {fmt(val * 12 * anualDiscount / 100)}</div>}
                           </div>
                         </div>
                         <p className="text-[11px] text-gray-500 text-center pt-1">O valor é pago mensalmente conforme a duração do contrato escolhida.</p>

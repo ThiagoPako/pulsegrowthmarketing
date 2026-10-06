@@ -516,6 +516,9 @@ export default function ProposalViewer() {
     // Contrato mensal é apenas o valor fixo (adicionais são à parte)
     const totalBeforeDiscount = val;
     const discountedVal = totalBeforeDiscount * (1 - discount / 100);
+    // Descontos por duração (ajustáveis manualmente na proposta); fallback para propostas antigas
+    const semDisc = customData.semestralDiscount != null ? Number(customData.semestralDiscount) || 0 : 0;
+    const anuDisc = customData.anualDiscount != null ? Number(customData.anualDiscount) || 0 : 5;
 
     const installs = customData.installments || 1;
     const installmentVal = discountedVal / installs;
@@ -733,16 +736,18 @@ export default function ProposalViewer() {
                 <>
                   <Separator />
                   <div className="grid grid-cols-2 gap-3 pt-1">
-                    <div className="rounded-xl border-2 p-4 text-center" style={{ borderColor: customData.contractDuration === 'semestral' ? accentColor : '#e5e7eb' }}>
+                    <div className="rounded-xl border-2 p-4 text-center relative" style={{ borderColor: customData.contractDuration === 'semestral' ? accentColor : '#e5e7eb' }}>
+                      {semDisc > 0 && <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">{semDisc}% OFF</div>}
                       <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Semestral</div>
-                      <div className="text-xl font-bold mt-1" style={{ color: accentColor }}>{fmt(totalBeforeDiscount)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
+                      <div className="text-xl font-bold mt-1" style={{ color: accentColor }}>{fmt(totalBeforeDiscount * (1 - semDisc / 100))}<span className="text-xs font-normal text-gray-500">/mês</span></div>
                       <div className="text-[10px] text-gray-500 mt-1">Compromisso de 6 meses</div>
+                      {semDisc > 0 && <div className="text-[10px] text-green-600 font-semibold mt-1">Economia total de {fmt(totalBeforeDiscount * 6 * semDisc / 100)}</div>}
                     </div>
                     <div className="rounded-xl border-2 p-4 text-center relative" style={{ borderColor: customData.contractDuration === 'anual' ? accentColor : '#e5e7eb' }}>
-                      <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">5% OFF</div>
+                      {anuDisc > 0 && <div className="absolute -top-2 right-2 bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">{anuDisc}% OFF</div>}
                       <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Anual</div>
-                      <div className="text-xl font-bold mt-1" style={{ color: accentColor }}>{fmt(totalBeforeDiscount * 0.95)}<span className="text-xs font-normal text-gray-500">/mês</span></div>
-                      <div className="text-[10px] text-green-600 font-semibold mt-1">Economia total de {fmt(totalBeforeDiscount * 12 * 0.05)}</div>
+                      <div className="text-xl font-bold mt-1" style={{ color: accentColor }}>{fmt(totalBeforeDiscount * (1 - anuDisc / 100))}<span className="text-xs font-normal text-gray-500">/mês</span></div>
+                      {anuDisc > 0 && <div className="text-[10px] text-green-600 font-semibold mt-1">Economia total de {fmt(totalBeforeDiscount * 12 * anuDisc / 100)}</div>}
                     </div>
                   </div>
                 </>

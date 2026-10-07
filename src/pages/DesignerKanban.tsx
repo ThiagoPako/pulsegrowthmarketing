@@ -36,6 +36,25 @@ const FORMAT_LABELS: Record<string, string> = {
   midia_fisica: 'Mídia Física',
 };
 
+// Colunas que encerram o ciclo da arte — não contam como atrasadas mesmo com prazo vencido.
+const OVERDUE_EXCLUDED_COLS: DesignTaskColumn[] = ['em_analise', 'enviar_cliente', 'aprovado', 'postado'];
+
+// Atrasada = tem prazo anterior a hoje e ainda não saiu do fluxo de produção.
+export function isDesignTaskOverdue(task: { due_date?: string | null; kanban_column: string }): boolean {
+  if (!task.due_date) return false;
+  if (OVERDUE_EXCLUDED_COLS.includes(task.kanban_column as DesignTaskColumn)) return false;
+  const due = String(task.due_date).slice(0, 10); // datas são sempre YYYY-MM-DD
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  return due < todayStr;
+}
+
+// Normaliza qualquer data (ISO ou YYYY-MM-DD) para o trecho YYYY-MM-DD.
+function dateOnly(value?: string | null): string | null {
+  if (!value) return null;
+  return String(value).slice(0, 10);
+}
+
 // SLA em horas para toda demanda de design
 export const DESIGN_SLA_HOURS = 72;
 
@@ -132,6 +151,12 @@ export default function DesignerKanban() {
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [filterClient, setFilterClient] = useState<string>('all');
+  // Filtros de data: criação (de/até), prazo (de/até) e somente atrasadas.
+  const [createdFrom, setCreatedFrom] = useState<string>('');
+  const [createdTo, setCreatedTo] = useState<string>('');
+  const [dueFrom, setDueFrom] = useState<string>('');
+  const [dueTo, setDueTo] = useState<string>('');
+  const [overdueOnly, setOverdueOnly] = useState<boolean>(false);
   // Paginação padrão em TODAS as colunas — evita renderizar 100+ cards de uma vez.
   const [columnLimits, setColumnLimits] = useState<Record<string, number>>({
     nova_tarefa: 15,

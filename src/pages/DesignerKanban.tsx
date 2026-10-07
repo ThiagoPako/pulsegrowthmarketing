@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useRef, useEffect, DragEvent } from 're
 import { Link } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BookOpen } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/vpsDb';
 import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn } from '@/hooks/useDesignTasks';
 import { useApp } from '@/contexts/AppContext';
@@ -12,7 +13,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2, Play, Image as ImageIcon, Upload, Download, FileDown, Calendar, Undo2, Flame, Pause, AlertTriangle, Timer } from 'lucide-react';
+import { Plus, Kanban, List, Clock, GripVertical, Sparkles, Zap, Eye, Send, CheckCircle2, RotateCcw, Pencil, Trash2, Play, Image as ImageIcon, Upload, Download, FileDown, Calendar, Undo2, Flame, Pause, AlertTriangle, Timer, Filter, X } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import DesignTaskCreateDialog from '@/components/designer/DesignTaskCreateDialog';
 import DesignTaskDetailSheet from '@/components/designer/DesignTaskDetailSheet';
@@ -34,6 +35,25 @@ const FORMAT_LABELS: Record<string, string> = {
   logomarca: 'Logomarca',
   midia_fisica: 'Mídia Física',
 };
+
+// Colunas que encerram o ciclo da arte — não contam como atrasadas mesmo com prazo vencido.
+const OVERDUE_EXCLUDED_COLS: DesignTaskColumn[] = ['em_analise', 'enviar_cliente', 'aprovado', 'postado'];
+
+// Atrasada = tem prazo anterior a hoje e ainda não saiu do fluxo de produção.
+export function isDesignTaskOverdue(task: { due_date?: string | null; kanban_column: string }): boolean {
+  if (!task.due_date) return false;
+  if (OVERDUE_EXCLUDED_COLS.includes(task.kanban_column as DesignTaskColumn)) return false;
+  const due = String(task.due_date).slice(0, 10); // datas são sempre YYYY-MM-DD
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  return due < todayStr;
+}
+
+// Normaliza qualquer data (ISO ou YYYY-MM-DD) para o trecho YYYY-MM-DD.
+function dateOnly(value?: string | null): string | null {
+  if (!value) return null;
+  return String(value).slice(0, 10);
+}
 
 // SLA em horas para toda demanda de design
 export const DESIGN_SLA_HOURS = 72;
@@ -131,6 +151,12 @@ export default function DesignerKanban() {
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [filterClient, setFilterClient] = useState<string>('all');
+  // Filtros de data: criação (de/até), prazo (de/até) e somente atrasadas.
+  const [createdFrom, setCreatedFrom] = useState<string>('');
+  const [createdTo, setCreatedTo] = useState<string>('');
+  const [dueFrom, setDueFrom] = useState<string>('');
+  const [dueTo, setDueTo] = useState<string>('');
+  const [overdueOnly, setOverdueOnly] = useState<boolean>(false);
   // Paginação padrão em TODAS as colunas — evita renderizar 100+ cards de uma vez.
   const [columnLimits, setColumnLimits] = useState<Record<string, number>>({
     nova_tarefa: 15,
@@ -175,11 +201,38 @@ export default function DesignerKanban() {
     return Array.from(map.entries()).sort((a, b) => a[1].name.localeCompare(b[1].name));
   }, [tasks, clients]);
 
+  const hasDateFilters = !!(createdFrom || createdTo || dueFrom || dueTo || overdueOnly);
+
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(t => {
+      if (filterClient !== 'all' && t.client_id !== filterClient) return false;
+      // Data de criação
+      const created = dateOnly(t.created_at);
+      if (createdFrom && (!created || created < createdFrom)) return false;
+      if (createdTo && (!created || created > createdTo)) return false;
+      // Prazo — tarefas sem prazo somem quando o filtro de prazo está ativo
+      const due = dateOnly(t.due_date);
+      if ((dueFrom || dueTo) && !due) return false;
+      if (dueFrom && due < dueFrom) return false;
+      if (dueTo && due > dueTo) return false;
+      // Somente atrasadas
+      if (overdueOnly && !isDesignTaskOverdue(t)) return false;
+      return true;
+    });
+  }, [tasks, filterClient, createdFrom, createdTo, dueFrom, dueTo, overdueOnly]);
+
+  const clearDateFilters = () => {
+    setCreatedFrom('');
+    setCreatedTo('');
+    setDueFrom('');
+    setDueTo('');
+    setOverdueOnly(false);
+  };
+
   const tasksByColumn = useMemo(() => {
     const map: Record<string, DesignTask[]> = {};
     DESIGN_COLUMNS.forEach(c => { map[c.key] = []; });
-    tasks.forEach(t => {
-      if (filterClient !== 'all' && t.client_id !== filterClient) return;
+    filteredTasks.forEach(t => {
       if (map[t.kanban_column]) map[t.kanban_column].push(t);
     });
     Object.keys(map).forEach(k => {
@@ -194,7 +247,7 @@ export default function DesignerKanban() {
       });
     });
     return map;
-  }, [tasks, filterClient]);
+  }, [filteredTasks]);
 
 
   const handleDragStart = useCallback((e: DragEvent, task: DesignTask) => {
@@ -550,6 +603,61 @@ export default function DesignerKanban() {
         </div>
       </div>
 
+      <div className="flex items-center gap-2 flex-wrap">
+        <Badge variant="outline" className="gap-1 h-7 text-xs shrink-0">
+          <Filter size={12} /> Filtros
+        </Badge>
+        <div className="flex items-center gap-1 flex-wrap">
+          <span className="text-xs text-muted-foreground shrink-0">Criação:</span>
+          <Input
+            type="date"
+            value={createdFrom}
+            onChange={e => setCreatedFrom(e.target.value)}
+            className="h-8 w-[135px] text-xs"
+            aria-label="Criada a partir de"
+          />
+          <span className="text-xs text-muted-foreground shrink-0">até</span>
+          <Input
+            type="date"
+            value={createdTo}
+            onChange={e => setCreatedTo(e.target.value)}
+            className="h-8 w-[135px] text-xs"
+            aria-label="Criada até"
+          />
+        </div>
+        <div className="flex items-center gap-1 flex-wrap">
+          <span className="text-xs text-muted-foreground shrink-0">Prazo:</span>
+          <Input
+            type="date"
+            value={dueFrom}
+            onChange={e => setDueFrom(e.target.value)}
+            className="h-8 w-[135px] text-xs"
+            aria-label="Prazo a partir de"
+          />
+          <span className="text-xs text-muted-foreground shrink-0">até</span>
+          <Input
+            type="date"
+            value={dueTo}
+            onChange={e => setDueTo(e.target.value)}
+            className="h-8 w-[135px] text-xs"
+            aria-label="Prazo até"
+          />
+        </div>
+        <Button
+          size="sm"
+          variant={overdueOnly ? 'destructive' : 'outline'}
+          className="h-8 gap-1 text-xs"
+          onClick={() => setOverdueOnly(v => !v)}
+        >
+          <AlertTriangle size={13} /> Atrasados
+        </Button>
+        {hasDateFilters && (
+          <Button size="sm" variant="ghost" className="h-8 gap-1 text-xs" onClick={clearDateFilters}>
+            <X size={13} /> Limpar filtros
+          </Button>
+        )}
+      </div>
+
       {error && (
         <div className="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400" role="alert">
           <span className="font-medium">Erro ao carregar tarefas:</span> {error.message || 'Erro desconhecido'}
@@ -700,7 +808,7 @@ export default function DesignerKanban() {
           </div>
         </DragScrollContainer>
       ) : view === 'agendamentos' ? (
-        <AgendamentosView tasks={tasks} onOpen={id => setSelectedTaskId(id)} />
+        <AgendamentosView tasks={filteredTasks} onOpen={id => setSelectedTaskId(id)} />
       ) : (
         <div className="border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
@@ -716,7 +824,7 @@ export default function DesignerKanban() {
               </tr>
             </thead>
             <tbody>
-              {tasks.map(task => (
+              {filteredTasks.map(task => (
                 <tr key={task.id} className="border-t hover:bg-muted/30 cursor-pointer group" onClick={() => setCopyPreviewTask(task)}>
                   <td className="p-3">
                     <div className="flex items-center gap-2">

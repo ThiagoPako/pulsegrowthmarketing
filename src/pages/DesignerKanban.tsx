@@ -753,7 +753,7 @@ export default function DesignerKanban() {
           </div>
         </DragScrollContainer>
       ) : view === 'agendamentos' ? (
-        <AgendamentosView tasks={tasks} onOpen={id => setSelectedTaskId(id)} />
+        <AgendamentosView tasks={filteredTasks} onOpen={id => setSelectedTaskId(id)} />
       ) : (
         <div className="border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
@@ -769,7 +769,7 @@ export default function DesignerKanban() {
               </tr>
             </thead>
             <tbody>
-              {tasks.map(task => (
+              {filteredTasks.map(task => (
                 <tr key={task.id} className="border-t hover:bg-muted/30 cursor-pointer group" onClick={() => setCopyPreviewTask(task)}>
                   <td className="p-3">
                     <div className="flex items-center gap-2">

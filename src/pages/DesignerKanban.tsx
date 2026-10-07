@@ -201,11 +201,38 @@ export default function DesignerKanban() {
     return Array.from(map.entries()).sort((a, b) => a[1].name.localeCompare(b[1].name));
   }, [tasks, clients]);
 
+  const hasDateFilters = !!(createdFrom || createdTo || dueFrom || dueTo || overdueOnly);
+
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(t => {
+      if (filterClient !== 'all' && t.client_id !== filterClient) return false;
+      // Data de criação
+      const created = dateOnly(t.created_at);
+      if (createdFrom && (!created || created < createdFrom)) return false;
+      if (createdTo && (!created || created > createdTo)) return false;
+      // Prazo — tarefas sem prazo somem quando o filtro de prazo está ativo
+      const due = dateOnly(t.due_date);
+      if ((dueFrom || dueTo) && !due) return false;
+      if (dueFrom && due < dueFrom) return false;
+      if (dueTo && due > dueTo) return false;
+      // Somente atrasadas
+      if (overdueOnly && !isDesignTaskOverdue(t)) return false;
+      return true;
+    });
+  }, [tasks, filterClient, createdFrom, createdTo, dueFrom, dueTo, overdueOnly]);
+
+  const clearDateFilters = () => {
+    setCreatedFrom('');
+    setCreatedTo('');
+    setDueFrom('');
+    setDueTo('');
+    setOverdueOnly(false);
+  };
+
   const tasksByColumn = useMemo(() => {
     const map: Record<string, DesignTask[]> = {};
     DESIGN_COLUMNS.forEach(c => { map[c.key] = []; });
-    tasks.forEach(t => {
-      if (filterClient !== 'all' && t.client_id !== filterClient) return;
+    filteredTasks.forEach(t => {
       if (map[t.kanban_column]) map[t.kanban_column].push(t);
     });
     Object.keys(map).forEach(k => {

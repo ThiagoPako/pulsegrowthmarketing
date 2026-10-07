@@ -900,7 +900,7 @@ export default function DesignerKanban() {
               </tr>
             </thead>
             <tbody>
-              {filteredTasks.map(task => (
+              {sortedTasks.map(task => (
                 <tr key={task.id} className="border-t hover:bg-muted/30 cursor-pointer group" onClick={() => setCopyPreviewTask(task)}>
                   <td className="p-3">
                     <div className="flex items-center gap-2">

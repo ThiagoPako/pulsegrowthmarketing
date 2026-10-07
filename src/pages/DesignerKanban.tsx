@@ -303,22 +303,14 @@ export default function DesignerKanban() {
   const tasksByColumn = useMemo(() => {
     const map: Record<string, DesignTask[]> = {};
     DESIGN_COLUMNS.forEach(c => { map[c.key] = []; });
-    filteredTasks.forEach(t => {
+    sortedTasks.forEach(t => {
       if (map[t.kanban_column]) map[t.kanban_column].push(t);
     });
     Object.keys(map).forEach(k => {
-      map[k].sort((a, b) => {
-        const pa = a.position != null ? Number(a.position) : 999999;
-        const pb = b.position != null ? Number(b.position) : 999999;
-        if (pa !== pb) return pa - pb;
-        const wa = PRIORITY_WEIGHT[a.priority] ?? 9;
-        const wb = PRIORITY_WEIGHT[b.priority] ?? 9;
-        if (wa !== wb) return wa - wb;
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      });
+      map[k].sort((a, b) => compareTasksByMode(a, b, sortMode, PRIORITY_WEIGHT));
     });
     return map;
-  }, [filteredTasks]);
+  }, [sortedTasks, sortMode]);
 
 
   const handleDragStart = useCallback((e: DragEvent, task: DesignTask) => {

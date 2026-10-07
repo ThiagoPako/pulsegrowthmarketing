@@ -55,6 +55,69 @@ function dateOnly(value?: string | null): string | null {
   return String(value).slice(0, 10);
 }
 
+// ── Ordenação dos cards: quais aparecem primeiro ──
+// 'default' = ordem manual (posição do drag + prioridade + criação).
+export type TaskSortMode =
+  | 'default'
+  | 'atrasados'
+  | 'criacao_recentes'
+  | 'criacao_antigas'
+  | 'prazo_proximo'
+  | 'prazo_distante';
+
+export const TASK_SORT_OPTIONS: { value: TaskSortMode; label: string }[] = [
+  { value: 'default', label: 'Padrão (ordem manual)' },
+  { value: 'atrasados', label: 'Atrasados primeiro' },
+  { value: 'criacao_recentes', label: 'Criação — mais recentes' },
+  { value: 'criacao_antigas', label: 'Criação — mais antigas' },
+  { value: 'prazo_proximo', label: 'Prazo — mais próximo' },
+  { value: 'prazo_distante', label: 'Prazo — mais distante' },
+];
+
+// Comparador compartilhado: kanban (por coluna), lista e agendamentos.
+function compareTasksByMode(a: DesignTask, b: DesignTask, mode: TaskSortMode, priorityWeight: Record<string, number>): number {
+  const defaultCompare = () => {
+    const pa = a.position != null ? Number(a.position) : 999999;
+    const pb = b.position != null ? Number(b.position) : 999999;
+    if (pa !== pb) return pa - pb;
+    const wa = priorityWeight[a.priority] ?? 9;
+    const wb = priorityWeight[b.priority] ?? 9;
+    if (wa !== wb) return wa - wb;
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  };
+
+  if (mode === 'default') return defaultCompare();
+
+  if (mode === 'atrasados') {
+    const oa = isDesignTaskOverdue(a) ? 0 : 1;
+    const ob = isDesignTaskOverdue(b) ? 0 : 1;
+    if (oa !== ob) return oa - ob;
+    // Entre atrasadas, prazo mais próximo primeiro.
+    const da = dateOnly(a.due_date);
+    const db = dateOnly(b.due_date);
+    if (da && db && da !== db) return da.localeCompare(db);
+    return defaultCompare();
+  }
+
+  if (mode === 'criacao_recentes') {
+    const diff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    return diff !== 0 ? diff : defaultCompare();
+  }
+  if (mode === 'criacao_antigas') {
+    const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    return diff !== 0 ? diff : defaultCompare();
+  }
+
+  // prazo_proximo / prazo_distante — tarefas sem prazo vão para o fim.
+  const da = dateOnly(a.due_date);
+  const db = dateOnly(b.due_date);
+  if (!da && !db) return defaultCompare();
+  if (!da) return 1;
+  if (!db) return -1;
+  if (da !== db) return mode === 'prazo_proximo' ? da.localeCompare(db) : db.localeCompare(da);
+  return defaultCompare();
+}
+
 // SLA em horas para toda demanda de design
 export const DESIGN_SLA_HOURS = 72;
 
@@ -157,6 +220,8 @@ export default function DesignerKanban() {
   const [dueFrom, setDueFrom] = useState<string>('');
   const [dueTo, setDueTo] = useState<string>('');
   const [overdueOnly, setOverdueOnly] = useState<boolean>(false);
+  // Ordenação dos cards: quais aparecem primeiro em todas as visões.
+  const [sortMode, setSortMode] = useState<TaskSortMode>('default');
   // Paginação padrão em TODAS as colunas — evita renderizar 100+ cards de uma vez.
   const [columnLimits, setColumnLimits] = useState<Record<string, number>>({
     nova_tarefa: 15,
@@ -229,25 +294,23 @@ export default function DesignerKanban() {
     setOverdueOnly(false);
   };
 
+  // Ordena conforme o modo escolhido (usado no kanban, lista e agendamentos).
+  const sortedTasks = useMemo(() => {
+    if (sortMode === 'default') return filteredTasks;
+    return [...filteredTasks].sort((a, b) => compareTasksByMode(a, b, sortMode, PRIORITY_WEIGHT));
+  }, [filteredTasks, sortMode]);
+
   const tasksByColumn = useMemo(() => {
     const map: Record<string, DesignTask[]> = {};
     DESIGN_COLUMNS.forEach(c => { map[c.key] = []; });
-    filteredTasks.forEach(t => {
+    sortedTasks.forEach(t => {
       if (map[t.kanban_column]) map[t.kanban_column].push(t);
     });
     Object.keys(map).forEach(k => {
-      map[k].sort((a, b) => {
-        const pa = a.position != null ? Number(a.position) : 999999;
-        const pb = b.position != null ? Number(b.position) : 999999;
-        if (pa !== pb) return pa - pb;
-        const wa = PRIORITY_WEIGHT[a.priority] ?? 9;
-        const wb = PRIORITY_WEIGHT[b.priority] ?? 9;
-        if (wa !== wb) return wa - wb;
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      });
+      map[k].sort((a, b) => compareTasksByMode(a, b, sortMode, PRIORITY_WEIGHT));
     });
     return map;
-  }, [filteredTasks]);
+  }, [sortedTasks, sortMode]);
 
 
   const handleDragStart = useCallback((e: DragEvent, task: DesignTask) => {
@@ -643,6 +706,19 @@ export default function DesignerKanban() {
             aria-label="Prazo até"
           />
         </div>
+        <div className="flex items-center gap-1 flex-wrap">
+          <span className="text-xs text-muted-foreground shrink-0">Aparecem primeiro:</span>
+          <Select value={sortMode} onValueChange={v => setSortMode(v as TaskSortMode)}>
+            <SelectTrigger className="h-8 w-[200px] text-xs" aria-label="Ordenação dos cards">
+              <SelectValue placeholder="Ordenação" />
+            </SelectTrigger>
+            <SelectContent>
+              {TASK_SORT_OPTIONS.map(o => (
+                <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <Button
           size="sm"
           variant={overdueOnly ? 'destructive' : 'outline'}
@@ -808,7 +884,7 @@ export default function DesignerKanban() {
           </div>
         </DragScrollContainer>
       ) : view === 'agendamentos' ? (
-        <AgendamentosView tasks={filteredTasks} onOpen={id => setSelectedTaskId(id)} />
+        <AgendamentosView tasks={sortedTasks} onOpen={id => setSelectedTaskId(id)} />
       ) : (
         <div className="border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
@@ -824,7 +900,7 @@ export default function DesignerKanban() {
               </tr>
             </thead>
             <tbody>
-              {filteredTasks.map(task => (
+              {sortedTasks.map(task => (
                 <tr key={task.id} className="border-t hover:bg-muted/30 cursor-pointer group" onClick={() => setCopyPreviewTask(task)}>
                   <td className="p-3">
                     <div className="flex items-center gap-2">

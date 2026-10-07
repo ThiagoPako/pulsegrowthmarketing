@@ -55,6 +55,69 @@ function dateOnly(value?: string | null): string | null {
   return String(value).slice(0, 10);
 }
 
+// ── Ordenação dos cards: quais aparecem primeiro ──
+// 'default' = ordem manual (posição do drag + prioridade + criação).
+export type TaskSortMode =
+  | 'default'
+  | 'atrasados'
+  | 'criacao_recentes'
+  | 'criacao_antigas'
+  | 'prazo_proximo'
+  | 'prazo_distante';
+
+export const TASK_SORT_OPTIONS: { value: TaskSortMode; label: string }[] = [
+  { value: 'default', label: 'Padrão (ordem manual)' },
+  { value: 'atrasados', label: 'Atrasados primeiro' },
+  { value: 'criacao_recentes', label: 'Criação — mais recentes' },
+  { value: 'criacao_antigas', label: 'Criação — mais antigas' },
+  { value: 'prazo_proximo', label: 'Prazo — mais próximo' },
+  { value: 'prazo_distante', label: 'Prazo — mais distante' },
+];
+
+// Comparador compartilhado: kanban (por coluna), lista e agendamentos.
+function compareTasksByMode(a: DesignTask, b: DesignTask, mode: TaskSortMode, priorityWeight: Record<string, number>): number {
+  const defaultCompare = () => {
+    const pa = a.position != null ? Number(a.position) : 999999;
+    const pb = b.position != null ? Number(b.position) : 999999;
+    if (pa !== pb) return pa - pb;
+    const wa = priorityWeight[a.priority] ?? 9;
+    const wb = priorityWeight[b.priority] ?? 9;
+    if (wa !== wb) return wa - wb;
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  };
+
+  if (mode === 'default') return defaultCompare();
+
+  if (mode === 'atrasados') {
+    const oa = isDesignTaskOverdue(a) ? 0 : 1;
+    const ob = isDesignTaskOverdue(b) ? 0 : 1;
+    if (oa !== ob) return oa - ob;
+    // Entre atrasadas, prazo mais próximo primeiro.
+    const da = dateOnly(a.due_date);
+    const db = dateOnly(b.due_date);
+    if (da && db && da !== db) return da.localeCompare(db);
+    return defaultCompare();
+  }
+
+  if (mode === 'criacao_recentes') {
+    const diff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    return diff !== 0 ? diff : defaultCompare();
+  }
+  if (mode === 'criacao_antigas') {
+    const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    return diff !== 0 ? diff : defaultCompare();
+  }
+
+  // prazo_proximo / prazo_distante — tarefas sem prazo vão para o fim.
+  const da = dateOnly(a.due_date);
+  const db = dateOnly(b.due_date);
+  if (!da && !db) return defaultCompare();
+  if (!da) return 1;
+  if (!db) return -1;
+  if (da !== db) return mode === 'prazo_proximo' ? da.localeCompare(db) : db.localeCompare(da);
+  return defaultCompare();
+}
+
 // SLA em horas para toda demanda de design
 export const DESIGN_SLA_HOURS = 72;
 

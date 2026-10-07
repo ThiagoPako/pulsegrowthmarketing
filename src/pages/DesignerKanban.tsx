@@ -603,6 +603,61 @@ export default function DesignerKanban() {
         </div>
       </div>
 
+      <div className="flex items-center gap-2 flex-wrap">
+        <Badge variant="outline" className="gap-1 h-7 text-xs shrink-0">
+          <Filter size={12} /> Filtros
+        </Badge>
+        <div className="flex items-center gap-1 flex-wrap">
+          <span className="text-xs text-muted-foreground shrink-0">Criação:</span>
+          <Input
+            type="date"
+            value={createdFrom}
+            onChange={e => setCreatedFrom(e.target.value)}
+            className="h-8 w-[135px] text-xs"
+            aria-label="Criada a partir de"
+          />
+          <span className="text-xs text-muted-foreground shrink-0">até</span>
+          <Input
+            type="date"
+            value={createdTo}
+            onChange={e => setCreatedTo(e.target.value)}
+            className="h-8 w-[135px] text-xs"
+            aria-label="Criada até"
+          />
+        </div>
+        <div className="flex items-center gap-1 flex-wrap">
+          <span className="text-xs text-muted-foreground shrink-0">Prazo:</span>
+          <Input
+            type="date"
+            value={dueFrom}
+            onChange={e => setDueFrom(e.target.value)}
+            className="h-8 w-[135px] text-xs"
+            aria-label="Prazo a partir de"
+          />
+          <span className="text-xs text-muted-foreground shrink-0">até</span>
+          <Input
+            type="date"
+            value={dueTo}
+            onChange={e => setDueTo(e.target.value)}
+            className="h-8 w-[135px] text-xs"
+            aria-label="Prazo até"
+          />
+        </div>
+        <Button
+          size="sm"
+          variant={overdueOnly ? 'default' : 'outline'}
+          className={overdueOnly ? 'h-8 gap-1 text-xs bg-red-600 hover:bg-red-700 text-white' : 'h-8 gap-1 text-xs'}
+          onClick={() => setOverdueOnly(v => !v)}
+        >
+          <AlertTriangle size={13} /> Atrasados
+        </Button>
+        {hasDateFilters && (
+          <Button size="sm" variant="ghost" className="h-8 gap-1 text-xs" onClick={clearDateFilters}>
+            <X size={13} /> Limpar filtros
+          </Button>
+        )}
+      </div>
+
       {error && (
         <div className="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400" role="alert">
           <span className="font-medium">Erro ao carregar tarefas:</span> {error.message || 'Erro desconhecido'}

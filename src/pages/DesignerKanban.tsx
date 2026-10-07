@@ -706,6 +706,19 @@ export default function DesignerKanban() {
             aria-label="Prazo até"
           />
         </div>
+        <div className="flex items-center gap-1 flex-wrap">
+          <span className="text-xs text-muted-foreground shrink-0">Aparecem primeiro:</span>
+          <Select value={sortMode} onValueChange={v => setSortMode(v as TaskSortMode)}>
+            <SelectTrigger className="h-8 w-[200px] text-xs" aria-label="Ordenação dos cards">
+              <SelectValue placeholder="Ordenação" />
+            </SelectTrigger>
+            <SelectContent>
+              {TASK_SORT_OPTIONS.map(o => (
+                <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <Button
           size="sm"
           variant={overdueOnly ? 'destructive' : 'outline'}

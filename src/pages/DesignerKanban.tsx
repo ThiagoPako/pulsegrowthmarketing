@@ -247,7 +247,7 @@ export default function DesignerKanban() {
       });
     });
     return map;
-  }, [tasks, filterClient]);
+  }, [filteredTasks]);
 
 
   const handleDragStart = useCallback((e: DragEvent, task: DesignTask) => {

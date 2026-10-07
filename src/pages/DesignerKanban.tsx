@@ -645,8 +645,8 @@ export default function DesignerKanban() {
         </div>
         <Button
           size="sm"
-          variant={overdueOnly ? 'default' : 'outline'}
-          className={overdueOnly ? 'h-8 gap-1 text-xs bg-red-600 hover:bg-red-700 text-white' : 'h-8 gap-1 text-xs'}
+          variant={overdueOnly ? 'destructive' : 'outline'}
+          className="h-8 gap-1 text-xs"
           onClick={() => setOverdueOnly(v => !v)}
         >
           <AlertTriangle size={13} /> Atrasados

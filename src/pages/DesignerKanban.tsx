@@ -294,6 +294,12 @@ export default function DesignerKanban() {
     setOverdueOnly(false);
   };
 
+  // Ordena conforme o modo escolhido (usado no kanban, lista e agendamentos).
+  const sortedTasks = useMemo(() => {
+    if (sortMode === 'default') return filteredTasks;
+    return [...filteredTasks].sort((a, b) => compareTasksByMode(a, b, sortMode, PRIORITY_WEIGHT));
+  }, [filteredTasks, sortMode]);
+
   const tasksByColumn = useMemo(() => {
     const map: Record<string, DesignTask[]> = {};
     DESIGN_COLUMNS.forEach(c => { map[c.key] = []; });

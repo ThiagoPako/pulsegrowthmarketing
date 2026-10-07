@@ -220,6 +220,8 @@ export default function DesignerKanban() {
   const [dueFrom, setDueFrom] = useState<string>('');
   const [dueTo, setDueTo] = useState<string>('');
   const [overdueOnly, setOverdueOnly] = useState<boolean>(false);
+  // Ordenação dos cards: quais aparecem primeiro em todas as visões.
+  const [sortMode, setSortMode] = useState<TaskSortMode>('default');
   // Paginação padrão em TODAS as colunas — evita renderizar 100+ cards de uma vez.
   const [columnLimits, setColumnLimits] = useState<Record<string, number>>({
     nova_tarefa: 15,

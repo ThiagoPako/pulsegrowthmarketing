@@ -7,6 +7,8 @@ import { toast } from 'sonner';
 import { Instagram, Facebook, Loader2, CheckCircle2, ShieldCheck } from 'lucide-react';
 
 const API_BASE = 'https://agenciapulse.tech/api';
+/** Mesmo endereço cadastrado na Meta e usado pelo servidor na troca do código. */
+const OAUTH_REDIRECT_URI = 'https://agenciapulse.tech/';
 
 type Platform = 'instagram' | 'facebook';
 
@@ -57,7 +59,7 @@ export default function SocialConnectInvite() {
   const authorize = async (platform: Platform) => {
     if (!invite) return;
     setBusy(platform);
-    const redirectUri = `${window.location.origin}/`;
+    const redirectUri = OAUTH_REDIRECT_URI;
     try {
       const urlRes = await fetch(`${API_BASE}/meta-oauth`, {
         method: 'POST',
@@ -75,6 +77,15 @@ export default function SocialConnectInvite() {
       if (!popup) throw new Error('Permita janelas pop-up para continuar.');
 
       const code = await new Promise<string>((resolve, reject) => {
+        // Se esta página estiver em outro endereço (ex.: www), a janela de retorno avisa por mensagem.
+        const onMsg = (e: MessageEvent) => {
+          if (e.origin !== new URL(OAUTH_REDIRECT_URI).origin || e.data?.type !== 'pulse-oauth-return') return;
+          window.removeEventListener('message', onMsg);
+          window.clearInterval(timer);
+          try { popup.close(); } catch { /* ignore */ }
+          if (e.data.code) resolve(String(e.data.code)); else reject(new Error('Autorização recusada.'));
+        };
+        window.addEventListener('message', onMsg);
         const timer = window.setInterval(() => {
           try {
             if (popup.closed) {

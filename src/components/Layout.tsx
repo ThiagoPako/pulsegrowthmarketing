@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { LanguageToggle } from '@/lib/i18n';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
@@ -724,6 +725,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 ))}
               </PopoverContent>
             </Popover>
+            <LanguageToggle />
             <NotificationBell />
             {/* Mobile avatar */}
             <div className="md:hidden">

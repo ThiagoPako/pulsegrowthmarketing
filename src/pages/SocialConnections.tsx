@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLang, tr } from '@/lib/i18n';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { setPortalInsightsEnabled, diagnoseClientConnection, type ConnectedSocialAccount, type DiagnosticCheck } from '@/services/socialPostsApi';
 import { Switch } from '@/components/ui/switch';
@@ -22,6 +23,7 @@ interface ClientConnection {
 type Platform = 'instagram' | 'facebook';
 
 export default function SocialConnections() {
+  const { t } = useLang();
   const [clients, setClients] = useState<ClientConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -108,6 +110,26 @@ export default function SocialConnections() {
 
   useEffect(() => { load(); }, []);
 
+  // Após autorizar na Meta (outra aba/janela), atualiza a lista sozinho ao voltar.
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === 'visible') load(); };
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'pulse-social-connected') {
+        toast.success(tr('Conta do Instagram conectada com sucesso.', 'Instagram Business account connected successfully via Meta API.'));
+        load();
+      }
+    };
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('message', onMessage);
+    let channel: BroadcastChannel | null = null;
+    try { channel = new BroadcastChannel('pulse-social'); channel.onmessage = onMessage; } catch { /* navegador antigo */ }
+    return () => {
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('message', onMessage);
+      channel?.close();
+    };
+  }, []);
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return clients.filter(c => {
@@ -136,7 +158,7 @@ export default function SocialConnections() {
         body: { client_id: client.id, platform: plat },
       });
       if (error) throw new Error(error.message);
-      toast.success('Conta desconectada');
+      toast.success(tr('Conta desconectada', 'Account disconnected'));
       await load();
     } catch (err) {
       toast.error((err as Error).message);
@@ -147,11 +169,11 @@ export default function SocialConnections() {
     <div className="p-4 md:p-6 space-y-5">
       <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Conexões Sociais</h1>
-          <p className="text-sm text-muted-foreground">Conecte Instagram e Facebook de todos os clientes para postagem automática.</p>
+          <h1 className="text-2xl font-bold">{t('Conexões Sociais', 'Social Connections')}</h1>
+          <p className="text-sm text-muted-foreground">{t('Conecte Instagram e Facebook de todos os clientes para postagem automática.', 'Connect Instagram Professional and Facebook accounts for automatic publishing.')}</p>
         </div>
         <Button variant="outline" onClick={load} className="gap-2">
-          <RefreshCw size={16} /> Atualizar
+          <RefreshCw size={16} /> {t('Atualizar', 'Refresh')}
         </Button>
       </header>
 
@@ -275,7 +297,7 @@ export default function SocialConnections() {
 
                   <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed p-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium">Testar conexão</p>
+                      <p className="text-sm font-medium">{t('Testar conexão', 'Test Connection')}</p>
                       <p className="text-xs text-muted-foreground">
                         Verifica o acesso ao perfil, o limite de postagens e as métricas.
                       </p>

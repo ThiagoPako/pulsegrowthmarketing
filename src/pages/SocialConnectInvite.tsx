@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { tr } from '@/lib/i18n';
 import { useParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -114,7 +115,9 @@ export default function SocialConnectInvite() {
       if (!exchangeRes.ok || result?.error) throw new Error(result?.error || 'Falha ao concluir a autorização.');
 
       await fetch(`${API_BASE}/social-connect/${token}/complete`, { method: 'POST' });
-      toast.success('Conta autorizada com sucesso!');
+      toast.success(tr('Conta autorizada com sucesso!', 'Instagram Business account connected successfully via Meta API.'));
+      // Avisa a tela de Conexões Sociais aberta em outra aba para atualizar na hora.
+      try { new BroadcastChannel('pulse-social').postMessage({ type: 'pulse-social-connected' }); } catch { /* navegador antigo */ }
       await load();
     } catch (err) {
       toast.error((err as Error).message);

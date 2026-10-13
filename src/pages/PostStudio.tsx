@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLang, tr } from '@/lib/i18n';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import {
   createScheduledPost, fetchScheduledPosts, cancelScheduledPost, publishScheduledPostNow,
@@ -42,6 +43,7 @@ const emptyItem = (): PostMediaItem => ({ url: '', label: '' });
 const IS_VIDEO = /\.(mp4|mov|webm|m4v)(\?|$)/i;
 
 export default function PostStudio() {
+  const { t } = useLang();
   const [clients, setClients] = useState<ClientConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [clientId, setClientId] = useState('');
@@ -189,9 +191,9 @@ export default function PostStudio() {
       });
       if (now) {
         await publishScheduledPostNow(post.id);
-        toast.success('Publicado no perfil do cliente.');
+        toast.success(tr('Publicado no perfil do cliente.', 'Content published successfully to Instagram.'));
       } else {
-        toast.success('Postagem agendada.');
+        toast.success(tr('Postagem agendada.', 'Content scheduled successfully for Instagram publishing.'));
       }
       reset();
       loadQueue();
@@ -207,10 +209,10 @@ export default function PostStudio() {
       <header className="overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-primary/10 via-card to-card p-5">
         <h1 className="flex items-center gap-2 text-2xl font-bold">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary/15 text-primary"><Images size={18} /></span>
-          Estúdio de Postagem
+          {t('Estúdio de Postagem', 'Publishing Studio')}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Escolha o cliente, selecione as artes e vídeos que já estão no sistema e veja a prévia igual ao Instagram antes de publicar.
+          {t('Escolha o cliente, selecione as artes e vídeos que já estão no sistema e veja a prévia igual ao Instagram antes de publicar.', 'Choose the client, pick media, write the caption, set date/time and preview exactly how it will look on Instagram.')}
         </p>
       </header>
 
@@ -426,10 +428,10 @@ export default function PostStudio() {
                   </div>
                   <div className="flex items-end gap-2">
                     <Button className="flex-1" onClick={() => submit(false)} disabled={saving}>
-                      {saving ? <Loader2 size={14} className="mr-1 animate-spin" /> : <CalendarClock size={14} className="mr-1" />} Agendar
+                      {saving ? <Loader2 size={14} className="mr-1 animate-spin" /> : <CalendarClock size={14} className="mr-1" />} {t('Agendar', 'Schedule Post')}
                     </Button>
                     <Button variant="secondary" onClick={() => submit(true)} disabled={saving}>
-                      <Zap size={14} className="mr-1" /> Publicar agora
+                      <Zap size={14} className="mr-1" /> {t('Publicar agora', 'Publish Now')}
                     </Button>
                   </div>
                 </div>

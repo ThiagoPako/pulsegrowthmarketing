@@ -5523,6 +5523,78 @@ const META_API_BASE = 'https://graph.facebook.com/v21.0';
 // Base da API do Instagram com Login do Instagram (perfil conectado direto, sem Página do Facebook)
 const IG_API_BASE = 'https://graph.instagram.com/v21.0';
 
+/**
+ * Carrega a configuração Meta usada no OAuth (uma única regra para login, troca e diagnóstico).
+ * Prefere o registro ativo mais recente que tenha o secret do Instagram.
+ * Retorna também DE ONDE veio cada credencial — essencial para diagnosticar
+ * "Error validating verification code" (quase sempre secret de outro app).
+ */
+async function loadMetaOAuthConfig(admin) {
+  const { data: metaRows } = await admin.from('api_integrations').select('id, config, updated_at').eq('provider', 'meta_ads').eq('status', 'ativo').order('updated_at', { ascending: false });
+  const rows = Array.isArray(metaRows) ? metaRows : [];
+  const metaIntegration = rows.find(r => r?.config?.instagram_app_secret_encrypted) || rows[0] || null;
+  const config = { ...((metaIntegration && metaIntegration.config) || {}) };
+  for (const k of ['meta_app_id', 'meta_app_secret_encrypted', 'instagram_app_id', 'instagram_app_secret_encrypted']) {
+    if (typeof config[k] === 'string') config[k] = config[k].replace(/\s+/g, '');
+  }
+  const appId = config.meta_app_id || null;
+  const igAppId = config.instagram_app_id || appId || INSTAGRAM_APP_ID_DEFAULT;
+  const igAppIdSource = config.instagram_app_id ? 'instagram_app_id' : (appId ? 'meta_app_id (fallback)' : 'padrão do servidor');
+  const igAppSecret = config.instagram_app_secret_encrypted || config.meta_app_secret_encrypted || null;
+  const igSecretSource = config.instagram_app_secret_encrypted ? 'Instagram App Secret' : (config.meta_app_secret_encrypted ? 'App Secret da Meta (fallback)' : 'nenhum');
+  return { rows, metaIntegration, config, appId, igAppId, igAppIdSource, igAppSecret, igSecretSource };
+}
+
+/** Apenas os 4 últimos caracteres — suficiente para comparar com o painel da Meta sem expor o segredo. */
+const secretSuffix = (s) => (s ? '••••' + String(s).slice(-4) : '(vazio)');
+/** Códigos OAuth do Instagram já trocados (uso único; mantidos por 1h em memória). */
+const USED_IG_CODES = new Set();
+
+/**
+ * Diagnóstico das credenciais do Login do Instagram (somente admin).
+ * Não expõe segredos: mostra só os 4 últimos caracteres e valida o par
+ * App ID + Secret com a Meta (grant client_credentials, não cria nada).
+ */
+app.post('/api/meta-oauth-diagnose', async (req, res) => {
+  try {
+    const { admin } = await verifyAdmin(req);
+    const loaded = await loadMetaOAuthConfig(admin);
+    let secretCheck = { status: 'skipped', message: 'Sem App ID ou secret para testar.' };
+    if (loaded.igAppId && loaded.igAppSecret) {
+      try {
+        const qs = new URLSearchParams({ client_id: String(loaded.igAppId), client_secret: String(loaded.igAppSecret), grant_type: 'client_credentials' });
+        const r = await fetch(`${META_API_BASE}/oauth/access_token?${qs.toString()}`);
+        const j = await r.json().catch(() => ({}));
+        if (j.access_token) secretCheck = { status: 'ok', message: 'A Meta confirmou que este secret pertence ao App ID ' + loaded.igAppId + '.' };
+        else {
+          const msg = j.error?.message || JSON.stringify(j);
+          secretCheck = /client secret|client_secret/i.test(msg)
+            ? { status: 'invalid', message: 'Secret NÃO corresponde ao App ID ' + loaded.igAppId + ': ' + msg }
+            : { status: 'inconclusive', message: 'A Meta não confirmou o par (pode ser normal para apps só do Instagram): ' + msg };
+        }
+      } catch (e) {
+        secretCheck = { status: 'inconclusive', message: 'Falha ao consultar a Meta: ' + e.message };
+      }
+    }
+    res.json({
+      redirect_uri: META_OAUTH_REDIRECT_URI,
+      active_rows: loaded.rows.length,
+      integration_id: loaded.metaIntegration?.id || null,
+      instagram_app_id: loaded.igAppId,
+      instagram_app_id_source: loaded.igAppIdSource,
+      meta_app_id: loaded.appId,
+      instagram_secret: secretSuffix(loaded.config.instagram_app_secret_encrypted),
+      meta_secret: secretSuffix(loaded.config.meta_app_secret_encrypted),
+      secret_used: secretSuffix(loaded.igAppSecret),
+      secret_used_source: loaded.igSecretSource,
+      secret_check: secretCheck,
+    });
+  } catch (error) {
+    const denied = /access required|unauthorized|token/i.test(error.message || '');
+    res.status(denied ? 403 : 500).json({ error: error.message });
+  }
+});
+
 app.post('/api/meta-oauth', async (req, res) => {
   try {
     const admin = getAdminClient();
@@ -5531,19 +5603,11 @@ app.post('/api/meta-oauth', async (req, res) => {
     const { action, client_id, code } = req.body;
     const redirect_uri = META_OAUTH_REDIRECT_URI;
 
-    // Pode haver mais de um registro Meta ativo (salvo por telas diferentes). Antes era
-    // pego um qualquer — o secret podia vir de um registro antigo e o Instagram recusava.
-    // Agora: o mais recente que tenha o secret do Instagram; senão o mais recente.
-    const { data: metaRows } = await admin.from('api_integrations').select('id, config, updated_at').eq('provider', 'meta_ads').eq('status', 'ativo').order('updated_at', { ascending: false });
-    const rows = Array.isArray(metaRows) ? metaRows : [];
-    const metaIntegration = rows.find(r => r?.config?.instagram_app_secret_encrypted) || rows[0];
+    const loaded = await loadMetaOAuthConfig(admin);
+    const { rows, metaIntegration, config } = loaded;
     if (!metaIntegration) return res.status(400).json({ error: 'Meta integration not configured' });
-    const config = { ...(metaIntegration.config || {}) };
-    for (const k of ['meta_app_id', 'meta_app_secret_encrypted', 'instagram_app_id', 'instagram_app_secret_encrypted']) {
-      if (typeof config[k] === 'string') config[k] = config[k].trim();
-    }
     if (rows.length > 1) console.warn('[meta-oauth] ' + rows.length + ' registros Meta ativos; usando', metaIntegration.id);
-    const appId = config?.meta_app_id;
+    const appId = loaded.appId;
 
     if (action === 'get_oauth_url') {
       if (!appId) return res.status(400).json({ error: 'Meta App ID not found' });
@@ -5590,15 +5654,16 @@ app.post('/api/meta-oauth', async (req, res) => {
     // ── Instagram Login direto (sem Página do Facebook) ──
     // Usa a "API do Instagram com Login do Instagram": o cliente entra com a
     // conta profissional do Instagram e autoriza a agência. Token fica só na VPS.
-    const igAppId = config?.instagram_app_id || appId || INSTAGRAM_APP_ID_DEFAULT;
+    const igAppId = loaded.igAppId;
     const igRedirect = META_OAUTH_REDIRECT_URI;
-    const igAppSecret = config?.instagram_app_secret_encrypted || config?.meta_app_secret_encrypted;
+    const igAppSecret = loaded.igAppSecret;
 
     if (action === 'get_instagram_oauth_url') {
       if (!igAppId) return res.status(400).json({ error: 'Instagram App ID não configurado (Financeiro → Integrações → Meta)' });
       const scopes = 'instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights';
       const state = JSON.stringify({ client_id, flow: 'instagram' });
       const oauthUrl = `https://www.instagram.com/oauth/authorize?client_id=${igAppId}&redirect_uri=${encodeURIComponent(igRedirect)}&scope=${scopes}&state=${encodeURIComponent(state)}&response_type=code&force_reauth=true`;
+      console.log('[instagram-oauth] link gerado', { igAppId, redirect_uri: igRedirect, integration: metaIntegration.id });
       return res.json({ oauth_url: oauthUrl });
     }
 
@@ -5611,18 +5676,27 @@ app.post('/api/meta-oauth', async (req, res) => {
         return res.status(400).json({ error: 'Falta o Instagram App Secret. Cole o secret do app do Instagram em Configurações → Integração Meta (o secret da Meta não serve para o App ID do Instagram).' });
       }
 
+      // O código do Instagram é de uso único: bloqueia uma segunda troca do mesmo código
+      // (duplo clique, duas abas, retorno duplicado do popup) que invalidaria a conexão.
+      const cleanCode = String(code).trim().replace(/#_$/, '');
+      if (USED_IG_CODES.has(cleanCode)) {
+        return res.status(409).json({ error: 'Este código de autorização já foi usado. Clique em "Conectar Instagram" de novo para gerar um novo.' });
+      }
+      USED_IG_CODES.add(cleanCode);
+      setTimeout(() => USED_IG_CODES.delete(cleanCode), 60 * 60 * 1000).unref?.();
+
       // 1) code → token curto (POST form-urlencoded)
       const form = new URLSearchParams({
         client_id: String(igAppId), client_secret: String(igAppSecret),
-        grant_type: 'authorization_code', redirect_uri: igRedirect, code: String(code).trim().replace(/#_$/, ''),
+        grant_type: 'authorization_code', redirect_uri: igRedirect, code: cleanCode,
       });
       const shortRes = await fetch('https://api.instagram.com/oauth/access_token', { method: 'POST', body: form });
       const shortData = await shortRes.json().catch(() => ({}));
       if (!shortData.access_token) {
         const raw = shortData.error_message || shortData.error?.message || JSON.stringify(shortData);
-        console.warn('[instagram-oauth] troca recusada', { igAppId, redirect_uri, raw });
+        console.warn('[instagram-oauth] troca recusada', { igAppId, igAppIdSource: loaded.igAppIdSource, secret: secretSuffix(igAppSecret), secretSource: loaded.igSecretSource, integration: metaIntegration.id, activeRows: rows.length, redirect_uri, raw });
         const hint = /verification code|redirect_uri/i.test(raw)
-          ? ` — Confira: (1) o endereço ${redirect_uri} está cadastrado igual em "URIs de redirecionamento OAuth válidos" do Login do Instagram; (2) o Instagram App Secret salvo é do mesmo app do Instagram App ID ${igAppId}; (3) o código não foi usado antes (tente autorizar de novo).`
+          ? ` — Diagnóstico: App ID usado ${igAppId} (${loaded.igAppIdSource}); secret usado ${secretSuffix(igAppSecret)} (${loaded.igSecretSource}); redirect ${redirect_uri}. Compare o final do secret com "Chave secreta do app do Instagram" no painel da Meta (Login do Instagram → Configuração da API). Se for diferente, cole o correto em Configurações → Integração Meta → "Instagram App Secret" e use "Testar credenciais".`
           : '';
         return res.status(400).json({ error: 'Instagram recusou o código: ' + raw + hint });
       }

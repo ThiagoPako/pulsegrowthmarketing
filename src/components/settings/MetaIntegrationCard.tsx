@@ -5,7 +5,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Share2, Save, Loader2, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
+import { Share2, Save, Loader2, Eye, EyeOff, CheckCircle, AlertCircle, Stethoscope } from 'lucide-react';
+
+interface MetaDiagnosis {
+  redirect_uri: string;
+  active_rows: number;
+  instagram_app_id: string;
+  instagram_app_id_source: string;
+  instagram_secret: string;
+  meta_secret: string;
+  secret_used: string;
+  secret_used_source: string;
+  secret_check: { status: 'ok' | 'invalid' | 'inconclusive' | 'skipped'; message: string };
+}
 
 /**
  * Card de configuração da integração Meta (Instagram/Facebook) para postagens automáticas.
@@ -15,6 +27,8 @@ import { Share2, Save, Loader2, Eye, EyeOff, CheckCircle, AlertCircle } from 'lu
 export default function MetaIntegrationCard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [diagnosing, setDiagnosing] = useState(false);
+  const [diag, setDiag] = useState<MetaDiagnosis | null>(null);
   const [integrationId, setIntegrationId] = useState<string | null>(null);
   const [showSecrets, setShowSecrets] = useState(false);
   const [configured, setConfigured] = useState(false);
@@ -105,6 +119,20 @@ export default function MetaIntegrationCard() {
     }
   };
 
+  /** Mostra qual App ID/secret o servidor usa (só os 4 últimos caracteres) e valida o par com a Meta. */
+  const handleDiagnose = async () => {
+    setDiagnosing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('meta-oauth-diagnose', { body: {} });
+      if (error || data?.error) throw new Error(data?.error || error?.message || 'Falha no diagnóstico');
+      setDiag(data as MetaDiagnosis);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setDiagnosing(false);
+    }
+  };
+
   const secretType = showSecrets ? 'text' : 'password';
 
   return (
@@ -170,16 +198,34 @@ export default function MetaIntegrationCard() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Button variant="ghost" size="sm" onClick={() => setShowSecrets(s => !s)} className="text-xs">
           {showSecrets ? <EyeOff size={13} className="mr-1" /> : <Eye size={13} className="mr-1" />}
           {showSecrets ? 'Ocultar secrets' : 'Mostrar secrets'}
         </Button>
-        <Button onClick={handleSave} disabled={saving || loading} size="sm">
-          {saving ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Save size={14} className="mr-1" />}
-          Salvar Integração Meta
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleDiagnose} disabled={diagnosing || loading} size="sm">
+            {diagnosing ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Stethoscope size={14} className="mr-1" />}
+            Testar credenciais
+          </Button>
+          <Button onClick={handleSave} disabled={saving || loading} size="sm">
+            {saving ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Save size={14} className="mr-1" />}
+            Salvar Integração Meta
+          </Button>
+        </div>
       </div>
+
+      {diag && (
+        <div className="rounded-md border border-border bg-muted/40 p-3 text-xs space-y-1 font-mono">
+          <p className={diag.secret_check.status === 'ok' ? 'text-primary font-semibold' : diag.secret_check.status === 'invalid' ? 'text-destructive font-semibold' : 'text-muted-foreground font-semibold'}>
+            {diag.secret_check.message}
+          </p>
+          <p>Instagram App ID usado: {diag.instagram_app_id} ({diag.instagram_app_id_source})</p>
+          <p>Secret usado: {diag.secret_used} ({diag.secret_used_source})</p>
+          <p>Instagram Secret salvo: {diag.instagram_secret} · Meta Secret salvo: {diag.meta_secret}</p>
+          <p>Redirect: {diag.redirect_uri} · Configurações ativas: {diag.active_rows}</p>
+        </div>
+      )}
     </div>
   );
 }

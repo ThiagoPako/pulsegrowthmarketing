@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLang, tr, LanguageToggle } from '@/lib/i18n';
+import { useLang, tr } from '@/lib/i18n';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { setPortalInsightsEnabled, diagnoseClientConnection, type ConnectedSocialAccount, type DiagnosticCheck } from '@/services/socialPostsApi';
 import { Switch } from '@/components/ui/switch';

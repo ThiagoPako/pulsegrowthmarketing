@@ -5607,15 +5607,16 @@ app.post('/api/meta-oauth', async (req, res) => {
     // ── Instagram Login direto (sem Página do Facebook) ──
     // Usa a "API do Instagram com Login do Instagram": o cliente entra com a
     // conta profissional do Instagram e autoriza a agência. Token fica só na VPS.
-    const igAppId = config?.instagram_app_id || appId || INSTAGRAM_APP_ID_DEFAULT;
+    const igAppId = loaded.igAppId;
     const igRedirect = META_OAUTH_REDIRECT_URI;
-    const igAppSecret = config?.instagram_app_secret_encrypted || config?.meta_app_secret_encrypted;
+    const igAppSecret = loaded.igAppSecret;
 
     if (action === 'get_instagram_oauth_url') {
       if (!igAppId) return res.status(400).json({ error: 'Instagram App ID não configurado (Financeiro → Integrações → Meta)' });
       const scopes = 'instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights';
       const state = JSON.stringify({ client_id, flow: 'instagram' });
       const oauthUrl = `https://www.instagram.com/oauth/authorize?client_id=${igAppId}&redirect_uri=${encodeURIComponent(igRedirect)}&scope=${scopes}&state=${encodeURIComponent(state)}&response_type=code&force_reauth=true`;
+      console.log('[instagram-oauth] link gerado', { igAppId, redirect_uri: igRedirect, integration: metaIntegration.id });
       return res.json({ oauth_url: oauthUrl });
     }
 
@@ -5628,18 +5629,27 @@ app.post('/api/meta-oauth', async (req, res) => {
         return res.status(400).json({ error: 'Falta o Instagram App Secret. Cole o secret do app do Instagram em Configurações → Integração Meta (o secret da Meta não serve para o App ID do Instagram).' });
       }
 
+      // O código do Instagram é de uso único: bloqueia uma segunda troca do mesmo código
+      // (duplo clique, duas abas, retorno duplicado do popup) que invalidaria a conexão.
+      const cleanCode = String(code).trim().replace(/#_$/, '');
+      if (USED_IG_CODES.has(cleanCode)) {
+        return res.status(409).json({ error: 'Este código de autorização já foi usado. Clique em "Conectar Instagram" de novo para gerar um novo.' });
+      }
+      USED_IG_CODES.add(cleanCode);
+      setTimeout(() => USED_IG_CODES.delete(cleanCode), 60 * 60 * 1000).unref?.();
+
       // 1) code → token curto (POST form-urlencoded)
       const form = new URLSearchParams({
         client_id: String(igAppId), client_secret: String(igAppSecret),
-        grant_type: 'authorization_code', redirect_uri: igRedirect, code: String(code).trim().replace(/#_$/, ''),
+        grant_type: 'authorization_code', redirect_uri: igRedirect, code: cleanCode,
       });
       const shortRes = await fetch('https://api.instagram.com/oauth/access_token', { method: 'POST', body: form });
       const shortData = await shortRes.json().catch(() => ({}));
       if (!shortData.access_token) {
         const raw = shortData.error_message || shortData.error?.message || JSON.stringify(shortData);
-        console.warn('[instagram-oauth] troca recusada', { igAppId, redirect_uri, raw });
+        console.warn('[instagram-oauth] troca recusada', { igAppId, igAppIdSource: loaded.igAppIdSource, secret: secretSuffix(igAppSecret), secretSource: loaded.igSecretSource, integration: metaIntegration.id, activeRows: rows.length, redirect_uri, raw });
         const hint = /verification code|redirect_uri/i.test(raw)
-          ? ` — Confira: (1) o endereço ${redirect_uri} está cadastrado igual em "URIs de redirecionamento OAuth válidos" do Login do Instagram; (2) o Instagram App Secret salvo é do mesmo app do Instagram App ID ${igAppId}; (3) o código não foi usado antes (tente autorizar de novo).`
+          ? ` — Diagnóstico: App ID usado ${igAppId} (${loaded.igAppIdSource}); secret usado ${secretSuffix(igAppSecret)} (${loaded.igSecretSource}); redirect ${redirect_uri}. Compare o final do secret com "Chave secreta do app do Instagram" no painel da Meta (Login do Instagram → Configuração da API). Se for diferente, cole o correto em Configurações → Integração Meta → "Instagram App Secret" e use "Testar credenciais".`
           : '';
         return res.status(400).json({ error: 'Instagram recusou o código: ' + raw + hint });
       }

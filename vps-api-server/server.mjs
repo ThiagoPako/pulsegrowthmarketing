@@ -5590,7 +5590,8 @@ app.post('/api/meta-oauth-diagnose', async (req, res) => {
       secret_check: secretCheck,
     });
   } catch (error) {
-    res.status(error.status || 500).json({ error: error.message });
+    const denied = /access required|unauthorized|token/i.test(error.message || '');
+    res.status(denied ? 403 : 500).json({ error: error.message });
   }
 });
 

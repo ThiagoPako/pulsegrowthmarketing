@@ -59,7 +59,9 @@ export default function SocialConnections() {
       if (error || data?.error || !data?.path) {
         throw new Error(data?.error || error?.message || 'Não foi possível gerar o link.');
       }
-      const url = `${window.location.origin}${data.path}`;
+      // O link precisa abrir no domínio de produção: o retorno do login da Meta
+      // está cadastrado como https://agenciapulse.tech/ e só funciona lá.
+      const url = `https://agenciapulse.tech${data.path}`;
       setInviteLink({
         name: client.name,
         url,

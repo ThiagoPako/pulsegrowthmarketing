@@ -21,6 +21,16 @@ interface DeliveryRecord {
   videos_recorded?: number | string | null;
   recording_duration_seconds?: number | string | null;
   wait_duration_seconds?: number | string | null;
+  recording_id?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+}
+
+interface WaitLogRow {
+  recording_id: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  wait_duration_seconds: number | string | null;
 }
 
 /** Formata segundos como "1h 05min" / "12min" / "—". */

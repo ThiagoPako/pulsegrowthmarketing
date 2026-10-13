@@ -121,7 +121,13 @@ export default function SocialConnections() {
     };
     document.addEventListener('visibilitychange', refresh);
     window.addEventListener('message', onMessage);
-    return () => { document.removeEventListener('visibilitychange', refresh); window.removeEventListener('message', onMessage); };
+    let channel: BroadcastChannel | null = null;
+    try { channel = new BroadcastChannel('pulse-social'); channel.onmessage = onMessage; } catch { /* navegador antigo */ }
+    return () => {
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('message', onMessage);
+      channel?.close();
+    };
   }, []);
 
   const filtered = useMemo(() => {

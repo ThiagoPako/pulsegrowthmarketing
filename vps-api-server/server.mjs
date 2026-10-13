@@ -5531,9 +5531,18 @@ app.post('/api/meta-oauth', async (req, res) => {
     const { action, client_id, code } = req.body;
     const redirect_uri = META_OAUTH_REDIRECT_URI;
 
-    const { data: metaIntegration } = await admin.from('api_integrations').select('config').eq('provider', 'meta_ads').eq('status', 'ativo').limit(1).single();
+    // Pode haver mais de um registro Meta ativo (salvo por telas diferentes). Antes era
+    // pego um qualquer — o secret podia vir de um registro antigo e o Instagram recusava.
+    // Agora: o mais recente que tenha o secret do Instagram; senão o mais recente.
+    const { data: metaRows } = await admin.from('api_integrations').select('id, config, updated_at').eq('provider', 'meta_ads').eq('status', 'ativo').order('updated_at', { ascending: false });
+    const rows = Array.isArray(metaRows) ? metaRows : [];
+    const metaIntegration = rows.find(r => r?.config?.instagram_app_secret_encrypted) || rows[0];
     if (!metaIntegration) return res.status(400).json({ error: 'Meta integration not configured' });
-    const config = metaIntegration.config;
+    const config = { ...(metaIntegration.config || {}) };
+    for (const k of ['meta_app_id', 'meta_app_secret_encrypted', 'instagram_app_id', 'instagram_app_secret_encrypted']) {
+      if (typeof config[k] === 'string') config[k] = config[k].trim();
+    }
+    if (rows.length > 1) console.warn('[meta-oauth] ' + rows.length + ' registros Meta ativos; usando', metaIntegration.id);
     const appId = config?.meta_app_id;
 
     if (action === 'get_oauth_url') {
@@ -5832,7 +5841,11 @@ app.post('/api/meta-publish', async (req, res) => {
 app.post('/api/meta-store-credentials', async (req, res) => {
   try {
     const { user, admin } = await verifyAdmin(req);
-    const { integration_id, secret_name, secret_value, meta_app_id, meta_app_secret, meta_page_token, meta_ig_business_id, meta_page_id, instagram_app_id, instagram_app_secret } = req.body;
+    const b = req.body || {};
+    const clean = (v) => (typeof v === 'string' ? v.trim() : v);
+    const { integration_id, secret_name, secret_value, meta_page_token, meta_ig_business_id, meta_page_id } = b;
+    const meta_app_id = clean(b.meta_app_id), meta_app_secret = clean(b.meta_app_secret);
+    const instagram_app_id = clean(b.instagram_app_id), instagram_app_secret = clean(b.instagram_app_secret);
 
     if (secret_name && secret_value) {
       const keyToProviderMap = { GOOGLE_GEMINI_API_KEY: 'ai_gemini', OPENAI_API_KEY: 'ai_openai', ANTHROPIC_API_KEY: 'ai_claude' };

@@ -21,6 +21,16 @@ interface DeliveryRecord {
   videos_recorded?: number | string | null;
   recording_duration_seconds?: number | string | null;
   wait_duration_seconds?: number | string | null;
+  recording_id?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+}
+
+interface WaitLogRow {
+  recording_id: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  wait_duration_seconds: number | string | null;
 }
 
 /** Formata segundos como "1h 05min" / "12min" / "—". */
@@ -100,7 +110,10 @@ const PRODUCED_SOCIAL_STATUSES = new Set(['postado', 'publicado', 'posted', 'age
 const toNumber = (value: number | string | null | undefined): number => {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
   if (typeof value !== 'string') return 0;
-  const normalized = value.replace(/\./g, '').replace(',', '.');
+  const trimmed = value.trim();
+  // PostgreSQL devolve numeric como "2900.00": ponto é decimal, não milhar.
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
+  const normalized = trimmed.replace(/\./g, '').replace(',', '.');
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
 };
@@ -230,9 +243,17 @@ const normalizeContentType = (value?: string | null): 'reels' | 'criativo' | 'st
   return 'outro';
 };
 
+/** Datas puras ficam como estão; timestamps viram o dia no fuso de São Paulo. */
+const toLocalDay = (value: string): string => {
+  if (value.length <= 10) return value.slice(0, 10);
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value.slice(0, 10);
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+};
+
 const inDateRange = (value: string | null | undefined, start: string, end: string) => {
   if (!value) return false;
-  const day = value.slice(0, 10);
+  const day = toLocalDay(value);
   return day >= start && day <= end;
 };
 
@@ -315,8 +336,8 @@ export default function CostByContentType() {
 
   const fetchData = useCallback(async () => {
     setLoadError(null);
-    const [rRes, sRes, edRes, dRes, scRes, catRes, expRes, plRes] = await Promise.all([
-      safeSelect<DeliveryRecord>('delivery_records', 'client_id,videomaker_id,date,reels_produced,creatives_produced,stories_produced,arts_produced,delivery_status,videos_recorded,recording_duration_seconds,wait_duration_seconds'),
+    const [rRes, sRes, edRes, dRes, scRes, catRes, expRes, plRes, wRes] = await Promise.all([
+      safeSelect<DeliveryRecord>('delivery_records', 'recording_id,started_at,finished_at,client_id,videomaker_id,date,reels_produced,creatives_produced,stories_produced,arts_produced,delivery_status,videos_recorded,recording_duration_seconds,wait_duration_seconds'),
       safeSelect<SocialDelivery>('social_media_deliveries', 'client_id,content_type,delivered_at,posted_at,created_at,updated_at,status,created_by'),
       safeSelect<EditorTask>('content_tasks', 'client_id,content_type,kanban_column,approved_at,updated_at,created_at,assigned_to,edited_by'),
       safeSelect<DesignTask>('design_tasks', 'client_id,kanban_column,completed_at,updated_at,created_at,attachment_url,attachment_urls,editable_file_url,mockup_url,assigned_to'),
@@ -324,8 +345,27 @@ export default function CostByContentType() {
       safeSelect<ExpenseCategory>('expense_categories', 'id,name'),
       safeSelect<SalaryExpense>('expenses', 'date,amount,description,responsible,category_id,expense_type'),
       safeSelect<PlanRow>('plans', 'id,name,price,reels_qty,creatives_qty,stories_qty,arts_qty,recording_sessions,status'),
+      safeSelect<WaitLogRow>('recording_wait_logs', 'recording_id,started_at,ended_at,wait_duration_seconds'),
     ]);
-    setRecords(rRes);
+    // Registros antigos não têm espera/duração gravadas: completa a partir dos logs reais.
+    const waitByRecording = new Map<string, number>();
+    wRes.forEach(w => {
+      if (!w.recording_id) return;
+      let sec = toNumber(w.wait_duration_seconds);
+      if (sec <= 0 && w.started_at && w.ended_at) {
+        sec = Math.max(0, Math.floor((new Date(w.ended_at).getTime() - new Date(w.started_at).getTime()) / 1000));
+      }
+      if (sec > 0 && sec < 12 * 3600) waitByRecording.set(w.recording_id, (waitByRecording.get(w.recording_id) || 0) + sec);
+    });
+    setRecords(rRes.map(r => {
+      const wait = toNumber(r.wait_duration_seconds) || (r.recording_id ? waitByRecording.get(r.recording_id) || 0 : 0);
+      let rec = toNumber(r.recording_duration_seconds);
+      if (rec <= 0 && r.started_at && r.finished_at) {
+        const gross = Math.floor((new Date(r.finished_at).getTime() - new Date(r.started_at).getTime()) / 1000);
+        if (gross > 0 && gross < 16 * 3600) rec = Math.max(0, gross - wait);
+      }
+      return { ...r, wait_duration_seconds: wait, recording_duration_seconds: rec };
+    }));
     setSocialDeliveries(sRes);
     setEditorTasks(edRes);
     setDesignTasks(dRes);

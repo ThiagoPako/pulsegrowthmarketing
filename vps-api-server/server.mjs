@@ -9455,7 +9455,7 @@ app.post('/api/active-recordings/:recordingId/stop', async (req, res) => {
         `INSERT INTO delivery_records (recording_id, client_id, videomaker_id, date, reels_produced, creatives_produced, stories_produced, arts_produced, extras_produced, videos_recorded, delivery_status, observations,
                                        started_at, finished_at, recording_duration_seconds, wait_duration_seconds)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-        [recordingId, active.client_id, active.videomaker_id, finishedAt.toISOString().split('T')[0],
+        [recordingId, active.client_id, active.videomaker_id, finishedAt.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
          deliveryOverrides?.reels_produced ?? 0, deliveryOverrides?.creatives_produced ?? 0,
          deliveryOverrides?.stories_produced ?? 0, deliveryOverrides?.arts_produced ?? 0,
          deliveryOverrides?.extras_produced ?? 0, deliveryOverrides?.videos_recorded ?? 1,

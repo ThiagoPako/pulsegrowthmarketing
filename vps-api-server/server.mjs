@@ -28,6 +28,9 @@ import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { Readable } from 'node:stream';
 
+/** Endereço de retorno OAuth cadastrado na Meta — idêntico em todas as etapas. */
+const META_OAUTH_REDIRECT_URI = process.env.META_OAUTH_REDIRECT_URI || 'https://agenciapulse.tech/';
+const INSTAGRAM_APP_ID_DEFAULT = process.env.INSTAGRAM_APP_ID || '4269428196659273';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -5523,7 +5526,10 @@ const IG_API_BASE = 'https://graph.instagram.com/v21.0';
 app.post('/api/meta-oauth', async (req, res) => {
   try {
     const admin = getAdminClient();
-    const { action, client_id, redirect_uri, code } = req.body;
+    // redirect_uri ÚNICO: o mesmo texto vai na URL de login e na troca do código.
+    // Valor do corpo é ignorado para nunca divergir (www, sem barra, preview…).
+    const { action, client_id, code } = req.body;
+    const redirect_uri = META_OAUTH_REDIRECT_URI;
 
     const { data: metaIntegration } = await admin.from('api_integrations').select('config').eq('provider', 'meta_ads').eq('status', 'ativo').limit(1).single();
     if (!metaIntegration) return res.status(400).json({ error: 'Meta integration not configured' });
@@ -5575,14 +5581,15 @@ app.post('/api/meta-oauth', async (req, res) => {
     // ── Instagram Login direto (sem Página do Facebook) ──
     // Usa a "API do Instagram com Login do Instagram": o cliente entra com a
     // conta profissional do Instagram e autoriza a agência. Token fica só na VPS.
-    const igAppId = config?.instagram_app_id || appId;
+    const igAppId = config?.instagram_app_id || appId || INSTAGRAM_APP_ID_DEFAULT;
+    const igRedirect = META_OAUTH_REDIRECT_URI;
     const igAppSecret = config?.instagram_app_secret_encrypted || config?.meta_app_secret_encrypted;
 
     if (action === 'get_instagram_oauth_url') {
       if (!igAppId) return res.status(400).json({ error: 'Instagram App ID não configurado (Financeiro → Integrações → Meta)' });
       const scopes = 'instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights';
       const state = JSON.stringify({ client_id, flow: 'instagram' });
-      const oauthUrl = `https://www.instagram.com/oauth/authorize?client_id=${igAppId}&redirect_uri=${encodeURIComponent(redirect_uri)}&scope=${scopes}&state=${encodeURIComponent(state)}&response_type=code&force_reauth=true`;
+      const oauthUrl = `https://www.instagram.com/oauth/authorize?client_id=${igAppId}&redirect_uri=${encodeURIComponent(igRedirect)}&scope=${scopes}&state=${encodeURIComponent(state)}&response_type=code&force_reauth=true`;
       return res.json({ oauth_url: oauthUrl });
     }
 
@@ -5598,7 +5605,7 @@ app.post('/api/meta-oauth', async (req, res) => {
       // 1) code → token curto (POST form-urlencoded)
       const form = new URLSearchParams({
         client_id: String(igAppId), client_secret: String(igAppSecret),
-        grant_type: 'authorization_code', redirect_uri, code: String(code).replace(/#_$/, ''),
+        grant_type: 'authorization_code', redirect_uri: igRedirect, code: String(code).trim().replace(/#_$/, ''),
       });
       const shortRes = await fetch('https://api.instagram.com/oauth/access_token', { method: 'POST', body: form });
       const shortData = await shortRes.json().catch(() => ({}));

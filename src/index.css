@@ -265,3 +265,8 @@ html.font-scale-victor1 { font-size: 26px; }
 /* Escape hatch: <h1 data-no-tint> desliga o efeito onde não faz sentido
    (ex.: telas de login/erro fora do shell principal). */
 
+
+/* Esconde a barra e o balão do tradutor automático (troca de idioma fica no botão PT/EN). */
+.goog-te-banner-frame, .skiptranslate iframe, #goog-gt-tt, .goog-te-balloon-frame, .VIpgJd-ZVi9od-ORHb-OEVmcd { display: none !important; }
+body { top: 0 !important; }
+.goog-text-highlight { background: transparent !important; box-shadow: none !important; }

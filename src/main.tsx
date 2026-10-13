@@ -1,6 +1,10 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { initAutoTranslate } from "./lib/i18n";
+
+// Tradução automática do sistema inteiro quando o idioma for inglês.
+initAutoTranslate();
 
 /**
  * Não consultar versões nem recarregar a aplicação em segundo plano.

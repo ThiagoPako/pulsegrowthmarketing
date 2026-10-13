@@ -5547,6 +5547,52 @@ async function loadMetaOAuthConfig(admin) {
 
 /** Apenas os 4 últimos caracteres — suficiente para comparar com o painel da Meta sem expor o segredo. */
 const secretSuffix = (s) => (s ? '••••' + String(s).slice(-4) : '(vazio)');
+/** Códigos OAuth do Instagram já trocados (uso único; mantidos por 1h em memória). */
+const USED_IG_CODES = new Set();
+
+/**
+ * Diagnóstico das credenciais do Login do Instagram (somente admin).
+ * Não expõe segredos: mostra só os 4 últimos caracteres e valida o par
+ * App ID + Secret com a Meta (grant client_credentials, não cria nada).
+ */
+app.post('/api/meta-oauth-diagnose', async (req, res) => {
+  try {
+    const { admin } = await verifyAdmin(req);
+    const loaded = await loadMetaOAuthConfig(admin);
+    let secretCheck = { status: 'skipped', message: 'Sem App ID ou secret para testar.' };
+    if (loaded.igAppId && loaded.igAppSecret) {
+      try {
+        const qs = new URLSearchParams({ client_id: String(loaded.igAppId), client_secret: String(loaded.igAppSecret), grant_type: 'client_credentials' });
+        const r = await fetch(`${META_API_BASE}/oauth/access_token?${qs.toString()}`);
+        const j = await r.json().catch(() => ({}));
+        if (j.access_token) secretCheck = { status: 'ok', message: 'A Meta confirmou que este secret pertence ao App ID ' + loaded.igAppId + '.' };
+        else {
+          const msg = j.error?.message || JSON.stringify(j);
+          secretCheck = /client secret|client_secret/i.test(msg)
+            ? { status: 'invalid', message: 'Secret NÃO corresponde ao App ID ' + loaded.igAppId + ': ' + msg }
+            : { status: 'inconclusive', message: 'A Meta não confirmou o par (pode ser normal para apps só do Instagram): ' + msg };
+        }
+      } catch (e) {
+        secretCheck = { status: 'inconclusive', message: 'Falha ao consultar a Meta: ' + e.message };
+      }
+    }
+    res.json({
+      redirect_uri: META_OAUTH_REDIRECT_URI,
+      active_rows: loaded.rows.length,
+      integration_id: loaded.metaIntegration?.id || null,
+      instagram_app_id: loaded.igAppId,
+      instagram_app_id_source: loaded.igAppIdSource,
+      meta_app_id: loaded.appId,
+      instagram_secret: secretSuffix(loaded.config.instagram_app_secret_encrypted),
+      meta_secret: secretSuffix(loaded.config.meta_app_secret_encrypted),
+      secret_used: secretSuffix(loaded.igAppSecret),
+      secret_used_source: loaded.igSecretSource,
+      secret_check: secretCheck,
+    });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
 
 app.post('/api/meta-oauth', async (req, res) => {
   try {

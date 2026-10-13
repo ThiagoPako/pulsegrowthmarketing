@@ -247,7 +247,7 @@ function AppRoutes() {
           <ProtectedRoute>
             {/* A role já está resolvida aqui (garantido pelo ProtectedRoute),
                 então o painel correto é renderizado direto, sem flash. */}
-            {currentRoles.includes('revisor_meta') ? <Navigate to="/estudio-postagem" replace /> :
+            {currentRoles.includes('revisor_meta') && !currentRoles.includes('admin') ? <Navigate to="/estudio-postagem" replace /> :
              currentRoles.includes('editor') ? <EditorDashboard /> :
              currentRoles.includes('videomaker') ? <VideomakerDashboard /> :
              currentRoles.includes('endomarketing') ? <EndomarketingDashboard /> :

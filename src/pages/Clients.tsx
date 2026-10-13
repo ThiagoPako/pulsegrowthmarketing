@@ -1407,7 +1407,7 @@ export default function Clients() {
     const clientId = editing?.id || 'new';
     const exchangeAction = flow === 'instagram' ? 'exchange_instagram_code' : 'exchange_code';
     try {
-      const redirectUri = `${window.location.origin}/`;
+      const redirectUri = 'https://agenciapulse.tech/'; // idêntico ao cadastrado na Meta e ao usado no servidor
       
       const { data, error } = await invokeVpsFunction('meta-oauth', {
         body: {
@@ -1513,7 +1513,7 @@ export default function Clients() {
             body: {
               action: savedFlow === 'instagram' ? 'exchange_instagram_code' : 'exchange_code',
               code,
-              redirect_uri: savedRedirectUri,
+              redirect_uri: 'https://agenciapulse.tech/',
               client_id: parsedClientId,
             },
           });

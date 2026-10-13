@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { tr } from '@/lib/i18n';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { FileDown, Eye, CheckCircle2 } from 'lucide-react';
@@ -64,13 +66,14 @@ export function PortalInsightsReport({ open, onOpenChange, clientName, accountNa
         : [],
       filename: `relatorio-instagram-${period.since}-a-${period.until}.pdf`,
     });
+    toast.success(tr('Relatório gerado em PDF.', 'Insights report generated and exported to PDF.'));
   };
 
   return (
     <Dialog open={open} onOpenChange={value => { onOpenChange(value); if (!value) setPreview(false); }}>
       <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Gerar relatório do Instagram</DialogTitle>
+          <DialogTitle>{tr('Gerar relatório do Instagram', 'Generate Instagram Insights Report')}</DialogTitle>
           <DialogDescription>
             {formatDate(period.since)} até {formatDate(period.until)} · escolha as informações que deseja incluir.
           </DialogDescription>
@@ -136,7 +139,7 @@ export function PortalInsightsReport({ open, onOpenChange, clientName, accountNa
             <Eye size={15} /> {preview ? 'Ocultar prévia' : 'Visualizar'}
           </Button>
           <Button type="button" className="gap-2" disabled={chosen.length === 0} onClick={handleExport}>
-            <FileDown size={15} /> Gerar PDF
+            <FileDown size={15} /> {tr('Gerar PDF', 'Generate PDF Report')}
           </Button>
         </DialogFooter>
       </DialogContent>

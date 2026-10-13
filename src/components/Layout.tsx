@@ -65,7 +65,6 @@ const navCategories: NavCategory[] = [
       { path: '/conexoes-sociais', label: 'Conexões Sociais', icon: Plug, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },
       { path: '/estudio-postagem', label: 'Estúdio de Postagem', icon: Images, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },
       { path: '/desempenho-social', label: 'Desempenho Social', icon: TrendingUp, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },
-      { path: '/clientes-teste', label: 'Clientes de Teste', icon: FlaskConical, roles: ['revisor_meta'] },
     ],
   },
   {

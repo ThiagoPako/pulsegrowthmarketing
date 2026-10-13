@@ -5523,6 +5523,31 @@ const META_API_BASE = 'https://graph.facebook.com/v21.0';
 // Base da API do Instagram com Login do Instagram (perfil conectado direto, sem Página do Facebook)
 const IG_API_BASE = 'https://graph.instagram.com/v21.0';
 
+/**
+ * Carrega a configuração Meta usada no OAuth (uma única regra para login, troca e diagnóstico).
+ * Prefere o registro ativo mais recente que tenha o secret do Instagram.
+ * Retorna também DE ONDE veio cada credencial — essencial para diagnosticar
+ * "Error validating verification code" (quase sempre secret de outro app).
+ */
+async function loadMetaOAuthConfig(admin) {
+  const { data: metaRows } = await admin.from('api_integrations').select('id, config, updated_at').eq('provider', 'meta_ads').eq('status', 'ativo').order('updated_at', { ascending: false });
+  const rows = Array.isArray(metaRows) ? metaRows : [];
+  const metaIntegration = rows.find(r => r?.config?.instagram_app_secret_encrypted) || rows[0] || null;
+  const config = { ...((metaIntegration && metaIntegration.config) || {}) };
+  for (const k of ['meta_app_id', 'meta_app_secret_encrypted', 'instagram_app_id', 'instagram_app_secret_encrypted']) {
+    if (typeof config[k] === 'string') config[k] = config[k].replace(/\s+/g, '');
+  }
+  const appId = config.meta_app_id || null;
+  const igAppId = config.instagram_app_id || appId || INSTAGRAM_APP_ID_DEFAULT;
+  const igAppIdSource = config.instagram_app_id ? 'instagram_app_id' : (appId ? 'meta_app_id (fallback)' : 'padrão do servidor');
+  const igAppSecret = config.instagram_app_secret_encrypted || config.meta_app_secret_encrypted || null;
+  const igSecretSource = config.instagram_app_secret_encrypted ? 'Instagram App Secret' : (config.meta_app_secret_encrypted ? 'App Secret da Meta (fallback)' : 'nenhum');
+  return { rows, metaIntegration, config, appId, igAppId, igAppIdSource, igAppSecret, igSecretSource };
+}
+
+/** Apenas os 4 últimos caracteres — suficiente para comparar com o painel da Meta sem expor o segredo. */
+const secretSuffix = (s) => (s ? '••••' + String(s).slice(-4) : '(vazio)');
+
 app.post('/api/meta-oauth', async (req, res) => {
   try {
     const admin = getAdminClient();
@@ -5531,19 +5556,11 @@ app.post('/api/meta-oauth', async (req, res) => {
     const { action, client_id, code } = req.body;
     const redirect_uri = META_OAUTH_REDIRECT_URI;
 
-    // Pode haver mais de um registro Meta ativo (salvo por telas diferentes). Antes era
-    // pego um qualquer — o secret podia vir de um registro antigo e o Instagram recusava.
-    // Agora: o mais recente que tenha o secret do Instagram; senão o mais recente.
-    const { data: metaRows } = await admin.from('api_integrations').select('id, config, updated_at').eq('provider', 'meta_ads').eq('status', 'ativo').order('updated_at', { ascending: false });
-    const rows = Array.isArray(metaRows) ? metaRows : [];
-    const metaIntegration = rows.find(r => r?.config?.instagram_app_secret_encrypted) || rows[0];
+    const loaded = await loadMetaOAuthConfig(admin);
+    const { rows, metaIntegration, config } = loaded;
     if (!metaIntegration) return res.status(400).json({ error: 'Meta integration not configured' });
-    const config = { ...(metaIntegration.config || {}) };
-    for (const k of ['meta_app_id', 'meta_app_secret_encrypted', 'instagram_app_id', 'instagram_app_secret_encrypted']) {
-      if (typeof config[k] === 'string') config[k] = config[k].trim();
-    }
     if (rows.length > 1) console.warn('[meta-oauth] ' + rows.length + ' registros Meta ativos; usando', metaIntegration.id);
-    const appId = config?.meta_app_id;
+    const appId = loaded.appId;
 
     if (action === 'get_oauth_url') {
       if (!appId) return res.status(400).json({ error: 'Meta App ID not found' });

@@ -5589,6 +5589,11 @@ app.post('/api/meta-oauth', async (req, res) => {
     if (action === 'exchange_instagram_code') {
       if (!code || !redirect_uri || !client_id) return res.status(400).json({ error: 'Missing code, redirect_uri, or client_id' });
       if (!igAppId || !igAppSecret) return res.status(400).json({ error: 'Instagram App ID/Secret não configurados' });
+      // App do Instagram separado exige o secret DELE; usar o secret da Meta gera
+      // "Error validating verification code" (mensagem enganosa de redirect_uri).
+      if (config?.instagram_app_id && String(config.instagram_app_id) !== String(appId) && !config?.instagram_app_secret_encrypted) {
+        return res.status(400).json({ error: 'Falta o Instagram App Secret. Cole o secret do app do Instagram em Configurações → Integração Meta (o secret da Meta não serve para o App ID do Instagram).' });
+      }
 
       // 1) code → token curto (POST form-urlencoded)
       const form = new URLSearchParams({
@@ -5598,7 +5603,12 @@ app.post('/api/meta-oauth', async (req, res) => {
       const shortRes = await fetch('https://api.instagram.com/oauth/access_token', { method: 'POST', body: form });
       const shortData = await shortRes.json().catch(() => ({}));
       if (!shortData.access_token) {
-        return res.status(400).json({ error: 'Instagram recusou o código: ' + (shortData.error_message || shortData.error?.message || JSON.stringify(shortData)) });
+        const raw = shortData.error_message || shortData.error?.message || JSON.stringify(shortData);
+        console.warn('[instagram-oauth] troca recusada', { igAppId, redirect_uri, raw });
+        const hint = /verification code|redirect_uri/i.test(raw)
+          ? ` — Confira: (1) o endereço ${redirect_uri} está cadastrado igual em "URIs de redirecionamento OAuth válidos" do Login do Instagram; (2) o Instagram App Secret salvo é do mesmo app do Instagram App ID ${igAppId}; (3) o código não foi usado antes (tente autorizar de novo).`
+          : '';
+        return res.status(400).json({ error: 'Instagram recusou o código: ' + raw + hint });
       }
 
       // 2) token curto → token longo (60 dias)

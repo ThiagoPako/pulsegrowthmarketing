@@ -5938,6 +5938,14 @@ app.post('/api/meta-store-credentials', async (req, res) => {
     }
 
     if (!integration_id) return res.status(400).json({ error: 'integration_id is required' });
+    // App Secrets da Meta/Instagram são sempre 32 caracteres hexadecimais (0-9, a-f).
+    // Tokens de acesso (EAA..., IGAA..., terminados em "ZDZD") NÃO são secrets e quebram o OAuth.
+    const isHexSecret = (s) => /^[a-f0-9]{32}$/i.test(s);
+    for (const [label, val] of [['Meta App Secret', meta_app_secret], ['Instagram App Secret', instagram_app_secret]]) {
+      if (val && !isHexSecret(val)) {
+        return res.status(400).json({ error: `${label} inválido: deve ter 32 caracteres (letras a-f e números). O valor colado parece um token de acesso, não a "Chave secreta do app".` });
+      }
+    }
     const { data: current } = await admin.from('api_integrations').select('config').eq('id', integration_id).single();
     const updatedConfig = { ...(current?.config || {}) };
     if (meta_app_id) updatedConfig.meta_app_id = meta_app_id;

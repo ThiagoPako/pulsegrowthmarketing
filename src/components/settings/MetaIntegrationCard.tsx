@@ -97,6 +97,11 @@ export default function MetaIntegrationCard() {
       }
 
       // Armazena os secrets completos no backend (nunca exibidos no frontend)
+      // App Secrets são 32 caracteres hexadecimais; tokens (EAA/IGAA/...ZDZD) não servem aqui.
+      const secretOk = (s: string): boolean => !s || /^[a-f0-9]{32}$/i.test(s);
+      if (!secretOk(form.metaAppSecret.trim()) || !secretOk(form.instagramAppSecret.trim())) {
+        throw new Error('O secret colado não é uma "Chave secreta do app" (deve ter 32 caracteres, letras a-f e números). Parece um token de acesso.');
+      }
       if (savedId && (form.metaAppSecret.trim() || form.instagramAppSecret.trim())) {
         const { error } = await supabase.functions.invoke('meta-store-credentials', {
           body: {

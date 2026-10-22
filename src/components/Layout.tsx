@@ -92,6 +92,7 @@ const navCategories: NavCategory[] = [
     items: [
       { path: '/edicao', label: 'Edição', icon: Scissors, roles: ['admin', 'editor', 'social_media', 'videomaker', 'gestor_projetos'] },
       { path: '/edicao/kanban', label: 'Kanban Edição', icon: Kanban, roles: ['admin', 'editor', 'social_media', 'videomaker', 'gestor_projetos'] },
+      { path: '/agentes', label: 'Agentes IA', icon: Bot, roles: ['admin'] },
       { path: '/videomakers', label: 'Videomakers', icon: Video, roles: ['admin', 'videomaker', 'social_media', 'gestor_projetos'] },
     ],
   },

@@ -46,6 +46,7 @@ const PostStudio = lazy(() => import("@/pages/PostStudio"));
 const ContentKanban = lazy(() => import("@/pages/ContentKanban"));
 const EditorDashboard = lazy(() => import("@/pages/EditorDashboard"));
 const EditorKanban = lazy(() => import("@/pages/EditorKanban"));
+const AgentsPanel = lazy(() => import("@/pages/AgentsPanel"));
 const FinancialDashboard = lazy(() => import("@/pages/FinancialDashboard"));
 const FinancialContracts = lazy(() => import("@/pages/FinancialContracts"));
 const ContractsManagement = lazy(() => import("@/pages/ContractsManagement"));
@@ -292,6 +293,7 @@ function AppRoutes() {
         <Route path="/conteudo" element={<ProtectedRoute><ContentKanban /></ProtectedRoute>} />
         <Route path="/edicao" element={<ProtectedRoute><EditorDashboard /></ProtectedRoute>} />
         <Route path="/edicao/kanban" element={<ProtectedRoute><EditorKanban /></ProtectedRoute>} />
+        <Route path="/agentes" element={<ProtectedRoute><AgentsPanel /></ProtectedRoute>} />
         <Route path="/videomakers" element={<ProtectedRoute><VideomakerDashboard /></ProtectedRoute>} />
         <Route path="/designer" element={<ProtectedRoute><DesignerKanban /></ProtectedRoute>} />
         <Route path="/designer/relatorios" element={<ProtectedRoute><DesignerReports /></ProtectedRoute>} />

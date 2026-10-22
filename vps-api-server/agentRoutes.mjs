@@ -7,6 +7,8 @@
 //   GET    /api/agent-keys              lista as chaves (sem o segredo)
 //   POST   /api/agent-keys              { user_id, role } → devolve a chave UMA vez
 //   DELETE /api/agent-keys/:id          revoga
+//   GET    /api/agents/overview         painel: agentes, card atual, entregas, fila, atividade
+//   POST   /api/agents/pause|resume     { scope: 'all' | <user_id> } — pausado = não pega card novo
 //
 // Rotas do agente (cabeçalho "Authorization: Agent <chave>"):
 //   GET  /api/agent/me
@@ -92,6 +94,15 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS agent_step TEXT`);
         await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS agent_heartbeat_at TIMESTAMPTZ`);
         await pool.query(`CREATE INDEX IF NOT EXISTS idx_edit_versions_task ON edit_versions(task_id, version DESC)`).catch(() => {});
+        // pausa: scope = 'all' (todos) ou o user_id de um agente; existir a linha = pausado
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS agent_pauses (
+            scope TEXT PRIMARY KEY,
+            paused_by UUID,
+            paused_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            reason TEXT
+          )
+        `);
       })().catch((error) => {
         schemaPromise = null;
         throw error;
@@ -131,6 +142,16 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       'INSERT INTO task_history (task_id, user_id, action, details) VALUES ($1, $2, $3, $4)',
       [taskId, userId, action, details]
     ).catch((error) => console.error('[agent] task_history:', error.message));
+  }
+
+  async function pauseStateFor(userId) {
+    const { rows } = await pool.query(
+      `SELECT scope, paused_at, reason FROM agent_pauses WHERE scope = 'all' OR scope = $1`,
+      [String(userId)]
+    );
+    const all = rows.find((r) => r.scope === 'all');
+    const own = rows.find((r) => r.scope !== 'all');
+    return { paused: rows.length > 0, all: !!all, own: !!own, reason: (all || own)?.reason || null };
   }
 
   // ── Administração das chaves ──────────────────────────────
@@ -186,11 +207,113 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
     }
   });
 
+  // ── Painel de agentes no sistema (admin) ──────────────────
+  app.get('/api/agents/overview', async (req, res) => {
+    try {
+      const { user } = await verifyUser(req);
+      if (!(await isStrictAdmin(user))) return res.status(403).json({ error: 'Apenas administradores' });
+      await ensureAgentSchema();
+      const [{ rows: agents }, { rows: pauses }, { rows: current }, { rows: delivered }, { rows: queue }, { rows: activity }] = await Promise.all([
+        pool.query(
+          `SELECT k.user_id, p.name, p.email,
+                  string_agg(DISTINCT k.role, ',') AS roles,
+                  MAX(k.last_used_at) AS last_used_at
+             FROM agent_keys k LEFT JOIN profiles p ON p.id = k.user_id
+            WHERE k.revoked_at IS NULL
+            GROUP BY k.user_id, p.name, p.email
+            ORDER BY p.name`
+        ),
+        pool.query(`SELECT scope, paused_at, reason, paused_by FROM agent_pauses`),
+        pool.query(
+          `SELECT t.id, t.title, t.kanban_column, t.assigned_to, t.agent_step, t.agent_heartbeat_at, t.editing_started_at,
+                  c.company_name AS client_name
+             FROM content_tasks t LEFT JOIN clients c ON c.id = t.client_id
+            WHERE t.kanban_column IN ('edicao', 'alteracao')
+              AND t.assigned_to IN (SELECT user_id FROM agent_keys WHERE revoked_at IS NULL)`
+        ),
+        pool.query(
+          `SELECT created_by,
+                  COUNT(*) FILTER (WHERE created_at >= date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo') AS today,
+                  COUNT(*) FILTER (WHERE created_at >= now() - interval '7 days') AS week,
+                  COUNT(*) FILTER (WHERE version > 1 AND created_at >= now() - interval '7 days') AS week_alterations
+             FROM edit_versions GROUP BY created_by`
+        ),
+        pool.query(
+          `SELECT
+              COUNT(*) FILTER (WHERE kanban_column = 'edicao' AND assigned_to IS NULL) AS waiting,
+              COUNT(*) FILTER (WHERE kanban_column = 'edicao' AND assigned_to IS NULL AND COALESCE(drive_link, '') = '') AS without_footage,
+              COUNT(*) FILTER (WHERE kanban_column = 'alteracao' AND edited_by IN (SELECT user_id FROM agent_keys)) AS agent_alterations,
+              COUNT(*) FILTER (WHERE kanban_column = 'edicao' AND assigned_to IS NULL AND editing_deadline < now()) AS overdue
+             FROM content_tasks
+            WHERE content_type IS DISTINCT FROM 'otimizacao'`
+        ),
+        pool.query(
+          `SELECT h.created_at, h.action, h.details, h.user_id, p.name AS agent_name, t.title, t.id AS task_id
+             FROM task_history h
+             JOIN profiles p ON p.id = h.user_id
+             LEFT JOIN content_tasks t ON t.id = h.task_id
+            WHERE h.user_id IN (SELECT user_id FROM agent_keys)
+            ORDER BY h.created_at DESC
+            LIMIT 20`
+        ),
+      ]);
+      const allPause = pauses.find((p) => p.scope === 'all') || null;
+      res.json({
+        paused_all: allPause,
+        queue: queue[0],
+        agents: agents.map((a) => {
+          const d = delivered.find((x) => x.created_by === a.user_id) || {};
+          return {
+            ...a,
+            paused: pauses.find((p) => p.scope === String(a.user_id)) || null,
+            current: current.filter((t) => t.assigned_to === a.user_id),
+            delivered_today: Number(d.today || 0),
+            delivered_week: Number(d.week || 0),
+            alterations_week: Number(d.week_alterations || 0),
+          };
+        }),
+        activity,
+      });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/agents/pause', async (req, res) => {
+    try {
+      const { user } = await verifyUser(req);
+      if (!(await isStrictAdmin(user))) return res.status(403).json({ error: 'Apenas administradores' });
+      await ensureAgentSchema();
+      const scope = String(req.body?.scope || 'all');
+      const reason = String(req.body?.reason || '').slice(0, 300) || null;
+      await pool.query(
+        `INSERT INTO agent_pauses (scope, paused_by, reason) VALUES ($1, $2, $3)
+         ON CONFLICT (scope) DO UPDATE SET paused_by = EXCLUDED.paused_by, reason = EXCLUDED.reason, paused_at = now()`,
+        [scope, user.id, reason]
+      );
+      res.json({ ok: true });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/agents/resume', async (req, res) => {
+    try {
+      const { user } = await verifyUser(req);
+      if (!(await isStrictAdmin(user))) return res.status(403).json({ error: 'Apenas administradores' });
+      await ensureAgentSchema();
+      await pool.query('DELETE FROM agent_pauses WHERE scope = $1', [String(req.body?.scope || 'all')]);
+      res.json({ ok: true });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
   // ── Rotas do agente ───────────────────────────────────────
   app.get('/api/agent/me', async (req, res) => {
     try {
       const agent = await verifyAgent(req);
-      res.json({ id: agent.userId, name: agent.name, email: agent.email, role: agent.role });
+      res.json({ id: agent.userId, name: agent.name, email: agent.email, role: agent.role, pause: await pauseStateFor(agent.userId) });
     } catch (error) {
       sendError(res, error);
     }
@@ -229,7 +352,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
                    t.created_at ASC`,
         [agent.userId]
       );
-      res.json({ agent: { id: agent.userId, name: agent.name, role: agent.role }, tasks: rows });
+      res.json({ agent: { id: agent.userId, name: agent.name, role: agent.role }, pause: await pauseStateFor(agent.userId), tasks: rows });
     } catch (error) {
       sendError(res, error);
     }
@@ -238,6 +361,10 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
   app.post('/api/agent/tasks/:id/claim', async (req, res) => {
     try {
       const agent = await verifyAgent(req);
+      const pause = await pauseStateFor(agent.userId);
+      if (pause.paused) {
+        return res.status(423).json({ error: `Agentes pausados pelo sistema${pause.all ? '' : ` (${agent.name})`}. Não pegue cards novos.`, pause });
+      }
       const { rows } = await pool.query(
         `UPDATE content_tasks SET
             assigned_to = $2,

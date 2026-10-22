@@ -22,6 +22,8 @@
 //   GET  /api/agent/clients?search=     nicho, linha editorial e links do cliente
 //   GET  /api/agent/tasks?search=       (chefe, revisor) busca cards do fluxo de edição em qualquer coluna
 //   POST /api/agent/tasks/:id/move      (chefe) { column: edicao|revisao|alteracao, reason, adjustment_notes }
+//   POST /api/agent/messages            { to: nome | "todos", body } recado entre agentes (qualquer computador)
+//   GET  /api/agent/messages            caixa de entrada (devolve não lidos e marca como lidos)
 //   POST /api/agent/status              { status } trabalhando (online 15 min) | { done: true } encerrou
 //
 // A entrega reproduz no servidor o que o navegador faz em
@@ -106,6 +108,18 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
             updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
           )
         `);
+        // recados entre agentes (funciona entre computadores diferentes)
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS agent_messages (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            from_user UUID,
+            to_user UUID NOT NULL,
+            body TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            read_at TIMESTAMPTZ
+          )
+        `);
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_agent_messages_to ON agent_messages(to_user, read_at)`).catch(() => {});
         // pausa: scope = 'all' (todos) ou o user_id de um agente; existir a linha = pausado
         await pool.query(`
           CREATE TABLE IF NOT EXISTS agent_pauses (
@@ -411,6 +425,49 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         );
       }
       res.json({ ok: true });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // Recados: { to: "<nome do agente>" | "todos", body }. Destinatários = membros com chave ativa.
+  app.post('/api/agent/messages', async (req, res) => {
+    try {
+      const agent = await verifyAgent(req);
+      const to = String(req.body?.to || '').trim();
+      const body = String(req.body?.body || '').trim().slice(0, 4000);
+      if (!to || !body) return res.status(400).json({ error: 'Informe o destinatário e o recado' });
+      const { rows: agents } = await pool.query(
+        `SELECT DISTINCT k.user_id, p.name FROM agent_keys k JOIN profiles p ON p.id = k.user_id WHERE k.revoked_at IS NULL`
+      );
+      const norm = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+      const targets = to.toLowerCase() === 'todos'
+        ? agents.filter((a) => a.user_id !== agent.userId)
+        : agents.filter((a) => norm(a.name) === norm(to) || norm(a.name).split(/\s+/)[0] === norm(to));
+      if (!targets.length) return res.status(404).json({ error: `Nenhum agente chamado "${to}"` });
+      for (const t of targets) {
+        await pool.query('INSERT INTO agent_messages (from_user, to_user, body) VALUES ($1, $2, $3)', [agent.userId, t.user_id, body]);
+      }
+      res.json({ ok: true, sent_to: targets.map((t) => t.name.trim()) });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // Caixa de entrada: devolve os não lidos e marca como lidos
+  app.get('/api/agent/messages', async (req, res) => {
+    try {
+      const agent = await verifyAgent(req);
+      const { rows } = await pool.query(
+        `UPDATE agent_messages m SET read_at = now()
+           FROM (SELECT id FROM agent_messages WHERE to_user = $1 AND read_at IS NULL ORDER BY created_at LIMIT 50) x
+          WHERE m.id = x.id
+          RETURNING m.id, m.body, m.created_at,
+                    (SELECT name FROM profiles WHERE id = m.from_user) AS from_name`,
+        [agent.userId]
+      );
+      rows.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      res.json({ messages: rows });
     } catch (error) {
       sendError(res, error);
     }

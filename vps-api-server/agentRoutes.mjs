@@ -20,7 +20,7 @@
 //   POST /api/agent/tasks/:id/deliver   multipart: video (mp4), plan (json, opcional), notes
 //   GET  /api/agent/stale?minutes=30    (chefe) cards de agentes sem sinal de vida
 //   GET  /api/agent/clients?search=     nicho, linha editorial e links do cliente
-//   GET  /api/agent/tasks?search=       (chefe) busca cards do fluxo de edição em qualquer coluna
+//   GET  /api/agent/tasks?search=       (chefe, revisor) busca cards do fluxo de edição em qualquer coluna
 //   POST /api/agent/tasks/:id/move      (chefe) { column: edicao|revisao|alteracao, reason, adjustment_notes }
 //   POST /api/agent/status              { status } trabalhando (online 15 min) | { done: true } encerrou
 //
@@ -570,13 +570,17 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
   app.get('/api/agent/tasks', async (req, res) => {
     try {
       const agent = await verifyAgent(req);
-      if (agent.role !== 'chefe') return res.status(403).json({ error: 'Apenas a chefe' });
+      if (!['chefe', 'revisor'].includes(agent.role)) return res.status(403).json({ error: 'Apenas a chefe e a revisão' });
       const search = String(req.query.search || '').trim();
       const { rows } = await pool.query(
         `SELECT t.id, t.title, t.kanban_column, t.content_type, t.assigned_to, t.edited_by, t.edited_video_link,
                 t.adjustment_notes, t.drive_link, t.editing_deadline, t.review_deadline, t.alteration_deadline,
-                t.updated_at, c.company_name AS client_name, pe.name AS edited_by_name, pa.name AS assigned_to_name
+                t.updated_at, t.description, t.content_type, t.script_alteration_notes,
+                c.company_name AS client_name, pe.name AS edited_by_name, pa.name AS assigned_to_name,
+                s.title AS script_title, s.content AS script_content,
+                (SELECT COALESCE(MAX(v.version), 0) FROM edit_versions v WHERE v.task_id = t.id) AS last_version
            FROM content_tasks t
+           LEFT JOIN scripts s ON s.id = t.script_id
            LEFT JOIN clients c ON c.id = t.client_id
            LEFT JOIN profiles pe ON pe.id = t.edited_by
            LEFT JOIN profiles pa ON pa.id = t.assigned_to

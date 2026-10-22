@@ -322,45 +322,6 @@ function Easel() {
   );
 }
 
-/* ── Cat pixel ── */
-function PixelCat({ index }: { index: number }) {
-  const colors = ['#f59e0b', '#6b7280', '#1a1a1a', '#f97316', '#d1d5db', '#92400e'];
-  const color = colors[index % colors.length];
-  return (
-    <motion.div
-      className="absolute"
-      style={{ left: 4 + index * 14, bottom: 2 }}
-      animate={{ x: [0, 6 * (index % 2 ? 1 : -1), 0], y: [0, -4, 0] }}
-      transition={{ duration: 3 + index * 0.5, repeat: Infinity, delay: index * 0.4 }}
-    >
-      <div className="relative" style={{ width: 8, height: 8 }}>
-        <div style={{ width: 7, height: 4, backgroundColor: color, borderRadius: 2, position: 'absolute', bottom: 0, left: 0 }} />
-        <div style={{ width: 5, height: 4, backgroundColor: color, borderRadius: '2px 2px 1px 1px', position: 'absolute', top: 0, left: 0 }} />
-        <div style={{ width: 0, height: 0, borderLeft: '2px solid transparent', borderRight: '2px solid transparent', borderBottom: `3px solid ${color}`, position: 'absolute', top: -2, left: 0 }} />
-        <div style={{ width: 0, height: 0, borderLeft: '2px solid transparent', borderRight: '2px solid transparent', borderBottom: `3px solid ${color}`, position: 'absolute', top: -2, left: 3 }} />
-        <motion.div
-          animate={{ scaleY: [1, 0.1, 1] }}
-          transition={{ duration: 4, repeat: Infinity, delay: index * 2 }}
-          style={{ width: 1, height: 1, backgroundColor: '#22c55e', borderRadius: '50%', position: 'absolute', top: 2, left: 1 }}
-        />
-        <motion.div
-          animate={{ scaleY: [1, 0.1, 1] }}
-          transition={{ duration: 4, repeat: Infinity, delay: index * 2 }}
-          style={{ width: 1, height: 1, backgroundColor: '#22c55e', borderRadius: '50%', position: 'absolute', top: 2, left: 3 }}
-        />
-        <motion.div
-          animate={{ rotate: [0, 30, -20, 0] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          style={{
-            width: 5, height: 2, backgroundColor: color, borderRadius: '0 3px 3px 0',
-            position: 'absolute', bottom: 2, right: -4, transformOrigin: 'left center',
-          }}
-        />
-      </div>
-    </motion.div>
-  );
-}
-
 /* ── Tablet/iPad ── */
 function Tablet() {
   return (
@@ -517,7 +478,6 @@ function ActivityScene({ member, inCoffeeRoom }: { member: OfficeMember; inCoffe
         </div>
       </div>
       <div className="relative w-24 h-3">
-        {[0, 1, 2, 3, 4, 5].map(i => <PixelCat key={i} index={i} />)}
       </div>
     </div>
   );

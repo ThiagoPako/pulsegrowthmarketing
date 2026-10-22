@@ -5,3 +5,4 @@
 - [x] Métricas por cliente: tempo de gravação, espera, qtd gravações, média vídeos/gravação (relatório mensal)
 - [x] Relatório designer: filtro por cliente e dia/mês
 - [x] Portal do cliente: Insights interativos, coloridos e com gráficos profissionais
+- [x] Remover efeitos e referências a gatinhos; substituir status por badges e validar imports/prioridade.

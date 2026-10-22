@@ -26,8 +26,7 @@ import { ptBR } from 'date-fns/locale';
 import PostingCalendar from '@/components/social/PostingCalendar';
 import OnboardingTracker from '@/components/social/OnboardingTracker';
 import SocialMediaKanban from '@/components/social/SocialMediaKanban';
-import CatStatusIndicator, { getCatStatus } from '@/components/social/CatStatusIndicator';
-import CatClickWrapper from '@/components/social/CatClickEffect';
+import ClientStatusBadge, { getClientStatus } from '@/components/social/ClientStatusBadge';
 import { Loader2 } from 'lucide-react';
 import AutoPostScheduleForm, { type AutoPostFormValue } from '@/components/social/AutoPostScheduleForm';
 import AutoPostQueue from '@/components/social/AutoPostQueue';
@@ -953,7 +952,6 @@ export default function SocialMediaDeliveries() {
     // All data now rendered via Kanban component
 
     return (
-      <CatClickWrapper>
       <div className="space-y-5">
         {/* Header */}
         <div className="flex items-center gap-3">
@@ -1331,13 +1329,11 @@ export default function SocialMediaDeliveries() {
         {renderBatchContentDialog(selectedClientId)}
         {renderAlterationDialog()}
       </div>
-      </CatClickWrapper>
     );
   }
 
   // ─── CLIENT CARDS VIEW (MAIN) ──────────────────────────────
   return (
-    <CatClickWrapper>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -1487,10 +1483,8 @@ export default function SocialMediaDeliveries() {
                             )}
                           </div>
                         </div>
-                        <CatStatusIndicator
-                          status={getCatStatus({ hasOverdue, isOnboarding })}
-                          size="sm"
-                          showMessage={true}
+                        <ClientStatusBadge
+                          status={getClientStatus({ hasOverdue, isOnboarding })}
                         />
                       </div>
 
@@ -1603,7 +1597,6 @@ export default function SocialMediaDeliveries() {
       {renderBatchContentDialog('')}
       {renderAlterationDialog()}
     </div>
-    </CatClickWrapper>
   );
 
   // ─── SHARED DIALOG RENDERERS ───────────────────────────────

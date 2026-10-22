@@ -42,53 +42,6 @@ const STATUS_CONFIG: Record<string, { label: string; icon: typeof Clock; color: 
 
 const WEEKDAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
-/* ── Decorative cat SVGs ── */
-function SleepyCat() {
-  return (
-    <motion.svg viewBox="0 0 64 48" className="w-16 h-12 opacity-60" animate={{ y: [0, -2, 0] }} transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}>
-      <ellipse cx="32" cy="38" rx="22" ry="9" fill="hsl(30 30% 72%)" />
-      <ellipse cx="32" cy="32" rx="14" ry="11" fill="hsl(30 30% 72%)" />
-      <polygon points="22,24 18,14 28,22" fill="hsl(30 30% 68%)" />
-      <polygon points="42,24 46,14 36,22" fill="hsl(30 30% 68%)" />
-      <polygon points="23,23 20,16 27,22" fill="hsl(350 55% 78%)" />
-      <polygon points="41,23 44,16 37,22" fill="hsl(350 55% 78%)" />
-      <path d="M25,30 Q28,27 31,30" stroke="hsl(30 30% 45%)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-      <path d="M33,30 Q36,27 39,30" stroke="hsl(30 30% 45%)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-      <circle cx="24" cy="34" r="3" fill="hsl(350 55% 75%)" opacity="0.35" />
-      <circle cx="40" cy="34" r="3" fill="hsl(350 55% 75%)" opacity="0.35" />
-      <polygon points="32,33 30.5,35.5 33.5,35.5" fill="hsl(350 55% 60%)" />
-      <motion.text x="42" y="20" fontSize="7" fill="hsl(var(--muted-foreground))" animate={{ opacity: [0, 0.7, 0], y: [20, 16, 12] }} transition={{ duration: 2.5, repeat: Infinity, repeatDelay: 2 }}>
-        zzz
-      </motion.text>
-      <motion.path d="M50,36 Q58,32 56,24" stroke="hsl(30 30% 65%)" strokeWidth="3" strokeLinecap="round" fill="none" animate={{ d: ['M50,36 Q58,32 56,24', 'M50,36 Q60,34 58,26', 'M50,36 Q58,32 56,24'] }} transition={{ duration: 3, repeat: Infinity }} />
-    </motion.svg>
-  );
-}
-
-function PlayfulCat() {
-  return (
-    <motion.svg viewBox="0 0 64 56" className="w-14 h-12 opacity-70" animate={{ rotate: [-4, 4, -4] }} transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}>
-      <ellipse cx="32" cy="40" rx="14" ry="12" fill="hsl(35 40% 75%)" />
-      <ellipse cx="32" cy="28" rx="13" ry="11" fill="hsl(35 40% 75%)" />
-      <polygon points="22,20 17,8 28,18" fill="hsl(35 40% 70%)" />
-      <polygon points="42,20 47,8 36,18" fill="hsl(35 40% 70%)" />
-      <polygon points="23,19 19,10 27,18" fill="hsl(350 60% 80%)" />
-      <polygon points="41,19 45,10 37,18" fill="hsl(350 60% 80%)" />
-      <motion.g animate={{ scaleY: [1, 0.1, 1] }} transition={{ duration: 3, repeat: Infinity, repeatDelay: 4 }}>
-        <ellipse cx="27" cy="27" rx="2.5" ry="3" fill="hsl(160 50% 35%)" />
-        <ellipse cx="37" cy="27" rx="2.5" ry="3" fill="hsl(160 50% 35%)" />
-        <circle cx="28" cy="26" r="1" fill="white" />
-        <circle cx="38" cy="26" r="1" fill="white" />
-      </motion.g>
-      <polygon points="32,31 30.5,33.5 33.5,33.5" fill="hsl(350 55% 60%)" />
-      <path d="M28,35 Q32,39 36,35" stroke="hsl(30 30% 45%)" strokeWidth="1.2" fill="none" />
-      {/* yarn ball */}
-      <motion.circle cx="18" cy="48" r="5" fill="hsl(var(--primary))" opacity="0.5" animate={{ cx: [18, 22, 18] }} transition={{ duration: 1.5, repeat: Infinity }} />
-      <motion.path d="M48,38 Q56,30 54,22" stroke="hsl(35 40% 65%)" strokeWidth="3" strokeLinecap="round" fill="none" animate={{ d: ['M48,38 Q56,30 54,22', 'M48,38 Q58,32 56,24', 'M48,38 Q56,30 54,22'] }} transition={{ duration: 1.5, repeat: Infinity }} />
-    </motion.svg>
-  );
-}
-
 export default function PostingCalendar({ deliveries, clients }: PostingCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedClientId, setSelectedClientId] = useState<string>('all');
@@ -169,7 +122,6 @@ export default function PostingCalendar({ deliveries, clients }: PostingCalendar
                 <ChevronRight size={16} />
               </Button>
             </div>
-            <PlayfulCat />
           </div>
 
           <div className="flex items-center gap-3">
@@ -408,9 +360,9 @@ export default function PostingCalendar({ deliveries, clients }: PostingCalendar
                       animate={{ opacity: 1 }}
                       className="py-10 flex flex-col items-center text-muted-foreground"
                     >
-                      <SleepyCat />
+                      <CalendarClock size={40} className="text-muted-foreground/60" aria-hidden="true" />
                       <p className="text-sm mt-3">Nenhum conteúdo neste dia</p>
-                      <p className="text-[10px] mt-0.5 opacity-60">O gatinho está descansando... 😺</p>
+                      <p className="text-[10px] mt-0.5 opacity-60">Nenhuma postagem agendada</p>
                     </motion.div>
                   ) : (
                     <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
@@ -484,7 +436,7 @@ export default function PostingCalendar({ deliveries, clients }: PostingCalendar
                   animate={{ opacity: 1 }}
                   className="py-16 flex flex-col items-center text-muted-foreground"
                 >
-                  <SleepyCat />
+                  <CalendarClock size={40} className="text-muted-foreground/60" aria-hidden="true" />
                   <p className="text-sm mt-3 font-medium">Selecione um dia</p>
                   <p className="text-[10px] mt-0.5 opacity-60">para ver os conteúdos agendados 📅</p>
                 </motion.div>

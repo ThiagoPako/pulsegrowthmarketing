@@ -16,6 +16,7 @@
 //   POST /api/agent/tasks/:id/release   { reason } devolve o card para a fila
 //   POST /api/agent/tasks/:id/deliver   multipart: video (mp4), plan (json, opcional), notes
 //   GET  /api/agent/stale?minutes=30    (chefe) cards de agentes sem sinal de vida
+//   GET  /api/agent/clients?search=     nicho, linha editorial e links do cliente
 //
 // A entrega reproduz no servidor o que o navegador faz em
 // src/lib/contentTaskSync.ts ao mover um card para "revisao".
@@ -308,6 +309,25 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       if (!rows.length) return res.status(409).json({ error: 'Nada a liberar' });
       await logHistory(rows[0].id, agent.userId, 'Card devolvido para a fila', reason);
       res.json({ ok: true });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // Dados dos clientes para montar a estrutura no OPEN CUT (nicho, linha editorial, Drive, identidade)
+  app.get('/api/agent/clients', async (req, res) => {
+    try {
+      await verifyAgent(req);
+      const search = String(req.query.search || '').trim();
+      const { rows } = await pool.query(
+        `SELECT id, company_name, niche, city, editorial, color, logo_url,
+                drive_link, drive_fotos, drive_identidade_visual
+           FROM clients
+          WHERE ($1 = '' OR company_name ILIKE '%' || $1 || '%')
+          ORDER BY company_name`,
+        [search]
+      );
+      res.json({ clients: rows });
     } catch (error) {
       sendError(res, error);
     }

@@ -8,7 +8,7 @@
 //   POST   /api/agent-keys              { user_id, role } → devolve a chave UMA vez
 //   DELETE /api/agent-keys/:id          revoga
 //   GET    /api/agents/overview         painel: agentes, card atual, entregas, fila, atividade
-//   GET    /api/agents/office           Escritório Virtual: admin vê agente online só executando; equipe não vê agentes
+//   GET    /api/agents/office           Escritório Virtual: agente online (com "(IA)") só enquanto executa
 //   POST   /api/agents/pause|resume     { scope: 'all' | <user_id> } — pausado = não pega card novo
 //
 // Rotas do agente (cabeçalho "Authorization: Agent <chave>"):
@@ -280,15 +280,14 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
     }
   });
 
-  // Escritório Virtual: admins veem o agente online só enquanto executa uma tarefa;
-  // para o resto da equipe os agentes não aparecem no escritório.
+  // Escritório Virtual: toda a equipe vê o agente online (com "(IA)") só enquanto executa uma tarefa.
+  // A equipe foi avisada pelo usuário em 22/10/2026.
   app.get('/api/agents/office', async (req, res) => {
     try {
-      const { user } = await verifyUser(req);
+      await verifyUser(req);
       await ensureAgentSchema();
       const { rows: ids } = await pool.query(`SELECT DISTINCT user_id FROM agent_keys WHERE revoked_at IS NULL`);
       const agentIds = ids.map((r) => String(r.user_id));
-      if (!(await isStrictAdmin(user))) return res.json({ agents: [], hidden: agentIds });
       const { rows } = await pool.query(
         `SELECT t.assigned_to AS user_id, t.kanban_column, t.agent_step, t.title
            FROM content_tasks t

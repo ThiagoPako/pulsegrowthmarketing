@@ -216,7 +216,8 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           WHERE t.content_type IS DISTINCT FROM 'otimizacao'
             AND (
               (t.kanban_column = 'edicao' AND (t.assigned_to IS NULL OR t.assigned_to = $1))
-              OR (t.kanban_column = 'alteracao' AND (t.edited_by = $1 OR t.edited_by IS NULL)
+              -- alteração só de vídeo que o próprio agente editou (os de humanos não têm plano no OPEN CUT)
+              OR (t.kanban_column = 'alteracao' AND t.edited_by = $1
                   AND (t.assigned_to IS NULL OR t.assigned_to = $1))
             )
           ORDER BY (t.kanban_column = 'alteracao') DESC,
@@ -250,7 +251,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
             AND (assigned_to IS NULL OR assigned_to = $2)
             AND (
               kanban_column = 'edicao'
-              OR (kanban_column = 'alteracao' AND (edited_by IS NULL OR edited_by = $2))
+              OR (kanban_column = 'alteracao' AND edited_by = $2)
             )
           RETURNING id, kanban_column`,
         [req.params.id, agent.userId]

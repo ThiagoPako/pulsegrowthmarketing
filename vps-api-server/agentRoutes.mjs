@@ -8,7 +8,7 @@
 //   POST   /api/agent-keys              { user_id, role } → devolve a chave UMA vez
 //   DELETE /api/agent-keys/:id          revoga
 //   GET    /api/agents/overview         painel: agentes, card atual, entregas, fila, atividade
-//   GET    /api/agents/office           Escritório Virtual: agente online (com "(IA)") só enquanto executa
+//   GET    /api/agents/office           Escritório Virtual: agente online só enquanto executa
 //   POST   /api/agents/pause|resume     { scope: 'all' | <user_id> } — pausado = não pega card novo
 //
 // Rotas do agente (cabeçalho "Authorization: Agent <chave>"):
@@ -280,7 +280,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
     }
   });
 
-  // Escritório Virtual: toda a equipe vê o agente online (com "(IA)") só enquanto executa uma tarefa.
+  // Escritório Virtual: toda a equipe vê o agente online só enquanto executa uma tarefa.
   // A equipe foi avisada pelo usuário em 22/10/2026.
   app.get('/api/agents/office', async (req, res) => {
     try {

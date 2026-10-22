@@ -198,7 +198,7 @@ export default function VirtualOffice() {
         const job = agentOffice.working[m.id];
         return {
           ...m,
-          name: `${m.name.trim()} (IA)`,
+          name: m.name.trim(),
           isOnline: !!job,
           activity: job ? (job.column === 'alteracao' ? 'alteracao' : 'edicao') : undefined,
         };

@@ -3092,6 +3092,29 @@ app.post('/api/auth/reset-password', async (req, res) => {
   }
 });
 
+// ─── Admin: Trocar a foto de um membro da equipe ────────────
+// A imagem já foi enviada por /api/upload; aqui só gravamos a URL no perfil.
+app.post('/api/admin/user-avatar', async (req, res) => {
+  try {
+    await verifyTeamManager(req);
+    const userId = String(req.body?.userId || '');
+    const avatarUrl = String(req.body?.avatarUrl || '');
+    if (!userId) return res.status(400).json({ error: 'userId obrigatório' });
+    if (!/^https:\/\/agenciapulse\.tech\/uploads\/[\w./-]+\.(png|jpe?g|webp)$/i.test(avatarUrl)) {
+      return res.status(400).json({ error: 'Envie uma imagem PNG, JPG ou WEBP pelo upload do sistema' });
+    }
+    const { rowCount } = await pool.query(
+      'UPDATE profiles SET avatar_url = $2, updated_at = now() WHERE id = $1',
+      [userId, avatarUrl]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Membro não encontrado' });
+    res.json({ success: true });
+  } catch (error) {
+    const status = error.message === 'Unauthorized' ? 401 : /Admin|access|permiss/i.test(error.message || '') ? 403 : 500;
+    res.status(status).json({ error: error.message });
+  }
+});
+
 // ─── Admin: Listar cidades de todos os usuários ─────────────
 app.get('/api/admin/user-cities', async (req, res) => {
   try {

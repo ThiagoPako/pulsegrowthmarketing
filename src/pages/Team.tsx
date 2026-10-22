@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth, type AppRole } from '@/hooks/useAuth';
-import { supabase } from '@/lib/vpsDb';
+import { supabase, vpsAuthedFetch } from '@/lib/vpsDb';
+import { uploadFileToVps } from '@/services/vpsApi';
 
 // Resolve um token de autorização válido para o backend VPS.
 async function getAuthToken(): Promise<string | null> {
@@ -18,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, KeyRound, Users, Handshake, Trash2, Shield, Lock, Cake, CalendarDays, BarChart3, DollarSign, MapPin, ShieldPlus } from 'lucide-react';
+import { Plus, KeyRound, Users, Handshake, Trash2, Shield, Lock, Cake, CalendarDays, BarChart3, DollarSign, MapPin, ShieldPlus, Camera, Loader2 } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import { useUserPermissions, AVAILABLE_MODULES } from '@/hooks/useUserPermissions';
 import BirthdayCountdown from '@/components/BirthdayCountdown';
@@ -124,6 +125,36 @@ export default function Team() {
       }));
     }
     setLoading(false);
+  };
+
+  const [photoBusy, setPhotoBusy] = useState<string | null>(null);
+
+  const handleChangePhoto = async (member: TeamMember, file: File | undefined) => {
+    if (!file) return;
+    if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) {
+      toast.error('Use uma imagem PNG, JPG ou WEBP');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('A foto precisa ter até 5 MB');
+      return;
+    }
+    setPhotoBusy(member.id);
+    try {
+      const url = await uploadFileToVps(file, { folder: `avatars/${member.id}`, retries: 2 });
+      const response = await vpsAuthedFetch('/admin/user-avatar', {
+        method: 'POST',
+        body: JSON.stringify({ userId: member.id, avatarUrl: url }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || 'Falha ao salvar a foto');
+      setMembers(prev => prev.map(m => (m.id === member.id ? { ...m, avatarUrl: url } : m)));
+      toast.success(`Foto de ${member.displayName || member.name} atualizada`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPhotoBusy(null);
+    }
   };
 
   const fetchPartners = async () => {
@@ -671,7 +702,26 @@ export default function Team() {
             {teamMembers.map(u => (
               <div key={u.id} className="glass-card p-4 flex items-center justify-between cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all" onClick={() => setStatsTarget(u)}>
                 <div className="flex items-center gap-4">
-                  <UserAvatar user={u} size="lg" />
+                  {canManageTeam ? (
+                    <label className="relative cursor-pointer" title="Trocar foto" onClick={e => e.stopPropagation()}>
+                      <UserAvatar user={u} size="lg" />
+                      <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-background">
+                        {photoBusy === u.id ? <Loader2 size={10} className="animate-spin" /> : <Camera size={10} />}
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        disabled={photoBusy === u.id}
+                        onChange={e => {
+                          void handleChangePhoto(u, e.target.files?.[0]);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                  ) : (
+                    <UserAvatar user={u} size="lg" />
+                  )}
                    <div>
                     <p className="font-medium">{u.displayName || u.name}</p>
                     <p className="text-xs text-muted-foreground">{u.email}{u.jobTitle ? ` · ${u.jobTitle}` : ''}</p>

@@ -8,6 +8,7 @@
 //   POST   /api/agent-keys              { user_id, role } → devolve a chave UMA vez
 //   DELETE /api/agent-keys/:id          revoga
 //   GET    /api/agents/overview         painel: agentes, card atual, entregas, fila, atividade
+//   GET    /api/agents/office           Escritório Virtual: admin vê agente online só executando; equipe não vê agentes
 //   POST   /api/agents/pause|resume     { scope: 'all' | <user_id> } — pausado = não pega card novo
 //
 // Rotas do agente (cabeçalho "Authorization: Agent <chave>"):
@@ -273,6 +274,35 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           };
         }),
         activity,
+      });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // Escritório Virtual: admins veem o agente online só enquanto executa uma tarefa;
+  // para o resto da equipe os agentes não aparecem no escritório.
+  app.get('/api/agents/office', async (req, res) => {
+    try {
+      const { user } = await verifyUser(req);
+      await ensureAgentSchema();
+      const { rows: ids } = await pool.query(`SELECT DISTINCT user_id FROM agent_keys WHERE revoked_at IS NULL`);
+      const agentIds = ids.map((r) => String(r.user_id));
+      if (!(await isStrictAdmin(user))) return res.json({ agents: [], hidden: agentIds });
+      const { rows } = await pool.query(
+        `SELECT t.assigned_to AS user_id, t.kanban_column, t.agent_step, t.title
+           FROM content_tasks t
+          WHERE t.assigned_to = ANY($1::uuid[])
+            AND t.kanban_column IN ('edicao', 'alteracao')
+            AND t.agent_heartbeat_at > now() - interval '30 minutes'`,
+        [agentIds]
+      );
+      res.json({
+        hidden: [],
+        agents: agentIds.map((id) => {
+          const task = rows.find((r) => String(r.user_id) === id);
+          return { user_id: id, working: !!task, column: task?.kanban_column || null, step: task?.agent_step || null, title: task?.title || null };
+        }),
       });
     } catch (error) {
       sendError(res, error);

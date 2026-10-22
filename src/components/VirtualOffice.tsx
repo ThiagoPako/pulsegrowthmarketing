@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { supabase } from '@/lib/vpsDb';
+import { supabase, vpsAuthedFetch } from '@/lib/vpsDb';
 import { useApp } from '@/contexts/AppContext';
 import { AnimatePresence } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
@@ -43,6 +43,8 @@ export default function VirtualOffice() {
   const [chatTarget, setChatTarget] = useState<OfficeMember | null>(null);
   const [now, setNow] = useState(Date.now());
   const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
+  // Agentes de edição: a equipe não os vê; admin os vê online só enquanto executam uma tarefa.
+  const [agentOffice, setAgentOffice] = useState<{ hidden: Set<string>; working: Record<string, { column: string | null; step: string | null }>; ids: Set<string> }>({ hidden: new Set(), working: {}, ids: new Set() });
   const membersRef = useRef<OfficeMember[]>([]);
   const chatRef = useRef<OfficeMember | null>(null);
   const prevOnlineRef = useRef<Set<string>>(new Set());
@@ -111,6 +113,24 @@ export default function VirtualOffice() {
     });
     dt?.forEach((t: any) => { if (t.assigned_to && !act[t.assigned_to]) act[t.assigned_to] = 'designing'; });
     setActivities(act);
+
+    try {
+      const response = await vpsAuthedFetch('/agents/office');
+      if (response.ok) {
+        const body = await response.json();
+        const working: Record<string, { column: string | null; step: string | null }> = {};
+        (body.agents || []).forEach((a: { user_id: string; working: boolean; column: string | null; step: string | null }) => {
+          if (a.working) working[a.user_id] = { column: a.column, step: a.step };
+        });
+        setAgentOffice({
+          hidden: new Set<string>(body.hidden || []),
+          working,
+          ids: new Set<string>((body.agents || []).map((a: { user_id: string }) => a.user_id)),
+        });
+      }
+    } catch {
+      // sem a rota (ou offline), o escritório segue como antes
+    }
   }, []);
 
   const syncPresence = useCallback(() => {
@@ -172,7 +192,17 @@ export default function VirtualOffice() {
   }, [appendChat, chatTarget, currentUser]);
 
   const enriched = useMemo(() => {
-    const list = members.map(m => {
+    const list = members.filter(m => !agentOffice.hidden.has(m.id)).map(m => {
+      if (agentOffice.ids.has(m.id)) {
+        // agente: online só enquanto executa uma tarefa (sinal de vida nos últimos 30 min)
+        const job = agentOffice.working[m.id];
+        return {
+          ...m,
+          name: `${m.name.trim()} (IA)`,
+          isOnline: !!job,
+          activity: job ? (job.column === 'alteracao' ? 'alteracao' : 'edicao') : undefined,
+        };
+      }
       const hasHeartbeat = Boolean(presence[m.id]) && now - new Date(presence[m.id]).getTime() < ONLINE_MS;
       return {
         ...m,
@@ -212,7 +242,7 @@ export default function VirtualOffice() {
     prevOnlineRef.current = currentOnline;
 
     return list;
-  }, [activities, members, now, presence, currentUser]);
+  }, [activities, members, now, presence, currentUser, agentOffice]);
 
   const roomAssign = useMemo(() => {
     const a: Record<string, OfficeMember[]> = {};

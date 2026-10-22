@@ -109,8 +109,12 @@ export default function AgentKeysCard() {
 
   const copyKey = async () => {
     if (!newKey) return;
-    await navigator.clipboard.writeText(newKey.key);
-    toast.success('Chave copiada');
+    try {
+      await navigator.clipboard.writeText(newKey.key);
+      toast.success('Chave copiada');
+    } catch {
+      toast.error('O navegador não deixou copiar. Selecione a chave com o mouse e use Cmd+C.');
+    }
   };
 
   return (
@@ -128,11 +132,14 @@ export default function AgentKeysCard() {
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-4 space-y-2">
           <p className="text-sm font-medium">Chave de {newKey.name} — copie agora, ela não aparece de novo:</p>
           <div className="flex items-center gap-2">
-            <code className="flex-1 truncate rounded bg-background px-2 py-1 text-xs">{newKey.key}</code>
+            <code className="flex-1 select-all break-all rounded bg-background px-2 py-1 text-xs">{newKey.key}</code>
             <Button size="sm" variant="outline" onClick={copyKey}>
               <Copy size={14} className="mr-1" /> Copiar
             </Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            No Mac que edita, salve com: <code className="select-all">read -rs "K?Cole a chave: " &amp;&amp; printf %s "$K" &gt; ~/.config/pulse/agentes/{newKey.name.split(' ')[0].toLowerCase()}.key &amp;&amp; chmod 600 ~/.config/pulse/agentes/{newKey.name.split(' ')[0].toLowerCase()}.key &amp;&amp; unset K</code>
+          </p>
           <Button size="sm" variant="ghost" onClick={() => setNewKey(null)}>Já guardei</Button>
         </div>
       )}

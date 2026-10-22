@@ -227,12 +227,12 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       await ensureAgentSchema();
       const [{ rows: agents }, { rows: pauses }, { rows: activityNow }, { rows: current }, { rows: delivered }, { rows: queue }, { rows: activity }] = await Promise.all([
         pool.query(
-          `SELECT k.user_id, p.name, p.email,
+          `SELECT k.user_id, p.name, p.email, p.avatar_url,
                   string_agg(DISTINCT k.role, ',') AS roles,
                   MAX(k.last_used_at) AS last_used_at
              FROM agent_keys k LEFT JOIN profiles p ON p.id = k.user_id
             WHERE k.revoked_at IS NULL
-            GROUP BY k.user_id, p.name, p.email
+            GROUP BY k.user_id, p.name, p.email, p.avatar_url
             ORDER BY p.name`
         ),
         pool.query(`SELECT scope, paused_at, reason, paused_by FROM agent_pauses`),
@@ -329,6 +329,28 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           };
         }),
       });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // Foto do agente (admin): só para membros que têm chave de agente; a imagem já foi enviada por /api/upload
+  app.post('/api/agents/:userId/avatar', async (req, res) => {
+    try {
+      const { user } = await verifyUser(req);
+      if (!(await isStrictAdmin(user))) return res.status(403).json({ error: 'Apenas administradores' });
+      await ensureAgentSchema();
+      const url = String(req.body?.avatar_url || '');
+      if (!/^https:\/\/agenciapulse\.tech\/uploads\/[\w./-]+\.(png|jpe?g|webp)$/i.test(url)) {
+        return res.status(400).json({ error: 'Envie uma imagem PNG, JPG ou WEBP pelo upload do sistema' });
+      }
+      const { rowCount } = await pool.query(
+        `UPDATE profiles SET avatar_url = $2, updated_at = now()
+          WHERE id = $1 AND id IN (SELECT user_id FROM agent_keys WHERE revoked_at IS NULL)`,
+        [req.params.userId, url]
+      );
+      if (!rowCount) return res.status(404).json({ error: 'Agente não encontrado' });
+      res.json({ ok: true });
     } catch (error) {
       sendError(res, error);
     }

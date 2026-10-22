@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
-import { Bot, Pause, Play, Loader2, AlertTriangle, KeyRound, Clock, CheckCircle2, Inbox } from 'lucide-react';
+import { Bot, Pause, Play, Loader2, AlertTriangle, KeyRound, Clock, CheckCircle2, Inbox, Camera } from 'lucide-react';
 import { vpsAuthedFetch } from '@/lib/vpsDb';
+import { uploadFileToVps } from '@/services/vpsApi';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -26,6 +27,7 @@ interface CurrentTask {
 
 interface AgentRow {
   user_id: string;
+  avatar_url: string | null;
   name: string | null;
   email: string | null;
   roles: string;
@@ -85,6 +87,34 @@ export default function AgentsPanel() {
     const timer = setInterval(load, 15000);
     return () => clearInterval(timer);
   }, [load]);
+
+  const changePhoto = async (agent: AgentRow, file: File | undefined) => {
+    if (!file) return;
+    if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) {
+      toast.error('Use uma imagem PNG, JPG ou WEBP');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('A foto precisa ter até 5 MB');
+      return;
+    }
+    setBusy(`foto-${agent.user_id}`);
+    try {
+      const url = await uploadFileToVps(file, { folder: `avatars/agentes/${agent.user_id}`, retries: 2 });
+      const response = await vpsAuthedFetch(`/agents/${agent.user_id}/avatar`, {
+        method: 'POST',
+        body: JSON.stringify({ avatar_url: url }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || 'Falha ao salvar a foto');
+      toast.success('Foto atualizada');
+      await load();
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const setPause = async (scope: string, pause: boolean, label: string) => {
     if (pause && !window.confirm(`Pausar ${label}? Nenhum card novo será assumido até você retomar. O que já está em andamento pode terminar.`)) return;
@@ -179,6 +209,31 @@ export default function AgentsPanel() {
           return (
             <div key={agent.user_id} className="glass-card p-4">
               <div className="flex flex-wrap items-center gap-2">
+                <label
+                  className="relative cursor-pointer"
+                  title="Trocar foto"
+                >
+                  {agent.avatar_url ? (
+                    <img src={agent.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover" />
+                  ) : (
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-sm font-semibold">
+                      {label.slice(0, 1).toUpperCase()}
+                    </div>
+                  )}
+                  <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-background">
+                    {busy === `foto-${agent.user_id}` ? <Loader2 size={10} className="animate-spin" /> : <Camera size={10} />}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    disabled={busy === `foto-${agent.user_id}`}
+                    onChange={(event) => {
+                      void changePhoto(agent, event.target.files?.[0]);
+                      event.target.value = '';
+                    }}
+                  />
+                </label>
                 <span className="text-base font-semibold">{label}</span>
                 {agent.roles.split(',').map((role) => (
                   <Badge key={role} variant="outline">{ROLE_LABELS[role] || role}</Badge>

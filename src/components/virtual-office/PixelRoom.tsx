@@ -94,8 +94,6 @@ function RoomDecor({ id }: { id: string }) {
         </div>
         <div style={{ width: 8, height: 3, backgroundColor: '#555', borderRadius: 1, position: 'absolute', bottom: 0 }} />
       </div>
-      {/* Cat bed */}
-      <div style={{ width: 14, height: 4, backgroundColor: '#92400e', borderRadius: '4px 4px 2px 2px', opacity: 0.5 }} />
     </div>
   );
 

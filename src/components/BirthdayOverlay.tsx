@@ -13,9 +13,9 @@ const ROLE_THEMES: Record<string, { emoji: string[]; bgGradient: string; title: 
     title: '🎬 Feliz Aniversário, mestre da edição!',
   },
   social_media: {
-    emoji: ['🐱', '😺', '😸', '🐾', '🧶', '🐈', '😻', '🎀'],
+    emoji: ['🎉', '🎊', '🎈', '🎂', '🎁', '✨', '🥳', '🎀'],
     bgGradient: 'from-pink-500/10 via-transparent to-pink-500/5',
-    title: '🐱 Miau! Feliz Aniversário, gatinho(a)!',
+    title: '🎉 Feliz Aniversário!',
   },
   videomaker: {
     emoji: ['🎥', '📸', '🎬', '🎞️', '📽️', '🎦', '🏆', '⭐'],

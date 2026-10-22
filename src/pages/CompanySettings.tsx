@@ -18,6 +18,7 @@ import { ASSISTANT_KEY } from '@/components/ProductionAssistant';
 import { getHolidays, createHoliday, deleteHoliday, sendHolidayNotifications, getWhatsAppConfig, updateWhatsAppConfig, type Holiday } from '@/services/whatsappService';
 import PortalBulkDelete from '@/components/portal/PortalBulkDelete';
 import MetaIntegrationCard from '@/components/settings/MetaIntegrationCard';
+import AgentKeysCard from '@/components/settings/AgentKeysCard';
 import { format, parseISO, addDays, isSameDay, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -301,6 +302,8 @@ export default function CompanySettings() {
       {isAdmin && <PortalBulkDelete />}
 
       {isAdmin && <MetaIntegrationCard />}
+
+      {isAdmin && <AgentKeysCard />}
 
       {/* Turnos e Expediente */}
       <div className="glass-card p-6 space-y-5">

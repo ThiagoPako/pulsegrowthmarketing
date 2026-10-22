@@ -18,6 +18,7 @@ import express from 'express';
 import cors from 'cors';
 import compression from 'compression';
 import { createPgClient } from './pgClient.mjs';
+import { registerAgentRoutes } from './agentRoutes.mjs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -14340,6 +14341,15 @@ app.post('/api/public/client-database/:token/media', async (req, res) => {
     console.error('[public-clientdb:media]', error);
     return res.status(error.status || 500).json({ error: error.message || 'Falha ao anexar mídias' });
   }
+});
+
+// ─── Agentes de edição (chaves próprias, fila, entrega) ─────
+registerAgentRoutes(app, {
+  pool,
+  uploadRoot: UPLOAD_ROOT,
+  verifyUser,
+  isStrictAdmin: (user) => (user?.role === 'admin' ? true : userHasAssignedRole(user, 'admin')),
+  publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL,
 });
 
 // ─── Start ──────────────────────────────────────────────────

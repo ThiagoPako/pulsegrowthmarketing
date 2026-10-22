@@ -31,6 +31,7 @@ interface AgentRow {
   roles: string;
   last_used_at: string | null;
   paused: PauseRow | null;
+  status: { status: string | null; updated_at: string } | null;
   current: CurrentTask[];
   delivered_today: number;
   delivered_week: number;
@@ -184,7 +185,7 @@ export default function AgentsPanel() {
                 ))}
                 {paused ? (
                   <Badge variant="destructive">Pausado</Badge>
-                ) : task ? (
+                ) : task || agent.status ? (
                   stale ? <Badge variant="destructive">Sem sinal há +{STALE_MINUTES} min</Badge>
                     : <Badge className="bg-success/15 text-success border-success/30" variant="outline">Trabalhando</Badge>
                 ) : (
@@ -210,8 +211,13 @@ export default function AgentsPanel() {
                   {task.client_name ? ` · ${task.client_name.trim()}` : ''}
                   <span className="text-muted-foreground"> — etapa: {task.agent_step || '—'}, sinal {ago(task.agent_heartbeat_at)}</span>
                 </p>
+              ) : agent.status ? (
+                <p className="mt-2 text-sm">
+                  {agent.status.status || 'Trabalhando'}
+                  <span className="text-muted-foreground"> — sinal {ago(agent.status.updated_at)}</span>
+                </p>
               ) : (
-                <p className="mt-2 text-sm text-muted-foreground">Sem card no momento.</p>
+                <p className="mt-2 text-sm text-muted-foreground">Sem tarefa no momento.</p>
               )}
 
               <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">

@@ -20,6 +20,7 @@
 //   POST /api/agent/tasks/:id/deliver   multipart: video (mp4), plan (json, opcional), notes
 //   GET  /api/agent/stale?minutes=30    (chefe) cards de agentes sem sinal de vida
 //   GET  /api/agent/clients?search=     nicho, linha editorial e links do cliente
+//   POST /api/agent/status              { status } trabalhando (online 15 min) | { done: true } encerrou
 //
 // A entrega reproduz no servidor o que o navegador faz em
 // src/lib/contentTaskSync.ts ao mover um card para "revisao".
@@ -95,6 +96,14 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS agent_step TEXT`);
         await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS agent_heartbeat_at TIMESTAMPTZ`);
         await pool.query(`CREATE INDEX IF NOT EXISTS idx_edit_versions_task ON edit_versions(task_id, version DESC)`).catch(() => {});
+        // atividade geral (chefe, revisão, editor entre cards): online enquanto o status for recente
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS agent_activity (
+            user_id UUID PRIMARY KEY,
+            status TEXT,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )
+        `);
         // pausa: scope = 'all' (todos) ou o user_id de um agente; existir a linha = pausado
         await pool.query(`
           CREATE TABLE IF NOT EXISTS agent_pauses (
@@ -214,7 +223,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       const { user } = await verifyUser(req);
       if (!(await isStrictAdmin(user))) return res.status(403).json({ error: 'Apenas administradores' });
       await ensureAgentSchema();
-      const [{ rows: agents }, { rows: pauses }, { rows: current }, { rows: delivered }, { rows: queue }, { rows: activity }] = await Promise.all([
+      const [{ rows: agents }, { rows: pauses }, { rows: activityNow }, { rows: current }, { rows: delivered }, { rows: queue }, { rows: activity }] = await Promise.all([
         pool.query(
           `SELECT k.user_id, p.name, p.email,
                   string_agg(DISTINCT k.role, ',') AS roles,
@@ -225,6 +234,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
             ORDER BY p.name`
         ),
         pool.query(`SELECT scope, paused_at, reason, paused_by FROM agent_pauses`),
+        pool.query(`SELECT user_id, status, updated_at FROM agent_activity WHERE updated_at > now() - interval '15 minutes'`),
         pool.query(
           `SELECT t.id, t.title, t.kanban_column, t.assigned_to, t.agent_step, t.agent_heartbeat_at, t.editing_started_at,
                   c.company_name AS client_name
@@ -267,6 +277,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           return {
             ...a,
             paused: pauses.find((p) => p.scope === String(a.user_id)) || null,
+            status: activityNow.find((x) => String(x.user_id) === String(a.user_id)) || null,
             current: current.filter((t) => t.assigned_to === a.user_id),
             delivered_today: Number(d.today || 0),
             delivered_week: Number(d.week || 0),
@@ -286,7 +297,9 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
     try {
       await verifyUser(req);
       await ensureAgentSchema();
-      const { rows: ids } = await pool.query(`SELECT DISTINCT user_id FROM agent_keys WHERE revoked_at IS NULL`);
+      const { rows: ids } = await pool.query(
+        `SELECT user_id, string_agg(DISTINCT role, ',') AS roles FROM agent_keys WHERE revoked_at IS NULL GROUP BY user_id`
+      );
       const agentIds = ids.map((r) => String(r.user_id));
       const { rows } = await pool.query(
         `SELECT t.assigned_to AS user_id, t.kanban_column, t.agent_step, t.title
@@ -296,11 +309,22 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
             AND t.agent_heartbeat_at > now() - interval '30 minutes'`,
         [agentIds]
       );
+      const { rows: activity } = await pool.query(
+        `SELECT user_id, status FROM agent_activity WHERE updated_at > now() - interval '15 minutes'`
+      );
       res.json({
         hidden: [],
         agents: agentIds.map((id) => {
           const task = rows.find((r) => String(r.user_id) === id);
-          return { user_id: id, working: !!task, column: task?.kanban_column || null, step: task?.agent_step || null, title: task?.title || null };
+          const act = activity.find((a) => String(a.user_id) === id);
+          return {
+            user_id: id,
+            roles: ids.find((r) => String(r.user_id) === id)?.roles || 'editor',
+            working: !!task || !!act,
+            column: task?.kanban_column || null,
+            step: task?.agent_step || act?.status || null,
+            title: task?.title || null,
+          };
         }),
       });
     } catch (error) {
@@ -343,6 +367,26 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
     try {
       const agent = await verifyAgent(req);
       res.json({ id: agent.userId, name: agent.name, email: agent.email, role: agent.role, pause: await pauseStateFor(agent.userId) });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // Sinal de vida geral: { status: "texto" } = trabalhando; { status: null } ou { done: true } = encerrou
+  app.post('/api/agent/status', async (req, res) => {
+    try {
+      const agent = await verifyAgent(req);
+      if (req.body?.done) {
+        await pool.query('DELETE FROM agent_activity WHERE user_id = $1', [agent.userId]);
+      } else {
+        const status = String(req.body?.status || '').slice(0, 160) || null;
+        await pool.query(
+          `INSERT INTO agent_activity (user_id, status, updated_at) VALUES ($1, $2, now())
+           ON CONFLICT (user_id) DO UPDATE SET status = EXCLUDED.status, updated_at = now()`,
+          [agent.userId, status]
+        );
+      }
+      res.json({ ok: true });
     } catch (error) {
       sendError(res, error);
     }

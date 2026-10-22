@@ -44,7 +44,7 @@ export default function VirtualOffice() {
   const [now, setNow] = useState(Date.now());
   const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
   // Agentes de edição: a equipe não os vê; admin os vê online só enquanto executam uma tarefa.
-  const [agentOffice, setAgentOffice] = useState<{ hidden: Set<string>; working: Record<string, { column: string | null; step: string | null }>; ids: Set<string> }>({ hidden: new Set(), working: {}, ids: new Set() });
+  const [agentOffice, setAgentOffice] = useState<{ hidden: Set<string>; working: Record<string, { column: string | null; step: string | null; roles: string }>; ids: Set<string> }>({ hidden: new Set(), working: {}, ids: new Set() });
   const membersRef = useRef<OfficeMember[]>([]);
   const chatRef = useRef<OfficeMember | null>(null);
   const prevOnlineRef = useRef<Set<string>>(new Set());
@@ -118,9 +118,9 @@ export default function VirtualOffice() {
       const response = await vpsAuthedFetch('/agents/office');
       if (response.ok) {
         const body = await response.json();
-        const working: Record<string, { column: string | null; step: string | null }> = {};
-        (body.agents || []).forEach((a: { user_id: string; working: boolean; column: string | null; step: string | null }) => {
-          if (a.working) working[a.user_id] = { column: a.column, step: a.step };
+        const working: Record<string, { column: string | null; step: string | null; roles: string }> = {};
+        (body.agents || []).forEach((a: { user_id: string; working: boolean; column: string | null; step: string | null; roles?: string }) => {
+          if (a.working) working[a.user_id] = { column: a.column, step: a.step, roles: a.roles || 'editor' };
         });
         setAgentOffice({
           hidden: new Set<string>(body.hidden || []),
@@ -200,7 +200,12 @@ export default function VirtualOffice() {
           ...m,
           name: m.name.trim(),
           isOnline: !!job,
-          activity: job ? (job.column === 'alteracao' ? 'alteracao' : 'edicao') : undefined,
+          activity: !job ? undefined
+            : job.column === 'alteracao' ? 'alteracao'
+            : job.column === 'edicao' ? 'edicao'
+            : job.roles.includes('revisor') ? 'revisao'
+            : job.roles.includes('chefe') ? 'gestao'
+            : 'edicao',
         };
       }
       const hasHeartbeat = Boolean(presence[m.id]) && now - new Date(presence[m.id]).getTime() < ONLINE_MS;

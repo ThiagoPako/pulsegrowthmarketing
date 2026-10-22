@@ -20,6 +20,8 @@
 //   POST /api/agent/tasks/:id/deliver   multipart: video (mp4), plan (json, opcional), notes
 //   GET  /api/agent/stale?minutes=30    (chefe) cards de agentes sem sinal de vida
 //   GET  /api/agent/clients?search=     nicho, linha editorial e links do cliente
+//   GET  /api/agent/tasks?search=       (chefe) busca cards do fluxo de edição em qualquer coluna
+//   POST /api/agent/tasks/:id/move      (chefe) { column: edicao|revisao|alteracao, reason, adjustment_notes }
 //   POST /api/agent/status              { status } trabalhando (online 15 min) | { done: true } encerrou
 //
 // A entrega reproduz no servidor o que o navegador faz em
@@ -530,6 +532,165 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       res.json({ clients: rows });
     } catch (error) {
       sendError(res, error);
+    }
+  });
+
+  // ── Organização (chefe): buscar e mover cards do fluxo de edição ──
+  const MOVABLE = new Set(['edicao', 'revisao', 'alteracao']);
+  const SOCIAL_STATUS = { revisao: 'revisao', alteracao: 'ajuste' };
+  const MOVE_ACTION = { edicao: 'Movido para Edição', revisao: 'Enviado para Revisão', alteracao: 'Solicitado Alteração' };
+  const PORTAL_NOTIF = {
+    edicao: ['✂️ Vídeo em edição', (t) => `"${t}" foi enviado para edição. Prazo previsto: 2 dias úteis.`, 'editing_started'],
+    revisao: ['👁 Revisão interna', (t) => `"${t}" está em revisão interna de qualidade.`, 'internal_review'],
+    alteracao: ['🔧 Ajuste em andamento', (t) => `"${t}" está recebendo ajustes solicitados.`, 'adjustment'],
+  };
+
+  app.get('/api/agent/tasks', async (req, res) => {
+    try {
+      const agent = await verifyAgent(req);
+      if (agent.role !== 'chefe') return res.status(403).json({ error: 'Apenas a chefe' });
+      const search = String(req.query.search || '').trim();
+      const { rows } = await pool.query(
+        `SELECT t.id, t.title, t.kanban_column, t.content_type, t.assigned_to, t.edited_by, t.edited_video_link,
+                t.adjustment_notes, t.drive_link, t.editing_deadline, t.review_deadline, t.alteration_deadline,
+                t.updated_at, c.company_name AS client_name, pe.name AS edited_by_name, pa.name AS assigned_to_name
+           FROM content_tasks t
+           LEFT JOIN clients c ON c.id = t.client_id
+           LEFT JOIN profiles pe ON pe.id = t.edited_by
+           LEFT JOIN profiles pa ON pa.id = t.assigned_to
+          WHERE t.kanban_column IN ('edicao', 'revisao', 'alteracao', 'envio')
+            AND ($1 = '' OR t.title ILIKE '%' || $1 || '%' OR c.company_name ILIKE '%' || $1 || '%' OR t.id::text LIKE $1 || '%')
+          ORDER BY t.updated_at DESC
+          LIMIT 50`,
+        [search]
+      );
+      res.json({ tasks: rows });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/agent/tasks/:id/move', async (req, res) => {
+    const client = await pool.connect();
+    try {
+      const agent = await verifyAgent(req);
+      if (agent.role !== 'chefe') return res.status(403).json({ error: 'Apenas a chefe move cards' });
+      const column = String(req.body?.column || '');
+      if (!MOVABLE.has(column)) {
+        return res.status(400).json({ error: 'Coluna permitida: edicao, revisao ou alteracao (enviar ao cliente é decisão humana)' });
+      }
+      const reason = String(req.body?.reason || '').slice(0, 500) || null;
+      const notes = req.body?.adjustment_notes != null ? String(req.body.adjustment_notes).slice(0, 4000) : null;
+
+      await client.query('BEGIN');
+      const { rows } = await client.query(
+        `SELECT t.*, c.company_name AS client_name FROM content_tasks t LEFT JOIN clients c ON c.id = t.client_id
+          WHERE t.id = $1 FOR UPDATE OF t`,
+        [req.params.id]
+      );
+      const task = rows[0];
+      if (!task) throw Object.assign(new Error('Card não encontrado'), { status: 404 });
+      if (!['edicao', 'revisao', 'alteracao', 'envio'].includes(task.kanban_column)) {
+        throw Object.assign(new Error(`O card está em "${task.kanban_column}", fora do fluxo de edição`), { status: 409 });
+      }
+      if (task.kanban_column === column && notes == null) throw Object.assign(new Error('O card já está nessa coluna'), { status: 409 });
+      if (column === 'revisao' && !task.edited_video_link) {
+        throw Object.assign(new Error('Não dá para mandar para revisão sem vídeo editado no card'), { status: 409 });
+      }
+      if (column === 'alteracao' && !notes && !task.adjustment_notes) {
+        throw Object.assign(new Error('Informe os ajustes pedidos (adjustment_notes) ao mandar para alteração'), { status: 400 });
+      }
+
+      const now = new Date();
+      const { rows: settingsRows } = await client.query('SELECT * FROM company_settings LIMIT 1');
+      const settings = settingsRows[0] || {};
+      if (typeof settings.work_days === 'string') {
+        try { settings.work_days = JSON.parse(settings.work_days); } catch { settings.work_days = null; }
+      }
+      const workDays = Array.isArray(settings.work_days) && settings.work_days.length
+        ? settings.work_days : ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
+      const deadline = (hoursKey, enabledKey, fallback) => ((settings[enabledKey] ?? true)
+        ? addBusinessHours(now, settings[hoursKey] ?? fallback, workDays).toISOString() : null);
+
+      // mesmos campos que src/lib/contentTaskSync.ts grava ao mover
+      const set = {
+        kanban_column: column, reviewing_by: null, reviewing_by_name: null, reviewing_at: null,
+        editing_deadline: null, review_deadline: null, alteration_deadline: null, approval_deadline: null,
+        agent_step: null, agent_heartbeat_at: null,
+      };
+      if (column === 'edicao') {
+        set.editing_started_at = now.toISOString();
+        set.editing_deadline = deadline('editing_deadline_hours', 'editing_deadline_enabled', 48);
+        set.assigned_to = null;
+      }
+      if (column === 'revisao') {
+        set.review_deadline = deadline('review_deadline_hours', 'review_deadline_enabled', 24);
+        set.approval_sent_at = now.toISOString();
+        set.assigned_to = null;
+      }
+      if (column === 'alteracao') {
+        if (!task.immediate_alteration) set.alteration_deadline = deadline('alteration_deadline_hours', 'alteration_deadline_enabled', 24);
+        set.editing_started_at = null;
+        set.editing_paused_at = null;
+        set.editing_paused_seconds = 0;
+        set.assigned_to = null;
+      }
+      if (notes != null) set.adjustment_notes = notes;
+
+      const keys = Object.keys(set);
+      await client.query(
+        `UPDATE content_tasks SET ${keys.map((k, i) => `${k} = $${i + 2}`).join(', ')}, updated_at = now() WHERE id = $1`,
+        [task.id, ...keys.map((k) => set[k])]
+      );
+
+      if (task.client_id) {
+        const social = SOCIAL_STATUS[column];
+        if (social) {
+          const { rowCount } = await client.query('UPDATE social_media_deliveries SET status = $2 WHERE content_task_id = $1', [task.id, social]);
+          if (!rowCount) {
+            await client.query(
+              `INSERT INTO social_media_deliveries
+                 (client_id, content_type, title, description, status, delivered_at, recording_id, script_id, created_by, content_task_id)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+              [task.client_id, task.content_type, task.title, task.description || null, social, brazilDateString(now),
+                task.recording_id || null, task.script_id || null, agent.userId, task.id]
+            );
+          }
+        } else {
+          await client.query('DELETE FROM social_media_deliveries WHERE content_task_id = $1', [task.id]);
+        }
+        if (column === 'revisao' && task.edited_video_link) {
+          const { rows: portalRows } = await client.query(
+            'SELECT id FROM client_portal_contents WHERE client_id = $1 AND title = $2 ORDER BY created_at DESC LIMIT 1',
+            [task.client_id, task.title]
+          );
+          if (portalRows.length) {
+            await client.query(`UPDATE client_portal_contents SET file_url = $2, status = 'revisao_interna', updated_at = now() WHERE id = $1`,
+              [portalRows[0].id, task.edited_video_link]);
+          }
+        }
+        const [title, message, type] = PORTAL_NOTIF[column];
+        await client.query('INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)',
+          [task.client_id, title, message(task.title), type]);
+      }
+      if (column === 'revisao') {
+        await client.query(`SELECT notify_role('social_media'::app_role, $1, $2, 'review', '/entregas-social')`,
+          ['Vídeo para Revisão', `${task.title} (${task.client_name || ''}) está pronto para revisão`]);
+      }
+      if (column === 'alteracao' && task.edited_by) {
+        const urgent = task.immediate_alteration ? '🚨 IMEDIATO: ' : '';
+        await client.query(`SELECT notify_user($1, $2, $3, 'adjustment', '/edicao/kanban')`,
+          [task.edited_by, `${urgent}Ajuste solicitado`, `"${task.title}" (${task.client_name || ''}) precisa de ajustes`]);
+      }
+      await client.query('INSERT INTO task_history (task_id, user_id, action, details) VALUES ($1, $2, $3, $4)',
+        [task.id, agent.userId, MOVE_ACTION[column], [reason, notes ? `Ajustes: ${notes}` : null].filter(Boolean).join(' · ') || null]);
+      await client.query('COMMIT');
+      res.json({ ok: true, from: task.kanban_column, to: column });
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      sendError(res, error);
+    } finally {
+      client.release();
     }
   });
 

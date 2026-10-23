@@ -488,7 +488,8 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         cb(null, `clientes_${Date.now()}_${crypto.randomBytes(6).toString('hex')}.tar.gz`);
       },
     }),
-    limits: { fileSize: 500 * 1024 * 1024, files: 1, fieldSize: 20 * 1024 * 1024 },
+    // clientes sem fotos ficam em ~16 MB; acima de 60 MB algo pesado entrou por engano
+    limits: { fileSize: 60 * 1024 * 1024, files: 1, fieldSize: 5 * 1024 * 1024 },
   }).single('bundle');
 
   app.post('/api/agent/clients-bundle', async (req, res) => {
@@ -522,7 +523,12 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           discard();
           return res.status(400).json({ error: 'O pacote precisa ter clientes/mapa.json' });
         }
-        const sha256 = crypto.createHash('sha256').update(await fs.promises.readFile(req.file.path)).digest('hex');
+        // hash em fluxo: não carrega o pacote inteiro na memória (a VPS é pequena)
+        const sha256 = await new Promise((resolve, reject) => {
+          const hash = crypto.createHash('sha256');
+          fs.createReadStream(req.file.path).on('data', (chunk) => hash.update(chunk)).on('error', reject)
+            .on('end', () => resolve(hash.digest('hex')));
+        });
         const clientCount = Number(manifest.client_count) || 0;
         const machineId = await machineOfKey(agent.keyId);
         const { rows } = await pool.query(

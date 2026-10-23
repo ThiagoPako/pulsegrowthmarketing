@@ -5,6 +5,11 @@ on:
     branches:
       - main
 
+# um deploy por vez: dois rodando juntos disputam o restart do PM2 ("Process not found")
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest

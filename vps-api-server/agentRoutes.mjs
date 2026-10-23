@@ -302,16 +302,17 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
     return user;
   }
 
-  // só agentes que já têm chave ativa (a função deles vem dessa chave)
+  // quem já teve chave de agente, ativa ou revogada (ex.: Davi indo para o Mac 2 depois de revogar a chave antiga);
+  // a função vem da chave mais recente
   async function validAgentIds(userIds) {
     const ids = [...new Set((Array.isArray(userIds) ? userIds : []).map(String).filter(Boolean))];
     if (!ids.length) throw Object.assign(new Error('Escolha pelo menos um agente para este Mac'), { status: 400 });
     const { rows } = await pool.query(
-      `SELECT DISTINCT user_id::text FROM agent_keys WHERE revoked_at IS NULL AND user_id::text = ANY($1)`,
+      `SELECT DISTINCT user_id::text FROM agent_keys WHERE user_id::text = ANY($1)`,
       [ids]
     );
     if (rows.length !== ids.length) {
-      throw Object.assign(new Error('Algum agente escolhido não tem chave ativa. Gere a chave dele primeiro.'), { status: 400 });
+      throw Object.assign(new Error('Algum membro escolhido nunca foi agente. Gere a chave dele em "Agentes de edição" primeiro.'), { status: 400 });
     }
     return ids;
   }
@@ -341,9 +342,10 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
            FROM agent_machines m WHERE m.revoked_at IS NULL ORDER BY m.created_at`
       );
       const { rows: agents } = await pool.query(
-        `SELECT DISTINCT ON (k.user_id) k.user_id, k.role, k.machine_id, k.last_used_at, p.name, p.email, p.avatar_url
+        `SELECT DISTINCT ON (k.user_id) k.user_id, k.role, k.last_used_at, p.name, p.email, p.avatar_url,
+                (k.revoked_at IS NULL) AS active,
+                CASE WHEN k.revoked_at IS NULL THEN k.machine_id END AS machine_id
            FROM agent_keys k LEFT JOIN profiles p ON p.id = k.user_id
-          WHERE k.revoked_at IS NULL
           ORDER BY k.user_id, k.created_at DESC`
       );
       res.json({ machines, agents });
@@ -499,10 +501,10 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       for (const userId of userIds) {
         const { rows: current } = await client.query(
           `SELECT k.role, p.name FROM agent_keys k LEFT JOIN profiles p ON p.id = k.user_id
-            WHERE k.user_id = $1 AND k.revoked_at IS NULL ORDER BY k.created_at DESC LIMIT 1`,
+            WHERE k.user_id = $1 ORDER BY k.created_at DESC LIMIT 1`,
           [userId]
         );
-        if (!current.length) continue; // revogado depois que o código foi gerado
+        if (!current.length) continue;
         // o agente passa a rodar só neste Mac
         await client.query('UPDATE agent_keys SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [userId]);
         const raw = `pa_${crypto.randomBytes(32).toString('base64url')}`;

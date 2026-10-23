@@ -43,6 +43,7 @@ interface Agent {
   user_id: string;
   role: string;
   machine_id: string | null;
+  active: boolean;
   last_used_at: string | null;
   name: string | null;
   email: string | null;
@@ -137,8 +138,9 @@ export default function AgentMachinesCard() {
 
   const machineName = useMemo(() => new Map(machines.map((m) => [m.id, m.name])), [machines]);
   const agentsOf = (machineId: string | null) =>
-    agents.filter((a) => (machineId ? a.machine_id === machineId : !a.machine_id || !machineName.has(a.machine_id)));
+    agents.filter((a) => a.active && (machineId ? a.machine_id === machineId : !a.machine_id || !machineName.has(a.machine_id)));
   const unassigned = agentsOf(null);
+  const withoutKey = agents.filter((a) => !a.active);
 
   const openNew = () => {
     setName(`Mac ${machines.length + 1}`);
@@ -277,6 +279,22 @@ export default function AgentMachinesCard() {
             );
           })}
 
+          {withoutKey.length > 0 && (
+            <div className="rounded-lg border border-dashed border-amber-500/50 p-3 space-y-2">
+              <span className="text-sm font-medium">Sem computador e sem chave ativa</span>
+              <div className="flex flex-wrap gap-1.5">
+                {withoutKey.map((agent) => (
+                  <Badge key={agent.user_id} variant="outline">
+                    {agent.name || agent.email} · {ROLE_LABELS[agent.role] || agent.role}
+                  </Badge>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Parados até serem conectados num Mac: use "Conectar outro Mac" e marque o agente — ele recebe uma chave nova.
+              </p>
+            </div>
+          )}
+
           {unassigned.length > 0 && (
             <div className="rounded-lg border border-dashed border-border p-3 space-y-2">
               <span className="text-sm font-medium">Sem computador definido</span>
@@ -386,7 +404,10 @@ export default function AgentMachinesCard() {
                       {elsewhere && selected.includes(agent.user_id) && (
                         <span className="text-xs text-amber-600">sai do {elsewhere}</span>
                       )}
-                      {!agent.machine_id && selected.includes(agent.user_id) && (
+                      {!agent.active && (
+                        <span className="text-xs text-muted-foreground">sem chave ativa — recebe uma nova</span>
+                      )}
+                      {agent.active && !agent.machine_id && selected.includes(agent.user_id) && (
                         <span className="text-xs text-amber-600">a chave atual deixa de valer</span>
                       )}
                     </label>

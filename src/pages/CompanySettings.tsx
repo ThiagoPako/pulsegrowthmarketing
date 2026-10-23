@@ -19,6 +19,7 @@ import { getHolidays, createHoliday, deleteHoliday, sendHolidayNotifications, ge
 import PortalBulkDelete from '@/components/portal/PortalBulkDelete';
 import MetaIntegrationCard from '@/components/settings/MetaIntegrationCard';
 import AgentKeysCard from '@/components/settings/AgentKeysCard';
+import AgentMachinesCard from '@/components/settings/AgentMachinesCard';
 import { format, parseISO, addDays, isSameDay, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -304,6 +305,8 @@ export default function CompanySettings() {
       {isAdmin && <MetaIntegrationCard />}
 
       {isAdmin && <AgentKeysCard />}
+
+      {isAdmin && <AgentMachinesCard />}
 
       {/* Turnos e Expediente */}
       <div className="glass-card p-6 space-y-5">

@@ -10,6 +10,15 @@
 //   GET    /api/agents/overview         painel: agentes, card atual, entregas, fila, atividade
 //   GET    /api/agents/office           Escritório Virtual: agente online só enquanto executa
 //   POST   /api/agents/pause|resume     { scope: 'all' | <user_id> } — pausado = não pega card novo
+//   GET    /api/agent-machines          computadores conectados e os agentes de cada um
+//   POST   /api/agent-machines          { name, user_ids } → cadastra o Mac e devolve um código de conexão (30 min, uso único)
+//   POST   /api/agent-machines/:id/code { user_ids } → novo código para o mesmo Mac (trocar/acrescentar agentes)
+//   PATCH  /api/agent-machines/:id      { name }
+//   DELETE /api/agent-machines/:id      desconecta: revoga as chaves dos agentes daquele Mac
+//
+// Conexão de um Mac (sem login; o código é a autorização):
+//   POST /api/agent-pair                { code, hostname } → chaves novas dos agentes escolhidos, presas ao Mac
+//                                       (as chaves antigas desses agentes, em qualquer outro Mac, são revogadas)
 //
 // Rotas do agente (cabeçalho "Authorization: Agent <chave>"):
 //   GET  /api/agent/me
@@ -123,6 +132,30 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           )
         `);
         await pool.query(`CREATE INDEX IF NOT EXISTS idx_agent_messages_to ON agent_messages(to_user, read_at)`).catch(() => {});
+        // computadores onde os agentes rodam (Mac 1, Mac 2…) e os códigos de conexão de uso único
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS agent_machines (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name TEXT NOT NULL,
+            hostname TEXT,
+            created_by UUID,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            connected_at TIMESTAMPTZ,
+            last_seen_at TIMESTAMPTZ,
+            revoked_at TIMESTAMPTZ
+          )
+        `);
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS agent_pair_codes (
+            code_hash TEXT PRIMARY KEY,
+            machine_id UUID NOT NULL,
+            user_ids JSONB NOT NULL,
+            created_by UUID,
+            expires_at TIMESTAMPTZ NOT NULL,
+            used_at TIMESTAMPTZ
+          )
+        `);
+        await pool.query(`ALTER TABLE agent_keys ADD COLUMN IF NOT EXISTS machine_id UUID`);
         // pausa: scope = 'all' (todos) ou o user_id de um agente; existir a linha = pausado
         await pool.query(`
           CREATE TABLE IF NOT EXISTS agent_pauses (
@@ -149,7 +182,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
     if (!raw) throw Object.assign(new Error('Unauthorized'), { status: 401 });
     await ensureAgentSchema();
     const { rows } = await pool.query(
-      `SELECT k.id, k.user_id, k.role, p.name, p.email
+      `SELECT k.id, k.user_id, k.role, k.machine_id, p.name, p.email
          FROM agent_keys k LEFT JOIN profiles p ON p.id = k.user_id
         WHERE k.key_hash = $1 AND k.revoked_at IS NULL
         LIMIT 1`,
@@ -157,6 +190,9 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
     );
     if (!rows.length) throw Object.assign(new Error('Unauthorized'), { status: 401 });
     pool.query('UPDATE agent_keys SET last_used_at = now() WHERE id = $1', [rows[0].id]).catch(() => {});
+    if (rows[0].machine_id) {
+      pool.query('UPDATE agent_machines SET last_seen_at = now() WHERE id = $1', [rows[0].machine_id]).catch(() => {});
+    }
     return { keyId: rows[0].id, userId: rows[0].user_id, role: rows[0].role, name: rows[0].name, email: rows[0].email };
   }
 
@@ -190,8 +226,10 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       if (!(await isStrictAdmin(user))) return res.status(403).json({ error: 'Apenas administradores' });
       await ensureAgentSchema();
       const { rows } = await pool.query(
-        `SELECT k.id, k.user_id, k.role, k.key_hint, k.created_at, k.last_used_at, k.revoked_at, p.name, p.email
+        `SELECT k.id, k.user_id, k.role, k.key_hint, k.created_at, k.last_used_at, k.revoked_at, p.name, p.email,
+                k.machine_id, m.name AS machine_name
            FROM agent_keys k LEFT JOIN profiles p ON p.id = k.user_id
+           LEFT JOIN agent_machines m ON m.id = k.machine_id
           ORDER BY k.revoked_at NULLS FIRST, k.created_at DESC`
       );
       res.json({ keys: rows });
@@ -233,6 +271,193 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       res.json({ ok: true });
     } catch (error) {
       sendError(res, error);
+    }
+  });
+
+  // ── Computadores (Macs) onde os agentes rodam ─────────────
+  const PAIR_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sem 0/O/1/I
+  const PAIR_TTL_MIN = 30;
+  const pairFailures = new Map(); // ip → { count, until }
+
+  function newPairCode() {
+    const bytes = crypto.randomBytes(10);
+    const chars = Array.from(bytes, (b) => PAIR_ALPHABET[b % PAIR_ALPHABET.length]).join('');
+    return `${chars.slice(0, 5)}-${chars.slice(5)}`;
+  }
+  const normalizePairCode = (code) => String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const agentSlug = (name) => String(name || '').trim().split(/\s+/)[0]
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '') || 'agente';
+
+  async function requireAdmin(req) {
+    const { user } = await verifyUser(req);
+    if (!(await isStrictAdmin(user))) throw Object.assign(new Error('Apenas administradores'), { status: 403 });
+    await ensureAgentSchema();
+    return user;
+  }
+
+  // só agentes que já têm chave ativa (a função deles vem dessa chave)
+  async function validAgentIds(userIds) {
+    const ids = [...new Set((Array.isArray(userIds) ? userIds : []).map(String).filter(Boolean))];
+    if (!ids.length) throw Object.assign(new Error('Escolha pelo menos um agente para este Mac'), { status: 400 });
+    const { rows } = await pool.query(
+      `SELECT DISTINCT user_id::text FROM agent_keys WHERE revoked_at IS NULL AND user_id::text = ANY($1)`,
+      [ids]
+    );
+    if (rows.length !== ids.length) {
+      throw Object.assign(new Error('Algum agente escolhido não tem chave ativa. Gere a chave dele primeiro.'), { status: 400 });
+    }
+    return ids;
+  }
+
+  async function issuePairCode(machineId, userIds, createdBy) {
+    const code = newPairCode();
+    // um código válido por Mac: o anterior deixa de valer
+    await pool.query('DELETE FROM agent_pair_codes WHERE machine_id = $1 AND used_at IS NULL', [machineId]);
+    await pool.query(
+      `INSERT INTO agent_pair_codes (code_hash, machine_id, user_ids, created_by, expires_at)
+       VALUES ($1, $2, $3::jsonb, $4, now() + ($5 || ' minutes')::interval)`,
+      [hashKey(normalizePairCode(code)), machineId, JSON.stringify(userIds), createdBy, String(PAIR_TTL_MIN)]
+    );
+    return { code, expires_in_minutes: PAIR_TTL_MIN };
+  }
+
+  app.get('/api/agent-machines', async (req, res) => {
+    try {
+      await requireAdmin(req);
+      const { rows: machines } = await pool.query(
+        `SELECT m.id, m.name, m.hostname, m.created_at, m.connected_at, m.last_seen_at,
+                EXISTS (SELECT 1 FROM agent_pair_codes c WHERE c.machine_id = m.id AND c.used_at IS NULL AND c.expires_at > now()) AS code_pending
+           FROM agent_machines m WHERE m.revoked_at IS NULL ORDER BY m.created_at`
+      );
+      const { rows: agents } = await pool.query(
+        `SELECT DISTINCT ON (k.user_id) k.user_id, k.role, k.machine_id, k.last_used_at, p.name, p.email, p.avatar_url
+           FROM agent_keys k LEFT JOIN profiles p ON p.id = k.user_id
+          WHERE k.revoked_at IS NULL
+          ORDER BY k.user_id, k.created_at DESC`
+      );
+      res.json({ machines, agents });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/agent-machines', async (req, res) => {
+    try {
+      const user = await requireAdmin(req);
+      const name = String(req.body?.name || '').trim().slice(0, 60);
+      if (!name) return res.status(400).json({ error: 'Dê um nome ao computador (ex.: Mac 2)' });
+      const userIds = await validAgentIds(req.body?.user_ids);
+      const { rows } = await pool.query(
+        'INSERT INTO agent_machines (name, created_by) VALUES ($1, $2) RETURNING id, name',
+        [name, user.id]
+      );
+      res.json({ machine: rows[0], ...(await issuePairCode(rows[0].id, userIds, user.id)) });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/agent-machines/:id/code', async (req, res) => {
+    try {
+      const user = await requireAdmin(req);
+      const { rows } = await pool.query('SELECT id, name FROM agent_machines WHERE id = $1 AND revoked_at IS NULL', [req.params.id]);
+      if (!rows.length) return res.status(404).json({ error: 'Computador não encontrado' });
+      const userIds = await validAgentIds(req.body?.user_ids);
+      res.json({ machine: rows[0], ...(await issuePairCode(rows[0].id, userIds, user.id)) });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.patch('/api/agent-machines/:id', async (req, res) => {
+    try {
+      await requireAdmin(req);
+      const name = String(req.body?.name || '').trim().slice(0, 60);
+      if (!name) return res.status(400).json({ error: 'Nome vazio' });
+      await pool.query('UPDATE agent_machines SET name = $2 WHERE id = $1 AND revoked_at IS NULL', [req.params.id, name]);
+      res.json({ ok: true });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.delete('/api/agent-machines/:id', async (req, res) => {
+    try {
+      await requireAdmin(req);
+      await pool.query('UPDATE agent_keys SET revoked_at = now() WHERE machine_id = $1 AND revoked_at IS NULL', [req.params.id]);
+      await pool.query('DELETE FROM agent_pair_codes WHERE machine_id = $1', [req.params.id]);
+      await pool.query('UPDATE agent_machines SET revoked_at = now() WHERE id = $1', [req.params.id]);
+      res.json({ ok: true });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // O Mac troca o código pelas chaves (o pulse.mjs grava cada uma em ~/.config/pulse/agentes/<nome>.key).
+  app.post('/api/agent-pair', async (req, res) => {
+    const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim();
+    const fail = pairFailures.get(ip);
+    if (fail && fail.until > Date.now() && fail.count >= 10) {
+      return res.status(429).json({ error: 'Muitas tentativas. Espere 15 minutos.' });
+    }
+    const registerFailure = () => {
+      const cur = pairFailures.get(ip);
+      const active = cur && cur.until > Date.now();
+      pairFailures.set(ip, { count: active ? cur.count + 1 : 1, until: active ? cur.until : Date.now() + 15 * 60_000 });
+    };
+    const client = await pool.connect();
+    try {
+      await ensureAgentSchema();
+      const code = normalizePairCode(req.body?.code);
+      const hostname = String(req.body?.hostname || '').trim().slice(0, 120) || null;
+      await client.query('BEGIN');
+      const { rows } = await client.query(
+        `UPDATE agent_pair_codes SET used_at = now()
+          WHERE code_hash = $1 AND used_at IS NULL AND expires_at > now()
+          RETURNING machine_id, user_ids, created_by`,
+        [hashKey(code)]
+      );
+      if (!rows.length) {
+        await client.query('ROLLBACK');
+        registerFailure();
+        return res.status(400).json({ error: 'Código inválido, já usado ou vencido. Gere outro em Configurações → Computadores dos agentes.' });
+      }
+      const { machine_id: machineId, user_ids: userIds, created_by: createdBy } = rows[0];
+      const { rows: machineRows } = await client.query(
+        `UPDATE agent_machines SET hostname = $2, connected_at = now(), last_seen_at = now()
+          WHERE id = $1 AND revoked_at IS NULL RETURNING id, name`,
+        [machineId, hostname]
+      );
+      if (!machineRows.length) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Este computador foi desconectado no sistema.' });
+      }
+      const agents = [];
+      for (const userId of userIds) {
+        const { rows: current } = await client.query(
+          `SELECT k.role, p.name FROM agent_keys k LEFT JOIN profiles p ON p.id = k.user_id
+            WHERE k.user_id = $1 AND k.revoked_at IS NULL ORDER BY k.created_at DESC LIMIT 1`,
+          [userId]
+        );
+        if (!current.length) continue; // revogado depois que o código foi gerado
+        // o agente passa a rodar só neste Mac
+        await client.query('UPDATE agent_keys SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [userId]);
+        const raw = `pa_${crypto.randomBytes(32).toString('base64url')}`;
+        await client.query(
+          `INSERT INTO agent_keys (user_id, role, key_hash, key_hint, created_by, machine_id)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [userId, current[0].role, hashKey(raw), raw.slice(-4), createdBy, machineId]
+        );
+        agents.push({ name: current[0].name, slug: agentSlug(current[0].name), role: current[0].role, key: raw });
+      }
+      await client.query('COMMIT');
+      pairFailures.delete(ip);
+      res.json({ machine: machineRows[0], agents });
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      sendError(res, error);
+    } finally {
+      client.release();
     }
   });
 

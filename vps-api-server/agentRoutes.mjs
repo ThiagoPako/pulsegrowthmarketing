@@ -15,10 +15,13 @@
 //   POST   /api/agent-machines/:id/code { user_ids } → novo código para o mesmo Mac (trocar/acrescentar agentes)
 //   PATCH  /api/agent-machines/:id      { name }
 //   DELETE /api/agent-machines/:id      desconecta: revoga as chaves dos agentes daquele Mac
+//   GET    /api/agent-machines/:id/pair  andamento da conexão ao vivo (a tela consulta enquanto o Mac conecta)
 //
 // Conexão de um Mac (sem login; o código é a autorização):
 //   POST /api/agent-pair                { code, hostname } → chaves novas dos agentes escolhidos, presas ao Mac
 //                                       (as chaves antigas desses agentes, em qualquer outro Mac, são revogadas)
+//   POST /api/agent/machine/report      (chave do Mac) { stage, checks, done } → o Mac conta ao sistema cada etapa
+//                                       e o resultado da verificação (Node, ffprobe, pasta OPEN CUT, mapa, chaves)
 //
 // Rotas do agente (cabeçalho "Authorization: Agent <chave>"):
 //   GET  /api/agent/me
@@ -156,6 +159,10 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           )
         `);
         await pool.query(`ALTER TABLE agent_keys ADD COLUMN IF NOT EXISTS machine_id UUID`);
+        // conexão ao vivo: aguardando → chaves_entregues → chaves_gravadas → conectado | com_avisos
+        await pool.query(`ALTER TABLE agent_machines ADD COLUMN IF NOT EXISTS pair_status TEXT`);
+        await pool.query(`ALTER TABLE agent_machines ADD COLUMN IF NOT EXISTS pair_report JSONB`);
+        await pool.query(`ALTER TABLE agent_machines ADD COLUMN IF NOT EXISTS pair_updated_at TIMESTAMPTZ`);
         // pausa: scope = 'all' (todos) ou o user_id de um agente; existir a linha = pausado
         await pool.query(`
           CREATE TABLE IF NOT EXISTS agent_pauses (
@@ -318,6 +325,10 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
        VALUES ($1, $2, $3::jsonb, $4, now() + ($5 || ' minutes')::interval)`,
       [hashKey(normalizePairCode(code)), machineId, JSON.stringify(userIds), createdBy, String(PAIR_TTL_MIN)]
     );
+    await pool.query(
+      `UPDATE agent_machines SET pair_status = 'aguardando', pair_report = NULL, pair_updated_at = now() WHERE id = $1`,
+      [machineId]
+    );
     return { code, expires_in_minutes: PAIR_TTL_MIN };
   }
 
@@ -325,7 +336,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
     try {
       await requireAdmin(req);
       const { rows: machines } = await pool.query(
-        `SELECT m.id, m.name, m.hostname, m.created_at, m.connected_at, m.last_seen_at,
+        `SELECT m.id, m.name, m.hostname, m.created_at, m.connected_at, m.last_seen_at, m.pair_status, m.pair_report,
                 EXISTS (SELECT 1 FROM agent_pair_codes c WHERE c.machine_id = m.id AND c.used_at IS NULL AND c.expires_at > now()) AS code_pending
            FROM agent_machines m WHERE m.revoked_at IS NULL ORDER BY m.created_at`
       );
@@ -393,6 +404,57 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
     }
   });
 
+  app.get('/api/agent-machines/:id/pair', async (req, res) => {
+    try {
+      await requireAdmin(req);
+      const { rows } = await pool.query(
+        `SELECT m.id, m.name, m.hostname, m.pair_status, m.pair_report, m.pair_updated_at, m.connected_at,
+                (SELECT max(c.expires_at) FROM agent_pair_codes c WHERE c.machine_id = m.id AND c.used_at IS NULL) AS code_expires_at
+           FROM agent_machines m WHERE m.id = $1 AND m.revoked_at IS NULL`,
+        [req.params.id]
+      );
+      if (!rows.length) return res.status(404).json({ error: 'Computador não encontrado' });
+      const m = rows[0];
+      // código vencido sem o Mac ter respondido
+      const expired = m.pair_status === 'aguardando' && (!m.code_expires_at || new Date(m.code_expires_at) < new Date());
+      // chaves entregues mas o Mac não terminou em 3 min: provavelmente parou no meio
+      const stalled = ['chaves_entregues', 'chaves_gravadas'].includes(m.pair_status)
+        && m.pair_updated_at && Date.now() - new Date(m.pair_updated_at).getTime() > 3 * 60_000;
+      res.json({ ...m, pair_status: expired ? 'vencido' : stalled ? 'parado' : m.pair_status });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  const PAIR_STAGES = new Set(['chaves_gravadas', 'verificando']);
+  app.post('/api/agent/machine/report', async (req, res) => {
+    try {
+      const agent = await verifyAgent(req);
+      const { rows: keyRows } = await pool.query('SELECT machine_id FROM agent_keys WHERE id = $1', [agent.keyId]);
+      const machineId = keyRows[0]?.machine_id;
+      if (!machineId) return res.status(400).json({ error: 'Esta chave não pertence a um computador conectado' });
+      const checks = (Array.isArray(req.body?.checks) ? req.body.checks : []).slice(0, 40).map((c) => ({
+        label: String(c?.label || '').slice(0, 120),
+        ok: !!c?.ok,
+        detail: c?.detail ? String(c.detail).slice(0, 300) : null,
+      }));
+      let status;
+      if (req.body?.done) status = checks.every((c) => c.ok) ? 'conectado' : 'com_avisos';
+      else {
+        status = String(req.body?.stage || '');
+        if (!PAIR_STAGES.has(status)) return res.status(400).json({ error: 'Etapa inválida' });
+      }
+      await pool.query(
+        `UPDATE agent_machines SET pair_status = $2, pair_report = $3::jsonb, pair_updated_at = now(), last_seen_at = now()
+          WHERE id = $1 AND revoked_at IS NULL`,
+        [machineId, status, JSON.stringify({ checks, node: req.body?.node || null })]
+      );
+      res.json({ ok: true, status });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
   // O Mac troca o código pelas chaves (o pulse.mjs grava cada uma em ~/.config/pulse/agentes/<nome>.key).
   app.post('/api/agent-pair', async (req, res) => {
     const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim();
@@ -424,7 +486,8 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       }
       const { machine_id: machineId, user_ids: userIds, created_by: createdBy } = rows[0];
       const { rows: machineRows } = await client.query(
-        `UPDATE agent_machines SET hostname = $2, connected_at = now(), last_seen_at = now()
+        `UPDATE agent_machines SET hostname = $2, connected_at = now(), last_seen_at = now(),
+                pair_status = 'chaves_entregues', pair_report = NULL, pair_updated_at = now()
           WHERE id = $1 AND revoked_at IS NULL RETURNING id, name`,
         [machineId, hostname]
       );

@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Copy, Laptop, Loader2, Pencil, Plus, RefreshCw, Unplug } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Circle, Copy, Laptop, Loader2, Pencil, Plus, RefreshCw, Unplug } from 'lucide-react';
 
 interface Machine {
   id: string;
@@ -17,6 +17,26 @@ interface Machine {
   connected_at: string | null;
   last_seen_at: string | null;
   code_pending: boolean;
+  pair_status: string | null;
+  pair_report: PairReport | null;
+}
+
+interface PairCheck {
+  label: string;
+  ok: boolean;
+  detail: string | null;
+}
+
+interface PairReport {
+  checks?: PairCheck[];
+  node?: string | null;
+}
+
+interface PairState {
+  pair_status: string | null;
+  hostname: string | null;
+  pair_report: PairReport | null;
+  code_expires_at: string | null;
 }
 
 interface Agent {
@@ -37,7 +57,17 @@ function formatDate(value: string | null) {
   return new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
+// etapas da conexão ao vivo, na ordem em que o Mac avisa o sistema
+const PAIR_STEPS = [
+  { id: 'aguardando', label: 'Código gerado — esperando o Mac' },
+  { id: 'chaves_entregues', label: 'O Mac respondeu e recebeu as chaves' },
+  { id: 'chaves_gravadas', label: 'Chaves gravadas no Mac' },
+  { id: 'verificado', label: 'Mac conferido (Node, ffmpeg, pasta OPEN CUT, mapa, chaves)' },
+];
+const STEP_INDEX: Record<string, number> = { aguardando: 0, chaves_entregues: 1, chaves_gravadas: 2, conectado: 4, com_avisos: 4 };
+
 function machineStatus(machine: Machine) {
+  if (machine.pair_status === 'com_avisos') return { label: 'Conectado com avisos', variant: 'destructive' as const };
   if (!machine.connected_at) {
     return machine.code_pending
       ? { label: 'Aguardando conexão', variant: 'outline' as const }
@@ -62,7 +92,8 @@ export default function AgentMachinesCard() {
   const [name, setName] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const [issued, setIssued] = useState<{ code: string; machineName: string; minutes: number } | null>(null);
+  const [issued, setIssued] = useState<{ code: string; machineId: string; machineName: string; minutes: number } | null>(null);
+  const [pair, setPair] = useState<PairState | null>(null);
 
   const load = useCallback(async () => {
     const response = await vpsAuthedFetch('/agent-machines');
@@ -78,6 +109,32 @@ export default function AgentMachinesCard() {
       .finally(() => setLoading(false));
   }, [load]);
 
+  // enquanto a janela mostra o código, o sistema acompanha o Mac até a conexão terminar
+  const pairStatus = pair?.pair_status;
+  const pairFinished = pairStatus === 'conectado' || pairStatus === 'com_avisos' || pairStatus === 'vencido';
+  useEffect(() => {
+    if (!issued || pairFinished) return;
+    let stopped = false;
+    const poll = async () => {
+      try {
+        const response = await vpsAuthedFetch(`/agent-machines/${issued.machineId}/pair`);
+        if (!response.ok || stopped) return;
+        const body = await response.json();
+        if (stopped) return;
+        setPair(body);
+        if (['conectado', 'com_avisos'].includes(body.pair_status)) load().catch(() => {});
+      } catch {
+        // rede instável: tenta de novo no próximo ciclo
+      }
+    };
+    poll();
+    const timer = window.setInterval(poll, 2000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [issued, pairFinished, load]);
+
   const machineName = useMemo(() => new Map(machines.map((m) => [m.id, m.name])), [machines]);
   const agentsOf = (machineId: string | null) =>
     agents.filter((a) => (machineId ? a.machine_id === machineId : !a.machine_id || !machineName.has(a.machine_id)));
@@ -87,6 +144,7 @@ export default function AgentMachinesCard() {
     setName(`Mac ${machines.length + 1}`);
     setSelected([]);
     setIssued(null);
+    setPair(null);
     setDialog({ mode: 'new' });
   };
 
@@ -94,6 +152,7 @@ export default function AgentMachinesCard() {
     setName(machine.name);
     setSelected(agentsOf(machine.id).map((a) => a.user_id));
     setIssued(null);
+    setPair(null);
     setDialog({ mode: 'code', machine });
   };
 
@@ -113,7 +172,8 @@ export default function AgentMachinesCard() {
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || 'Falha ao gerar o código');
-      setIssued({ code: body.code, machineName: body.machine.name, minutes: body.expires_in_minutes });
+      setPair(null);
+      setIssued({ code: body.code, machineId: body.machine.id, machineName: body.machine.name, minutes: body.expires_in_minutes });
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
@@ -245,20 +305,66 @@ export default function AgentMachinesCard() {
           </DialogHeader>
 
           {issued ? (
-            <div className="space-y-3">
-              <p className="text-sm">
-                No <strong>{issued.machineName}</strong>, com a pasta OPEN CUT instalada, abra o Terminal e rode:
-              </p>
-              <code className="block select-all break-all rounded bg-muted px-3 py-2 text-sm">
-                {PULSE_CMD} {issued.code}
-              </code>
-              <Button size="sm" variant="outline" onClick={copyCommand}>
-                <Copy size={14} className="mr-1" /> Copiar comando
-              </Button>
-              <p className="text-xs text-muted-foreground">
-                O código vale {issued.minutes} minutos e só uma vez. As chaves são gravadas no Mac sem aparecer na tela.
-                Quando conectar, o computador aparece aqui como "Em uso agora".
-              </p>
+            <div className="space-y-4">
+              {!pairStatus || pairStatus === 'aguardando' ? (
+                <>
+                  <p className="text-sm">
+                    No <strong>{issued.machineName}</strong>, com a pasta OPEN CUT instalada, abra o Terminal e rode:
+                  </p>
+                  <code className="block select-all break-all rounded bg-muted px-3 py-2 text-sm">
+                    {PULSE_CMD} {issued.code}
+                  </code>
+                  <Button size="sm" variant="outline" onClick={copyCommand}>
+                    <Copy size={14} className="mr-1" /> Copiar comando
+                  </Button>
+                </>
+              ) : null}
+
+              <PairProgress status={pairStatus || 'aguardando'} hostname={pair?.hostname || null} />
+
+              {pair?.pair_report?.checks && pair.pair_report.checks.length > 0 && (
+                <div className="rounded-lg border border-border p-3 space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">O que o Mac conferiu</p>
+                  {pair.pair_report.checks.map((check, index) => (
+                    <div key={index} className="flex items-start gap-2 text-sm">
+                      {check.ok ? (
+                        <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-emerald-500" />
+                      ) : (
+                        <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-500" />
+                      )}
+                      <span>
+                        {check.label}
+                        {check.detail && <span className="block text-xs text-muted-foreground">{check.detail}</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {pairStatus === 'conectado' && (
+                <p className="text-sm font-medium text-emerald-600">Conexão concluída. O {issued.machineName} já pode trabalhar.</p>
+              )}
+              {pairStatus === 'com_avisos' && (
+                <p className="text-sm text-amber-600">
+                  Conectado, mas o Mac precisa de ajustes (lista acima). Depois de corrigir, gere um novo código e rode de novo
+                  para conferir.
+                </p>
+              )}
+              {pairStatus === 'vencido' && (
+                <p className="text-sm text-destructive">O código venceu antes de o Mac responder. Gere outro.</p>
+              )}
+              {pairStatus === 'parado' && (
+                <p className="text-sm text-amber-600">
+                  O Mac recebeu as chaves mas parou de responder. Veja a mensagem no Terminal dele; se preciso, gere um novo
+                  código e rode de novo.
+                </p>
+              )}
+              {(!pairStatus || pairStatus === 'aguardando') && (
+                <p className="text-xs text-muted-foreground">
+                  O código vale {issued.minutes} minutos e só uma vez. Deixe esta janela aberta: ela mostra cada passo
+                  conforme o Mac responde.
+                </p>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -295,7 +401,16 @@ export default function AgentMachinesCard() {
 
           <DialogFooter>
             {issued ? (
-              <Button onClick={() => setDialog(null)}>Pronto</Button>
+              <>
+                {(pairStatus === 'vencido' || pairStatus === 'parado' || pairStatus === 'com_avisos') && (
+                  <Button variant="outline" onClick={() => { setIssued(null); setPair(null); }}>
+                    Gerar outro código
+                  </Button>
+                )}
+                <Button onClick={() => setDialog(null)}>
+                  {pairStatus === 'conectado' || pairStatus === 'com_avisos' ? 'Pronto' : 'Fechar'}
+                </Button>
+              </>
             ) : (
               <>
                 <Button variant="ghost" onClick={() => setDialog(null)}>Cancelar</Button>
@@ -308,5 +423,32 @@ export default function AgentMachinesCard() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function PairProgress({ status, hostname }: { status: string; hostname: string | null }) {
+  const current = STEP_INDEX[status] ?? (status === 'parado' ? 2 : 0);
+  return (
+    <ol className="space-y-2">
+      {PAIR_STEPS.map((step, index) => {
+        const done = index < current;
+        const active = index === current && status !== 'vencido' && status !== 'parado';
+        return (
+          <li key={step.id} className="flex items-center gap-2 text-sm">
+            {done ? (
+              <CheckCircle2 size={16} className="shrink-0 text-emerald-500" />
+            ) : active ? (
+              <Loader2 size={16} className="shrink-0 animate-spin text-primary" />
+            ) : (
+              <Circle size={16} className="shrink-0 text-muted-foreground/50" />
+            )}
+            <span className={done || active ? '' : 'text-muted-foreground'}>
+              {step.label}
+              {step.id === 'chaves_entregues' && done && hostname ? ` (${hostname})` : ''}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }

@@ -30,7 +30,6 @@ const Schedule = lazy(() => import("@/pages/Schedule"));
 const Goals = lazy(() => import("@/pages/Goals"));
 const CompanySettings = lazy(() => import("@/pages/CompanySettings"));
 const Scripts = lazy(() => import("@/pages/Scripts"));
-const WhatsAppDashboard = lazy(() => import("@/pages/WhatsAppDashboard"));
 const Plans = lazy(() => import("@/pages/Plans"));
 const DeliveryRecords = lazy(() => import("@/pages/DeliveryRecords"));
 const Reports = lazy(() => import("@/pages/Reports"));
@@ -301,7 +300,8 @@ function AppRoutes() {
         <Route path="/gestao/contratos" element={<ProtectedRoute><ContractsManagement /></ProtectedRoute>} />
         <Route path="/briefing/:clientId" element={<ClientBriefing />} />
         <Route path="/briefing-provedor/:clientId" element={<ClientBriefingProvider />} />
-        <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppDashboard /></ProtectedRoute>} />
+        {/* a Central de WhatsApp agora fica em Configurações → WhatsApp */}
+        <Route path="/whatsapp" element={<Navigate to="/configuracoes?aba=whatsapp" replace />} />
         <Route path="/financeiro" element={<ProtectedRoute><FinancialDashboard /></ProtectedRoute>} />
         <Route path="/financeiro/contratos" element={<ProtectedRoute><FinancialContracts /></ProtectedRoute>} />
         <Route path="/financeiro/receitas" element={<ProtectedRoute><FinancialRevenues /></ProtectedRoute>} />

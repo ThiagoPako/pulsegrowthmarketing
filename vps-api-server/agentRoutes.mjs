@@ -714,7 +714,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       if (!rows.length) {
         await client.query('ROLLBACK');
         registerFailure();
-        return res.status(400).json({ error: 'Código inválido, já usado ou vencido. Gere outro em Configurações → Computadores dos agentes.' });
+        return res.status(400).json({ error: 'Código inválido, já usado ou vencido. Gere outro em Configurações → Agentes de IA → Computadores dos agentes.' });
       }
       const { machine_id: machineId, user_ids: userIds, created_by: createdBy } = rows[0];
       const { rows: machineRows } = await client.query(

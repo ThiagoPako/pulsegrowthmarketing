@@ -31,9 +31,13 @@ import {
   type WhatsAppConfirmation,
 } from '@/services/whatsappService';
 
-export default function WhatsAppDashboard() {
+/**
+ * Central de WhatsApp: confirmações, histórico, modelos de mensagem e, para o admin, conexões e automações.
+ * Fica dentro de Configurações → WhatsApp (`embedded` esconde o título da página).
+ */
+export default function WhatsAppDashboard({ embedded = false }: { embedded?: boolean }) {
   const { clients, recordings, users, currentUser } = useApp();
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.roles?.includes('admin') === true;
 
   const [stats, setStats] = useState({ total: 0, sent: 0, failed: 0 });
   const [confirmationStats, setConfirmationStats] = useState({ pending: 0, confirmed: 0, cancelled: 0, backupInvites: 0 });
@@ -178,14 +182,16 @@ export default function WhatsAppDashboard() {
 
   return (
     <div className="space-y-5 max-w-[1400px]">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-display font-bold flex items-center gap-2">
-            <MessageSquare className="text-success" size={24} /> Central de WhatsApp
-          </h1>
-          <p className="text-muted-foreground text-sm">Gerenciamento de mensagens, confirmações e automações</p>
+      {!embedded && (
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-display font-bold flex items-center gap-2">
+              <MessageSquare className="text-success" size={24} /> Central de WhatsApp
+            </h1>
+            <p className="text-muted-foreground text-sm">Gerenciamento de mensagens, confirmações e automações</p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -221,12 +227,12 @@ export default function WhatsAppDashboard() {
         </Card>
       </div>
 
-      <Tabs defaultValue="confirmations">
-        <TabsList className="grid w-full grid-cols-4">
+      <Tabs defaultValue={isAdmin ? 'config' : 'confirmations'}>
+        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-4' : 'grid-cols-3'}`}>
           <TabsTrigger value="confirmations" className="gap-1"><ClipboardCheck size={14} /> Confirmações</TabsTrigger>
           <TabsTrigger value="history" className="gap-1"><History size={14} /> Histórico</TabsTrigger>
           <TabsTrigger value="templates" className="gap-1"><Pencil size={14} /> Mensagens</TabsTrigger>
-          {isAdmin && <TabsTrigger value="config" className="gap-1"><Settings size={14} /> Config</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="config" className="gap-1"><Settings size={14} /> Conexões</TabsTrigger>}
         </TabsList>
 
         {/* ── TAB: Confirmações ── */}

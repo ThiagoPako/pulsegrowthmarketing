@@ -191,13 +191,12 @@ const navCategories: NavCategory[] = [
     items: [
       { path: '/financeiro/chat', label: 'Chat IA', icon: Bot, roles: ['admin'] },
       { path: '/financeiro/apis', label: 'APIs', icon: Plug, roles: ['admin'] },
-      { path: '/whatsapp', label: 'WhatsApp', icon: MessageSquare, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/automacoes', label: 'Automações', icon: Bot, roles: ['admin', 'social_media', 'gestor_projetos'] },
       { path: '/painel-tv', label: 'Painel TV', icon: Monitor, roles: ['admin'] },
       { path: '/treinamento', label: 'Treinamento', icon: BookOpen, roles: ['admin', 'videomaker', 'social_media', 'editor', 'designer', 'fotografo', 'endomarketing', 'parceiro', 'copywriter', 'gestor_projetos'] },
       { path: '/treinamento-gestao', label: 'Gestão Trein.', icon: Settings, roles: ['admin'] },
       { path: '/portal-videos', label: 'Vídeos Portal', icon: Video, roles: ['admin'] },
-      { path: '/configuracoes', label: 'Config', icon: Settings, roles: ['admin', 'social_media'] },
+      { path: '/configuracoes', label: 'Config', icon: Settings, roles: ['admin', 'social_media', 'gestor_projetos'] },
     ],
   },
 
@@ -272,6 +271,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         if (userRoles.includes('admin' as any)) return true;
 
         // For others, check custom module permissions
+        // (Configurações também abre para quem só tem o módulo WhatsApp: a central fica numa aba de lá)
+        if (item.path === '/configuracoes') return hasModuleAccess('/configuracoes') || hasModuleAccess('/whatsapp');
         return hasModuleAccess(item.path);
       }),
     }))

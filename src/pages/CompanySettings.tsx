@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { DAY_LABELS } from '@/types';
 import type { DayOfWeek } from '@/types';
@@ -11,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket, RotateCcw, CalendarOff, Plus, Send, Loader2, DollarSign } from 'lucide-react';
+import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket, RotateCcw, CalendarOff, Plus, Send, Loader2, DollarSign, MessageSquare, Plug, Bot, MonitorPlay, Factory, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
 import { supabase as supabaseCloud } from '@/lib/vpsDb';
 import { ASSISTANT_KEY } from '@/components/ProductionAssistant';
@@ -20,6 +21,8 @@ import PortalBulkDelete from '@/components/portal/PortalBulkDelete';
 import MetaIntegrationCard from '@/components/settings/MetaIntegrationCard';
 import AgentKeysCard from '@/components/settings/AgentKeysCard';
 import AgentMachinesCard from '@/components/settings/AgentMachinesCard';
+import WhatsAppDashboard from '@/pages/WhatsAppDashboard';
+import { useMyPermissions } from '@/hooks/useUserPermissions';
 import { format, parseISO, addDays, isSameDay, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -138,6 +141,18 @@ const MODULE_RESETS: ModuleReset[] = [
   },
 ];
 
+type SettingsTab = 'agenda' | 'producao' | 'whatsapp' | 'integracoes' | 'agentes' | 'portal' | 'perigo';
+
+const SETTINGS_TABS: { key: SettingsTab; label: string; icon: LucideIcon; description: string }[] = [
+  { key: 'agenda', label: 'Agenda e prazos', icon: Clock, description: 'Turnos de gravação, prazos das tarefas e feriados' },
+  { key: 'producao', label: 'Produção', icon: Factory, description: 'Custos de produção e assistente da equipe' },
+  { key: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, description: 'Conexões, automações, modelos de mensagem, confirmações e histórico' },
+  { key: 'integracoes', label: 'Integrações', icon: Plug, description: 'Meta (Instagram/Facebook) e Pixel da landing page' },
+  { key: 'agentes', label: 'Agentes de IA', icon: Bot, description: 'Chaves dos agentes e computadores onde eles rodam' },
+  { key: 'portal', label: 'Portal do cliente', icon: MonitorPlay, description: 'Manutenção dos conteúdos do portal' },
+  { key: 'perigo', label: 'Zona de perigo', icon: AlertTriangle, description: 'Apagar dados do sistema (irreversível)' },
+];
+
 export default function CompanySettings() {
   const { settings, updateSettings, currentUser } = useApp();
   const [form, setForm] = useState(settings);
@@ -156,6 +171,19 @@ export default function CompanySettings() {
   const [sendingHoliday, setSendingHoliday] = useState<string | null>(null);
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.roles?.includes('admin') === true;
+  const { hasModuleAccess } = useMyPermissions();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = (searchParams.get('aba') || '') as SettingsTab;
+  const setTab = (key: SettingsTab) => setSearchParams({ aba: key }, { replace: true });
+  const userRoles: string[] = currentUser?.roles?.length ? currentUser.roles : currentUser?.role ? [currentUser.role] : [];
+  const hasRole = (...roles: string[]) => roles.some((r) => userRoles.includes(r));
+  // mesmas regras do menu: papel + módulo liberado para a pessoa (Equipe → permissões)
+  const canSeeTab = (key: SettingsTab) => {
+    if (isAdmin) return true;
+    if (key === 'whatsapp') return hasRole('social_media', 'gestor_projetos') && hasModuleAccess('/whatsapp');
+    if (key === 'agenda' || key === 'producao' || key === 'integracoes') return hasRole('social_media') && hasModuleAccess('/configuracoes');
+    return false;
+  };
 
   const loadHolidays = useCallback(async () => {
     const h = await getHolidays();
@@ -296,18 +324,41 @@ export default function CompanySettings() {
     return remaining > 0 ? `${days}d ${remaining}h` : `${days}d`;
   };
 
+  const tabs = SETTINGS_TABS.filter((t) => canSeeTab(t.key));
+  const activeTab = tabs.some((t) => t.key === requestedTab) ? requestedTab : tabs[0]?.key;
+  const current = tabs.find((t) => t.key === activeTab);
+
   return (
-    <div className="max-w-2xl space-y-6">
-      <h1 className="text-2xl font-display font-bold">Configurações</h1>
+    <div className="max-w-6xl space-y-5">
+      <div>
+        <h1 className="text-2xl font-display font-bold">Configurações</h1>
+        <p className="text-sm text-muted-foreground">{current?.description || 'Ajustes do sistema'}</p>
+      </div>
 
-      {isAdmin && <PortalBulkDelete />}
+      <div className="flex flex-col gap-5 md:flex-row">
+        <nav className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 md:mx-0 md:w-56 md:shrink-0 md:flex-col md:overflow-visible md:px-0">
+          {tabs.map((t) => {
+            const Icon = t.icon;
+            const active = t.key === activeTab;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTab(t.key)}
+                className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                  active ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                } ${t.key === 'perigo' ? 'md:mt-4' : ''}`}
+              >
+                <Icon size={16} className={t.key === 'perigo' ? 'text-destructive' : ''} />
+                <span className="whitespace-nowrap">{t.label}</span>
+              </button>
+            );
+          })}
+        </nav>
 
-      {isAdmin && <MetaIntegrationCard />}
-
-      {isAdmin && <AgentKeysCard />}
-
-      {isAdmin && <AgentMachinesCard />}
-
+        <div className="min-w-0 flex-1 space-y-6">
+          {activeTab === 'agenda' && (
+            <div className="max-w-2xl space-y-6">
       {/* Turnos e Expediente */}
       <div className="glass-card p-6 space-y-5">
         <div className="flex items-center gap-2 text-primary">
@@ -498,114 +549,7 @@ export default function CompanySettings() {
           {/* Aprovação/Agendamento removido — prazo definido pela Social Media */}
         </div>
       </div>
-      {/* Custos de Produção */}
-      <div className="glass-card p-6 space-y-4">
-        <div className="flex items-center gap-2 text-primary">
-          <DollarSign size={18} />
-          <h2 className="text-base font-semibold">Custos de Produção</h2>
-        </div>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Regra de Rateio de Salários</Label>
-            <Select 
-              value={form.costAllocationRule || 'approved'} 
-              onValueChange={v => setForm({ ...form, costAllocationRule: v as any })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione a regra" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="approved">Entregas Aprovadas (Finalizadas)</SelectItem>
-                <SelectItem value="recorded">Entregas Gravadas (Sessions)</SelectItem>
-                <SelectItem value="posted">Entregas Postadas (Social Media)</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-[11px] text-muted-foreground">
-              Define como o sistema divide o salário mensal do colaborador para calcular o custo unitário.
-            </p>
-          </div>
-        </div>
-      </div>
-
-
-      {/* Assistente de Produção */}
-      <div className="glass-card p-6 space-y-4">
-        <div className="flex items-center gap-2 text-primary">
-          <Rocket size={18} />
-          <h2 className="text-base font-semibold">Assistente de Produção (Foguetinho)</h2>
-        </div>
-        <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
-          <div>
-            <p className="text-sm font-medium">Ativar assistente</p>
-            <p className="text-[11px] text-muted-foreground">O Foguetinho monitora prazos e cobra a equipe de forma divertida</p>
-          </div>
-          <Switch
-            checked={assistantEnabled}
-            onCheckedChange={(checked) => {
-              setAssistantEnabled(checked);
-              localStorage.setItem(ASSISTANT_KEY, String(checked));
-              toast.success(checked ? 'Assistente ativado' : 'Assistente desativado');
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Facebook Pixel */}
-      <div className="glass-card p-6 space-y-4">
-        <div className="flex items-center gap-2 text-primary">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
-          <h2 className="text-base font-semibold">Facebook Pixel</h2>
-        </div>
-        <p className="text-xs text-muted-foreground -mt-2">
-          Configure o Pixel do Facebook para rastrear eventos da landing page (PageView, Lead, etc).
-        </p>
-        <div className="space-y-1.5 p-3 rounded-lg border border-border bg-muted/30">
-          <Label className="text-sm font-medium">Pixel ID</Label>
-          <Input
-            value={pixelId}
-            onChange={e => setPixelId(e.target.value)}
-            placeholder="Ex: 123456789012345"
-          />
-          <p className="text-[11px] text-muted-foreground">
-            Encontre seu Pixel ID em{' '}
-            <a href="https://business.facebook.com/events_manager" target="_blank" rel="noopener noreferrer" className="text-primary underline">
-              Meta Events Manager
-            </a>
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={async () => {
-            try {
-              const { data: existing } = await supabaseCloud
-                .from('landing_page_settings')
-                .select('id')
-                .eq('section', 'facebook_pixel')
-                .maybeSingle();
-              if (existing) {
-                await supabaseCloud
-                  .from('landing_page_settings')
-                  .update({ title: pixelId || null, updated_at: new Date().toISOString() })
-                  .eq('id', existing.id);
-              } else {
-                await supabaseCloud
-                  .from('landing_page_settings')
-                  .insert({ section: 'facebook_pixel', title: pixelId || null });
-              }
-              toast.success('Pixel salvo com sucesso!');
-            } catch {
-              toast.error('Erro ao salvar pixel');
-            }
-          }}
-          className="gap-2"
-        >
-          Salvar Pixel
-        </Button>
-      </div>
-
       <Button onClick={handleSave} className="w-full">Salvar Configurações</Button>
-
       {/* Feriados */}
       <div className="glass-card p-6 space-y-5">
         <div className="flex items-center gap-2 text-primary">
@@ -720,10 +664,147 @@ export default function CompanySettings() {
         </div>
       </div>
 
+            </div>
+          )}
+
+          {activeTab === 'producao' && (
+            <div className="max-w-2xl space-y-6">
+      {/* Custos de Produção */}
+      <div className="glass-card p-6 space-y-4">
+        <div className="flex items-center gap-2 text-primary">
+          <DollarSign size={18} />
+          <h2 className="text-base font-semibold">Custos de Produção</h2>
+        </div>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Regra de Rateio de Salários</Label>
+            <Select 
+              value={form.costAllocationRule || 'approved'} 
+              onValueChange={v => setForm({ ...form, costAllocationRule: v as any })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a regra" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="approved">Entregas Aprovadas (Finalizadas)</SelectItem>
+                <SelectItem value="recorded">Entregas Gravadas (Sessions)</SelectItem>
+                <SelectItem value="posted">Entregas Postadas (Social Media)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Define como o sistema divide o salário mensal do colaborador para calcular o custo unitário.
+            </p>
+          </div>
+        </div>
+      </div>
+
+
+      {/* Assistente de Produção */}
+      <div className="glass-card p-6 space-y-4">
+        <div className="flex items-center gap-2 text-primary">
+          <Rocket size={18} />
+          <h2 className="text-base font-semibold">Assistente de Produção (Foguetinho)</h2>
+        </div>
+        <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
+          <div>
+            <p className="text-sm font-medium">Ativar assistente</p>
+            <p className="text-[11px] text-muted-foreground">O Foguetinho monitora prazos e cobra a equipe de forma divertida</p>
+          </div>
+          <Switch
+            checked={assistantEnabled}
+            onCheckedChange={(checked) => {
+              setAssistantEnabled(checked);
+              localStorage.setItem(ASSISTANT_KEY, String(checked));
+              toast.success(checked ? 'Assistente ativado' : 'Assistente desativado');
+            }}
+          />
+        </div>
+      </div>
+
+      <Button onClick={handleSave} className="w-full">Salvar Configurações</Button>
+            </div>
+          )}
+
+          {activeTab === 'whatsapp' && <WhatsAppDashboard embedded />}
+
+          {activeTab === 'integracoes' && (
+            <div className="max-w-2xl space-y-6">
+              {isAdmin && <MetaIntegrationCard />}
+      {/* Facebook Pixel */}
+      <div className="glass-card p-6 space-y-4">
+        <div className="flex items-center gap-2 text-primary">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+          <h2 className="text-base font-semibold">Facebook Pixel</h2>
+        </div>
+        <p className="text-xs text-muted-foreground -mt-2">
+          Configure o Pixel do Facebook para rastrear eventos da landing page (PageView, Lead, etc).
+        </p>
+        <div className="space-y-1.5 p-3 rounded-lg border border-border bg-muted/30">
+          <Label className="text-sm font-medium">Pixel ID</Label>
+          <Input
+            value={pixelId}
+            onChange={e => setPixelId(e.target.value)}
+            placeholder="Ex: 123456789012345"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Encontre seu Pixel ID em{' '}
+            <a href="https://business.facebook.com/events_manager" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+              Meta Events Manager
+            </a>
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={async () => {
+            try {
+              const { data: existing } = await supabaseCloud
+                .from('landing_page_settings')
+                .select('id')
+                .eq('section', 'facebook_pixel')
+                .maybeSingle();
+              if (existing) {
+                await supabaseCloud
+                  .from('landing_page_settings')
+                  .update({ title: pixelId || null, updated_at: new Date().toISOString() })
+                  .eq('id', existing.id);
+              } else {
+                await supabaseCloud
+                  .from('landing_page_settings')
+                  .insert({ section: 'facebook_pixel', title: pixelId || null });
+              }
+              toast.success('Pixel salvo com sucesso!');
+            } catch {
+              toast.error('Erro ao salvar pixel');
+            }
+          }}
+          className="gap-2"
+        >
+          Salvar Pixel
+        </Button>
+      </div>
+
+            </div>
+          )}
+
+          {activeTab === 'agentes' && (
+            <div className="max-w-2xl space-y-6">
+              <AgentKeysCard />
+              <AgentMachinesCard />
+            </div>
+          )}
+
+          {activeTab === 'portal' && (
+            <div className="max-w-2xl space-y-6">
+              <PortalBulkDelete />
+            </div>
+          )}
+
+          {activeTab === 'perigo' && (
+            <div className="max-w-2xl space-y-6">
       {/* Zona de Perigo — Admin Only */}
       {isAdmin && (
         <>
-          <Separator className="my-4" />
           {!showDangerZone ? (
             <Button
               variant="outline"
@@ -875,6 +956,10 @@ export default function CompanySettings() {
           )}
         </>
       )}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

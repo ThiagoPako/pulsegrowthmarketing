@@ -466,14 +466,13 @@ export async function sendManualConfirmation(
     confirmation_status: 'aguardando',
   }).eq('id', recordingId);
 
-  // Send the message — no número do próprio cliente (não no grupo): a resposta 1/2 só é lida em conversa direta
+  // Vai no grupo do cliente (se tiver); a resposta 1/2 vale no grupo ou no privado
   const result = await sendWhatsAppMessage({
     number: clientPhone,
     message,
     clientId,
     triggerType: 'auto_confirmation',
     purpose: 'agenda',
-    useGroup: false,
   });
 
   return result;

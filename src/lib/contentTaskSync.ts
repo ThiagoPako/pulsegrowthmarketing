@@ -306,33 +306,8 @@ export async function syncContentTaskColumnChange(
       } catch (err) {
         console.error('Portal content publish error:', err);
       }
-      // Auto-send WhatsApp portal invite message
-      try {
-        const whatsConfig = await getWhatsAppConfig();
-        if (whatsConfig?.integrationActive && whatsConfig?.autoVideoApproval && ctx.clientWhatsapp) {
-          const portalUrl = `https://agenciapulse.tech/portal/${ctx.clientId}`;
-          let msg = whatsConfig.msgVideoApproval
-            .replace('{nome_cliente}', ctx.clientName || '')
-            .replace('{link_video}', portalUrl)
-            .replace('{titulo}', ctx.title)
-            .replace('{link_portal}', portalUrl);
-
-          // If template still has the old drive link pattern, override with portal message
-          if (!msg.includes('portal') && !msg.includes('Área do Cliente')) {
-            msg = `Olá, ${ctx.clientName || ''}! 😊\n\nSeu conteúdo "${ctx.title}" ficou pronto! 🎬\n\n📱 Acesse sua Área do Cliente Pulse para assistir e aprovar:\n${portalUrl}\n\nEquipe Pulse Growth Marketing 🚀`;
-          }
-
-          await sendWhatsAppMessage({
-            number: ctx.clientWhatsapp,
-            message: msg,
-            clientId: ctx.clientId,
-            triggerType: 'auto_confirmation',
-            purpose: 'aprovacao',
-          });
-        }
-      } catch (err) {
-        console.error('WhatsApp auto-send error:', err);
-      }
+      // Aviso ao cliente pelo WhatsApp: o servidor manda sozinho quando o conteúdo fica "pendente" no portal
+      // (uma mensagem só, juntando os vídeos que entram juntos — ver vps-api-server/whatsapp/routes.mjs).
 
       // Create portal notification for the client
       try {

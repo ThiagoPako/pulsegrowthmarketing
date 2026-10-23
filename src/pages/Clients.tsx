@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import WhatsAppGroupPicker from '@/components/whatsapp/WhatsAppGroupPicker';
 import { useApp } from '@/contexts/AppContext';
 import { generateClientCardPdf } from '@/lib/clientCardPdf';
 import { generateBriefingPdf } from '@/lib/briefingPdf';
@@ -1123,8 +1124,7 @@ export default function Clients() {
       </div>
       <div className="space-y-1">
         <Label>Grupo WhatsApp (opcional)</Label>
-        <Input value={form.whatsappGroup || ''} onChange={e => setForm({ ...form, whatsappGroup: e.target.value })} placeholder="ID do grupo ou número do grupo" />
-         <p className="text-[10px] text-muted-foreground">Se preenchido, mensagens automáticas serão enviadas para o grupo em vez do número pessoal</p>
+        <WhatsAppGroupPicker value={form.whatsappGroup || ''} onChange={v => setForm({ ...form, whatsappGroup: v })} />
       </div>
 
       {/* Cliente Star toggle - moved here from Step 2 */}

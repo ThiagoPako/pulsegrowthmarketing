@@ -20,7 +20,7 @@ import compression from 'compression';
 import { createPgClient } from './pgClient.mjs';
 import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerWhatsAppRoutes } from './whatsapp/routes.mjs';
-import { enqueueWhatsApp } from './whatsapp/shared.mjs';
+import { enqueueWhatsApp, clientTarget, clientsForGroup } from './whatsapp/shared.mjs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -7497,6 +7497,14 @@ function classifyResponse(text) {
   return 'unknown';
 }
 
+// No grupo as pessoas conversam: só vale resposta explícita ("ok"/"sim" de outra conversa não confirma gravação)
+function classifyGroupResponse(text) {
+  const n = String(text || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (/^(1|confirmo|confirmado|confirmada|confirmar)\b/.test(n)) return 'confirm';
+  if (/^(2|cancelar|cancelado|cancelada|cancela)\b/.test(n)) return 'cancel';
+  return 'unknown';
+}
+
 function extractPayload(body) {
   let phone = body.from || body.number || body.phone || body.remoteJid || body.contact?.number || body.ticket?.contact?.number || '';
   let message = body.body || body.message || body.text || body.msg || body.content || '';
@@ -7520,11 +7528,23 @@ app.post('/api/whatsapp-webhook', async (req, res) => {
   }
 });
 
-async function handleWhatsAppReply(phoneInput, messageText) {
+// No privado: acha a confirmação pelo número. No grupo do cliente: pela confirmação pendente do cliente do grupo,
+// e a resposta volta no grupo.
+async function handleWhatsAppReply(phoneInput, messageText, { groupJid = null } = {}) {
   {
     const admin = getAdminClient();
     const phoneNumber = String(phoneInput || '').replace(/\D/g, '');
-    if (!phoneNumber || !messageText) return { ok: true, skipped: 'no_phone_or_message' };
+    if ((!phoneNumber && !groupJid) || !messageText) return { ok: true, skipped: 'no_phone_or_message' };
+    if (groupJid) {
+      if (classifyGroupResponse(messageText) === 'unknown') return { ok: true, skipped: 'unrecognized_response' };
+      const groupClients = await clientsForGroup(pool, groupJid);
+      if (!groupClients.length) return { ok: true, skipped: 'group_without_client' };
+      const { data: groupConfirmations } = await admin.from('whatsapp_confirmations').select('*, recordings(*), clients(*)')
+        .in('client_id', groupClients.map((c) => c.id)).eq('status', 'pending').not('sent_at', 'is', null)
+        .order('sent_at', { ascending: false }).limit(1);
+      if (!groupConfirmations?.length) return { ok: true, skipped: 'no_pending_confirmation' };
+      return applyConfirmationReply(admin, groupConfirmations[0], messageText, groupJid);
+    }
 
     // o cadastro pode ter o número com ou sem 55 e com ou sem o 9º dígito
     const local = phoneNumber.startsWith('55') && phoneNumber.length > 11 ? phoneNumber.slice(2) : phoneNumber;
@@ -7535,11 +7555,15 @@ async function handleWhatsAppReply(phoneInput, messageText) {
 
     const { data: confirmations } = await admin.from('whatsapp_confirmations').select('*, recordings(*), clients(*)').in('phone_number', phoneVariants).eq('status', 'pending').not('sent_at', 'is', null).order('sent_at', { ascending: false }).limit(1);
     if (!confirmations?.length) return { ok: true, skipped: 'no_pending_confirmation' };
+    return applyConfirmationReply(admin, confirmations[0], messageText, null);
+  }
+}
 
-    const confirmation = confirmations[0];
+async function applyConfirmationReply(admin, confirmation, messageText, replyTo) {
+  {
     const recording = confirmation.recordings;
     const client = confirmation.clients;
-    const classification = classifyResponse(messageText);
+    const classification = replyTo ? classifyGroupResponse(messageText) : classifyResponse(messageText);
     if (classification === 'unknown') return { ok: true, skipped: 'unrecognized_response' };
 
     const { data: configData } = await admin.from('whatsapp_config').select('*').limit(1).single();
@@ -7552,11 +7576,11 @@ async function handleWhatsAppReply(phoneInput, messageText) {
       if (classification === 'confirm') {
         await admin.from('whatsapp_confirmations').update({ status: 'confirmed', responded_at: new Date().toISOString(), response_message: messageText }).eq('id', confirmation.id);
         await admin.from('recordings').update({ confirmation_status: 'confirmada' }).eq('id', confirmation.recording_id);
-        await sendWhatsAppDirect(configData, confirmation.phone_number, applyTemplate(configData.msg_confirmation_confirmed, templateVars), admin, client?.id, 'auto_confirmation', 'agenda');
+        await sendWhatsAppDirect(configData, replyTo || clientTarget(client, 'agenda') || confirmation.phone_number, applyTemplate(configData.msg_confirmation_confirmed, templateVars), admin, client?.id, 'auto_confirmation', 'agenda');
       } else {
         await admin.from('whatsapp_confirmations').update({ status: 'cancelled', responded_at: new Date().toISOString(), response_message: messageText }).eq('id', confirmation.id);
         await admin.from('recordings').update({ status: 'cancelada', confirmation_status: 'cancelada' }).eq('id', confirmation.recording_id);
-        await sendWhatsAppDirect(configData, confirmation.phone_number, applyTemplate(configData.msg_confirmation_cancelled, templateVars), admin, client?.id, 'auto_confirmation', 'agenda');
+        await sendWhatsAppDirect(configData, replyTo || clientTarget(client, 'agenda') || confirmation.phone_number, applyTemplate(configData.msg_confirmation_cancelled, templateVars), admin, client?.id, 'auto_confirmation', 'agenda');
       }
     }
 
@@ -7607,7 +7631,8 @@ async function runConfirmationCron() {
       const message = applyTemplate(config.msg_confirmation, { nome_cliente: client.company_name, data_gravacao: recording.date, hora_gravacao: recording.start_time, videomaker: vmNames[recording.videomaker_id] || 'Equipe', link_portal: portalLink });
       await admin.from('whatsapp_confirmations').insert({ recording_id: recording.id, client_id: client.id, phone_number: phoneNumber, type: 'confirmation', status: 'pending', sent_at: new Date().toISOString() });
       await admin.from('recordings').update({ confirmation_status: 'aguardando' }).eq('id', recording.id);
-      const result = await sendWhatsAppDirect(config, client.whatsapp, message, admin, client.id, 'auto_confirmation', 'agenda');
+      // no grupo do cliente (se tiver); a resposta 1/2 vale no grupo ou no privado
+      const result = await sendWhatsAppDirect(config, clientTarget(client, 'agenda'), message, admin, client.id, 'auto_confirmation', 'agenda');
       if (result.ok) sentCount++;
     }
     return { ok: true, sent: sentCount, total: recordings.length };
@@ -7625,7 +7650,7 @@ app.post('/api/approval-deadline-cron', async (req, res) => {
 
     const { data: config } = await admin.from('whatsapp_config').select('*').limit(1).single();
     const clientIds = [...new Set(expiredTasks.map(t => t.client_id))];
-    const { data: clientsData } = await admin.from('clients').select('id, company_name, whatsapp, responsible_person').in('id', clientIds);
+    const { data: clientsData } = await admin.from('clients').select('id, company_name, whatsapp, whatsapp_group, responsible_person').in('id', clientIds);
     const clientsMap = {};
     (clientsData || []).forEach(c => { clientsMap[c.id] = c; });
 
@@ -7639,7 +7664,7 @@ app.post('/api/approval-deadline-cron', async (req, res) => {
       if (config?.integration_active && config?.auto_approval_expired && client?.whatsapp) {
         const portalLink = `${PORTAL_BASE_URL}/${task.client_id}`;
         const msg = applyTemplate(config.msg_approval_expired || 'Olá, {nome_cliente}! O vídeo "{titulo}" foi encaminhado para agendamento.', { nome_cliente: client.responsible_person || client.company_name, titulo: task.title, link_portal: portalLink });
-        await sendWhatsAppDirect(config, client.whatsapp, msg, admin, task.client_id, 'auto_approval_expired', 'aprovacao');
+        await sendWhatsAppDirect(config, clientTarget(client, 'aprovacao'), msg, admin, task.client_id, 'auto_approval_expired', 'aprovacao');
       }
       movedCount++;
     }

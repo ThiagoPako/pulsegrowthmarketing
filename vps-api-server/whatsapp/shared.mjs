@@ -29,6 +29,16 @@ const TRIGGER_PURPOSE = {
   clube_campanha: 'clube',
 };
 
+// grupo do WhatsApp: jid "…@g.us" ou link de convite "chat.whatsapp.com/…"
+export const isGroupTarget = (to) => /@g\.us$/.test(String(to || '').trim()) || /chat\.whatsapp\.com\//i.test(String(to || ''));
+
+/** Para onde vai a mensagem de um cliente: grupo dele (se tiver), exceto cobrança, que é sempre no privado. */
+export function clientTarget(client, purpose) {
+  if (!client) return null;
+  if (purpose !== 'cobranca' && client.whatsapp_group && String(client.whatsapp_group).trim()) return String(client.whatsapp_group).trim();
+  return client.whatsapp || null;
+}
+
 export function purposeFor(purpose, triggerType) {
   if (purpose && WA_PURPOSES[purpose]) return purpose;
   return TRIGGER_PURPOSE[triggerType] || 'geral';
@@ -118,6 +128,39 @@ export function ensureWhatsAppSchema(pool) {
         )
       `);
       await pool.query(`CREATE TABLE IF NOT EXISTS wa_engine (id INTEGER PRIMARY KEY, seen_at TIMESTAMPTZ, version TEXT)`);
+      // grupos em que cada número conectado está (para mandar no grupo do cliente pelo número que está nele)
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS wa_groups (
+          connection_id UUID NOT NULL,
+          jid TEXT NOT NULL,
+          subject TEXT,
+          size INTEGER,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          PRIMARY KEY (connection_id, jid)
+        )
+      `);
+      await pool.query(`ALTER TABLE wa_inbound ADD COLUMN IF NOT EXISTS group_jid TEXT`);
+      // dois números da agência no mesmo grupo recebem a mesma mensagem: guarda uma vez só
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_wa_inbound_grupo ON wa_inbound (group_jid, wa_id) WHERE group_jid IS NOT NULL`);
+      // vídeo mandado no privado (cliente não conseguiu abrir o portal): espera "APROVADO" ou o ajuste
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS wa_approval_requests (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          batch_id UUID NOT NULL,
+          position INTEGER NOT NULL DEFAULT 1,
+          client_id UUID NOT NULL,
+          content_id UUID NOT NULL,
+          title TEXT,
+          phone TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pendente',
+          answer TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          answered_at TIMESTAMPTZ
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_wa_approval_phone ON wa_approval_requests (phone, status)`);
+      // aviso "vídeo novo no portal": cada conteúdo avisa uma vez só
+      await pool.query(`ALTER TABLE client_portal_contents ADD COLUMN IF NOT EXISTS wa_notified_at TIMESTAMPTZ`).catch(() => {});
       await pool.query(`
         CREATE TABLE IF NOT EXISTS wa_job_runs (
           job TEXT NOT NULL,
@@ -178,3 +221,19 @@ export async function enqueueWhatsApp(pool, { to, body, purpose, triggerType, cl
   );
   return { id: rows[0].id, purpose: finalPurpose };
 }
+
+/** Clientes cujo grupo cadastrado (jid ou link de convite já resolvido) é este grupo. */
+export async function clientsForGroup(pool, groupJid) {
+  if (!groupJid) return [];
+  const { rows } = await pool.query(
+    `SELECT c.id, c.company_name, c.responsible_person, c.whatsapp, c.whatsapp_group
+       FROM clients c
+       LEFT JOIN wa_jid_cache j
+         ON j.number = 'grupo:' || substring(c.whatsapp_group from 'chat\\.whatsapp\\.com/(?:invite/)?([A-Za-z0-9]+)')
+      WHERE c.whatsapp_group IS NOT NULL AND trim(c.whatsapp_group) <> ''
+        AND (trim(c.whatsapp_group) = $1 OR j.jid = $1)`,
+    [groupJid]
+  );
+  return rows;
+}
+

@@ -379,6 +379,7 @@ export default function FinancialRevenues() {
         clientId: client.id,
         triggerType: 'manual',
         purpose: 'cobranca',
+        useGroup: false, // cobrança é sempre no privado
       });
 
       if (result.success) {
@@ -433,7 +434,7 @@ export default function FinancialRevenues() {
         if (report.text && !template.includes('{relatorio_entregas}')) {
           message += report.text;
         }
-        const result = await sendWhatsAppMessage({ number: client.whatsapp, message, clientId: client.id, triggerType: 'manual', purpose: 'cobranca' });
+        const result = await sendWhatsAppMessage({ number: client.whatsapp, message, clientId: client.id, triggerType: 'manual', purpose: 'cobranca', useGroup: false });
         if (result.success) sent++; else errors++;
       } catch { errors++; }
     }

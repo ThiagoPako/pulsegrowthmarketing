@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { AlertTriangle, CheckCircle2, Circle, Copy, Laptop, Loader2, Pencil, Plus, RefreshCw, Unplug } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Circle, Copy, FolderSync, Laptop, Loader2, Pencil, Plus, RefreshCw, Unplug } from 'lucide-react';
 
 interface Machine {
   id: string;
@@ -19,6 +19,18 @@ interface Machine {
   code_pending: boolean;
   pair_status: string | null;
   pair_report: PairReport | null;
+  clients_version: number | null;
+  clients_synced_at: string | null;
+}
+
+interface ClientsBundle {
+  version: number;
+  size_bytes: number;
+  file_count: number;
+  client_count: number;
+  created_at: string;
+  machine_id: string | null;
+  created_by_name: string | null;
 }
 
 interface PairCheck {
@@ -88,6 +100,8 @@ type DialogState = { mode: 'new' } | { mode: 'code'; machine: Machine } | null;
 export default function AgentMachinesCard() {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [bundle, setBundle] = useState<ClientsBundle | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [dialog, setDialog] = useState<DialogState>(null);
   const [name, setName] = useState('');
@@ -102,6 +116,7 @@ export default function AgentMachinesCard() {
     if (!response.ok) throw new Error(body.error || 'Falha ao carregar os computadores');
     setMachines(body.machines || []);
     setAgents(body.agents || []);
+    setBundle(body.clients_bundle || null);
   }, []);
 
   useEffect(() => {
@@ -202,6 +217,34 @@ export default function AgentMachinesCard() {
     await load();
   };
 
+  const handleSyncClients = async () => {
+    setSyncing(true);
+    try {
+      const response = await vpsAuthedFetch('/agent-machines/sync-clients', { method: 'POST' });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || 'Falha ao pedir a sincronização');
+      const parts = [];
+      if (body.publish_requested?.length) parts.push(`${body.publish_requested.join(', ')} vai publicar a versão atual`);
+      else parts.push('Nenhuma chefe com chave ativa para publicar');
+      if (body.download_requested?.length) parts.push(`${body.download_requested.join(', ')} vai baixar`);
+      toast.success(`Pedido enviado por recado: ${parts.join('; ')}.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const clientsStatus = (machine: Machine) => {
+    if (!bundle) return null;
+    if (bundle.machine_id === machine.id) return { label: `Clientes: publica daqui (v${bundle.version})`, tone: 'text-muted-foreground' };
+    if (!machine.clients_version) return { label: 'Clientes: nunca baixou', tone: 'text-amber-600' };
+    if (machine.clients_version < bundle.version) {
+      return { label: `Clientes desatualizados (v${machine.clients_version} de v${bundle.version})`, tone: 'text-amber-600' };
+    }
+    return { label: `Clientes em dia (v${machine.clients_version})`, tone: 'text-emerald-600' };
+  };
+
   const copyCommand = async () => {
     if (!issued) return;
     try {
@@ -234,6 +277,22 @@ export default function AgentMachinesCard() {
         <Loader2 className="animate-spin text-muted-foreground" size={18} />
       ) : (
         <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/40 p-3">
+            <FolderSync size={16} className="text-muted-foreground" />
+            <div className="text-sm">
+              <span className="font-medium">Clientes e regras dos agentes</span>
+              <span className="block text-xs text-muted-foreground">
+                {bundle
+                  ? `Versão ${bundle.version} · ${bundle.client_count} clientes · ${bundle.file_count} arquivos · ${(bundle.size_bytes / 1024 / 1024).toFixed(1)} MB · por ${bundle.created_by_name || '—'} em ${formatDate(bundle.created_at)}`
+                  : 'Nunca publicados. O mapa de clientes, a pasta agentes/ e as pastas dos clientes ainda não foram para os outros Macs.'}
+              </span>
+            </div>
+            <Button size="sm" variant="outline" className="ml-auto" onClick={handleSyncClients} disabled={syncing}>
+              {syncing ? <Loader2 size={14} className="mr-1 animate-spin" /> : <FolderSync size={14} className="mr-1" />}
+              Sincronizar clientes
+            </Button>
+          </div>
+
           {machines.length === 0 && (
             <p className="text-sm text-muted-foreground">Nenhum computador conectado ainda.</p>
           )}
@@ -274,6 +333,9 @@ export default function AgentMachinesCard() {
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Conectado em {formatDate(machine.connected_at)} · último sinal {formatDate(machine.last_seen_at)}
+                  {clientsStatus(machine) && (
+                    <span className={`ml-1 ${clientsStatus(machine)!.tone}`}>· {clientsStatus(machine)!.label}</span>
+                  )}
                 </p>
               </div>
             );

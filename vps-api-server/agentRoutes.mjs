@@ -16,10 +16,16 @@
 //   PATCH  /api/agent-machines/:id      { name }
 //   DELETE /api/agent-machines/:id      desconecta: revoga as chaves dos agentes daquele Mac
 //   GET    /api/agent-machines/:id/pair  andamento da conexão ao vivo (a tela consulta enquanto o Mac conecta)
+//   POST   /api/agent-machines/sync-clients  "Sincronizar clientes": pede à chefe para publicar e aos outros Macs para baixar
 //
 // Conexão de um Mac (sem login; o código é a autorização):
 //   POST /api/agent-pair                { code, hostname } → chaves novas dos agentes escolhidos, presas ao Mac
 //                                       (as chaves antigas desses agentes, em qualquer outro Mac, são revogadas)
+//   POST /api/agent/clients-bundle      (chefe) multipart: bundle (tar.gz) + manifest → nova versão dos clientes
+//                                       (mapa.json, agentes/, CLAUDE.md/marca/grade de cada cliente); avisa os outros Macs
+//   GET  /api/agent/clients-bundle[?meta=1]   versão atual (com a lista de arquivos e sha256, sem ?meta=1)
+//   GET  /api/agent/clients-bundle/download   o tar.gz da versão atual
+//   POST /api/agent/clients-bundle/applied    { version } o Mac aplicou essa versão
 //   POST /api/agent/machine/report      (chave do Mac) { stage, checks, done } → o Mac conta ao sistema cada etapa
 //                                       e o resultado da verificação (Node, ffprobe, pasta OPEN CUT, mapa, chaves)
 //
@@ -42,6 +48,7 @@
 // A entrega reproduz no servidor o que o navegador faz em
 // src/lib/contentTaskSync.ts ao mover um card para "revisao".
 
+import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -163,6 +170,23 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         await pool.query(`ALTER TABLE agent_machines ADD COLUMN IF NOT EXISTS pair_status TEXT`);
         await pool.query(`ALTER TABLE agent_machines ADD COLUMN IF NOT EXISTS pair_report JSONB`);
         await pool.query(`ALTER TABLE agent_machines ADD COLUMN IF NOT EXISTS pair_updated_at TIMESTAMPTZ`);
+        // sincronização de clientes entre os Macs (o arquivo fica numa pasta privada, fora de /uploads)
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS agent_client_bundles (
+            version SERIAL PRIMARY KEY,
+            sha256 TEXT NOT NULL,
+            size_bytes BIGINT NOT NULL,
+            file_count INTEGER NOT NULL,
+            client_count INTEGER NOT NULL,
+            manifest JSONB NOT NULL,
+            file_name TEXT NOT NULL,
+            created_by UUID,
+            machine_id UUID,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )
+        `);
+        await pool.query(`ALTER TABLE agent_machines ADD COLUMN IF NOT EXISTS clients_version INTEGER`);
+        await pool.query(`ALTER TABLE agent_machines ADD COLUMN IF NOT EXISTS clients_synced_at TIMESTAMPTZ`);
         // pausa: scope = 'all' (todos) ou o user_id de um agente; existir a linha = pausado
         await pool.query(`
           CREATE TABLE IF NOT EXISTS agent_pauses (
@@ -338,6 +362,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       await requireAdmin(req);
       const { rows: machines } = await pool.query(
         `SELECT m.id, m.name, m.hostname, m.created_at, m.connected_at, m.last_seen_at, m.pair_status, m.pair_report,
+                m.clients_version, m.clients_synced_at,
                 EXISTS (SELECT 1 FROM agent_pair_codes c WHERE c.machine_id = m.id AND c.used_at IS NULL AND c.expires_at > now()) AS code_pending
            FROM agent_machines m WHERE m.revoked_at IS NULL ORDER BY m.created_at`
       );
@@ -348,7 +373,12 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
            FROM agent_keys k LEFT JOIN profiles p ON p.id = k.user_id
           ORDER BY k.user_id, k.created_at DESC`
       );
-      res.json({ machines, agents });
+      const { rows: bundles } = await pool.query(
+        `SELECT b.version, b.size_bytes, b.file_count, b.client_count, b.created_at, b.machine_id, p.name AS created_by_name
+           FROM agent_client_bundles b LEFT JOIN profiles p ON p.id = b.created_by
+          ORDER BY b.version DESC LIMIT 1`
+      );
+      res.json({ machines, agents, clients_bundle: bundles[0] || null });
     } catch (error) {
       sendError(res, error);
     }
@@ -401,6 +431,199 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       await pool.query('DELETE FROM agent_pair_codes WHERE machine_id = $1', [req.params.id]);
       await pool.query('UPDATE agent_machines SET revoked_at = now() WHERE id = $1', [req.params.id]);
       res.json({ ok: true });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // ── Sincronização de clientes entre os Macs ───────────────
+  const bundleDir = path.resolve(process.env.AGENT_PRIVATE_DIR || path.join(os.homedir(), 'pulse-agent-private'), 'clientes');
+  const MANIFEST_PATH = /^(clientes|agentes)\/[^\0]+$/;
+  const BLOCKED_PATH = /(^|\/)(\.\.|node_modules|brutos)(\/|$)|\.(env|key|pem|p12|mp4|mov|m4v|mxf|avi)$|(^|\/)\.env/i;
+
+  async function latestBundle(withManifest) {
+    const { rows } = await pool.query(
+      `SELECT b.version, b.sha256, b.size_bytes, b.file_count, b.client_count, b.file_name, b.created_at, b.machine_id,
+              ${withManifest ? 'b.manifest,' : ''} p.name AS created_by_name
+         FROM agent_client_bundles b LEFT JOIN profiles p ON p.id = b.created_by
+        ORDER BY b.version DESC LIMIT 1`
+    );
+    return rows[0] || null;
+  }
+
+  async function machineOfKey(keyId) {
+    const { rows } = await pool.query('SELECT machine_id FROM agent_keys WHERE id = $1', [keyId]);
+    return rows[0]?.machine_id || null;
+  }
+
+  // avisa os agentes dos outros Macs (Macs conectados, diferentes de quem publicou) que há versão nova
+  async function notifyOtherMachines(fromUser, publisherMachine, version, byName) {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT k.user_id, p.name FROM agent_keys k JOIN profiles p ON p.id = k.user_id
+        WHERE k.revoked_at IS NULL AND k.machine_id IS NOT NULL AND k.machine_id IS DISTINCT FROM $1`,
+      [publisherMachine]
+    );
+    for (const r of rows) {
+      const slug = agentSlug(r.name);
+      await pool.query('INSERT INTO agent_messages (from_user, to_user, body) VALUES ($1, $2, $3)', [
+        fromUser, r.user_id,
+        `Clientes atualizados (versão ${version}, por ${byName}). Rode \`pulse --agente ${slug} baixar-clientes\`, confira o que muda e aplique com --aplicar.`,
+      ]);
+    }
+    return rows.map((r) => r.name.trim());
+  }
+
+  const bundleUpload = multer({
+    storage: multer.diskStorage({
+      destination(_req, _file, cb) {
+        try {
+          fs.mkdirSync(bundleDir, { recursive: true, mode: 0o700 });
+          cb(null, bundleDir);
+        } catch (error) {
+          cb(error);
+        }
+      },
+      filename(_req, _file, cb) {
+        cb(null, `clientes_${Date.now()}_${crypto.randomBytes(6).toString('hex')}.tar.gz`);
+      },
+    }),
+    limits: { fileSize: 500 * 1024 * 1024, files: 1, fieldSize: 20 * 1024 * 1024 },
+  }).single('bundle');
+
+  app.post('/api/agent/clients-bundle', async (req, res) => {
+    let agent;
+    try {
+      agent = await verifyAgent(req);
+      if (agent.role !== 'chefe') return res.status(403).json({ error: 'Só a chefe publica os clientes (o Mac principal)' });
+      await ensureAgentSchema();
+    } catch (error) {
+      return sendError(res, error);
+    }
+    bundleUpload(req, res, async (uploadError) => {
+      const discard = () => req.file && fs.promises.unlink(req.file.path).catch(() => {});
+      try {
+        if (uploadError) throw Object.assign(uploadError, { status: uploadError.status || 400 });
+        if (!req.file) return res.status(400).json({ error: 'Envie o pacote (bundle)' });
+        let manifest;
+        try {
+          manifest = JSON.parse(String(req.body?.manifest || ''));
+        } catch {
+          discard();
+          return res.status(400).json({ error: 'Manifesto inválido' });
+        }
+        const files = Array.isArray(manifest?.files) ? manifest.files : [];
+        const bad = files.find((f) => !MANIFEST_PATH.test(String(f?.path || '')) || BLOCKED_PATH.test(String(f.path)) || !/^[a-f0-9]{64}$/.test(String(f?.sha256 || '')));
+        if (!files.length || bad) {
+          discard();
+          return res.status(400).json({ error: bad ? `Arquivo não permitido no pacote: ${bad.path}` : 'Pacote vazio' });
+        }
+        if (!files.some((f) => f.path === 'clientes/mapa.json')) {
+          discard();
+          return res.status(400).json({ error: 'O pacote precisa ter clientes/mapa.json' });
+        }
+        const sha256 = crypto.createHash('sha256').update(await fs.promises.readFile(req.file.path)).digest('hex');
+        const clientCount = Number(manifest.client_count) || 0;
+        const machineId = await machineOfKey(agent.keyId);
+        const { rows } = await pool.query(
+          `INSERT INTO agent_client_bundles (sha256, size_bytes, file_count, client_count, manifest, file_name, created_by, machine_id)
+           VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8) RETURNING version, created_at`,
+          [sha256, req.file.size, files.length, clientCount,
+            JSON.stringify({ files: files.map((f) => ({ path: String(f.path), sha256: String(f.sha256), size: Number(f.size) || 0 })) }),
+            path.basename(req.file.path), agent.userId, machineId]
+        );
+        const version = rows[0].version;
+        if (machineId) {
+          await pool.query('UPDATE agent_machines SET clients_version = $2, clients_synced_at = now() WHERE id = $1', [machineId, version]);
+        }
+        // guarda só as 5 últimas versões no disco
+        const { rows: old } = await pool.query('SELECT file_name FROM agent_client_bundles ORDER BY version DESC OFFSET 5');
+        for (const o of old) fs.promises.unlink(path.join(bundleDir, o.file_name)).catch(() => {});
+        const notified = await notifyOtherMachines(agent.userId, machineId, version, agent.name?.trim() || 'a chefe');
+        res.json({ ok: true, version, sha256, size_bytes: req.file.size, file_count: files.length, notified });
+      } catch (error) {
+        discard();
+        sendError(res, error);
+      }
+    });
+  });
+
+  app.get('/api/agent/clients-bundle', async (req, res) => {
+    try {
+      await verifyAgent(req);
+      await ensureAgentSchema();
+      const bundle = await latestBundle(req.query.meta !== '1');
+      if (!bundle) return res.status(404).json({ error: 'Nenhuma versão de clientes publicada ainda' });
+      delete bundle.file_name;
+      res.json(bundle);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.get('/api/agent/clients-bundle/download', async (req, res) => {
+    try {
+      await verifyAgent(req);
+      await ensureAgentSchema();
+      const bundle = await latestBundle(false);
+      if (!bundle) return res.status(404).json({ error: 'Nenhuma versão de clientes publicada ainda' });
+      const file = path.join(bundleDir, bundle.file_name);
+      if (!fs.existsSync(file)) return res.status(410).json({ error: 'Arquivo da versão sumiu do servidor; publique de novo' });
+      res.setHeader('Content-Type', 'application/gzip');
+      res.setHeader('X-Bundle-Version', String(bundle.version));
+      res.setHeader('X-Bundle-Sha256', bundle.sha256);
+      fs.createReadStream(file).pipe(res);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/agent/clients-bundle/applied', async (req, res) => {
+    try {
+      const agent = await verifyAgent(req);
+      const version = Number(req.body?.version);
+      if (!Number.isInteger(version) || version < 1) return res.status(400).json({ error: 'Versão inválida' });
+      const machineId = await machineOfKey(agent.keyId);
+      if (!machineId) return res.json({ ok: true, machine: null });
+      await pool.query('UPDATE agent_machines SET clients_version = $2, clients_synced_at = now(), last_seen_at = now() WHERE id = $1', [machineId, version]);
+      res.json({ ok: true });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // Botão "Sincronizar clientes": a chefe publica (Mac principal); os Macs desatualizados recebem o aviso para baixar
+  app.post('/api/agent-machines/sync-clients', async (req, res) => {
+    try {
+      const user = await requireAdmin(req);
+      const { rows: chiefs } = await pool.query(
+        `SELECT DISTINCT k.user_id, p.name FROM agent_keys k JOIN profiles p ON p.id = k.user_id
+          WHERE k.revoked_at IS NULL AND k.role = 'chefe'`
+      );
+      for (const c of chiefs) {
+        await pool.query('INSERT INTO agent_messages (from_user, to_user, body) VALUES ($1, $2, $3)', [
+          user.id, c.user_id,
+          `Ordem do usuário (Configurações → Sincronizar clientes): rode \`pulse --agente ${agentSlug(c.name)} publicar-clientes\` para mandar mapa, agentes/ e pastas de clientes aos outros Macs.`,
+        ]);
+      }
+      const bundle = await latestBundle(false);
+      let outdated = [];
+      if (bundle) {
+        const { rows } = await pool.query(
+          `SELECT DISTINCT k.user_id, p.name FROM agent_keys k JOIN profiles p ON p.id = k.user_id
+             JOIN agent_machines m ON m.id = k.machine_id
+            WHERE k.revoked_at IS NULL AND m.revoked_at IS NULL AND m.id IS DISTINCT FROM $1
+              AND (m.clients_version IS NULL OR m.clients_version < $2)`,
+          [bundle.machine_id, bundle.version]
+        );
+        for (const r of rows) {
+          await pool.query('INSERT INTO agent_messages (from_user, to_user, body) VALUES ($1, $2, $3)', [
+            user.id, r.user_id,
+            `Ordem do usuário: seus clientes estão desatualizados (versão ${bundle.version} no sistema). Rode \`pulse --agente ${agentSlug(r.name)} baixar-clientes\` e aplique com --aplicar.`,
+          ]);
+        }
+        outdated = rows.map((r) => r.name.trim());
+      }
+      res.json({ ok: true, publish_requested: chiefs.map((c) => c.name.trim()), download_requested: outdated });
     } catch (error) {
       sendError(res, error);
     }

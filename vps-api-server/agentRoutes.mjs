@@ -1135,7 +1135,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           [task.id, videoUrl, plan ? JSON.stringify(plan) : null, notes, agent.userId]
         );
 
-        // Pré-revisão (IA): o Uriel revisa e a Marcely libera para a revisão humana (pulse mover … revisao).
+        // Análise (coluna pre_revisao): o Uriel revisa e a Marcely libera para a revisão humana (pulse mover … revisao).
         // Aqui não há prazo, Social Media, portal nem aviso para a equipe — isso acontece ao entrar em "revisao".
         await client.query(
           `UPDATE content_tasks SET
@@ -1155,7 +1155,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         await client.query(
           'INSERT INTO task_history (task_id, user_id, action, details) VALUES ($1, $2, $3, $4), ($1, $2, $5, $6)',
           [task.id, agent.userId, 'Vídeo editado enviado via upload', videoUrl,
-            'Enviado para Pré-revisão (IA)', `Versão ${versionRows[0].version}${notes ? ` · ${notes}` : ''}`]
+            'Enviado para Análise', `Versão ${versionRows[0].version}${notes ? ` · ${notes}` : ''}`]
         );
         const reviewDeadline = null;
 
@@ -1280,7 +1280,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
             [childId, url, notes, agent.userId]
           );
           await db.query(
-            `INSERT INTO task_history (task_id, user_id, action, details) VALUES ($1, $2, 'Enviado para Pré-revisão (IA)', $3)`,
+            `INSERT INTO task_history (task_id, user_id, action, details) VALUES ($1, $2, 'Enviado para Análise', $3)`,
             [childId, agent.userId, `Story ${i + 1} de ${files.length} do card "${task.title.trim()}"${notes ? ` · ${notes}` : ''}`]
           );
           created.push({ id: childId, title, video_url: url });

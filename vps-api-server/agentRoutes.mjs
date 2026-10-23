@@ -41,6 +41,7 @@
 //   GET  /api/agent/clients?search=     nicho, linha editorial e links do cliente
 //   GET  /api/agent/tasks?search=       (chefe, revisor) busca cards do fluxo de edição em qualquer coluna
 //   POST /api/agent/tasks/:id/move      (chefe) { column: edicao|revisao|alteracao, reason, adjustment_notes }
+//   POST /api/agent/tasks/:id/type      (chefe) { content_type: reels|story|criativo, reason } corrige o tipo de um card da edição
 //   POST /api/agent/messages            { to: nome | "todos", body } recado entre agentes (qualquer computador)
 //   GET  /api/agent/messages            caixa de entrada (devolve não lidos e marca como lidos)
 //   POST /api/agent/status              { status } trabalhando (online 15 min) | { done: true } encerrou
@@ -1298,6 +1299,36 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       sendError(res, error);
     } finally {
       client.release();
+    }
+  });
+
+  // Tipo cadastrado errado (ex.: pacote de stories como "reels") trava o entregar-stories: a chefe corrige
+  const RETYPE_ALLOWED = new Set(['reels', 'story', 'criativo']);
+  app.post('/api/agent/tasks/:id/type', async (req, res) => {
+    try {
+      const agent = await verifyAgent(req);
+      if (agent.role !== 'chefe') return res.status(403).json({ error: 'Só a chefe corrige o tipo do card' });
+      const next = String(req.body?.content_type || '').trim();
+      const reason = String(req.body?.reason || '').trim().slice(0, 300);
+      if (!RETYPE_ALLOWED.has(next)) return res.status(400).json({ error: 'Tipo deve ser reels, story ou criativo' });
+      if (!reason) return res.status(400).json({ error: 'Diga o motivo' });
+      const { rows } = await pool.query(
+        `SELECT id, title, content_type, kanban_column FROM content_tasks WHERE id::text = $1 OR id::text LIKE $1 || '%'`,
+        [String(req.params.id).trim()]
+      );
+      if (rows.length !== 1) return res.status(rows.length ? 400 : 404).json({ error: rows.length ? 'Mais de um card com esse começo de id' : 'Card não encontrado' });
+      const task = rows[0];
+      if (!['edicao', 'alteracao'].includes(task.kanban_column)) {
+        return res.status(400).json({ error: 'Só dá para corrigir o tipo de card em Para Editar ou Alteração' });
+      }
+      if (!RETYPE_ALLOWED.has(task.content_type)) return res.status(400).json({ error: `Card do tipo ${task.content_type} não pode ser trocado por aqui` });
+      if (task.content_type === next) return res.json({ ok: true, unchanged: true, task });
+      await pool.query('UPDATE content_tasks SET content_type = $2, updated_at = now() WHERE id = $1', [task.id, next])
+        .catch(() => pool.query('UPDATE content_tasks SET content_type = $2 WHERE id = $1', [task.id, next]));
+      await logHistory(task.id, agent.userId, 'Tipo do card corrigido', `${task.content_type} → ${next}: ${reason}`);
+      res.json({ ok: true, task: { ...task, content_type: next }, from: task.content_type });
+    } catch (error) {
+      sendError(res, error);
     }
   });
 

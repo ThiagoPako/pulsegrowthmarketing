@@ -734,12 +734,18 @@ export default function SocialMediaDeliveries() {
 
       const message = `Olá, ${client.responsiblePerson || client.companyName}! 😊\n\nSeu conteúdo "${d.title}" ficou pronto! 🎬\n\n${videoLink ? `📎 Acesse aqui: ${videoLink}\n\n` : ''}Por favor, avalie e nos diga se está aprovado ou se precisa de algum ajuste.\n\nEquipe Pulse Growth Marketing 🚀`;
 
-      const result = await sendWhatsAppMessage({
-        number: client.whatsapp,
-        message,
-        clientId: d.client_id,
-        triggerType: 'manual',
-      });
+      // Com card de conteúdo, o aviso ao cliente sai na sincronização para "envio" (modelo "vídeo para aprovação",
+      // com o link do portal); mandar aqui também fazia o cliente receber duas mensagens.
+      const autoSendsOnSync = !!d.content_task_id && !!(await getWhatsAppConfig())?.autoVideoApproval;
+      const result = autoSendsOnSync
+        ? { success: true }
+        : await sendWhatsAppMessage({
+            number: client.whatsapp,
+            message,
+            clientId: d.client_id,
+            triggerType: 'manual',
+            purpose: 'aprovacao',
+          });
 
       if (result.success) {
         await supabase.from('social_media_deliveries').update({ status: 'aprovacao_cliente' } as any).eq('id', d.id);

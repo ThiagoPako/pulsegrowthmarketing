@@ -378,6 +378,7 @@ export default function FinancialRevenues() {
         message,
         clientId: client.id,
         triggerType: 'manual',
+        purpose: 'cobranca',
       });
 
       if (result.success) {
@@ -432,7 +433,7 @@ export default function FinancialRevenues() {
         if (report.text && !template.includes('{relatorio_entregas}')) {
           message += report.text;
         }
-        const result = await sendWhatsAppMessage({ number: client.whatsapp, message, clientId: client.id, triggerType: 'manual' });
+        const result = await sendWhatsAppMessage({ number: client.whatsapp, message, clientId: client.id, triggerType: 'manual', purpose: 'cobranca' });
         if (result.success) sent++; else errors++;
       } catch { errors++; }
     }

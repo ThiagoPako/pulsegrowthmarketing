@@ -2714,6 +2714,7 @@ export default function Clients() {
                   message: sendWaMsg,
                   clientId: sendWaClient.id,
                   triggerType: 'manual',
+                  purpose: 'geral',
                 });
                 setSendWaLoading(false);
                 if (result.success) {

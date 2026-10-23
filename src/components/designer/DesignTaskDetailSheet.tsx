@@ -316,6 +316,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           mediaFileName: fileName,
           clientId: task.client_id,
           triggerType: 'auto_design_approved',
+          purpose: 'aprovacao',
         });
         if (!result.success) {
           console.error('WhatsApp media send error:', result.error);
@@ -327,6 +328,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           message: msg,
           clientId: task.client_id,
           triggerType: 'auto_design_approved',
+          purpose: 'aprovacao',
         });
       }
     } catch (err) { console.error('WhatsApp send error:', err); }

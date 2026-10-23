@@ -434,7 +434,7 @@ export default function FinancialDashboard() {
         if (report.text && !template.includes('{relatorio_entregas}')) {
           message += report.text;
         }
-        const result = await sendWhatsAppMessage({ number: client.whatsapp, message, clientId: client.id, triggerType: 'manual' });
+        const result = await sendWhatsAppMessage({ number: client.whatsapp, message, clientId: client.id, triggerType: 'manual', purpose: 'cobranca' });
         if (result.success) sent++; else errors++;
       } catch { errors++; }
     }

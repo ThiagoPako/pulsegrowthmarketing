@@ -895,6 +895,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
         message: msg,
         clientId: client.id,
         triggerType: 'manual',
+        purpose: 'aprovacao',
       });
       if (result.success) {
         toast.success('✅ WhatsApp enviado ao cliente!');

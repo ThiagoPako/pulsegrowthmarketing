@@ -31,6 +31,28 @@ else
     --name pulse-api \
     --cwd /var/www/pulsegrowthmarketing/vps-api-server
 fi
+
+# WhatsApp próprio (processo separado da API). Só reinicia quando o código dele muda: reiniciar derruba as
+# conexões por alguns segundos. Falha aqui não derruba o deploy do site.
+WA_DIR=/var/www/pulsegrowthmarketing/vps-api-server
+NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
+if [ "$NODE_MAJOR" -lt 20 ]; then
+  echo "AVISO: Node $NODE_MAJOR na VPS; o WhatsApp precisa do Node 20 ou mais novo. Processo pulse-wa não iniciado."
+else
+  WA_HASH="$(cat "$WA_DIR"/whatsapp/*.mjs "$WA_DIR"/package-lock.json 2>/dev/null | sha256sum | cut -d' ' -f1)"
+  WA_HASH_FILE=/var/www/pulsegrowthmarketing/.pulse-wa-hash
+  if pm2 describe pulse-wa >/dev/null 2>&1; then
+    if [ "$(cat "$WA_HASH_FILE" 2>/dev/null)" != "$WA_HASH" ]; then
+      pm2 restart pulse-wa --update-env || echo "AVISO: pulse-wa não reiniciou"
+    else
+      echo "pulse-wa: código igual, sem reiniciar"
+    fi
+  else
+    pm2 start "$WA_DIR/whatsapp/wa-server.mjs" --name pulse-wa --cwd "$WA_DIR" --max-memory-restart 600M \
+      || echo "AVISO: pulse-wa não iniciou"
+  fi
+  echo "$WA_HASH" > "$WA_HASH_FILE"
+fi
 pm2 save
 
 sudo nginx -t

@@ -19,6 +19,8 @@ import cors from 'cors';
 import compression from 'compression';
 import { createPgClient } from './pgClient.mjs';
 import { registerAgentRoutes } from './agentRoutes.mjs';
+import { registerWhatsAppRoutes } from './whatsapp/routes.mjs';
+import { enqueueWhatsApp } from './whatsapp/shared.mjs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -3245,37 +3247,16 @@ async function callAi(ai, model, messages, options = {}) {
 }
 
 
-// WhatsApp helper
-const WHATSAPP_API_URL = 'https://api.atendeclique.com.br/api/messages/send';
-const PORTAL_BASE_URL = 'https://pulsegrowthmarketing.lovable.app/portal';
+// WhatsApp helper — envio pelo WhatsApp próprio (Baileys, processo pulse-wa): a mensagem entra na fila e sai pela
+// conexão que tem a função dela (ver vps-api-server/whatsapp/). `config` e `db` ficam por compatibilidade.
+const PORTAL_BASE_URL = 'https://agenciapulse.tech/portal';
 
-async function sendWhatsAppDirect(config, number, message, db, clientId, triggerType) {
+async function sendWhatsAppDirect(config, number, message, db, clientId, triggerType, purpose) {
   try {
-    const apiBody = {
-      number: number.replace(/\D/g, ''),
-      body: message,
-      userId: config.default_user_id || '',
-      queueId: config.default_queue_id || '',
-      sendSignature: config.send_signature || false,
-      closeTicket: config.close_ticket || false,
-    };
-    const apiResponse = await fetch(WHATSAPP_API_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${config.api_token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(apiBody),
-    });
-    const apiResult = await apiResponse.json();
-    await db.from('whatsapp_messages').insert({
-      phone_number: number.replace(/\D/g, ''),
-      message,
-      status: apiResponse.ok ? 'sent' : 'failed',
-      api_response: apiResult,
-      client_id: clientId || null,
-      trigger_type: triggerType,
-    });
-    return { ok: apiResponse.ok, result: apiResult };
+    const queued = await enqueueWhatsApp(pool, { to: number, body: message, clientId, triggerType, purpose });
+    return { ok: true, queued: true, id: queued.id };
   } catch (e) {
-    console.error('sendWhatsApp error:', e);
+    console.error('sendWhatsAppDirect error:', e);
     return { ok: false, error: e.message };
   }
 }
@@ -3728,75 +3709,28 @@ ${contextData}`;
 });
 
 // ─── 2. Send WhatsApp ───────────────────────────────────────
+// Coloca na fila do WhatsApp próprio. `purpose` diz qual conexão envia (aprovacao, agenda, cobranca, crm, equipe,
+// clube, geral); sem ele, o tipo do disparo decide. A resposta volta na hora ("na fila"); o envio sai em segundos
+// e o histórico (whatsapp_messages) passa para "sent" ou "failed".
 app.post('/api/send-whatsapp', async (req, res) => {
   try {
-    const { user, userClient } = await verifyUser(req);
-    const admin = getAdminClient();
-
-    const { data: configData } = await admin.from('whatsapp_config').select('api_token, default_user_id, default_queue_id, send_signature, close_ticket').limit(1).single();
-    const WHATSAPP_TOKEN = configData?.api_token;
-    if (!WHATSAPP_TOKEN) return res.status(400).json({ error: 'Token da API WhatsApp não configurado' });
-
-    const { action, number, message, userId: apiUserId, queueId, sendSignature, closeTicket, clientId, triggerType, mediaUrl, mediaFileName } = req.body;
-    const effectiveUserId = apiUserId || configData?.default_user_id || '';
-    const effectiveQueueId = queueId || configData?.default_queue_id || '';
-    const effectiveSignature = sendSignature !== undefined ? sendSignature : (configData?.send_signature || false);
-    const effectiveCloseTicket = closeTicket !== undefined ? closeTicket : (configData?.close_ticket || false);
+    const { user } = await verifyUser(req);
+    const { action, number, message, clientId, triggerType, mediaUrl, mediaFileName, purpose, connectionId } = req.body || {};
 
     if (action === 'test_connection') {
-      try {
-        const testResponse = await fetch(WHATSAPP_API_URL, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ number: '0', body: '', userId: '', queueId: '', sendSignature: false, closeTicket: false }),
-        });
-        const isTokenValid = testResponse.status !== 401 && testResponse.status !== 403;
-        return res.json({ success: isTokenValid, status: testResponse.status });
-      } catch (e) {
-        return res.status(502).json({ success: false, error: 'Não foi possível conectar à API' });
-      }
+      const { rows } = await pool.query(
+        `SELECT name, status, purposes FROM wa_connections WHERE desired = 'ligada' ORDER BY created_at`
+      ).catch(() => ({ rows: [] }));
+      const connected = rows.filter((r) => r.status === 'conectada');
+      return res.json({ success: connected.length > 0, connections: rows });
     }
 
-    if (!number || !message) return res.status(400).json({ error: 'number and message are required' });
-    const cleanNumber = number.replace(/\D/g, '');
-
-    let apiResponse, apiResult;
-    if (mediaUrl) {
-      const fileResponse = await fetch(mediaUrl);
-      if (!fileResponse.ok) return res.status(400).json({ error: 'Não foi possível baixar o arquivo de mídia' });
-      const fileBlob = await fileResponse.blob();
-      const fileName = mediaFileName || mediaUrl.split('/').pop() || 'file';
-      const formData = new FormData();
-      formData.append('number', cleanNumber);
-      formData.append('body', message);
-      formData.append('userId', effectiveUserId);
-      formData.append('queueId', effectiveQueueId);
-      formData.append('sendSignature', String(effectiveSignature));
-      formData.append('closeTicket', String(effectiveCloseTicket));
-      formData.append('medias', fileBlob, fileName);
-      apiResponse = await fetch(WHATSAPP_API_URL, { method: 'POST', headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` }, body: formData });
-      apiResult = await apiResponse.json();
-    } else {
-      apiResponse = await fetch(WHATSAPP_API_URL, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ number: cleanNumber, body: message, userId: effectiveUserId, queueId: effectiveQueueId, sendSignature: effectiveSignature, closeTicket: effectiveCloseTicket }),
-      });
-      apiResult = await apiResponse.json();
-    }
-
-    const status = apiResponse.ok ? 'sent' : 'failed';
-    await userClient.from('whatsapp_messages').insert({
-      phone_number: cleanNumber,
-      message: mediaUrl ? `${message} [📎 ${mediaFileName || 'arquivo'}]` : message,
-      status,
-      api_response: apiResult,
-      sent_by: user.id,
-      client_id: clientId || null,
-      trigger_type: triggerType || 'manual',
+    if (!number || (!message && !mediaUrl)) return res.status(400).json({ error: 'number and message are required' });
+    const queued = await enqueueWhatsApp(pool, {
+      to: number, body: message || '', clientId, triggerType: triggerType || 'manual', purpose,
+      sentBy: user.id, mediaUrl, mediaName: mediaFileName, connectionId,
     });
-
-    res.status(apiResponse.ok ? 200 : 502).json({ success: apiResponse.ok, status, apiResult });
+    res.json({ success: true, status: 'fila', id: queued.id, purpose: queued.purpose });
   } catch (error) {
     console.error('send-whatsapp error:', error);
     res.status(500).json({ error: error.message });
@@ -7480,8 +7414,18 @@ app.get('/api/public-team-presentation', async (_req, res) => {
 });
 
 // ─── 15. Billing Automation ─────────────────────────────────
+// Roda sozinha todo dia às 9h (agendador do WhatsApp, mais abaixo); a rota é só para o admin disparar à mão.
 app.post('/api/billing-automation', async (req, res) => {
   try {
+    await verifyAdmin(req);
+    res.json(await runBillingAutomation());
+  } catch (error) {
+    res.status(error.message === 'Admin access required' ? 403 : error.message === 'Unauthorized' ? 401 : 500).json({ error: String(error.message || error) });
+  }
+});
+
+async function runBillingAutomation() {
+  {
     const admin = getAdminClient();
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
@@ -7490,7 +7434,7 @@ app.post('/api/billing-automation', async (req, res) => {
     const currentYear = today.getFullYear();
 
     const { data: contracts } = await admin.from('financial_contracts').select('*').eq('status', 'ativo');
-    if (!contracts?.length) return res.json({ message: 'No active contracts' });
+    if (!contracts?.length) return { message: 'No active contracts', processed: 0 };
     const { data: paymentConfigs } = await admin.from('payment_config').select('*').limit(1);
     const paymentConfig = paymentConfigs?.[0];
     const { data: whatsappConfigs } = await admin.from('whatsapp_config').select('*').limit(1);
@@ -7530,19 +7474,17 @@ app.post('/api/billing-automation', async (req, res) => {
         message = applyVars(paymentConfig?.msg_billing_due || `Olá, {nome_cliente}! 🚀\n💰 Mensalidade: {valor}\n📅 Vencimento: Dia {dia_vencimento}{dados_pagamento}`);
       }
 
-      if (whatsappConfig?.api_token && whatsappConfig?.integration_active) {
+      if (whatsappConfig?.integration_active) {
         try {
-          await sendWhatsAppDirect(whatsappConfig, clientData.whatsapp, message, admin, contract.client_id, isReminder ? 'cobranca_lembrete' : 'cobranca');
+          await sendWhatsAppDirect(whatsappConfig, clientData.whatsapp, message, admin, contract.client_id, isReminder ? 'cobranca_lembrete' : 'cobranca', 'cobranca');
           await admin.from('billing_messages').insert({ revenue_id: revenue?.id || null, client_id: contract.client_id, message_type: isReminder ? 'lembrete' : 'cobranca', status: 'enviada' });
           results.push({ client: clientData.company_name, type: isReminder ? 'lembrete' : 'cobranca', status: 'sent' });
         } catch (err) { results.push({ client: clientData.company_name, status: 'error', error: String(err) }); }
       }
     }
-    res.json({ results, processed: results.length });
-  } catch (error) {
-    res.status(500).json({ error: String(error) });
+    return { results, processed: results.length };
   }
-});
+}
 
 // ─── 16. WhatsApp Webhook ───────────────────────────────────
 const CONFIRM_WORDS = ['1', 'confirmar', 'confirmado', 'ok', 'sim', 'quero aproveitar', 'quero'];
@@ -7566,27 +7508,42 @@ function extractPayload(body) {
   return { phone, message: typeof message === 'string' ? message : '' };
 }
 
+// Resposta recebida no WhatsApp próprio (o processo pulse-wa grava em wa_inbound; o laço abaixo chama esta função).
+// A rota ficou só para o admin testar à mão: sem a AtendeClique, ninguém de fora manda mais nada para cá.
 app.post('/api/whatsapp-webhook', async (req, res) => {
   try {
-    const admin = getAdminClient();
-    const { phone: phoneNumber, message: messageText } = extractPayload(req.body);
-    if (!phoneNumber || !messageText) return res.json({ ok: true, skipped: 'no_phone_or_message' });
+    await verifyAdmin(req);
+    const { phone, message } = extractPayload(req.body);
+    res.json(await handleWhatsAppReply(phone, message));
+  } catch (error) {
+    res.status(error.message === 'Admin access required' ? 403 : error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+  }
+});
 
-    const phoneVariants = [phoneNumber];
-    if (phoneNumber.startsWith('55') && phoneNumber.length > 10) phoneVariants.push(phoneNumber.slice(2));
-    else phoneVariants.push('55' + phoneNumber);
+async function handleWhatsAppReply(phoneInput, messageText) {
+  {
+    const admin = getAdminClient();
+    const phoneNumber = String(phoneInput || '').replace(/\D/g, '');
+    if (!phoneNumber || !messageText) return { ok: true, skipped: 'no_phone_or_message' };
+
+    // o cadastro pode ter o número com ou sem 55 e com ou sem o 9º dígito
+    const local = phoneNumber.startsWith('55') && phoneNumber.length > 11 ? phoneNumber.slice(2) : phoneNumber;
+    const localVariants = new Set([local]);
+    if (local.length === 11 && local[2] === '9') localVariants.add(local.slice(0, 2) + local.slice(3));
+    if (local.length === 10) localVariants.add(`${local.slice(0, 2)}9${local.slice(2)}`);
+    const phoneVariants = [...localVariants].flatMap((v) => [v, `55${v}`]);
 
     const { data: confirmations } = await admin.from('whatsapp_confirmations').select('*, recordings(*), clients(*)').in('phone_number', phoneVariants).eq('status', 'pending').not('sent_at', 'is', null).order('sent_at', { ascending: false }).limit(1);
-    if (!confirmations?.length) return res.json({ ok: true, skipped: 'no_pending_confirmation' });
+    if (!confirmations?.length) return { ok: true, skipped: 'no_pending_confirmation' };
 
     const confirmation = confirmations[0];
     const recording = confirmation.recordings;
     const client = confirmation.clients;
     const classification = classifyResponse(messageText);
-    if (classification === 'unknown') return res.json({ ok: true, skipped: 'unrecognized_response' });
+    if (classification === 'unknown') return { ok: true, skipped: 'unrecognized_response' };
 
     const { data: configData } = await admin.from('whatsapp_config').select('*').limit(1).single();
-    if (!configData?.api_token) return res.status(400).json({ error: 'No API token' });
+    if (!configData) return { ok: false, error: 'whatsapp_config vazio' };
 
     const portalLink = `${PORTAL_BASE_URL}/${client?.id || ''}`;
     const templateVars = { nome_cliente: client?.company_name || '', data_gravacao: recording?.date || '', hora_gravacao: recording?.start_time || '', link_portal: portalLink };
@@ -7595,32 +7552,40 @@ app.post('/api/whatsapp-webhook', async (req, res) => {
       if (classification === 'confirm') {
         await admin.from('whatsapp_confirmations').update({ status: 'confirmed', responded_at: new Date().toISOString(), response_message: messageText }).eq('id', confirmation.id);
         await admin.from('recordings').update({ confirmation_status: 'confirmada' }).eq('id', confirmation.recording_id);
-        await sendWhatsAppDirect(configData, confirmation.phone_number, applyTemplate(configData.msg_confirmation_confirmed, templateVars), admin, client?.id, 'auto_confirmation');
+        await sendWhatsAppDirect(configData, confirmation.phone_number, applyTemplate(configData.msg_confirmation_confirmed, templateVars), admin, client?.id, 'auto_confirmation', 'agenda');
       } else {
         await admin.from('whatsapp_confirmations').update({ status: 'cancelled', responded_at: new Date().toISOString(), response_message: messageText }).eq('id', confirmation.id);
         await admin.from('recordings').update({ status: 'cancelada', confirmation_status: 'cancelada' }).eq('id', confirmation.recording_id);
-        await sendWhatsAppDirect(configData, confirmation.phone_number, applyTemplate(configData.msg_confirmation_cancelled, templateVars), admin, client?.id, 'auto_confirmation');
+        await sendWhatsAppDirect(configData, confirmation.phone_number, applyTemplate(configData.msg_confirmation_cancelled, templateVars), admin, client?.id, 'auto_confirmation', 'agenda');
       }
     }
 
-    res.json({ ok: true, classification, type: confirmation.type });
+    return { ok: true, classification, type: confirmation.type };
+  }
+}
+
+// ─── 17. Confirmation Cron ──────────────────────────────────
+// Roda sozinha todo dia às 10h (agendador do WhatsApp); a rota é para o admin disparar à mão.
+app.post('/api/whatsapp-confirmation-cron', async (req, res) => {
+  try {
+    await verifyAdmin(req);
+    res.json(await runConfirmationCron());
   } catch (error) {
-    console.error('whatsapp-webhook error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('confirmation-cron error:', error);
+    res.status(error.message === 'Admin access required' ? 403 : error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
   }
 });
 
-// ─── 17. Confirmation Cron ──────────────────────────────────
-app.post('/api/whatsapp-confirmation-cron', async (req, res) => {
-  try {
+async function runConfirmationCron() {
+  {
     const admin = getAdminClient();
     const { data: config } = await admin.from('whatsapp_config').select('*').limit(1).single();
-    if (!config?.integration_active || !config?.api_token || !config?.auto_confirmation) return res.json({ ok: true, skipped: 'disabled' });
+    if (!config?.integration_active || !config?.auto_confirmation) return { ok: true, skipped: 'disabled' };
 
     const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
     const { data: recordings } = await admin.from('recordings').select('*, clients(*)').eq('date', tomorrowStr).eq('status', 'agendada').eq('confirmation_status', 'pendente');
-    if (!recordings?.length) return res.json({ ok: true, sent: 0 });
+    if (!recordings?.length) return { ok: true, sent: 0 };
 
     const recordingIds = recordings.map(r => r.id);
     const { data: existingConfirmations } = await admin.from('whatsapp_confirmations').select('recording_id').in('recording_id', recordingIds).eq('type', 'confirmation');
@@ -7642,19 +7607,17 @@ app.post('/api/whatsapp-confirmation-cron', async (req, res) => {
       const message = applyTemplate(config.msg_confirmation, { nome_cliente: client.company_name, data_gravacao: recording.date, hora_gravacao: recording.start_time, videomaker: vmNames[recording.videomaker_id] || 'Equipe', link_portal: portalLink });
       await admin.from('whatsapp_confirmations').insert({ recording_id: recording.id, client_id: client.id, phone_number: phoneNumber, type: 'confirmation', status: 'pending', sent_at: new Date().toISOString() });
       await admin.from('recordings').update({ confirmation_status: 'aguardando' }).eq('id', recording.id);
-      const result = await sendWhatsAppDirect(config, client.whatsapp, message, admin, client.id, 'auto_confirmation');
+      const result = await sendWhatsAppDirect(config, client.whatsapp, message, admin, client.id, 'auto_confirmation', 'agenda');
       if (result.ok) sentCount++;
     }
-    res.json({ ok: true, sent: sentCount, total: recordings.length });
-  } catch (error) {
-    console.error('confirmation-cron error:', error);
-    res.status(500).json({ error: error.message });
+    return { ok: true, sent: sentCount, total: recordings.length };
   }
-});
+}
 
 // ─── 18. Approval Deadline Cron ─────────────────────────────
 app.post('/api/approval-deadline-cron', async (req, res) => {
   try {
+    await verifyAdmin(req);
     const admin = getAdminClient();
     const now = new Date().toISOString();
     const { data: expiredTasks } = await admin.from('content_tasks').select('id, client_id, title, edited_video_link, approval_deadline').eq('kanban_column', 'envio').not('approval_deadline', 'is', null).lt('approval_deadline', now);
@@ -7673,16 +7636,16 @@ app.post('/api/approval-deadline-cron', async (req, res) => {
       const client = clientsMap[task.client_id];
       await admin.rpc('notify_role', { _role: 'social_media', _title: 'Aprovação expirada', _message: `"${task.title}" (${client?.company_name || ''}) não foi aprovado em 6h. Movido para agendamento.`, _type: 'deadline', _link: '/entregas-social' });
 
-      if (config?.integration_active && config?.api_token && client?.whatsapp) {
+      if (config?.integration_active && config?.auto_approval_expired && client?.whatsapp) {
         const portalLink = `${PORTAL_BASE_URL}/${task.client_id}`;
         const msg = applyTemplate(config.msg_approval_expired || 'Olá, {nome_cliente}! O vídeo "{titulo}" foi encaminhado para agendamento.', { nome_cliente: client.responsible_person || client.company_name, titulo: task.title, link_portal: portalLink });
-        await sendWhatsAppDirect(config, client.whatsapp, msg, admin, task.client_id, 'auto_approval_expired');
+        await sendWhatsAppDirect(config, client.whatsapp, msg, admin, task.client_id, 'auto_approval_expired', 'aprovacao');
       }
       movedCount++;
     }
     res.json({ ok: true, moved: movedCount });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.message === 'Admin access required' ? 403 : error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
   }
 });
 
@@ -7712,10 +7675,11 @@ app.post('/api/generate-monthly-revenues', async (req, res) => {
 // ─── 20. Endo Daily Tasks Notify ────────────────────────────
 app.post('/api/endo-daily-tasks-notify', async (req, res) => {
   try {
+    await verifyUser(req);
     const admin = getAdminClient();
     const today = new Date().toISOString().split('T')[0];
-    const { data: configData } = await admin.from('whatsapp_config').select('api_token, integration_active').limit(1).single();
-    if (!configData?.api_token || !configData.integration_active) return res.status(400).json({ error: 'WhatsApp não configurado' });
+    const { data: configData } = await admin.from('whatsapp_config').select('integration_active').limit(1).single();
+    if (!configData?.integration_active) return res.status(400).json({ error: 'WhatsApp desativado' });
 
     let tasksQuery = admin.from('endomarketing_partner_tasks').select('*, clients(company_name)').eq('date', today).eq('status', 'pendente');
     const requestedPartnerId = req.body?.partner_id;
@@ -7741,7 +7705,7 @@ app.post('/api/endo-daily-tasks-notify', async (req, res) => {
       const partnerName = profile?.display_name || profile?.name || 'Parceiro';
       const taskLines = partnerTasks.map((t, i) => `   ${i + 1}. ${t.task_type} — *${t.clients?.company_name || 'Cliente'}* (${t.duration_minutes}min)`).join('\n');
       const message = `🌟 *Bom dia, ${partnerName}!*\n\n📋 *Suas tarefas de hoje:*\n\n${taskLines}\n\n✨ Você está fazendo um trabalho incrível! 🚀`;
-      const result = await sendWhatsAppDirect({ api_token: configData.api_token }, phone, message, admin, partnerTasks[0].client_id, 'endo_daily_tasks');
+      const result = await sendWhatsAppDirect(configData, phone, message, admin, partnerTasks[0].client_id, 'endo_daily_tasks', 'equipe');
       if (result.ok) sentCount++;
     }
     res.json({ success: true, sent: sentCount, total_partners: partnerIds.length });
@@ -9986,24 +9950,13 @@ app.post('/api/discount-claim', async (req, res) => {
       ? `${campInfo.discount_value}% de desconto`
       : `R$ ${Number(campInfo.discount_value).toFixed(2)} de desconto`;
 
-    const whatsappToken = process.env.WHATSAPP_API_TOKEN;
-    if (whatsappToken) {
+    {
       const cleanPhone = phone.replace(/\D/g, '');
       const whatsPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
       const message = `🎉 Parabéns ${name}!\n\nVocê resgatou um cupom de *${discountText}* na *${campInfo.company_name}*!\n\n🎟️ Seu código: *${claimed[0].code}*\n\nApresente este código no caixa para validar seu desconto.\n\n_Clube de Descontos Pulse_`;
-
-      try {
-        const formData = new FormData();
-        formData.append('number', whatsPhone);
-        formData.append('message', message);
-        await fetch('https://api.atendeclique.com.br/api/send-message', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${whatsappToken}` },
-          body: formData,
-        });
-      } catch (whatsErr) {
-        console.error('WhatsApp notification error:', whatsErr);
-      }
+      // pela fila do WhatsApp próprio (conexão com a função "clube"); o código também aparece na tela
+      await enqueueWhatsApp(pool, { to: whatsPhone, body: message, triggerType: 'clube_cupom', purpose: 'clube' })
+        .catch((whatsErr) => console.error('WhatsApp notification error:', whatsErr.message));
     }
 
     res.json({ coupon: claimed[0], store_name: campInfo.company_name });
@@ -10143,8 +10096,7 @@ app.post('/api/discount-campaigns', async (req, res) => {
       [client_id]
     );
 
-    const whatsappToken = process.env.WHATSAPP_API_TOKEN;
-    if (whatsappToken && existingClaimants.length > 0) {
+    if (existingClaimants.length > 0) {
       const { rows: [clientInfo] } = await pool.query(`SELECT company_name FROM clients WHERE id = $1`, [client_id]);
       const storeName = clientInfo?.company_name || 'Loja parceira';
 
@@ -10153,18 +10105,9 @@ app.post('/api/discount-campaigns', async (req, res) => {
         const whatsPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
         const message = `🎁 Novidade no Clube de Descontos!\n\n${claimant.claimed_by_name}, a *${storeName}* acabou de lançar novos cupons de desconto!\n\n📌 *${title}*\n\nCorra e garanta o seu antes que acabe! 🏃‍♂️\n\n_Clube de Descontos Pulse_`;
 
-        try {
-          const formData = new FormData();
-          formData.append('number', whatsPhone);
-          formData.append('message', message);
-          await fetch('https://api.atendeclique.com.br/api/send-message', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${whatsappToken}` },
-            body: formData,
-          });
-        } catch (whatsErr) {
-          console.error('WhatsApp new campaign notification error:', whatsErr);
-        }
+        // a fila espaça os envios (vários segundos entre cada um) para o número não ser bloqueado por disparo em massa
+        await enqueueWhatsApp(pool, { to: whatsPhone, body: message, clientId: client_id, triggerType: 'clube_campanha', purpose: 'clube' })
+          .catch((whatsErr) => console.error('WhatsApp new campaign notification error:', whatsErr.message));
       }
     }
 
@@ -14185,18 +14128,15 @@ setInterval(async () => {
       [tomorrowStr]
     );
 
+    if (!pendingReminders.length) return;
+    const { rows: [waConfig] } = await pool.query(`SELECT integration_active FROM whatsapp_config LIMIT 1`).catch(() => ({ rows: [] }));
+    if (!waConfig?.integration_active) return;
+
     for (const lead of pendingReminders) {
-      console.log(`[CRM-Reminder] Sending reminder to ${lead.name} (${lead.phone}) for meeting at ${lead.meeting_time}`);
-      
-      // Aqui integraria com a API de WhatsApp (ex: Evolution API ou Z-API)
-      // Por enquanto simulamos o envio e marcamos como enviado no banco
       const message = `Olá ${lead.name}, aqui é da Agência Pulse! Passando para confirmar nossa reunião de amanhã às ${lead.meeting_time?.slice(0, 5)}. Podemos confirmar?`;
-      
-      // Mock de envio bem sucedido
-      await pool.query(
-        `UPDATE crm_leads SET reminder_sent_24h = TRUE WHERE id = $1`,
-        [lead.id]
-      );
+      // pela fila do WhatsApp próprio (conexão com a função "crm")
+      await enqueueWhatsApp(pool, { to: lead.phone, body: message, triggerType: 'crm_reminder', purpose: 'crm' });
+      await pool.query(`UPDATE crm_leads SET reminder_sent_24h = TRUE WHERE id = $1`, [lead.id]);
     }
   } catch (err) {
     console.error('[CRM-Reminder-Error]', err);
@@ -14367,6 +14307,8 @@ app.post('/api/public/client-database/:token/media', async (req, res) => {
 });
 
 // ─── Agentes de edição (chaves próprias, fila, entrega) ─────
+registerWhatsAppRoutes(app, { pool, verifyAdmin, handleWhatsAppReply, runBillingAutomation, runConfirmationCron });
+
 registerAgentRoutes(app, {
   pool,
   uploadRoot: UPLOAD_ROOT,
@@ -14386,7 +14328,6 @@ server.listen(PORT, () => {
  * .env required variables:
  * 
  * GOOGLE_GEMINI_API_KEY=<your_gemini_key>
- * WHATSAPP_API_TOKEN=<your_whatsapp_token>
  * API_PORT=3002
  * 
  * Optional:

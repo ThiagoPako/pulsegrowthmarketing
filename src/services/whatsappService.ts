@@ -32,11 +32,15 @@ export interface WhatsAppConfig {
   msgHoliday: string;
 }
 
+/** Função da mensagem: escolhe qual conexão do WhatsApp envia (Configurações → WhatsApp → Conexões). */
+export type WhatsAppPurpose = 'aprovacao' | 'agenda' | 'cobranca' | 'crm' | 'equipe' | 'clube' | 'geral';
+
 interface SendMessageParams {
   number: string;
   message: string;
   clientId?: string;
   triggerType?: 'manual' | 'auto_recording' | 'auto_reminder' | 'auto_confirmation' | 'auto_backup' | 'auto_design_approved';
+  purpose?: WhatsAppPurpose;
   mediaUrl?: string;
   mediaFileName?: string;
   useGroup?: boolean; // if true, will try to use the client's group number
@@ -164,9 +168,6 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<{ 
   if (!config?.integrationActive) {
     return { success: false, error: 'Integração WhatsApp desativada' };
   }
-  if (!config.apiToken) {
-    return { success: false, error: 'Token da API não configurado' };
-  }
 
   // If useGroup is true (or not explicitly false) and clientId is provided, try to get the group number
   let targetNumber = params.number;
@@ -185,12 +186,9 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<{ 
     body: {
       number: targetNumber,
       message: params.message,
-      userId: config.defaultUserId,
-      queueId: config.defaultQueueId,
-      sendSignature: config.sendSignature,
-      closeTicket: config.closeTicket,
       clientId: params.clientId,
       triggerType: params.triggerType || 'manual',
+      purpose: params.purpose,
       mediaUrl: params.mediaUrl,
       mediaFileName: params.mediaFileName,
     },
@@ -210,6 +208,7 @@ export async function sendWhatsAppMediaMessage(params: {
   mediaFileName?: string;
   clientId?: string;
   triggerType?: string;
+  purpose?: WhatsAppPurpose;
 }): Promise<{ success: boolean; error?: string }> {
   return sendWhatsAppMessage({
     number: params.number,
@@ -218,6 +217,7 @@ export async function sendWhatsAppMediaMessage(params: {
     mediaFileName: params.mediaFileName,
     clientId: params.clientId,
     triggerType: (params.triggerType as any) || 'manual',
+    purpose: params.purpose,
   });
 }
 
@@ -254,9 +254,6 @@ export async function getMessageStats(): Promise<{ total: number; sent: number; 
 }
 
 export async function testWhatsAppConnection(): Promise<{ success: boolean; error?: string }> {
-  const config = await getWhatsAppConfig();
-  if (!config?.apiToken) return { success: false, error: 'Token não configurado' };
-
   const { data, error } = await supabase.functions.invoke('send-whatsapp', {
     body: { action: 'test_connection' },
   });
@@ -295,7 +292,7 @@ export async function sendRecordingCancelledNotification(
     link_portal: getPortalLink(clientId),
   });
 
-  return sendWhatsAppMessage({ number: clientPhone, message, clientId, triggerType: 'auto_confirmation' });
+  return sendWhatsAppMessage({ number: clientPhone, message, clientId, triggerType: 'auto_confirmation', purpose: 'agenda' });
 }
 
 export async function sendRecordingConfirmedNotification(
@@ -316,7 +313,7 @@ export async function sendRecordingConfirmedNotification(
     link_portal: getPortalLink(clientId),
   });
 
-  return sendWhatsAppMessage({ number: clientPhone, message, clientId, triggerType: 'auto_confirmation' });
+  return sendWhatsAppMessage({ number: clientPhone, message, clientId, triggerType: 'auto_confirmation', purpose: 'agenda' });
 }
 
 export async function sendBackupInviteNotification(
@@ -337,7 +334,7 @@ export async function sendBackupInviteNotification(
     link_portal: getPortalLink(clientId),
   });
 
-  return sendWhatsAppMessage({ number: clientPhone, message, clientId, triggerType: 'auto_backup' });
+  return sendWhatsAppMessage({ number: clientPhone, message, clientId, triggerType: 'auto_backup', purpose: 'agenda' });
 }
 
 export async function sendRecordingScheduledNotification(
@@ -365,6 +362,7 @@ export async function sendRecordingScheduledNotification(
     message,
     clientId,
     triggerType: 'auto_recording',
+    purpose: 'agenda',
   });
 }
 
@@ -409,10 +407,6 @@ export async function getConfirmationStats(): Promise<{
     cancelled: items.filter((i: any) => i.type === 'confirmation' && i.status === 'cancelled').length,
     backupInvites: items.filter((i: any) => i.type === 'backup_invite').length,
   };
-}
-
-export function getWebhookUrl(): string {
-  return 'https://agenciapulse.tech/api/whatsapp-webhook';
 }
 
 /**
@@ -470,12 +464,14 @@ export async function sendManualConfirmation(
     confirmation_status: 'aguardando',
   }).eq('id', recordingId);
 
-  // Send the message
+  // Send the message — no número do próprio cliente (não no grupo): a resposta 1/2 só é lida em conversa direta
   const result = await sendWhatsAppMessage({
     number: clientPhone,
     message,
     clientId,
     triggerType: 'auto_confirmation',
+    purpose: 'agenda',
+    useGroup: false,
   });
 
   return result;
@@ -539,6 +535,7 @@ export async function sendHolidayNotifications(
       message,
       clientId: client.id,
       triggerType: 'manual',
+      purpose: 'agenda',
     });
 
     if (result.success) sent++;

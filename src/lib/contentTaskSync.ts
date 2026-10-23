@@ -121,6 +121,7 @@ export async function syncContentTaskColumnChange(
           message: editingMsg,
           clientId: ctx.clientId,
           triggerType: 'auto_recording',
+          purpose: 'aprovacao',
         });
       }
     } catch (err) {
@@ -326,6 +327,7 @@ export async function syncContentTaskColumnChange(
             message: msg,
             clientId: ctx.clientId,
             triggerType: 'auto_confirmation',
+            purpose: 'aprovacao',
           });
         }
       } catch (err) {

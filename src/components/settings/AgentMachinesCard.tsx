@@ -72,10 +72,10 @@ function formatDate(value: string | null) {
 
 // etapas da conexão ao vivo, na ordem em que o Mac avisa o sistema
 const PAIR_STEPS = [
-  { id: 'aguardando', label: 'Código gerado — esperando o Mac' },
-  { id: 'chaves_entregues', label: 'O Mac respondeu e recebeu as chaves' },
-  { id: 'chaves_gravadas', label: 'Chaves gravadas no Mac' },
-  { id: 'verificado', label: 'Mac conferido (Node, ffmpeg, pasta OPEN CUT, mapa, chaves)' },
+  { id: 'aguardando', label: 'Código gerado — esperando o computador' },
+  { id: 'chaves_entregues', label: 'O computador respondeu e recebeu as chaves' },
+  { id: 'chaves_gravadas', label: 'Chaves gravadas no computador' },
+  { id: 'verificado', label: 'Computador conferido (Node, ffmpeg, pasta OPEN CUT, mapa, chaves)' },
 ];
 const STEP_INDEX: Record<string, number> = { aguardando: 0, chaves_entregues: 1, chaves_gravadas: 2, conectado: 4, com_avisos: 4 };
 
@@ -158,7 +158,7 @@ export default function AgentMachinesCard() {
   const withoutKey = agents.filter((a) => !a.active);
 
   const openNew = () => {
-    setName(`Mac ${machines.length + 1}`);
+    setName(`Computador ${machines.length + 1}`);
     setSelected([]);
     setIssued(null);
     setPair(null);
@@ -265,7 +265,7 @@ export default function AgentMachinesCard() {
           <h2 className="text-base font-semibold">Computadores dos agentes</h2>
         </div>
         <Button size="sm" className="ml-auto" onClick={openNew} disabled={loading || agents.length === 0}>
-          <Plus size={14} className="mr-1" /> Conectar outro Mac
+          <Plus size={14} className="mr-1" /> Conectar outro computador
         </Button>
       </div>
       <p className="text-sm text-muted-foreground">
@@ -321,7 +321,7 @@ export default function AgentMachinesCard() {
                 <div className="flex flex-wrap gap-1.5">
                   {list.length === 0 ? (
                     <span className="text-xs text-muted-foreground">
-                      {machine.connected_at ? 'Nenhum agente neste Mac.' : 'Os agentes entram quando o Mac usar o código.'}
+                      {machine.connected_at ? 'Nenhum agente neste computador.' : 'Os agentes entram quando o computador usar o código.'}
                     </span>
                   ) : (
                     list.map((agent) => (
@@ -352,7 +352,7 @@ export default function AgentMachinesCard() {
                 ))}
               </div>
               <p className="text-xs text-muted-foreground">
-                Parados até serem conectados num Mac: use "Conectar outro Mac" e marque o agente — ele recebe uma chave nova.
+                Parados até serem conectados num computador: use "Conectar outro computador" e marque o agente — ele recebe uma chave nova.
               </p>
             </div>
           )}
@@ -368,7 +368,7 @@ export default function AgentMachinesCard() {
                 ))}
               </div>
               <p className="text-xs text-muted-foreground">
-                Chaves salvas à mão (antes desta tela). Continuam funcionando; conecte o Mac onde rodam para aparecerem nele.
+                Chaves salvas à mão (antes desta tela). Continuam funcionando; conecte o computador onde rodam para aparecerem nele.
               </p>
             </div>
           )}
@@ -378,9 +378,9 @@ export default function AgentMachinesCard() {
       <Dialog open={!!dialog} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{dialog?.mode === 'code' ? `Agentes do ${dialog.machine.name}` : 'Conectar outro Mac'}</DialogTitle>
+            <DialogTitle>{dialog?.mode === 'code' ? `Agentes do ${dialog.machine.name}` : 'Conectar outro computador'}</DialogTitle>
             <DialogDescription>
-              Escolha os agentes que vão rodar nesse computador. Você recebe um código para usar no Mac.
+              Escolha os agentes que vão rodar nesse computador. Você recebe um código para usar nele (Mac ou Windows).
             </DialogDescription>
           </DialogHeader>
 
@@ -389,7 +389,7 @@ export default function AgentMachinesCard() {
               {!pairStatus || pairStatus === 'aguardando' ? (
                 <>
                   <p className="text-sm">
-                    No <strong>{issued.machineName}</strong>, com a pasta OPEN CUT instalada, abra o Terminal e rode:
+                    No <strong>{issued.machineName}</strong>, com a pasta OPEN CUT instalada, abra o Terminal (no Windows, o Git Bash) e rode:
                   </p>
                   <code className="block select-all break-all rounded bg-muted px-3 py-2 text-sm">
                     {PULSE_CMD} {issued.code}
@@ -404,7 +404,7 @@ export default function AgentMachinesCard() {
 
               {pair?.pair_report?.checks && pair.pair_report.checks.length > 0 && (
                 <div className="rounded-lg border border-border p-3 space-y-1.5">
-                  <p className="text-xs font-medium text-muted-foreground">O que o Mac conferiu</p>
+                  <p className="text-xs font-medium text-muted-foreground">O que o computador conferiu</p>
                   {pair.pair_report.checks.map((check, index) => (
                     <div key={index} className="flex items-start gap-2 text-sm">
                       {check.ok ? (
@@ -426,23 +426,23 @@ export default function AgentMachinesCard() {
               )}
               {pairStatus === 'com_avisos' && (
                 <p className="text-sm text-amber-600">
-                  Conectado, mas o Mac precisa de ajustes (lista acima). Depois de corrigir, gere um novo código e rode de novo
+                  Conectado, mas o computador precisa de ajustes (lista acima). Depois de corrigir, gere um novo código e rode de novo
                   para conferir.
                 </p>
               )}
               {pairStatus === 'vencido' && (
-                <p className="text-sm text-destructive">O código venceu antes de o Mac responder. Gere outro.</p>
+                <p className="text-sm text-destructive">O código venceu antes de o computador responder. Gere outro.</p>
               )}
               {pairStatus === 'parado' && (
                 <p className="text-sm text-amber-600">
-                  O Mac recebeu as chaves mas parou de responder. Veja a mensagem no Terminal dele; se preciso, gere um novo
+                  O computador recebeu as chaves mas parou de responder. Veja a mensagem no Terminal dele; se preciso, gere um novo
                   código e rode de novo.
                 </p>
               )}
               {(!pairStatus || pairStatus === 'aguardando') && (
                 <p className="text-xs text-muted-foreground">
                   O código vale {issued.minutes} minutos e só uma vez. Deixe esta janela aberta: ela mostra cada passo
-                  conforme o Mac responde.
+                  conforme o computador responde.
                 </p>
               )}
             </div>
@@ -451,11 +451,11 @@ export default function AgentMachinesCard() {
               {dialog?.mode === 'new' && (
                 <div className="space-y-1.5">
                   <Label>Nome do computador</Label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Mac 2" maxLength={60} />
+                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Mac 2 ou PC Windows" maxLength={60} />
                 </div>
               )}
               <div className="space-y-2">
-                <Label>Agentes neste Mac</Label>
+                <Label>Agentes neste computador</Label>
                 {agents.map((agent) => {
                   const elsewhere = agent.machine_id && agent.machine_id !== currentMachineId ? machineName.get(agent.machine_id) : null;
                   return (

@@ -36,6 +36,7 @@ const CONTENT_TYPES = [
 
 const EDITOR_COLUMNS = [
   { id: 'edicao', label: 'Para Editar', bg: '#3498db', icon: '🎬' },
+  { id: 'pre_revisao', label: 'Pré-revisão (IA)', bg: '#9b59b6', icon: '🤖' },
   { id: 'revisao', label: 'Em Revisão', bg: '#1abc9c', icon: '👁' },
   { id: 'alteracao', label: 'Alteração', bg: '#f1c40f', icon: '✏️' },
   { id: 'envio', label: 'Concluído', bg: '#2ecc71', icon: '✅' },
@@ -398,7 +399,7 @@ export default function EditorKanban() {
 
   const fetchTasks = useCallback(async () => {
     const { data } = await supabase.from('content_tasks').select('*')
-      .in('kanban_column', ['edicao', 'revisao', 'alteracao', 'envio']);
+      .in('kanban_column', ['edicao', 'pre_revisao', 'revisao', 'alteracao', 'envio']);
     
     // Sort client-side to be resilient to missing 'position' column
     const sorted = (data || []).sort((a: any, b: any) => {

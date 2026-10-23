@@ -644,7 +644,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
            LEFT JOIN clients c ON c.id = t.client_id
            LEFT JOIN profiles pe ON pe.id = t.edited_by
            LEFT JOIN profiles pa ON pa.id = t.assigned_to
-          WHERE t.kanban_column IN ('edicao', 'revisao', 'alteracao', 'envio')
+          WHERE t.kanban_column IN ('edicao', 'pre_revisao', 'revisao', 'alteracao', 'envio')
             AND ($1 = '' OR t.title ILIKE '%' || $1 || '%' OR c.company_name ILIKE '%' || $1 || '%' OR t.id::text LIKE $1 || '%')
           ORDER BY t.updated_at DESC
           LIMIT 50`,
@@ -676,7 +676,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       );
       const task = rows[0];
       if (!task) throw Object.assign(new Error('Card não encontrado'), { status: 404 });
-      if (!['edicao', 'revisao', 'alteracao', 'envio'].includes(task.kanban_column)) {
+      if (!['edicao', 'pre_revisao', 'revisao', 'alteracao', 'envio'].includes(task.kanban_column)) {
         throw Object.assign(new Error(`O card está em "${task.kanban_column}", fora do fluxo de edição`), { status: 409 });
       }
       if (task.kanban_column === column && notes == null) throw Object.assign(new Error('O card já está nessa coluna'), { status: 409 });
@@ -753,6 +753,14 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           if (portalRows.length) {
             await client.query(`UPDATE client_portal_contents SET file_url = $2, status = 'revisao_interna', updated_at = now() WHERE id = $1`,
               [portalRows[0].id, task.edited_video_link]);
+          } else {
+            const month = Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'numeric' }).format(now));
+            const year = Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, year: 'numeric' }).format(now));
+            await client.query(
+              `INSERT INTO client_portal_contents (client_id, title, content_type, file_url, status, season_month, season_year, uploaded_by)
+               VALUES ($1, $2, $3, $4, 'revisao_interna', $5, $6, $7)`,
+              [task.client_id, task.title, task.content_type, task.edited_video_link, month, year, task.edited_by || agent.userId]
+            );
           }
         }
         const [title, message, type] = PORTAL_NOTIF[column];
@@ -902,88 +910,29 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           [task.id, videoUrl, plan ? JSON.stringify(plan) : null, notes, agent.userId]
         );
 
-        // Prazos iguais ao front (company_settings + dias úteis)
-        // SELECT * porque colunas como review_deadline_enabled não existem em todo banco
-        const { rows: settingsRows } = await client.query('SELECT * FROM company_settings LIMIT 1');
-        const settings = settingsRows[0] || {};
-        if (typeof settings.work_days === 'string') {
-          try { settings.work_days = JSON.parse(settings.work_days); } catch { settings.work_days = null; }
-        }
-        const workDays = Array.isArray(settings.work_days) && settings.work_days.length
-          ? settings.work_days
-          : ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
-        const reviewDeadline = (settings.review_deadline_enabled ?? true)
-          ? addBusinessHours(now, settings.review_deadline_hours ?? 24, workDays).toISOString()
-          : null;
-
+        // Pré-revisão (IA): o Uriel revisa e a Marcely libera para a revisão humana (pulse mover … revisao).
+        // Aqui não há prazo, Social Media, portal nem aviso para a equipe — isso acontece ao entrar em "revisao".
         await client.query(
           `UPDATE content_tasks SET
-              kanban_column = 'revisao',
+              kanban_column = 'pre_revisao',
               edited_video_link = $2,
               edited_video_type = 'upload',
               edited_by = $3,
               assigned_to = NULL,
               reviewing_by = NULL, reviewing_by_name = NULL, reviewing_at = NULL,
-              editing_deadline = NULL, alteration_deadline = NULL, approval_deadline = NULL,
-              review_deadline = $4,
-              approval_sent_at = $5,
-              agent_step = 'entregue',
+              editing_deadline = NULL, alteration_deadline = NULL, approval_deadline = NULL, review_deadline = NULL,
+              agent_step = 'pré-revisão',
               agent_heartbeat_at = now(),
               updated_at = now()
             WHERE id = $1`,
-          [task.id, videoUrl, agent.userId, reviewDeadline, now.toISOString()]
+          [task.id, videoUrl, agent.userId]
         );
-
-        if (task.client_id) {
-          const { rowCount } = await client.query(
-            `UPDATE social_media_deliveries SET status = 'revisao' WHERE content_task_id = $1`,
-            [task.id]
-          );
-          if (!rowCount) {
-            await client.query(
-              `INSERT INTO social_media_deliveries
-                 (client_id, content_type, title, description, status, delivered_at, recording_id, script_id, created_by, content_task_id)
-               VALUES ($1, $2, $3, $4, 'revisao', $5, $6, $7, $8, $9)`,
-              [task.client_id, task.content_type, task.title, task.description || null, brazilDateString(now),
-                task.recording_id || null, task.script_id || null, agent.userId, task.id]
-            );
-          }
-
-          const { rows: portalRows } = await client.query(
-            `SELECT id FROM client_portal_contents WHERE client_id = $1 AND title = $2 ORDER BY created_at DESC LIMIT 1`,
-            [task.client_id, task.title]
-          );
-          if (portalRows.length) {
-            await client.query(
-              `UPDATE client_portal_contents SET file_url = $2, status = 'revisao_interna', updated_at = now() WHERE id = $1`,
-              [portalRows[0].id, videoUrl]
-            );
-          } else {
-            const month = Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'numeric' }).format(now));
-            const year = Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, year: 'numeric' }).format(now));
-            await client.query(
-              `INSERT INTO client_portal_contents (client_id, title, content_type, file_url, status, season_month, season_year, uploaded_by)
-               VALUES ($1, $2, $3, $4, 'revisao_interna', $5, $6, $7)`,
-              [task.client_id, task.title, task.content_type, videoUrl, month, year, agent.userId]
-            );
-          }
-
-          await client.query(
-            `INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)`,
-            [task.client_id, '👁 Revisão interna', `"${task.title}" está em revisão interna de qualidade.`, 'internal_review']
-          );
-        }
-
-        await client.query(
-          `SELECT notify_role('social_media'::app_role, $1, $2, 'review', '/entregas-social')`,
-          ['Vídeo para Revisão', `${task.title} (${task.client_name || ''}) está pronto para revisão`]
-        );
-
         await client.query(
           'INSERT INTO task_history (task_id, user_id, action, details) VALUES ($1, $2, $3, $4), ($1, $2, $5, $6)',
           [task.id, agent.userId, 'Vídeo editado enviado via upload', videoUrl,
-            'Enviado para Revisão', `Versão ${versionRows[0].version}${notes ? ` · ${notes}` : ''}`]
+            'Enviado para Pré-revisão (IA)', `Versão ${versionRows[0].version}${notes ? ` · ${notes}` : ''}`]
         );
+        const reviewDeadline = null;
 
         await client.query('COMMIT');
         res.json({ ok: true, version: versionRows[0].version, video_url: videoUrl, review_deadline: reviewDeadline });
@@ -1094,10 +1043,10 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
                (client_id, title, content_type, kanban_column, description, recording_id, script_id, drive_link,
                 edited_video_link, edited_video_type, created_by, edited_by, assigned_to, position, parent_task_id,
                 review_deadline, approval_sent_at${hasCity ? ', city' : ''}, created_at, updated_at)
-             VALUES ($1, $2, 'story', 'revisao', $3, $4, $5, $6, $7, 'upload', $8, $8, NULL, $9, $10, $11, $12${hasCity ? ', $13' : ''}, now(), now())
+             VALUES ($1, $2, 'story', 'pre_revisao', $3, $4, $5, $6, $7, 'upload', $8, $8, NULL, $9, $10, $11, $12${hasCity ? ', $13' : ''}, now(), now())
              RETURNING id`,
             [task.client_id, title, task.description || null, task.recording_id || null, task.script_id || null,
-              task.drive_link || null, url, agent.userId, i, task.id, reviewDeadline, now.toISOString(),
+              task.drive_link || null, url, agent.userId, i, task.id, null, null,
               ...(hasCity ? [task.city || null] : [])]
           );
           const childId = child[0].id;
@@ -1105,37 +1054,17 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
             `INSERT INTO edit_versions (task_id, version, video_url, notes, created_by) VALUES ($1, 1, $2, $3, $4)`,
             [childId, url, notes, agent.userId]
           );
-          if (task.client_id) {
-            await db.query(
-              `INSERT INTO social_media_deliveries
-                 (client_id, content_type, title, description, status, delivered_at, recording_id, script_id, created_by, content_task_id)
-               VALUES ($1, 'story', $2, $3, 'revisao', $4, $5, $6, $7, $8)`,
-              [task.client_id, title, task.description || null, brazilDateString(now), task.recording_id || null,
-                task.script_id || null, agent.userId, childId]
-            );
-            await db.query(
-              `INSERT INTO client_portal_contents (client_id, title, content_type, file_url, status, season_month, season_year, uploaded_by)
-               VALUES ($1, $2, 'story', $3, 'revisao_interna', $4, $5, $6)`,
-              [task.client_id, title, url, month, year, agent.userId]
-            );
-            await db.query(
-              `INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, 'internal_review')`,
-              [task.client_id, '👁 Revisão interna', `"${title}" está em revisão interna de qualidade.`]
-            );
-          }
           await db.query(
-            `INSERT INTO task_history (task_id, user_id, action, details) VALUES ($1, $2, 'Enviado para Revisão', $3)`,
+            `INSERT INTO task_history (task_id, user_id, action, details) VALUES ($1, $2, 'Enviado para Pré-revisão (IA)', $3)`,
             [childId, agent.userId, `Story ${i + 1} de ${files.length} do card "${task.title.trim()}"${notes ? ` · ${notes}` : ''}`]
           );
           created.push({ id: childId, title, video_url: url });
         }
 
-        await db.query(`SELECT notify_role('social_media'::app_role, $1, $2, 'review', '/entregas-social')`,
-          ['Stories para Revisão', `${files.length} stories de "${task.title.trim()}" (${task.client_name || ''}) prontos para revisão`]);
         await db.query('DELETE FROM social_media_deliveries WHERE content_task_id = $1', [task.id]);
         await db.query('DELETE FROM content_tasks WHERE id = $1', [task.id]);
         await db.query('COMMIT');
-        res.json({ ok: true, stories: created, review_deadline: reviewDeadline });
+        res.json({ ok: true, stories: created, column: 'pre_revisao' });
       } catch (error) {
         await db.query('ROLLBACK').catch(() => {});
         cleanup();

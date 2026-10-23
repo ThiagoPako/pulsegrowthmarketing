@@ -554,7 +554,7 @@ export default function ClientPortal() {
                   className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all relative ${activeTab === 'otimizados' ? 'bg-gradient-to-r from-fuchsia-500/30 to-purple-500/30 text-white ring-1 ring-fuchsia-400/40' : 'text-fuchsia-300 hover:text-fuchsia-200'}`}
                 >
                   <span className="inline-flex items-center gap-1">
-                    <Rocket size={12} className="animate-pulse" /> Otimizados
+                    <Rocket size={12} className="animate-pulse" /> Stories e otimizados
                     <span className="text-[10px] font-bold bg-fuchsia-500/30 px-1.5 rounded-full">{optimizedContents.length}</span>
                   </span>
                 </button>
@@ -697,7 +697,7 @@ export default function ClientPortal() {
         </button>
         {optimizedContents.length > 0 && (
           <button onClick={() => setActiveTab('otimizados')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap inline-flex items-center gap-1 ${activeTab === 'otimizados' ? 'text-fuchsia-300 border-b-2 border-fuchsia-400' : 'text-fuchsia-300/70'}`}>
-            <Rocket size={11} className="animate-pulse" /> Otimizados
+            <Rocket size={11} className="animate-pulse" /> Stories
           </button>
         )}
         <button onClick={() => setActiveTab('criativa')} className={`flex-none px-4 py-3 text-[11px] font-medium text-center transition-colors whitespace-nowrap ${activeTab === 'criativa' ? 'text-white border-b-2' : 'text-white/40'}`} style={activeTab === 'criativa' ? { borderColor: `hsl(${clientColor})` } : {}}>

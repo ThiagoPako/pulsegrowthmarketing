@@ -224,10 +224,13 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   const cfg = getTypeConfig(task.content_type);
   const isEditing = !!task.editing_started_at;
   const isOptimize = task.content_type === 'otimizacao';
+  // Card de story em edição pode levar vários stories; ao enviar, vira um card por story (nome próprio no portal)
+  const isStoryPack = task.content_type === 'story' && task.kanban_column === 'edicao';
 
   const initialParse = parseSlots(task.description);
   const [slots, setSlots] = useState<OptSlot[]>(
-    isOptimize ? (initialParse.slots.length > 0 ? initialParse.slots : makeDefaultSlots()) : []
+    isOptimize ? (initialParse.slots.length > 0 ? initialParse.slots : makeDefaultSlots())
+      : isStoryPack ? initialParse.slots : []
   );
   const [baseDescription, setBaseDescription] = useState<string>(initialParse.baseDescription);
 
@@ -236,10 +239,11 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
     const p = parseSlots(task.description);
     setBaseDescription(p.baseDescription);
     if (isOptimize) setSlots(p.slots.length > 0 ? p.slots : makeDefaultSlots());
-  }, [open, task.id, task.description, isOptimize]);
+    else if (isStoryPack) setSlots(p.slots);
+  }, [open, task.id, task.description, isOptimize, isStoryPack]);
 
   const filledSlots = slots.filter(s => s.link.trim().length > 0);
-  const hasAnyVideo = isOptimize
+  const hasAnyVideo = (isOptimize || isStoryPack)
     ? (filledSlots.length > 0 || !!task.edited_video_link || !!videoLink.trim())
     : (!!task.edited_video_link || !!videoLink.trim());
 
@@ -252,7 +256,10 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   };
 
   const addSlot = (type: OptSlot['type']) => {
-    persistSlots([...slots, { id: `s_${Date.now()}`, type, link: '', label: type === 'story' ? 'Story' : type === 'criativo' ? 'Criativo' : 'Reels' }]);
+    const label = isStoryPack
+      ? `Story ${String(slots.length + 1).padStart(2, '0')}`
+      : type === 'story' ? 'Story' : type === 'criativo' ? 'Criativo' : 'Reels';
+    persistSlots([...slots, { id: `s_${Date.now()}`, type, link: '', label }]);
   };
 
   const removeSlot = (id: string) => {
@@ -490,6 +497,70 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   const sendForApproval = async () => {
     const currentLink = videoLink.trim() || task.edited_video_link;
     const cl = clients.find(c => c.id === task.client_id);
+
+    // Pacote de stories: um card por story, cada um com o próprio nome (aparece separado no portal)
+    const filledStories = isStoryPack ? slots.filter(s => s.link.trim().length > 0) : [];
+    if (isStoryPack && filledStories.length > 0) {
+      const names = filledStories.map(s => (s.label || '').trim());
+      if (names.some(n => !n)) { toast.error('Dê um nome a cada story antes de enviar'); return; }
+      if (new Set(names.map(n => n.toLowerCase())).size !== names.length) { toast.error('Cada story precisa de um nome diferente'); return; }
+      await supabase.from('content_tasks').update({
+        description: serializeSlots(baseDescription, slots), updated_at: new Date().toISOString(),
+      }).eq('id', task.id);
+
+      setSaving(true);
+      const now = new Date().toISOString();
+      const baseTitle = task.title.trim();
+      for (let i = 0; i < filledStories.length; i++) {
+        const s = filledStories[i];
+        const payload: any = {
+          client_id: task.client_id,
+          title: `${baseTitle} · ${names[i]}`,
+          content_type: 'story',
+          kanban_column: 'revisao',
+          description: baseDescription || null,
+          recording_id: (task as any).recording_id || null,
+          script_id: (task as any).script_id || null,
+          drive_link: (task as any).drive_link || null,
+          edited_video_link: s.link,
+          edited_video_type: s.link.includes('/uploads/') ? 'upload' : 'link',
+          created_by: user?.id || null,
+          assigned_to: null,
+          edited_by: (task as any).edited_by || user?.id || null,
+          editing_started_at: null,
+          editing_priority: false,
+          immediate_alteration: false,
+          position: i,
+          parent_task_id: task.id,
+          created_at: now,
+          updated_at: now,
+        };
+        const { error } = await supabase.from('content_tasks').insert(payload);
+        if (error) {
+          const { parent_task_id: _parent, ...rest } = payload;
+          const retry = await supabase.from('content_tasks').insert(rest);
+          if (retry.error) {
+            toast.error('Erro ao criar os cards dos stories: ' + retry.error.message);
+            setSaving(false);
+            return;
+          }
+        }
+        const { data: created } = await supabase.from('content_tasks').select('id')
+          .eq('client_id', task.client_id).eq('title', payload.title).order('created_at', { ascending: false }).limit(1);
+        const childCtx = buildSyncContext({ ...task, ...payload, id: created?.[0]?.id || task.id } as any, {
+          userId: user?.id, clientName: cl?.companyName, clientWhatsapp: (cl as any)?.whatsapp,
+        });
+        await syncContentTaskColumnChange('revisao', childCtx);
+      }
+      await supabase.from('content_tasks').delete().eq('id', task.id);
+      await logAction('Pacote de stories dividido em cards', names.join(' · '));
+      setCelebrationPoints(filledStories.length * (POINTS_PER_TYPE.story || 3));
+      setShowCelebration(true);
+      toast.success(`🚀 ${filledStories.length} story(s) enviados para revisão, cada um com o próprio nome!`);
+      onRefresh();
+      setSaving(false);
+      return;
+    }
 
     if (isOptimize) {
       // Persist current slot state first
@@ -824,6 +895,73 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
               </div>
             )}
 
+            {/* ─── PACOTE DE STORIES ─────────────────────────── */}
+            {isStoryPack && (
+              <div className="rounded-xl border-2 border-pink-500/40 bg-gradient-to-br from-pink-500/10 to-fuchsia-500/5 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-black text-pink-600 dark:text-pink-300 uppercase tracking-wider">Vários stories neste card</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Opcional. Suba cada story com um nome (ex.: "01 Combustível"). Ao enviar, cada um vira um card próprio e
+                      aparece separado no portal do cliente, para aprovar um a um. Com só um vídeo, use o envio normal abaixo.
+                    </p>
+                  </div>
+                  <Badge className="text-[10px] bg-pink-500/20 text-pink-600 dark:text-pink-300 border-pink-500/40">
+                    {filledSlots.length}/{slots.length} com vídeo
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  {slots.map((slot, idx) => {
+                    const isFilled = slot.link.trim().length > 0;
+                    return (
+                      <div key={slot.id} className="rounded-lg border border-pink-400/30 bg-background/60 p-2.5 space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-bold text-foreground/70">{idx + 1}.</span>
+                          <Input
+                            placeholder="Nome do story (aparece no portal)"
+                            value={slot.label || ''}
+                            onChange={e => updateSlot(slot.id, { label: e.target.value })}
+                            onBlur={() => persistSlots(slots)}
+                            className="h-7 text-xs flex-1"
+                          />
+                          {isFilled && <Check size={12} className="text-emerald-500" />}
+                          <button onClick={() => removeSlot(slot.id)} className="text-[11px] text-muted-foreground hover:text-destructive" title="Remover">✕</button>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <Input
+                            placeholder="Link do vídeo ou envie o arquivo →"
+                            value={slot.link}
+                            onChange={e => updateSlot(slot.id, { link: e.target.value })}
+                            className="h-8 text-xs flex-1"
+                            disabled={uploadingSlotId === slot.id}
+                          />
+                          <Button size="sm" onClick={() => saveSlot(slot.id)} className="h-8 px-2 text-xs" disabled={uploadingSlotId === slot.id}>
+                            <Link2 size={11} />
+                          </Button>
+                          <label className={`inline-flex items-center justify-center h-8 px-2 rounded-md border border-pink-400/40 text-pink-600 hover:bg-pink-500/10 cursor-pointer ${uploadingSlotId === slot.id ? 'opacity-50 pointer-events-none' : ''}`} title="Enviar arquivo">
+                            <input type="file" accept="video/*" className="hidden" onChange={e => {
+                              const f = e.target.files?.[0];
+                              if (f) uploadSlotFile(slot.id, f);
+                              e.currentTarget.value = '';
+                            }} />
+                            {uploadingSlotId === slot.id ? <span className="text-[10px] font-bold">{slotProgress}%</span> : <Upload size={11} />}
+                          </label>
+                          {isFilled && (
+                            <Button asChild size="sm" variant="outline" className="h-8 px-2">
+                              <a href={slot.link} target="_blank" rel="noopener noreferrer"><ExternalLink size={11} /></a>
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <Button size="sm" variant="outline" onClick={() => addSlot('story')} className="h-7 text-[11px] border-pink-400/40 text-pink-600 hover:bg-pink-500/10">
+                  + Story
+                </Button>
+              </div>
+            )}
+
             {/* ─── OPTIMIZATION SLOTS ─────────────────────────── */}
             {isOptimize && (
               <div className="rounded-xl border-2 border-fuchsia-500/40 bg-gradient-to-br from-fuchsia-500/10 via-purple-500/5 to-violet-500/10 p-4 space-y-3 shadow-lg shadow-fuchsia-500/10">
@@ -1137,7 +1275,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
 
               {!hasAnyVideo && (task.kanban_column === 'edicao' || task.kanban_column === 'alteracao') && (
                 <p className="text-[10px] text-destructive self-center">
-                  {isOptimize ? 'Anexe pelo menos 1 vídeo nos slots antes de enviar' : 'Adicione o vídeo editado primeiro'}
+                  {isOptimize ? 'Anexe pelo menos 1 vídeo nos slots antes de enviar' : isStoryPack ? 'Adicione o vídeo editado (ou os stories acima)' : 'Adicione o vídeo editado primeiro'}
                 </p>
               )}
 

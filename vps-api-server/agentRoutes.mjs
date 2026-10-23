@@ -18,6 +18,7 @@
 //   POST /api/agent/tasks/:id/heartbeat { step }   sinal de vida + etapa atual
 //   POST /api/agent/tasks/:id/release   { reason } devolve o card para a fila
 //   POST /api/agent/tasks/:id/deliver   multipart: video (mp4), plan (json, opcional), notes
+//   POST /api/agent/tasks/:id/deliver-stories  multipart: stories[] + names (JSON) → um card de story por vídeo
 //   GET  /api/agent/stale?minutes=30    (chefe) cards de agentes sem sinal de vida
 //   GET  /api/agent/clients?search=     nicho, linha editorial e links do cliente
 //   GET  /api/agent/tasks?search=       (chefe, revisor) busca cards do fluxo de edição em qualquer coluna
@@ -99,6 +100,8 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         `);
         await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS agent_step TEXT`);
         await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS agent_heartbeat_at TIMESTAMPTZ`);
+        // usado pela divisão de pacotes (otimização e stories) em cards filhos; não existia em produção
+        await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS parent_task_id UUID`);
         await pool.query(`CREATE INDEX IF NOT EXISTS idx_edit_versions_task ON edit_versions(task_id, version DESC)`).catch(() => {});
         // atividade geral (chefe, revisão, editor entre cards): online enquanto o status for recente
         await pool.query(`
@@ -990,6 +993,155 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         sendError(res, error);
       } finally {
         client.release();
+      }
+    });
+  });
+
+  // ── Pacote de stories: vários vídeos num card de story → um card por story (nome próprio no portal) ──
+  // multipart: stories (vários arquivos, na ordem) + names (JSON com um nome por arquivo) + notes
+  const storiesUpload = multer({
+    storage: multer.diskStorage({
+      destination(req, _file, cb) {
+        try { fs.mkdirSync(req.agentUploadDir, { recursive: true }); cb(null, req.agentUploadDir); } catch (error) { cb(error); }
+      },
+      filename(_req, file, cb) {
+        const ext = path.extname(file.originalname || '').toLowerCase().replace(/[^.a-z0-9]/g, '');
+        cb(null, `${Date.now()}_${crypto.randomBytes(6).toString('hex')}${ext}`);
+      },
+    }),
+    limits: { fileSize: 2 * 1024 * 1024 * 1024, files: 30 },
+    fileFilter(_req, file, cb) {
+      if (!/^video\//.test(file.mimetype) && !/\.(mp4|mov)$/i.test(file.originalname || '')) {
+        return cb(Object.assign(new Error('Cada story precisa ser MP4/MOV'), { status: 400 }));
+      }
+      cb(null, true);
+    },
+  }).array('stories', 30);
+
+  app.post('/api/agent/tasks/:id/deliver-stories', async (req, res) => {
+    let agent;
+    let task;
+    try {
+      agent = await verifyAgent(req);
+      await ensureAgentSchema();
+      const { rows } = await pool.query(
+        `SELECT t.*, c.company_name AS client_name FROM content_tasks t LEFT JOIN clients c ON c.id = t.client_id WHERE t.id = $1`,
+        [req.params.id]
+      );
+      task = rows[0];
+      if (!task) return res.status(404).json({ error: 'Card não encontrado' });
+      if (task.assigned_to !== agent.userId || task.kanban_column !== 'edicao') {
+        return res.status(409).json({ error: 'Assuma o card de story (claim) antes de entregar' });
+      }
+      if (task.content_type !== 'story') return res.status(400).json({ error: 'Só cards de story recebem vários vídeos' });
+      req.agentUploadDir = path.resolve(uploadRoot, path.join('content', task.client_id || 'avulso', task.id, 'stories'));
+      if (!req.agentUploadDir.startsWith(path.resolve(uploadRoot))) return res.status(400).json({ error: 'Pasta inválida' });
+    } catch (error) {
+      return sendError(res, error);
+    }
+
+    storiesUpload(req, res, async (uploadError) => {
+      const files = req.files || [];
+      const cleanup = () => files.forEach((f) => fs.promises.unlink(f.path).catch(() => {}));
+      if (uploadError) {
+        cleanup();
+        const status = uploadError.status || (uploadError.code === 'LIMIT_FILE_SIZE' ? 413 : uploadError.code === 'ENOSPC' ? 507 : 500);
+        return res.status(status).json({ error: uploadError.message || 'Falha no upload' });
+      }
+      let names = [];
+      try { names = JSON.parse(String(req.body?.names || '[]')); } catch { names = []; }
+      names = Array.isArray(names) ? names.map((n) => String(n || '').trim().slice(0, 120)) : [];
+      if (!files.length) { cleanup(); return res.status(400).json({ error: 'Envie os vídeos no campo "stories"' }); }
+      if (names.length !== files.length || names.some((n) => !n)) {
+        cleanup();
+        return res.status(400).json({ error: 'Envie um nome para cada story (names, na mesma ordem dos vídeos)' });
+      }
+      if (new Set(names.map((n) => n.toLowerCase())).size !== names.length) {
+        cleanup();
+        return res.status(400).json({ error: 'Cada story precisa de um nome diferente' });
+      }
+      const notes = String(req.body?.notes || '').slice(0, 4000) || null;
+      const now = new Date();
+      // a coluna city só existe em alguns bancos (escopo por cidade); copia do card pai quando existir
+      const { rowCount: hasCity } = await pool.query(
+        `SELECT 1 FROM information_schema.columns WHERE table_name = 'content_tasks' AND column_name = 'city'`
+      );
+      const db = await pool.connect();
+      try {
+        await db.query('BEGIN');
+        const { rows: locked } = await db.query(
+          `SELECT id FROM content_tasks WHERE id = $1 AND assigned_to = $2 AND kanban_column = 'edicao' FOR UPDATE`,
+          [task.id, agent.userId]
+        );
+        if (!locked.length) throw Object.assign(new Error('O card mudou durante o envio; entrega cancelada'), { status: 409 });
+
+        const { rows: settingsRows } = await db.query('SELECT * FROM company_settings LIMIT 1');
+        const settings = settingsRows[0] || {};
+        if (typeof settings.work_days === 'string') { try { settings.work_days = JSON.parse(settings.work_days); } catch { settings.work_days = null; } }
+        const workDays = Array.isArray(settings.work_days) && settings.work_days.length ? settings.work_days : ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
+        const reviewDeadline = (settings.review_deadline_enabled ?? true)
+          ? addBusinessHours(now, settings.review_deadline_hours ?? 24, workDays).toISOString() : null;
+        const month = Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'numeric' }).format(now));
+        const year = Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, year: 'numeric' }).format(now));
+
+        const created = [];
+        for (let i = 0; i < files.length; i++) {
+          const rel = path.relative(path.resolve(uploadRoot), files[i].path).split(path.sep).join('/');
+          const url = `${uploadsBase}/${rel}`;
+          const title = `${task.title.trim()} · ${names[i]}`;
+          const { rows: child } = await db.query(
+            `INSERT INTO content_tasks
+               (client_id, title, content_type, kanban_column, description, recording_id, script_id, drive_link,
+                edited_video_link, edited_video_type, created_by, edited_by, assigned_to, position, parent_task_id,
+                review_deadline, approval_sent_at${hasCity ? ', city' : ''}, created_at, updated_at)
+             VALUES ($1, $2, 'story', 'revisao', $3, $4, $5, $6, $7, 'upload', $8, $8, NULL, $9, $10, $11, $12${hasCity ? ', $13' : ''}, now(), now())
+             RETURNING id`,
+            [task.client_id, title, task.description || null, task.recording_id || null, task.script_id || null,
+              task.drive_link || null, url, agent.userId, i, task.id, reviewDeadline, now.toISOString(),
+              ...(hasCity ? [task.city || null] : [])]
+          );
+          const childId = child[0].id;
+          await db.query(
+            `INSERT INTO edit_versions (task_id, version, video_url, notes, created_by) VALUES ($1, 1, $2, $3, $4)`,
+            [childId, url, notes, agent.userId]
+          );
+          if (task.client_id) {
+            await db.query(
+              `INSERT INTO social_media_deliveries
+                 (client_id, content_type, title, description, status, delivered_at, recording_id, script_id, created_by, content_task_id)
+               VALUES ($1, 'story', $2, $3, 'revisao', $4, $5, $6, $7, $8)`,
+              [task.client_id, title, task.description || null, brazilDateString(now), task.recording_id || null,
+                task.script_id || null, agent.userId, childId]
+            );
+            await db.query(
+              `INSERT INTO client_portal_contents (client_id, title, content_type, file_url, status, season_month, season_year, uploaded_by)
+               VALUES ($1, $2, 'story', $3, 'revisao_interna', $4, $5, $6)`,
+              [task.client_id, title, url, month, year, agent.userId]
+            );
+            await db.query(
+              `INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, 'internal_review')`,
+              [task.client_id, '👁 Revisão interna', `"${title}" está em revisão interna de qualidade.`]
+            );
+          }
+          await db.query(
+            `INSERT INTO task_history (task_id, user_id, action, details) VALUES ($1, $2, 'Enviado para Revisão', $3)`,
+            [childId, agent.userId, `Story ${i + 1} de ${files.length} do card "${task.title.trim()}"${notes ? ` · ${notes}` : ''}`]
+          );
+          created.push({ id: childId, title, video_url: url });
+        }
+
+        await db.query(`SELECT notify_role('social_media'::app_role, $1, $2, 'review', '/entregas-social')`,
+          ['Stories para Revisão', `${files.length} stories de "${task.title.trim()}" (${task.client_name || ''}) prontos para revisão`]);
+        await db.query('DELETE FROM social_media_deliveries WHERE content_task_id = $1', [task.id]);
+        await db.query('DELETE FROM content_tasks WHERE id = $1', [task.id]);
+        await db.query('COMMIT');
+        res.json({ ok: true, stories: created, review_deadline: reviewDeadline });
+      } catch (error) {
+        await db.query('ROLLBACK').catch(() => {});
+        cleanup();
+        sendError(res, error);
+      } finally {
+        db.release();
       }
     });
   });

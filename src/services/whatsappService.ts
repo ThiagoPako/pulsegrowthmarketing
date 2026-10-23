@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/vpsDb';
+import { supabase, vpsAuthedFetch } from '@/lib/vpsDb';
 
 export interface WhatsAppConfig {
   id: string;
@@ -119,22 +119,21 @@ function rowToMessage(r: any): WhatsAppMessage {
   };
 }
 
+// Uma configuração só para as duas cidades (a mesma linha que o servidor usa nos envios).
 export async function getWhatsAppConfig(): Promise<WhatsAppConfig | null> {
-  const { data } = await supabase.from('whatsapp_config').select('*').limit(1).single();
-  return data ? rowToConfig(data) : null;
+  try {
+    const response = await vpsAuthedFetch('/whatsapp/config');
+    if (!response.ok) return null;
+    const body = await response.json();
+    return body?.config ? rowToConfig(body.config) : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function updateWhatsAppConfig(config: Partial<WhatsAppConfig>): Promise<boolean> {
-  const current = await getWhatsAppConfig();
-  if (!current) return false;
-  
   const updateData: any = {};
   if (config.integrationActive !== undefined) updateData.integration_active = config.integrationActive;
-  if (config.apiToken !== undefined) updateData.api_token = config.apiToken;
-  if (config.defaultUserId !== undefined) updateData.default_user_id = config.defaultUserId;
-  if (config.defaultQueueId !== undefined) updateData.default_queue_id = config.defaultQueueId;
-  if (config.sendSignature !== undefined) updateData.send_signature = config.sendSignature;
-  if (config.closeTicket !== undefined) updateData.close_ticket = config.closeTicket;
   if (config.autoRecordingScheduled !== undefined) updateData.auto_recording_scheduled = config.autoRecordingScheduled;
   if (config.autoRecordingReminder !== undefined) updateData.auto_recording_reminder = config.autoRecordingReminder;
   if (config.autoVideoApproval !== undefined) updateData.auto_video_approval = config.autoVideoApproval;
@@ -157,10 +156,13 @@ export async function updateWhatsAppConfig(config: Partial<WhatsAppConfig>): Pro
   if (config.msgTaskApproved !== undefined) updateData.msg_task_approved = config.msgTaskApproved;
   if (config.msgApprovalExpired !== undefined) updateData.msg_approval_expired = config.msgApprovalExpired;
   if (config.msgHoliday !== undefined) updateData.msg_holiday = config.msgHoliday;
-  updateData.updated_at = new Date().toISOString();
 
-  const { error } = await supabase.from('whatsapp_config').update(updateData).eq('id', current.id);
-  return !error;
+  try {
+    const response = await vpsAuthedFetch('/whatsapp/config', { method: 'PATCH', body: JSON.stringify(updateData) });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 export async function sendWhatsAppMessage(params: SendMessageParams): Promise<{ success: boolean; error?: string }> {

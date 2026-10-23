@@ -449,14 +449,11 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
         {/* ── TAB: Configurações ── */}
         {isAdmin && (
           <TabsContent value="config" className="space-y-4">
+            <WhatsAppConnections />
             {configLoading ? (
               <p className="text-center text-muted-foreground py-8">Carregando...</p>
             ) : config ? (
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="md:col-span-2">
-                  <WhatsAppConnections />
-                </div>
-
                 <Card>
                   <CardHeader><CardTitle className="text-base flex items-center gap-2"><Key size={16} /> Integração</CardTitle></CardHeader>
                   <CardContent className="space-y-4">
@@ -501,7 +498,7 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
                 </div>
               </div>
             ) : (
-              <p className="text-center text-muted-foreground">Erro ao carregar configurações</p>
+              <p className="text-center text-sm text-muted-foreground">Não consegui carregar as automações do WhatsApp. Recarregue a página.</p>
             )}
           </TabsContent>
         )}

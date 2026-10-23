@@ -14307,7 +14307,7 @@ app.post('/api/public/client-database/:token/media', async (req, res) => {
 });
 
 // ─── Agentes de edição (chaves próprias, fila, entrega) ─────
-registerWhatsAppRoutes(app, { pool, verifyAdmin, handleWhatsAppReply, runBillingAutomation, runConfirmationCron });
+registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, verifyTeamManager, handleWhatsAppReply, runBillingAutomation, runConfirmationCron });
 
 registerAgentRoutes(app, {
   pool,

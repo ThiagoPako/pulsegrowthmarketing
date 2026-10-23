@@ -10,6 +10,9 @@
 //   DELETE /api/whatsapp/connections/:id            apaga a conexão (sai do WhatsApp)
 //   POST   /api/whatsapp/connections/:id/test       { number, message } envia um teste por esta conexão
 //   GET    /api/whatsapp/queue?status=&limit=        últimas mensagens da fila (diagnóstico)
+//   GET    /api/whatsapp/config      (qualquer usuário) chave geral, automações e modelos de mensagem
+//   PATCH  /api/whatsapp/config      (admin, social media, gestor de projetos) { integration_active, auto_*, msg_* }
+//          A configuração é uma só para as duas cidades: é a mesma linha que o servidor usa nos envios.
 
 import { WA_PURPOSES, ensureWhatsAppSchema, enqueueWhatsApp } from './shared.mjs';
 
@@ -23,7 +26,7 @@ function brazilNow() {
   return { day: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour) };
 }
 
-export function registerWhatsAppRoutes(app, { pool, verifyAdmin, handleWhatsAppReply, runBillingAutomation, runConfirmationCron }) {
+export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, verifyTeamManager, handleWhatsAppReply, runBillingAutomation, runConfirmationCron }) {
   ensureWhatsAppSchema(pool).catch((error) => console.error('[whatsapp] esquema:', error.message));
 
   const fail = (res, error) => {
@@ -191,6 +194,58 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, handleWhatsAppR
         [status, limit]
       );
       res.json({ items: rows });
+    } catch (error) {
+      fail(res, error);
+    }
+  });
+
+  // ── Configuração (uma só, para as duas cidades) ──
+  // O servidor sempre leu a primeira linha de whatsapp_config; a tela filtrava por cidade e, em Uruaçu (sem linha
+  // própria), não achava nada. Agora a tela lê e grava exatamente a linha que o servidor usa.
+  const configRow = async () => {
+    const { rows } = await pool.query('SELECT * FROM whatsapp_config LIMIT 1');
+    if (rows.length) return rows[0];
+    const { rows: created } = await pool.query('INSERT INTO whatsapp_config DEFAULT VALUES RETURNING *');
+    return created[0];
+  };
+  let configColumns = null;
+  const editableColumns = async () => {
+    if (!configColumns) {
+      const { rows } = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'whatsapp_config'`
+      );
+      configColumns = new Set(rows.map((r) => r.column_name)
+        .filter((c) => c === 'integration_active' || c.startsWith('auto_') || c.startsWith('msg_')));
+    }
+    return configColumns;
+  };
+  const strip = (row) => {
+    const { api_token, default_user_id, default_queue_id, send_signature, close_ticket, api_token_configured, ...rest } = row;
+    return rest;
+  };
+
+  app.get('/api/whatsapp/config', async (req, res) => {
+    try {
+      await verifyUser(req);
+      res.json({ config: strip(await configRow()) });
+    } catch (error) {
+      fail(res, error);
+    }
+  });
+
+  app.patch('/api/whatsapp/config', async (req, res) => {
+    try {
+      await verifyTeamManager(req);
+      const allowed = await editableColumns();
+      const entries = Object.entries(req.body || {}).filter(([k]) => allowed.has(k));
+      if (!entries.length) return res.status(400).json({ error: 'Nada para salvar' });
+      const current = await configRow();
+      const sets = entries.map(([k], i) => `${k} = $${i + 2}`).join(', ');
+      const { rows } = await pool.query(
+        `UPDATE whatsapp_config SET ${sets}, updated_at = now() WHERE id = $1 RETURNING *`,
+        [current.id, ...entries.map(([, v]) => v)]
+      );
+      res.json({ config: strip(rows[0]) });
     } catch (error) {
       fail(res, error);
     }

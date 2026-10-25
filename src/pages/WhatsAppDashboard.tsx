@@ -273,15 +273,13 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
                 size="sm"
                 className="gap-1 text-destructive hover:text-destructive"
                 onClick={async () => {
-                  if (!confirm('Tem certeza que deseja apagar todo o histórico de confirmações?')) return;
+                  if (!confirm('Apagar as confirmações já respondidas e as pendentes com mais de 7 dias? As pendentes recentes continuam (o cliente ainda pode responder).')) return;
                   const ok = await clearConfirmationHistory();
-                  if (ok) {
-                    setConfirmations([]);
-                    setConfirmationStats({ pending: 0, confirmed: 0, cancelled: 0, backupInvites: 0 });
-                    toast.success('Histórico de confirmações apagado');
-                  } else {
-                    toast.error('Erro ao apagar histórico');
-                  }
+                  const [confs, cStats] = await Promise.all([getWhatsAppConfirmations(), getConfirmationStats()]);
+                  setConfirmations(confs);
+                  setConfirmationStats(cStats);
+                  if (ok) toast.success('Histórico de confirmações apagado');
+                  else toast.error('Erro ao apagar histórico');
                 }}
               >
                 <Trash2 size={14} /> Apagar histórico

@@ -371,9 +371,14 @@ export async function sendRecordingScheduledNotification(
 
 // ── Confirmation functions ──
 
+// Apaga as respondidas/expiradas e as pendentes com mais de 7 dias. As pendentes recentes ficam: a resposta 1/2
+// do cliente depende delas, e a confirmação manual e o cron usam a existência delas para não mandar de novo.
 export async function clearConfirmationHistory(): Promise<boolean> {
-  const { error } = await supabase.from('whatsapp_confirmations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-  return !error;
+  const { error } = await supabase.from('whatsapp_confirmations').delete().neq('status', 'pending');
+  if (error) return false;
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { error: oldPendingError } = await supabase.from('whatsapp_confirmations').delete().eq('status', 'pending').lt('sent_at', weekAgo);
+  return !oldPendingError;
 }
 
 export async function getWhatsAppConfirmations(limit = 200): Promise<WhatsAppConfirmation[]> {

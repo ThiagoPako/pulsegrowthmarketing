@@ -14,6 +14,8 @@
 //   PATCH  /api/whatsapp/config      (admin, social media, gestor de projetos) { integration_active, auto_*, msg_* }
 //          A configuração é uma só para as duas cidades: é a mesma linha que o servidor usa nos envios.
 //   GET    /api/whatsapp/groups      (gestão) grupos em que os números conectados estão — para o cadastro do cliente
+//   POST   /api/whatsapp/holidays/:id/notify  (gestão) "Avisar" de um feriado: avisa os clientes das duas cidades
+//          com gravação agendada na próxima ocorrência e marca a ocorrência como avisada
 //
 // Fluxos automáticos (laços abaixo):
 //   - vídeo novo no portal (status "pendente") → UMA mensagem ao cliente (no grupo dele) com o link do portal;
@@ -313,6 +315,8 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
   // ── Feriado: avisa quem tem gravação no dia (Configurações → Feriados → "Envio automático (2 dias antes)") ──
   // Feriado "Anual" vale todo ano no mesmo dia e mês. Cada ocorrência avisa uma vez (holidays.last_notified_date,
   // que o "Avisar" manual também grava). Olha amanhã e depois de amanhã: se o agendador não rodou num dia, ainda avisa.
+  // O feriado e a marca de "avisado" são um só para as duas cidades: o aviso (automático ou o "Avisar") vai para os
+  // clientes das duas cidades com gravação no dia, senão a marca de uma cidade deixaria a outra sem aviso.
   const HOLIDAY_DEFAULT_MSG = 'Olá, {nome_cliente}! 🚀\n\nInformamos que no dia *{data_feriado}* ({nome_feriado}) *não haverá gravações*.\n\nNossa equipe retorna normalmente no próximo dia útil.\n\n📱 Acompanhe tudo na sua Área do Cliente:\n{link_portal}\n\nEquipe Pulse Growth Marketing';
   const isoDay = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v || '').slice(0, 10));
   const addDays = (day, n) => {
@@ -327,10 +331,44 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
     if (base.slice(5) === day.slice(5)) return true;
     return base.slice(5) === '02-29' && day.slice(5) === '02-28' && !isLeapYear(Number(day.slice(0, 4))); // 29/02 cai em 28/02
   };
+  // próxima ocorrência a partir de hoje (a mesma conta da tela): a própria data, ou, no "Anual", o mesmo dia e mês
+  const holidayNextOccurrence = (h, today) => {
+    const base = isoDay(h.date);
+    if (!h.recurring) return base;
+    const inYear = (y) => (base.slice(5) === '02-29' && !isLeapYear(y) ? `${y}-02-28` : `${y}-${base.slice(5)}`);
+    const year = Number(today.slice(0, 4));
+    return inYear(year) >= today ? inYear(year) : inYear(year + 1);
+  };
+  const holidayNotified = (h, occurrence) => isoDay(h.last_notified_date) === occurrence || (!h.recurring && h.notification_sent);
   const holidayLabel = (day) => {
     const weekday = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${day}T12:00:00Z`));
     return `${day.slice(8, 10)}/${day.slice(5, 7)}/${day.slice(0, 4)} (${weekday})`;
   };
+  // clientes das duas cidades com gravação agendada no dia
+  const holidayClients = async (occurrence) => (await pool.query(
+    `SELECT DISTINCT c.id, c.company_name, c.responsible_person, c.whatsapp, c.whatsapp_group
+       FROM recordings r JOIN clients c ON c.id::text = r.client_id::text
+      WHERE r.date = $1 AND r.status = 'agendada'`, [occurrence]
+  )).rows;
+  // marca antes de enviar: um reinício no meio (ou um segundo clique) não manda duas vezes
+  const claimHoliday = async (h, occurrence) => (await pool.query(
+    `UPDATE holidays SET last_notified_date = $2, notification_sent = true
+      WHERE id = $1 AND last_notified_date IS DISTINCT FROM $2::date RETURNING id`, [h.id, occurrence]
+  )).rows.length > 0;
+  async function sendHolidayNotices(config, h, occurrence, clients, { triggerType, sentBy, expiresAt }) {
+    let enviados = 0;
+    for (const client of clients) {
+      const to = clientTarget(client, 'agenda');
+      if (!to) continue;
+      const body = fill(config.msg_holiday || HOLIDAY_DEFAULT_MSG, {
+        nome_cliente: client.company_name, data_feriado: holidayLabel(occurrence), nome_feriado: h.name || 'feriado',
+        link_portal: `${PORTAL_URL}/${client.id}`,
+      });
+      await enqueueWhatsApp(pool, { to, body, clientId: client.id, triggerType, sentBy, purpose: 'agenda', expiresAt });
+      enviados++;
+    }
+    return enviados;
+  }
 
   async function runHolidayNotifications() {
     const { rows: [config] } = await pool.query('SELECT * FROM whatsapp_config LIMIT 1');
@@ -341,34 +379,41 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
     const result = { feriados: 0, enviados: 0 };
     for (const h of holidays) {
       const occurrence = targets.find((t) => holidayOccursOn(h, t));
-      if (!occurrence) continue;
-      if (isoDay(h.last_notified_date) === occurrence || (!h.recurring && h.notification_sent)) continue;
-      // marca antes de enviar: um reinício no meio não manda duas vezes
-      const { rows: claimed } = await pool.query(
-        `UPDATE holidays SET last_notified_date = $2, notification_sent = true
-          WHERE id = $1 AND last_notified_date IS DISTINCT FROM $2::date RETURNING id`, [h.id, occurrence]
-      );
-      if (!claimed.length) continue;
+      if (!occurrence || holidayNotified(h, occurrence)) continue;
+      if (!(await claimHoliday(h, occurrence))) continue;
       result.feriados++;
-      const { rows: clients } = await pool.query(
-        `SELECT DISTINCT c.id, c.company_name, c.responsible_person, c.whatsapp, c.whatsapp_group
-           FROM recordings r JOIN clients c ON c.id::text = r.client_id::text
-          WHERE r.date = $1 AND r.status = 'agendada'`, [occurrence]
-      );
-      for (const client of clients) {
-        const to = clientTarget(client, 'agenda');
-        if (!to) continue;
-        const body = fill(config.msg_holiday || HOLIDAY_DEFAULT_MSG, {
-          nome_cliente: client.company_name, data_feriado: holidayLabel(occurrence), nome_feriado: h.name || 'feriado',
-          link_portal: `${PORTAL_URL}/${client.id}`,
-        });
-        await enqueueWhatsApp(pool, { to, body, clientId: client.id, triggerType: 'auto_holiday', purpose: 'agenda',
-          expiresAt: new Date(`${occurrence}T00:00:00-03:00`) });
-        result.enviados++;
-      }
+      result.enviados += await sendHolidayNotices(config, h, occurrence, await holidayClients(occurrence),
+        { triggerType: 'auto_holiday', expiresAt: new Date(`${occurrence}T00:00:00-03:00`) });
     }
     return result;
   }
+
+  // "Avisar" (Configurações → Feriados): o mesmo aviso do automático, já, para a próxima ocorrência. Só marca como
+  // avisado quando há a quem mandar; o aviso fica na fila até o fim do dia do feriado.
+  app.post('/api/whatsapp/holidays/:id/notify', async (req, res) => {
+    try {
+      const { user } = await verifyTeamManager(req);
+      await ensureWhatsAppSchema(pool);
+      const { rows: [config] } = await pool.query('SELECT * FROM whatsapp_config LIMIT 1');
+      if (!config?.integration_active) return res.status(400).json({ error: 'Integração WhatsApp desativada' });
+      const { rows: [h] } = await pool.query('SELECT * FROM holidays WHERE id::text = $1', [String(req.params.id)]);
+      if (!h) return res.status(404).json({ error: 'Feriado não encontrado' });
+      const { day } = brazilNow();
+      const occurrence = holidayNextOccurrence(h, day);
+      if (occurrence < day) return res.status(400).json({ error: 'Este feriado já passou' });
+      if (holidayNotified(h, occurrence)) return res.status(409).json({ error: 'Os clientes já foram avisados deste feriado' });
+      const clients = await holidayClients(occurrence);
+      const reachable = clients.filter((c) => clientTarget(c, 'agenda'));
+      const counts = { ok: true, data: occurrence, clientes: clients.length, sem_whatsapp: clients.length - reachable.length, enviados: 0 };
+      if (!reachable.length) return res.json(counts);
+      if (!(await claimHoliday(h, occurrence))) return res.status(409).json({ error: 'Os clientes já foram avisados deste feriado' });
+      counts.enviados = await sendHolidayNotices(config, h, occurrence, reachable,
+        { triggerType: 'manual', sentBy: user?.id, expiresAt: new Date(`${occurrence}T23:59:59-03:00`) });
+      res.json(counts);
+    } catch (error) {
+      fail(res, error);
+    }
+  });
 
   // ── Aprovar / pedir ajuste (o mesmo que o portal faz) ──
   async function notifyTeam(title, message, type, link) {

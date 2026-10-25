@@ -299,26 +299,14 @@ export default function CompanySettings() {
   const handleSendHolidayNotification = async (holiday: Holiday) => {
     setSendingHoliday(holiday.id);
     try {
-      // gravações ainda agendadas na próxima ocorrência do feriado (o "Anual" vale todo ano)
-      const occurrence = holidayNextOccurrence(holiday);
-      const { data: recs } = await supabase.from('recordings').select('client_id').eq('date', occurrence).eq('status', 'agendada');
-      const clientIds = [...new Set((recs || []).map((r: any) => r.client_id).filter(Boolean))];
-
-      if (clientIds.length === 0) {
-        toast.info('Nenhum cliente com gravação nesta data');
-        setSendingHoliday(null);
-        return;
-      }
-
-      // Get client details
-      const { data: clientsData } = await supabase.from('clients').select('id, company_name, whatsapp').in('id', clientIds);
-      const clientsList = (clientsData || []) as { id: string; company_name: string; whatsapp: string }[];
-
-      const formattedDate = format(parseISO(occurrence), "dd/MM/yyyy (EEEE)", { locale: ptBR });
-      const result = await sendHolidayNotifications(formattedDate, holiday.name, clientsList, { id: holiday.id, occurrence });
+      // o servidor avisa os clientes das duas cidades com gravação agendada na próxima ocorrência (o "Anual" vale
+      // todo ano) e marca a ocorrência: a marca é uma só, então o aviso não pode ficar só na cidade ativa
+      const result = await sendHolidayNotifications(holiday.id);
 
       if (result.error) toast.error(result.error);
-      else if (result.failed > 0) toast.warning(`Aviso enviado: ${result.sent} enviados, ${result.failed} falharam`);
+      else if (result.clients === 0) toast.info('Nenhum cliente com gravação nesta data');
+      else if (result.sent === 0) toast.warning(`Nenhum aviso enviado: ${result.noWhatsApp} cliente(s) sem WhatsApp cadastrado`);
+      else if (result.noWhatsApp > 0) toast.warning(`Aviso enviado: ${result.sent} enviados, ${result.noWhatsApp} sem WhatsApp`);
       else toast.success(`Aviso enviado! ${result.sent} enviados`);
       loadHolidays();
     } catch (err) {

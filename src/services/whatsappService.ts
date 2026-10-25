@@ -534,49 +534,18 @@ export async function deleteHoliday(id: string): Promise<boolean> {
 }
 
 /**
- * Send holiday notification to clients who have recordings on the holiday week
+ * "Avisar" de um feriado: o servidor manda o mesmo aviso do envio automático aos clientes das duas cidades com
+ * gravação agendada na próxima ocorrência e marca a ocorrência como avisada (a marca vale para as duas cidades).
  */
 export async function sendHolidayNotifications(
-  holidayDate: string,
-  holidayName: string,
-  clients: { id: string; company_name: string; whatsapp: string }[],
-  mark?: { id: string; occurrence: string },
-): Promise<{ sent: number; failed: number; error?: string }> {
-  const config = await getWhatsAppConfig();
-  if (!config?.integrationActive) {
-    return { sent: 0, failed: 0, error: 'Integração WhatsApp desativada' };
+  holidayId: string,
+): Promise<{ clients: number; sent: number; noWhatsApp: number; error?: string }> {
+  try {
+    const response = await vpsAuthedFetch(`/whatsapp/holidays/${encodeURIComponent(holidayId)}/notify`, { method: 'POST' });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return { clients: 0, sent: 0, noWhatsApp: 0, error: data?.error || 'Erro ao enviar notificações' };
+    return { clients: data.clientes || 0, sent: data.enviados || 0, noWhatsApp: data.sem_whatsapp || 0 };
+  } catch {
+    return { clients: 0, sent: 0, noWhatsApp: 0, error: 'Erro ao enviar notificações' };
   }
-
-  const template = config.msgHoliday;
-  let sent = 0;
-  let failed = 0;
-
-  for (const client of clients) {
-    if (!client.whatsapp) { failed++; continue; }
-
-    const message = applyTemplate(template, {
-      nome_cliente: client.company_name,
-      data_feriado: holidayDate,
-      nome_feriado: holidayName,
-      link_portal: getPortalLink(client.id),
-    });
-
-    const result = await sendWhatsAppMessage({
-      number: client.whatsapp,
-      message,
-      clientId: client.id,
-      triggerType: 'manual',
-      purpose: 'agenda',
-    });
-
-    if (result.success) sent++;
-    else failed++;
-  }
-
-  // marca a ocorrência como avisada (se algo saiu), para o envio automático não repetir
-  if (mark && sent > 0) {
-    await supabase.from('holidays').update({ notification_sent: true, last_notified_date: mark.occurrence }).eq('id', mark.id);
-  }
-
-  return { sent, failed };
 }

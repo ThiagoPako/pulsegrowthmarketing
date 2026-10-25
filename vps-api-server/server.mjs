@@ -3722,7 +3722,7 @@ ${contextData}`;
       ].filter(Boolean).join('\n\n');
 
       await pool.query(
-        `INSERT INTO financial_chat_messages (id, user_id, role, content, created_at) VALUES ($1, $2, 'user', $3, NOW()), ($4, $2, 'assistant', $5, NOW())`,
+        `INSERT INTO financial_chat_messages (id, user_id, role, content, created_at) VALUES ($1, $2, 'user', $3, NOW()), ($4, $2, 'assistant', $5, NOW() + interval '1 millisecond')`,
         [crypto.randomUUID(), user.id, question, crypto.randomUUID(), answer]
       );
 
@@ -3751,7 +3751,7 @@ ${contextData}`;
 
     // Save chat messages to local DB
     await pool.query(
-      `INSERT INTO financial_chat_messages (id, user_id, role, content, created_at) VALUES ($1, $2, 'user', $3, NOW()), ($4, $2, 'assistant', $5, NOW())`,
+      `INSERT INTO financial_chat_messages (id, user_id, role, content, created_at) VALUES ($1, $2, 'user', $3, NOW()), ($4, $2, 'assistant', $5, NOW() + interval '1 millisecond')`,
       [crypto.randomUUID(), user.id, question, crypto.randomUUID(), answer]
     );
 

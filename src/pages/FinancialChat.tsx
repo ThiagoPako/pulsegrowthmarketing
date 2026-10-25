@@ -56,20 +56,34 @@ export default function FinancialChat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { loadHistory(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadHistory(); }, [user?.id]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
+  // Histórico do próprio usuário (o "Limpar" também é por usuário): as 100
+  // mensagens mais recentes, exibidas em ordem. Antes vinham as 100 mais antigas
+  // de todo mundo, e as conversas novas sumiam ao recarregar.
   const loadHistory = async () => {
+    if (!user?.id) return;
     setLoadingHistory(true);
     const { data } = await supabase
       .from('financial_chat_messages')
       .select('*')
-      .order('created_at', { ascending: true })
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
       .limit(100);
-    if (data) setMessages(data as ChatMessage[]);
+    if (data) {
+      // Pergunta e resposta antigas foram gravadas com o mesmo horário: pergunta primeiro
+      const ordered = (data as ChatMessage[]).slice().sort((a, b) => {
+        if (a.created_at !== b.created_at) return a.created_at < b.created_at ? -1 : 1;
+        if (a.role === b.role) return 0;
+        return a.role === 'user' ? -1 : 1;
+      });
+      setMessages(ordered);
+    }
     setLoadingHistory(false);
   };
 

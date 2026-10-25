@@ -2073,6 +2073,56 @@ async function isStrictAdminUser(user) {
   return userHasAssignedRole(user, 'admin');
 }
 
+// Papéis que só um admin pode conceder ou tirar (e cujas contas só um admin mexe).
+const PRIVILEGED_USER_ROLES = new Set(['admin', 'social_media', 'socio_gestor']);
+
+/** Papéis da conta alvo: o do perfil e os de user_roles (pelos ids ligados por e-mail). */
+async function getTargetUserRoles(userId) {
+  const id = String(userId || '').trim();
+  if (!id) return [];
+  await ensureAuthSupportTables();
+  const { rows: profileRows } = await pool.query(
+    'SELECT email, role::text AS role FROM profiles WHERE id::text = $1 LIMIT 1',
+    [id]
+  );
+  const linkedIds = await getLinkedUserIds({ id, email: profileRows[0]?.email || '' });
+  const { rows } = await pool.query(
+    'SELECT role::text AS role FROM user_roles WHERE user_id::text = ANY($1::text[])',
+    [linkedIds.length ? linkedIds : [id]]
+  );
+  return [...new Set([profileRows[0]?.role, ...rows.map((row) => row.role)].filter(Boolean))];
+}
+
+/**
+ * Senha, exclusão e criação de conta com papel admin, social_media ou socio_gestor
+ * ficam só com admin (social_media passa no verifyAdmin, mas não pode tomar a
+ * conta do dono nem criar outro admin).
+ */
+async function assertCanManageUserAccount(actor, { targetUserId = null, requestedRole = null } = {}) {
+  if (await isStrictAdminUser(actor)) return;
+  const forbidden = () => Object.assign(
+    new Error('Só um administrador pode criar ou alterar contas admin, social_media ou socio_gestor.'),
+    { statusCode: 403 }
+  );
+  if (requestedRole && PRIVILEGED_USER_ROLES.has(String(requestedRole))) throw forbidden();
+  if (targetUserId && String(targetUserId) !== String(actor?.id || '')) {
+    const roles = await getTargetUserRoles(targetUserId);
+    if (roles.some((role) => PRIVILEGED_USER_ROLES.has(role))) throw forbidden();
+  }
+}
+
+// Valores aceitos pelo enum app_role (o schema base tem 8; o resto entrou por migração).
+// null quando não dá para ler (banco antigo com role TEXT): aí não valida.
+async function getValidAppRoles() {
+  try {
+    const { rows } = await pool.query('SELECT unnest(enum_range(NULL::app_role))::text AS role');
+    return new Set(rows.map((row) => row.role));
+  } catch (error) {
+    console.warn('Could not read app_role values:', error?.message || error);
+    return null;
+  }
+}
+
 async function verifyAdmin(req) {
   const { user, userClient } = await verifyUser(req);
   if (await isAdminUser(user)) {
@@ -2681,7 +2731,9 @@ async function verifyStoredPassword(rawPassword, ...passwordHashes) {
       const saltedSha256 = crypto.createHash('sha256').update(rawPassword + 'pulse_portal_salt_2026').digest('hex');
       if (/^[a-f0-9]{64}$/i.test(passwordHash) && passwordHash.toLowerCase() === saltedSha256) return true;
 
-      if (!passwordHash.startsWith('$2') && passwordHash === rawPassword) return true;
+      // Texto puro só quando o valor guardado não tem cara de hash: mandar o
+      // próprio SHA-256 em hex como senha não pode passar.
+      if (!passwordHash.startsWith('$2') && !/^[a-f0-9]{64}$/i.test(passwordHash) && passwordHash === rawPassword) return true;
     } catch (error) {
       console.error('Password hash verification failed:', error?.message || error);
     }
@@ -2714,6 +2766,65 @@ async function authenticateWithLegacyAuth() {
   return null;
 }
 
+// ─── Limite de tentativas (login e auto-cadastro) ───────────
+// A API fica atrás do nginx: o IP de quem conectou vem no X-Real-IP ou no último
+// item do X-Forwarded-For (o nginx acrescenta no fim; o começo pode vir do cliente).
+function getClientIp(req) {
+  const realIp = String(req.headers['x-real-ip'] || '').trim();
+  if (realIp) return realIp;
+  const forwarded = String(req.headers['x-forwarded-for'] || '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return forwarded[forwarded.length - 1] || req.socket?.remoteAddress || 'unknown';
+}
+
+function isLoopbackIp(ip) {
+  return !ip || ip === 'unknown' || ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+}
+
+const authAttemptBuckets = new Map();
+const AUTH_ATTEMPT_WINDOW_MS = 15 * 60_000;
+
+function authAttemptCount(key) {
+  const bucket = authAttemptBuckets.get(key);
+  if (!bucket || Date.now() > bucket.reset) return 0;
+  return bucket.count;
+}
+
+function registerAuthAttempt(key, windowMs = AUTH_ATTEMPT_WINDOW_MS) {
+  const now = Date.now();
+  const bucket = authAttemptBuckets.get(key);
+  if (!bucket || now > bucket.reset) {
+    authAttemptBuckets.set(key, { count: 1, reset: now + windowMs });
+    return 1;
+  }
+  bucket.count += 1;
+  return bucket.count;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, bucket] of authAttemptBuckets) {
+    if (now > bucket.reset) authAttemptBuckets.delete(key);
+  }
+}, 5 * 60_000).unref?.();
+
+// Só as falhas contam. E-mail + IP trava rápido; o e-mail sozinho tem teto maior
+// (o IP pode faltar ou ser o mesmo para o estúdio inteiro); o IP sozinho só conta
+// quando é o IP real do cliente.
+const LOGIN_FAILURE_LIMITS = { emailIp: 10, email: 50, ip: 100 };
+
+function loginAttemptKeys(req, normalizedEmail) {
+  const ip = getClientIp(req);
+  const keys = {
+    emailIp: `login:${normalizedEmail}:${ip}`,
+    email: `login-email:${normalizedEmail}`,
+  };
+  if (!isLoopbackIp(ip)) keys.ip = `login-ip:${ip}`;
+  return keys;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // AUTH ROUTES
 // ═══════════════════════════════════════════════════════════════
@@ -2725,8 +2836,16 @@ app.post('/api/auth/login', async (req, res) => {
     if (!email || !password) return res.status(400).json({ error: 'Email e senha são obrigatórios' });
 
     const normalizedEmail = String(email).toLowerCase().trim();
+
+    const attemptKeys = loginAttemptKeys(req, normalizedEmail);
+    const blockedBy = Object.entries(attemptKeys).find(([kind, key]) => authAttemptCount(key) >= LOGIN_FAILURE_LIMITS[kind]);
+    if (blockedBy) {
+      const minutes = Math.max(1, Math.ceil(((authAttemptBuckets.get(blockedBy[1])?.reset || Date.now()) - Date.now()) / 60_000));
+      return res.status(429).json({ error: `Muitas tentativas de login. Tente de novo em ${minutes} min.` });
+    }
+
     let profile = await getAuthProfileByEmail(normalizedEmail);
-    
+
     // Fallback: Se não encontrou no join profiles+auth_users, tenta direto na auth_users por email
     if (!profile) {
       profile = await getLocalAuthUserByEmail(normalizedEmail);
@@ -2756,7 +2875,12 @@ app.post('/api/auth/login', async (req, res) => {
       }
     }
 
-    if (!profile || !valid) return res.status(401).json({ error: 'Email ou senha inválidos' });
+    if (!profile || !valid) {
+      for (const key of Object.values(attemptKeys)) registerAuthAttempt(key);
+      return res.status(401).json({ error: 'Email ou senha inválidos' });
+    }
+    authAttemptBuckets.delete(attemptKeys.emailIp);
+    authAttemptBuckets.delete(attemptKeys.email);
 
     await upgradePasswordHashIfNeeded(profile, password);
 
@@ -2961,16 +3085,17 @@ app.post('/api/auth/change-password', async (req, res) => {
 // ─── Admin: Set password for a team member ──────────────────
 app.post('/api/auth/set-password', async (req, res) => {
   try {
-    await verifyAdmin(req);
+    const { user: actor } = await verifyAdmin(req);
     const { userId, password } = req.body;
     if (!userId || !password || password.length < 6) return res.status(400).json({ error: 'userId e senha (min 6 chars) obrigatórios' });
+    await assertCanManageUserAccount(actor, { targetUserId: userId });
 
     await storeUserPassword(userId, password);
 
     res.json({ success: true, message: 'Senha definida com sucesso' });
   } catch (error) {
     console.error('Set password error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message });
   }
 });
 
@@ -3036,8 +3161,20 @@ app.post('/api/auth/create-user', async (req, res) => {
   try {
     const { name, email, password, role, cities, primaryCity, isSelfRegister } = req.body;
 
-    if (!isSelfRegister) {
-      await verifyAdmin(req);
+    if (isSelfRegister) {
+      // Cadastro público da Academy: limite por IP (contas criadas por hora).
+      const ip = getClientIp(req);
+      if (registerAuthAttempt(`self-register:${ip}`, 60 * 60_000) > 10) {
+        return res.status(429).json({ error: 'Muitos cadastros feitos daqui. Tente de novo mais tarde.' });
+      }
+    } else {
+      const { user: actor } = await verifyAdmin(req);
+      const requestedRole = role || 'editor';
+      const validRoles = await getValidAppRoles();
+      if (validRoles && !validRoles.has(String(requestedRole))) {
+        return res.status(400).json({ error: `Função inválida: "${String(requestedRole).slice(0, 40)}"` });
+      }
+      await assertCanManageUserAccount(actor, { requestedRole });
     }
 
     if (!name || !email || !password) return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
@@ -3076,28 +3213,32 @@ app.post('/api/auth/create-user', async (req, res) => {
       [id, userRole]
     );
 
-    const saved = await saveUserCities(id, cities && cities.length ? cities : ['minacu'], primaryCity);
+    // No auto-cadastro a cidade não vem do pedido: fica a padrão, e o admin libera outra na Equipe.
+    const saved = isSelfRegister
+      ? await saveUserCities(id, ['minacu'], 'minacu')
+      : await saveUserCities(id, cities && cities.length ? cities : ['minacu'], primaryCity);
 
     res.json({ success: true, user: { id, name, email: normalizedEmail, role: userRole, cities: saved.cities, primary_city: saved.primary } });
   } catch (error) {
     console.error('Create user error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message });
   }
 });
 
 // ─── Admin: Reset password ──────────────────────────────────
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
-    await verifyAdmin(req);
+    const { user: actor } = await verifyAdmin(req);
     const { userId, newPassword } = req.body;
     if (!userId || !newPassword || newPassword.length < 6) return res.status(400).json({ error: 'userId e nova senha (min 6 chars) obrigatórios' });
+    await assertCanManageUserAccount(actor, { targetUserId: userId });
 
     await storeUserPassword(userId, newPassword);
 
     res.json({ success: true, message: 'Senha redefinida com sucesso' });
   } catch (error) {
     console.error('Reset password error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message });
   }
 });
 
@@ -7226,28 +7367,56 @@ app.post('/api/reset-password', async (req, res) => {
     const { user, admin } = await verifyAdmin(req);
     const { userId, newPassword } = req.body;
     if (!userId || !newPassword || newPassword.length < 6) return res.status(400).json({ error: 'userId and newPassword (min 6 chars) required' });
+    await assertCanManageUserAccount(user, { targetUserId: userId });
     await storeUserPassword(userId, newPassword);
     res.json({ success: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(e.statusCode || 500).json({ error: e.message });
   }
 });
 
 // ─── 13. Delete User ────────────────────────────────────────
 app.post('/api/delete-user', async (req, res) => {
   try {
-    const { user, admin } = await verifyAdmin(req);
+    const { user } = await verifyAdmin(req);
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: 'Missing userId' });
     if (userId === user.id) return res.status(400).json({ error: 'Cannot delete yourself' });
-    await admin.from('partners').delete().eq('user_id', userId);
-    await admin.from('user_roles').delete().eq('user_id', userId);
-    await admin.from('notifications').delete().eq('user_id', userId);
-    await admin.from('profiles').delete().eq('id', userId);
-    await pool.query('DELETE FROM auth_users WHERE id::text = $1', [String(userId)]).catch(() => null);
+    await assertCanManageUserAccount(user, { targetUserId: userId });
+
+    // Ids ligados (perfil + auth_users com o mesmo e-mail) calculados ANTES de apagar:
+    // em instalações antigas o auth_users tem outro id e sobrava um login sem perfil.
+    await ensureAuthSupportTables();
+    const targetId = String(userId);
+    const { rows: profileRows } = await pool.query('SELECT email FROM profiles WHERE id::text = $1 LIMIT 1', [targetId]);
+    const targetEmail = String(profileRows[0]?.email || '').trim().toLowerCase();
+    const linkedIds = await getLinkedUserIds({ id: targetId, email: targetEmail });
+    if (linkedIds.includes(String(user.id))) return res.status(400).json({ error: 'Cannot delete yourself' });
+
+    // Tudo numa transação: se o perfil não puder sair (ex.: gravações ligadas), nada é apagado.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const table of ['partners', 'user_roles', 'user_permissions', 'user_cities', 'notifications']) {
+        const { rows: [{ exists }] } = await client.query('SELECT to_regclass($1) IS NOT NULL AS exists', [`public.${table}`]);
+        if (exists) await client.query(`DELETE FROM ${table} WHERE user_id::text = ANY($1::text[])`, [linkedIds]);
+      }
+      await client.query('DELETE FROM profiles WHERE id::text = $1', [targetId]);
+      if (targetEmail) {
+        await client.query('DELETE FROM auth_users WHERE id::text = ANY($1::text[]) OR lower(email) = $2', [linkedIds, targetEmail]);
+      } else {
+        await client.query('DELETE FROM auth_users WHERE id::text = ANY($1::text[])', [linkedIds]);
+      }
+      await client.query('COMMIT');
+    } catch (deleteError) {
+      await client.query('ROLLBACK').catch(() => null);
+      throw deleteError;
+    } finally {
+      client.release();
+    }
     res.json({ success: true });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(err.statusCode || 400).json({ error: err.message });
   }
 });
 
@@ -8107,7 +8276,7 @@ async function getDbQueryStripOptions(user, tables) {
 }
 
 // Papéis que só um admin pode conceder ou tirar.
-const DB_QUERY_PRIVILEGED_ROLES = new Set(['admin', 'social_media', 'socio_gestor']);
+const DB_QUERY_PRIVILEGED_ROLES = PRIVILEGED_USER_ROLES;
 
 // Papéis do endomarketing: o contrato de parceiro lança a despesa (useEndomarketing.createEndoExpense).
 const DB_QUERY_ENDO_ROLES = ['endomarketing', 'parceiro'];

@@ -3593,6 +3593,38 @@ app.get('/api/admin/user-cities', async (req, res) => {
   }
 });
 
+// ─── Equipe da cidade ativa: ids de quem atende a cidade (user_cities) ───
+// A Agenda e o Controle de Gravações usam para não oferecer nem distribuir gravação para
+// videomaker da outra cidade. Mesma regra do resolveActiveCity: sem cidade cadastrada = Minaçu;
+// contas ligadas pelo e-mail (profiles x auth_users) contam juntas.
+app.get('/api/team/city-members', async (req, res) => {
+  try {
+    await ensureUserCitiesTable();
+    const { user } = await verifyUser(req);
+    const city = await resolveActiveCity(req, user.id, user);
+    const profileColumns = await getExistingColumns('profiles').catch(() => new Set());
+    const authColumns = await getExistingColumns('auth_users').catch(() => new Set());
+    const linkByEmail = profileColumns.has('email') && authColumns.has('id') && authColumns.has('email');
+    const { rows } = await pool.query(
+      `WITH ids AS (
+         SELECT p.id::text AS profile_id, p.id::text AS uid FROM profiles p
+         ${linkByEmail ? `UNION
+         SELECT p.id::text, a.id::text FROM profiles p
+           JOIN auth_users a ON p.email IS NOT NULL AND lower(a.email) = lower(p.email)` : ''}
+       )
+       SELECT ids.profile_id AS id
+         FROM ids LEFT JOIN user_cities uc ON uc.user_id::text = ids.uid
+        GROUP BY ids.profile_id
+       HAVING COALESCE(bool_or(uc.user_id IS NOT NULL AND ${cityScopeCondition('uc.city', '$1')}), false)
+           OR ($1::text = 'minacu' AND COUNT(uc.user_id) = 0)`,
+      [city]
+    );
+    res.json({ city, user_ids: rows.map(r => r.id) });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+  }
+});
+
 // ─── Admin: Atualizar cidades de um usuário ─────────────────
 app.post('/api/admin/user-cities', async (req, res) => {
   try {
@@ -4522,11 +4554,6 @@ async function syncPortalAdjustmentToKanban(content, note, teamUser = null) {
   }
   await notifyPortalTeam(content.client_id, ['admin', 'social_media'], '🔧 Ajuste solicitado no Pulse Club',
     `${teamUser ? 'Equipe' : 'Cliente'} solicitou ajuste em "${content.title}": ${shortNote}`, 'adjustment', '/entregas-social');
-}
-
-/** Cidade a gravar numa linha nova do cliente (recordings): null = deixa o DEFAULT/trigger. */
-async function portalInsertCity(tableName, clientCity) {
-  return clientCity && await tableHasCityColumn(tableName) ? clientCity : null;
 }
 
 // Ensure client_portal_users table exists (multi-user per company)
@@ -5602,6 +5629,152 @@ app.post('/api/avulso-actions', async (req, res) => {
   }
 });
 
+// ─── Helpers de agenda para as rotas públicas (portal e link de reagendamento) ───
+// Data (YYYY-MM-DD) e minuto do dia sempre no fuso de Brasília, não no fuso do servidor.
+const BRT_TIME_FORMAT = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+function brtDateString(date = new Date()) {
+  return date.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+}
+function brtMinutesNow(date = new Date()) {
+  const [h, m] = BRT_TIME_FORMAT.format(date).split(':').map(Number);
+  return h * 60 + m;
+}
+function addDaysToDateString(dateStr, days) {
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().split('T')[0];
+}
+const AGENDA_WEEKDAY_NAMES = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+function weekdayNameOfDate(dateStr) {
+  return AGENDA_WEEKDAY_NAMES[new Date(`${dateStr}T12:00:00Z`).getUTCDay()];
+}
+function isValidAgendaDate(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(`${value}T12:00:00Z`).getTime());
+}
+function isValidAgendaTime(value) {
+  if (typeof value !== 'string' || !/^\d{2}:\d{2}(:\d{2})?$/.test(value)) return false;
+  const [h, m] = value.split(':').map(Number);
+  return h < 24 && m < 60;
+}
+function agendaTimeToMinutes(value) {
+  const [h, m] = String(value || '00:00').split(':').map(Number);
+  return h * 60 + m;
+}
+function getSettingsWorkDays(settings) {
+  return Array.isArray(settings?.work_days) && settings.work_days.length > 0
+    ? settings.work_days
+    : ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
+}
+// A gravação (início + duração) cabe inteira no turno A ou no turno B do expediente.
+function fitsInWorkShifts(time, settings, duration) {
+  const start = agendaTimeToMinutes(time);
+  const inShift = (s, e) => start >= agendaTimeToMinutes(s) && start + duration <= agendaTimeToMinutes(e);
+  return inShift(settings?.shift_a_start || '08:30', settings?.shift_a_end || '12:00')
+    || inShift(settings?.shift_b_start || '14:30', settings?.shift_b_end || '18:00');
+}
+
+// Cidade do cliente (null = cliente global ou sem cidade), para as rotas públicas gravarem e filtrarem na praça certa.
+async function getClientCityForAgenda(clientId) {
+  if (!clientId) return null;
+  try {
+    const { rows: [row] } = await pool.query('SELECT city::text AS city FROM clients WHERE id = $1', [clientId]);
+    return normalizeCityValue(row?.city) || null;
+  } catch {
+    return null;
+  }
+}
+
+// Filtro SQL "este usuário atende a cidade": tem a cidade em user_cities, ou não tem cidade
+// nenhuma cadastrada e a cidade é Minaçu (mesma regra do resolveActiveCity).
+function userServesCitySql(userIdExpr, placeholder) {
+  return `(EXISTS (SELECT 1 FROM user_cities uc WHERE uc.user_id::text = ${userIdExpr}::text AND ${cityScopeCondition('uc.city', placeholder)})
+    OR (${placeholder}::text = 'minacu' AND NOT EXISTS (SELECT 1 FROM user_cities uc0 WHERE uc0.user_id::text = ${userIdExpr}::text)))`;
+}
+
+// O videomaker existe (papel videomaker) e atende a cidade do cliente (cliente global: qualquer cidade).
+async function isVideomakerForCity(videomakerId, city) {
+  if (!videomakerId) return false;
+  const params = [videomakerId];
+  let cityClause = '';
+  if (city) {
+    params.push(city);
+    cityClause = ` AND ${userServesCitySql('ur.user_id', '$2')}`;
+  }
+  const { rows } = await pool.query(
+    `SELECT 1 FROM user_roles ur WHERE ur.user_id::text = $1::text AND ur.role = 'videomaker'${cityClause} LIMIT 1`,
+    params
+  );
+  return rows.length > 0;
+}
+
+// company_settings é por cidade: lê a da cidade do cliente e, se não houver, qualquer linha (como antes).
+async function getCompanySettingsForCity(city) {
+  if (city) {
+    try {
+      if (await tableHasCityColumn('company_settings')) {
+        const { rows: [row] } = await pool.query(`SELECT * FROM company_settings WHERE ${cityScopeCondition('city', '$1')} LIMIT 1`, [city]);
+        if (row) return row;
+      }
+    } catch { /* cai para qualquer linha */ }
+  }
+  const { rows: [row] } = await pool.query('SELECT * FROM company_settings LIMIT 1');
+  return row;
+}
+
+// Insere uma gravação vinda das rotas públicas já na cidade certa. Sem cidade (cliente global),
+// fica o default da tabela e o trigger apply_global_client_city cuida do resto.
+async function insertPublicRecording(db, { clientId, videomakerId, date, startTime, type, status, confirmationStatus, city, source = null }) {
+  await ensurePublicReschedTable();
+  const cols = ['client_id', 'videomaker_id', 'date', 'start_time', 'type', 'status', 'confirmation_status'];
+  const vals = [clientId, videomakerId, date, startTime, type, status, confirmationStatus];
+  if (city && await tableHasCityColumn('recordings')) { cols.push('city'); vals.push(city); }
+  if (source && recordingsSourceColumnReady) { cols.push('source'); vals.push(source); }
+  const { rows: [row] } = await db.query(
+    `INSERT INTO recordings (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')})
+     RETURNING id, date::text, start_time`,
+    vals
+  );
+  return row;
+}
+
+// Avisa a equipe dos papéis informados. notifications é por cidade: grava a cidade do cliente
+// para o aviso aparecer na praça certa (sem cidade, fica o default da tabela, como antes).
+async function notifyTeamRoles(roles, { title, message, type, link }, city = null) {
+  const { rows: users } = await pool.query(
+    'SELECT DISTINCT ur.user_id FROM user_roles ur WHERE ur.role::text = ANY($1::text[])',
+    [roles]
+  );
+  const withCity = Boolean(city) && await tableHasCityColumn('notifications');
+  for (const u of users) {
+    await pool.query(
+      `INSERT INTO notifications (user_id, title, message, type, link${withCity ? ', city' : ''}) VALUES ($1, $2, $3, $4, $5${withCity ? ', $6' : ''})`,
+      [u.user_id, title, message, type, link, ...(withCity ? [city] : [])]
+    );
+  }
+}
+
+// Videomakers (id, name) que atendem a cidade do cliente (cliente global: todos), menos o excluído.
+async function listVideomakersForCity(city, excludeId = null) {
+  const params = [];
+  let where = "ur.role = 'videomaker'";
+  if (excludeId) { params.push(excludeId); where += ` AND p.id::text != $${params.length}::text`; }
+  if (city) { params.push(city); where += ` AND ${userServesCitySql('p.id', `$${params.length}`)}`; }
+  const { rows } = await pool.query(
+    `SELECT DISTINCT p.id, p.name FROM profiles p JOIN user_roles ur ON ur.user_id = p.id WHERE ${where}`,
+    params
+  );
+  return rows;
+}
+
+// Horários livres (início) do videomaker num dia, dentro dos turnos do expediente.
+async function getFreeSlotsForVideomaker(db, videomakerId, date, settings, duration) {
+  const { rows: existing } = await db.query(
+    `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,
+    [videomakerId, date]
+  );
+  return computeVmSlots(existing, settings, duration);
+}
+
 // ─── 6. Portal Recordings (uses local PostgreSQL) ───────────
 app.post('/api/portal-recordings', async (req, res) => {
   try {
@@ -5637,7 +5810,7 @@ app.post('/api/portal-recordings', async (req, res) => {
         vmId = lastRec?.videomaker_id;
       }
       if (!vmId) return res.status(400).json({ error: 'Nenhum videomaker atribuído' });
-      const { rows: [settings] } = await pool.query('SELECT * FROM company_settings LIMIT 1');
+      const settings = await getCompanySettingsForCity(await getClientCityForAgenda(client_id));
       const rawDur = settings?.recording_duration || 2;
       const duration = rawDur > 10 ? rawDur : rawDur * 60;
       console.log('[check_availability] recording_duration raw:', rawDur, '-> duration (min):', duration, 'shifts:', settings?.shift_a_start, '-', settings?.shift_a_end, '|', settings?.shift_b_start, '-', settings?.shift_b_end);
@@ -5658,25 +5831,61 @@ app.post('/api/portal-recordings', async (req, res) => {
 
     if (action === 'reschedule') {
       if (!recording_id || !new_date || !new_time) return res.status(400).json({ error: 'recording_id, new_date, new_time required' });
-      const { rows: [rec] } = await pool.query('SELECT id, client_id, videomaker_id, date::text, start_time FROM recordings WHERE id = $1 AND client_id = $2', [recording_id, client_id]);
+      if (!isValidAgendaDate(new_date) || !isValidAgendaTime(new_time)) return res.status(400).json({ error: 'Data ou horário inválido' });
+      const { rows: [rec] } = await pool.query('SELECT id, client_id, videomaker_id, date::text, start_time, status FROM recordings WHERE id = $1 AND client_id = $2', [recording_id, client_id]);
       if (!rec) return res.status(404).json({ error: 'Gravação não encontrada' });
-      const { rows: [settings] } = await pool.query('SELECT recording_duration FROM company_settings LIMIT 1');
+      // Só remarca gravação ainda agendada (não a já feita, a cancelada nem o pedido em análise)
+      if (rec.status !== 'agendada') return res.status(409).json({ error: 'Esta gravação não pode mais ser remarcada' });
+      // Mesma janela do calendário do portal: a partir de amanhã, nas próximas 3 semanas
+      const todayResched = brtDateString();
+      if (new_date <= todayResched || new_date > addDaysToDateString(todayResched, 22)) {
+        return res.status(400).json({ error: 'Escolha uma data a partir de amanhã, nas próximas 3 semanas' });
+      }
+      const clientCityResched = await getClientCityForAgenda(client_id);
+      const settings = await getCompanySettingsForCity(clientCityResched);
+      if (!getSettingsWorkDays(settings).includes(weekdayNameOfDate(new_date))) {
+        return res.status(400).json({ error: 'A agência não grava neste dia' });
+      }
       const rawDurR = settings?.recording_duration || 2;
       const duration = rawDurR > 10 ? rawDurR : rawDurR * 60;
       const buffer = 30;
-      const { rows: conflicts } = await pool.query(
-        `SELECT id, start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada' AND id != $3`,
-        [rec.videomaker_id, new_date, recording_id]
-      );
-      const [nh, nm] = new_time.split(':').map(Number);
-      const newStart = nh * 60 + nm;
-      const newEnd = newStart + duration + buffer;
-      const hasConflict = conflicts.some(c => { const [ch, cm] = c.start_time.split(':').map(Number); const cStart = ch * 60 + cm; return newStart < cStart + duration + buffer && newEnd > cStart; });
-      if (hasConflict) return res.status(409).json({ error: 'Horário não está mais disponível' });
-      await pool.query(`UPDATE recordings SET date = $1, start_time = $2, confirmation_status = 'pendente' WHERE id = $3`, [new_date, new_time, recording_id]);
+      const newTimeHHMM = new_time.slice(0, 5);
+      // Conferência e remarcação na mesma transação, com trava por videomaker+dia
+      const txResched = await pool.connect();
+      try {
+        await txResched.query('BEGIN');
+        await txResched.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`agenda|${rec.videomaker_id}|${new_date}`]);
+        const { rows: conflicts } = await txResched.query(
+          `SELECT id, start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada' AND id != $3`,
+          [rec.videomaker_id, new_date, recording_id]
+        );
+        // Só aceita um dos horários que o portal oferece (turnos do expediente, sem conflito)
+        const offeredSlots = computeVmSlots(conflicts, settings, duration);
+        const newStart = agendaTimeToMinutes(new_time);
+        const newEnd = newStart + duration + buffer;
+        const hasConflict = conflicts.some(c => { const cStart = agendaTimeToMinutes(c.start_time); return newStart < cStart + duration + buffer && newEnd > cStart; });
+        if (hasConflict || !offeredSlots.includes(newTimeHHMM)) {
+          await txResched.query('ROLLBACK');
+          return res.status(409).json({ error: 'Horário não está mais disponível' });
+        }
+        const { rowCount } = await txResched.query(
+          `UPDATE recordings SET date = $1, start_time = $2, confirmation_status = 'pendente' WHERE id = $3 AND client_id = $4 AND status = 'agendada'`,
+          [new_date, new_time, recording_id, client_id]
+        );
+        if (rowCount === 0) {
+          await txResched.query('ROLLBACK');
+          return res.status(409).json({ error: 'Esta gravação não pode mais ser remarcada' });
+        }
+        await txResched.query('COMMIT');
+      } catch (txErr) {
+        await txResched.query('ROLLBACK').catch(() => {});
+        throw txErr;
+      } finally {
+        txResched.release();
+      }
       const { rows: [clientInfo] } = await pool.query('SELECT company_name FROM clients WHERE id = $1', [client_id]);
       const notifMsg = `${clientInfo?.company_name || 'Cliente'} reagendou gravação de ${rec.date} ${rec.start_time} para ${new_date} ${new_time}`;
-      // Notify admins and social_media via local notifications table
+      // Avisa admin e social_media (todas as cidades), com a cidade do cliente na notificação
       await notifyPortalTeam(client_id, ['admin', 'social_media'], 'Reagendamento pelo cliente', notifMsg, 'warning', '/agenda');
       return res.json({ success: true });
     }
@@ -5696,7 +5905,8 @@ app.post('/api/portal-recordings', async (req, res) => {
       const { rows: [recCancel] } = await pool.query('SELECT id, date::text, start_time, videomaker_id FROM recordings WHERE id = $1 AND client_id = $2', [recording_id, client_id]);
       if (!recCancel) return res.status(404).json({ error: 'Gravação não encontrada' });
       const { rows: [clientCancel] } = await pool.query('SELECT backup_day, backup_time, videomaker_id, company_name, fixed_day FROM clients WHERE id = $1', [client_id]);
-      const { rows: [settingsCancel] } = await pool.query('SELECT * FROM company_settings LIMIT 1');
+      const clientCityCancel = await getClientCityForAgenda(client_id);
+      const settingsCancel = await getCompanySettingsForCity(clientCityCancel);
       const rawDurC = settingsCancel?.recording_duration || 2;
       const durationCancel = rawDurC > 10 ? rawDurC : rawDurC * 60;
       const bufferCancel = 30;
@@ -5718,13 +5928,8 @@ app.post('/api/portal-recordings', async (req, res) => {
       // If main videomaker backup not available, find alternative videomakers with space
       let alternativeVideomakers = [];
       if (!backupAvailable && backupDateCancel) {
-        // Só videomakers que atendem a cidade do cliente
-        const cancelCity = await getPortalClientCity(client_id);
-        const { rows: allVideomakers } = await pool.query(
-          `SELECT DISTINCT p.id, p.name FROM profiles p JOIN user_roles ur ON ur.user_id = p.id
-            WHERE ur.role = 'videomaker' AND p.id IS DISTINCT FROM $1 AND ${portalCityMemberSql('p.id', '$2')}`,
-          [clientCancel?.videomaker_id || null, cancelCity]
-        );
+        // Só videomakers que atendem a cidade do cliente; gravações do dia numa consulta só
+        const allVideomakers = await listVideomakersForCity(clientCityCancel, clientCancel?.videomaker_id || null);
         const { rows: altRecsCancel } = allVideomakers.length > 0
           ? await pool.query(
             `SELECT videomaker_id, start_time FROM recordings WHERE videomaker_id = ANY($1::uuid[]) AND date = $2 AND status != 'cancelada'`,
@@ -5781,24 +5986,56 @@ app.post('/api/portal-recordings', async (req, res) => {
 
     /* ── accept_backup ── */
     if (action === 'accept_backup') {
-      const { backup_date, backup_time, videomaker_id: requestedVmId, backup_offer } = req.body;
+      const { backup_date, backup_time, videomaker_id: requestedVmId, backup_offer, recording_id: bodyCancelledRecId } = req.body;
       if (!backup_date || !backup_time) return res.status(400).json({ error: 'backup_date and backup_time required' });
-      // Só uma das opções oferecidas no cancelamento (oferta assinada, válida por 2 h), uma vez só.
+      if (!isValidAgendaDate(backup_date) || !isValidAgendaTime(backup_time)) return res.status(400).json({ error: 'Data ou horário inválido' });
+      const todayBackup = brtDateString();
+      if (backup_date < todayBackup || backup_date > addDaysToDateString(todayBackup, 15)) {
+        return res.status(400).json({ error: 'Data fora do período de remarcação' });
+      }
+      // Só uma das opções oferecidas no cancelamento (oferta assinada, válida por 2 h)
       const offer = portalSession.readBackupOffer(backup_offer, client_id);
       if (!offer) return res.status(400).json({ error: 'Essa opção de remarcação expirou. Fale com a equipe para remarcar.' });
       const offerOption = pickBackupOption(offer, { videomakerId: requestedVmId || null, date: backup_date, time: backup_time });
       if (!offerOption) return res.status(400).json({ error: 'Horário não faz parte das opções oferecidas' });
-      if (offer.issuedAt) {
-        const { rows: [alreadyAccepted] } = await pool.query(
-          `SELECT id FROM recordings WHERE client_id = $1 AND type = 'secundaria' AND created_at >= to_timestamp($2) LIMIT 1`,
-          [client_id, offer.issuedAt]
-        );
-        if (alreadyAccepted) return res.status(409).json({ error: 'Essa remarcação já foi feita' });
+      // A gravação cancelada vem da oferta assinada; o recording_id do corpo, se vier, tem de ser o mesmo
+      if (offer.recordingId && bodyCancelledRecId && String(bodyCancelledRecId) !== String(offer.recordingId)) {
+        return res.status(400).json({ error: 'Horário não faz parte das opções oferecidas' });
       }
-      // Videomaker da opção escolhida; o backup sem videomaker definido cai no do cliente
-      let vmId = offerOption.vm || null;
+      const cancelledRecId = offer.recordingId || bodyCancelledRecId || null;
+      // Só remarca a partir de uma gravação deste cliente cancelada e ainda não remarcada:
+      // cada cancelamento vale uma remarcação (evita lotar a agenda chamando a ação em loop).
+      await ensurePublicReschedTable();
+      const { rows: [cancelledRec] } = await pool.query(
+        `SELECT id FROM recordings
+          WHERE client_id = $1 AND status = 'cancelada' AND rescheduled_to_id IS NULL
+            AND ($2::text IS NULL OR id::text = $2::text) AND date >= $3
+          ORDER BY date ASC, start_time ASC LIMIT 1`,
+        [client_id, cancelledRecId, addDaysToDateString(todayBackup, -1)]
+      );
+      if (!cancelledRec) return res.status(409).json({ error: 'Nenhuma gravação cancelada para remarcar' });
+
+      const { rows: [clientBackup] } = await pool.query('SELECT videomaker_id, backup_time FROM clients WHERE id = $1', [client_id]);
+      const clientCityBackup = await getClientCityForAgenda(client_id);
+      const settingsBackup = await getCompanySettingsForCity(clientCityBackup);
+      const rawDurB = settingsBackup?.recording_duration || 2;
+      const durationBackup = rawDurB > 10 ? rawDurB : rawDurB * 60;
+      const bufferBackup = 30;
+      // Videomaker da opção escolhida na oferta; o backup sem videomaker definido cai no do cliente
+      const offerVmId = offerOption.vm || null;
+      // Videomaker alternativo (oferecido no cancelamento) precisa ser videomaker da cidade do cliente
+      const usesAlternativeVm = Boolean(offerVmId) && offerVmId !== clientBackup?.videomaker_id;
+      if (usesAlternativeVm && !(await isVideomakerForCity(offerVmId, clientCityBackup))) {
+        return res.status(400).json({ error: 'Videomaker indisponível para este cliente' });
+      }
+      // Fora o horário de backup do próprio cliente, só aceita dia útil e horário dentro do expediente
+      const isClientBackupTime = !usesAlternativeVm && Boolean(clientBackup?.backup_time)
+        && agendaTimeToMinutes(clientBackup.backup_time) === agendaTimeToMinutes(backup_time);
+      if (!isClientBackupTime && (!getSettingsWorkDays(settingsBackup).includes(weekdayNameOfDate(backup_date)) || !fitsInWorkShifts(backup_time, settingsBackup, durationBackup))) {
+        return res.status(400).json({ error: 'Horário fora do expediente da agência' });
+      }
+      let vmId = offerVmId;
       if (!vmId) {
-        const { rows: [clientBackup] } = await pool.query('SELECT videomaker_id FROM clients WHERE id = $1', [client_id]);
         vmId = clientBackup?.videomaker_id;
       }
       if (!vmId) {
@@ -5814,29 +6051,42 @@ app.post('/api/portal-recordings', async (req, res) => {
         vmId = anyRec?.videomaker_id;
       }
       if (!vmId) return res.status(400).json({ error: 'Nenhum videomaker encontrado para este cliente' });
-      // Verify no conflict for selected videomaker/date/time
-      const { rows: [settingsBackup] } = await pool.query('SELECT recording_duration FROM company_settings LIMIT 1');
-      const rawDurB = settingsBackup?.recording_duration || 2;
-      const durationBackup = rawDurB > 10 ? rawDurB : rawDurB * 60;
-      const bufferBackup = 30;
-      const { rows: conflictsBackup } = await pool.query(
-        `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,
-        [vmId, backup_date]
-      );
-      const [nbh, nbm] = backup_time.split(':').map(Number);
-      const newStartBackup = nbh * 60 + nbm;
-      const hasConflictBackup = conflictsBackup.some(c => {
-        const [ch, cm] = c.start_time.split(':').map(Number);
-        const cStart = ch * 60 + cm;
-        return newStartBackup < cStart + durationBackup + bufferBackup && newStartBackup + durationBackup + bufferBackup > cStart;
-      });
-      if (hasConflictBackup) return res.status(409).json({ error: 'Horário não está mais disponível' });
-      // Cidade do cliente na gravação (sem ela o DEFAULT 'minacu' tira a gravação da agenda de Uruaçu)
-      const backupCity = await portalInsertCity('recordings', await getPortalClientCity(client_id));
-      if (backupCity) {
-        await pool.query(`INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status, city) VALUES ($1, $2, $3, $4, 'secundaria', 'agendada', 'confirmada', $5)`, [client_id, vmId, backup_date, backup_time, backupCity]);
-      } else {
-        await pool.query(`INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ($1, $2, $3, $4, 'secundaria', 'agendada', 'confirmada')`, [client_id, vmId, backup_date, backup_time]);
+      // Verify no conflict for selected videomaker/date/time — conferência e criação na mesma
+      // transação, com trava por videomaker+dia, para dois pedidos não pegarem o mesmo horário
+      const txClient = await pool.connect();
+      try {
+        await txClient.query('BEGIN');
+        await txClient.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`agenda|${vmId}|${backup_date}`]);
+        const { rows: [lockedCancelled] } = await txClient.query('SELECT rescheduled_to_id FROM recordings WHERE id = $1 FOR UPDATE', [cancelledRec.id]);
+        if (lockedCancelled?.rescheduled_to_id) {
+          await txClient.query('ROLLBACK');
+          return res.status(409).json({ error: 'Esta gravação já foi remarcada' });
+        }
+        const { rows: conflictsBackup } = await txClient.query(
+          `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,
+          [vmId, backup_date]
+        );
+        const newStartBackup = agendaTimeToMinutes(backup_time);
+        const hasConflictBackup = conflictsBackup.some(c => {
+          const cStart = agendaTimeToMinutes(c.start_time);
+          return newStartBackup < cStart + durationBackup + bufferBackup && newStartBackup + durationBackup + bufferBackup > cStart;
+        });
+        if (hasConflictBackup) {
+          await txClient.query('ROLLBACK');
+          return res.status(409).json({ error: 'Horário não está mais disponível' });
+        }
+        // Cidade do cliente na gravação (sem ela o DEFAULT 'minacu' tira a gravação da agenda de Uruaçu)
+        const newBackupRec = await insertPublicRecording(txClient, {
+          clientId: client_id, videomakerId: vmId, date: backup_date, startTime: backup_time,
+          type: 'secundaria', status: 'agendada', confirmationStatus: 'confirmada', city: clientCityBackup, source: 'portal',
+        });
+        await txClient.query('UPDATE recordings SET rescheduled_to_id = $1 WHERE id = $2', [newBackupRec.id, cancelledRec.id]);
+        await txClient.query('COMMIT');
+      } catch (txErr) {
+        await txClient.query('ROLLBACK').catch(() => {});
+        throw txErr;
+      } finally {
+        txClient.release();
       }
       return res.json({ success: true });
     }
@@ -5845,8 +6095,12 @@ app.post('/api/portal-recordings', async (req, res) => {
     if (action === 'check_special_availability') {
       const { requested_date, requested_time } = req.body;
       if (!requested_date) return res.status(400).json({ error: 'requested_date required' });
+      if (!isValidAgendaDate(requested_date) || (requested_time && !isValidAgendaTime(requested_time))) {
+        return res.status(400).json({ error: 'Data ou horário inválido' });
+      }
 
-      const { rows: [settings] } = await pool.query('SELECT * FROM company_settings LIMIT 1');
+      const clientCitySpecial = await getClientCityForAgenda(client_id);
+      const settings = await getCompanySettingsForCity(clientCitySpecial);
       const rawDur = settings?.recording_duration || 2;
       const duration = rawDur > 10 ? rawDur : rawDur * 60;
       const buffer = 30;
@@ -5959,12 +6213,7 @@ app.post('/api/portal-recordings', async (req, res) => {
       // Get alternative videomakers
       const alternativeVideomakers = [];
       // Só videomakers que atendem a cidade do cliente; gravações do dia numa consulta só
-      const specialCity = await getPortalClientCity(client_id);
-      const { rows: allVms } = await pool.query(
-        `SELECT DISTINCT p.id, p.name FROM profiles p JOIN user_roles ur ON ur.user_id = p.id
-          WHERE ur.role = 'videomaker' AND p.id IS DISTINCT FROM $1 AND ${portalCityMemberSql('p.id', '$2')}`,
-        [mainVmId || null, specialCity]
-      );
+      const allVms = await listVideomakersForCity(clientCitySpecial, mainVmId || null);
       const { rows: altRecsSpecial } = allVms.length > 0
         ? await pool.query(
           `SELECT videomaker_id, start_time FROM recordings WHERE videomaker_id = ANY($1::uuid[]) AND date = $2 AND status != 'cancelada'`,
@@ -6001,17 +6250,17 @@ app.post('/api/portal-recordings', async (req, res) => {
     if (action === 'request_special') {
       const { requested_date, requested_time, comment, selected_videomaker_id } = req.body;
       if (!requested_date || !comment) return res.status(400).json({ error: 'requested_date and comment required' });
+      if (!isValidAgendaDate(requested_date) || (requested_time && !isValidAgendaTime(requested_time))) {
+        return res.status(400).json({ error: 'Data ou horário inválido' });
+      }
+      if (requested_date < brtDateString()) return res.status(400).json({ error: 'Escolha uma data a partir de hoje' });
 
       const { rows: [clientSpecial] } = await pool.query('SELECT company_name, videomaker_id FROM clients WHERE id = $1', [client_id]);
-      const requestCity = await getPortalClientCity(client_id);
-      // Videomaker escolhido no portal: o do cliente ou um videomaker que atende a cidade dele
-      if (selected_videomaker_id && selected_videomaker_id !== clientSpecial?.videomaker_id) {
-        const { rows: [validVm] } = await pool.query(
-          `SELECT p.id FROM profiles p JOIN user_roles ur ON ur.user_id = p.id
-            WHERE p.id::text = $1::text AND ur.role = 'videomaker' AND ${portalCityMemberSql('p.id', '$2')} LIMIT 1`,
-          [selected_videomaker_id, requestCity]
-        );
-        if (!validVm) return res.status(400).json({ error: 'Videomaker indisponível para este cliente' });
+      const clientCityRequest = await getClientCityForAgenda(client_id);
+      // Videomaker escolhido no portal precisa atender a cidade do cliente
+      if (selected_videomaker_id && selected_videomaker_id !== clientSpecial?.videomaker_id
+          && !(await isVideomakerForCity(selected_videomaker_id, clientCityRequest))) {
+        return res.status(400).json({ error: 'Videomaker indisponível para este cliente' });
       }
       let specialVmId = selected_videomaker_id || clientSpecial?.videomaker_id || null;
 
@@ -6020,24 +6269,19 @@ app.post('/api/portal-recordings', async (req, res) => {
         specialVmId = lastClientRec?.videomaker_id || null;
       }
       if (!specialVmId) {
+        // Fallback: o videomaker menos ocupado no dia, entre os que atendem a cidade do cliente
         const { rows: [fallbackVm] } = await pool.query(
-          `SELECT p.id FROM profiles p JOIN user_roles ur ON ur.user_id = p.id LEFT JOIN recordings r ON r.videomaker_id = p.id AND r.date = $1 AND r.status != 'cancelada' WHERE ur.role = 'videomaker' AND ${portalCityMemberSql('p.id', '$2')} GROUP BY p.id, p.name ORDER BY COUNT(r.id) ASC, p.name ASC LIMIT 1`,
-          [requested_date, requestCity]
+          `SELECT p.id FROM profiles p JOIN user_roles ur ON ur.user_id = p.id LEFT JOIN recordings r ON r.videomaker_id = p.id AND r.date = $1 AND r.status != 'cancelada' WHERE ur.role = 'videomaker'${clientCityRequest ? ` AND ${userServesCitySql('p.id', '$2')}` : ''} GROUP BY p.id, p.name ORDER BY COUNT(r.id) ASC, p.name ASC LIMIT 1`,
+          clientCityRequest ? [requested_date, clientCityRequest] : [requested_date]
         );
         specialVmId = fallbackVm?.id || null;
       }
       if (!specialVmId) return res.status(400).json({ error: 'Nenhum videomaker disponível para esta solicitação' });
 
-      const specialInsertCity = await portalInsertCity('recordings', requestCity);
-      const { rows: [newSpecialRec] } = specialInsertCity
-        ? await pool.query(
-          `INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status, city) VALUES ($1, $2, $3, $4, 'extra', 'solicitada', 'pendente', $5) RETURNING id`,
-          [client_id, specialVmId, requested_date, requested_time || '09:00', specialInsertCity]
-        )
-        : await pool.query(
-          `INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ($1, $2, $3, $4, 'extra', 'solicitada', 'pendente') RETURNING id`,
-          [client_id, specialVmId, requested_date, requested_time || '09:00']
-        );
+      const newSpecialRec = await insertPublicRecording(pool, {
+        clientId: client_id, videomakerId: specialVmId, date: requested_date, startTime: requested_time || '09:00',
+        type: 'extra', status: 'solicitada', confirmationStatus: 'pendente', city: clientCityRequest, source: 'portal',
+      });
       await pool.query(`INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)`,
         [client_id, '📨 Solicitação enviada', `Sua solicitação de gravação especial para ${requested_date} foi enviada para aprovação. Aguarde a confirmação da equipe.`, 'info']);
       await notifyPortalTeam(client_id, ['admin', 'social_media'], 'Solicitação de gravação especial', `${clientSpecial?.company_name || 'Cliente'}: ${comment} — Data: ${requested_date} ${requested_time || ''} — AGUARDANDO APROVAÇÃO`, 'warning', '/relacionamento');
@@ -6045,6 +6289,7 @@ app.post('/api/portal-recordings', async (req, res) => {
     }
 
     /* ── approve_special / reject_special: só a equipe (Relacionamento) ── */
+    // Login da equipe com papel admin, social_media (isAdminUser) ou gestor_projetos: o client_id do portal não basta
     if (action === 'approve_special' || action === 'reject_special') {
       const canDecideSpecial = caller?.kind === 'team'
         && (await isAdminUser(caller.user) || await userHasAssignedRole(caller.user, 'gestor_projetos'));
@@ -6055,12 +6300,15 @@ app.post('/api/portal-recordings', async (req, res) => {
     if (action === 'approve_special') {
       const { recording_id: approveRecId } = req.body;
       if (!approveRecId) return res.status(400).json({ error: 'recording_id required' });
-      await pool.query(`UPDATE recordings SET status = 'agendada', confirmation_status = 'pendente' WHERE id = $1 AND status = 'solicitada'`, [approveRecId]);
-      const { rows: [recApprove] } = await pool.query('SELECT client_id, date::text, start_time FROM recordings WHERE id = $1', [approveRecId]);
-      if (recApprove) {
-        await pool.query(`INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)`,
-          [recApprove.client_id, '✅ Gravação aprovada!', `Sua solicitação de gravação especial para ${recApprove.date} às ${recApprove.start_time} foi aprovada pela equipe! Confirme sua presença.`, 'success']);
-      }
+      const { rows: [recApprove] } = await pool.query(
+        `UPDATE recordings SET status = 'agendada', confirmation_status = 'pendente'
+          WHERE id = $1 AND client_id = $2 AND status = 'solicitada'
+          RETURNING client_id, date::text, start_time`,
+        [approveRecId, client_id]
+      );
+      if (!recApprove) return res.status(409).json({ error: 'Solicitação não encontrada ou já respondida' });
+      await pool.query(`INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)`,
+        [recApprove.client_id, '✅ Gravação aprovada!', `Sua solicitação de gravação especial para ${recApprove.date} às ${recApprove.start_time} foi aprovada pela equipe! Confirme sua presença.`, 'success']);
       return res.json({ success: true });
     }
 
@@ -6068,12 +6316,15 @@ app.post('/api/portal-recordings', async (req, res) => {
     if (action === 'reject_special') {
       const { recording_id: rejectRecId, rejection_reason } = req.body;
       if (!rejectRecId || !rejection_reason) return res.status(400).json({ error: 'recording_id and rejection_reason required' });
-      await pool.query(`UPDATE recordings SET status = 'cancelada' WHERE id = $1 AND status = 'solicitada'`, [rejectRecId]);
-      const { rows: [recReject] } = await pool.query('SELECT client_id, date::text, start_time FROM recordings WHERE id = $1', [rejectRecId]);
-      if (recReject) {
-        await pool.query(`INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)`,
-          [recReject.client_id, '❌ Solicitação não aprovada', `Sua solicitação de gravação para ${recReject.date} não pôde ser atendida: ${rejection_reason}`, 'warning']);
-      }
+      const { rows: [recReject] } = await pool.query(
+        `UPDATE recordings SET status = 'cancelada'
+          WHERE id = $1 AND client_id = $2 AND status = 'solicitada'
+          RETURNING client_id, date::text, start_time`,
+        [rejectRecId, client_id]
+      );
+      if (!recReject) return res.status(409).json({ error: 'Solicitação não encontrada ou já respondida' });
+      await pool.query(`INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)`,
+        [recReject.client_id, '❌ Solicitação não aprovada', `Sua solicitação de gravação para ${recReject.date} não pôde ser atendida: ${rejection_reason}`, 'warning']);
       return res.json({ success: true });
     }
 
@@ -10636,9 +10887,22 @@ app.delete('/api/clients/:id', async (req, res) => {
 });
 
 // ─── Recordings ─────────────────────────────────────────────
+// Índice da subconsulta do status efetivo (content_tasks por gravação). Idempotente, na subida.
+pool.query('CREATE INDEX IF NOT EXISTS idx_content_tasks_recording ON content_tasks(recording_id)')
+  .catch(e => console.warn('idx_content_tasks_recording:', e?.message || e));
+
 app.get('/api/recordings', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
+    // Período opcional (?from=AAAA-MM-DD&to=AAAA-MM-DD) para telas que não precisam do histórico todo.
+    // Sem os parâmetros, continua vindo tudo (relatórios dependem do histórico completo).
+    const params = [];
+    const where = [];
+    if (scopeCity) { params.push(activeCity); where.push(cityVisibilityExpression('r.city', `$${params.length}`)); }
+    const from = typeof req.query.from === 'string' && isValidAgendaDate(req.query.from) ? req.query.from : null;
+    const to = typeof req.query.to === 'string' && isValidAgendaDate(req.query.to) ? req.query.to : null;
+    if (from) { params.push(from); where.push(`r.date >= $${params.length}::date`); }
+    if (to) { params.push(to); where.push(`r.date <= $${params.length}::date`); }
     const { rows } = await pool.query(`
       SELECT
         r.*,
@@ -10658,9 +10922,9 @@ app.get('/api/recordings', async (req, res) => {
           ELSE r.status
         END AS effective_status
       FROM recordings r
-      ${scopeCity ? `WHERE ${cityVisibilityExpression('r.city', '$1')}` : ''}
+      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
       ORDER BY r.date DESC, r.start_time ASC
-    `, scopeCity ? [activeCity] : []);
+    `, params);
 
     res.json(rows.map(({ effective_status, ...recording }) => ({
       ...recording,
@@ -10669,20 +10933,33 @@ app.get('/api/recordings', async (req, res) => {
   } catch (e) { res.status(401).json({ error: e.message }); }
 });
 
+// Colunas opcionais de recordings (prospect_name, client_id anulável), em cache como o tableHasCityColumn
+const _recordingsSchemaCache = new Map();
+async function getRecordingsSchemaInfo() {
+  const cached = getSchemaCacheValue(_recordingsSchemaCache, 'recordings');
+  if (cached !== null) return cached;
+  const schemaResult = await pool.query(`
+    SELECT column_name, is_nullable
+    FROM information_schema.columns
+    WHERE table_name = 'recordings'
+      AND column_name IN ('client_id', 'prospect_name')
+  `);
+  const info = {
+    hasProspectName: schemaResult.rows.some((row) => row.column_name === 'prospect_name'),
+    clientIdNullable: schemaResult.rows.some((row) => row.column_name === 'client_id' && row.is_nullable === 'YES'),
+  };
+  _recordingsSchemaCache.set('recordings', { value: info, cachedAt: Date.now() });
+  return info;
+}
+
 app.post('/api/recordings', async (req, res) => {
+  let txClient = null;
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
     const items = Array.isArray(req.body) ? req.body : [req.body];
-    const schemaResult = await pool.query(`
-      SELECT column_name, is_nullable
-      FROM information_schema.columns
-      WHERE table_name = 'recordings'
-        AND column_name IN ('client_id', 'prospect_name')
-    `);
-    const hasProspectName = schemaResult.rows.some((row) => row.column_name === 'prospect_name');
-    const clientIdNullable = schemaResult.rows.some((row) => row.column_name === 'client_id' && row.is_nullable === 'YES');
+    const { hasProspectName, clientIdNullable } = await getRecordingsSchemaInfo();
 
-    const results = [];
+    // Valida o lote inteiro antes de gravar qualquer linha
     for (const r of items) {
       const isAvulso = r.type === 'avulso' || Boolean(r.prospect_name);
       if (isAvulso && !clientIdNullable && !r.client_id) {
@@ -10695,7 +10972,31 @@ app.post('/api/recordings', async (req, res) => {
           error: 'Schema da VPS desatualizado: coluna prospect_name não existe na tabela recordings.'
         });
       }
+    }
 
+    // Videomaker que atende as duas cidades: a tela só enxerga as gravações da cidade ativa,
+    // então o mesmo horário na outra cidade é conferido aqui (gravação avulsa, uma por vez)
+    if (scopeCity && items.length === 1 && items[0]?.videomaker_id && items[0]?.date && items[0]?.start_time
+        && (items[0].status || 'agendada') !== 'cancelada') {
+      const one = items[0];
+      const { rows: otherCity } = await pool.query(
+        `SELECT 1 FROM recordings
+          WHERE videomaker_id::text = $1::text AND date = $2::date AND start_time::text = $3::text
+            AND status::text <> 'cancelada' AND NOT ${cityVisibilityExpression('city', '$4')}
+          LIMIT 1`,
+        [one.videomaker_id, one.date, one.start_time, activeCity]
+      );
+      if (otherCity.length > 0) {
+        return res.status(409).json({ error: 'O videomaker já tem gravação neste horário na outra cidade' });
+      }
+    }
+
+    // Lote numa transação: ou entra tudo, ou nada (sem metade gravada para duplicar na nova tentativa).
+    // ON CONFLICT (id) DO NOTHING deixa reenviar o mesmo lote (mesmos ids) sem erro nem duplicata.
+    txClient = await pool.connect();
+    await txClient.query('BEGIN');
+    const results = [];
+    for (const r of items) {
       const cols = ['id', 'client_id', 'videomaker_id', 'date', 'start_time', 'type', 'status', 'confirmation_status'];
       const vals = [r.id || crypto.randomUUID(), r.client_id || null, r.videomaker_id, r.date, r.start_time, r.type || 'fixa', r.status || 'agendada', r.confirmation_status || 'pendente'];
       if (scopeCity) {
@@ -10710,17 +11011,27 @@ app.post('/api/recordings', async (req, res) => {
         vals.push(r.prospect_name);
       }
       const placeholders = cols.map((_, i) => `$${i + 1}`).join(',');
-      const { rows } = await pool.query(
-        `INSERT INTO recordings (${cols.join(', ')}) VALUES (${placeholders}) RETURNING *`,
+      const { rows } = await txClient.query(
+        `INSERT INTO recordings (${cols.join(', ')}) VALUES (${placeholders}) ON CONFLICT (id) DO NOTHING RETURNING *`,
         vals
       );
-      results.push(rows[0]);
+      if (rows[0]) {
+        results.push(rows[0]);
+      } else {
+        // Já existia (reenvio do mesmo lote): devolve a linha atual
+        const { rows: existingRows } = await txClient.query('SELECT * FROM recordings WHERE id = $1', [vals[0]]);
+        if (existingRows[0]) results.push(existingRows[0]);
+      }
     }
+    await txClient.query('COMMIT');
     res.json(results.length === 1 ? results[0] : results);
   } catch (e) {
+    if (txClient) await txClient.query('ROLLBACK').catch(() => {});
     console.error('POST /api/recordings error:', e);
-    const status = e?.statusCode === 400 ? 400 : 500;
+    const status = e?.statusCode === 400 ? 400 : e?.message === 'Unauthorized' ? 401 : 500;
     res.status(status).json({ error: e.message });
+  } finally {
+    if (txClient) txClient.release();
   }
 });
 
@@ -10729,14 +11040,7 @@ app.put('/api/recordings/:id', async (req, res) => {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
     const { id } = req.params;
     const r = req.body;
-    const schemaResult = await pool.query(`
-      SELECT column_name, is_nullable
-      FROM information_schema.columns
-      WHERE table_name = 'recordings'
-        AND column_name IN ('client_id', 'prospect_name')
-    `);
-    const hasProspectName = schemaResult.rows.some((row) => row.column_name === 'prospect_name');
-    const clientIdNullable = schemaResult.rows.some((row) => row.column_name === 'client_id' && row.is_nullable === 'YES');
+    const { hasProspectName, clientIdNullable } = await getRecordingsSchemaInfo();
     if ((r.type === 'avulso' || r.prospect_name) && r.client_id == null && !clientIdNullable) {
       return res.status(500).json({ error: 'Schema da VPS desatualizado: client_id da tabela recordings ainda está NOT NULL e bloqueia vídeo avulso.' });
     }
@@ -10756,50 +11060,128 @@ app.put('/api/recordings/:id', async (req, res) => {
     const cityClause = scopeCity ? ` AND ${cityVisibilityExpression('city', `$${idx + 1}`)}` : '';
     if (scopeCity) vals.push(activeCity);
     const { rows } = await pool.query(`UPDATE recordings SET ${sets.join(', ')} WHERE id = $${idx}${cityClause} RETURNING *`, vals);
+    // Nada atualizado (apagada ou de outra cidade): erro, para a tela não mostrar sucesso
+    if (!rows[0]) return res.status(404).json({ error: 'Gravação não encontrada' });
     res.json(rows[0]);
   } catch (e) {
-    const status = e?.statusCode === 400 ? 400 : 500;
+    const status = e?.statusCode === 400 ? 400 : e?.message === 'Unauthorized' ? 401 : 500;
     res.status(status).json({ error: e.message });
   }
 });
 
 app.delete('/api/recordings/:id', async (req, res) => {
+  let txClient = null;
   try {
-    const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
+    const { user, activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
     const id = req.params.id;
-    // Cascade: remove dependent records first
-    await pool.query('DELETE FROM active_recordings WHERE recording_id = $1', [id]);
-    await pool.query('DELETE FROM delivery_records WHERE recording_id = $1', [id]);
-    await pool.query('DELETE FROM recording_wait_logs WHERE recording_id = $1', [id]);
-    // Remove content_tasks linked to this recording (and their history/deliveries)
-    const { rows: linkedTasks } = await pool.query('SELECT id FROM content_tasks WHERE recording_id = $1', [id]);
-    if (linkedTasks.length > 0) {
-      const taskIds = linkedTasks.map(t => t.id);
-      await pool.query('DELETE FROM task_history WHERE task_id = ANY($1)', [taskIds]);
-      await pool.query('DELETE FROM social_media_deliveries WHERE content_task_id = ANY($1)', [taskIds]);
-      await pool.query('DELETE FROM content_tasks WHERE recording_id = $1', [id]);
-    }
-    // Mark linked scripts as not recorded
-    await pool.query("UPDATE scripts SET recorded = false, updated_at = NOW() WHERE recording_id = $1", [id]);
-    await pool.query(
-      `DELETE FROM recordings WHERE id = $1${scopeCity ? ` AND ${cityVisibilityExpression('city', '$2')}` : ''}`,
+    const force = req.query.force === '1' || req.query.force === 'true';
+    txClient = await pool.connect();
+    await txClient.query('BEGIN');
+    // Confere antes (com o filtro de cidade) se a gravação existe; nada é apagado de outra cidade
+    const { rows: [rec] } = await txClient.query(
+      `SELECT id, status FROM recordings WHERE id = $1${scopeCity ? ` AND ${cityVisibilityExpression('city', '$2')}` : ''} FOR UPDATE`,
       scopeCity ? [id, activeCity] : [id]
     );
+    if (!rec) {
+      await txClient.query('ROLLBACK');
+      return res.status(404).json({ error: 'Gravação não encontrada' });
+    }
+    // Gravação já realizada (concluída, organizando material, com entrega ou vídeos em produção)
+    // não é apagada no uso normal: o certo é cancelar. Só admin apaga, e de forma explícita (force).
+    const { rows: [usage] } = await txClient.query(
+      `SELECT EXISTS (SELECT 1 FROM delivery_records WHERE recording_id = $1) AS has_delivery,
+              (SELECT COUNT(*)::int FROM content_tasks WHERE recording_id = $1
+                 AND kanban_column IN ('captacao_concluida', 'edicao', 'revisao', 'alteracao', 'aprovado', 'finalizado')) AS videos_in_production`,
+      [id]
+    );
+    const alreadyRecorded = ['concluida', 'organizando_material'].includes(rec.status) || usage?.has_delivery || Number(usage?.videos_in_production || 0) > 0;
+    if (alreadyRecorded) {
+      if (!force || !(await isAdminUser(user))) {
+        await txClient.query('ROLLBACK');
+        return res.status(409).json({
+          error: 'Esta gravação já foi realizada e não pode ser apagada. Use Cancelar ou peça a um admin.',
+          already_recorded: true,
+          videos_in_production: Number(usage?.videos_in_production || 0),
+        });
+      }
+    }
+    // Cascade: remove dependent records first
+    await txClient.query('DELETE FROM active_recordings WHERE recording_id = $1', [id]);
+    await txClient.query('DELETE FROM recording_wait_logs WHERE recording_id = $1', [id]);
+    if (alreadyRecorded) {
+      await txClient.query('DELETE FROM delivery_records WHERE recording_id = $1', [id]);
+    }
+    // Vídeos vinculados NÃO são apagados: os que ainda estão na captação voltam para "ideias"
+    // (igual a cancelar a gravação ativa) e os que já passaram dela só perdem o vínculo.
+    const backToIdeasColumns = alreadyRecorded ? ['captacao'] : ['captacao', 'captacao_concluida', 'aguardando_link'];
+    await txClient.query(
+      `UPDATE content_tasks SET kanban_column = 'ideias', recording_id = NULL, updated_at = NOW()
+        WHERE recording_id = $1 AND kanban_column = ANY($2::text[])`,
+      [id, backToIdeasColumns]
+    );
+    await txClient.query('UPDATE content_tasks SET recording_id = NULL, updated_at = NOW() WHERE recording_id = $1', [id]);
+    // Mark linked scripts as not recorded (só quando a gravação não chegou a acontecer)
+    if (!alreadyRecorded) {
+      await txClient.query("UPDATE scripts SET recorded = false, updated_at = NOW() WHERE recording_id = $1", [id]);
+    }
+    await txClient.query('DELETE FROM recordings WHERE id = $1', [id]);
+    await txClient.query('COMMIT');
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    if (txClient) await txClient.query('ROLLBACK').catch(() => {});
+    const status = e?.message === 'Unauthorized' ? 401 : 500;
+    res.status(status).json({ error: e.message });
+  } finally {
+    if (txClient) txClient.release();
+  }
 });
 
 // Bulk delete future recordings for a client
+// Regenerar agenda do cliente: apaga as gravações futuras geradas pela agenda (fixa, backup, extra)
+// para recriar as fixas com a configuração nova. Ficam: as que o cliente criou ou confirmou pelo
+// portal/link, as que já começaram (hoje, no fuso de Brasília) e as que têm algo vinculado
+// (em andamento, entrega, vídeos). Tudo numa transação, limpando o vínculo dos roteiros.
 app.delete('/api/recordings/future/:clientId', async (req, res) => {
+  let txClient = null;
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
-    const today = new Date().toISOString().split('T')[0];
-    const { rowCount } = await pool.query(
-      `DELETE FROM recordings WHERE client_id = $1 AND status = 'agendada' AND date >= $2${scopeCity ? ` AND ${cityVisibilityExpression('city', '$3')}` : ''}`,
-      scopeCity ? [req.params.clientId, today, activeCity] : [req.params.clientId, today]
+    await ensurePublicReschedTable();
+    const today = brtDateString();
+    const nowMinutes = brtMinutesNow();
+    const params = [req.params.clientId, today, nowMinutes];
+    let cityClause = '';
+    if (scopeCity) { params.push(activeCity); cityClause = ` AND ${cityVisibilityExpression('r.city', `$${params.length}`)}`; }
+    txClient = await pool.connect();
+    await txClient.query('BEGIN');
+    const { rows: deletedRows } = await txClient.query(
+      `DELETE FROM recordings r
+        WHERE r.client_id = $1 AND r.status::text = 'agendada'
+          AND r.type::text IN ('fixa', 'backup', 'extra')
+          AND (r.date > $2::date OR (r.date = $2::date
+               AND (CASE WHEN r.start_time::text ~ '^[0-9]{1,2}:[0-9]{2}'
+                         THEN split_part(r.start_time::text, ':', 1)::int * 60 + split_part(r.start_time::text, ':', 2)::int
+                         ELSE 0 END) > $3))
+          AND NOT (r.type::text <> 'fixa' AND COALESCE(r.confirmation_status::text, '') = 'confirmada')
+          ${recordingsSourceColumnReady ? "AND COALESCE(r.source, '') NOT IN ('portal', 'link')" : ''}
+          AND NOT EXISTS (SELECT 1 FROM recordings o WHERE o.rescheduled_to_id = r.id)
+          AND NOT EXISTS (SELECT 1 FROM active_recordings a WHERE a.recording_id = r.id)
+          AND NOT EXISTS (SELECT 1 FROM delivery_records d WHERE d.recording_id = r.id)
+          AND NOT EXISTS (SELECT 1 FROM content_tasks ct WHERE ct.recording_id = r.id)${cityClause}
+        RETURNING r.id::text AS id`,
+      params
     );
-    res.json({ deleted: rowCount });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    const deletedIds = deletedRows.map(row => row.id);
+    if (deletedIds.length > 0) {
+      await txClient.query('UPDATE scripts SET recording_id = NULL, updated_at = NOW() WHERE recording_id::text = ANY($1::text[])', [deletedIds]);
+    }
+    await txClient.query('COMMIT');
+    res.json({ deleted: deletedIds.length, deleted_ids: deletedIds });
+  } catch (e) {
+    if (txClient) await txClient.query('ROLLBACK').catch(() => {});
+    res.status(e?.message === 'Unauthorized' ? 401 : 500).json({ error: e.message });
+  } finally {
+    if (txClient) txClient.release();
+  }
 });
 
 // ─── Kanban Tasks ───────────────────────────────────────────
@@ -11129,96 +11511,243 @@ async function ensureRecordingMetricsSchema() {
 }
 ensureRecordingMetricsSchema().catch(err => console.error('[recording-metrics] schema init failed:', err.message));
 
+// Contagens do registro de entrega (o que não vier fica 0, e pelo menos 1 vídeo gravado)
+function deliveryCountsFrom(overrides) {
+  return {
+    reels_produced: overrides?.reels_produced ?? 0,
+    creatives_produced: overrides?.creatives_produced ?? 0,
+    stories_produced: overrides?.stories_produced ?? 0,
+    arts_produced: overrides?.arts_produced ?? 0,
+    extras_produced: overrides?.extras_produced ?? 0,
+    videos_recorded: overrides?.videos_recorded ?? 1,
+  };
+}
+
+// Cidade de uma gravação: a da gravação ativa (se informada), senão a da gravação, senão a do cliente.
+async function getRecordingCity(recordingId, activeCity = null) {
+  const fromActive = normalizeCityValue(activeCity);
+  if (fromActive) return fromActive;
+  try {
+    const hasRecCity = await tableHasCityColumn('recordings');
+    const { rows: [row] } = await pool.query(
+      `SELECT ${hasRecCity ? 'r.city::text' : 'NULL'} AS rec_city, c.city::text AS client_city
+         FROM recordings r LEFT JOIN clients c ON c.id = r.client_id
+        WHERE r.id = $1`,
+      [recordingId]
+    );
+    return normalizeCityValue(row?.rec_city) || normalizeCityValue(row?.client_city) || null;
+  } catch {
+    return null;
+  }
+}
+
+// Um registro de entrega por gravação: atualiza o que existe e só insere quando não há nenhum.
+// Funciona com ou sem o índice único delivery_records_recording_id_unique.
+async function upsertDeliveryRecord({ recordingId, clientId, videomakerId, date, city, counts = null, timing = null }) {
+  const updates = { ...(counts || {}), ...(timing || {}) };
+  const keys = Object.keys(updates);
+  if (keys.length > 0) {
+    const { rowCount } = await pool.query(
+      `UPDATE delivery_records SET ${keys.map((k, i) => `${k} = $${i + 2}`).join(', ')}, updated_at = NOW() WHERE recording_id = $1`,
+      [recordingId, ...keys.map(k => updates[k])]
+    );
+    if (rowCount > 0) return 'updated';
+  } else {
+    const { rows } = await pool.query('SELECT 1 FROM delivery_records WHERE recording_id = $1 LIMIT 1', [recordingId]);
+    if (rows.length > 0) return 'exists';
+  }
+  // client_id e videomaker_id são obrigatórios: gravação avulsa (sem cliente) não gera entrega
+  if (!clientId || !videomakerId) return 'skipped';
+  const row = {
+    recording_id: recordingId,
+    client_id: clientId,
+    videomaker_id: videomakerId,
+    date,
+    ...deliveryCountsFrom(null),
+    ...(counts || {}),
+    delivery_status: 'realizada',
+    observations: 'Registro automático ao finalizar gravação',
+    ...(timing || {}),
+  };
+  if (city && await tableHasCityColumn('delivery_records')) row.city = city;
+  const cols = Object.keys(row);
+  await pool.query(
+    `INSERT INTO delivery_records (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')})`,
+    cols.map(c => row[c])
+  );
+  return 'inserted';
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Roteiros planejados que NÃO foram gravados voltam para "ideias"
+// (e desvinculam do recording para sumir da captação dessa gravação)
+async function returnUnrecordedScriptsToIdeas(notRecorded) {
+  const ids = [...new Set((notRecorded || []).map(String))].filter(id => UUID_PATTERN.test(id));
+  if (ids.length === 0) return;
+  await pool.query(
+    `UPDATE content_tasks
+       SET kanban_column = 'ideias',
+           recording_id = NULL,
+           drive_link = NULL,
+           updated_at = NOW()
+     WHERE script_id = ANY($1::uuid[])
+       AND kanban_column IN ('captacao', 'captacao_concluida', 'aguardando_link')`,
+    [ids]
+  );
+  // Garante que os scripts não fiquem marcados como gravados
+  await pool.query(
+    `UPDATE scripts SET recorded = false, recording_id = NULL, updated_at = NOW()
+     WHERE id = ANY($1::uuid[])`,
+    [ids]
+  );
+}
+
 // Stop active recording with delivery record creation
+// deferDelivery: o painel do videomaker fecha o cronômetro ao tocar em Finalizar, mas só informa
+// roteiros e contagens depois, no diálogo de finalização (rota /finalize). Nesse modo o stop grava
+// só o tempo (início, fim, duração e espera) e não mexe em roteiros nem em contagens.
 app.post('/api/active-recordings/:recordingId/stop', async (req, res) => {
   try {
     await verifyUser(req);
     await ensureRecordingMetricsSchema().catch(() => {});
     const { recordingId } = req.params;
-    const { deliveryOverrides, completedScriptIds } = req.body;
-    
+    const { deliveryOverrides, completedScriptIds, deferDelivery } = req.body || {};
+
     const { rows: activeRows } = await pool.query('SELECT * FROM active_recordings WHERE recording_id = $1', [recordingId]);
     await pool.query('DELETE FROM active_recordings WHERE recording_id = $1', [recordingId]);
-    
+
     const active = activeRows[0];
     if (active) {
       const finishedAt = new Date();
       const startedAt = active.started_at ? new Date(active.started_at) : null;
 
-      // Fecha esperas ainda abertas dessa gravação e soma o total de espera
+      // Fecha esperas ainda abertas dessa gravação e soma o total de espera.
+      // Há dois tipos: a espera antes do início ("Aguardar cliente", que o Iniciar encerra) e a pausa
+      // durante a gravação ("Em Espera" no card ao vivo). Uma espera aberta que começou antes do início
+      // termina no início (senão o tempo gravado entraria como espera); a pausa termina agora.
       let waitSeconds = 0;
+      let pausedSeconds = 0;
       try {
         await pool.query(
           `UPDATE recording_wait_logs
-              SET ended_at = NOW(),
-                  wait_duration_seconds = GREATEST(0, EXTRACT(EPOCH FROM (NOW() - started_at))::int)
+              SET ended_at = CASE WHEN $2::timestamptz IS NOT NULL AND started_at < $2::timestamptz THEN $2::timestamptz ELSE NOW() END,
+                  wait_duration_seconds = GREATEST(0, EXTRACT(EPOCH FROM (
+                    (CASE WHEN $2::timestamptz IS NOT NULL AND started_at < $2::timestamptz THEN $2::timestamptz ELSE NOW() END) - started_at
+                  ))::int)
             WHERE recording_id = $1 AND ended_at IS NULL`,
-          [recordingId]
+          [recordingId, startedAt ? startedAt.toISOString() : null]
         );
+        // total = toda a espera (informativo); during = só o trecho de espera dentro da gravação
         const { rows: waitRows } = await pool.query(
-          'SELECT COALESCE(SUM(wait_duration_seconds), 0)::int AS total FROM recording_wait_logs WHERE recording_id = $1',
-          [recordingId]
+          `SELECT COALESCE(SUM(wait_duration_seconds), 0)::int AS total,
+                  COALESCE(SUM(CASE WHEN $2::timestamptz IS NULL THEN 0 ELSE GREATEST(0, EXTRACT(EPOCH FROM (
+                    LEAST(COALESCE(ended_at, $3::timestamptz), $3::timestamptz) - GREATEST(started_at, $2::timestamptz)
+                  ))) END), 0)::int AS during
+             FROM recording_wait_logs WHERE recording_id = $1`,
+          [recordingId, startedAt ? startedAt.toISOString() : null, finishedAt.toISOString()]
         );
         waitSeconds = Number(waitRows[0]?.total || 0);
+        pausedSeconds = Number(waitRows[0]?.during || 0);
       } catch (waitErr) {
         console.warn('[recording-metrics] wait aggregation failed:', waitErr.message);
       }
 
-      // Duração efetiva = total decorrido - espera (nunca negativa)
+      // Duração efetiva = total decorrido - pausas durante a gravação (nunca negativa).
+      // A espera antes do início não é descontada: fica só em wait_duration_seconds.
       const grossSeconds = startedAt ? Math.max(0, Math.floor((finishedAt - startedAt) / 1000)) : null;
-      const recordingSeconds = grossSeconds === null ? null : Math.max(0, grossSeconds - waitSeconds);
+      const recordingSeconds = grossSeconds === null ? null : Math.max(0, grossSeconds - pausedSeconds);
+      const deliveryCity = await getRecordingCity(recordingId, active.city);
 
-      await pool.query(
-        `INSERT INTO delivery_records (recording_id, client_id, videomaker_id, date, reels_produced, creatives_produced, stories_produced, arts_produced, extras_produced, videos_recorded, delivery_status, observations,
-                                       started_at, finished_at, recording_duration_seconds, wait_duration_seconds)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-        [recordingId, active.client_id, active.videomaker_id, finishedAt.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
-         deliveryOverrides?.reels_produced ?? 0, deliveryOverrides?.creatives_produced ?? 0,
-         deliveryOverrides?.stories_produced ?? 0, deliveryOverrides?.arts_produced ?? 0,
-         deliveryOverrides?.extras_produced ?? 0, deliveryOverrides?.videos_recorded ?? 1,
-         'realizada', 'Registro automático ao finalizar gravação',
-         startedAt ? startedAt.toISOString() : null, finishedAt.toISOString(), recordingSeconds, waitSeconds]
-      );
-      
-      if (completedScriptIds?.length > 0) {
-        for (const scriptId of completedScriptIds) {
-          const { rows: scriptRows } = await pool.query('SELECT title, content_format FROM scripts WHERE id = $1', [scriptId]);
-          const script = scriptRows[0];
-          await pool.query(
-            `INSERT INTO social_media_deliveries (client_id, content_type, title, status, delivered_at, script_id, recording_id, created_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [active.client_id, script?.content_format || 'reels', script?.title || 'Vídeo gravado',
-             'entregue', new Date().toISOString().split('T')[0], scriptId, recordingId, active.videomaker_id]
-          );
+      await upsertDeliveryRecord({
+        recordingId,
+        clientId: active.client_id,
+        videomakerId: active.videomaker_id,
+        date: finishedAt.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
+        city: deliveryCity,
+        counts: deferDelivery ? null : deliveryCountsFrom(deliveryOverrides),
+        timing: {
+          started_at: startedAt ? startedAt.toISOString() : null,
+          finished_at: finishedAt.toISOString(),
+          recording_duration_seconds: recordingSeconds,
+          wait_duration_seconds: waitSeconds,
+        },
+      });
+
+      if (!deferDelivery) {
+        // social_media_deliveries.client_id é NOT NULL: gravação avulsa/sem cliente não gera entrega
+        // (igual ao 'skipped' do upsertDeliveryRecord). A falha de um roteiro não derruba a finalização.
+        if (completedScriptIds?.length > 0 && active.client_id) {
+          const smdHasCity = Boolean(deliveryCity) && await tableHasCityColumn('social_media_deliveries');
+          for (const scriptId of completedScriptIds) {
+            try {
+              const { rows: scriptRows } = await pool.query('SELECT title, content_format FROM scripts WHERE id = $1', [scriptId]);
+              const script = scriptRows[0];
+              await pool.query(
+                `INSERT INTO social_media_deliveries (client_id, content_type, title, status, delivered_at, script_id, recording_id, created_by${smdHasCity ? ', city' : ''})
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8${smdHasCity ? ',$9' : ''})`,
+                [active.client_id, script?.content_format || 'reels', script?.title || 'Vídeo gravado',
+                 'entregue', new Date().toISOString().split('T')[0], scriptId, recordingId, active.videomaker_id,
+                 ...(smdHasCity ? [deliveryCity] : [])]
+              );
+            } catch (smdErr) {
+              console.warn('[active-recordings/stop] social_media_deliveries insert failed:', scriptId, smdErr.message);
+            }
+          }
         }
-      }
 
-      // Roteiros planejados que NÃO foram gravados voltam para "ideias"
-      // (e desvinculam do recording para sumir da captação dessa gravação)
-      const planned = Array.isArray(active.planned_script_ids) ? active.planned_script_ids : [];
-      const completed = new Set(completedScriptIds || []);
-      const notRecorded = planned.filter(id => !completed.has(id));
-      if (notRecorded.length > 0) {
-        await pool.query(
-          `UPDATE content_tasks
-             SET kanban_column = 'ideias',
-                 recording_id = NULL,
-                 drive_link = NULL,
-                 updated_at = NOW()
-           WHERE script_id = ANY($1::uuid[])
-             AND kanban_column IN ('captacao', 'captacao_concluida', 'aguardando_link')`,
-          [notRecorded]
-        );
-        // Garante que os scripts não fiquem marcados como gravados
-        await pool.query(
-          `UPDATE scripts SET recorded = false, recording_id = NULL, updated_at = NOW()
-           WHERE id = ANY($1::uuid[])`,
-          [notRecorded]
-        );
+        const planned = Array.isArray(active.planned_script_ids) ? active.planned_script_ids : [];
+        const completed = new Set(completedScriptIds || []);
+        await returnUnrecordedScriptsToIdeas(planned.filter(id => !completed.has(id)));
       }
     }
     res.json({ success: true });
-  } catch (e) { console.error('POST /api/active-recordings/stop error:', e); res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('POST /api/active-recordings/stop error:', e);
+    res.status(e?.message === 'Unauthorized' ? 401 : 500).json({ error: e.message });
+  }
+});
+
+// Segundo passo do stop com deferDelivery: depois do diálogo de finalização, grava as contagens
+// no registro de entrega (sem mexer no tempo de gravação) e só então devolve para "ideias"
+// os roteiros planejados que não foram gravados.
+app.post('/api/active-recordings/:recordingId/finalize', async (req, res) => {
+  try {
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
+    await ensureRecordingMetricsSchema().catch(() => {});
+    const { recordingId } = req.params;
+    const { deliveryOverrides, completedScriptIds, plannedScriptIds } = req.body || {};
+    const { rows: [rec] } = await pool.query(
+      `SELECT id, client_id, videomaker_id, date::text AS date FROM recordings
+        WHERE id = $1${scopeCity ? ` AND ${cityVisibilityExpression('city', '$2')}` : ''}`,
+      scopeCity ? [recordingId, activeCity] : [recordingId]
+    );
+    if (!rec) return res.status(404).json({ error: 'Gravação não encontrada' });
+
+    await upsertDeliveryRecord({
+      recordingId,
+      clientId: rec.client_id,
+      videomakerId: rec.videomaker_id,
+      date: rec.date,
+      city: await getRecordingCity(recordingId),
+      counts: deliveryCountsFrom(deliveryOverrides),
+    });
+
+    // Não gravados = planejados informados pelo painel + os que ainda estão na captação desta gravação
+    const completed = new Set((Array.isArray(completedScriptIds) ? completedScriptIds : []).map(String));
+    const { rows: pendingTasks } = await pool.query(
+      `SELECT script_id::text AS script_id FROM content_tasks
+        WHERE recording_id = $1 AND script_id IS NOT NULL
+          AND kanban_column IN ('captacao', 'captacao_concluida', 'aguardando_link')`,
+      [recordingId]
+    );
+    const candidates = [...(Array.isArray(plannedScriptIds) ? plannedScriptIds : []), ...pendingTasks.map(t => t.script_id)];
+    await returnUnrecordedScriptsToIdeas(candidates.filter(id => !completed.has(String(id))));
+    res.json({ success: true });
+  } catch (e) {
+    console.error('POST /api/active-recordings/finalize error:', e);
+    res.status(e?.message === 'Unauthorized' ? 401 : 500).json({ error: e.message });
+  }
 });
 
 // ─── Production Assistant (AI Mascot) ──────────────────────
@@ -14752,6 +15281,7 @@ app.get('/api/gestao/history', async (req, res) => {
 
 // ─── Public reschedule (link enviado ao cliente após cancelamento manual) ───
 let publicReschedTableReady = null;
+let recordingsSourceColumnReady = false;
 async function ensurePublicReschedTable() {
   if (publicReschedTableReady) return publicReschedTableReady;
   publicReschedTableReady = (async () => {
@@ -14761,9 +15291,16 @@ async function ensurePublicReschedTable() {
           ADD COLUMN IF NOT EXISTS rescheduled_to_id uuid REFERENCES recordings(id) ON DELETE SET NULL
       `);
     } catch (e) { console.warn('ensurePublicReschedTable:', e?.message || e); }
+    // Origem das gravações criadas pelo cliente: 'portal' (pedido especial, remarcação no portal)
+    // ou 'link' (link público de reagendamento). Vazio = criada pela equipe.
+    try {
+      await pool.query(`ALTER TABLE recordings ADD COLUMN IF NOT EXISTS source text`);
+      recordingsSourceColumnReady = true;
+    } catch (e) { console.warn('ensurePublicReschedTable (source):', e?.message || e); }
   })();
   return publicReschedTableReady;
 }
+ensurePublicReschedTable().catch(() => {});
 
 const DAY_MAP_PR = { domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6 };
 
@@ -14809,6 +15346,8 @@ app.post('/api/public-reschedule', async (req, res) => {
     );
     if (!rec) return res.status(404).json({ error: 'Link inválido ou expirado' });
     if (rec.status !== 'cancelada') return res.status(400).json({ error: 'Esta gravação não está cancelada.' });
+    // A nova gravação fica na cidade da gravação original (senão a do cliente)
+    const recCity = await getRecordingCity(rec.id);
 
     // If already rescheduled, return that info (idempotent)
     let alreadyBooked = null;
@@ -14819,23 +15358,32 @@ app.post('/api/public-reschedule', async (req, res) => {
       if (nr) alreadyBooked = { id: nr.id, date: nr.date, start_time: nr.start_time };
     }
 
-    const { rows: [settings] } = await pool.query('SELECT * FROM company_settings LIMIT 1');
+    const settings = await getCompanySettingsForCity(recCity);
     const rawDur = settings?.recording_duration || 2;
     const duration = rawDur > 10 ? rawDur : rawDur * 60;
+    const workDays = getSettingsWorkDays(settings);
+    // Hoje e agora no fuso de Brasília; horário de hoje só com pelo menos 1 h de antecedência
+    const todayBrt = brtDateString();
+    const minStartTodayMin = brtMinutesNow() + 60;
+    // Horários que o link oferece num dia: dia útil da agência, dentro dos 14 dias, livres e, se hoje, ainda por vir
+    const offeredSlotsFor = (dateStr, existing) => {
+      if (dateStr < todayBrt || dateStr > addDaysToDateString(todayBrt, 13)) return [];
+      if (!workDays.includes(weekdayNameOfDate(dateStr))) return [];
+      const free = computeVmSlots(existing, settings, duration);
+      return dateStr === todayBrt ? free.filter(t => agendaTimeToMinutes(t) >= minStartTodayMin) : free;
+    };
 
     if (action === 'info' || !action) {
       // Build next 14 days of slots for this videomaker (current + next week)
-      const today = new Date(); today.setHours(0, 0, 0, 0);
       const days = [];
       for (let i = 0; i < 14; i++) {
-        const d = new Date(today); d.setDate(d.getDate() + i);
-        const dateStr = d.toISOString().split('T')[0];
+        const dateStr = addDaysToDateString(todayBrt, i);
         const { rows: existing } = await pool.query(
           `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,
           [rec.videomaker_id, dateStr]
         );
-        const slots = computeVmSlots(existing, settings, duration);
-        days.push({ date: dateStr, weekday: d.getDay(), slots });
+        const slots = offeredSlotsFor(dateStr, existing);
+        days.push({ date: dateStr, weekday: new Date(`${dateStr}T12:00:00Z`).getUTCDay(), slots });
       }
 
       // Next fixed occurrence (7-14 days from cancelled date)
@@ -14862,40 +15410,51 @@ app.post('/api/public-reschedule', async (req, res) => {
 
     if (alreadyBooked) return res.status(409).json({ error: 'Este link já foi usado para reagendar.', already_booked: alreadyBooked });
 
-    async function createBackup(newDate, newTime) {
-      // Conflict recheck
-      const { rows: existing } = await pool.query(
-        `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,
-        [rec.videomaker_id, newDate]
-      );
+    // Conferência e criação numa transação: trava a gravação cancelada (um link = um reagendamento)
+    // e o dia do videomaker (dois clientes não pegam o mesmo horário). Avisa a equipe só depois do COMMIT.
+    async function createBackup(newDate, newTime, { requireOffered = true } = {}) {
       const buffer = 30;
-      const [nh, nm] = newTime.split(':').map(Number);
-      const ns = nh * 60 + nm; const ne = ns + duration + buffer;
-      const conflict = existing.some(c => { const [ch, cm] = c.start_time.split(':').map(Number); const cs = ch * 60 + cm; return ns < cs + duration + buffer && ne > cs; });
-      if (conflict) { const err = new Error('Horário não está mais disponível.'); err.status = 409; throw err; }
+      const txClient = await pool.connect();
+      let newRec;
+      try {
+        await txClient.query('BEGIN');
+        const { rows: [locked] } = await txClient.query('SELECT rescheduled_to_id FROM recordings WHERE id = $1 FOR UPDATE', [rec.id]);
+        if (locked?.rescheduled_to_id) { const err = new Error('Este link já foi usado para reagendar.'); err.status = 409; throw err; }
+        await txClient.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`agenda|${rec.videomaker_id}|${newDate}`]);
+        // Conflict recheck
+        const { rows: existing } = await txClient.query(
+          `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,
+          [rec.videomaker_id, newDate]
+        );
+        if (requireOffered && !offeredSlotsFor(newDate, existing).includes(String(newTime).slice(0, 5))) {
+          const err = new Error('Horário não está mais disponível.'); err.status = 409; throw err;
+        }
+        const ns = agendaTimeToMinutes(newTime); const ne = ns + duration + buffer;
+        const conflict = existing.some(c => { const cs = agendaTimeToMinutes(c.start_time); return ns < cs + duration + buffer && ne > cs; });
+        if (conflict) { const err = new Error('Horário não está mais disponível.'); err.status = 409; throw err; }
 
-      const { rows: [newRec] } = await pool.query(
-        `INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status)
-         VALUES ($1, $2, $3, $4, 'backup', 'agendada', 'confirmada')
-         RETURNING id, date::text, start_time`,
-        [rec.client_id, rec.videomaker_id, newDate, newTime]
-      );
-      await pool.query(`UPDATE recordings SET rescheduled_to_id = $1 WHERE id = $2`, [newRec.id, rec.id]);
+        newRec = await insertPublicRecording(txClient, {
+          clientId: rec.client_id, videomakerId: rec.videomaker_id, date: newDate, startTime: newTime,
+          type: 'backup', status: 'agendada', confirmationStatus: 'confirmada', city: recCity, source: 'link',
+        });
+        await txClient.query(`UPDATE recordings SET rescheduled_to_id = $1 WHERE id = $2`, [newRec.id, rec.id]);
+        await txClient.query('COMMIT');
+      } catch (txErr) {
+        await txClient.query('ROLLBACK').catch(() => {});
+        throw txErr;
+      } finally {
+        txClient.release();
+      }
 
       // Notify team
       const msg = `${rec.company_name} reagendou (via link) para ${newDate} ${newTime}`;
-      const { rows: notifUsers } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media', 'videomaker')`);
-      for (const u of notifUsers) {
-        await pool.query(
-          `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, 'Reagendamento por link', msg, 'info', '/agenda']
-        );
-      }
+      await notifyTeamRoles(['admin', 'social_media', 'videomaker'], { title: 'Reagendamento por link', message: msg, type: 'info', link: '/agenda' }, recCity);
       return newRec;
     }
 
     if (action === 'book') {
       if (!date || !time) return res.status(400).json({ error: 'date e time requeridos' });
+      if (!isValidAgendaDate(date) || !isValidAgendaTime(time)) return res.status(400).json({ error: 'Data ou horário inválido' });
       const nr = await createBackup(date, time);
       return res.json({ success: true, booked: nr });
     }
@@ -14911,7 +15470,8 @@ app.post('/api/public-reschedule', async (req, res) => {
         if (d.getDay() === fixedDayNum) { target = d.toISOString().split('T')[0]; break; }
       }
       if (!target) return res.status(400).json({ error: 'Não foi possível calcular a próxima data fixa.' });
-      const nr = await createBackup(target, rec.fixed_time || '08:30');
+      // Horário fixo do cliente: não precisa estar na grade do link, só livre
+      const nr = await createBackup(target, rec.fixed_time || '08:30', { requireOffered: false });
       return res.json({ success: true, booked: nr });
     }
 

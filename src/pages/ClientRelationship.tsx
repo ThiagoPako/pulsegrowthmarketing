@@ -34,11 +34,22 @@ export default function ClientRelationship() {
 
   const fetchRequests = useCallback(async () => {
     try {
-      const { data } = await supabase
+      // Só os pedidos do cliente (source = 'portal'); as extras geradas pela equipe também são
+      // type 'extra' e poluíam o histórico. Pedido pendente antigo (sem source) continua aparecendo.
+      let { data, error } = await supabase
         .from('recordings')
         .select('id, client_id, date, start_time, status, created_at, videomaker_id')
         .eq('type', 'extra')
+        .or('source.eq.portal,status.eq.solicitada')
         .order('created_at', { ascending: false });
+      if (error) {
+        // Servidor ainda sem a coluna source: volta para a consulta antiga
+        ({ data } = await supabase
+          .from('recordings')
+          .select('id, client_id, date, start_time, status, created_at, videomaker_id')
+          .eq('type', 'extra')
+          .order('created_at', { ascending: false }));
+      }
 
       if (!data) { setRequests([]); setLoading(false); return; }
 
@@ -75,10 +86,17 @@ export default function ClientRelationship() {
 
   useEffect(() => { fetchRequests(); }, [fetchRequests]);
 
-  // Poll every 15s
+  // Atualiza a cada 60 s só com a aba visível, e na hora ao voltar para a aba
   useEffect(() => {
-    const interval = setInterval(fetchRequests, 15000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchRequests();
+    }, 60000);
+    const onVisibility = () => { if (document.visibilityState === 'visible') fetchRequests(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [fetchRequests]);
 
   const handleApprove = async (req: SpecialRequest) => {

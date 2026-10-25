@@ -747,8 +747,14 @@ export default function Clients() {
             editing.monthlyRecordings !== updatedClient.monthlyRecordings;
 
           if (scheduleFieldsChanged) {
-            const { deleted, created } = await regenerateScheduleForClient(updatedClient);
-            toast.success(`Cliente atualizado — agenda regenerada: ${deleted} removida(s), ${created} criada(s)`);
+            try {
+              const { deleted, created } = await regenerateScheduleForClient(updatedClient);
+              toast.success(`Cliente atualizado — agenda regenerada: ${deleted} removida(s), ${created} criada(s)`);
+            } catch (regenErr) {
+              // O cliente já foi salvo: avisa só que a agenda não foi refeita
+              console.error('Erro ao regenerar agenda:', regenErr);
+              toast.error(`Cliente atualizado, mas a agenda não foi regenerada: ${regenErr instanceof Error ? regenErr.message : 'erro desconhecido'}`);
+            }
           } else {
             toast.success('Cliente atualizado');
           }

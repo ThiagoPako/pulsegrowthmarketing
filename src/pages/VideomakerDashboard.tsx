@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { useApp } from '@/contexts/AppContext';
@@ -20,7 +20,7 @@ import {
   Scissors, PlusCircle, ExternalLink, Pause, Sparkles, Film, Zap
 } from 'lucide-react';
 import LiveRecordingCard from '@/components/videomaker/LiveRecordingCard';
-import { startWaitSession, stopWaitSession, loadWaitSession, restoreOpenWaitSession, waitElapsedSeconds, formatWaitDuration } from '@/lib/recordingWait';
+import { startWaitSession, stopWaitSession, loadWaitSession, restoreOpenWaitSession, formatWaitDuration } from '@/lib/recordingWait';
 import FieldworkButton from '@/components/videomaker/FieldworkButton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -36,10 +36,28 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import EditorDashboard from '@/pages/EditorDashboard';
 import EditorKanban from '@/pages/EditorKanban';
 
+/** Cronômetro com estado próprio: só ele re-renderiza a cada segundo, não o painel inteiro.
+ *  compute recebe o "agora" (ms) e devolve os segundos a mostrar. */
+function LiveSeconds({ compute, children }: { compute: (nowMs: number) => number; children: (seconds: number) => ReactNode }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, []);
+  return <>{children(compute(Date.now()))}</>;
+}
+
+/** Segundos ativos da sessão de stories: desconta as pausas encerradas e a pausa em andamento */
+function storyActiveSeconds(startedAt: string, pausedAt: number | null, totalPausedSec: number, nowMs: number) {
+  const currentPause = pausedAt ? Math.floor((nowMs - pausedAt) / 1000) : 0;
+  const raw = Math.floor((nowMs - new Date(startedAt).getTime()) / 1000);
+  return Math.max(0, raw - totalPausedSec - currentPause);
+}
+
 export default function VideomakerDashboard() {
   const {
     currentUser, recordings, clients, scripts, users, activeRecordings, settings,
-    updateRecording, updateScript, startActiveRecording, stopActiveRecording, refetchData,
+    updateRecording, updateScript, startActiveRecording, stopActiveRecording, finalizeRecordingDelivery, refetchData,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'recordings' | 'editing' | 'kanban'>('recordings');
@@ -88,10 +106,8 @@ export default function VideomakerDashboard() {
 
   // Story editing session state (nova função)
   const [storySession, setStorySession] = useState<{ id: string; startedAt: string; storiesCount: number } | null>(null);
-  const [storySessionElapsed, setStorySessionElapsed] = useState(0);
   const [storyPausedAt, setStoryPausedAt] = useState<number | null>(null);
   const [storyTotalPausedSec, setStoryTotalPausedSec] = useState(0);
-  const [storyPauseElapsed, setStoryPauseElapsed] = useState(0);
   const [storyUploadDialogOpen, setStoryUploadDialogOpen] = useState(false);
   const storyMultiFileRef = useRef<HTMLInputElement>(null);
 
@@ -99,7 +115,6 @@ export default function VideomakerDashboard() {
   const [waitingRecordingId, setWaitingRecordingId] = useState<string | null>(null);
   const [waitingLogId, setWaitingLogId] = useState<string | null>(null);
   const [waitingStartedAt, setWaitingStartedAt] = useState<Date | null>(null);
-  const [waitingElapsed, setWaitingElapsed] = useState(0);
   const [deliveredRecordingIds, setDeliveredRecordingIds] = useState<Set<string>>(new Set());
 
   // ── Event recordings (Agenda → Eventos) ──
@@ -116,14 +131,7 @@ export default function VideomakerDashboard() {
   const [drivePreviewId, setDrivePreviewId] = useState<string | null>(null);
   const [drivePreviewConfirmed, setDrivePreviewConfirmed] = useState(false);
 
-  // Timer for waiting elapsed
-  useEffect(() => {
-    if (!waitingStartedAt) return;
-    const tick = () => setWaitingElapsed(Math.max(0, Math.floor((Date.now() - waitingStartedAt.getTime()) / 1000)));
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [waitingStartedAt]);
+  // O cronômetro da espera é o <LiveSeconds> do selo: o painel não re-renderiza a cada segundo
 
   // Restaura espera em aberto ao abrir o app (celular fechou aba/navegador)
   useEffect(() => {
@@ -135,7 +143,6 @@ export default function VideomakerDashboard() {
       setWaitingRecordingId(s.recordingId);
       setWaitingLogId(s.logId);
       setWaitingStartedAt(new Date(s.startedAt));
-      setWaitingElapsed(waitElapsedSeconds(s));
     });
     return () => { cancelled = true; };
   }, [currentUser?.id]);
@@ -146,7 +153,6 @@ export default function VideomakerDashboard() {
     setWaitingRecordingId(rec.id);
     setWaitingLogId(session.logId);
     setWaitingStartedAt(new Date(session.startedAt));
-    setWaitingElapsed(waitElapsedSeconds(session));
     toast.info(`Aguardando cliente ${getClientName(rec.clientId, rec)}...`, { icon: '⏳' });
   };
 
@@ -154,7 +160,7 @@ export default function VideomakerDashboard() {
     if (!waitingRecordingId || !waitingStartedAt) return;
     const session = loadWaitSession(waitingRecordingId);
     if (!session) {
-      setWaitingRecordingId(null); setWaitingLogId(null); setWaitingStartedAt(null); setWaitingElapsed(0);
+      setWaitingRecordingId(null); setWaitingLogId(null); setWaitingStartedAt(null);
       return;
     }
     const { seconds, persisted } = await stopWaitSession(session);
@@ -163,7 +169,6 @@ export default function VideomakerDashboard() {
     setWaitingRecordingId(null);
     setWaitingLogId(null);
     setWaitingStartedAt(null);
-    setWaitingElapsed(0);
   };
 
   const formatWaitTime = (seconds: number) => {
@@ -621,8 +626,14 @@ export default function VideomakerDashboard() {
         clientId: rec.clientId,
         startedAt: new Date().toISOString(),
         plannedScriptIds: [],
+      }).then(ok => {
+        if (ok) {
+          toast.success(`Gravação endomarketing iniciada — ${getClientName(rec.clientId, rec)}`);
+        } else {
+          // O hook já mostrou o erro da API: só desfaz o estado local
+          setLocalActiveRecordingId(prev => (prev === rec.id ? null : prev));
+        }
       });
-      toast.success(`Gravação endomarketing iniciada — ${getClientName(rec.clientId, rec)}`);
       return;
     }
     setScriptsClientId(rec.clientId);
@@ -660,13 +671,18 @@ export default function VideomakerDashboard() {
     // Store planned scripts and mark recording as locally active
     setPlannedScripts(prev => ({ ...prev, [rec.id]: Array.from(selectedScriptIds) }));
     setLocalActiveRecordingId(rec.id);
-    startActiveRecording({
+    const started = await startActiveRecording({
       recordingId: rec.id,
       videomarkerId: vmId,
       clientId: rec.clientId,
       startedAt: new Date().toISOString(),
       plannedScriptIds: Array.from(selectedScriptIds),
     });
+    if (!started) {
+      // Servidor não registrou o início (o hook já avisou): desfaz o estado local e não mexe nos roteiros
+      setLocalActiveRecordingId(prev => (prev === rec.id ? null : prev));
+      return;
+    }
     
     // Move content_tasks linked to selected scripts to "captacao"
     for (const scriptId of selectedScriptIds) {
@@ -692,8 +708,10 @@ export default function VideomakerDashboard() {
       setShowCelebration(true);
       return;
     }
-    // Stop active recording and set status to "organizando_material"
-    if (!(await stopActiveRecording(rec.id))) return;
+    // Fecha só o cronômetro (deferDelivery): roteiros e contagens são gravados no confirmFinish,
+    // depois que o videomaker escolher o que foi gravado. Até lá os roteiros ficam na captação.
+    // Se a API recusar, o hook já mostrou o erro e a gravação segue em andamento.
+    if (!(await stopActiveRecording(rec.id, undefined, undefined, { deferDelivery: true }))) return;
     updateRecording({ ...rec, status: 'organizando_material' as RecordingStatus });
     setLocalActiveRecordingId(null);
     toast.success(`Gravação finalizada — organizando material`);
@@ -860,22 +878,17 @@ export default function VideomakerDashboard() {
       else extrasCount++;
     }
     const totalVideos = allRecordedArray.length;
-    // For avulso recordings without clientId, skip delivery_records (requires client_id NOT NULL)
-    if (rec.clientId) {
-      try {
-        await supabase.from('delivery_records').insert({
-          client_id: rec.clientId,
-          videomaker_id: currentUser?.id || '',
-          date: rec.date,
-          recording_id: rec.id,
-          reels_produced: reelsCount,
-          creatives_produced: creativesCount,
-          stories_produced: storiesCount,
-          extras_produced: extrasCount,
-          videos_recorded: Math.max(totalVideos, 1),
-        });
-      } catch {}
-    }
+    // Contagens no registro de entrega criado no Finalizar (um por gravação; avulso sem cliente não tem)
+    // e devolução para "ideias" dos roteiros planejados que não foram gravados
+    const deliverySaved = await finalizeRecordingDelivery(rec.id, {
+      reels_produced: reelsCount,
+      creatives_produced: creativesCount,
+      stories_produced: storiesCount,
+      extras_produced: extrasCount,
+      videos_recorded: Math.max(totalVideos, 1),
+    }, allRecordedArray, planned.filter(id => !rejectedScripts.has(id)));
+    // A API recusou: o hook já mostrou o erro e o diálogo continua aberto para tentar de novo
+    if (!deliverySaved) return;
     updateRecording({ ...rec, status: 'concluida' });
 
     // Content tasks - sync handles deadlines via syncContentTaskColumnChange
@@ -1284,7 +1297,7 @@ export default function VideomakerDashboard() {
   // Restore pause state from localStorage when session becomes active
   useEffect(() => {
     if (!storySession) {
-      setStoryPausedAt(null); setStoryTotalPausedSec(0); setStoryPauseElapsed(0);
+      setStoryPausedAt(null); setStoryTotalPausedSec(0);
       return;
     }
     const raw = localStorage.getItem(`storyPause:${storySession.id}`);
@@ -1306,21 +1319,7 @@ export default function VideomakerDashboard() {
     );
   }, [storySession?.id, storyPausedAt, storyTotalPausedSec]);
 
-  // Session timer (subtracts total paused + current pause window)
-  useEffect(() => {
-    if (!storySession) { setStorySessionElapsed(0); return; }
-    const startMs = new Date(storySession.startedAt).getTime();
-    const tick = () => {
-      const now = Date.now();
-      const currentPause = storyPausedAt ? Math.floor((now - storyPausedAt) / 1000) : 0;
-      setStoryPauseElapsed(currentPause);
-      const raw = Math.floor((now - startMs) / 1000);
-      setStorySessionElapsed(Math.max(0, raw - storyTotalPausedSec - currentPause));
-    };
-    tick();
-    const iv = setInterval(tick, 1000);
-    return () => clearInterval(iv);
-  }, [storySession, storyPausedAt, storyTotalPausedSec]);
+  // Os cronômetros da sessão (tempo ativo e em pausa) são <LiveSeconds> no card: o painel não re-renderiza a cada segundo
 
   const handlePauseStorySession = () => {
     if (!storySession || storyPausedAt) return;
@@ -1333,7 +1332,6 @@ export default function VideomakerDashboard() {
     const pausedSec = Math.floor((Date.now() - storyPausedAt) / 1000);
     setStoryTotalPausedSec(prev => prev + pausedSec);
     setStoryPausedAt(null);
-    setStoryPauseElapsed(0);
     const mins = Math.floor(pausedSec / 60);
     const secs = pausedSec % 60;
     toast.success(`▶️ Retomado! Pausa de ${mins > 0 ? `${mins}m` : ''}${secs}s registrada.`);
@@ -1360,9 +1358,10 @@ export default function VideomakerDashboard() {
       setStoryTotalPausedSec(prev => prev + pausedSec);
       setStoryPausedAt(null);
     }
+    const activeSeconds = storyActiveSeconds(storySession.startedAt, storyPausedAt, storyTotalPausedSec, Date.now());
     const now = new Date().toISOString();
     await supabase.from('story_editing_sessions').update({ ended_at: now } as any).eq('id', storySession.id);
-    const mins = Math.floor(storySessionElapsed / 60);
+    const mins = Math.floor(activeSeconds / 60);
     const pauseInfo = storyTotalPausedSec > 60 ? ` (${Math.floor(storyTotalPausedSec / 60)}min em pausa)` : '';
     toast.success(`✅ Sessão encerrada: ${mins}min · ${storySession.storiesCount} story(s) enviado(s)${pauseInfo}`);
     localStorage.removeItem(`storyPause:${storySession.id}`);
@@ -1664,6 +1663,7 @@ export default function VideomakerDashboard() {
             : (timeToMin(settings.shiftAEnd) - timeToMin(settings.shiftAStart)))
           : settings.recordingDuration;
         return (
+          <div id="live-recording-card" className="scroll-mt-4">
           <LiveRecordingCard
             clientName={getClientName(activeRec.clientId, activeRec as Recording)}
             clientColor={getClientColor(activeRec.clientId, activeRec as Recording)}
@@ -1678,6 +1678,7 @@ export default function VideomakerDashboard() {
             onViewScripts={() => openScripts(activeRec.clientId, activeRec.id)}
             onCancel={handleCancelActiveRecording}
           />
+          </div>
         );
       })()}
 
@@ -1769,7 +1770,11 @@ export default function VideomakerDashboard() {
                             <motion.div animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
                               <Badge className="bg-warning/20 text-warning border-warning/30 text-[9px] sm:text-[10px]">
                                 <Hourglass size={9} className="mr-0.5 animate-spin" style={{ animationDuration: '3s' }} />
-                                {formatWaitTime(waitingElapsed)}
+                                {waitingStartedAt ? (
+                                  <LiveSeconds compute={now => Math.max(0, Math.floor((now - waitingStartedAt.getTime()) / 1000))}>
+                                    {seconds => formatWaitTime(seconds)}
+                                  </LiveSeconds>
+                                ) : formatWaitTime(0)}
                               </Badge>
                             </motion.div>
                           )}
@@ -2081,7 +2086,8 @@ export default function VideomakerDashboard() {
                             return;
                           }
                           if (isActive) {
-                            handleFinishRecording(rec);
+                            // Tocar no card não encerra a gravação: leva ao painel ao vivo, onde fica o Finalizar
+                            document.getElementById('live-recording-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                           } else if (isStartable) {
                             handleStartRecording(rec);
                           }
@@ -2313,7 +2319,9 @@ export default function VideomakerDashboard() {
                     animate={storyPausedAt ? {} : { opacity: [1, 0.7, 1] }}
                     transition={{ duration: 2, repeat: Infinity }}
                   >
-                    {`${String(Math.floor(storySessionElapsed / 3600)).padStart(2,'0')}:${String(Math.floor((storySessionElapsed % 3600) / 60)).padStart(2,'0')}:${String(storySessionElapsed % 60).padStart(2,'0')}`}
+                    <LiveSeconds compute={now => storyActiveSeconds(storySession.startedAt, storyPausedAt, storyTotalPausedSec, now)}>
+                      {elapsed => `${String(Math.floor(elapsed / 3600)).padStart(2,'0')}:${String(Math.floor((elapsed % 3600) / 60)).padStart(2,'0')}:${String(elapsed % 60).padStart(2,'0')}`}
+                    </LiveSeconds>
                   </motion.div>
                 </div>
 
@@ -2331,12 +2339,9 @@ export default function VideomakerDashboard() {
                     <Pause size={11} /> Em Pausa
                   </div>
                   <div className="font-mono font-black text-xl tabular-nums leading-none text-muted-foreground">
-                    {(() => {
-                      const total = storyTotalPausedSec + storyPauseElapsed;
-                      const m = Math.floor(total / 60);
-                      const s = total % 60;
-                      return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-                    })()}
+                    <LiveSeconds compute={now => storyTotalPausedSec + (storyPausedAt ? Math.floor((now - storyPausedAt) / 1000) : 0)}>
+                      {total => `${String(Math.floor(total / 60)).padStart(2,'0')}:${String(total % 60).padStart(2,'0')}`}
+                    </LiveSeconds>
                   </div>
                 </div>
               </div>

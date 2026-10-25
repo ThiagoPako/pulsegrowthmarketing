@@ -3,6 +3,7 @@ import { supabase } from '@/lib/vpsDb';
 import { useCity } from '@/contexts/CityContext';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { toast } from 'sonner';
+import type { RecordingDeleteResult } from '@/lib/recordingDelete';
 import type { Client, Recording, KanbanTask, Script, CompanySettings, DayOfWeek, ActiveRecording, ContentType, RecordingType, RecordingStatus, ConfirmationStatus, KanbanColumn, ScriptVideoType, ScriptPriority, ScriptContentFormat } from '@/types';
 
 // ── Mappers: DB row ↔ App type ──
@@ -167,6 +168,7 @@ function rowToRecording(r: any): Recording {
     status: r.status as RecordingStatus,
     confirmationStatus: (r.confirmation_status || 'pendente') as ConfirmationStatus,
     ...(r.prospect_name ? { prospectName: r.prospect_name } : {}),
+    ...(r.source ? { source: String(r.source) } : {}),
   };
 }
 
@@ -595,6 +597,7 @@ export function useSupabaseData() {
   }, []);
 
   // ── Recording CRUD ──
+  // Devolve false quando o servidor recusa (o reportSaveError já avisa): a tela não pode mostrar sucesso nem avisar o cliente
   const cancelRecording = useCallback(async (id: string): Promise<boolean> => {
     const { error } = await invokeVpsFunction(`recordings/${id}`, { body: { status: 'cancelada' }, method: 'PUT' });
     if (error) return reportSaveError('cancelRecording', error);
@@ -651,27 +654,52 @@ export function useSupabaseData() {
   }, []);
 
 
-  const deleteRecording = useCallback(async (id: string): Promise<boolean> => {
+  /** DELETE com o motivo da recusa (409 quando a gravação já foi realizada e faltou force/admin) */
+  const tryDeleteRecording = useCallback(async (id: string, options?: { force?: boolean }): Promise<RecordingDeleteResult> => {
     try {
-      const { error } = await invokeVpsFunction(`recordings/${id}`, { method: 'DELETE' });
-      if (error) { console.error('deleteRecording error:', error); return false; }
+      // force: só admin apaga gravação já realizada (o servidor confere o papel)
+      const { error } = await invokeVpsFunction(`recordings/${id}${options?.force ? '?force=1' : ''}`, { method: 'DELETE' });
+      if (error) {
+        console.error('deleteRecording error:', error);
+        const status = Number(error.status) || 0;
+        return {
+          ok: false,
+          error: status >= 400 && status < 500 ? error.message : undefined,
+          alreadyRecorded: status === 409
+            && (error.details?.already_recorded === true || typeof error.details?.videos_in_production === 'number'),
+        };
+      }
       setRecordings(prev => prev.filter(r => r.id !== id));
       setActiveRecordings(prev => prev.filter(a => a.recordingId !== id));
-      return true;
+      return { ok: true };
     } catch (err) {
       console.error('deleteRecording error:', err);
-      return false;
+      return { ok: false };
     }
   }, []);
 
-  const deleteFutureRecordingsForClient = useCallback(async (clientId: string): Promise<number> => {
-    const { data } = await invokeVpsFunction(`recordings/future/${clientId}`, { method: 'DELETE' });
+  const deleteRecording = useCallback(async (id: string, options?: { force?: boolean }): Promise<boolean> => {
+    return (await tryDeleteRecording(id, options)).ok;
+  }, [tryDeleteRecording]);
+
+  /** Apaga as futuras geradas pela agenda. deletedIds = null quando o servidor não informa quais (versão antiga). */
+  const deleteFutureRecordingsForClient = useCallback(async (clientId: string): Promise<{ deleted: number; deletedIds: string[] | null }> => {
+    const { data, error } = await invokeVpsFunction(`recordings/future/${clientId}`, { method: 'DELETE' });
+    // Sem isso, um erro do servidor seguia como "0 apagadas" e as fixas novas eram criadas por cima das antigas
+    if (error) throw new Error(error.message || 'Erro ao apagar as gravações futuras');
     const deleted = data?.deleted || 0;
+    const deletedIds: string[] | null = Array.isArray(data?.deleted_ids) ? data.deleted_ids.map(String) : null;
     if (deleted > 0) {
-      const today = new Date().toISOString().split('T')[0];
-      setRecordings(prev => prev.filter(r => !(r.clientId === clientId && r.status === 'agendada' && r.date >= today)));
+      // O servidor preserva as criadas/confirmadas pelo cliente e as que já começaram: tira só as apagadas
+      if (deletedIds) {
+        const deletedSet = new Set(deletedIds);
+        setRecordings(prev => prev.filter(r => !deletedSet.has(r.id)));
+      } else {
+        const today = new Date().toISOString().split('T')[0];
+        setRecordings(prev => prev.filter(r => !(r.clientId === clientId && r.status === 'agendada' && r.date >= today)));
+      }
     }
-    return deleted;
+    return { deleted, deletedIds };
   }, []);
 
   // ── Task CRUD ──
@@ -766,23 +794,34 @@ export function useSupabaseData() {
     return true;
   }, []);
 
-  const stopActiveRecording = useCallback(async (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]): Promise<boolean> => {
+  // deferDelivery: fecha só o cronômetro; roteiros e contagens vão depois, no finalizeRecordingDelivery
+  const stopActiveRecording = useCallback(async (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[], options?: { deferDelivery?: boolean }): Promise<boolean> => {
     const { error } = await invokeVpsFunction(`active-recordings/${recordingId}/stop`, {
-      body: { deliveryOverrides, completedScriptIds },
+      body: { deliveryOverrides, completedScriptIds, deferDelivery: Boolean(options?.deferDelivery) },
     });
     if (error) return reportSaveError('stopActiveRecording', error);
     setActiveRecordings(prev => prev.filter(a => a.recordingId !== recordingId));
     return true;
   }, []);
 
+  // Segundo passo do stop com deferDelivery: grava as contagens da entrega e devolve para "ideias"
+  // os roteiros planejados que não foram gravados.
+  const finalizeRecordingDelivery = useCallback(async (recordingId: string, deliveryOverrides: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds: string[], plannedScriptIds: string[]): Promise<boolean> => {
+    const { error } = await invokeVpsFunction(`active-recordings/${recordingId}/finalize`, {
+      body: { deliveryOverrides, completedScriptIds, plannedScriptIds },
+    });
+    if (error) return reportSaveError('finalizeRecordingDelivery', error);
+    return true;
+  }, []);
+
   return {
     clients, recordings, tasks, scripts, settings, activeRecordings, loading,
     addClient, updateClient, deleteClient,
-    addRecording, addRecordingsBulk, updateRecording, cancelRecording, deleteRecording, deleteFutureRecordingsForClient,
+    addRecording, addRecordingsBulk, updateRecording, cancelRecording, deleteRecording, tryDeleteRecording, deleteFutureRecordingsForClient,
     deleteRecordingsBulk, cancelRecordingsBulk,
     addTask, updateTask, deleteTask,
     addScript, updateScript, deleteScript,
-    updateSettings, startActiveRecording, stopActiveRecording,
+    updateSettings, startActiveRecording, stopActiveRecording, finalizeRecordingDelivery,
     refetch: fetchAll,
     resetData,
   };

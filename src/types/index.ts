@@ -155,6 +155,8 @@ export interface Recording {
   status: RecordingStatus;
   confirmationStatus?: ConfirmationStatus;
   prospectName?: string;
+  /** Origem gravada pelo servidor: 'portal' ou 'link' = pedida pelo cliente (só leitura) */
+  source?: string;
 }
 
 export interface EventRecording {

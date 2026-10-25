@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import TimeMarker from '@/components/scheduling/TimeMarker';
+import { deleteRecordingWithConfirm } from '@/lib/recordingDelete';
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
   agendada: { bg: 'bg-blue-500/15', text: 'text-blue-400', label: 'Agendada' },
@@ -44,7 +45,7 @@ const LUNCH_SLOTS = ['12:30', '13:30'];
 
 
 export default function RecordingControl() {
-  const { recordings, clients, users, scripts, addScript, updateScript, updateRecording, addRecording, deleteRecording, hasConflict, settings, refetchData } = useApp();
+  const { recordings, clients, users, servesActiveCity, scripts, addScript, updateScript, updateRecording, addRecording, tryDeleteRecording, hasConflict, settings, refetchData, currentUser } = useApp();
   const { user: authUser } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'day' | 'week'>('day');
@@ -83,12 +84,6 @@ export default function RecordingControl() {
     [clients]
   );
 
-  // Get all videomakers
-  const videomakers = useMemo(() =>
-    users.filter(u => u.role === 'videomaker').sort((a, b) => a.name.localeCompare(b.name)),
-    [users]
-  );
-
   // Get dates to display
   const displayDates = useMemo(() => {
     if (viewMode === 'day') return [format(selectedDate, 'yyyy-MM-dd')];
@@ -96,25 +91,51 @@ export default function RecordingControl() {
     return Array.from({ length: 6 }, (_, i) => format(addDays(weekStart, i), 'yyyy-MM-dd'));
   }, [selectedDate, viewMode]);
 
+  // Videomakers da cidade ativa; quem é da outra cidade só ganha coluna se tiver gravação aqui nos dias mostrados
+  const videomakerIdsWithRecordings = useMemo(
+    () => new Set(recordings
+      .filter(r => r.status !== 'cancelada' && displayDates.includes(r.date))
+      .map(r => r.videomakerId)
+      .filter(Boolean)),
+    [recordings, displayDates]
+  );
+  const videomakers = useMemo(() =>
+    users
+      .filter(u => u.role === 'videomaker' && (servesActiveCity(u.id) || videomakerIdsWithRecordings.has(u.id)))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    [users, servesActiveCity, videomakerIdsWithRecordings]
+  );
+
   // Filter recordings for selected date(s) — exclude cancelled
   const filteredRecordings = useMemo(() =>
     recordings.filter(r => displayDates.includes(r.date) && r.status !== 'cancelada'),
     [recordings, displayDates]
   );
 
-  // Group recordings by videomaker and time slot
+  // Group recordings by videomaker and time slot (lista por célula: nenhuma sobreposição some da grade)
   const recordingsByVmAndSlot = useMemo(() => {
-    const map: Record<string, Record<string, Recording>> = {};
+    const map: Record<string, Record<string, Recording[]>> = {};
     videomakers.forEach(vm => { map[vm.id] = {}; });
     map['__unassigned__'] = {};
 
     filteredRecordings.forEach(r => {
       const vmId = r.videomakerId && map[r.videomakerId] ? r.videomakerId : '__unassigned__';
-      map[vmId][r.startTime] = r;
+      if (!map[vmId][r.startTime]) map[vmId][r.startTime] = [];
+      map[vmId][r.startTime].push(r);
     });
 
     return map;
   }, [filteredRecordings, videomakers]);
+
+  // Gravações que a grade não mostra: sem videomaker conhecido (visão Dia) ou fora dos horários da grade
+  // (ex.: 09:00 do pedido especial, horário livre da edição). Ficam listadas à parte com o horário real.
+  const offGridRecordings = useMemo(() => {
+    const gridSlots = new Set([...STANDARD_SLOTS, ...PULSE_SLOTS, ...LUNCH_SLOTS]);
+    const knownVm = new Set(videomakers.map(vm => vm.id));
+    return filteredRecordings
+      .filter(r => !gridSlots.has(r.startTime) || (viewMode === 'day' && (!r.videomakerId || !knownVm.has(r.videomakerId))))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
+  }, [filteredRecordings, videomakers, viewMode]);
 
   // Week grid: { [date]: { [time]: Recording[] } }
   const recordingsByDayAndSlot = useMemo(() => {
@@ -176,10 +197,32 @@ export default function RecordingControl() {
       return;
     }
 
-    setReassigning(true);
-    const oldVideomaker = users.find(u => u.id === draggedRecording.videomakerId);
+    // Mesmo videomaker/horário de outra gravação (inclusive extra): recusa o drop.
+    // O tipo vai vazio de propósito, para a extra também contar como conflito.
+    const conflict = hasConflict(
+      targetVideomakerId,
+      draggedRecording.date,
+      targetTime || draggedRecording.startTime,
+      draggedRecording.id,
+      undefined,
+      draggedRecording.clientId,
+      { skipClientDayCheck: true }
+    );
+    if (conflict.hasConflict) {
+      toast.error(conflict.message || 'Conflito de horário no destino');
+      setDraggedRecording(null);
+      return;
+    }
+
     const newVideomaker = users.find(u => u.id === targetVideomakerId);
     const client = clients.find(c => c.id === draggedRecording.clientId);
+    // Fixa: mudar também o cadastro do cliente (vale para as próximas semanas) só se o usuário confirmar
+    const clientDefaultsChange = Boolean(client) && (client!.videomaker !== targetVideomakerId
+      || (Boolean(targetTime) && STANDARD_SLOTS.includes(targetTime!) && client!.fixedTime !== targetTime));
+    const applyToClient = draggedRecording.type === 'fixa' && client && clientDefaultsChange
+      ? window.confirm(`Aplicar também às próximas semanas de ${client.companyName}?\n\nOK: o videomaker${targetTime && STANDARD_SLOTS.includes(targetTime) ? ' e o horário' : ''} padrão do cliente passam a ser os novos.\nCancelar: muda só esta gravação.`)
+      : false;
+    setReassigning(true);
 
     try {
       // Update recording
@@ -188,16 +231,17 @@ export default function RecordingControl() {
         videomakerId: targetVideomakerId,
         startTime: targetTime || draggedRecording.startTime,
       };
-      updateRecording(updatedRecording);
+      // A API recusou: o hook já mostrou o erro
+      if (!(await updateRecording(updatedRecording))) return;
 
       // Also update the client's default settings if this is a fixed recording
-      if (draggedRecording.type === 'fixa' && client) {
+      if (applyToClient && client) {
         const updates: any = { videomaker_id: targetVideomakerId };
         if (targetTime && STANDARD_SLOTS.includes(targetTime)) {
           updates.fixed_time = targetTime;
         }
-        await (supabase as any).from('clients').update(updates).eq('id', client.id);
-
+        const { error: clientError } = await (supabase as any).from('clients').update(updates).eq('id', client.id);
+        if (clientError) toast.error('A gravação foi movida, mas o cadastro do cliente não foi atualizado.');
       }
 
       toast.success(
@@ -224,13 +268,14 @@ export default function RecordingControl() {
       setDraggedRecording(null);
       return;
     }
-    // Conflict check with the same videomaker on target date/time (skip client-day rule to allow multi/day)
+    // Conflict check with the same videomaker on target date/time (skip client-day rule to allow multi/day).
+    // Tipo vazio: a extra no destino também conta como conflito (senão as duas ficariam no mesmo horário)
     const conflict = hasConflict(
       draggedRecording.videomakerId,
       targetDate,
       targetTime,
       draggedRecording.id,
-      draggedRecording.type,
+      undefined,
       draggedRecording.clientId,
       { skipClientDayCheck: true }
     );
@@ -243,7 +288,8 @@ export default function RecordingControl() {
     const client = clients.find(c => c.id === draggedRecording.clientId);
     try {
       const updated: Recording = { ...draggedRecording, date: targetDate, startTime: targetTime };
-      updateRecording(updated);
+      // A API recusou: o hook já mostrou o erro
+      if (!(await updateRecording(updated))) return;
       toast.success(
         `Gravação "${client?.companyName || draggedRecording.prospectName || 'Cliente'}" movida para ${format(new Date(targetDate + 'T12:00:00'), 'dd/MM', { locale: ptBR })} às ${targetTime}`,
         { duration: 3500 }
@@ -258,6 +304,14 @@ export default function RecordingControl() {
   };
 
   const getClient = (clientId: string) => clients.find(c => c.id === clientId);
+
+  const handleDeleteRecording = async (rec: Recording) => {
+    const label = getClient(rec.clientId)?.companyName || rec.prospectName || 'esta gravação';
+    const result = await deleteRecordingWithConfirm(rec, label, currentUser, tryDeleteRecording);
+    if (!result) return;
+    if (result.ok) { toast.success('Gravação apagada'); setTimeout(() => refetchData(), 300); }
+    else toast.error(result.error || 'Erro ao apagar');
+  };
 
   const dateLabel = viewMode === 'day'
     ? format(selectedDate, "EEEE, dd 'de' MMMM", { locale: ptBR })
@@ -395,33 +449,46 @@ export default function RecordingControl() {
 
                 {/* Videomaker Cells */}
                 {videomakers.map(vm => {
-                  const recording = recordingsByVmAndSlot[vm.id]?.[time];
+                  const cellRecs = recordingsByVmAndSlot[vm.id]?.[time] || [];
                   const isOver = dragOverSlot?.vmId === vm.id && dragOverSlot?.time === time;
+                  // Conflito no destino enquanto arrasta (mesma regra do drop)
+                  const wouldConflict = !!(draggedRecording && isOver && !isRestricted &&
+                    !(draggedRecording.videomakerId === vm.id && draggedRecording.startTime === time) &&
+                    hasConflict(vm.id, draggedRecording.date, time, draggedRecording.id, undefined, draggedRecording.clientId, { skipClientDayCheck: true }).hasConflict);
                   
                   return (
                     <div
                       key={`${vm.id}-${time}`}
                       className={`flex-1 min-w-[200px] border-r last:border-r-0 relative p-1.5 transition-colors ${
-                        isOver ? 'bg-primary/10 ring-2 ring-primary/30 ring-inset z-10' : ''
+                        isOver
+                          ? wouldConflict
+                            ? 'bg-red-500/10 ring-2 ring-red-500/40 ring-inset z-10'
+                            : 'bg-primary/10 ring-2 ring-primary/30 ring-inset z-10'
+                          : ''
                       } ${isRestricted ? 'bg-muted/5' : 'bg-background/40 hover:bg-muted/5'}`}
                       onDragOver={e => !isRestricted && handleDragOver(e, vm.id, time)}
                       onDragLeave={handleDragLeave}
                       onDrop={e => !isRestricted && handleDrop(e, vm.id, time)}
                     >
-                      {recording ? (
-                        <RecordingCard
-                          recording={recording}
-                          client={getClient(recording.clientId)}
-                          isDragging={draggedRecording?.id === recording.id}
-                          onDragStart={handleDragStart}
-                          onDelete={async () => {
-                            const label = getClient(recording.clientId)?.companyName || recording.prospectName || 'esta gravação';
-                            if (!window.confirm(`Apagar permanentemente "${label}" às ${recording.startTime}?`)) return;
-                            const ok = await deleteRecording(recording.id);
-                            if (ok) { toast.success('Gravação apagada'); setTimeout(() => refetchData(), 300); }
-                            else toast.error('Erro ao apagar');
-                          }}
-                        />
+                      {cellRecs.length > 0 ? (
+                        <div className="h-full flex flex-col gap-1">
+                          {cellRecs.length > 1 && (
+                            <span className="absolute top-0.5 right-1 z-20 text-[9px] font-bold text-destructive bg-destructive/10 rounded px-1">
+                              {cellRecs.length} no mesmo horário
+                            </span>
+                          )}
+                          {cellRecs.map(recording => (
+                            <div key={recording.id} className="flex-1 min-h-0">
+                              <RecordingCard
+                                recording={recording}
+                                client={getClient(recording.clientId)}
+                                isDragging={draggedRecording?.id === recording.id}
+                                onDragStart={handleDragStart}
+                                onDelete={() => handleDeleteRecording(recording)}
+                              />
+                            </div>
+                          ))}
+                        </div>
                       ) : isLunch ? (
                         <div className="h-full flex items-center justify-center bg-amber-500/5">
                           <span className="text-[9px] font-bold text-amber-500/20 uppercase tracking-[0.2em] font-mono">Almoço</span>
@@ -526,7 +593,7 @@ export default function RecordingControl() {
                         d,
                         time,
                         draggedRecording.id,
-                        draggedRecording.type,
+                        undefined,
                         draggedRecording.clientId,
                         { skipClientDayCheck: true }
                       ).hasConflict);
@@ -593,13 +660,9 @@ export default function RecordingControl() {
                                     </div>
                                     <button
                                       type="button"
-                                      onClick={async (e) => {
+                                      onClick={(e) => {
                                         e.stopPropagation();
-                                        const label = client?.companyName || rec.prospectName || 'esta gravação';
-                                        if (!window.confirm(`Apagar "${label}" às ${rec.startTime}?`)) return;
-                                        const ok = await deleteRecording(rec.id);
-                                        if (ok) { toast.success('Gravação apagada'); setTimeout(() => refetchData(), 300); }
-                                        else toast.error('Erro ao apagar');
+                                        handleDeleteRecording(rec);
                                       }}
                                       onMouseDown={e => e.stopPropagation()}
                                       draggable={false}
@@ -648,29 +711,33 @@ export default function RecordingControl() {
           </div>
         </div>
       )}
-      {viewMode === 'day' && Object.keys(recordingsByVmAndSlot['__unassigned__'] || {}).length > 0 && (
+      {offGridRecordings.length > 0 && (
         <div className="mt-8">
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle size={18} className="text-amber-500" />
             <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Fora do Padrão ou Sem Videomaker</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {Object.values(recordingsByVmAndSlot['__unassigned__']).map(rec => (
-              <RecordingCard
-                key={rec.id}
-                recording={rec}
-                client={getClient(rec.clientId)}
-                isDragging={draggedRecording?.id === rec.id}
-                onDragStart={handleDragStart}
-                onDelete={async () => {
-                  const label = getClient(rec.clientId)?.companyName || rec.prospectName || 'esta gravação';
-                  if (!window.confirm(`Apagar permanentemente "${label}" às ${rec.startTime}?`)) return;
-                  const ok = await deleteRecording(rec.id);
-                  if (ok) { toast.success('Gravação apagada'); setTimeout(() => refetchData(), 300); }
-                  else toast.error('Erro ao apagar');
-                }}
-              />
-            ))}
+            {offGridRecordings.map(rec => {
+              const vmName = users.find(u => u.id === rec.videomakerId)?.name;
+              return (
+                <div key={rec.id} className="space-y-1">
+                  <p className="text-xs font-mono font-bold text-amber-600">
+                    {viewMode === 'week' ? `${format(new Date(rec.date + 'T12:00:00'), 'dd/MM')} ` : ''}às {rec.startTime}
+                    <span className="font-sans font-normal text-muted-foreground"> · {vmName || 'Sem videomaker'}</span>
+                  </p>
+                  <div className="h-28">
+                    <RecordingCard
+                      recording={rec}
+                      client={getClient(rec.clientId)}
+                      isDragging={draggedRecording?.id === rec.id}
+                      onDragStart={handleDragStart}
+                      onDelete={() => handleDeleteRecording(rec)}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

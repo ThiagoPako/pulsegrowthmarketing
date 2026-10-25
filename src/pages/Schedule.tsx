@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/vpsDb';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
@@ -6,6 +6,7 @@ import type { Recording, RecordingType, Script, DayOfWeek, Client, EventRecordin
 import { SCRIPT_VIDEO_TYPE_LABELS, DAY_LABELS } from '@/types';
 import { useEndoClientes, useEndoAgendamentos, useEndoContracts } from '@/hooks/useEndomarketing';
 import { findAvailableSlots } from '@/lib/schedulingUtils';
+import { deleteRecordingWithConfirm } from '@/lib/recordingDelete';
 
 import AgencyCapacityWidget from '@/components/AgencyCapacityWidget';
 import { Button } from '@/components/ui/button';
@@ -19,7 +20,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles, RefreshCw, MessageSquare, Play, Square, Star, Link, ThumbsDown, MessageCircle, Trash2, Video, MapPin, Calendar } from 'lucide-react';
-import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, getDay } from 'date-fns';
+import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, getDay, differenceInCalendarWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import UserAvatar from '@/components/UserAvatar';
@@ -93,8 +94,8 @@ function mapEventRecordingRow(e: any): EventRecording {
 
 export default function Schedule() {
   const {
-    clients, users, recordings, scripts, settings, activeRecordings,
-    currentUser, updateScript, addRecording, updateRecording, cancelRecording, deleteRecording, cancelAndReschedule,
+    clients, users, cityVideomakers, servesActiveCity, recordings, scripts, settings, activeRecordings,
+    currentUser, updateScript, addRecording, addRecordingsBulk, updateRecording, cancelRecording, deleteRecording, tryDeleteRecording, cancelAndReschedule,
     regenerateScheduleForClient, generateFixedSchedulesForMonth, previewFixedSchedulesForMonth, commitFixedSchedules, autoFillVacanciesForDate, organizeSchedule, startActiveRecording, stopActiveRecording, refetchData,
     hasConflict, isWithinWorkHours,
 
@@ -132,10 +133,11 @@ export default function Schedule() {
   const [scriptsClientId, setScriptsClientId] = useState('');
   const [selectedScriptIds, setSelectedScriptIds] = useState<Set<string>>(new Set());
   const [form, setForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '08:30', type: 'fixa' as RecordingType, prospectName: '' });
-  const [editForm, setEditForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '', type: 'fixa' as RecordingType, status: 'agendada' as Recording['status'] });
+  const [editForm, setEditForm] = useState({ clientId: '', prospectName: '', videomakerId: '', date: '', startTime: '', type: 'fixa' as RecordingType, status: 'agendada' as Recording['status'] });
   const [filterVideomaker, setFilterVideomaker] = useState('all');
   const [filterCity, setFilterCity] = useState<string>('all');
   const [weekOffset, setWeekOffset] = useState(0);
+  const [scheduleView, setScheduleView] = useState<'calendar' | 'kanban'>('calendar');
   const [showEndo, setShowEndo] = useState(true);
   const [showEvents, setShowEvents] = useState(true);
   const [showBackup, setShowBackup] = useState(false);
@@ -182,6 +184,25 @@ export default function Schedule() {
   const [plannedScriptsMap, setPlannedScriptsMap] = useState<Record<string, string[]>>({});
 
   const [organizing, setOrganizing] = useState(false);
+  // Geração/remoção em lote de backups e extras em andamento (botões ficam desabilitados)
+  const [bulkBusy, setBulkBusy] = useState<null | 'backup' | 'extra'>(null);
+  // Apagar em lote backups e extras: só admin e social_media
+  const canBulkManageRecordings = ['admin', 'social_media'].some(role => currentUser?.role === role || currentUser?.roles?.includes(role as any));
+
+  // Outros compromissos do videomaker no dia (eventos e endomarketing com videomaker), para a checagem de conflito
+  const videomakerBlocks = useCallback((vmId: string, date: string) => {
+    const blocks: { startTime: string; endTime: string; label: string }[] = [];
+    eventRecordings
+      .filter(e => e.videomakerId === vmId && normalizeDateKey(e.date) === date && e.status !== 'cancelado')
+      .forEach(e => blocks.push({ startTime: e.startTime, endTime: e.endTime || e.startTime, label: `o evento "${e.title || 'Evento'}"` }));
+    endoAgendamentos
+      .filter(a => a.videomaker_id === vmId && a.date === date && a.status !== 'cancelado')
+      .forEach(a => {
+        const end = timeToMinutes(a.start_time) + (Number(a.duration) || 0);
+        blocks.push({ startTime: a.start_time, endTime: `${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`, label: 'um endomarketing' });
+      });
+    return blocks;
+  }, [eventRecordings, endoAgendamentos]);
   // Finish recording dialog state
 
   const [finishRecOpen, setFinishRecOpen] = useState(false);
@@ -195,7 +216,8 @@ export default function Schedule() {
   const [finishVerbalScripts, setFinishVerbalScripts] = useState<Set<string>>(new Set());
   const [finishAlterationNotes, setFinishAlterationNotes] = useState<Record<string, string>>({});
 
-  const videomakers = users.filter(u => u.role === 'videomaker');
+  // Só os videomakers da cidade ativa (não oferece nem distribui gravação para quem atende a outra cidade)
+  const videomakers = cityVideomakers;
   const currentMonth = addMonths(new Date(), monthOffset);
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -330,6 +352,19 @@ export default function Schedule() {
       toast.error('Preencha todos os campos obrigatórios'); return;
     }
 
+    // Gravações do videomaker que caem dentro do evento: avisa antes de agendar
+    const evStart = timeToMinutes(eventForm.startTime);
+    const evEnd = timeToMinutes(eventForm.endTime || eventForm.startTime);
+    const overlapping = recordings.filter(r => {
+      if (r.videomakerId !== eventForm.videomakerId || r.date !== eventForm.date || r.status === 'cancelada') return false;
+      const rStart = timeToMinutes(r.startTime);
+      return rStart < evEnd + 30 && rStart + (settings.recordingDuration || 90) + 30 > evStart;
+    });
+    if (overlapping.length > 0) {
+      const list = overlapping.map(r => `${r.startTime} — ${getClientName(r.clientId) || r.prospectName || 'Gravação'}`).join('\n');
+      if (!window.confirm(`O videomaker já tem ${overlapping.length} gravação(ões) nesse horário:\n\n${list}\n\nAgendar o evento mesmo assim?`)) return;
+    }
+
     const { data, error } = await supabase
       .from('event_recordings')
       .insert({
@@ -440,7 +475,7 @@ export default function Schedule() {
     if (!isAvulso && !form.clientId) { toast.error('Selecione um cliente'); return; }
     if (isAvulso && !form.prospectName.trim()) { toast.error('Informe o nome do prospect'); return; }
     if (!form.videomakerId || !form.date || !form.startTime) { toast.error('Preencha todos os campos'); return; }
-    const conflictCheck = hasConflict(form.videomakerId, form.date, form.startTime, undefined, form.type as RecordingType, isAvulso ? undefined : form.clientId);
+    const conflictCheck = hasConflict(form.videomakerId, form.date, form.startTime, undefined, form.type as RecordingType, isAvulso ? undefined : form.clientId, { blocks: videomakerBlocks(form.videomakerId, form.date) });
     if (conflictCheck.hasConflict) {
       toast.error(conflictCheck.message || 'Conflito de horário!'); return;
     }
@@ -487,13 +522,12 @@ export default function Schedule() {
 
   const handleDeleteRecording = async (rec: Recording) => {
     const client = clients.find(c => c.id === rec.clientId);
-    const confirmed = window.confirm(`Tem certeza que deseja APAGAR permanentemente esta gravação${client ? ` de ${client.companyName}` : ''}?\n\nEsta ação não pode ser desfeita.`);
-    if (!confirmed) return;
-    const success = await deleteRecording(rec.id);
-    if (success) {
+    const result = await deleteRecordingWithConfirm(rec, client?.companyName || rec.prospectName || 'esta gravação', currentUser, tryDeleteRecording);
+    if (!result) return;
+    if (result.ok) {
       toast.success('Gravação apagada com sucesso');
     } else {
-      toast.error('Erro ao apagar gravação');
+      toast.error(result.error || 'Erro ao apagar gravação');
     }
   };
 
@@ -501,7 +535,9 @@ export default function Schedule() {
     if (!cancellingRec) return;
     const recId = cancellingRec.id;
     const client = clients.find(c => c.id === cancellingRec.clientId);
-    cancelRecording(recId);
+    // Só avisa o cliente e gera o link de reagendamento se o cancelamento foi gravado no servidor
+    const cancelled = await cancelRecording(recId);
+    if (!cancelled) return; // o hook já mostrou o erro da API
     if (client?.whatsapp) {
       const sent = await sendRecordingCancelledNotification(client.whatsapp, client.companyName, client.id);
       if (sent.success) toast.info('Mensagem de cancelamento enviada ao cliente');
@@ -522,7 +558,8 @@ export default function Schedule() {
   const handleSelectBackup = async (backupClient: Client) => {
     if (!cancellingRec) return;
     // Cancel original
-    cancelRecording(cancellingRec.id);
+    const cancelled = await cancelRecording(cancellingRec.id);
+    if (!cancelled) return; // o hook já mostrou o erro da API
 
     // Send cancellation message to original client
     const originalClient = clients.find(c => c.id === cancellingRec.clientId);
@@ -540,8 +577,15 @@ export default function Schedule() {
       type: 'backup',
       status: 'agendada',
     };
-    // o cliente do backup recebe o convite abaixo (não o aviso de "gravação agendada")
-    await addRecording(newRec, { notify: false });
+    // O addRecording deste render ainda vê a original como 'agendada' no mesmo horário: ela fica
+    // fora da checagem. O cliente backup recebe só o convite abaixo, sem o aviso de agendada.
+    const backupAdded = await addRecording(newRec, { excludeId: cancellingRec.id, skipNotification: true });
+    if (!backupAdded) {
+      toast.error(`A gravação foi cancelada, mas não foi possível encaixar ${backupClient.companyName}. Tente de novo.`);
+      setBackupOpen(false);
+      setCancellingRec(null);
+      return;
+    }
 
     // Send backup invite to the backup client
     if (backupClient.whatsapp) {
@@ -558,38 +602,49 @@ export default function Schedule() {
     setCancellingRec(null);
   };
 
-  const handleNoShow = (rec: Recording) => {
-    updateRecording({ ...rec, status: 'cancelada' });
+  const handleNoShow = async (rec: Recording) => {
+    const ok = await updateRecording({ ...rec, status: 'cancelada' });
+    if (!ok) return; // o hook já mostrou o erro da API
     toast.warning(`${getClientName(rec.clientId)} — não gravou`);
   };
 
   // "Gravado" não manda WhatsApp: o modelo "Gravação Confirmada" é a resposta quando o cliente confirma antes
   // da gravação (não serve para depois que ela aconteceu)
-  const handleComplete = (rec: Recording) => {
-    updateRecording({ ...rec, status: 'concluida' });
+  const handleComplete = async (rec: Recording) => {
+    // A API recusou: o hook já avisou e a gravação não aparece como concluída
+    if (!(await updateRecording({ ...rec, status: 'concluida' }))) return;
     toast.success('Gravação concluída');
   };
 
   const openEditRecording = (rec: Recording) => {
     setEditingRec(rec);
-    setEditForm({ clientId: rec.clientId, videomakerId: rec.videomakerId, date: rec.date, startTime: rec.startTime, type: rec.type, status: rec.status });
+    setEditForm({ clientId: rec.clientId, prospectName: rec.prospectName || '', videomakerId: rec.videomakerId, date: rec.date, startTime: rec.startTime, type: rec.type, status: rec.status });
     setEditOpen(true);
   };
 
-  const handleEditSave = () => {
+  const handleEditSave = async () => {
     if (!editingRec) return;
-    if (!editForm.clientId || !editForm.videomakerId || !editForm.date || !editForm.startTime) {
-      toast.error('Preencha todos os campos'); return;
+    // Gravação avulsa ou "Produção de Story" não tem cliente: vale o nome do prospect
+    const withoutClient = !editForm.clientId;
+    if (withoutClient && !editForm.prospectName.trim()) {
+      toast.error('Selecione um cliente ou informe o nome do prospect'); return;
     }
+    if (withoutClient && editForm.type !== editingRec.type && editForm.type !== 'avulso') {
+      toast.error('Para mudar o tipo desta gravação, escolha o cliente'); return;
+    }
+    if (!editForm.videomakerId) { toast.error('Selecione o videomaker'); return; }
+    if (!editForm.date || !editForm.startTime) { toast.error('Informe a data e o horário'); return; }
     // Check conflict only if date/time/videomaker changed
     const changed = editForm.date !== editingRec.date || editForm.startTime !== editingRec.startTime || editForm.videomakerId !== editingRec.videomakerId;
-    const conflictCheck = hasConflict(editForm.videomakerId, editForm.date, editForm.startTime, editingRec.id, editForm.type as RecordingType, editForm.clientId);
+    const conflictCheck = hasConflict(editForm.videomakerId, editForm.date, editForm.startTime, editingRec.id, editForm.type as RecordingType, editForm.clientId || undefined, { blocks: videomakerBlocks(editForm.videomakerId, editForm.date) });
     if (changed && editForm.status !== 'cancelada' && conflictCheck.hasConflict) {
       toast.error(conflictCheck.message || 'Conflito de horário!'); return;
     }
 
-    const updated = { ...editingRec, ...editForm };
-    updateRecording(updated);
+    const { prospectName, ...editFields } = editForm;
+    const updated: Recording = { ...editingRec, ...editFields, prospectName: prospectName.trim() || editingRec.prospectName };
+    const ok = await updateRecording(updated);
+    if (!ok) return; // o hook já mostrou o erro da API
     
     // If status changed to 'agendada', remove active recording entry
     if (editForm.status === 'agendada' && editingRec.status !== 'agendada') {
@@ -624,7 +679,8 @@ export default function Schedule() {
           .eq('script_id', scriptId).in('kanban_column', ['captacao']);
       }
     }
-    updateRecording({ ...rec, status: 'agendada' });
+    const ok = await updateRecording({ ...rec, status: 'agendada' });
+    if (!ok) return; // o hook já mostrou o erro da API
     toast.success('Gravação resetada para Agendada');
   };
 
@@ -730,8 +786,10 @@ export default function Schedule() {
           clientId: rec.clientId,
           startedAt: new Date().toISOString(),
           plannedScriptIds: [],
+        }).then(started => {
+          // Sem sucesso o hook já mostrou o erro da API
+          if (started) toast.success(`Gravação endomarketing iniciada — ${getClientName(rec.clientId)}`);
         });
-        toast.success(`Gravação endomarketing iniciada — ${getClientName(rec.clientId)}`);
         return;
       }
       setStartRecordingState(rec);
@@ -757,14 +815,15 @@ export default function Schedule() {
       toast.error('Selecione pelo menos 1 roteiro para iniciar');
       return;
     }
-    setPlannedScriptsMap(prev => ({ ...prev, [startRecording.id]: Array.from(startSelectedScripts) }));
-    startActiveRecording({
+    const started = await startActiveRecording({
       recordingId: startRecording.id,
       videomarkerId: startRecording.videomakerId,
       clientId: startRecording.clientId,
       startedAt: new Date().toISOString(),
       plannedScriptIds: Array.from(startSelectedScripts),
     });
+    if (!started) return; // o hook já mostrou o erro da API
+    setPlannedScriptsMap(prev => ({ ...prev, [startRecording.id]: Array.from(startSelectedScripts) }));
     
     // Move content_tasks linked to selected scripts to "captacao"
     for (const scriptId of startSelectedScripts) {
@@ -989,26 +1048,55 @@ export default function Schedule() {
     </Badge>
   );
 
-  // Delete all backup recordings (future, non-concluded)
-  const handleDeleteAllBackup = async () => {
+  // Apaga em lote as backups ou extras ainda agendadas de hoje em diante (desfaz o "Gerar Mensal").
+  // Não entram as já feitas, as em andamento, os pedidos do portal em análise nem as confirmadas pelo cliente.
+  // Pedido do cliente já aprovado (source portal/link) também fica, com a mesma regra do Regenerar Agenda.
+  const handleDeleteAllOfType = async (type: 'backup' | 'extra') => {
+    if (!canBulkManageRecordings) { toast.error('Só admin e social media podem apagar em lote'); return; }
+    const label = type === 'backup' ? 'backup' : 'extra';
     const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const backupRecs = recordings.filter(r => r.type === 'backup' && r.date >= todayStr && r.status !== 'concluida');
-    if (backupRecs.length === 0) { toast.info('Nenhuma gravação backup para apagar'); return; }
-    for (const rec of backupRecs) { deleteRecording(rec.id); }
-    toast.success(`${backupRecs.length} gravação(ões) backup apagada(s)`);
-  };
+    const candidates = recordings.filter(r => r.type === type && r.date >= todayStr && r.status === 'agendada' && !isRecordingActive(r.id));
+    const isClientRequest = (r: Recording) => r.source === 'portal' || r.source === 'link';
+    const keptByClient = candidates.filter(r => r.confirmationStatus === 'confirmada' || isClientRequest(r));
+    const toDelete = candidates.filter(r => r.confirmationStatus !== 'confirmada' && !isClientRequest(r));
+    if (toDelete.length === 0) {
+      toast.info(keptByClient.length > 0
+        ? `Nenhuma gravação ${label} para apagar (${keptByClient.length} pedida(s) ou confirmada(s) pelo cliente foram mantidas)`
+        : `Nenhuma gravação ${label} para apagar`);
+      return;
+    }
+    const firstDate = toDelete.reduce((min, r) => (r.date < min ? r.date : min), toDelete[0].date);
+    const lastDate = toDelete.reduce((max, r) => (r.date > max ? r.date : max), toDelete[0].date);
+    const period = firstDate === lastDate
+      ? format(new Date(firstDate + 'T12:00:00'), 'dd/MM')
+      : `${format(new Date(firstDate + 'T12:00:00'), 'dd/MM')} a ${format(new Date(lastDate + 'T12:00:00'), 'dd/MM')}`;
+    const keptNote = keptByClient.length > 0 ? `\n\n${keptByClient.length} pedida(s) ou confirmada(s) pelo cliente não serão apagadas.` : '';
+    if (!window.confirm(`Apagar ${toDelete.length} gravação(ões) ${label} agendada(s) (${period})?${keptNote}\n\nEsta ação não pode ser desfeita.`)) return;
 
-  // Delete all extra recordings (future, non-concluded)
-  const handleDeleteAllExtra = async () => {
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const extraRecs = recordings.filter(r => r.type === 'extra' && r.date >= todayStr && r.status !== 'concluida');
-    if (extraRecs.length === 0) { toast.info('Nenhuma gravação extra para apagar'); return; }
-    for (const rec of extraRecs) { deleteRecording(rec.id); }
-    toast.success(`${extraRecs.length} gravação(ões) extra apagada(s)`);
+    let deleted = 0;
+    let failed = 0;
+    for (const rec of toDelete) {
+      if (await deleteRecording(rec.id)) deleted++;
+      else failed++;
+    }
+    if (failed > 0) toast.error(`${deleted} gravação(ões) ${label} apagada(s), ${failed} com erro`);
+    else toast.success(`${deleted} gravação(ões) ${label} apagada(s)`);
   };
+  // Um lote por vez: o ref barra o clique duplo antes de a tela atualizar
+  const bulkBusyRef = useRef(false);
+  const runBulk = async (type: 'backup' | 'extra', fn: () => Promise<void>) => {
+    if (bulkBusyRef.current) return;
+    bulkBusyRef.current = true;
+    setBulkBusy(type);
+    try { await fn(); } finally { bulkBusyRef.current = false; setBulkBusy(null); }
+  };
+  const handleDeleteAllBackup = () => runBulk('backup', () => handleDeleteAllOfType('backup'));
+  const handleDeleteAllExtra = () => runBulk('extra', () => handleDeleteAllOfType('extra'));
+  const handleGenerateBackup = () => runBulk('backup', generateBackupRecordings);
+  const handleGenerateExtra = () => runBulk('extra', generateExtraRecordings);
 
   // Generate backup & extra recordings for eligible clients into available slots
-  const handleGenerateBackup = async () => {
+  const generateBackupRecordings = async () => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const endStr = format(endOfMonth(addMonths(new Date(), 1)), 'yyyy-MM-dd');
     let created = 0;
@@ -1021,7 +1109,10 @@ export default function Schedule() {
       d = addDays(d, 1);
     }
 
-    let currentRecsLocal = [...recordings];
+    // A conferência de conflito usa a lista local (com as já geradas no laço) e tudo é criado
+    // de uma vez no fim, sem WhatsApp por gravação (backup é só vaga reserva)
+    const currentRecsLocal = [...recordings];
+    const toCreate: Recording[] = [];
 
     for (const day of days) {
       const dateStr = format(day, 'yyyy-MM-dd');
@@ -1037,7 +1128,7 @@ export default function Schedule() {
         const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
         if (vmDayRecsCount >= 4) continue;
 
-        if (!hasConflict(vmId, dateStr, client.backupTime, undefined, undefined, client.id).hasConflict) {
+        if (!hasConflict(vmId, dateStr, client.backupTime, undefined, undefined, client.id, { recordings: currentRecsLocal, blocks: videomakerBlocks(vmId, dateStr) }).hasConflict) {
           const exists = currentRecsLocal.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'backup' && r.status !== 'cancelada');
           if (!exists) {
             const rec: Recording = {
@@ -1049,14 +1140,16 @@ export default function Schedule() {
               type: 'backup',
               status: 'agendada',
             };
-            const ok = await addRecording(rec, { notify: false });
-            if (ok) {
-              created++;
-              currentRecsLocal.push(rec);
-            }
+            toCreate.push(rec);
+            currentRecsLocal.push(rec);
           }
         }
       }
+    }
+
+    if (toCreate.length > 0) {
+      if (await addRecordingsBulk(toCreate)) created = toCreate.length;
+      else { toast.error('Não foi possível gerar as gravações de backup. Tente de novo.'); return; }
     }
 
     if (created > 0) {
@@ -1066,7 +1159,7 @@ export default function Schedule() {
     }
   };
 
-  const handleGenerateExtra = async () => {
+  const generateExtraRecordings = async () => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const endStr = format(endOfMonth(addMonths(new Date(), 1)), 'yyyy-MM-dd');
     let created = 0;
@@ -1079,7 +1172,9 @@ export default function Schedule() {
       d = addDays(d, 1);
     }
 
-    let currentRecsLocal = [...recordings];
+    // Conflito conferido na lista local (com as já geradas no laço); criação única no fim, sem WhatsApp
+    const currentRecsLocal = [...recordings];
+    const toCreate: Recording[] = [];
     const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
 
     for (const day of days) {
@@ -1095,7 +1190,7 @@ export default function Schedule() {
             const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
             if (vmDayRecsCount >= 4) continue;
 
-            if (!hasConflict(vmId, dateStr, slot).hasConflict) {
+            if (!hasConflict(vmId, dateStr, slot, undefined, 'extra', undefined, { recordings: currentRecsLocal, blocks: videomakerBlocks(vmId, dateStr) }).hasConflict) {
               const eligibleClient = extraClients.find(c => 
                 !currentRecsLocal.some(r => r.clientId === c.id && r.date === dateStr && r.status !== 'cancelada')
               );
@@ -1110,21 +1205,24 @@ export default function Schedule() {
                   type: 'extra',
                   status: 'agendada',
                 };
-                const ok = await addRecording(rec, { notify: false });
-                if (ok) {
-                  created++;
-                  currentRecsLocal.push(rec);
-                  const idx = extraClients.indexOf(eligibleClient);
-                  if (idx > -1) {
-                    extraClients.splice(idx, 1);
-                    extraClients.push(eligibleClient);
-                  }
+                toCreate.push(rec);
+                currentRecsLocal.push(rec);
+                const idx = extraClients.indexOf(eligibleClient);
+                if (idx > -1) {
+                  extraClients.splice(idx, 1);
+                  extraClients.push(eligibleClient);
                 }
               }
             }
           }
         }
       }
+    }
+
+    if (toCreate.length > 0) {
+      if (await addRecordingsBulk(toCreate)) created = toCreate.length;
+      else { toast.error('Não foi possível gerar as gravações extras. Tente de novo.'); return; }
+      // Geração em massa não dispara "gravação agendada" por gravação (decisão do WhatsApp)
     }
 
     if (created > 0) {
@@ -1149,7 +1247,7 @@ export default function Schedule() {
     }
     const generationVideomakers = new Set([
       ...videomakers.map(vm => vm.id),
-      ...recordings.map(recording => recording.videomakerId),
+      ...recordings.map(recording => recording.videomakerId).filter(servesActiveCity),
       ...fixedClients.map(client => client.videomaker),
     ].filter(Boolean));
 
@@ -1304,23 +1402,27 @@ export default function Schedule() {
             {showBackup && (
               <div className="flex gap-2 items-center bg-amber-500/5 p-1 rounded-md border border-amber-500/20">
                 <span className="text-[10px] font-bold text-amber-600 uppercase ml-1 px-1">Backup</span>
-                <Button variant="outline" size="sm" className="h-8 border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateBackup}>
-                  <RefreshCw size={14} className="mr-1.5" /> Gerar Mensal
+                <Button variant="outline" size="sm" className="h-8 border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateBackup} disabled={bulkBusy !== null}>
+                  <RefreshCw size={14} className={`mr-1.5 ${bulkBusy === 'backup' ? 'animate-spin' : ''}`} /> Gerar Mensal
                 </Button>
-                <Button variant="outline" size="sm" className="h-8 border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllBackup}>
-                  <Trash2 size={14} className="mr-1.5" /> Apagar
-                </Button>
+                {canBulkManageRecordings && (
+                  <Button variant="outline" size="sm" className="h-8 border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllBackup} disabled={bulkBusy !== null}>
+                    <Trash2 size={14} className="mr-1.5" /> Apagar
+                  </Button>
+                )}
               </div>
             )}
             {showExtra && (
               <div className="flex gap-2 items-center bg-blue-500/5 p-1 rounded-md border border-blue-500/20">
                 <span className="text-[10px] font-bold text-blue-600 uppercase ml-1 px-1">Extra</span>
-                <Button variant="outline" size="sm" className="h-8 border-blue-500/50 text-blue-600 hover:bg-blue-500/10" onClick={handleGenerateExtra}>
-                  <RefreshCw size={14} className="mr-1.5" /> Gerar Mensal
+                <Button variant="outline" size="sm" className="h-8 border-blue-500/50 text-blue-600 hover:bg-blue-500/10" onClick={handleGenerateExtra} disabled={bulkBusy !== null}>
+                  <RefreshCw size={14} className={`mr-1.5 ${bulkBusy === 'extra' ? 'animate-spin' : ''}`} /> Gerar Mensal
                 </Button>
-                <Button variant="outline" size="sm" className="h-8 border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllExtra}>
-                  <Trash2 size={14} className="mr-1.5" /> Apagar
-                </Button>
+                {canBulkManageRecordings && (
+                  <Button variant="outline" size="sm" className="h-8 border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllExtra} disabled={bulkBusy !== null}>
+                    <Trash2 size={14} className="mr-1.5" /> Apagar
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -1346,7 +1448,7 @@ export default function Schedule() {
                 variant="outline" 
                 className="border-indigo-500/50 text-indigo-600 hover:bg-indigo-500/10" 
                 onClick={async () => {
-                  const confirm = window.confirm("Deseja organizar a agenda de todo o mês? Isso irá reajustar horários para os slots padrão (08:30, 10:30, 14:30, 16:30) e APAGAR o que exceder a capacidade de 4 por videomaker.");
+                  const confirm = window.confirm("Deseja organizar a agenda do mês, de hoje em diante? Isso irá reajustar horários das gravações agendadas para os slots padrão (08:30, 10:30, 14:30, 16:30) e APAGAR as agendadas que excederem a capacidade de 4 por videomaker.\n\nGravações já realizadas, em andamento e dias que já passaram não são alterados.");
                   if (!confirm) return;
                   
                   setOrganizing(true);
@@ -1393,7 +1495,7 @@ export default function Schedule() {
       {/* Capacity widget */}
       <AgencyCapacityWidget clients={clients} users={users} recordings={recordings} settings={settings} compact />
 
-      <Tabs defaultValue="calendar" className="w-full">
+      <Tabs value={scheduleView} onValueChange={v => setScheduleView(v as 'calendar' | 'kanban')} className="w-full">
         <TabsList>
           <TabsTrigger value="calendar" className="gap-1.5"><CalendarDays size={14} /> Calendário</TabsTrigger>
           <TabsTrigger value="kanban" className="gap-1.5"><Columns3 size={14} /> Kanban</TabsTrigger>
@@ -1482,8 +1584,10 @@ export default function Schedule() {
 
           {/* Calendar grid */}
           <div className="grid grid-cols-7 gap-1">
-             {calendarDays.map(day => {
+             {calendarDays.map((day, dayIndex) => {
               const dateStr = format(day, 'yyyy-MM-dd');
+              // Nas colunas da direita a caixa de ações abre para a esquerda (não sai da tela)
+              const actionsAlignRight = dayIndex % 7 >= 4;
               const isCurrentMonth = isSameMonth(day, currentMonth);
               const isToday = isSameDay(day, today);
               const dayEvents = getEventsForDay(day);
@@ -1504,19 +1608,24 @@ export default function Schedule() {
                       return (
                       <div
                         key={evt.id}
-                        className={`rounded px-1 py-0.5 text-[10px] truncate cursor-pointer group relative ${active ? 'ring-1 ring-primary animate-pulse' : ''}`}
+                        // tabIndex: no celular/tablet o toque foca o card e abre as ações (group-focus-within)
+                        tabIndex={0}
+                        className={`rounded px-1 py-0.5 text-[10px] cursor-pointer group relative focus:outline-none focus-visible:ring-1 focus-visible:ring-primary ${active ? 'ring-1 ring-primary animate-pulse' : ''}`}
                         style={{ backgroundColor: `hsl(${evt.color} / 0.15)`, borderLeft: `2px solid hsl(${evt.color})` }}
                       >
-                        {evt.type === 'endomarketing' && <Sparkles size={7} className="inline mr-0.5" style={{ color: `hsl(${ENDO_COLOR})` }} />}
-                        {evt.type === 'event' && <MapPin size={7} className="inline mr-0.5 text-orange-500" />}
-                        <span className="font-medium">{evt.clientName}</span>
-                        <span className="text-muted-foreground ml-1">{evt.startTime}</span>
-                        {active && <span className="inline ml-0.5 text-primary font-bold">●</span>}
-                        {evt.type === 'recording' && evt.recording?.status === 'concluida' && <Check size={8} className="inline ml-0.5 text-success" />}
-                        {evt.type === 'recording' && evt.recording?.status === 'cancelada' && <XCircle size={8} className="inline ml-0.5 text-destructive" />}
+                        {/* O corte do texto fica aqui dentro: no card, o overflow escondia a caixa de ações */}
+                        <div className="truncate">
+                          {evt.type === 'endomarketing' && <Sparkles size={7} className="inline mr-0.5" style={{ color: `hsl(${ENDO_COLOR})` }} />}
+                          {evt.type === 'event' && <MapPin size={7} className="inline mr-0.5 text-orange-500" />}
+                          <span className="font-medium">{evt.clientName}</span>
+                          <span className="text-muted-foreground ml-1">{evt.startTime}</span>
+                          {active && <span className="inline ml-0.5 text-primary font-bold">●</span>}
+                          {evt.type === 'recording' && evt.recording?.status === 'concluida' && <Check size={8} className="inline ml-0.5 text-success" />}
+                          {evt.type === 'recording' && evt.recording?.status === 'cancelada' && <XCircle size={8} className="inline ml-0.5 text-destructive" />}
+                        </div>
 
                         {/* Hover tooltip */}
-                        <div className="absolute left-0 top-full mt-0.5 hidden group-hover:flex flex-col gap-1 bg-card rounded-lg p-2 shadow-lg border border-border z-20 min-w-[140px]">
+                        <div className={`absolute ${actionsAlignRight ? 'right-0' : 'left-0'} top-full mt-0.5 hidden group-hover:flex group-focus-within:flex flex-col gap-1 bg-card rounded-lg p-2 shadow-lg border border-border z-20 min-w-[140px]`}>
                           {evt.type === 'event' && evt.eventRecording ? (
                             <>
                               <div className="flex items-center gap-1">
@@ -1559,7 +1668,10 @@ export default function Schedule() {
                                     )}
                                     <button onClick={() => openScriptsForClient(evt.recording!.clientId)} className="p-0.5 rounded hover:bg-primary/20 text-primary" title="Roteiros"><FileText size={10} /></button>
                                     <button onClick={() => handleSendConfirmation(evt.recording!)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Enviar Confirmação"><MessageSquare size={10} /></button>
-                                    <button onClick={() => handleComplete(evt.recording!)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Gravado"><Check size={10} /></button>
+                                    {/* Gravação em andamento só sai pelo Finalizar (fecha o cronômetro e registra a entrega) */}
+                                    {!isRecordingActive(evt.recording!.id) && (
+                                      <button onClick={() => handleComplete(evt.recording!)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Gravado"><Check size={10} /></button>
+                                    )}
                                     <button onClick={() => handleCancel(evt.recording!)} className="p-0.5 rounded hover:bg-destructive/20 text-destructive" title="Cancelar"><XCircle size={10} /></button>
                                     <button onClick={() => handleDeleteRecording(evt.recording!)} className="p-0.5 rounded hover:bg-destructive/20 text-destructive" title="Apagar"><Trash2 size={10} /></button>
                                   </>
@@ -1572,7 +1684,18 @@ export default function Schedule() {
                       );
                     })}
                     {dayEvents.length > 4 && (
-                      <p className="text-[9px] text-muted-foreground text-center">+{dayEvents.length - 4} mais</p>
+                      // Abre o Kanban na semana do dia, que lista todas as gravações sem corte
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWeekOffset(differenceInCalendarWeeks(day, new Date(), { weekStartsOn: 1 }));
+                          setScheduleView('kanban');
+                        }}
+                        className="w-full text-[9px] text-muted-foreground text-center hover:text-primary hover:underline"
+                        title="Ver todas no Kanban da semana"
+                      >
+                        +{dayEvents.length - 4} mais
+                      </button>
                     )}
                   </div>
                 </div>
@@ -1676,7 +1799,7 @@ export default function Schedule() {
                         )}
 
                         {evt.type === 'event' && evt.eventRecording && (
-                          <div className="grid grid-cols-2 gap-1 pt-1.5 border-t border-border/50 hidden group-hover:grid transition-all">
+                          <div className="grid grid-cols-2 gap-1 pt-1.5 border-t border-border/50 hidden group-hover:grid group-focus-within:grid [@media(hover:none)]:grid transition-all">
                             <button onClick={() => openEditEvent(evt.eventRecording!)} className="text-[10px] py-1.5 rounded-md bg-muted/60 text-muted-foreground hover:bg-muted transition-colors flex items-center justify-center gap-1">
                               <Pencil size={10} /> Editar
                             </button>
@@ -1692,7 +1815,7 @@ export default function Schedule() {
                         )}
 
                         {evt.type === 'recording' && evt.recording && (
-                          <div className="grid grid-cols-2 gap-1 pt-1.5 border-t border-border/50 hidden group-hover:grid transition-all">
+                          <div className="grid grid-cols-2 gap-1 pt-1.5 border-t border-border/50 hidden group-hover:grid group-focus-within:grid [@media(hover:none)]:grid transition-all">
                             <button onClick={() => openEditRecording(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-muted/60 text-muted-foreground hover:bg-muted transition-colors flex items-center justify-center gap-1">
                               <Pencil size={10} /> Editar
                             </button>
@@ -1718,9 +1841,11 @@ export default function Schedule() {
                                 <button onClick={() => handleSendConfirmation(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-success/10 text-success hover:bg-success/20 transition-colors flex items-center justify-center gap-1">
                                   <MessageSquare size={10} /> Confirmar
                                 </button>
-                                <button onClick={() => handleComplete(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-success/10 text-success hover:bg-success/20 transition-colors flex items-center justify-center gap-1">
-                                  <Check size={10} /> Gravado
-                                </button>
+                                {!isRecordingActive(evt.recording!.id) && (
+                                  <button onClick={() => handleComplete(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-success/10 text-success hover:bg-success/20 transition-colors flex items-center justify-center gap-1">
+                                    <Check size={10} /> Gravado
+                                  </button>
+                                )}
                                 <button onClick={() => handleCancel(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/15 transition-colors flex items-center justify-center gap-1">
                                   <XCircle size={10} /> Cancelar
                                 </button>
@@ -2061,10 +2186,16 @@ export default function Schedule() {
             <div className="space-y-1">
               <Label>Cliente</Label>
               <Select value={editForm.clientId} onValueChange={v => setEditForm({ ...editForm, clientId: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={editingRec && !editingRec.clientId ? 'Sem cliente (avulso)' : 'Selecione'} /></SelectTrigger>
                 <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+            {editingRec && !editingRec.clientId && !editForm.clientId && (
+              <div className="space-y-1">
+                <Label>Nome do prospect</Label>
+                <Input value={editForm.prospectName} onChange={e => setEditForm({ ...editForm, prospectName: e.target.value })} placeholder="Ex: Loja do João" />
+              </div>
+            )}
             <div className="space-y-1">
               <Label>Videomaker</Label>
               <Select value={editForm.videomakerId} onValueChange={v => setEditForm({ ...editForm, videomakerId: v })}>
@@ -2087,6 +2218,7 @@ export default function Schedule() {
                   <SelectItem value="secundaria">Secundária</SelectItem>
                   <SelectItem value="backup">Backup</SelectItem>
                   <SelectItem value="endomarketing">Endomarketing</SelectItem>
+                  <SelectItem value="avulso">Avulso</SelectItem>
                 </SelectContent>
                 </Select>
               </div>
@@ -2096,6 +2228,7 @@ export default function Schedule() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="agendada">Agendada</SelectItem>
+                    <SelectItem value="organizando_material">Organizando material</SelectItem>
                     <SelectItem value="concluida">Concluída</SelectItem>
                     <SelectItem value="cancelada">Cancelada</SelectItem>
                   </SelectContent>
@@ -2183,7 +2316,7 @@ export default function Schedule() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Regenerar Agenda</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Remove todas as gravações futuras com status "agendada" do cliente selecionado e gera novas com base nas configurações atuais.
+            Remove as gravações futuras "agendadas" geradas pela agenda (fixas, backups e extras) do cliente selecionado e gera as fixas de novo com base nas configurações atuais. Ficam as que já começaram, as pedidas ou confirmadas pelo cliente e as que já têm vídeos ou entrega vinculados.
           </p>
           <div className="space-y-3">
             <div className="space-y-1">

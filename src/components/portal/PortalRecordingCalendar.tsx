@@ -454,6 +454,8 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     // A oferta assinada do cancelamento: o servidor só aceita uma das opções dela
     const body: any = { action: 'accept_backup', client_id: clientId, backup_date: date, backup_time: time, backup_offer: cancelFlow?.step === 'result' ? cancelFlow.backupOffer : null };
     if (altVmId) body.videomaker_id = altVmId;
+    // O servidor só remarca a partir da gravação que acabou de ser cancelada
+    if (cancelFlow?.step === 'result') body.recording_id = cancelFlow.rec.id;
     const { data, error } = await portalRecordings(body);
     if (data?.success) {
       toast.success('🚀 Gravação remarcada!');

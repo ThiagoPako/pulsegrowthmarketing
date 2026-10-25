@@ -465,17 +465,25 @@ export function organizeRecordingsForDate(
   settings: CompanySettings,
   validClientIds?: Set<string>,
   cancelledClientIds?: Set<string>,
-  clients?: Client[]
+  clients?: Client[],
+  activeRecordingIds?: Set<string>
 ): { toUpdate: Recording[]; toCancel: Recording[] } {
   const normalizedVmId = videomakerId || '';
   
-  const dayRecordings = allRecordings.filter(r => 
+  const allDayRecordings = allRecordings.filter(r => 
     r.date === date && 
     (r.videomakerId || '') === normalizedVmId && 
     r.status !== 'cancelada'
   );
 
-  if (dayRecordings.length === 0) return { toUpdate: [], toCancel: [] };
+  if (allDayRecordings.length === 0) return { toUpdate: [], toCancel: [] };
+
+  // Só gravações 'agendada' que não estão em andamento podem mudar de horário ou ser removidas.
+  // As já feitas (concluida, organizando_material), as em andamento e os pedidos ainda não
+  // aprovados ficam onde estão e ocupam o horário delas.
+  const isMovable = (r: Recording) => r.status === 'agendada' && !activeRecordingIds?.has(r.id);
+  const dayRecordings = allDayRecordings.filter(isMovable);
+  const fixedOccupants = allDayRecordings.filter(r => !isMovable(r));
 
   const toUpdate: Recording[] = [];
   const toCancel: Recording[] = [];
@@ -521,6 +529,18 @@ export function organizeRecordingsForDate(
 
   const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
   const usedSlots = new Set<string>();
+
+  // Ocupantes fixos tomam os horários padrão com que se sobrepõem (gravação + intervalo)
+  const BUFFER = 30;
+  fixedOccupants.forEach(occ => {
+    const occStart = timeToMinutes(occ.startTime);
+    FIXED_SLOTS.forEach(slot => {
+      const slotStart = timeToMinutes(slot);
+      if (slotStart < occStart + settings.recordingDuration + BUFFER && slotStart + settings.recordingDuration + BUFFER > occStart) {
+        usedSlots.add(slot);
+      }
+    });
+  });
 
   // 1. First Pass: Keep "fixa" recordings at their defined client schedule if possible
   const highPriority = sortedRecs.filter(r => r.type === 'fixa');

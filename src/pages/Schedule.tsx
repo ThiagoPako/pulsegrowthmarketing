@@ -1374,7 +1374,7 @@ export default function Schedule() {
                 variant="outline" 
                 className="border-indigo-500/50 text-indigo-600 hover:bg-indigo-500/10" 
                 onClick={async () => {
-                  const confirm = window.confirm("Deseja organizar a agenda de todo o mês? Isso irá reajustar horários para os slots padrão (08:30, 10:30, 14:30, 16:30) e APAGAR o que exceder a capacidade de 4 por videomaker.");
+                  const confirm = window.confirm("Deseja organizar a agenda do mês, de hoje em diante? Isso irá reajustar horários das gravações agendadas para os slots padrão (08:30, 10:30, 14:30, 16:30) e APAGAR as agendadas que excederem a capacidade de 4 por videomaker.\n\nGravações já realizadas, em andamento e dias que já passaram não são alterados.");
                   if (!confirm) return;
                   
                   setOrganizing(true);

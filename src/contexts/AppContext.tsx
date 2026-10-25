@@ -536,7 +536,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     return createdCount;
   }, [data, users, hasConflict]);
-  const organizeSchedule = useCallback(async (startDate: string, endDate: string): Promise<{ updated: number; cancelled: number }> => {
+  const organizeSchedule = useCallback(async (requestedStartDate: string, endDate: string): Promise<{ updated: number; cancelled: number }> => {
+    // Dias que já passaram não são reorganizados: começa no maior entre o início pedido e hoje
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    const startDate = requestedStartDate > todayStr ? requestedStartDate : todayStr;
+    if (startDate > endDate) return { updated: 0, cancelled: 0 };
     // 1. Fetch ALL recordings for the range directly from the VPS to catch "ghost" recordings
     const { data: allRawRecs, error } = await supabase
       .from('recordings')
@@ -577,6 +581,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...allRecs.map(r => r.videomakerId).filter(Boolean)
     ]);
     const vmIdsToProcess = [...Array.from(allVideomakerIds), ""];
+    // Gravações em andamento não mudam de horário nem são apagadas
+    const activeRecordingIds = new Set(data.activeRecordings.map(a => a.recordingId));
 
     const recordingsToUpdate: Recording[] = [];
     const idsToDelete: string[] = [];
@@ -593,7 +599,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           data.settings, 
           activeClientIds,
           cancelledClientIds,
-          data.clients
+          data.clients,
+          activeRecordingIds
         );
         
         // Add to our bulk lists
@@ -616,25 +623,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // 3. Perform bulk operations
+    // 3. Perform bulk operations (a contagem devolvida é só do que o servidor confirmou)
+    let deletedCount = 0;
     if (idsToDelete.length > 0) {
       // Chunk deletions to avoid URL length limits in some proxies
       const CHUNK_SIZE = 50;
       for (let i = 0; i < idsToDelete.length; i += CHUNK_SIZE) {
         const chunk = idsToDelete.slice(i, i + CHUNK_SIZE);
-        await data.deleteRecordingsBulk(chunk);
+        if (await data.deleteRecordingsBulk(chunk)) deletedCount += chunk.length;
       }
     }
 
+    let updatedCount = 0;
     if (recordingsToUpdate.length > 0) {
       // Updates are still row-by-row unless we add a bulk update endpoint
       // But we can at least do them in parallel
-      const updatePromises = recordingsToUpdate.map(rec => data.updateRecording(rec));
-      await Promise.all(updatePromises);
+      const updateResults = await Promise.all(recordingsToUpdate.map(rec => data.updateRecording(rec)));
+      updatedCount = updateResults.filter(Boolean).length;
     }
 
     await data.refetch();
-    return { updated: recordingsToUpdate.length, cancelled: idsToDelete.length };
+    return { updated: updatedCount, cancelled: deletedCount };
   }, [data, users]);
 
 

@@ -163,6 +163,26 @@ export function ensureWhatsAppSchema(pool) {
       await pool.query(`ALTER TABLE wa_approval_requests ADD COLUMN IF NOT EXISTS help_sent_at TIMESTAMPTZ`);
       // aviso "vídeo novo no portal": cada conteúdo avisa uma vez só
       await pool.query(`ALTER TABLE client_portal_contents ADD COLUMN IF NOT EXISTS wa_notified_at TIMESTAMPTZ`).catch(() => {});
+      // versão corrigida: quando o conteúdo volta para "pendente" (ajuste feito), avisa de novo. Vale para toda origem
+      // (telas, agentes, portal), por isso fica no banco. Só no UPDATE: o INSERT pode já vir marcado como avisado.
+      await pool.query(`
+        CREATE OR REPLACE FUNCTION public.reset_portal_wa_notified() RETURNS trigger
+        LANGUAGE plpgsql AS $fn$
+        BEGIN
+          IF NEW.status = 'pendente' AND OLD.status IS DISTINCT FROM 'pendente' THEN NEW.wa_notified_at := NULL; END IF;
+          RETURN NEW;
+        END $fn$;
+      `).catch((error) => console.error('[whatsapp] gatilho do aviso de portal:', error.message));
+      await pool.query(`
+        DO $do$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_portal_wa_notified_reset'
+                          AND tgrelid = 'public.client_portal_contents'::regclass) THEN
+            CREATE TRIGGER trg_portal_wa_notified_reset BEFORE UPDATE ON public.client_portal_contents
+            FOR EACH ROW EXECUTE FUNCTION public.reset_portal_wa_notified();
+          END IF;
+        END $do$;
+      `).catch((error) => console.error('[whatsapp] gatilho do aviso de portal:', error.message));
       await pool.query(`
         CREATE TABLE IF NOT EXISTS wa_job_runs (
           job TEXT NOT NULL,

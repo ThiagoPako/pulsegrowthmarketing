@@ -24,6 +24,7 @@ import UserAvatar from '@/components/UserAvatar';
 import type { Script, ScriptVideoType, ScriptContentFormat } from '@/types';
 import { SCRIPT_VIDEO_TYPE_LABELS, SCRIPT_CONTENT_FORMAT_LABELS } from '@/types';
 import SentScriptsDialog from '@/components/copy/SentScriptsDialog';
+import { sanitizeScriptHtml } from '@/lib/highlightQuotes';
 
 interface PendingTask {
   id: string;
@@ -2155,7 +2156,7 @@ export default function Copy() {
               </div>
               <div
                 className="flex-1 overflow-y-auto prose prose-invert prose-sm max-w-none py-3"
-                dangerouslySetInnerHTML={{ __html: previewScript.content || '<p class="text-white/40">Sem conteúdo</p>' }}
+                dangerouslySetInnerHTML={{ __html: sanitizeScriptHtml(previewScript.content) || '<p class="text-white/40">Sem conteúdo</p>' }}
               />
               {previewScript.caption && (
                 <div className="border-t border-white/10 pt-3">

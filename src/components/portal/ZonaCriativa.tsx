@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { syncPortalScriptPriority, syncPortalScriptEdit } from '@/lib/portalSync';
-import { highlightQuotes } from '@/lib/highlightQuotes';
+import { highlightQuotes, plainTextToScriptHtml, scriptHtmlToPlainText } from '@/lib/highlightQuotes';
 
 interface Script {
   id: string;
@@ -255,8 +255,9 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
       toast.error('Erro ao salvar edição');
     } else {
       toast.success('Roteiro editado com sucesso!');
-      setScripts(prev => prev.map(s => s.id === selectedScript.id ? { ...s, content: `<p>${editContent.replace(/\n/g, '</p><p>')}</p>`, caption: editCaption, client_edited: true, client_edited_at: new Date().toISOString() } : s));
-      setSelectedScript(prev => prev ? { ...prev, content: `<p>${editContent.replace(/\n/g, '</p><p>')}</p>`, caption: editCaption, client_edited: true, client_edited_at: new Date().toISOString() } : null);
+      const editedHtml = plainTextToScriptHtml(editContent);
+      setScripts(prev => prev.map(s => s.id === selectedScript.id ? { ...s, content: editedHtml, caption: editCaption, client_edited: true, client_edited_at: new Date().toISOString() } : s));
+      setSelectedScript(prev => prev ? { ...prev, content: editedHtml, caption: editCaption, client_edited: true, client_edited_at: new Date().toISOString() } : null);
       setEditing(false);
       syncPortalScriptEdit(clientId, selectedScript.id, result?.company_name || '').catch(console.error);
     }
@@ -277,11 +278,8 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
 
   const getTag = (videoType: string) => VIDEO_TYPE_TAGS[videoType] || { label: videoType, bg: 'bg-white/10', text: 'text-white/60', border: 'border-white/10' };
 
-  const stripHtml = (html: string) => {
-    const tmp = document.createElement('div');
-    tmp.innerHTML = html;
-    return tmp.textContent || tmp.innerText || '';
-  };
+  // Sem innerHTML numa div solta: o roteiro pode trazer <img onerror> e ele dispararia.
+  const stripHtml = (html: string) => scriptHtmlToPlainText(html);
 
   const videoTypes = [...new Set(scripts.map(s => s.video_type))];
   

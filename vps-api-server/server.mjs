@@ -4547,7 +4547,11 @@ app.post('/api/portal-actions', async (req, res) => {
       if (!client_id || !script_id) return res.status(400).json({ error: 'client_id and script_id required' });
 
       const plainContent = String(content || '').trim();
-      const htmlContent = plainContent ? `<p>${plainContent.replace(/\n/g, '</p><p>')}</p>` : '';
+      // Texto puro do textarea: escapa & < > antes de virar <p> (sem isso, 'preço < 100'
+      // quebra o HTML e uma tag digitada vira HTML na tela da equipe). Aspas ficam: o
+      // highlightQuotes precisa delas para marcar as falas.
+      const escapedContent = plainContent.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const htmlContent = escapedContent ? `<p>${escapedContent.replace(/\n/g, '</p><p>')}</p>` : '';
 
       const { rows: [updatedScript] } = await pool.query(
         `UPDATE scripts

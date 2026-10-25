@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/vpsDb';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
@@ -30,6 +30,7 @@ import {
   sendRecordingCancelledNotification,
   sendRecordingConfirmedNotification,
   sendBackupInviteNotification,
+  sendRecordingScheduledNotification,
 } from '@/services/whatsappService';
 
 // Endomarketing brand color (magenta/fuchsia)
@@ -96,7 +97,7 @@ function mapEventRecordingRow(e: any): EventRecording {
 export default function Schedule() {
   const {
     clients, users, recordings, scripts, settings, activeRecordings,
-    currentUser, updateScript, addRecording, updateRecording, cancelRecording, deleteRecording, cancelAndReschedule,
+    currentUser, updateScript, addRecording, addRecordingsBulk, updateRecording, cancelRecording, deleteRecording, cancelAndReschedule,
     regenerateScheduleForClient, generateFixedSchedulesForMonth, previewFixedSchedulesForMonth, commitFixedSchedules, autoFillVacanciesForDate, organizeSchedule, startActiveRecording, stopActiveRecording, refetchData,
     hasConflict, isWithinWorkHours,
 
@@ -184,6 +185,25 @@ export default function Schedule() {
   const [plannedScriptsMap, setPlannedScriptsMap] = useState<Record<string, string[]>>({});
 
   const [organizing, setOrganizing] = useState(false);
+  // Geração/remoção em lote de backups e extras em andamento (botões ficam desabilitados)
+  const [bulkBusy, setBulkBusy] = useState<null | 'backup' | 'extra'>(null);
+  // Apagar em lote backups e extras: só admin e social_media
+  const canBulkManageRecordings = ['admin', 'social_media'].some(role => currentUser?.role === role || currentUser?.roles?.includes(role as any));
+
+  // Outros compromissos do videomaker no dia (eventos e endomarketing com videomaker), para a checagem de conflito
+  const videomakerBlocks = useCallback((vmId: string, date: string) => {
+    const blocks: { startTime: string; endTime: string; label: string }[] = [];
+    eventRecordings
+      .filter(e => e.videomakerId === vmId && normalizeDateKey(e.date) === date && e.status !== 'cancelado')
+      .forEach(e => blocks.push({ startTime: e.startTime, endTime: e.endTime || e.startTime, label: `o evento "${e.title || 'Evento'}"` }));
+    endoAgendamentos
+      .filter(a => a.videomaker_id === vmId && a.date === date && a.status !== 'cancelado')
+      .forEach(a => {
+        const end = timeToMinutes(a.start_time) + (Number(a.duration) || 0);
+        blocks.push({ startTime: a.start_time, endTime: `${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`, label: 'um endomarketing' });
+      });
+    return blocks;
+  }, [eventRecordings, endoAgendamentos]);
   // Finish recording dialog state
 
   const [finishRecOpen, setFinishRecOpen] = useState(false);
@@ -332,6 +352,19 @@ export default function Schedule() {
       toast.error('Preencha todos os campos obrigatórios'); return;
     }
 
+    // Gravações do videomaker que caem dentro do evento: avisa antes de agendar
+    const evStart = timeToMinutes(eventForm.startTime);
+    const evEnd = timeToMinutes(eventForm.endTime || eventForm.startTime);
+    const overlapping = recordings.filter(r => {
+      if (r.videomakerId !== eventForm.videomakerId || r.date !== eventForm.date || r.status === 'cancelada') return false;
+      const rStart = timeToMinutes(r.startTime);
+      return rStart < evEnd + 30 && rStart + (settings.recordingDuration || 90) + 30 > evStart;
+    });
+    if (overlapping.length > 0) {
+      const list = overlapping.map(r => `${r.startTime} — ${getClientName(r.clientId) || r.prospectName || 'Gravação'}`).join('\n');
+      if (!window.confirm(`O videomaker já tem ${overlapping.length} gravação(ões) nesse horário:\n\n${list}\n\nAgendar o evento mesmo assim?`)) return;
+    }
+
     const { data, error } = await supabase
       .from('event_recordings')
       .insert({
@@ -442,7 +475,7 @@ export default function Schedule() {
     if (!isAvulso && !form.clientId) { toast.error('Selecione um cliente'); return; }
     if (isAvulso && !form.prospectName.trim()) { toast.error('Informe o nome do prospect'); return; }
     if (!form.videomakerId || !form.date || !form.startTime) { toast.error('Preencha todos os campos'); return; }
-    const conflictCheck = hasConflict(form.videomakerId, form.date, form.startTime, undefined, form.type as RecordingType, isAvulso ? undefined : form.clientId);
+    const conflictCheck = hasConflict(form.videomakerId, form.date, form.startTime, undefined, form.type as RecordingType, isAvulso ? undefined : form.clientId, { blocks: videomakerBlocks(form.videomakerId, form.date) });
     if (conflictCheck.hasConflict) {
       toast.error(conflictCheck.message || 'Conflito de horário!'); return;
     }
@@ -606,7 +639,7 @@ export default function Schedule() {
     if (!editForm.date || !editForm.startTime) { toast.error('Informe a data e o horário'); return; }
     // Check conflict only if date/time/videomaker changed
     const changed = editForm.date !== editingRec.date || editForm.startTime !== editingRec.startTime || editForm.videomakerId !== editingRec.videomakerId;
-    const conflictCheck = hasConflict(editForm.videomakerId, editForm.date, editForm.startTime, editingRec.id, editForm.type as RecordingType, editForm.clientId || undefined);
+    const conflictCheck = hasConflict(editForm.videomakerId, editForm.date, editForm.startTime, editingRec.id, editForm.type as RecordingType, editForm.clientId || undefined, { blocks: videomakerBlocks(editForm.videomakerId, editForm.date) });
     if (changed && editForm.status !== 'cancelada' && conflictCheck.hasConflict) {
       toast.error(conflictCheck.message || 'Conflito de horário!'); return;
     }
@@ -1017,26 +1050,53 @@ export default function Schedule() {
     </Badge>
   );
 
-  // Delete all backup recordings (future, non-concluded)
-  const handleDeleteAllBackup = async () => {
+  // Apaga em lote as backups ou extras ainda agendadas de hoje em diante (desfaz o "Gerar Mensal").
+  // Não entram as já feitas, as em andamento, os pedidos do portal em análise nem as confirmadas pelo cliente.
+  const handleDeleteAllOfType = async (type: 'backup' | 'extra') => {
+    if (!canBulkManageRecordings) { toast.error('Só admin e social media podem apagar em lote'); return; }
+    const label = type === 'backup' ? 'backup' : 'extra';
     const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const backupRecs = recordings.filter(r => r.type === 'backup' && r.date >= todayStr && r.status !== 'concluida');
-    if (backupRecs.length === 0) { toast.info('Nenhuma gravação backup para apagar'); return; }
-    for (const rec of backupRecs) { deleteRecording(rec.id); }
-    toast.success(`${backupRecs.length} gravação(ões) backup apagada(s)`);
-  };
+    const candidates = recordings.filter(r => r.type === type && r.date >= todayStr && r.status === 'agendada' && !isRecordingActive(r.id));
+    const confirmedByClient = candidates.filter(r => r.confirmationStatus === 'confirmada');
+    const toDelete = candidates.filter(r => r.confirmationStatus !== 'confirmada');
+    if (toDelete.length === 0) {
+      toast.info(confirmedByClient.length > 0
+        ? `Nenhuma gravação ${label} para apagar (${confirmedByClient.length} confirmada(s) pelo cliente foram mantidas)`
+        : `Nenhuma gravação ${label} para apagar`);
+      return;
+    }
+    const firstDate = toDelete.reduce((min, r) => (r.date < min ? r.date : min), toDelete[0].date);
+    const lastDate = toDelete.reduce((max, r) => (r.date > max ? r.date : max), toDelete[0].date);
+    const period = firstDate === lastDate
+      ? format(new Date(firstDate + 'T12:00:00'), 'dd/MM')
+      : `${format(new Date(firstDate + 'T12:00:00'), 'dd/MM')} a ${format(new Date(lastDate + 'T12:00:00'), 'dd/MM')}`;
+    const keptNote = confirmedByClient.length > 0 ? `\n\n${confirmedByClient.length} confirmada(s) pelo cliente não serão apagadas.` : '';
+    if (!window.confirm(`Apagar ${toDelete.length} gravação(ões) ${label} agendada(s) (${period})?${keptNote}\n\nEsta ação não pode ser desfeita.`)) return;
 
-  // Delete all extra recordings (future, non-concluded)
-  const handleDeleteAllExtra = async () => {
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const extraRecs = recordings.filter(r => r.type === 'extra' && r.date >= todayStr && r.status !== 'concluida');
-    if (extraRecs.length === 0) { toast.info('Nenhuma gravação extra para apagar'); return; }
-    for (const rec of extraRecs) { deleteRecording(rec.id); }
-    toast.success(`${extraRecs.length} gravação(ões) extra apagada(s)`);
+    let deleted = 0;
+    let failed = 0;
+    for (const rec of toDelete) {
+      if (await deleteRecording(rec.id)) deleted++;
+      else failed++;
+    }
+    if (failed > 0) toast.error(`${deleted} gravação(ões) ${label} apagada(s), ${failed} com erro`);
+    else toast.success(`${deleted} gravação(ões) ${label} apagada(s)`);
   };
+  // Um lote por vez: o ref barra o clique duplo antes de a tela atualizar
+  const bulkBusyRef = useRef(false);
+  const runBulk = async (type: 'backup' | 'extra', fn: () => Promise<void>) => {
+    if (bulkBusyRef.current) return;
+    bulkBusyRef.current = true;
+    setBulkBusy(type);
+    try { await fn(); } finally { bulkBusyRef.current = false; setBulkBusy(null); }
+  };
+  const handleDeleteAllBackup = () => runBulk('backup', () => handleDeleteAllOfType('backup'));
+  const handleDeleteAllExtra = () => runBulk('extra', () => handleDeleteAllOfType('extra'));
+  const handleGenerateBackup = () => runBulk('backup', generateBackupRecordings);
+  const handleGenerateExtra = () => runBulk('extra', generateExtraRecordings);
 
   // Generate backup & extra recordings for eligible clients into available slots
-  const handleGenerateBackup = async () => {
+  const generateBackupRecordings = async () => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const endStr = format(endOfMonth(addMonths(new Date(), 1)), 'yyyy-MM-dd');
     let created = 0;
@@ -1049,7 +1109,10 @@ export default function Schedule() {
       d = addDays(d, 1);
     }
 
-    let currentRecsLocal = [...recordings];
+    // A conferência de conflito usa a lista local (com as já geradas no laço) e tudo é criado
+    // de uma vez no fim, sem WhatsApp por gravação (backup é só vaga reserva)
+    const currentRecsLocal = [...recordings];
+    const toCreate: Recording[] = [];
 
     for (const day of days) {
       const dateStr = format(day, 'yyyy-MM-dd');
@@ -1065,7 +1128,7 @@ export default function Schedule() {
         const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
         if (vmDayRecsCount >= 4) continue;
 
-        if (!hasConflict(vmId, dateStr, client.backupTime, undefined, undefined, client.id).hasConflict) {
+        if (!hasConflict(vmId, dateStr, client.backupTime, undefined, undefined, client.id, { recordings: currentRecsLocal, blocks: videomakerBlocks(vmId, dateStr) }).hasConflict) {
           const exists = currentRecsLocal.some(r => r.clientId === client.id && r.date === dateStr && r.type === 'backup' && r.status !== 'cancelada');
           if (!exists) {
             const rec: Recording = {
@@ -1077,14 +1140,16 @@ export default function Schedule() {
               type: 'backup',
               status: 'agendada',
             };
-            const ok = await addRecording(rec);
-            if (ok) {
-              created++;
-              currentRecsLocal.push(rec);
-            }
+            toCreate.push(rec);
+            currentRecsLocal.push(rec);
           }
         }
       }
+    }
+
+    if (toCreate.length > 0) {
+      if (await addRecordingsBulk(toCreate)) created = toCreate.length;
+      else { toast.error('Não foi possível gerar as gravações de backup. Tente de novo.'); return; }
     }
 
     if (created > 0) {
@@ -1094,7 +1159,7 @@ export default function Schedule() {
     }
   };
 
-  const handleGenerateExtra = async () => {
+  const generateExtraRecordings = async () => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const endStr = format(endOfMonth(addMonths(new Date(), 1)), 'yyyy-MM-dd');
     let created = 0;
@@ -1107,7 +1172,9 @@ export default function Schedule() {
       d = addDays(d, 1);
     }
 
-    let currentRecsLocal = [...recordings];
+    // Conflito conferido na lista local (com as já geradas no laço); criação única no fim, sem WhatsApp por gravação
+    const currentRecsLocal = [...recordings];
+    const toCreate: Recording[] = [];
     const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
 
     for (const day of days) {
@@ -1123,7 +1190,7 @@ export default function Schedule() {
             const vmDayRecsCount = currentRecsLocal.filter(r => r.videomakerId === vmId && r.date === dateStr && r.status !== 'cancelada').length;
             if (vmDayRecsCount >= 4) continue;
 
-            if (!hasConflict(vmId, dateStr, slot).hasConflict) {
+            if (!hasConflict(vmId, dateStr, slot, undefined, 'extra', undefined, { recordings: currentRecsLocal, blocks: videomakerBlocks(vmId, dateStr) }).hasConflict) {
               const eligibleClient = extraClients.find(c => 
                 !currentRecsLocal.some(r => r.clientId === c.id && r.date === dateStr && r.status !== 'cancelada')
               );
@@ -1138,19 +1205,29 @@ export default function Schedule() {
                   type: 'extra',
                   status: 'agendada',
                 };
-                const ok = await addRecording(rec);
-                if (ok) {
-                  created++;
-                  currentRecsLocal.push(rec);
-                  const idx = extraClients.indexOf(eligibleClient);
-                  if (idx > -1) {
-                    extraClients.splice(idx, 1);
-                    extraClients.push(eligibleClient);
-                  }
+                toCreate.push(rec);
+                currentRecsLocal.push(rec);
+                const idx = extraClients.indexOf(eligibleClient);
+                if (idx > -1) {
+                  extraClients.splice(idx, 1);
+                  extraClients.push(eligibleClient);
                 }
               }
             }
           }
+        }
+      }
+    }
+
+    if (toCreate.length > 0) {
+      if (await addRecordingsBulk(toCreate)) created = toCreate.length;
+      else { toast.error('Não foi possível gerar as gravações extras. Tente de novo.'); return; }
+      // A extra é gravação de verdade: o cliente continua recebendo o aviso de agendamento (só do que foi salvo)
+      for (const rec of toCreate) {
+        const client = clients.find(c => c.id === rec.clientId);
+        const vm = users.find(u => u.id === rec.videomakerId);
+        if (client?.whatsapp && vm) {
+          sendRecordingScheduledNotification(client.whatsapp, client.companyName, client.id, rec.date, rec.startTime, vm.name);
         }
       }
     }
@@ -1332,23 +1409,27 @@ export default function Schedule() {
             {showBackup && (
               <div className="flex gap-2 items-center bg-amber-500/5 p-1 rounded-md border border-amber-500/20">
                 <span className="text-[10px] font-bold text-amber-600 uppercase ml-1 px-1">Backup</span>
-                <Button variant="outline" size="sm" className="h-8 border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateBackup}>
-                  <RefreshCw size={14} className="mr-1.5" /> Gerar Mensal
+                <Button variant="outline" size="sm" className="h-8 border-amber-500/50 text-amber-600 hover:bg-amber-500/10" onClick={handleGenerateBackup} disabled={bulkBusy !== null}>
+                  <RefreshCw size={14} className={`mr-1.5 ${bulkBusy === 'backup' ? 'animate-spin' : ''}`} /> Gerar Mensal
                 </Button>
-                <Button variant="outline" size="sm" className="h-8 border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllBackup}>
-                  <Trash2 size={14} className="mr-1.5" /> Apagar
-                </Button>
+                {canBulkManageRecordings && (
+                  <Button variant="outline" size="sm" className="h-8 border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllBackup} disabled={bulkBusy !== null}>
+                    <Trash2 size={14} className="mr-1.5" /> Apagar
+                  </Button>
+                )}
               </div>
             )}
             {showExtra && (
               <div className="flex gap-2 items-center bg-blue-500/5 p-1 rounded-md border border-blue-500/20">
                 <span className="text-[10px] font-bold text-blue-600 uppercase ml-1 px-1">Extra</span>
-                <Button variant="outline" size="sm" className="h-8 border-blue-500/50 text-blue-600 hover:bg-blue-500/10" onClick={handleGenerateExtra}>
-                  <RefreshCw size={14} className="mr-1.5" /> Gerar Mensal
+                <Button variant="outline" size="sm" className="h-8 border-blue-500/50 text-blue-600 hover:bg-blue-500/10" onClick={handleGenerateExtra} disabled={bulkBusy !== null}>
+                  <RefreshCw size={14} className={`mr-1.5 ${bulkBusy === 'extra' ? 'animate-spin' : ''}`} /> Gerar Mensal
                 </Button>
-                <Button variant="outline" size="sm" className="h-8 border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllExtra}>
-                  <Trash2 size={14} className="mr-1.5" /> Apagar
-                </Button>
+                {canBulkManageRecordings && (
+                  <Button variant="outline" size="sm" className="h-8 border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleDeleteAllExtra} disabled={bulkBusy !== null}>
+                    <Trash2 size={14} className="mr-1.5" /> Apagar
+                  </Button>
+                )}
               </div>
             )}
           </div>

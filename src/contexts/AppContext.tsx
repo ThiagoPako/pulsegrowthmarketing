@@ -15,6 +15,15 @@ const DATE_TO_DAY: Record<number, DayOfWeek> = {
 };
 
 
+/** Opções da checagem de conflito de agenda */
+export interface ConflictCheckOptions {
+  skipClientDayCheck?: boolean;
+  /** Lista a conferir no lugar do estado atual (ex.: geração em lote com as já criadas no laço) */
+  recordings?: Recording[];
+  /** Outros compromissos do videomaker no mesmo dia (eventos, endomarketing) */
+  blocks?: { startTime: string; endTime: string; label: string }[];
+}
+
 interface AppContextType {
   currentUser: User | null;
   users: User[];
@@ -32,6 +41,8 @@ interface AppContextType {
   updateClient: (client: Client) => Promise<void>;
   deleteClient: (id: string) => Promise<boolean>;
   addRecording: (recording: Recording, options?: { skipClientDayCheck?: boolean }) => Promise<boolean>;
+  /** Cria várias gravações de uma vez, sem aviso de WhatsApp (ex.: backups e extras gerados em lote) */
+  addRecordingsBulk: (recordings: Recording[]) => Promise<boolean>;
   updateRecording: (recording: Recording) => Promise<boolean>;
   cancelRecording: (id: string) => Promise<boolean>;
   deleteRecording: (id: string, options?: { force?: boolean }) => Promise<boolean>;
@@ -56,7 +67,7 @@ interface AppContextType {
   startActiveRecording: (rec: ActiveRecording) => Promise<boolean>;
   stopActiveRecording: (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[], options?: { deferDelivery?: boolean }) => Promise<boolean>;
   finalizeRecordingDelivery: (recordingId: string, deliveryOverrides: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds: string[], plannedScriptIds: string[]) => Promise<boolean>;
-  hasConflict: (videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType, clientId?: string, options?: { skipClientDayCheck?: boolean }) => { hasConflict: boolean; message?: string };
+  hasConflict: (videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType, clientId?: string, options?: ConflictCheckOptions) => { hasConflict: boolean; message?: string };
   isWithinWorkHours: (day: DayOfWeek, startTime: string) => boolean;
 
   getSuggestionsForCancellation: (recording: Recording) => Client[];
@@ -235,15 +246,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
   const LOWER_PRIORITY_TYPES_FOR_FIXED = new Set<RecordingType>(['extra', 'backup', 'secundaria']);
 
-  const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType, clientId?: string, options?: { skipClientDayCheck?: boolean }) => {
+  const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType, clientId?: string, options?: ConflictCheckOptions) => {
     const newStart = timeToMinutes(startTime);
     const duration = data.settings.recordingDuration || 90;
     const newEnd = newStart + duration;
+    // Lista a conferir: a do estado ou a que a tela passar (ex.: geração em lote com as já criadas no laço)
+    const recordingsToCheck = options?.recordings ?? data.recordings;
 
     // 1. Check if client already has a recording on this day (unless full-shift or explicitly skipped)
     if (clientId && !options?.skipClientDayCheck) {
       const client = data.clients.find(c => c.id === clientId);
-      const clientDayRecs = data.recordings.filter(r => r.clientId === clientId && r.date === date && r.status !== 'cancelada' && r.id !== excludeId);
+      const clientDayRecs = recordingsToCheck.filter(r => r.clientId === clientId && r.date === date && r.status !== 'cancelada' && r.id !== excludeId);
       
       if (client) {
         if (client.fullShiftRecording) {
@@ -260,7 +273,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     // 2. Check videomaker availability
-    const conflict = data.recordings.find(r => {
+    const conflict = recordingsToCheck.find(r => {
       if (r.id === excludeId || r.status === 'cancelada') return false;
       if (r.videomakerId !== videomakerId || r.date !== date) return false;
 
@@ -281,6 +294,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         hasConflict: true,
         message: `Conflito com ${clientLabel} às ${conflict.startTime} (${conflict.status}, tipo ${conflict.type}). Duração ${duration}min + buffer ${BUFFER_BETWEEN_RECORDINGS}min.`,
       };
+    }
+
+    // 3. Outros compromissos do videomaker nesse dia (eventos, endomarketing), informados pela tela
+    const newEndWithBuffer = newEnd + BUFFER_BETWEEN_RECORDINGS;
+    const block = options?.blocks?.find(b => {
+      const blockStart = timeToMinutes(b.startTime);
+      const blockEnd = timeToMinutes(b.endTime);
+      return newStart < blockEnd + BUFFER_BETWEEN_RECORDINGS && newEndWithBuffer > blockStart;
+    });
+    if (block) {
+      return { hasConflict: true, message: `Conflito com ${block.label} das ${block.startTime} às ${block.endTime}.` };
     }
 
     return { hasConflict: false };
@@ -666,6 +690,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [data, autoFillVacanciesForDate]);
 
   const deleteRecording = useCallback(async (id: string, options?: { force?: boolean }) => { return data.deleteRecording(id, options); }, [data]);
+  const addRecordingsBulk = useCallback((recs: Recording[]) => data.addRecordingsBulk(recs), [data]);
   const addTask = useCallback((task: KanbanTask) => { data.addTask(task); }, [data]);
   const updateTask = useCallback((task: KanbanTask) => { data.updateTask(task); }, [data]);
   const deleteTask = useCallback((id: string) => { data.deleteTask(id); }, [data]);
@@ -692,7 +717,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       activeRecordings: data.activeRecordings,
       logout, addUser, updateUser, deleteUser,
       addClient, updateClient, deleteClient,
-      addRecording, updateRecording, cancelRecording, deleteRecording,
+      addRecording, addRecordingsBulk, updateRecording, cancelRecording, deleteRecording,
       deleteRecordingsBulk: data.deleteRecordingsBulk, cancelRecordingsBulk: data.cancelRecordingsBulk,
       cancelAndReschedule, generateScheduleForClient, regenerateScheduleForClient, generateFixedSchedulesForMonth,
       previewFixedSchedulesForMonth, commitFixedSchedules,

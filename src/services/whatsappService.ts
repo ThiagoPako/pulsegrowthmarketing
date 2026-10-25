@@ -3,11 +3,6 @@ import { supabase, vpsAuthedFetch } from '@/lib/vpsDb';
 export interface WhatsAppConfig {
   id: string;
   integrationActive: boolean;
-  apiToken: string;
-  defaultUserId: string;
-  defaultQueueId: string;
-  sendSignature: boolean;
-  closeTicket: boolean;
   autoRecordingScheduled: boolean;
   autoRecordingReminder: boolean;
   autoVideoApproval: boolean;
@@ -71,15 +66,11 @@ export interface WhatsAppConfirmation {
   createdAt: string;
 }
 
+// O envio é a fila do WhatsApp próprio (sem token): basta a chave geral ligada e o telefone do cliente.
 function rowToConfig(r: any): WhatsAppConfig {
   return {
     id: r.id,
     integrationActive: r.integration_active,
-    apiToken: r.api_token || '',
-    defaultUserId: r.default_user_id,
-    defaultQueueId: r.default_queue_id,
-    sendSignature: r.send_signature,
-    closeTicket: r.close_ticket,
     autoRecordingScheduled: r.auto_recording_scheduled,
     autoRecordingReminder: r.auto_recording_reminder,
     autoVideoApproval: r.auto_video_approval,
@@ -287,7 +278,7 @@ export async function sendRecordingCancelledNotification(
 ): Promise<{ success: boolean; error?: string }> {
   const config = await getWhatsAppConfig();
   if (!config?.integrationActive) return { success: false, error: 'Integração desativada' };
-  if (!clientPhone || !config.apiToken) return { success: false, error: 'Token ou WhatsApp não configurado' };
+  if (!clientPhone) return { success: false, error: 'Cliente sem WhatsApp' };
 
   const message = applyTemplate(config.msgConfirmationCancelled, {
     nome_cliente: clientName,
@@ -306,7 +297,7 @@ export async function sendRecordingConfirmedNotification(
 ): Promise<{ success: boolean; error?: string }> {
   const config = await getWhatsAppConfig();
   if (!config?.integrationActive) return { success: false, error: 'Integração desativada' };
-  if (!clientPhone || !config.apiToken) return { success: false, error: 'Token ou WhatsApp não configurado' };
+  if (!clientPhone) return { success: false, error: 'Cliente sem WhatsApp' };
 
   const message = applyTemplate(config.msgConfirmationConfirmed, {
     nome_cliente: clientName,
@@ -327,7 +318,7 @@ export async function sendBackupInviteNotification(
 ): Promise<{ success: boolean; error?: string }> {
   const config = await getWhatsAppConfig();
   if (!config?.integrationActive) return { success: false, error: 'Integração desativada' };
-  if (!clientPhone || !config.apiToken) return { success: false, error: 'Token ou WhatsApp não configurado' };
+  if (!clientPhone) return { success: false, error: 'Cliente sem WhatsApp' };
 
   const message = applyTemplate(config.msgBackupInvite, {
     nome_cliente: clientName,
@@ -349,7 +340,7 @@ export async function sendRecordingScheduledNotification(
 ): Promise<void> {
   const config = await getWhatsAppConfig();
   if (!config?.integrationActive || !config.autoRecordingScheduled) return;
-  if (!clientPhone || !config.apiToken) return;
+  if (!clientPhone) return;
 
   const message = applyTemplate(config.msgRecordingScheduled, {
     nome_cliente: clientName,
@@ -426,7 +417,6 @@ export async function sendManualConfirmation(
 ): Promise<{ success: boolean; error?: string }> {
   const config = await getWhatsAppConfig();
   if (!config?.integrationActive) return { success: false, error: 'Integração desativada' };
-  if (!config.apiToken) return { success: false, error: 'Token não configurado' };
   if (!clientPhone) return { success: false, error: 'Cliente sem WhatsApp' };
 
   const phoneNumber = clientPhone.replace(/\D/g, '');
@@ -511,10 +501,10 @@ export async function sendHolidayNotifications(
   holidayDate: string,
   holidayName: string,
   clients: { id: string; company_name: string; whatsapp: string }[],
-): Promise<{ sent: number; failed: number }> {
+): Promise<{ sent: number; failed: number; error?: string }> {
   const config = await getWhatsAppConfig();
-  if (!config?.integrationActive || !config.apiToken) {
-    return { sent: 0, failed: 0 };
+  if (!config?.integrationActive) {
+    return { sent: 0, failed: 0, error: 'Integração WhatsApp desativada' };
   }
 
   const template = config.msgHoliday;

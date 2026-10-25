@@ -308,7 +308,9 @@ export default function CompanySettings() {
       const formattedDate = format(parseISO(holiday.date), "dd/MM/yyyy (EEEE)", { locale: ptBR });
       const result = await sendHolidayNotifications(formattedDate, holiday.name, clientsList);
 
-      toast.success(`Aviso enviado! ${result.sent} enviados, ${result.failed} falharam`);
+      if (result.error) toast.error(result.error);
+      else if (result.failed > 0) toast.warning(`Aviso enviado: ${result.sent} enviados, ${result.failed} falharam`);
+      else toast.success(`Aviso enviado! ${result.sent} enviados`);
       loadHolidays();
     } catch (err) {
       toast.error('Erro ao enviar notificações');

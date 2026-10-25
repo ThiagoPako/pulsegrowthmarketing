@@ -9012,6 +9012,22 @@ app.post('/api/db/query', async (req, res) => {
         const keys = entries.map(([key]) => key);
         const jsonColumns = await getTableJsonColumns(safeTable);
         const values = entries.map(([key, value]) => serializeValueForColumn(key, value, jsonColumns));
+
+        // CRM: o aviso de contrato/reunião sai só quando o status muda (antes saía em
+        // qualquer edição de um lead já fechado ou em reunião, até ao mudar observação).
+        let crmPreviousStatus = null;
+        if (safeTable === 'crm_leads' && (scopedData?.status === 'contracted' || scopedData?.status === 'meeting')) {
+          const prevParams = [];
+          const prevWhere = buildDbQueryWhere(filters, safeTable, prevParams);
+          if (prevWhere.length > 0) {
+            const { rows: prevRows } = await pool.query(
+              `SELECT id::text AS id, status::text AS status FROM crm_leads WHERE ${prevWhere.join(' AND ')}`,
+              prevParams
+            ).catch(() => ({ rows: [] }));
+            crmPreviousStatus = new Map(prevRows.map((row) => [row.id, row.status]));
+          }
+        }
+
         let paramIdx = 1;
         const setClauses = keys.map(k => `${k} = $${paramIdx++}`);
 
@@ -9036,9 +9052,10 @@ app.post('/api/db/query', async (req, res) => {
 
         const { rows } = await pool.query(query, params);
         
-        // Broadcaster: Notificações globais de status de lead
-        if (safeTable === 'crm_leads' && rows.length > 0) {
+        // Broadcaster: Notificações globais de status de lead (só na mudança de status)
+        if (safeTable === 'crm_leads' && rows.length > 0 && crmPreviousStatus) {
           for (const lead of rows) {
+            if (crmPreviousStatus.get(String(lead.id)) === lead.status) continue;
             if (lead.status === 'contracted') {
               broadcastToAll({
                 type: 'broadcast',
@@ -12546,6 +12563,16 @@ wss.on('connection', (ws) => {
         // we keep it simple for now as it's a internal local network VPS.
         ws.subscribedChannels = ws.subscribedChannels || new Set();
         ws.subscribedChannels.add(data.channel);
+        return;
+      }
+      // channel.send() do front (ex.: Copy avisa 'copy_task_change'): repassa a quem
+      // assina o mesmo canal. Eventos 'crm:*' só saem do servidor (broadcastToAll).
+      if (data.type === 'broadcast' && typeof data.channel === 'string' && typeof data.event === 'string' && !data.event.startsWith('crm:')) {
+        const payload = JSON.stringify({ type: 'broadcast', channel: data.channel, event: data.event, payload: data.payload ?? null });
+        for (const client of wssClients) {
+          if (client === ws || client.readyState !== 1 || !client.subscribedChannels?.has(data.channel)) continue;
+          try { client.send(payload); } catch { /* ignore */ }
+        }
       }
     } catch (e) {}
   });

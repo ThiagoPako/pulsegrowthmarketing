@@ -136,7 +136,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             duration: 10000,
             action: {
               label: 'Ver CRM',
-              onClick: () => window.location.hash = '/crm'
+              // BrowserRouter: o hash não muda de tela; troca o endereço e avisa o roteador.
+              onClick: () => {
+                window.history.pushState({}, '', '/crm');
+                window.dispatchEvent(new PopStateEvent('popstate'));
+              }
             }
           });
         });

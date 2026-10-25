@@ -310,6 +310,66 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
     }
   }
 
+  // ── Feriado: avisa quem tem gravação no dia (Configurações → Feriados → "Envio automático (2 dias antes)") ──
+  // Feriado "Anual" vale todo ano no mesmo dia e mês. Cada ocorrência avisa uma vez (holidays.last_notified_date,
+  // que o "Avisar" manual também grava). Olha amanhã e depois de amanhã: se o agendador não rodou num dia, ainda avisa.
+  const HOLIDAY_DEFAULT_MSG = 'Olá, {nome_cliente}! 🚀\n\nInformamos que no dia *{data_feriado}* ({nome_feriado}) *não haverá gravações*.\n\nNossa equipe retorna normalmente no próximo dia útil.\n\n📱 Acompanhe tudo na sua Área do Cliente:\n{link_portal}\n\nEquipe Pulse Growth Marketing';
+  const isoDay = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v || '').slice(0, 10));
+  const addDays = (day, n) => {
+    const d = new Date(`${day}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  };
+  const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  const holidayOccursOn = (h, day) => {
+    const base = isoDay(h.date);
+    if (!h.recurring) return base === day;
+    if (base.slice(5) === day.slice(5)) return true;
+    return base.slice(5) === '02-29' && day.slice(5) === '02-28' && !isLeapYear(Number(day.slice(0, 4))); // 29/02 cai em 28/02
+  };
+  const holidayLabel = (day) => {
+    const weekday = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${day}T12:00:00Z`));
+    return `${day.slice(8, 10)}/${day.slice(5, 7)}/${day.slice(0, 4)} (${weekday})`;
+  };
+
+  async function runHolidayNotifications() {
+    const { rows: [config] } = await pool.query('SELECT * FROM whatsapp_config LIMIT 1');
+    if (!config?.integration_active || config?.auto_holiday_notification !== true) return { skipped: 'desligado' };
+    const { day } = brazilNow();
+    const targets = [addDays(day, 1), addDays(day, 2)];
+    const { rows: holidays } = await pool.query('SELECT * FROM holidays');
+    const result = { feriados: 0, enviados: 0 };
+    for (const h of holidays) {
+      const occurrence = targets.find((t) => holidayOccursOn(h, t));
+      if (!occurrence) continue;
+      if (isoDay(h.last_notified_date) === occurrence || (!h.recurring && h.notification_sent)) continue;
+      // marca antes de enviar: um reinício no meio não manda duas vezes
+      const { rows: claimed } = await pool.query(
+        `UPDATE holidays SET last_notified_date = $2, notification_sent = true
+          WHERE id = $1 AND last_notified_date IS DISTINCT FROM $2::date RETURNING id`, [h.id, occurrence]
+      );
+      if (!claimed.length) continue;
+      result.feriados++;
+      const { rows: clients } = await pool.query(
+        `SELECT DISTINCT c.id, c.company_name, c.responsible_person, c.whatsapp, c.whatsapp_group
+           FROM recordings r JOIN clients c ON c.id::text = r.client_id::text
+          WHERE r.date = $1 AND r.status = 'agendada'`, [occurrence]
+      );
+      for (const client of clients) {
+        const to = clientTarget(client, 'agenda');
+        if (!to) continue;
+        const body = fill(config.msg_holiday || HOLIDAY_DEFAULT_MSG, {
+          nome_cliente: client.company_name, data_feriado: holidayLabel(occurrence), nome_feriado: h.name || 'feriado',
+          link_portal: `${PORTAL_URL}/${client.id}`,
+        });
+        await enqueueWhatsApp(pool, { to, body, clientId: client.id, triggerType: 'auto_holiday', purpose: 'agenda',
+          expiresAt: new Date(`${occurrence}T00:00:00-03:00`) });
+        result.enviados++;
+      }
+    }
+    return result;
+  }
+
   // ── Aprovar / pedir ajuste (o mesmo que o portal faz) ──
   async function notifyTeam(title, message, type, link) {
     const { rows } = await pool.query(`SELECT DISTINCT user_id FROM user_roles WHERE role IN ('admin', 'social_media')`);
@@ -612,6 +672,7 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
   const JOBS = [
     { job: 'cobranca', fromHour: 9, run: runBillingAutomation },
     { job: 'confirmacao_gravacao', fromHour: 10, run: runConfirmationCron },
+    { job: 'aviso_feriado', fromHour: 9, run: runHolidayNotifications },
   ];
   setInterval(async () => {
     try {

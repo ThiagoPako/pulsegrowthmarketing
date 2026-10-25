@@ -487,7 +487,30 @@ export interface Holiday {
   date: string;
   recurring: boolean;
   notification_sent: boolean;
+  /** dia (yyyy-MM-dd) da última ocorrência avisada; o feriado "Anual" avisa uma vez por ano */
+  last_notified_date?: string | null;
   created_at: string;
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const localIsoDay = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const isLeapYear = (y: number) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+
+/** Próxima ocorrência (yyyy-MM-dd): a própria data, ou, no "Anual", o mesmo dia e mês deste ano (ou do próximo, se já passou). */
+export function holidayNextOccurrence(holiday: Holiday, today: Date = new Date()): string {
+  const base = String(holiday.date || '').slice(0, 10);
+  if (!holiday.recurring) return base;
+  const todayIso = localIsoDay(today);
+  const monthDay = base.slice(5);
+  const inYear = (year: number) => (monthDay === '02-29' && !isLeapYear(year) ? `${year}-02-28` : `${year}-${monthDay}`);
+  const thisYear = inYear(today.getFullYear());
+  return thisYear >= todayIso ? thisYear : inYear(today.getFullYear() + 1);
+}
+
+/** Já foi avisado para esta ocorrência? (o notification_sent antigo só vale para feriado de data única) */
+export function holidayNotifiedFor(holiday: Holiday, occurrence: string): boolean {
+  if (String(holiday.last_notified_date || '').slice(0, 10) === occurrence) return true;
+  return !holiday.recurring && !!holiday.notification_sent;
 }
 
 export async function getHolidays(): Promise<Holiday[]> {
@@ -512,6 +535,7 @@ export async function sendHolidayNotifications(
   holidayDate: string,
   holidayName: string,
   clients: { id: string; company_name: string; whatsapp: string }[],
+  mark?: { id: string; occurrence: string },
 ): Promise<{ sent: number; failed: number; error?: string }> {
   const config = await getWhatsAppConfig();
   if (!config?.integrationActive) {
@@ -544,8 +568,10 @@ export async function sendHolidayNotifications(
     else failed++;
   }
 
-  // Mark holiday as notification sent
-  await supabase.from('holidays').update({ notification_sent: true }).eq('date', holidayDate);
+  // marca a ocorrência como avisada (se algo saiu), para o envio automático não repetir
+  if (mark && sent > 0) {
+    await supabase.from('holidays').update({ notification_sent: true, last_notified_date: mark.occurrence }).eq('id', mark.id);
+  }
 
   return { sent, failed };
 }

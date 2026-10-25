@@ -16,14 +16,14 @@ import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket, RotateCcw, Calenda
 import { supabase } from '@/lib/vpsDb';
 import { supabase as supabaseCloud } from '@/lib/vpsDb';
 import { ASSISTANT_KEY } from '@/components/ProductionAssistant';
-import { getHolidays, createHoliday, deleteHoliday, sendHolidayNotifications, getWhatsAppConfig, updateWhatsAppConfig, type Holiday } from '@/services/whatsappService';
+import { getHolidays, createHoliday, deleteHoliday, sendHolidayNotifications, holidayNextOccurrence, holidayNotifiedFor, getWhatsAppConfig, updateWhatsAppConfig, type Holiday } from '@/services/whatsappService';
 import PortalBulkDelete from '@/components/portal/PortalBulkDelete';
 import MetaIntegrationCard from '@/components/settings/MetaIntegrationCard';
 import AgentKeysCard from '@/components/settings/AgentKeysCard';
 import AgentMachinesCard from '@/components/settings/AgentMachinesCard';
 import WhatsAppDashboard from '@/pages/WhatsAppDashboard';
 import { useMyPermissions } from '@/hooks/useUserPermissions';
-import { format, parseISO, addDays, isSameDay, startOfWeek, endOfWeek } from 'date-fns';
+import { format, parseISO, addDays, isSameDay, startOfWeek, endOfWeek, differenceInCalendarDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const ALL_DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
@@ -304,8 +304,9 @@ export default function CompanySettings() {
   const handleSendHolidayNotification = async (holiday: Holiday) => {
     setSendingHoliday(holiday.id);
     try {
-      // Get recordings on the holiday date
-      const { data: recs } = await supabase.from('recordings').select('client_id').eq('date', holiday.date);
+      // gravações ainda agendadas na próxima ocorrência do feriado (o "Anual" vale todo ano)
+      const occurrence = holidayNextOccurrence(holiday);
+      const { data: recs } = await supabase.from('recordings').select('client_id').eq('date', occurrence).eq('status', 'agendada');
       const clientIds = [...new Set((recs || []).map((r: any) => r.client_id).filter(Boolean))];
 
       if (clientIds.length === 0) {
@@ -318,8 +319,8 @@ export default function CompanySettings() {
       const { data: clientsData } = await supabase.from('clients').select('id, company_name, whatsapp').in('id', clientIds);
       const clientsList = (clientsData || []) as { id: string; company_name: string; whatsapp: string }[];
 
-      const formattedDate = format(parseISO(holiday.date), "dd/MM/yyyy (EEEE)", { locale: ptBR });
-      const result = await sendHolidayNotifications(formattedDate, holiday.name, clientsList);
+      const formattedDate = format(parseISO(occurrence), "dd/MM/yyyy (EEEE)", { locale: ptBR });
+      const result = await sendHolidayNotifications(formattedDate, holiday.name, clientsList, { id: holiday.id, occurrence });
 
       if (result.error) toast.error(result.error);
       else if (result.failed > 0) toast.warning(`Aviso enviado: ${result.sent} enviados, ${result.failed} falharam`);
@@ -615,10 +616,15 @@ export default function CompanySettings() {
           {holidays.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-4">Nenhum feriado cadastrado</p>
           ) : (
-            holidays.map(h => {
-              const holidayDate = parseISO(h.date);
-              const isPast = holidayDate < new Date();
-              const daysUntil = Math.ceil((holidayDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+            holidays
+              .map(h => ({ h, occurrence: holidayNextOccurrence(h) }))
+              .sort((a, b) => a.occurrence.localeCompare(b.occurrence))
+              .map(({ h, occurrence }) => {
+              // "Anual" mostra a próxima ocorrência; passado só depois que o dia acaba (no próprio dia ainda dá para avisar)
+              const holidayDate = parseISO(occurrence);
+              const daysUntil = differenceInCalendarDays(holidayDate, new Date());
+              const isPast = daysUntil < 0;
+              const notified = holidayNotifiedFor(h, occurrence);
               return (
                 <div
                   key={h.id}
@@ -644,14 +650,14 @@ export default function CompanySettings() {
                             {daysUntil === 0 ? 'Hoje' : daysUntil === 1 ? 'Amanhã' : `em ${daysUntil} dias`}
                           </span>
                         )}
-                        {h.notification_sent && (
+                        {notified && (
                           <span className="text-[10px] bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded-full">✓ Enviado</span>
                         )}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {!isPast && !h.notification_sent && (
+                    {!isPast && !notified && (
                       <Button
                         variant="outline"
                         size="sm"

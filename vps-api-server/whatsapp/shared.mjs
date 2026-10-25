@@ -163,6 +163,8 @@ export function ensureWhatsAppSchema(pool) {
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_wa_approval_phone ON wa_approval_requests (phone, status)`);
       // texto que não deu para entender: a explicação de como responder vai uma vez só por lote
       await pool.query(`ALTER TABLE wa_approval_requests ADD COLUMN IF NOT EXISTS help_sent_at TIMESTAMPTZ`);
+      // feriado "Anual": cada ocorrência avisa uma vez (o notification_sent antigo valia para a vida toda)
+      await pool.query(`ALTER TABLE holidays ADD COLUMN IF NOT EXISTS last_notified_date DATE`).catch(() => {});
       // aviso "vídeo novo no portal": cada conteúdo avisa uma vez só
       await pool.query(`ALTER TABLE client_portal_contents ADD COLUMN IF NOT EXISTS wa_notified_at TIMESTAMPTZ`).catch(() => {});
       // versão corrigida: quando o conteúdo volta para "pendente" (ajuste feito), avisa de novo. Vale para toda origem

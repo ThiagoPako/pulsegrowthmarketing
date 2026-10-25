@@ -123,6 +123,7 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
     cobranca_lembrete: 'Cobrança (lembrete)',
     endo_daily_tasks: 'Tarefas do dia',
     crm_reminder: 'CRM',
+    auto_holiday: 'Feriado',
     clube_cupom: 'Clube (cupom)',
     clube_campanha: 'Clube (campanha)',
     teste: 'Teste',

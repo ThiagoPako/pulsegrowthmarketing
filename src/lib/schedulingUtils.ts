@@ -479,11 +479,12 @@ export function organizeRecordingsForDate(
   if (allDayRecordings.length === 0) return { toUpdate: [], toCancel: [] };
 
   // Só gravações 'agendada' que não estão em andamento podem mudar de horário ou ser removidas.
-  // As já feitas (concluida, organizando_material), as em andamento e os pedidos ainda não
-  // aprovados ficam onde estão e ocupam o horário delas.
+  // As já feitas (concluida, organizando_material) e as em andamento ficam onde estão e ocupam
+  // o horário delas. O pedido especial ainda em análise ('solicitada') também fica intocado, mas
+  // não reserva horário: pode nem ser aprovado, e a aprovação confere conflito.
   const isMovable = (r: Recording) => r.status === 'agendada' && !activeRecordingIds?.has(r.id);
   const dayRecordings = allDayRecordings.filter(isMovable);
-  const fixedOccupants = allDayRecordings.filter(r => !isMovable(r));
+  const fixedOccupants = allDayRecordings.filter(r => !isMovable(r) && r.status !== 'solicitada');
 
   const toUpdate: Recording[] = [];
   const toCancel: Recording[] = [];
@@ -530,17 +531,27 @@ export function organizeRecordingsForDate(
   const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
   const usedSlots = new Set<string>();
 
-  // Ocupantes fixos tomam os horários padrão com que se sobrepõem (gravação + intervalo)
+  // Cada ocupante fixo toma UMA vaga: o horário padrão com que mais se sobrepõe (gravação +
+  // intervalo). Os outros horários que ele encosta ficam só como última opção, para um ocupante
+  // fora do padrão não consumir duas vagas e fazer apagar uma agendada num dia com 4 ou menos.
   const BUFFER = 30;
-  fixedOccupants.forEach(occ => {
-    const occStart = timeToMinutes(occ.startTime);
-    FIXED_SLOTS.forEach(slot => {
-      const slotStart = timeToMinutes(slot);
-      if (slotStart < occStart + settings.recordingDuration + BUFFER && slotStart + settings.recordingDuration + BUFFER > occStart) {
-        usedSlots.add(slot);
-      }
+  const span = settings.recordingDuration + BUFFER;
+  const softSlots = new Set<string>();
+  [...fixedOccupants]
+    .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
+    .forEach(occ => {
+      const occStart = timeToMinutes(occ.startTime);
+      const overlapping = FIXED_SLOTS
+        .map(slot => {
+          const slotStart = timeToMinutes(slot);
+          return { slot, overlap: Math.min(slotStart, occStart) + span - Math.max(slotStart, occStart) };
+        })
+        .filter(o => o.overlap > 0)
+        .sort((a, b) => b.overlap - a.overlap);
+      const taken = overlapping.find(o => !usedSlots.has(o.slot));
+      if (taken) usedSlots.add(taken.slot);
+      overlapping.forEach(o => softSlots.add(o.slot));
     });
-  });
 
   // 1. First Pass: Keep "fixa" recordings at their defined client schedule if possible
   const highPriority = sortedRecs.filter(r => r.type === 'fixa');
@@ -549,7 +560,7 @@ export function organizeRecordingsForDate(
     const targetTime = client?.fixedTime;
     
     // If client has a specific time and it's one of the standard slots and not used yet
-    if (targetTime && FIXED_SLOTS.includes(targetTime) && !usedSlots.has(targetTime)) {
+    if (targetTime && FIXED_SLOTS.includes(targetTime) && !usedSlots.has(targetTime) && !softSlots.has(targetTime)) {
       if (rec.startTime !== targetTime) {
         toUpdate.push({ ...rec, startTime: targetTime });
       }
@@ -561,7 +572,12 @@ export function organizeRecordingsForDate(
   });
 
   // 2. Second Pass: Assign remaining recordings to remaining available slots
-  const remainingSlots = FIXED_SLOTS.filter(slot => !usedSlots.has(slot));
+  // (primeiro os livres; os que encostam num ocupante só antes de apagar alguma)
+  const freeSlots = FIXED_SLOTS.filter(slot => !usedSlots.has(slot));
+  const remainingSlots = [
+    ...freeSlots.filter(slot => !softSlots.has(slot)),
+    ...freeSlots.filter(slot => softSlots.has(slot)),
+  ];
   let slotIdx = 0;
 
   sortedRecs.forEach((rec) => {

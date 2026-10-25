@@ -5,7 +5,11 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createServer } from 'node:http';
+import http, { createServer } from 'node:http';
+import https from 'node:https';
+import dns from 'node:dns';
+import net from 'node:net';
+import zlib from 'node:zlib';
 process.on('uncaughtException', (err) => {
   console.error('CRITICAL UNCAUGHT EXCEPTION:', err);
 });
@@ -14018,6 +14022,7 @@ area["name"~"^${escapedArea}$",i]["boundary"="administrative"](area.state)->.sea
 //  3) Site oficial da empresa — varredura de tel:, mailto: e wa.me
 
 const ENRICH_CACHE = new Map();
+const ENRICH_CACHE_MAX = 5000;
 
 async function fetchJsonSafe(url, timeoutMs = 9000) {
   const controller = new AbortController();
@@ -14107,24 +14112,125 @@ function extractEmailsFromText(text = '') {
     .slice(0, 4);
 }
 
-async function fetchTextSafe(url, timeoutMs = 9000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const resp = await fetch(url, {
+// ─── Busca de páginas externas sem SSRF ───
+// O site vem do corpo do enriquecimento: nunca deixar a VPS acessar a própria
+// rede (127.0.0.1:3002, Postgres, metadados da nuvem...). O IP é conferido no
+// momento da conexão (lookup próprio), então DNS rebinding também não passa.
+function isPrivateAddress(address) {
+  if (net.isIPv4(address)) {
+    const [a, b] = address.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127
+      || (a === 100 && b >= 64 && b <= 127) // CGNAT
+      || (a === 169 && b === 254) // link-local / metadados
+      || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168)
+      || (a === 192 && b === 0)
+      || (a === 198 && (b === 18 || b === 19))
+      || a >= 224;
+  }
+  if (net.isIPv6(address)) {
+    const lower = address.toLowerCase();
+    if (lower === '::' || lower === '::1') return true;
+    const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (mapped) return isPrivateAddress(mapped[1]);
+    return /^(fc|fd|fe8|fe9|fea|feb|ff)/.test(lower);
+  }
+  return true;
+}
+
+function publicOnlyLookup(hostname, options, callback) {
+  dns.lookup(hostname, { ...options, all: true }, (error, addresses) => {
+    if (error) return callback(error);
+    const list = Array.isArray(addresses) ? addresses : [{ address: addresses, family: options?.family || 4 }];
+    if (!list.length || list.some((a) => isPrivateAddress(a.address))) {
+      return callback(Object.assign(new Error(`Endereço bloqueado: ${hostname}`), { code: 'EBLOCKEDHOST' }));
+    }
+    if (options?.all) return callback(null, list);
+    return callback(null, list[0].address, list[0].family);
+  });
+}
+
+function isAllowedExternalUrl(url) {
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+  if (url.username || url.password) return false;
+  if (url.port && !['80', '443'].includes(url.port)) return false;
+  const host = url.hostname.replace(/^\[|\]$/g, '');
+  if (net.isIP(host) && isPrivateAddress(host)) return false;
+  if (/^localhost$|\.localhost$|\.local$|\.internal$/i.test(host)) return false;
+  return true;
+}
+
+function requestExternalText(url, timeoutMs) {
+  return new Promise((resolve) => {
+    const client = url.protocol === 'https:' ? https : http;
+    const req = client.get(url, {
+      lookup: publicOnlyLookup,
+      timeout: timeoutMs,
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; PulseGrowthBot/1.0; +https://pulsegrowthmarketing.com)',
         'Accept-Language': 'pt-BR,pt;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
       },
-      signal: controller.signal,
-      redirect: 'follow',
+    }, (resp) => {
+      const status = resp.statusCode || 0;
+      if (status >= 300 && status < 400 && resp.headers.location) {
+        resp.resume();
+        return resolve({ redirect: resp.headers.location });
+      }
+      if (status < 200 || status >= 300) {
+        resp.resume();
+        return resolve(null);
+      }
+      const encoding = String(resp.headers['content-encoding'] || '').toLowerCase();
+      let stream = resp;
+      if (encoding.includes('br')) stream = resp.pipe(zlib.createBrotliDecompress());
+      else if (encoding.includes('gzip')) stream = resp.pipe(zlib.createGunzip());
+      else if (encoding.includes('deflate')) stream = resp.pipe(zlib.createInflate());
+      const chunks = [];
+      let size = 0;
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        resolve({ text: Buffer.concat(chunks).toString('utf8').slice(0, 500000) });
+      };
+      stream.on('data', (chunk) => {
+        chunks.push(chunk);
+        size += chunk.length;
+        // Mesmo teto de antes (500 mil caracteres): corta o download aí
+        if (size > 600000) {
+          finish();
+          req.destroy();
+        }
+      });
+      stream.on('end', finish);
+      stream.on('error', () => { if (!done) { done = true; resolve(null); } });
     });
-    if (!resp.ok) return null;
-    return (await resp.text()).slice(0, 500000);
+    req.on('timeout', () => req.destroy(new Error('timeout')));
+    req.on('error', () => resolve(null));
+  });
+}
+
+async function fetchTextSafe(url, timeoutMs = 9000) {
+  const deadline = Date.now() + timeoutMs;
+  try {
+    let current = new URL(url);
+    // Redirecionamentos seguidos à mão (até 3), revalidando cada destino
+    for (let hop = 0; hop <= 3; hop += 1) {
+      if (!isAllowedExternalUrl(current)) return null;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return null;
+      const result = await requestExternalText(current, remaining);
+      if (!result) return null;
+      if (result.redirect) {
+        current = new URL(result.redirect, current);
+        continue;
+      }
+      return result.text;
+    }
+    return null;
   } catch {
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -14227,7 +14333,9 @@ function registrarOrigem(origem, campo, valor, fonte) {
 }
 
 async function enrichCompany(company, opts = {}) {
-  const cacheKey = company.id;
+  // O resultado depende do site e do CNPJ enviados: entram na chave para um
+  // pedido com site falso não contaminar o cache do id real.
+  const cacheKey = `${company.id}|${company.website || ''}|${company.cnpj || ''}`;
   const cacheHit = ENRICH_CACHE.get(cacheKey);
   if (cacheHit && opts.force !== true) {
     return { ...company, ...cacheHit, cache: true };
@@ -14364,7 +14472,12 @@ async function enrichCompany(company, opts = {}) {
   patch.erros_fontes = erros;
   patch.enriquecido_em = new Date().toISOString();
 
+  ENRICH_CACHE.delete(cacheKey);
   ENRICH_CACHE.set(cacheKey, patch);
+  // Teto de memória: descarta os mais antigos
+  while (ENRICH_CACHE.size > ENRICH_CACHE_MAX) {
+    ENRICH_CACHE.delete(ENRICH_CACHE.keys().next().value);
+  }
   return { ...company, ...patch, cache: false };
 }
 
@@ -14507,6 +14620,12 @@ async function enrichCompanies(companies, maxItems = 400, concurrency = 10, opts
 
 app.post('/api/crm/harvest/search', async (req, res) => {
   try {
+    await verifyUser(req);
+  } catch {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
     const { city, location, niche, term, limit, state, onlyWithContact } = req.body || {};
 
     const cityName = city && city !== 'all' ? String(city).trim() : '';
@@ -14646,6 +14765,12 @@ app.post('/api/crm/harvest/search', async (req, res) => {
 
 // Enriquecimento sob demanda dos leads selecionados (botão "Enriquecer leads")
 app.post('/api/crm/harvest/enrich', async (req, res) => {
+  try {
+    await verifyUser(req);
+  } catch {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   try {
     const entrada = Array.isArray(req.body?.companies) ? req.body.companies : [];
     if (!entrada.length) return res.status(400).json({ error: 'Nenhuma empresa enviada para enriquecimento.' });

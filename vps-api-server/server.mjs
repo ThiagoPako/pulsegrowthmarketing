@@ -7466,49 +7466,112 @@ app.post('/api/billing-automation', async (req, res) => {
 async function runBillingAutomation() {
   {
     const admin = getAdminClient();
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    const currentDay = today.getDate();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
+    await ensureRecurringRevenuesTables().catch(() => {});
+    // Datas no calendário de Brasília (o agendador roda das 9h às 20h de lá)
+    const brDate = (d) => d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    const todayStr = brDate(new Date());
+    const [currentYear, currentMonthNum] = todayStr.split('-').map(Number);
+    const currentMonth = currentMonthNum - 1;
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const monthStart = (year, monthIdx) => {
+      const d = new Date(Date.UTC(year, monthIdx, 1));
+      return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-01`;
+    };
+    // Vencimento do contrato no mês, limitado ao último dia (dia 30/31 em fevereiro etc.)
+    const contractDueDate = (year, monthIdx, dueDay) => {
+      const first = new Date(Date.UTC(year, monthIdx, 1));
+      const lastDay = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+      const day = Math.min(Math.max(Number(dueDay) || 10, 1), lastDay);
+      return `${first.getUTCFullYear()}-${pad2(first.getUTCMonth() + 1)}-${pad2(day)}`;
+    };
+    const addDays = (dateStr, days) => {
+      const d = new Date(`${dateStr}T12:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + days);
+      return d.toISOString().slice(0, 10);
+    };
+    const toDateKey = (v) => {
+      if (!v) return '';
+      if (v instanceof Date) return v.toISOString().slice(0, 10);
+      return String(v).slice(0, 10);
+    };
+    const isReceived = (r) => r?.status === 'recebida' || r?.status === 'pago';
 
     const { data: contracts } = await admin.from('financial_contracts').select('*').eq('status', 'ativo');
     if (!contracts?.length) return { message: 'No active contracts', processed: 0 };
-    const { data: paymentConfigs } = await admin.from('payment_config').select('*').limit(1);
-    const paymentConfig = paymentConfigs?.[0];
+    // PIX/templates por cidade: cada contrato usa a config da sua cidade; sem config
+    // própria, cai na primeira cadastrada (comportamento anterior).
+    const paymentConfigHasCity = await tableHasCityColumn('payment_config');
+    const { rows: paymentConfigRows } = await pool.query('SELECT * FROM payment_config');
+    const paymentConfigByCity = new Map();
+    for (const pc of paymentConfigRows) {
+      const city = paymentConfigHasCity ? (normalizeCityValue(pc.city) || 'minacu') : 'minacu';
+      if (!paymentConfigByCity.has(city)) paymentConfigByCity.set(city, pc);
+    }
+    const billingMessagesHasCity = await tableHasCityColumn('billing_messages');
     const { data: whatsappConfigs } = await admin.from('whatsapp_config').select('*').limit(1);
     const whatsappConfig = whatsappConfigs?.[0];
     const results = [];
 
+    const refThis = monthStart(currentYear, currentMonth);
+    const refPrev = monthStart(currentYear, currentMonth - 1);
+
     for (const contract of contracts) {
       if (contract.billing_enabled === false) continue;
-      const isDueDay = currentDay === contract.due_day;
-      const dueDate = new Date(currentYear, currentMonth, contract.due_day);
-      const daysSinceDue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
-      const isReminder = daysSinceDue === 3;
-      if (!isDueDay && !isReminder) continue;
+
+      // Só a mensalidade do contrato (sem recorrência extra nem lançamento manual),
+      // do mês atual e do anterior — o lembrete de +3 dias atravessa a virada do mês.
+      const { rows: monthlyRevenues } = await pool.query(
+        `SELECT * FROM revenues
+          WHERE client_id = $1
+            AND recurrence_id IS NULL
+            AND (description IS NULL OR btrim(description) = '')
+            AND (contract_id IS NULL OR contract_id = $2)
+            AND reference_month = ANY($3::date[])
+          ORDER BY (contract_id = $2) DESC NULLS LAST, created_at ASC`,
+        [contract.client_id, contract.id, [refThis, refPrev]]
+      );
+      const revenuesOf = (ref) => monthlyRevenues.filter((r) => toDateKey(r.reference_month) === ref);
+      // Mês atual: sem receita gerada ainda, vale o dia do contrato (como antes).
+      // Mês anterior: só lembra se a mensalidade daquele mês existe.
+      const prevRevenues = revenuesOf(refPrev);
+      const candidates = [
+        { revenues: revenuesOf(refThis), fallbackDue: contractDueDate(currentYear, currentMonth, contract.due_day) },
+        ...(prevRevenues.length ? [{ revenues: prevRevenues, fallbackDue: '' }] : []),
+      ].map((c) => ({ ...c, dueDate: toDateKey(c.revenues[0]?.due_date) || c.fallbackDue }))
+        .filter((c) => c.dueDate);
+
+      // Cobrança no dia do vencimento da receita do mês; lembrete 3 dias depois
+      const dueToday = candidates[0]?.dueDate === todayStr ? candidates[0] : null;
+      const reminder = dueToday ? null : candidates.find((c) => addDays(c.dueDate, 3) === todayStr) || null;
+      const target = dueToday || reminder;
+      if (!target) continue;
+      const isReminder = Boolean(reminder);
+
+      // Já pago (qualquer mensalidade do mês recebida) → não cobra
+      if (target.revenues.some(isReceived)) continue;
+      const revenue = target.revenues[0] || null;
 
       const { data: clientData } = await admin.from('clients').select('*').eq('id', contract.client_id).single();
       if (!clientData?.whatsapp) continue;
-      const refMonth = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
-      const { data: existingRevenues } = await admin.from('revenues').select('*').eq('client_id', contract.client_id).eq('reference_month', refMonth);
-      const revenue = existingRevenues?.[0];
-      if (revenue?.status === 'recebida') continue;
       const { data: existingMessages } = await admin.from('billing_messages').select('*').eq('client_id', contract.client_id).gte('sent_at', todayStr + 'T00:00:00').lte('sent_at', todayStr + 'T23:59:59');
       if (existingMessages?.length) continue;
 
-      const value = Number(contract.contract_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const contractCity = normalizeCityValue(contract.city) || normalizeCityValue(clientData.city) || 'minacu';
+      const paymentConfig = paymentConfigByCity.get(contractCity) || paymentConfigByCity.get('minacu') || paymentConfigRows[0];
+
+      const value = Number(revenue?.amount ?? contract.contract_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       let paymentInfo = '';
       if (paymentConfig?.pix_key) {
         const template = paymentConfig.msg_payment_data || '💳 *Dados:*\nNome: {nome_recebedor}\nBanco: {banco}\nPIX: {chave_pix}\nDoc: {documento}';
         paymentInfo = template.replace(/\{nome_recebedor\}/g, paymentConfig.receiver_name || '').replace(/\{banco\}/g, paymentConfig.bank || '').replace(/\{chave_pix\}/g, paymentConfig.pix_key || '').replace(/\{documento\}/g, paymentConfig.document || '');
       }
 
-      const applyVars = tpl => tpl.replace(/\{nome_cliente\}/g, clientData.company_name).replace(/\{valor\}/g, value).replace(/\{dia_vencimento\}/g, String(contract.due_day)).replace(/\{dados_pagamento\}/g, paymentInfo);
+      const dueDayLabel = String(Number(target.dueDate.slice(8, 10)));
+      const applyVars = tpl => tpl.replace(/\{nome_cliente\}/g, clientData.company_name).replace(/\{valor\}/g, value).replace(/\{dia_vencimento\}/g, dueDayLabel).replace(/\{dados_pagamento\}/g, paymentInfo);
       let message;
       if (isReminder) {
         message = applyVars(paymentConfig?.msg_billing_overdue || `Olá, {nome_cliente}! Identificamos pendência de {valor}. Se já pagou, desconsidere.{dados_pagamento}`);
-        if (revenue) await admin.from('revenues').update({ status: 'em_atraso' }).eq('id', revenue.id);
+        if (revenue && revenue.status === 'prevista') await admin.from('revenues').update({ status: 'em_atraso' }).eq('id', revenue.id);
       } else {
         message = applyVars(paymentConfig?.msg_billing_due || `Olá, {nome_cliente}! 🚀\n💰 Mensalidade: {valor}\n📅 Vencimento: Dia {dia_vencimento}{dados_pagamento}`);
       }
@@ -7516,7 +7579,13 @@ async function runBillingAutomation() {
       if (whatsappConfig?.integration_active) {
         try {
           await sendWhatsAppDirect(whatsappConfig, clientData.whatsapp, message, admin, contract.client_id, isReminder ? 'cobranca_lembrete' : 'cobranca', 'cobranca');
-          await admin.from('billing_messages').insert({ revenue_id: revenue?.id || null, client_id: contract.client_id, message_type: isReminder ? 'lembrete' : 'cobranca', status: 'enviada' });
+          await admin.from('billing_messages').insert({
+            revenue_id: revenue?.id || null,
+            client_id: contract.client_id,
+            message_type: isReminder ? 'lembrete' : 'cobranca',
+            status: 'enviada',
+            ...(billingMessagesHasCity ? { city: contractCity } : {}),
+          });
           results.push({ client: clientData.company_name, type: isReminder ? 'lembrete' : 'cobranca', status: 'sent' });
         } catch (err) { results.push({ client: clientData.company_name, status: 'error', error: String(err) }); }
       }

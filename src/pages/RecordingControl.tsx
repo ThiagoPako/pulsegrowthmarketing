@@ -103,19 +103,30 @@ export default function RecordingControl() {
     [recordings, displayDates]
   );
 
-  // Group recordings by videomaker and time slot
+  // Group recordings by videomaker and time slot (lista por célula: nenhuma sobreposição some da grade)
   const recordingsByVmAndSlot = useMemo(() => {
-    const map: Record<string, Record<string, Recording>> = {};
+    const map: Record<string, Record<string, Recording[]>> = {};
     videomakers.forEach(vm => { map[vm.id] = {}; });
     map['__unassigned__'] = {};
 
     filteredRecordings.forEach(r => {
       const vmId = r.videomakerId && map[r.videomakerId] ? r.videomakerId : '__unassigned__';
-      map[vmId][r.startTime] = r;
+      if (!map[vmId][r.startTime]) map[vmId][r.startTime] = [];
+      map[vmId][r.startTime].push(r);
     });
 
     return map;
   }, [filteredRecordings, videomakers]);
+
+  // Gravações que a grade não mostra: sem videomaker conhecido (visão Dia) ou fora dos horários da grade
+  // (ex.: 09:00 do pedido especial, horário livre da edição). Ficam listadas à parte com o horário real.
+  const offGridRecordings = useMemo(() => {
+    const gridSlots = new Set([...STANDARD_SLOTS, ...PULSE_SLOTS, ...LUNCH_SLOTS]);
+    const knownVm = new Set(videomakers.map(vm => vm.id));
+    return filteredRecordings
+      .filter(r => !gridSlots.has(r.startTime) || (viewMode === 'day' && (!r.videomakerId || !knownVm.has(r.videomakerId))))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
+  }, [filteredRecordings, videomakers, viewMode]);
 
   // Week grid: { [date]: { [time]: Recording[] } }
   const recordingsByDayAndSlot = useMemo(() => {
@@ -177,10 +188,32 @@ export default function RecordingControl() {
       return;
     }
 
-    setReassigning(true);
-    const oldVideomaker = users.find(u => u.id === draggedRecording.videomakerId);
+    // Mesmo videomaker/horário de outra gravação (inclusive extra): recusa o drop.
+    // O tipo vai vazio de propósito, para a extra também contar como conflito.
+    const conflict = hasConflict(
+      targetVideomakerId,
+      draggedRecording.date,
+      targetTime || draggedRecording.startTime,
+      draggedRecording.id,
+      undefined,
+      draggedRecording.clientId,
+      { skipClientDayCheck: true }
+    );
+    if (conflict.hasConflict) {
+      toast.error(conflict.message || 'Conflito de horário no destino');
+      setDraggedRecording(null);
+      return;
+    }
+
     const newVideomaker = users.find(u => u.id === targetVideomakerId);
     const client = clients.find(c => c.id === draggedRecording.clientId);
+    // Fixa: mudar também o cadastro do cliente (vale para as próximas semanas) só se o usuário confirmar
+    const clientDefaultsChange = Boolean(client) && (client!.videomaker !== targetVideomakerId
+      || (Boolean(targetTime) && STANDARD_SLOTS.includes(targetTime!) && client!.fixedTime !== targetTime));
+    const applyToClient = draggedRecording.type === 'fixa' && client && clientDefaultsChange
+      ? window.confirm(`Aplicar também às próximas semanas de ${client.companyName}?\n\nOK: o videomaker${targetTime && STANDARD_SLOTS.includes(targetTime) ? ' e o horário' : ''} padrão do cliente passam a ser os novos.\nCancelar: muda só esta gravação.`)
+      : false;
+    setReassigning(true);
 
     try {
       // Update recording
@@ -189,16 +222,20 @@ export default function RecordingControl() {
         videomakerId: targetVideomakerId,
         startTime: targetTime || draggedRecording.startTime,
       };
-      updateRecording(updatedRecording);
+      const saved = await updateRecording(updatedRecording);
+      if (!saved) {
+        toast.error('Não foi possível mover a gravação. Verifique a conexão e tente de novo.');
+        return;
+      }
 
       // Also update the client's default settings if this is a fixed recording
-      if (draggedRecording.type === 'fixa' && client) {
+      if (applyToClient && client) {
         const updates: any = { videomaker_id: targetVideomakerId };
         if (targetTime && STANDARD_SLOTS.includes(targetTime)) {
           updates.fixed_time = targetTime;
         }
-        await (supabase as any).from('clients').update(updates).eq('id', client.id);
-
+        const { error: clientError } = await (supabase as any).from('clients').update(updates).eq('id', client.id);
+        if (clientError) toast.error('A gravação foi movida, mas o cadastro do cliente não foi atualizado.');
       }
 
       toast.success(
@@ -225,13 +262,14 @@ export default function RecordingControl() {
       setDraggedRecording(null);
       return;
     }
-    // Conflict check with the same videomaker on target date/time (skip client-day rule to allow multi/day)
+    // Conflict check with the same videomaker on target date/time (skip client-day rule to allow multi/day).
+    // Tipo vazio: a extra no destino também conta como conflito (senão as duas ficariam no mesmo horário)
     const conflict = hasConflict(
       draggedRecording.videomakerId,
       targetDate,
       targetTime,
       draggedRecording.id,
-      draggedRecording.type,
+      undefined,
       draggedRecording.clientId,
       { skipClientDayCheck: true }
     );
@@ -244,7 +282,10 @@ export default function RecordingControl() {
     const client = clients.find(c => c.id === draggedRecording.clientId);
     try {
       const updated: Recording = { ...draggedRecording, date: targetDate, startTime: targetTime };
-      updateRecording(updated);
+      if (!(await updateRecording(updated))) {
+        toast.error('Não foi possível mover a gravação. Verifique a conexão e tente de novo.');
+        return;
+      }
       toast.success(
         `Gravação "${client?.companyName || draggedRecording.prospectName || 'Cliente'}" movida para ${format(new Date(targetDate + 'T12:00:00'), 'dd/MM', { locale: ptBR })} às ${targetTime}`,
         { duration: 3500 }
@@ -405,27 +446,46 @@ export default function RecordingControl() {
 
                 {/* Videomaker Cells */}
                 {videomakers.map(vm => {
-                  const recording = recordingsByVmAndSlot[vm.id]?.[time];
+                  const cellRecs = recordingsByVmAndSlot[vm.id]?.[time] || [];
                   const isOver = dragOverSlot?.vmId === vm.id && dragOverSlot?.time === time;
+                  // Conflito no destino enquanto arrasta (mesma regra do drop)
+                  const wouldConflict = !!(draggedRecording && isOver && !isRestricted &&
+                    !(draggedRecording.videomakerId === vm.id && draggedRecording.startTime === time) &&
+                    hasConflict(vm.id, draggedRecording.date, time, draggedRecording.id, undefined, draggedRecording.clientId, { skipClientDayCheck: true }).hasConflict);
                   
                   return (
                     <div
                       key={`${vm.id}-${time}`}
                       className={`flex-1 min-w-[200px] border-r last:border-r-0 relative p-1.5 transition-colors ${
-                        isOver ? 'bg-primary/10 ring-2 ring-primary/30 ring-inset z-10' : ''
+                        isOver
+                          ? wouldConflict
+                            ? 'bg-red-500/10 ring-2 ring-red-500/40 ring-inset z-10'
+                            : 'bg-primary/10 ring-2 ring-primary/30 ring-inset z-10'
+                          : ''
                       } ${isRestricted ? 'bg-muted/5' : 'bg-background/40 hover:bg-muted/5'}`}
                       onDragOver={e => !isRestricted && handleDragOver(e, vm.id, time)}
                       onDragLeave={handleDragLeave}
                       onDrop={e => !isRestricted && handleDrop(e, vm.id, time)}
                     >
-                      {recording ? (
-                        <RecordingCard
-                          recording={recording}
-                          client={getClient(recording.clientId)}
-                          isDragging={draggedRecording?.id === recording.id}
-                          onDragStart={handleDragStart}
-                          onDelete={() => handleDeleteRecording(recording)}
-                        />
+                      {cellRecs.length > 0 ? (
+                        <div className="h-full flex flex-col gap-1">
+                          {cellRecs.length > 1 && (
+                            <span className="absolute top-0.5 right-1 z-20 text-[9px] font-bold text-destructive bg-destructive/10 rounded px-1">
+                              {cellRecs.length} no mesmo horário
+                            </span>
+                          )}
+                          {cellRecs.map(recording => (
+                            <div key={recording.id} className="flex-1 min-h-0">
+                              <RecordingCard
+                                recording={recording}
+                                client={getClient(recording.clientId)}
+                                isDragging={draggedRecording?.id === recording.id}
+                                onDragStart={handleDragStart}
+                                onDelete={() => handleDeleteRecording(recording)}
+                              />
+                            </div>
+                          ))}
+                        </div>
                       ) : isLunch ? (
                         <div className="h-full flex items-center justify-center bg-amber-500/5">
                           <span className="text-[9px] font-bold text-amber-500/20 uppercase tracking-[0.2em] font-mono">Almoço</span>
@@ -530,7 +590,7 @@ export default function RecordingControl() {
                         d,
                         time,
                         draggedRecording.id,
-                        draggedRecording.type,
+                        undefined,
                         draggedRecording.clientId,
                         { skipClientDayCheck: true }
                       ).hasConflict);
@@ -648,23 +708,33 @@ export default function RecordingControl() {
           </div>
         </div>
       )}
-      {viewMode === 'day' && Object.keys(recordingsByVmAndSlot['__unassigned__'] || {}).length > 0 && (
+      {offGridRecordings.length > 0 && (
         <div className="mt-8">
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle size={18} className="text-amber-500" />
             <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Fora do Padrão ou Sem Videomaker</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {Object.values(recordingsByVmAndSlot['__unassigned__']).map(rec => (
-              <RecordingCard
-                key={rec.id}
-                recording={rec}
-                client={getClient(rec.clientId)}
-                isDragging={draggedRecording?.id === rec.id}
-                onDragStart={handleDragStart}
-                onDelete={() => handleDeleteRecording(rec)}
-              />
-            ))}
+            {offGridRecordings.map(rec => {
+              const vmName = users.find(u => u.id === rec.videomakerId)?.name;
+              return (
+                <div key={rec.id} className="space-y-1">
+                  <p className="text-xs font-mono font-bold text-amber-600">
+                    {viewMode === 'week' ? `${format(new Date(rec.date + 'T12:00:00'), 'dd/MM')} ` : ''}às {rec.startTime}
+                    <span className="font-sans font-normal text-muted-foreground"> · {vmName || 'Sem videomaker'}</span>
+                  </p>
+                  <div className="h-28">
+                    <RecordingCard
+                      recording={rec}
+                      client={getClient(rec.clientId)}
+                      isDragging={draggedRecording?.id === rec.id}
+                      onDragStart={handleDragStart}
+                      onDelete={() => handleDeleteRecording(rec)}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -786,7 +856,7 @@ export default function RecordingControl() {
               title: kindLabel,
               message: `${clientLabel} • ${format(new Date(wizard.date + 'T12:00:00'), "dd/MM", { locale: ptBR })} às ${wizard.time}${wizard.scriptId && !isStory ? ' • roteiro anexado' : ''}`,
               type: 'info',
-              link: '/videomaker',
+              link: '/videomakers',
             });
           } catch {}
 

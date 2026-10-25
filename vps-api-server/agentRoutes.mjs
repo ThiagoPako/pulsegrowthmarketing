@@ -42,6 +42,8 @@
 //   GET  /api/agent/tasks?search=       (chefe, revisor) busca cards do fluxo de edição em qualquer coluna
 //   POST /api/agent/tasks/:id/move      (chefe) { column: edicao|revisao|alteracao, reason, adjustment_notes }
 //   POST /api/agent/tasks/:id/type      (chefe) { content_type: reels|story|criativo, reason } corrige o tipo de um card da edição
+//   POST /api/agent/tasks/:id/assign    (chefe) { to: nome do agente editor, reason } passa um card de edição/alteração
+//                                       para um agente — só se quem está com ele não mexeu nas últimas 24 h
 //   POST /api/agent/messages            { to: nome | "todos", body } recado entre agentes (qualquer computador)
 //   GET  /api/agent/messages            caixa de entrada (devolve não lidos e marca como lidos)
 //   POST /api/agent/status              { status } trabalhando (online 15 min) | { done: true } encerrou
@@ -1333,6 +1335,89 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         .catch(() => pool.query('UPDATE content_tasks SET content_type = $2 WHERE id = $1', [task.id, next]));
       await logHistory(task.id, agent.userId, 'Tipo do card corrigido', `${task.content_type} → ${next}: ${reason}`);
       res.json({ ok: true, task: { ...task, content_type: next }, from: task.content_type });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // A chefe passa um card parado para um agente editor (ex.: alteração de vídeo cujo editor não está mais nele).
+  // Regra do usuário (25/10/2026): só tira de quem NÃO está ativo no card — humano sem movimento no card nas
+  // últimas 24 h, ou agente sem sinal de vida há 30 min. Tudo fica no histórico e o editor anterior é avisado.
+  const ACTIVE_HUMAN_HOURS = 24;
+  app.post('/api/agent/tasks/:id/assign', async (req, res) => {
+    try {
+      const agent = await verifyAgent(req);
+      if (agent.role !== 'chefe') return res.status(403).json({ error: 'Só a chefe passa card de um editor para outro' });
+      const reason = String(req.body?.reason || '').trim().slice(0, 300);
+      const toName = String(req.body?.to || '').trim();
+      if (!toName || !reason) return res.status(400).json({ error: 'Informe o agente (to) e o motivo' });
+      const norm = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+      const { rows: editors } = await pool.query(
+        `SELECT DISTINCT k.user_id, p.name FROM agent_keys k JOIN profiles p ON p.id = k.user_id
+          WHERE k.revoked_at IS NULL AND k.role = 'editor'`
+      );
+      const target = editors.find((e) => norm(e.name) === norm(toName) || norm(e.name).split(/\s+/)[0] === norm(toName));
+      if (!target) return res.status(404).json({ error: `Nenhum agente editor ativo chamado "${toName}"` });
+
+      const { rows } = await pool.query(
+        `SELECT t.id, t.title, t.kanban_column, t.assigned_to, t.edited_by, t.editing_started_at, t.agent_heartbeat_at,
+                pa.name AS assigned_name, pe.name AS edited_name
+           FROM content_tasks t
+           LEFT JOIN profiles pa ON pa.id = t.assigned_to
+           LEFT JOIN profiles pe ON pe.id = t.edited_by
+          WHERE t.id::text = $1 OR t.id::text LIKE $1 || '%'`,
+        [String(req.params.id).trim()]
+      );
+      if (rows.length !== 1) return res.status(rows.length ? 400 : 404).json({ error: rows.length ? 'Mais de um card com esse começo de id' : 'Card não encontrado' });
+      const task = rows[0];
+      if (!['edicao', 'alteracao'].includes(task.kanban_column)) {
+        return res.status(400).json({ error: 'Só dá para passar card em Para Editar ou Alteração' });
+      }
+      const owner = task.assigned_to || task.edited_by;
+      if (owner === target.user_id && (task.kanban_column !== 'alteracao' || task.edited_by === target.user_id)) {
+        return res.json({ ok: true, unchanged: true, task: { id: task.id, title: task.title } });
+      }
+      if (owner) {
+        const { rows: agentKeys } = await pool.query(
+          'SELECT 1 FROM agent_keys WHERE user_id = $1 AND revoked_at IS NULL LIMIT 1', [owner]
+        );
+        if (agentKeys.length) {
+          const alive = task.assigned_to === owner && task.agent_heartbeat_at
+            && Date.now() - new Date(task.agent_heartbeat_at).getTime() < 30 * 60_000;
+          if (alive) return res.status(409).json({ error: `O card está com ${task.assigned_name || 'outro agente'} agora (sinal de vida há menos de 30 min)` });
+        } else {
+          const { rows: recent } = await pool.query(
+            `SELECT 1 FROM task_history WHERE task_id = $1 AND user_id = $2 AND created_at > now() - ($3 || ' hours')::interval LIMIT 1`,
+            [task.id, owner, String(ACTIVE_HUMAN_HOURS)]
+          );
+          const startedRecently = task.assigned_to === owner && task.editing_started_at
+            && Date.now() - new Date(task.editing_started_at).getTime() < ACTIVE_HUMAN_HOURS * 3600_000;
+          if (recent.length || startedRecently) {
+            const name = (task.assigned_to === owner ? task.assigned_name : task.edited_name) || 'um editor';
+            return res.status(409).json({ error: `${name.trim()} mexeu neste card nas últimas ${ACTIVE_HUMAN_HOURS} h: continua com ele` });
+          }
+        }
+      }
+      // alteração vai para a fila do agente pelo "editado por"; edição volta livre para ele pegar
+      await pool.query(
+        `UPDATE content_tasks SET edited_by = CASE WHEN kanban_column = 'alteracao' THEN $2 ELSE edited_by END,
+                assigned_to = NULL, agent_step = NULL, agent_heartbeat_at = NULL, updated_at = now()
+          WHERE id = $1`,
+        [task.id, target.user_id]
+      );
+      const fromName = (task.assigned_name || task.edited_name || 'ninguém').trim();
+      await logHistory(task.id, agent.userId, `Card passado para ${target.name.trim()}`, `de ${fromName} para ${target.name.trim()}: ${reason}`);
+      if (owner && owner !== target.user_id) {
+        await pool.query(
+          `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, 'adjustment', '/edicao/kanban')`,
+          [owner, 'Card passado para outro editor', `"${task.title}" foi passado para ${target.name.trim()}: ${reason}`]
+        ).catch(() => {});
+      }
+      await pool.query('INSERT INTO agent_messages (from_user, to_user, body) VALUES ($1, $2, $3)', [
+        agent.userId, target.user_id,
+        `Card ${task.id.slice(0, 8)} "${task.title}" (${task.kanban_column === 'alteracao' ? 'alteração' : 'edição'}) agora é seu: ${reason}`,
+      ]).catch(() => {});
+      res.json({ ok: true, task: { id: task.id, title: task.title, column: task.kanban_column }, from: fromName, to: target.name.trim() });
     } catch (error) {
       sendError(res, error);
     }

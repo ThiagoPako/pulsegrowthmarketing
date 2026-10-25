@@ -2712,12 +2712,74 @@ async function authenticateWithLegacyAuth() {
 // ═══════════════════════════════════════════════════════════════
 
 // ─── Login ──────────────────────────────────────────────────
+// ─── Limite de tentativas de login (memória do processo) ───
+// Conta só as FALHAS por login (e-mail da equipe ou usuário do portal), sem
+// depender de IP: atrás do Nginx o IP chega como 127.0.0.1 e o
+// X-Forwarded-For pode ser forjado. Depois de LOGIN_MAX_FAILURES erros em
+// 15 min aquele login fica bloqueado até a janela acabar; acertar a senha zera
+// o contador. O restart do PM2 no deploy zera tudo (a sonda do update_vps.sh
+// continua recebendo 401).
+const LOGIN_FAILURE_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_FAILURES = 10;
+const LOGIN_FAILURES_MAX_KEYS = 50000;
+const loginFailures = new Map();
+
+function loginAttemptKey(scope, login) {
+  return `${scope}:${String(login || '').trim().toLowerCase()}`;
+}
+
+/** Segundos até liberar o login (0 = pode tentar). */
+function loginRetryAfterSeconds(key) {
+  const entry = loginFailures.get(key);
+  if (!entry) return 0;
+  const elapsed = Date.now() - entry.firstAt;
+  if (elapsed > LOGIN_FAILURE_WINDOW_MS) {
+    loginFailures.delete(key);
+    return 0;
+  }
+  if (entry.count < LOGIN_MAX_FAILURES) return 0;
+  return Math.max(1, Math.ceil((LOGIN_FAILURE_WINDOW_MS - elapsed) / 1000));
+}
+
+function registerLoginFailure(key) {
+  const now = Date.now();
+  const entry = loginFailures.get(key);
+  if (!entry || now - entry.firstAt > LOGIN_FAILURE_WINDOW_MS) {
+    loginFailures.delete(key);
+    loginFailures.set(key, { count: 1, firstAt: now });
+  } else {
+    entry.count += 1;
+  }
+  if (loginFailures.size > LOGIN_FAILURES_MAX_KEYS) {
+    for (const [k, v] of loginFailures) {
+      if (now - v.firstAt > LOGIN_FAILURE_WINDOW_MS) loginFailures.delete(k);
+    }
+    // Ainda cheio (muitos logins diferentes): descarta os mais antigos
+    for (const k of loginFailures.keys()) {
+      if (loginFailures.size <= LOGIN_FAILURES_MAX_KEYS) break;
+      loginFailures.delete(k);
+    }
+  }
+}
+
+function clearLoginFailures(key) {
+  loginFailures.delete(key);
+}
+
+function sendTooManyLoginAttempts(res, retryAfter) {
+  res.setHeader('Retry-After', String(retryAfter));
+  return res.status(429).json({ error: 'Muitas tentativas de login. Aguarde alguns minutos e tente de novo.' });
+}
+
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email e senha são obrigatórios' });
 
     const normalizedEmail = String(email).toLowerCase().trim();
+    const attemptKey = loginAttemptKey('team', normalizedEmail);
+    const retryAfter = loginRetryAfterSeconds(attemptKey);
+    if (retryAfter > 0) return sendTooManyLoginAttempts(res, retryAfter);
     let profile = await getAuthProfileByEmail(normalizedEmail);
     
     // Fallback: Se não encontrou no join profiles+auth_users, tenta direto na auth_users por email
@@ -2749,7 +2811,11 @@ app.post('/api/auth/login', async (req, res) => {
       }
     }
 
-    if (!profile || !valid) return res.status(401).json({ error: 'Email ou senha inválidos' });
+    if (!profile || !valid) {
+      registerLoginFailure(attemptKey);
+      return res.status(401).json({ error: 'Email ou senha inválidos' });
+    }
+    clearLoginFailures(attemptKey);
 
     await upgradePasswordHashIfNeeded(profile, password);
 
@@ -3888,12 +3954,8 @@ app.post('/api/generate-caption', async (req, res) => {
 
 
 // ─── 5. Client Portal Auth ──────────────────────────────────
-async function hashPassword(password) {
-  // Use Node.js crypto module (crypto.subtle may not be available in all Node versions)
-  const { createHash } = await import('crypto');
-  const hash = createHash('sha256').update(password + 'pulse_portal_salt_2026').digest('hex');
-  return hash;
-}
+// Senhas do portal: bcrypt. O SHA-256 salgado antigo ('pulse_portal_salt_2026')
+// ainda é aceito por verifyStoredPassword e regravado em bcrypt no login.
 
 // Ensure client_portal_users table exists (multi-user per company)
 (async () => {
@@ -3929,6 +3991,14 @@ app.post('/api/client-portal-auth', async (req, res) => {
 
     if (action === 'login') {
       if (!login || !password) return res.status(400).json({ error: 'Login e senha obrigatórios' });
+      const attemptKey = loginAttemptKey('portal', login);
+      const retryAfter = loginRetryAfterSeconds(attemptKey);
+      if (retryAfter > 0) return sendTooManyLoginAttempts(res, retryAfter);
+      // Mesma resposta para login inexistente e senha errada (não revela quais logins existem)
+      const invalidLogin = () => {
+        registerLoginFailure(attemptKey);
+        return res.status(401).json({ error: 'Login ou senha inválidos' });
+      };
       // Search in client_portal_users first, fallback to clients table
       const { rows: [portalUser] } = await pool.query(
         `SELECT cpu.id as user_id, cpu.client_id, cpu.username, cpu.display_name, cpu.password_hash, c.company_name, c.color, c.logo_url
@@ -3938,8 +4008,14 @@ app.post('/api/client-portal-auth', async (req, res) => {
         [login.trim()]
       );
       if (portalUser) {
-        const passwordHash = await hashPassword(password);
-        if (portalUser.password_hash !== passwordHash) return res.status(401).json({ error: 'Senha incorreta' });
+        // Aceita bcrypt e o SHA-256 salgado antigo; no primeiro login certo regrava em bcrypt
+        if (!(await verifyStoredPassword(password, portalUser.password_hash))) return invalidLogin();
+        clearLoginFailures(attemptKey);
+        if (!String(portalUser.password_hash || '').startsWith('$2')) {
+          const upgraded = await bcrypt.hash(password, 12);
+          await pool.query('UPDATE client_portal_users SET password_hash = $1 WHERE id = $2', [upgraded, portalUser.user_id])
+            .catch((error) => console.warn('[portal-login] falha ao migrar hash para bcrypt:', error?.message || error));
+        }
         return res.json({ success: true, client_id: portalUser.client_id, company_name: portalUser.company_name, color: portalUser.color, logo_url: portalUser.logo_url, display_name: portalUser.display_name, portal_user_id: portalUser.user_id });
       }
       // Fallback: legacy login on clients table
@@ -3947,9 +4023,9 @@ app.post('/api/client-portal-auth', async (req, res) => {
         `SELECT id, company_name, client_login, client_password_hash, color, logo_url FROM clients WHERE client_login = $1`,
         [login.trim()]
       );
-      if (!client) return res.status(404).json({ error: 'Login não encontrado' });
-      const passwordHash = await hashPassword(password);
-      if (client.client_password_hash !== passwordHash) return res.status(401).json({ error: 'Senha incorreta' });
+      if (!client) return invalidLogin();
+      if (!(await verifyStoredPassword(password, client.client_password_hash))) return invalidLogin();
+      clearLoginFailures(attemptKey);
       return res.json({ success: true, client_id: client.id, company_name: client.company_name, color: client.color, logo_url: client.logo_url, display_name: client.company_name });
     }
 
@@ -3961,7 +4037,8 @@ app.post('/api/client-portal-auth', async (req, res) => {
       // Check username not taken
       const { rows: taken } = await pool.query(`SELECT id FROM client_portal_users WHERE username = $1`, [login.trim()]);
       if (taken.length > 0) return res.status(409).json({ error: 'Nome de usuário já em uso' });
-      const passwordHash = await hashPassword(password);
+      // Senhas novas do portal já nascem em bcrypt (o login aceita os dois formatos)
+      const passwordHash = await bcrypt.hash(String(password), 12);
       const name = (display_name || login).trim();
       await pool.query(
         `INSERT INTO client_portal_users (client_id, username, display_name, password_hash) VALUES ($1, $2, $3, $4)`,

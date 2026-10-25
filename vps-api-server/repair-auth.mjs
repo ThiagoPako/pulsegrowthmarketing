@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,10 +13,20 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 dotenv.config({ path: path.join(__dirname, '.env'), override: true });
 
-const ADMIN_EMAIL = 'admin@pulse.com';
-const ADMIN_PASSWORD = 'Pulse@2026!';
-const TEMP_PASSWORD = 'Pulse@2026!';
-const RESET_ALL_USER_PASSWORDS = process.env.RESET_ALL_USER_PASSWORDS === 'true';
+// Nenhuma senha fica no código. Por padrão o reparo NÃO mexe na senha do admin
+// (só garante o perfil e o papel). Para redefinir: `node repair-auth.mjs --reset-admin`
+// com REPAIR_ADMIN_PASSWORD no ambiente; sem a variável, gera uma senha aleatória
+// e mostra uma única vez no terminal.
+const ADMIN_EMAIL = (process.env.REPAIR_ADMIN_EMAIL || 'admin@pulse.com').trim();
+const RESET_ADMIN = process.argv.includes('--reset-admin') || process.env.REPAIR_AUTH_RESET_ADMIN === 'true';
+const ADMIN_PASSWORD_FROM_ENV = process.env.REPAIR_ADMIN_PASSWORD || '';
+// Senha temporária só se o operador informar; sem ela, perfis sem hash recebem
+// uma senha aleatória desconhecida e precisam ser redefinidos pela equipe.
+const TEMP_PASSWORD = process.env.REPAIR_TEMP_PASSWORD || '';
+const RESET_ALL_USER_PASSWORDS = process.env.RESET_ALL_USER_PASSWORDS === 'true' && TEMP_PASSWORD.length > 0;
+if (process.env.RESET_ALL_USER_PASSWORDS === 'true' && !TEMP_PASSWORD) {
+  console.warn('[repair-auth] RESET_ALL_USER_PASSWORDS ignorado: defina REPAIR_TEMP_PASSWORD para redefinir todas as senhas.');
+}
 const ALLOW_SCHEMA_CHANGES = process.env.REPAIR_AUTH_ALLOW_SCHEMA_CHANGES === 'true';
 const VALID_ROLES = new Set([
   'admin',
@@ -42,6 +53,10 @@ function normalizeRole(role) {
 
 function isPresentHash(value) {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+function randomPassword() {
+  return crypto.randomBytes(18).toString('base64url');
 }
 
 const pgConnectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
@@ -170,7 +185,11 @@ async function ensureAdminProfile(client, passwordHash) {
     await client.query('UPDATE profiles SET role = $1 WHERE id = $2', ['admin', userId]);
   }
 
-  await upsertAuthUser(client, userId, normalizedEmail, passwordHash);
+  // Sem --reset-admin o hash atual do admin é mantido (o laço de perfis já
+  // garantiu o auth_user dele); só grava quando houver senha nova.
+  if (passwordHash) {
+    await upsertAuthUser(client, userId, normalizedEmail, passwordHash);
+  }
 
   await client.query(
     `INSERT INTO user_roles (user_id, role)
@@ -229,10 +248,11 @@ async function repairProfiles(client) {
       ${orderBy}`,
   );
 
-  const tempHash = await bcrypt.hash(TEMP_PASSWORD, 12);
+  const tempHash = TEMP_PASSWORD ? await bcrypt.hash(TEMP_PASSWORD, 12) : null;
   let preserved = 0;
   let createdWithTemp = 0;
   let rolesRepaired = 0;
+  const needPasswordReset = [];
 
   for (const profile of profiles) {
     const email = normalizeEmail(profile.email);
@@ -243,15 +263,23 @@ async function repairProfiles(client) {
       [profile.id, email],
     );
     const existingAuth = existingAuthRows[0];
-    const chosenHash = RESET_ALL_USER_PASSWORDS
-      ? tempHash
-      : isPresentHash(existingAuth?.password_hash)
-      ? existingAuth.password_hash.trim()
-      : isPresentHash(profile.password_hash)
-        ? profile.password_hash.trim()
-        : tempHash;
+    const hasOwnHash = isPresentHash(existingAuth?.password_hash) || isPresentHash(profile.password_hash);
+    let chosenHash;
+    if (RESET_ALL_USER_PASSWORDS) {
+      chosenHash = tempHash;
+    } else if (isPresentHash(existingAuth?.password_hash)) {
+      chosenHash = existingAuth.password_hash.trim();
+    } else if (isPresentHash(profile.password_hash)) {
+      chosenHash = profile.password_hash.trim();
+    } else if (tempHash) {
+      chosenHash = tempHash;
+    } else {
+      // Senha aleatória que ninguém conhece: o usuário fica sem login até ser redefinido.
+      chosenHash = await bcrypt.hash(randomPassword(), 12);
+      needPasswordReset.push(email);
+    }
 
-    if (RESET_ALL_USER_PASSWORDS || (chosenHash === tempHash && !isPresentHash(existingAuth?.password_hash) && !isPresentHash(profile.password_hash))) {
+    if (RESET_ALL_USER_PASSWORDS || !hasOwnHash) {
       createdWithTemp += 1;
     } else {
       preserved += 1;
@@ -278,16 +306,29 @@ async function repairProfiles(client) {
     rolesRepaired += roleInsert.rowCount || 0;
   }
 
-  const adminHash = await bcrypt.hash(ADMIN_PASSWORD, 12);
-  const adminId = await ensureAdminProfile(client, adminHash);
-  const { rows: [adminAuth] } = await client.query(
-    'SELECT password_hash FROM auth_users WHERE id = $1 OR lower(email) = lower($2) LIMIT 1',
-    [adminId, ADMIN_EMAIL],
+  let adminPassword = null;
+  let adminPasswordGenerated = false;
+  const { rows: existingAdminRows } = await client.query(
+    'SELECT 1 FROM profiles WHERE lower(email) = lower($1) LIMIT 1',
+    [normalizeEmail(ADMIN_EMAIL)],
   );
-  const adminPasswordVerified = Boolean(adminAuth?.password_hash && await bcrypt.compare(ADMIN_PASSWORD, adminAuth.password_hash));
+  // Admin novo (só com REPAIR_AUTH_ALLOW_SCHEMA_CHANGES) precisa nascer com senha.
+  if (RESET_ADMIN || existingAdminRows.length === 0) {
+    adminPassword = ADMIN_PASSWORD_FROM_ENV || randomPassword();
+    adminPasswordGenerated = !ADMIN_PASSWORD_FROM_ENV;
+  }
+  const adminHash = adminPassword ? await bcrypt.hash(adminPassword, 12) : null;
+  const adminId = await ensureAdminProfile(client, adminHash);
 
-  if (!adminPasswordVerified) {
-    throw new Error('Hash do admin não confere após o reparo. Nenhuma senha foi exibida.');
+  if (adminPassword) {
+    const { rows: [adminAuth] } = await client.query(
+      'SELECT password_hash FROM auth_users WHERE id = $1 OR lower(email) = lower($2) LIMIT 1',
+      [adminId, ADMIN_EMAIL],
+    );
+    const adminPasswordVerified = Boolean(adminAuth?.password_hash && await bcrypt.compare(adminPassword, adminAuth.password_hash));
+    if (!adminPasswordVerified) {
+      throw new Error('Hash do admin não confere após o reparo. Nenhuma senha foi exibida.');
+    }
   }
 
   const { rows: counts } = await client.query(`
@@ -299,9 +340,13 @@ async function repairProfiles(client) {
 
   return {
     adminId,
+    adminPasswordUpdated: Boolean(adminPassword),
+    // Só aparece quando o próprio script gerou a senha (--reset-admin sem REPAIR_ADMIN_PASSWORD).
+    ...(adminPasswordGenerated ? { adminTemporaryPassword: adminPassword } : {}),
     profiles: profiles.length,
     preserved,
     createdWithTemp,
+    needPasswordReset,
     rolesRepaired,
     counts: counts[0],
   };
@@ -327,7 +372,6 @@ async function main() {
       backupDir,
       backedUp,
       adminEmail: ADMIN_EMAIL,
-      adminPasswordUpdated: true,
       resetAllUserPasswords: RESET_ALL_USER_PASSWORDS,
       schemaChangesAllowed: ALLOW_SCHEMA_CHANGES,
       ...result,

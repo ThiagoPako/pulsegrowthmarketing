@@ -2002,7 +2002,32 @@ async function verifyUser(req) {
   }
 }
 
+// Memo por objeto de usuário: o verifyUser cria um por requisição, e isAdminUser,
+// resolveActiveCity e as regras do /api/db/query pediam os mesmos ids ligados e o
+// mesmo papel várias vezes (cerca de 9 consultas só para autenticar). Validade
+// curta para não atrasar revogação caso algum objeto viva mais que a requisição.
+const AUTH_MEMO_TTL_MS = 5_000;
+const linkedUserIdsMemo = new WeakMap();
+const adminUserMemo = new WeakMap();
+
+function readAuthMemo(memo, user) {
+  if (!user || typeof user !== 'object') return null;
+  const hit = memo.get(user);
+  return hit && Date.now() - hit.at < AUTH_MEMO_TTL_MS ? hit.promise : null;
+}
+
+function writeAuthMemo(memo, user, promise) {
+  if (user && typeof user === 'object') memo.set(user, { at: Date.now(), promise });
+  return promise;
+}
+
 async function getLinkedUserIds(user) {
+  const cached = readAuthMemo(linkedUserIdsMemo, user);
+  if (cached) return [...(await cached)];
+  return [...(await writeAuthMemo(linkedUserIdsMemo, user, loadLinkedUserIds(user)))];
+}
+
+async function loadLinkedUserIds(user) {
   const directId = user?.id ? String(user.id) : '';
   const email = user?.email ? String(user.email).trim().toLowerCase() : '';
   const ids = new Set(directId ? [directId] : []);
@@ -2052,6 +2077,12 @@ async function getLinkedUserIds(user) {
 async function isAdminUser(user) {
   if (!user) return false;
   if (user.role === 'admin' || user.role === 'social_media') return true;
+  const cached = readAuthMemo(adminUserMemo, user);
+  if (cached) return cached;
+  return writeAuthMemo(adminUserMemo, user, loadIsAdminUser(user));
+}
+
+async function loadIsAdminUser(user) {
   try {
     await ensureAuthSupportTables();
     const linkedIds = await getLinkedUserIds(user);
@@ -8969,12 +9000,22 @@ app.post('/api/db/query', async (req, res) => {
             ? updateKeys.map((key) => `${key} = EXCLUDED.${key}`).join(', ')
             : `${conflictColumns[0] || keys[0]} = EXCLUDED.${conflictColumns[0] || keys[0]}`;
 
+          // Multi-city: o DO UPDATE só alcança linha da cidade ativa (ou sem cidade), como
+          // o update e o delete. Antes um id de outra cidade era sobrescrito e mudava de praça.
+          const upsertParams = scopeCity ? [...values, activeCity] : values;
+          const cityGuard = scopeCity
+            ? ` WHERE ${cityVisibilityExpression(`${safeTable}.city`, `$${values.length + 1}`)}`
+            : '';
+
           const { rows } = await pool.query(
             `INSERT INTO ${safeTable} (${keys.join(', ')}) VALUES (${placeholders.join(', ')})
-             ON CONFLICT (${(conflictColumns.length ? conflictColumns : ['id']).join(', ')}) DO UPDATE SET ${updateSet}
+             ON CONFLICT (${(conflictColumns.length ? conflictColumns : ['id']).join(', ')}) DO UPDATE SET ${updateSet}${cityGuard}
              RETURNING *`,
-            values
+            upsertParams
           );
+          if (rows.length === 0) {
+            throw dbQueryError('Esse registro é de outra cidade e não foi alterado.', 409);
+          }
           allResults.push(rows[0]);
         }
 

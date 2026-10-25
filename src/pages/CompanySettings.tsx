@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { DAY_LABELS } from '@/types';
@@ -155,7 +155,12 @@ const SETTINGS_TABS: { key: SettingsTab; label: string; icon: LucideIcon; descri
 
 export default function CompanySettings() {
   const { settings, updateSettings, currentUser } = useApp();
-  const [form, setForm] = useState(settings);
+  const [form, setFormState] = useState(settings);
+  // o form acompanha as configurações carregadas (F5 direto aqui) até a pessoa mexer em algo
+  const formDirty = useRef(false);
+  const setForm = (next: typeof settings) => { formDirty.current = true; setFormState(next); };
+  useEffect(() => { if (!formDirty.current) setFormState(settings); }, [settings]);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [resetting, setResetting] = useState(false);
   const [showDangerZone, setShowDangerZone] = useState(false);
@@ -255,9 +260,17 @@ export default function CompanySettings() {
     setForm({ ...form, workDays: days });
   };
 
-  const handleSave = () => {
-    updateSettings(form);
-    toast.success('Configurações salvas');
+  const handleSave = async () => {
+    setSavingSettings(true);
+    try {
+      await updateSettings(form);
+      formDirty.current = false;
+      toast.success('Configurações salvas');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao salvar as configurações');
+    } finally {
+      setSavingSettings(false);
+    }
   };
 
   const handleAddHoliday = async () => {
@@ -551,7 +564,7 @@ export default function CompanySettings() {
           {/* Aprovação/Agendamento removido — prazo definido pela Social Media */}
         </div>
       </div>
-      <Button onClick={handleSave} className="w-full">Salvar Configurações</Button>
+      <Button onClick={handleSave} disabled={savingSettings} className="w-full">{savingSettings ? 'Salvando...' : 'Salvar Configurações'}</Button>
       {/* Feriados */}
       <div className="glass-card p-6 space-y-5">
         <div className="flex items-center gap-2 text-primary">
@@ -723,7 +736,7 @@ export default function CompanySettings() {
         </div>
       </div>
 
-      <Button onClick={handleSave} className="w-full">Salvar Configurações</Button>
+      <Button onClick={handleSave} disabled={savingSettings} className="w-full">{savingSettings ? 'Salvando...' : 'Salvar Configurações'}</Button>
             </div>
           )}
 

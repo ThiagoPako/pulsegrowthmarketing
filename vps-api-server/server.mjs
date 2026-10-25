@@ -9537,14 +9537,50 @@ app.get('/api/company-settings', async (req, res) => {
   } catch (e) { res.status(401).json({ error: e.message }); }
 });
 
+// Chaves de liga/desliga dos prazos e o auto-preencher vagas: garante as colunas (aditivo) e lê quais existem,
+// para uma coluna ausente no banco não derrubar o salvamento inteiro.
+let companySettingsColumnsPromise = null;
+function companySettingsColumns() {
+  if (!companySettingsColumnsPromise) {
+    companySettingsColumnsPromise = (async () => {
+      for (const column of ['editing_deadline_enabled', 'review_deadline_enabled', 'alteration_deadline_enabled', 'approval_deadline_enabled']) {
+        await pool.query(`ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS ${column} BOOLEAN NOT NULL DEFAULT true`).catch(() => {});
+      }
+      await pool.query(`ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS auto_fill_vacancies BOOLEAN NOT NULL DEFAULT false`).catch(() => {});
+      const { rows } = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'company_settings'`
+      );
+      return new Set(rows.map((r) => r.column_name));
+    })().catch((error) => {
+      companySettingsColumnsPromise = null;
+      throw error;
+    });
+  }
+  return companySettingsColumnsPromise;
+}
+
+const COMPANY_SETTINGS_BOOLEANS = new Set(['editing_deadline_enabled', 'review_deadline_enabled', 'alteration_deadline_enabled', 'approval_deadline_enabled', 'auto_fill_vacancies']);
+const COST_ALLOCATION_RULES = ['approved', 'recorded', 'posted'];
+
 app.put('/api/company-settings/:id', async (req, res) => {
   try {
     await verifyAdmin(req);
     const { id } = req.params;
-    const s = req.body;
-    const allowed = ['shift_a_start','shift_a_end','shift_b_start','shift_b_end','work_days','recording_duration','editing_deadline_hours','review_deadline_hours','alteration_deadline_hours','approval_deadline_hours'];
+    const s = req.body || {};
+    if (s.cost_allocation_rule !== undefined && !COST_ALLOCATION_RULES.includes(s.cost_allocation_rule)) {
+      return res.status(400).json({ error: 'Regra de rateio inválida' });
+    }
+    const existing = await companySettingsColumns();
+    const allowed = ['shift_a_start','shift_a_end','shift_b_start','shift_b_end','work_days','recording_duration','editing_deadline_hours','review_deadline_hours','alteration_deadline_hours','approval_deadline_hours',
+      'editing_deadline_enabled','review_deadline_enabled','alteration_deadline_enabled','approval_deadline_enabled','auto_fill_vacancies','cost_allocation_rule']
+      .filter((key) => existing.has(key));
     const sets = []; const vals = []; let idx = 1;
-    for (const key of allowed) { if (s[key] !== undefined) { sets.push(`${key} = $${idx}`); vals.push(key === 'work_days' ? s[key] : s[key]); idx++; } }
+    for (const key of allowed) {
+      if (s[key] === undefined) continue;
+      sets.push(`${key} = $${idx}`);
+      vals.push(COMPANY_SETTINGS_BOOLEANS.has(key) ? s[key] === true || s[key] === 'true' : s[key]);
+      idx++;
+    }
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     sets.push('updated_at = NOW()');
     vals.push(id);

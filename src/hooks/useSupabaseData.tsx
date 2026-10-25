@@ -656,9 +656,11 @@ export function useSupabaseData() {
   }, []);
 
   // ── Settings ──
+  // Lança erro se não salvou (a tela mostra a mensagem em vez de "salvas")
   const updateSettings = useCallback(async (s: CompanySettings) => {
-    if (settingsId) {
-      await invokeVpsFunction(`company-settings/${settingsId}`, {
+    if (!settingsId) throw new Error('As configurações ainda não carregaram. Recarregue a página e tente de novo.');
+    {
+      const { error } = await invokeVpsFunction(`company-settings/${settingsId}`, {
         body: {
           shift_a_start: s.shiftAStart,
           shift_a_end: s.shiftAEnd,
@@ -674,9 +676,12 @@ export function useSupabaseData() {
           review_deadline_enabled: s.reviewDeadlineEnabled,
           alteration_deadline_enabled: s.alterationDeadlineEnabled,
           approval_deadline_enabled: s.approvalDeadlineEnabled,
+          auto_fill_vacancies: s.autoFillVacancies ?? false,
+          cost_allocation_rule: s.costAllocationRule || 'approved',
         },
         method: 'PUT',
       });
+      if (error) throw new Error(error.message || 'Erro ao salvar as configurações');
     }
     setSettings(s);
   }, [settingsId]);

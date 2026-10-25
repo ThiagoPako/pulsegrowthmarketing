@@ -67,6 +67,8 @@ app.use(express.json({ limit: '10mb' }));
 // Health Check: endpoint leve para monitoramento do Nginx/Uptime e Banco de Dados
 // Diagnóstico do Pente Fino: mostra o que faltava e repara o schema.
 app.get('/api/diagnostics/pente-fino', async (req, res) => {
+  // Roda CREATE/ALTER: só admin
+  if (!(await requireAdminRoute(req, res))) return;
   try {
     const before = {};
     for (const [table, columns] of Object.entries(PENTE_FINO_SCHEMA)) {
@@ -2076,6 +2078,45 @@ async function verifyAdmin(req) {
     return { user, userClient, admin: getAdminClient() };
   }
   throw new Error('Admin access required');
+}
+
+/** true quando o pedido traz um JWT válido da equipe (sem lançar erro). */
+async function hasTeamSession(req) {
+  if (!req.headers.authorization?.startsWith('Bearer ')) return false;
+  return verifyUser(req).then(() => true).catch(() => false);
+}
+
+/** Compara um segredo do .env com o enviado, em tempo constante. */
+function secretMatches(expected, provided) {
+  const a = String(expected || '').trim();
+  const b = String(provided || '').trim();
+  if (!a || !b) return false;
+  return crypto.timingSafeEqual(
+    crypto.createHash('sha256').update(a).digest(),
+    crypto.createHash('sha256').update(b).digest(),
+  );
+}
+
+/** Rotas só de admin: 401 sem login, 403 sem papel. Devolve false se respondeu. */
+async function requireAdminRoute(req, res) {
+  try {
+    await verifyAdmin(req);
+    return true;
+  } catch (error) {
+    res.status(error?.message === 'Admin access required' ? 403 : 401).json({ error: error?.message || 'Unauthorized' });
+    return false;
+  }
+}
+
+/**
+ * TV do escritório (/tv, sem login). Com TV_ACCESS_TOKEN no .env, a TV precisa
+ * abrir /tv?tv_token=... (ou estar logada); sem a variável segue pública.
+ */
+async function tvAccessAllowed(req) {
+  const expected = String(process.env.TV_ACCESS_TOKEN || '').trim();
+  if (!expected) return true;
+  if (await hasTeamSession(req)) return true;
+  return secretMatches(expected, req.query?.tv_token || req.headers['x-tv-token']);
 }
 
 /**
@@ -7940,6 +7981,10 @@ app.post('/api/approval-deadline-cron', async (req, res) => {
 
 // ─── 19. Generate Monthly Revenues ──────────────────────────
 app.post('/api/generate-monthly-revenues', async (req, res) => {
+  // Admin logado ou agendador com a chave CRON_KEY do .env (header X-Cron-Key)
+  if (!secretMatches(process.env.CRON_KEY, req.headers['x-cron-key'])) {
+    if (!(await requireAdminRoute(req, res))) return;
+  }
   try {
     const admin = getAdminClient();
     const now = new Date();
@@ -10847,6 +10892,7 @@ async function fetchSystemSeasonalAlerts({ clientIds = [], fallbackClients = nul
 
 // ─── TV Dashboard endpoint ──────────────────────────────────
 app.get('/api/tv-dashboard', async (req, res) => {
+  if (!(await tvAccessAllowed(req))) return res.status(401).json({ error: 'Unauthorized' });
   let stage = 'init';
   try {
     const safeQuery = async (label, sql, params = []) => {
@@ -11312,12 +11358,19 @@ app.get('/api/tv-dashboard', async (req, res) => {
 });
 
 // ─── Seasonal Alerts proxy (calls Supabase edge function) ───
+// Sem login (TV) os alertas saem sem o id do cliente: o id abre o portal.
+function publicSeasonalAlerts(alerts = []) {
+  return alerts.map(({ clientId, ...rest }) => rest);
+}
+
 app.post('/api/seasonal-alerts', async (req, res) => {
   try {
+    const isTeam = await hasTeamSession(req);
+    if (!isTeam && !(await tvAccessAllowed(req))) return res.status(401).json({ error: 'Unauthorized' });
     const clientIds = Array.isArray(req.body?.clientIds) ? req.body.clientIds : [];
     const seasonalClients = await loadSeasonalClients(clientIds);
     const alerts = await fetchSystemSeasonalAlerts({ clientIds, fallbackClients: seasonalClients });
-    res.json({ alerts });
+    res.json({ alerts: isTeam ? alerts : publicSeasonalAlerts(alerts) });
   } catch (err) {
     console.error('[seasonal-alerts] proxy error:', err?.message);
     res.json({ alerts: [] });
@@ -11327,9 +11380,11 @@ app.post('/api/seasonal-alerts', async (req, res) => {
 // Also support GET for simpler calls
 app.get('/api/seasonal-alerts', async (req, res) => {
   try {
+    const isTeam = await hasTeamSession(req);
+    if (!isTeam && !(await tvAccessAllowed(req))) return res.status(401).json({ error: 'Unauthorized' });
     const seasonalClients = await loadSeasonalClients();
     const alerts = await fetchSystemSeasonalAlerts({ fallbackClients: seasonalClients });
-    res.json({ alerts });
+    res.json({ alerts: isTeam ? alerts : publicSeasonalAlerts(alerts) });
   } catch (err) {
     console.error('[seasonal-alerts] proxy error:', err?.message);
     res.json({ alerts: [] });
@@ -11338,7 +11393,9 @@ app.get('/api/seasonal-alerts', async (req, res) => {
 
 
 
-app.get('/api/presence', (req, res) => {
+app.get('/api/presence', async (req, res) => {
+  // Quem está online (ids da equipe): só para a equipe logada
+  if (!(await hasTeamSession(req))) return res.status(401).json({ error: 'Unauthorized', users: [] });
   res.json({ users: collectOnlinePresenceUsers() });
 });
 
@@ -13595,7 +13652,9 @@ function uploadDeleteRelativePath(rawPath) {
   return uploadRelativePath(`/uploads/${relative}`);
 }
 
-app.get('/api/upload-health', (_req, res) => {
+app.get('/api/upload-health', async (req, res) => {
+  // Expõe caminho do disco e espaço livre: só admin
+  if (!(await requireAdminRoute(req, res))) return;
   try {
     fs.accessSync(UPLOAD_ROOT, fs.constants.R_OK | fs.constants.W_OK);
     const stats = fs.statfsSync(UPLOAD_ROOT);
@@ -13620,12 +13679,7 @@ app.get('/api/upload-health', (_req, res) => {
  * Sem REPAIR_KEY configurada a rota fica desligada (404).
  */
 function repairKeyMatches(req) {
-  const expected = String(process.env.REPAIR_KEY || '').trim();
-  const provided = String(req.headers['x-repair-key'] || '').trim();
-  if (!expected || !provided) return false;
-  const a = crypto.createHash('sha256').update(expected).digest();
-  const b = crypto.createHash('sha256').update(provided).digest();
-  return crypto.timingSafeEqual(a, b);
+  return secretMatches(process.env.REPAIR_KEY, req.headers['x-repair-key']);
 }
 
 app.post('/api/admin/repair-atomic', async (req, res) => {

@@ -14,6 +14,16 @@ export interface QuickMessage {
 const WS_URL = 'wss://agenciapulse.tech/ws/office';
 const REST_BASE = 'https://agenciapulse.tech/api';
 
+/** Authorization da equipe para as rotas REST de presença e chat. */
+function authHeaders(): Record<string, string> {
+  try {
+    const token = localStorage.getItem('pulse_jwt');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 let _ws: WebSocket | null = null;
 let _connecting = false;
 let _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -93,7 +103,7 @@ let _pollTimer: ReturnType<typeof setInterval> | null = null;
 
 async function pollPresenceRest() {
   try {
-    const res = await fetch(`${REST_BASE}/presence`);
+    const res = await fetch(`${REST_BASE}/presence`, { headers: authHeaders() });
     if (!res.ok) return;
     const data = await res.json();
     _presenceUsers = data.users || [];
@@ -247,7 +257,7 @@ export function sendLeaveBeacon(userId: string) {
 /** Fetch presence via REST (polling fallback when WS is down) */
 export async function fetchPresenceRest(): Promise<any[]> {
   try {
-    const res = await fetch(`${REST_BASE}/presence`);
+    const res = await fetch(`${REST_BASE}/presence`, { headers: authHeaders() });
     const data = await res.json();
     return data.users || [];
   } catch {

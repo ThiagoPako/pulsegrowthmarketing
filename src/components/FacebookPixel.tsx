@@ -1,18 +1,14 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/vpsDb';
+import { getLandingPixelId } from '@/services/landingSettings';
 
 export default function FacebookPixel() {
   const [pixelId, setPixelId] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase
-      .from('landing_page_settings')
-      .select('title')
-      .eq('section', 'facebook_pixel')
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.title) setPixelId(data.title);
-      });
+    // rota pública: a landing é aberta sem login
+    getLandingPixelId().then((id) => {
+      if (id) setPixelId(id);
+    });
   }, []);
 
   useEffect(() => {

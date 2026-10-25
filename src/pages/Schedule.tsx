@@ -27,7 +27,6 @@ import ClientLogo from '@/components/ClientLogo';
 import {
   sendManualConfirmation,
   sendRecordingCancelledNotification,
-  sendRecordingConfirmedNotification,
   sendBackupInviteNotification,
 } from '@/services/whatsappService';
 
@@ -504,8 +503,9 @@ export default function Schedule() {
     const client = clients.find(c => c.id === cancellingRec.clientId);
     cancelRecording(recId);
     if (client?.whatsapp) {
-      await sendRecordingCancelledNotification(client.whatsapp, client.companyName, client.id);
-      toast.info('Mensagem de cancelamento enviada ao cliente');
+      const sent = await sendRecordingCancelledNotification(client.whatsapp, client.companyName, client.id);
+      if (sent.success) toast.info('Mensagem de cancelamento enviada ao cliente');
+      else toast.warning(`Cliente não foi avisado pelo WhatsApp: ${sent.error || 'erro no envio'}`);
     }
     toast.warning('Gravação cancelada sem substituição');
     setBackupOpen(false);
@@ -540,15 +540,17 @@ export default function Schedule() {
       type: 'backup',
       status: 'agendada',
     };
-    await addRecording(newRec);
+    // o cliente do backup recebe o convite abaixo (não o aviso de "gravação agendada")
+    await addRecording(newRec, { notify: false });
 
     // Send backup invite to the backup client
     if (backupClient.whatsapp) {
-      await sendBackupInviteNotification(
+      const invite = await sendBackupInviteNotification(
         backupClient.whatsapp, backupClient.companyName, backupClient.id,
         cancellingRec.date, cancellingRec.startTime
       );
-      toast.success(`Convite de backup enviado para ${backupClient.companyName}`);
+      if (invite.success) toast.success(`Convite de backup enviado para ${backupClient.companyName}`);
+      else toast.warning(`Convite de backup não enviado: ${invite.error || 'erro no envio'}`);
     }
 
     toast.success(`${backupClient.companyName} encaixado como Backup no lugar de ${getClientName(cancellingRec.clientId)}`);
@@ -561,17 +563,11 @@ export default function Schedule() {
     toast.warning(`${getClientName(rec.clientId)} — não gravou`);
   };
 
-  const handleComplete = async (rec: Recording) => {
+  // "Gravado" não manda WhatsApp: o modelo "Gravação Confirmada" é a resposta quando o cliente confirma antes
+  // da gravação (não serve para depois que ela aconteceu)
+  const handleComplete = (rec: Recording) => {
     updateRecording({ ...rec, status: 'concluida' });
     toast.success('Gravação concluída');
-    // Send confirmed message via WhatsApp
-    const client = clients.find(c => c.id === rec.clientId);
-    if (client?.whatsapp) {
-      const result = await sendRecordingConfirmedNotification(
-        client.whatsapp, client.companyName, client.id, rec.date, rec.startTime
-      );
-      if (result.success) toast.success('Mensagem de confirmação enviada ao cliente');
-    }
   };
 
   const openEditRecording = (rec: Recording) => {
@@ -1053,7 +1049,7 @@ export default function Schedule() {
               type: 'backup',
               status: 'agendada',
             };
-            const ok = await addRecording(rec);
+            const ok = await addRecording(rec, { notify: false });
             if (ok) {
               created++;
               currentRecsLocal.push(rec);
@@ -1114,7 +1110,7 @@ export default function Schedule() {
                   type: 'extra',
                   status: 'agendada',
                 };
-                const ok = await addRecording(rec);
+                const ok = await addRecording(rec, { notify: false });
                 if (ok) {
                   created++;
                   currentRecsLocal.push(rec);

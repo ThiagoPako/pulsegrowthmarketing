@@ -131,25 +131,48 @@ export default function AgentMachinesCard() {
   useEffect(() => {
     if (!issued || pairFinished) return;
     let stopped = false;
+    let timer: number | undefined;
     const poll = async () => {
+      let delay = 2000;
       try {
         const response = await vpsAuthedFetch(`/agent-machines/${issued.machineId}/pair`);
-        if (!response.ok || stopped) return;
-        const body = await response.json();
         if (stopped) return;
-        setPair(body);
-        if (['conectado', 'com_avisos'].includes(body.pair_status)) load().catch(() => {});
+        if (response.status === 404) {
+          // o computador foi desconectado/apagado: não há mais o que acompanhar
+          stopped = true;
+          toast.error('Este computador foi desconectado');
+          setDialog(null);
+          setIssued(null);
+          setPair(null);
+          load().catch(() => {});
+          return;
+        }
+        if (response.ok) {
+          const body = await response.json();
+          if (stopped) return;
+          setPair(body);
+          if (['conectado', 'com_avisos'].includes(body.pair_status)) load().catch(() => {});
+          // parado (o Mac travou no meio): continua acompanhando, mas devagar, caso ele termine depois
+          if (body.pair_status === 'parado') delay = 10_000;
+        }
       } catch {
         // rede instável: tenta de novo no próximo ciclo
       }
+      if (!stopped) timer = window.setTimeout(poll, delay);
     };
     poll();
-    const timer = window.setInterval(poll, 2000);
     return () => {
       stopped = true;
-      window.clearInterval(timer);
+      window.clearTimeout(timer);
     };
   }, [issued, pairFinished, load]);
+
+  // fechar a janela encerra o acompanhamento do código (senão ele seguia consultando em segundo plano)
+  const closeDialog = () => {
+    setDialog(null);
+    setIssued(null);
+    setPair(null);
+  };
 
   const machineName = useMemo(() => new Map(machines.map((m) => [m.id, m.name])), [machines]);
   const agentsOf = (machineId: string | null) =>
@@ -375,7 +398,7 @@ export default function AgentMachinesCard() {
         </div>
       )}
 
-      <Dialog open={!!dialog} onOpenChange={(open) => !open && setDialog(null)}>
+      <Dialog open={!!dialog} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{dialog?.mode === 'code' ? `Agentes do ${dialog.machine.name}` : 'Conectar outro computador'}</DialogTitle>
@@ -490,13 +513,13 @@ export default function AgentMachinesCard() {
                     Gerar outro código
                   </Button>
                 )}
-                <Button onClick={() => setDialog(null)}>
+                <Button onClick={closeDialog}>
                   {pairStatus === 'conectado' || pairStatus === 'com_avisos' ? 'Pronto' : 'Fechar'}
                 </Button>
               </>
             ) : (
               <>
-                <Button variant="ghost" onClick={() => setDialog(null)}>Cancelar</Button>
+                <Button variant="ghost" onClick={closeDialog}>Cancelar</Button>
                 <Button onClick={handleGenerate} disabled={saving}>
                   {saving && <Loader2 size={14} className="mr-1 animate-spin" />} Gerar código
                 </Button>

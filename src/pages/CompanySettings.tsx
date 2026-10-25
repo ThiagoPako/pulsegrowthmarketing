@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { DAY_LABELS } from '@/types';
@@ -14,16 +14,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket, RotateCcw, CalendarOff, Plus, Send, Loader2, DollarSign, MessageSquare, Plug, Bot, MonitorPlay, Factory, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
-import { supabase as supabaseCloud } from '@/lib/vpsDb';
+import { getLandingPixelId, isValidPixelId, saveLandingPixelId } from '@/services/landingSettings';
 import { ASSISTANT_KEY } from '@/components/ProductionAssistant';
-import { getHolidays, createHoliday, deleteHoliday, sendHolidayNotifications, getWhatsAppConfig, updateWhatsAppConfig, type Holiday } from '@/services/whatsappService';
+import { getHolidays, createHoliday, deleteHoliday, sendHolidayNotifications, holidayNextOccurrence, holidayNotifiedFor, getWhatsAppConfig, updateWhatsAppConfig, type Holiday } from '@/services/whatsappService';
 import PortalBulkDelete from '@/components/portal/PortalBulkDelete';
 import MetaIntegrationCard from '@/components/settings/MetaIntegrationCard';
 import AgentKeysCard from '@/components/settings/AgentKeysCard';
 import AgentMachinesCard from '@/components/settings/AgentMachinesCard';
 import WhatsAppDashboard from '@/pages/WhatsAppDashboard';
 import { useMyPermissions } from '@/hooks/useUserPermissions';
-import { format, parseISO, addDays, isSameDay, startOfWeek, endOfWeek } from 'date-fns';
+import { format, parseISO, addDays, isSameDay, startOfWeek, endOfWeek, differenceInCalendarDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const ALL_DAYS: DayOfWeek[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
@@ -155,7 +155,12 @@ const SETTINGS_TABS: { key: SettingsTab; label: string; icon: LucideIcon; descri
 
 export default function CompanySettings() {
   const { settings, updateSettings, currentUser } = useApp();
-  const [form, setForm] = useState(settings);
+  const [form, setFormState] = useState(settings);
+  // o form acompanha as configurações carregadas (F5 direto aqui) até a pessoa mexer em algo
+  const formDirty = useRef(false);
+  const setForm = (next: typeof settings) => { formDirty.current = true; setFormState(next); };
+  useEffect(() => { if (!formDirty.current) setFormState(settings); }, [settings]);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [resetting, setResetting] = useState(false);
   const [showDangerZone, setShowDangerZone] = useState(false);
@@ -195,14 +200,9 @@ export default function CompanySettings() {
   useEffect(() => { loadHolidays(); }, [loadHolidays]);
 
   useEffect(() => {
-    supabaseCloud
-      .from('landing_page_settings')
-      .select('title')
-      .eq('section', 'facebook_pixel')
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.title) setPixelId(data.title);
-      });
+    getLandingPixelId().then((id) => {
+      if (id) setPixelId(id);
+    });
   }, []);
 
   const [moduleConfirmText, setModuleConfirmText] = useState<Record<string, string>>({});
@@ -256,8 +256,16 @@ export default function CompanySettings() {
   };
 
   const handleSave = async () => {
-    // Só confirma quando a API gravou (o erro já aparece como aviso).
-    if (await updateSettings(form)) toast.success('Configurações salvas');
+    setSavingSettings(true);
+    try {
+      // Só confirma quando a API gravou (o erro já aparece como aviso).
+      if (await updateSettings(form)) {
+        formDirty.current = false;
+        toast.success('Configurações salvas');
+      }
+    } finally {
+      setSavingSettings(false);
+    }
   };
 
   const handleAddHoliday = async () => {
@@ -291,24 +299,15 @@ export default function CompanySettings() {
   const handleSendHolidayNotification = async (holiday: Holiday) => {
     setSendingHoliday(holiday.id);
     try {
-      // Get recordings on the holiday date
-      const { data: recs } = await supabase.from('recordings').select('client_id').eq('date', holiday.date);
-      const clientIds = [...new Set((recs || []).map((r: any) => r.client_id).filter(Boolean))];
+      // o servidor avisa os clientes das duas cidades com gravação agendada na próxima ocorrência (o "Anual" vale
+      // todo ano) e marca a ocorrência: a marca é uma só, então o aviso não pode ficar só na cidade ativa
+      const result = await sendHolidayNotifications(holiday.id);
 
-      if (clientIds.length === 0) {
-        toast.info('Nenhum cliente com gravação nesta data');
-        setSendingHoliday(null);
-        return;
-      }
-
-      // Get client details
-      const { data: clientsData } = await supabase.from('clients').select('id, company_name, whatsapp').in('id', clientIds);
-      const clientsList = (clientsData || []) as { id: string; company_name: string; whatsapp: string }[];
-
-      const formattedDate = format(parseISO(holiday.date), "dd/MM/yyyy (EEEE)", { locale: ptBR });
-      const result = await sendHolidayNotifications(formattedDate, holiday.name, clientsList);
-
-      toast.success(`Aviso enviado! ${result.sent} enviados, ${result.failed} falharam`);
+      if (result.error) toast.error(result.error);
+      else if (result.clients === 0) toast.info('Nenhum cliente com gravação nesta data');
+      else if (result.sent === 0) toast.warning(`Nenhum aviso enviado: ${result.noWhatsApp} cliente(s) sem WhatsApp cadastrado`);
+      else if (result.noWhatsApp > 0) toast.warning(`Aviso enviado: ${result.sent} enviados, ${result.noWhatsApp} sem WhatsApp`);
+      else toast.success(`Aviso enviado! ${result.sent} enviados`);
       loadHolidays();
     } catch (err) {
       toast.error('Erro ao enviar notificações');
@@ -549,7 +548,7 @@ export default function CompanySettings() {
           {/* Aprovação/Agendamento removido — prazo definido pela Social Media */}
         </div>
       </div>
-      <Button onClick={handleSave} className="w-full">Salvar Configurações</Button>
+      <Button onClick={handleSave} disabled={savingSettings} className="w-full">{savingSettings ? 'Salvando...' : 'Salvar Configurações'}</Button>
       {/* Feriados */}
       <div className="glass-card p-6 space-y-5">
         <div className="flex items-center gap-2 text-primary">
@@ -600,10 +599,15 @@ export default function CompanySettings() {
           {holidays.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-4">Nenhum feriado cadastrado</p>
           ) : (
-            holidays.map(h => {
-              const holidayDate = parseISO(h.date);
-              const isPast = holidayDate < new Date();
-              const daysUntil = Math.ceil((holidayDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+            holidays
+              .map(h => ({ h, occurrence: holidayNextOccurrence(h) }))
+              .sort((a, b) => a.occurrence.localeCompare(b.occurrence))
+              .map(({ h, occurrence }) => {
+              // "Anual" mostra a próxima ocorrência; passado só depois que o dia acaba (no próprio dia ainda dá para avisar)
+              const holidayDate = parseISO(occurrence);
+              const daysUntil = differenceInCalendarDays(holidayDate, new Date());
+              const isPast = daysUntil < 0;
+              const notified = holidayNotifiedFor(h, occurrence);
               return (
                 <div
                   key={h.id}
@@ -629,14 +633,14 @@ export default function CompanySettings() {
                             {daysUntil === 0 ? 'Hoje' : daysUntil === 1 ? 'Amanhã' : `em ${daysUntil} dias`}
                           </span>
                         )}
-                        {h.notification_sent && (
+                        {notified && (
                           <span className="text-[10px] bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded-full">✓ Enviado</span>
                         )}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {!isPast && !h.notification_sent && (
+                    {!isPast && !notified && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -721,7 +725,7 @@ export default function CompanySettings() {
         </div>
       </div>
 
-      <Button onClick={handleSave} className="w-full">Salvar Configurações</Button>
+      <Button onClick={handleSave} disabled={savingSettings} className="w-full">{savingSettings ? 'Salvando...' : 'Salvar Configurações'}</Button>
             </div>
           )}
 
@@ -757,26 +761,14 @@ export default function CompanySettings() {
           variant="outline"
           size="sm"
           onClick={async () => {
-            try {
-              const { data: existing } = await supabaseCloud
-                .from('landing_page_settings')
-                .select('id')
-                .eq('section', 'facebook_pixel')
-                .maybeSingle();
-              if (existing) {
-                await supabaseCloud
-                  .from('landing_page_settings')
-                  .update({ title: pixelId || null, updated_at: new Date().toISOString() })
-                  .eq('id', existing.id);
-              } else {
-                await supabaseCloud
-                  .from('landing_page_settings')
-                  .insert({ section: 'facebook_pixel', title: pixelId || null });
-              }
-              toast.success('Pixel salvo com sucesso!');
-            } catch {
-              toast.error('Erro ao salvar pixel');
+            const value = pixelId.trim();
+            if (value && !isValidPixelId(value)) {
+              toast.error('O Pixel ID tem só números (ex.: 123456789012345)');
+              return;
             }
+            const { error } = await saveLandingPixelId(value);
+            if (error) toast.error(`Erro ao salvar pixel: ${error}`);
+            else toast.success(value ? 'Pixel salvo com sucesso!' : 'Pixel removido');
           }}
           className="gap-2"
         >

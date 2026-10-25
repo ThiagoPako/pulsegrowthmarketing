@@ -2351,6 +2351,28 @@ async function verifyTeamManager(req) {
   throw new Error('Admin access required');
 }
 
+// Papéis da equipe interna. Parceiro, endomarketing e revisor_meta também fazem login, mas não falam com o
+// cliente pelo número da agência (nenhuma tela deles envia WhatsApp).
+const INTERNAL_TEAM_ROLES = ['admin', 'social_media', 'gestor_projetos', 'socio_gestor', 'designer', 'videomaker', 'editor', 'copywriter', 'fotografo'];
+
+async function userHasAnyRole(user, roles) {
+  if (!user || !roles?.length) return false;
+  if (roles.includes(user.role)) return true;
+  try {
+    await ensureAuthSupportTables();
+    const linkedIds = await getLinkedUserIds(user);
+    if (linkedIds.length === 0) return false;
+    const { rows } = await pool.query(
+      'SELECT 1 FROM user_roles WHERE user_id::text = ANY($1::text[]) AND role::text = ANY($2::text[]) LIMIT 1',
+      [linkedIds, roles]
+    );
+    return rows.length > 0;
+  } catch (error) {
+    console.error('Role lookup failed:', error?.message || error);
+    return false;
+  }
+}
+
 
 
 let profilesPasswordHashColumnPromise;
@@ -3685,14 +3707,23 @@ async function callAi(ai, model, messages, options = {}) {
 // conexão que tem a função dela (ver vps-api-server/whatsapp/). `config` e `db` ficam por compatibilidade.
 const PORTAL_BASE_URL = 'https://agenciapulse.tech/portal';
 
-async function sendWhatsAppDirect(config, number, message, db, clientId, triggerType, purpose) {
+async function sendWhatsAppDirect(config, number, message, db, clientId, triggerType, purpose, { expiresAt } = {}) {
   try {
-    const queued = await enqueueWhatsApp(pool, { to: number, body: message, clientId, triggerType, purpose });
+    const queued = await enqueueWhatsApp(pool, { to: number, body: message, clientId, triggerType, purpose, expiresAt });
     return { ok: true, queued: true, id: queued.id };
   } catch (e) {
     console.error('sendWhatsAppDirect error:', e);
     return { ok: false, error: e.message };
   }
+}
+
+// data + hora de um compromisso no fuso de Brasília (sem horário de verão) → Date; sem data válida = null
+function brasiliaDateTime(date, time) {
+  const day = String(date || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const hour = /^\d{2}:\d{2}/.test(String(time || '')) ? String(time).slice(0, 5) : '23:59';
+  const at = new Date(`${day}T${hour}:00-03:00`);
+  return Number.isNaN(at.getTime()) ? null : at;
 }
 
 function applyTemplate(template, vars) {
@@ -4163,7 +4194,16 @@ ${contextData}`;
 app.post('/api/send-whatsapp', async (req, res) => {
   try {
     const { user } = await verifyUser(req);
-    const { action, number, message, clientId, triggerType, mediaUrl, mediaFileName, purpose, connectionId } = req.body || {};
+    if (!(await userHasAnyRole(user, INTERNAL_TEAM_ROLES))) {
+      return res.status(403).json({ error: 'Envio de WhatsApp restrito à equipe' });
+    }
+    const { action, number, message, clientId, triggerType, mediaUrl, mediaFileName, purpose } = req.body || {};
+    // escolher a conexão à mão é só do admin (nenhuma tela manda; os outros seguem a função)
+    const connectionId = req.body?.connectionId && (await isAdminUser(user)) ? req.body.connectionId : null;
+    // anexo só por link http(s); arquivo do próprio servidor pode vir como "/uploads/..."
+    let media = mediaUrl ? String(mediaUrl).trim() : '';
+    if (media.startsWith('/uploads/')) media = `https://agenciapulse.tech${media}`;
+    if (media && !/^https?:\/\/\S/i.test(media)) return res.status(400).json({ error: 'Link do arquivo inválido' });
 
     if (action === 'test_connection') {
       const { rows } = await pool.query(
@@ -4173,10 +4213,10 @@ app.post('/api/send-whatsapp', async (req, res) => {
       return res.json({ success: connected.length > 0, connections: rows });
     }
 
-    if (!number || (!message && !mediaUrl)) return res.status(400).json({ error: 'number and message are required' });
+    if (!number || (!message && !media)) return res.status(400).json({ error: 'number and message are required' });
     const queued = await enqueueWhatsApp(pool, {
       to: number, body: message || '', clientId, triggerType: triggerType || 'manual', purpose,
-      sentBy: user.id, mediaUrl, mediaName: mediaFileName, connectionId,
+      sentBy: user.id, mediaUrl: media || null, mediaName: mediaFileName, connectionId,
     });
     res.json({ success: true, status: 'fila', id: queued.id, purpose: queued.purpose });
   } catch (error) {
@@ -8520,22 +8560,42 @@ async function runBillingAutomation() {
 }
 
 // ─── 16. WhatsApp Webhook ───────────────────────────────────
-const CONFIRM_WORDS = ['1', 'confirmar', 'confirmado', 'ok', 'sim', 'quero aproveitar', 'quero'];
-const CANCEL_WORDS = ['2', 'cancelar', 'cancelado', 'não posso', 'nao posso', 'não', 'nao'];
+// A mensagem inteira tem que ser a opção (o modelo pede 1️⃣ ou 2️⃣): "1", "1 - confirmo", "Sim, confirmo!",
+// "Confirmado, estaremos lá", "2", "Cancelar". Frase solta não vale: "Não gostei da música" não cancela,
+// "100% aprovado" não confirma e "2ª feira pode?" ou "2 pessoas vão" não cancelam a gravação.
+const normalizeReply = (text) => String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+const REPLY_COURTESY = '(?: (?:obrigad[oa]|obg|valeu|vlw|beleza|blz|desculpa|desculpe))?';
+const CONFIRM_REPLY = new RegExp(`^(?:(?:1(?: (?:sim|ok|confirmo|confirmado|confirmada|confirmar))?|(?:sim |ok )?(?:confirmar|confirma))${REPLY_COURTESY}|(?:(?:sim|ok) )?(?:confirmo|confirmado|confirmada|confirmadissimo)(?: .*)?)$`, 'u');
+const CANCEL_REPLY = new RegExp(`^(?:2(?: (?:cancelar|cancelo|cancela|cancelado|cancelada))?|cancelar|cancelo|cancela|cancelado|cancelada|nao posso|nao vou poder|nao vamos poder)${REPLY_COURTESY}$`, 'u');
+// no privado, um "ok"/"sim" sozinho também confirma (no grupo não: pode ser de outra conversa)
+const CONFIRM_ALONE = new RegExp(`^(?:ok|okay|sim|sim sim)${REPLY_COURTESY}$`, 'u');
 
-function classifyResponse(text) {
-  const n = text.trim().toLowerCase().replace(/[^\w\sáéíóúãõâêîôûç]/g, '');
-  if (CONFIRM_WORDS.some(w => n === w || n.startsWith(w))) return 'confirm';
-  if (CANCEL_WORDS.some(w => n === w || n.startsWith(w))) return 'cancel';
+function classifyGroupResponse(text) {
+  if (String(text || '').includes('?')) return 'unknown'; // pergunta não é resposta
+  const n = normalizeReply(text);
+  if (CONFIRM_REPLY.test(n) && !/\bnao\b/.test(n)) return 'confirm';
+  if (CANCEL_REPLY.test(n)) return 'cancel';
   return 'unknown';
 }
 
-// No grupo as pessoas conversam: só vale resposta explícita ("ok"/"sim" de outra conversa não confirma gravação)
-function classifyGroupResponse(text) {
-  const n = String(text || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  if (/^(1|confirmo|confirmado|confirmada|confirmar)\b/.test(n)) return 'confirm';
-  if (/^(2|cancelar|cancelado|cancelada|cancela)\b/.test(n)) return 'cancel';
-  return 'unknown';
+function classifyResponse(text) {
+  const explicit = classifyGroupResponse(text);
+  if (explicit !== 'unknown' || String(text || '').includes('?')) return explicit;
+  return CONFIRM_ALONE.test(normalizeReply(text)) ? 'confirm' : 'unknown';
+}
+
+// Confirmação ainda válida: a gravação continua agendada e não passou. As outras (gravação feita, cancelada,
+// remarcada ou de um dia que já foi) viram "expired", para uma resposta solta não mexer em gravação antiga.
+async function pickActiveConfirmation(admin, confirmations) {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  for (const confirmation of confirmations || []) {
+    if (confirmation.type !== 'confirmation') continue;
+    const recording = confirmation.recordings;
+    if (recording?.status === 'agendada' && String(recording.date || '') >= today) return confirmation;
+    await admin.from('whatsapp_confirmations').update({ status: 'expired' }).eq('id', confirmation.id).eq('status', 'pending');
+  }
+  return null;
 }
 
 function extractPayload(body) {
@@ -8569,14 +8629,16 @@ async function handleWhatsAppReply(phoneInput, messageText, { groupJid = null } 
     const phoneNumber = String(phoneInput || '').replace(/\D/g, '');
     if ((!phoneNumber && !groupJid) || !messageText) return { ok: true, skipped: 'no_phone_or_message' };
     if (groupJid) {
-      if (classifyGroupResponse(messageText) === 'unknown') return { ok: true, skipped: 'unrecognized_response' };
+      const classification = classifyGroupResponse(messageText);
+      if (classification === 'unknown') return { ok: true, skipped: 'unrecognized_response' };
       const groupClients = await clientsForGroup(pool, groupJid);
       if (!groupClients.length) return { ok: true, skipped: 'group_without_client' };
       const { data: groupConfirmations } = await admin.from('whatsapp_confirmations').select('*, recordings(*), clients(*)')
         .in('client_id', groupClients.map((c) => c.id)).eq('status', 'pending').not('sent_at', 'is', null)
-        .order('sent_at', { ascending: false }).limit(1);
-      if (!groupConfirmations?.length) return { ok: true, skipped: 'no_pending_confirmation' };
-      return applyConfirmationReply(admin, groupConfirmations[0], messageText, groupJid);
+        .order('sent_at', { ascending: false }).limit(10);
+      const groupConfirmation = await pickActiveConfirmation(admin, groupConfirmations);
+      if (!groupConfirmation) return { ok: true, skipped: 'no_pending_confirmation' };
+      return applyConfirmationReply(admin, groupConfirmation, messageText, groupJid, classification);
     }
 
     // o cadastro pode ter o número com ou sem 55 e com ou sem o 9º dígito
@@ -8586,17 +8648,27 @@ async function handleWhatsAppReply(phoneInput, messageText, { groupJid = null } 
     if (local.length === 10) localVariants.add(`${local.slice(0, 2)}9${local.slice(2)}`);
     const phoneVariants = [...localVariants].flatMap((v) => [v, `55${v}`]);
 
-    const { data: confirmations } = await admin.from('whatsapp_confirmations').select('*, recordings(*), clients(*)').in('phone_number', phoneVariants).eq('status', 'pending').not('sent_at', 'is', null).order('sent_at', { ascending: false }).limit(1);
-    if (!confirmations?.length) return { ok: true, skipped: 'no_pending_confirmation' };
-    return applyConfirmationReply(admin, confirmations[0], messageText, null);
+    const classification = classifyResponse(messageText);
+    if (classification === 'unknown') return { ok: true, skipped: 'unrecognized_response' };
+    const { data: confirmations } = await admin.from('whatsapp_confirmations').select('*, recordings(*), clients(*)').in('phone_number', phoneVariants).eq('status', 'pending').not('sent_at', 'is', null).order('sent_at', { ascending: false }).limit(10);
+    const confirmation = await pickActiveConfirmation(admin, confirmations);
+    if (!confirmation) return { ok: true, skipped: 'no_pending_confirmation' };
+    // "ok"/"sim" sozinho logo depois de receber vídeos no privado é resposta aos vídeos, não à gravação
+    if (classification === 'confirm' && classifyGroupResponse(messageText) === 'unknown') {
+      const { rows: newerVideos } = await pool.query(
+        `SELECT 1 FROM wa_approval_requests WHERE phone = ANY($1) AND status = 'pendente' AND created_at > $2 LIMIT 1`,
+        [phoneVariants, confirmation.sent_at]
+      ).catch(() => ({ rows: [] }));
+      if (newerVideos.length) return { ok: true, skipped: 'resposta_aos_videos' };
+    }
+    return applyConfirmationReply(admin, confirmation, messageText, null, classification);
   }
 }
 
-async function applyConfirmationReply(admin, confirmation, messageText, replyTo) {
+async function applyConfirmationReply(admin, confirmation, messageText, replyTo, classification) {
   {
     const recording = confirmation.recordings;
     const client = confirmation.clients;
-    const classification = replyTo ? classifyGroupResponse(messageText) : classifyResponse(messageText);
     if (classification === 'unknown') return { ok: true, skipped: 'unrecognized_response' };
 
     const { data: configData } = await admin.from('whatsapp_config').select('*').limit(1).single();
@@ -8611,8 +8683,14 @@ async function applyConfirmationReply(admin, confirmation, messageText, replyTo)
         await admin.from('recordings').update({ confirmation_status: 'confirmada' }).eq('id', confirmation.recording_id);
         await sendWhatsAppDirect(configData, replyTo || clientTarget(client, 'agenda') || confirmation.phone_number, applyTemplate(configData.msg_confirmation_confirmed, templateVars), admin, client?.id, 'auto_confirmation', 'agenda');
       } else {
+        // só cancela gravação que ainda está agendada (nunca uma já feita ou já remarcada pela equipe)
+        const { data: cancelled } = await admin.from('recordings').update({ status: 'cancelada', confirmation_status: 'cancelada' })
+          .eq('id', confirmation.recording_id).eq('status', 'agendada');
+        if (!cancelled?.length) {
+          await admin.from('whatsapp_confirmations').update({ status: 'expired' }).eq('id', confirmation.id).eq('status', 'pending');
+          return { ok: true, skipped: 'recording_not_scheduled' };
+        }
         await admin.from('whatsapp_confirmations').update({ status: 'cancelled', responded_at: new Date().toISOString(), response_message: messageText }).eq('id', confirmation.id);
-        await admin.from('recordings').update({ status: 'cancelada', confirmation_status: 'cancelada' }).eq('id', confirmation.recording_id);
         await sendWhatsAppDirect(configData, replyTo || clientTarget(client, 'agenda') || confirmation.phone_number, applyTemplate(configData.msg_confirmation_cancelled, templateVars), admin, client?.id, 'auto_confirmation', 'agenda');
       }
     }
@@ -8636,6 +8714,13 @@ app.post('/api/whatsapp-confirmation-cron', async (req, res) => {
 async function runConfirmationCron() {
   {
     const admin = getAdminClient();
+    // pendentes de gravação que já passou ou não está mais agendada: não esperam mais resposta
+    await pool.query(
+      `UPDATE whatsapp_confirmations wc SET status = 'expired'
+         FROM recordings r
+        WHERE r.id = wc.recording_id AND wc.status = 'pending' AND wc.type = 'confirmation'
+          AND (r.date < (now() AT TIME ZONE 'America/Sao_Paulo')::date OR r.status <> 'agendada')`
+    ).catch((error) => console.error('confirmation-cron expirar:', error.message));
     const { data: config } = await admin.from('whatsapp_config').select('*').limit(1).single();
     if (!config?.integration_active || !config?.auto_confirmation) return { ok: true, skipped: 'disabled' };
 
@@ -8665,7 +8750,9 @@ async function runConfirmationCron() {
       await admin.from('whatsapp_confirmations').insert({ recording_id: recording.id, client_id: client.id, phone_number: phoneNumber, type: 'confirmation', status: 'pending', sent_at: new Date().toISOString() });
       await admin.from('recordings').update({ confirmation_status: 'aguardando' }).eq('id', recording.id);
       // no grupo do cliente (se tiver); a resposta 1/2 vale no grupo ou no privado
-      const result = await sendWhatsAppDirect(config, clientTarget(client, 'agenda'), message, admin, client.id, 'auto_confirmation', 'agenda');
+      // depois da hora da gravação a confirmação não faz mais sentido (número fora do ar até lá: não sai)
+      const result = await sendWhatsAppDirect(config, clientTarget(client, 'agenda'), message, admin, client.id, 'auto_confirmation', 'agenda',
+        { expiresAt: brasiliaDateTime(recording.date, recording.start_time) });
       if (result.ok) sentCount++;
     }
     return { ok: true, sent: sentCount, total: recordings.length };
@@ -10849,6 +10936,67 @@ app.delete('/api/scripts/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── Configurações da landing page (Pixel da Meta) ──────────
+// A tabela só existia no Supabase antigo e não está liberada no /api/db/query, então o Pixel nunca era salvo.
+// Leitura pública só das seções da própria landing (a página é anônima); gravação só do admin. O Pixel vai
+// dentro de um <script> da landing, por isso só aceita números.
+const LANDING_PUBLIC_SECTIONS = ['facebook_pixel', 'quem_somos'];
+let landingSettingsReady = null;
+function ensureLandingSettingsTable() {
+  if (!landingSettingsReady) {
+    landingSettingsReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS landing_page_settings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        section TEXT NOT NULL UNIQUE,
+        video_url TEXT,
+        title TEXT,
+        description TEXT,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `).catch((error) => {
+      landingSettingsReady = null;
+      throw error;
+    });
+  }
+  return landingSettingsReady;
+}
+
+app.get('/api/public/landing-settings', async (req, res) => {
+  try {
+    const section = String(req.query.section || '');
+    if (!LANDING_PUBLIC_SECTIONS.includes(section)) return res.status(400).json({ error: 'Seção inválida' });
+    await ensureLandingSettingsTable();
+    const { rows } = await pool.query(
+      'SELECT section, video_url, title, description, updated_at FROM landing_page_settings WHERE section = $1 LIMIT 1', [section]
+    );
+    res.json(rows[0] || null);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/landing-settings/facebook-pixel', async (req, res) => {
+  try {
+    await verifyAdmin(req);
+  } catch (e) {
+    return res.status(e.message === 'Admin access required' ? 403 : 401).json({ error: e.message });
+  }
+  try {
+    const pixelId = String(req.body?.pixelId ?? '').trim();
+    if (pixelId && !/^\d{5,20}$/.test(pixelId)) {
+      return res.status(400).json({ error: 'O Pixel ID tem só números (ex.: 123456789012345)' });
+    }
+    await ensureLandingSettingsTable();
+    const { rows: updated } = await pool.query(
+      `UPDATE landing_page_settings SET title = $1, updated_at = now() WHERE section = 'facebook_pixel' RETURNING section, title`,
+      [pixelId || null]
+    );
+    if (updated.length) return res.json(updated[0]);
+    const { rows } = await pool.query(
+      `INSERT INTO landing_page_settings (section, title) VALUES ('facebook_pixel', $1) RETURNING section, title`, [pixelId || null]
+    );
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Company Settings ───────────────────────────────────────
 app.get('/api/company-settings', async (req, res) => {
   try {
@@ -10858,14 +11006,50 @@ app.get('/api/company-settings', async (req, res) => {
   } catch (e) { res.status(401).json({ error: e.message }); }
 });
 
+// Chaves de liga/desliga dos prazos e o auto-preencher vagas: garante as colunas (aditivo) e lê quais existem,
+// para uma coluna ausente no banco não derrubar o salvamento inteiro.
+let companySettingsColumnsPromise = null;
+function companySettingsColumns() {
+  if (!companySettingsColumnsPromise) {
+    companySettingsColumnsPromise = (async () => {
+      for (const column of ['editing_deadline_enabled', 'review_deadline_enabled', 'alteration_deadline_enabled', 'approval_deadline_enabled']) {
+        await pool.query(`ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS ${column} BOOLEAN NOT NULL DEFAULT true`).catch(() => {});
+      }
+      await pool.query(`ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS auto_fill_vacancies BOOLEAN NOT NULL DEFAULT false`).catch(() => {});
+      const { rows } = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'company_settings'`
+      );
+      return new Set(rows.map((r) => r.column_name));
+    })().catch((error) => {
+      companySettingsColumnsPromise = null;
+      throw error;
+    });
+  }
+  return companySettingsColumnsPromise;
+}
+
+const COMPANY_SETTINGS_BOOLEANS = new Set(['editing_deadline_enabled', 'review_deadline_enabled', 'alteration_deadline_enabled', 'approval_deadline_enabled', 'auto_fill_vacancies']);
+const COST_ALLOCATION_RULES = ['approved', 'recorded', 'posted'];
+
 app.put('/api/company-settings/:id', async (req, res) => {
   try {
     await verifyAdmin(req);
     const { id } = req.params;
-    const s = req.body;
-    const allowed = ['shift_a_start','shift_a_end','shift_b_start','shift_b_end','work_days','recording_duration','editing_deadline_hours','review_deadline_hours','alteration_deadline_hours','approval_deadline_hours'];
+    const s = req.body || {};
+    if (s.cost_allocation_rule !== undefined && !COST_ALLOCATION_RULES.includes(s.cost_allocation_rule)) {
+      return res.status(400).json({ error: 'Regra de rateio inválida' });
+    }
+    const existing = await companySettingsColumns();
+    const allowed = ['shift_a_start','shift_a_end','shift_b_start','shift_b_end','work_days','recording_duration','editing_deadline_hours','review_deadline_hours','alteration_deadline_hours','approval_deadline_hours',
+      'editing_deadline_enabled','review_deadline_enabled','alteration_deadline_enabled','approval_deadline_enabled','auto_fill_vacancies','cost_allocation_rule']
+      .filter((key) => existing.has(key));
     const sets = []; const vals = []; let idx = 1;
-    for (const key of allowed) { if (s[key] !== undefined) { sets.push(`${key} = $${idx}`); vals.push(key === 'work_days' ? s[key] : s[key]); idx++; } }
+    for (const key of allowed) {
+      if (s[key] === undefined) continue;
+      sets.push(`${key} = $${idx}`);
+      vals.push(COMPANY_SETTINGS_BOOLEANS.has(key) ? s[key] === true || s[key] === 'true' : s[key]);
+      idx++;
+    }
     if (sets.length === 0) return res.json({ message: 'Nothing to update' });
     sets.push('updated_at = NOW()');
     vals.push(id);
@@ -16116,7 +16300,7 @@ setInterval(async () => {
     const tomorrowStr = tomorrow.toISOString().slice(0, 10);
 
     const { rows: pendingReminders } = await pool.query(
-      `SELECT id, name, phone, meeting_time, company 
+      `SELECT id, name, phone, meeting_date, meeting_time, company 
        FROM crm_leads 
        WHERE status = 'meeting' 
          AND meeting_date = $1 
@@ -16132,7 +16316,8 @@ setInterval(async () => {
     for (const lead of pendingReminders) {
       const message = `Olá ${lead.name}, aqui é da Agência Pulse! Passando para confirmar nossa reunião de amanhã às ${lead.meeting_time?.slice(0, 5)}. Podemos confirmar?`;
       // pela fila do WhatsApp próprio (conexão com a função "crm")
-      await enqueueWhatsApp(pool, { to: lead.phone, body: message, triggerType: 'crm_reminder', purpose: 'crm' });
+      await enqueueWhatsApp(pool, { to: lead.phone, body: message, triggerType: 'crm_reminder', purpose: 'crm',
+        expiresAt: brasiliaDateTime(lead.meeting_date, lead.meeting_time) });
       await pool.query(`UPDATE crm_leads SET reminder_sent_24h = TRUE WHERE id = $1`, [lead.id]);
     }
   } catch (err) {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -22,6 +22,7 @@ import {
   getWhatsAppConfig,
   updateWhatsAppConfig,
   getWhatsAppMessages,
+  WHATSAPP_HISTORY_PAGE,
   getMessageStats,
   getWhatsAppConfirmations,
   getConfirmationStats,
@@ -46,6 +47,9 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
   const [confirmations, setConfirmations] = useState<WhatsAppConfirmation[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(true);
+  const [messagesHasMore, setMessagesHasMore] = useState(false);
+  const [loadingMoreMessages, setLoadingMoreMessages] = useState(false);
+  const historyRequest = useRef(0);
   const [filterClient, setFilterClient] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [editingTemplate, setEditingTemplate] = useState<string | null>(null);
@@ -53,21 +57,41 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
-    const [cfg, msgs, st, confs, cStats] = await Promise.all([
+    const [cfg, st, confs, cStats] = await Promise.all([
       getWhatsAppConfig(),
-      getWhatsAppMessages(),
       getMessageStats(),
       getWhatsAppConfirmations(),
       getConfirmationStats(),
     ]);
     setConfig(cfg);
-    setMessages(msgs);
     setStats(st);
     setConfirmations(confs);
     setConfirmationStats(cStats);
     setConfigLoading(false);
-    setMessagesLoading(false);
   };
+
+  // histórico: uma página por vez, com cliente e status filtrados no servidor
+  const loadMessages = useCallback(async (before?: string) => {
+    const request = ++historyRequest.current;
+    if (before) setLoadingMoreMessages(true);
+    else setMessagesLoading(true);
+    const page = await getWhatsAppMessages({
+      clientId: filterClient !== 'all' ? filterClient : undefined,
+      status: filterStatus !== 'all' ? filterStatus : undefined,
+      before,
+    });
+    if (request !== historyRequest.current) return; // filtro mudou no meio: vale a busca mais nova
+    setMessages(prev => {
+      if (!before) return page;
+      const seen = new Set(prev.map(m => m.id));
+      return [...prev, ...page.filter(m => !seen.has(m.id))];
+    });
+    setMessagesHasMore(page.length >= WHATSAPP_HISTORY_PAGE);
+    setMessagesLoading(false);
+    setLoadingMoreMessages(false);
+  }, [filterClient, filterStatus]);
+
+  useEffect(() => { loadMessages(); }, [loadMessages]);
 
   const handleConfigSave = async () => {
     if (!config) return;
@@ -99,6 +123,7 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
     cobranca_lembrete: 'Cobrança (lembrete)',
     endo_daily_tasks: 'Tarefas do dia',
     crm_reminder: 'CRM',
+    auto_holiday: 'Feriado',
     clube_cupom: 'Clube (cupom)',
     clube_campanha: 'Clube (campanha)',
     teste: 'Teste',
@@ -111,7 +136,8 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
     expired: { label: 'Expirado', variant: 'secondary' },
   };
 
-  const templateFields: { key: keyof WhatsAppConfig; toggleKey?: keyof WhatsAppConfig; label: string; description: string; variables: string }[] = [
+  // unavailable: o sistema ainda não manda este aviso (nenhuma rotina usa o modelo); a chave fica travada
+  const templateFields: { key: keyof WhatsAppConfig; toggleKey?: keyof WhatsAppConfig; label: string; description: string; variables: string; unavailable?: boolean }[] = [
     {
       key: 'msgRecordingScheduled',
       toggleKey: 'autoRecordingScheduled',
@@ -149,6 +175,7 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
       label: '🎯 Backup Confirmado',
       description: 'Enviada quando um cliente backup aceita a vaga',
       variables: '{nome_cliente}, {link_portal}',
+      unavailable: true,
     },
     {
       key: 'msgTaskEditing',
@@ -170,6 +197,7 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
       label: '✅ Vídeo Aprovado',
       description: 'Enviada quando o vídeo é aprovado e vai para agendamento',
       variables: '{nome_cliente}, {titulo}, {link_portal}',
+      unavailable: true,
     },
     {
       key: 'msgApprovalExpired',
@@ -177,6 +205,7 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
       label: '⏰ Aprovação Expirada',
       description: 'Enviada quando o prazo de aprovação expira e o vídeo segue automaticamente',
       variables: '{nome_cliente}, {titulo}, {link_portal}',
+      unavailable: true,
     },
   ];
 
@@ -244,15 +273,13 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
                 size="sm"
                 className="gap-1 text-destructive hover:text-destructive"
                 onClick={async () => {
-                  if (!confirm('Tem certeza que deseja apagar todo o histórico de confirmações?')) return;
+                  if (!confirm('Apagar as confirmações já respondidas e as pendentes com mais de 7 dias? As pendentes recentes continuam (o cliente ainda pode responder).')) return;
                   const ok = await clearConfirmationHistory();
-                  if (ok) {
-                    setConfirmations([]);
-                    setConfirmationStats({ pending: 0, confirmed: 0, cancelled: 0, backupInvites: 0 });
-                    toast.success('Histórico de confirmações apagado');
-                  } else {
-                    toast.error('Erro ao apagar histórico');
-                  }
+                  const [confs, cStats] = await Promise.all([getWhatsAppConfirmations(), getConfirmationStats()]);
+                  setConfirmations(confs);
+                  setConfirmationStats(cStats);
+                  if (ok) toast.success('Histórico de confirmações apagado');
+                  else toast.error('Erro ao apagar histórico');
                 }}
               >
                 <Trash2 size={14} /> Apagar histórico
@@ -366,6 +393,18 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
                   </CardContent>
                 </Card>
               ))}
+              {messagesHasMore && (
+                <div className="flex justify-center pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={loadingMoreMessages}
+                    onClick={() => loadMessages(messages[messages.length - 1]?.sentAt)}
+                  >
+                    {loadingMoreMessages ? 'Carregando...' : 'Carregar mais'}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </TabsContent>
@@ -377,7 +416,7 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
           ) : config ? (
             <div className="space-y-4">
               {templateFields.map(tmpl => (
-                <Card key={tmpl.key} className={tmpl.toggleKey && config[tmpl.toggleKey] === false ? 'opacity-60' : ''}>
+                <Card key={tmpl.key} className={tmpl.unavailable || (tmpl.toggleKey && config[tmpl.toggleKey] === false) ? 'opacity-60' : ''}>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex-1">
@@ -385,14 +424,19 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
                           <CardTitle className="text-sm">{tmpl.label}</CardTitle>
                           {tmpl.toggleKey && (
                             <Switch
-                              checked={config[tmpl.toggleKey] as boolean}
+                              checked={!tmpl.unavailable && (config[tmpl.toggleKey] as boolean)}
+                              disabled={tmpl.unavailable}
                               onCheckedChange={v => setConfig({ ...config, [tmpl.toggleKey!]: v })}
                             />
                           )}
+                          {tmpl.unavailable && <Badge variant="secondary" className="text-[10px]">Ainda não disponível</Badge>}
                         </div>
                         <CardDescription className="text-[11px]">
                           {tmpl.description}
-                          {tmpl.toggleKey && (
+                          {tmpl.unavailable && (
+                            <span className="ml-1 font-medium text-muted-foreground">— o sistema ainda não envia este aviso</span>
+                          )}
+                          {tmpl.toggleKey && !tmpl.unavailable && (
                             <span className={`ml-1 font-medium ${config[tmpl.toggleKey] ? 'text-success' : 'text-muted-foreground'}`}>
                               — {config[tmpl.toggleKey] ? 'Ativo' : 'Desativado'}
                             </span>

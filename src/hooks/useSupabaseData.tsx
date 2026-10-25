@@ -721,7 +721,8 @@ export function useSupabaseData() {
 
   // ── Settings ──
   const updateSettings = useCallback(async (s: CompanySettings): Promise<boolean> => {
-    if (settingsId) {
+    if (!settingsId) return reportSaveError('updateSettings', new Error('As configurações ainda não carregaram. Recarregue a página e tente de novo.'));
+    {
       const { error } = await invokeVpsFunction(`company-settings/${settingsId}`, {
         body: {
           shift_a_start: s.shiftAStart,
@@ -738,6 +739,8 @@ export function useSupabaseData() {
           review_deadline_enabled: s.reviewDeadlineEnabled,
           alteration_deadline_enabled: s.alterationDeadlineEnabled,
           approval_deadline_enabled: s.approvalDeadlineEnabled,
+          auto_fill_vacancies: s.autoFillVacancies ?? false,
+          cost_allocation_rule: s.costAllocationRule || 'approved',
         },
         method: 'PUT',
       });

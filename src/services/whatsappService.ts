@@ -3,11 +3,6 @@ import { supabase, vpsAuthedFetch } from '@/lib/vpsDb';
 export interface WhatsAppConfig {
   id: string;
   integrationActive: boolean;
-  apiToken: string;
-  defaultUserId: string;
-  defaultQueueId: string;
-  sendSignature: boolean;
-  closeTicket: boolean;
   autoRecordingScheduled: boolean;
   autoRecordingReminder: boolean;
   autoVideoApproval: boolean;
@@ -71,15 +66,11 @@ export interface WhatsAppConfirmation {
   createdAt: string;
 }
 
+// O envio é a fila do WhatsApp próprio (sem token): basta a chave geral ligada e o telefone do cliente.
 function rowToConfig(r: any): WhatsAppConfig {
   return {
     id: r.id,
     integrationActive: r.integration_active,
-    apiToken: r.api_token || '',
-    defaultUserId: r.default_user_id,
-    defaultQueueId: r.default_queue_id,
-    sendSignature: r.send_signature,
-    closeTicket: r.close_ticket,
     autoRecordingScheduled: r.auto_recording_scheduled,
     autoRecordingReminder: r.auto_recording_reminder,
     autoVideoApproval: r.auto_video_approval,
@@ -223,11 +214,17 @@ export async function sendWhatsAppMediaMessage(params: {
   });
 }
 
+// O histórico não é limpo: busca uma página por vez (as mais recentes primeiro). `before` é o sent_at da última
+// mensagem já carregada (a mesma pode voltar e é descartada pelo id na tela).
+export const WHATSAPP_HISTORY_PAGE = 100;
+
 export async function getWhatsAppMessages(filters?: {
   clientId?: string;
   status?: string;
   dateFrom?: string;
   dateTo?: string;
+  before?: string;
+  limit?: number;
 }): Promise<WhatsAppMessage[]> {
   let query = supabase.from('whatsapp_messages').select('*').order('sent_at', { ascending: false });
   
@@ -235,17 +232,21 @@ export async function getWhatsAppMessages(filters?: {
   if (filters?.status) query = query.eq('status', filters.status);
   if (filters?.dateFrom) query = query.gte('sent_at', filters.dateFrom);
   if (filters?.dateTo) query = query.lte('sent_at', filters.dateTo);
+  if (filters?.before) query = query.lte('sent_at', filters.before);
+  query = query.limit(filters?.limit ?? WHATSAPP_HISTORY_PAGE);
 
   const { data } = await query;
   return (data || []).map(rowToMessage);
 }
 
 export async function getMessageStats(): Promise<{ total: number; sent: number; failed: number }> {
-  const today = new Date().toISOString().split('T')[0];
+  // "hoje" é o dia local (Brasília), não o dia UTC — depois das 21h o UTC já virou
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
   const { data } = await supabase
     .from('whatsapp_messages')
     .select('status')
-    .gte('sent_at', today + 'T00:00:00');
+    .gte('sent_at', startOfToday.toISOString());
   
   const messages = data || [];
   return {
@@ -287,31 +288,10 @@ export async function sendRecordingCancelledNotification(
 ): Promise<{ success: boolean; error?: string }> {
   const config = await getWhatsAppConfig();
   if (!config?.integrationActive) return { success: false, error: 'Integração desativada' };
-  if (!clientPhone || !config.apiToken) return { success: false, error: 'Token ou WhatsApp não configurado' };
+  if (!clientPhone) return { success: false, error: 'Cliente sem WhatsApp' };
 
   const message = applyTemplate(config.msgConfirmationCancelled, {
     nome_cliente: clientName,
-    link_portal: getPortalLink(clientId),
-  });
-
-  return sendWhatsAppMessage({ number: clientPhone, message, clientId, triggerType: 'auto_confirmation', purpose: 'agenda' });
-}
-
-export async function sendRecordingConfirmedNotification(
-  clientPhone: string,
-  clientName: string,
-  clientId: string,
-  date: string,
-  time: string,
-): Promise<{ success: boolean; error?: string }> {
-  const config = await getWhatsAppConfig();
-  if (!config?.integrationActive) return { success: false, error: 'Integração desativada' };
-  if (!clientPhone || !config.apiToken) return { success: false, error: 'Token ou WhatsApp não configurado' };
-
-  const message = applyTemplate(config.msgConfirmationConfirmed, {
-    nome_cliente: clientName,
-    data_gravacao: date,
-    hora_gravacao: time,
     link_portal: getPortalLink(clientId),
   });
 
@@ -327,7 +307,7 @@ export async function sendBackupInviteNotification(
 ): Promise<{ success: boolean; error?: string }> {
   const config = await getWhatsAppConfig();
   if (!config?.integrationActive) return { success: false, error: 'Integração desativada' };
-  if (!clientPhone || !config.apiToken) return { success: false, error: 'Token ou WhatsApp não configurado' };
+  if (!clientPhone) return { success: false, error: 'Cliente sem WhatsApp' };
 
   const message = applyTemplate(config.msgBackupInvite, {
     nome_cliente: clientName,
@@ -349,7 +329,7 @@ export async function sendRecordingScheduledNotification(
 ): Promise<void> {
   const config = await getWhatsAppConfig();
   if (!config?.integrationActive || !config.autoRecordingScheduled) return;
-  if (!clientPhone || !config.apiToken) return;
+  if (!clientPhone) return;
 
   const message = applyTemplate(config.msgRecordingScheduled, {
     nome_cliente: clientName,
@@ -370,16 +350,22 @@ export async function sendRecordingScheduledNotification(
 
 // ── Confirmation functions ──
 
+// Apaga as respondidas/expiradas e as pendentes com mais de 7 dias. As pendentes recentes ficam: a resposta 1/2
+// do cliente depende delas, e a confirmação manual e o cron usam a existência delas para não mandar de novo.
 export async function clearConfirmationHistory(): Promise<boolean> {
-  const { error } = await supabase.from('whatsapp_confirmations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-  return !error;
+  const { error } = await supabase.from('whatsapp_confirmations').delete().neq('status', 'pending');
+  if (error) return false;
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { error: oldPendingError } = await supabase.from('whatsapp_confirmations').delete().eq('status', 'pending').lt('sent_at', weekAgo);
+  return !oldPendingError;
 }
 
-export async function getWhatsAppConfirmations(): Promise<WhatsAppConfirmation[]> {
+export async function getWhatsAppConfirmations(limit = 200): Promise<WhatsAppConfirmation[]> {
   const { data } = await supabase
     .from('whatsapp_confirmations')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(limit);
   
   return (data || []).map((r: any) => ({
     id: r.id,
@@ -426,7 +412,6 @@ export async function sendManualConfirmation(
 ): Promise<{ success: boolean; error?: string }> {
   const config = await getWhatsAppConfig();
   if (!config?.integrationActive) return { success: false, error: 'Integração desativada' };
-  if (!config.apiToken) return { success: false, error: 'Token não configurado' };
   if (!clientPhone) return { success: false, error: 'Cliente sem WhatsApp' };
 
   const phoneNumber = clientPhone.replace(/\D/g, '');
@@ -486,7 +471,30 @@ export interface Holiday {
   date: string;
   recurring: boolean;
   notification_sent: boolean;
+  /** dia (yyyy-MM-dd) da última ocorrência avisada; o feriado "Anual" avisa uma vez por ano */
+  last_notified_date?: string | null;
   created_at: string;
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const localIsoDay = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const isLeapYear = (y: number) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+
+/** Próxima ocorrência (yyyy-MM-dd): a própria data, ou, no "Anual", o mesmo dia e mês deste ano (ou do próximo, se já passou). */
+export function holidayNextOccurrence(holiday: Holiday, today: Date = new Date()): string {
+  const base = String(holiday.date || '').slice(0, 10);
+  if (!holiday.recurring) return base;
+  const todayIso = localIsoDay(today);
+  const monthDay = base.slice(5);
+  const inYear = (year: number) => (monthDay === '02-29' && !isLeapYear(year) ? `${year}-02-28` : `${year}-${monthDay}`);
+  const thisYear = inYear(today.getFullYear());
+  return thisYear >= todayIso ? thisYear : inYear(today.getFullYear() + 1);
+}
+
+/** Já foi avisado para esta ocorrência? (o notification_sent antigo só vale para feriado de data única) */
+export function holidayNotifiedFor(holiday: Holiday, occurrence: string): boolean {
+  if (String(holiday.last_notified_date || '').slice(0, 10) === occurrence) return true;
+  return !holiday.recurring && !!holiday.notification_sent;
 }
 
 export async function getHolidays(): Promise<Holiday[]> {
@@ -505,46 +513,18 @@ export async function deleteHoliday(id: string): Promise<boolean> {
 }
 
 /**
- * Send holiday notification to clients who have recordings on the holiday week
+ * "Avisar" de um feriado: o servidor manda o mesmo aviso do envio automático aos clientes das duas cidades com
+ * gravação agendada na próxima ocorrência e marca a ocorrência como avisada (a marca vale para as duas cidades).
  */
 export async function sendHolidayNotifications(
-  holidayDate: string,
-  holidayName: string,
-  clients: { id: string; company_name: string; whatsapp: string }[],
-): Promise<{ sent: number; failed: number }> {
-  const config = await getWhatsAppConfig();
-  if (!config?.integrationActive || !config.apiToken) {
-    return { sent: 0, failed: 0 };
+  holidayId: string,
+): Promise<{ clients: number; sent: number; noWhatsApp: number; error?: string }> {
+  try {
+    const response = await vpsAuthedFetch(`/whatsapp/holidays/${encodeURIComponent(holidayId)}/notify`, { method: 'POST' });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return { clients: 0, sent: 0, noWhatsApp: 0, error: data?.error || 'Erro ao enviar notificações' };
+    return { clients: data.clientes || 0, sent: data.enviados || 0, noWhatsApp: data.sem_whatsapp || 0 };
+  } catch {
+    return { clients: 0, sent: 0, noWhatsApp: 0, error: 'Erro ao enviar notificações' };
   }
-
-  const template = config.msgHoliday;
-  let sent = 0;
-  let failed = 0;
-
-  for (const client of clients) {
-    if (!client.whatsapp) { failed++; continue; }
-
-    const message = applyTemplate(template, {
-      nome_cliente: client.company_name,
-      data_feriado: holidayDate,
-      nome_feriado: holidayName,
-      link_portal: getPortalLink(client.id),
-    });
-
-    const result = await sendWhatsAppMessage({
-      number: client.whatsapp,
-      message,
-      clientId: client.id,
-      triggerType: 'manual',
-      purpose: 'agenda',
-    });
-
-    if (result.success) sent++;
-    else failed++;
-  }
-
-  // Mark holiday as notification sent
-  await supabase.from('holidays').update({ notification_sent: true }).eq('date', holidayDate);
-
-  return { sent, failed };
 }

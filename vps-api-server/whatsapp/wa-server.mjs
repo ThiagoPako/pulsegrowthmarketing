@@ -16,6 +16,8 @@
 
 import path from 'node:path';
 import crypto from 'node:crypto';
+import dns from 'node:dns/promises';
+import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import pg from 'pg';
@@ -60,6 +62,8 @@ const SEND_GAP_MIN_MS = Number(process.env.WA_SEND_GAP_MIN_MS) || 4000; // inter
 const SEND_GAP_MAX_MS = Number(process.env.WA_SEND_GAP_MAX_MS) || 9000;
 const MAX_ATTEMPTS = 5;
 const QUEUE_TTL_H = 48; // mensagem que não saiu em 48 h (sem conexão para a função) não vale mais
+// erros do convite de grupo que não mudam tentando de novo (convite inválido, revogado, sem permissão)
+const GROUP_INVITE_PERMANENT = new Set([400, 401, 403, 404, 406, 410]);
 const QR_TIMEOUT_MS = 3 * 60 * 1000;
 const MEDIA_MAX_BYTES = 32 * 1024 * 1024;
 const VIDEO_MAX_BYTES = 100 * 1024 * 1024; // vídeo vai por streaming (não carrega o arquivo inteiro na memória)
@@ -188,6 +192,56 @@ async function baileysVersion() {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const digits = (v) => String(v || '').replace(/\D/g, '');
 
+// ── Anexo: só link público http(s) ─────────────────────────────
+// A Baileys lê do disco quando a URL não é http(s), e um link para endereço interno (localhost, rede privada)
+// mandaria ao cliente o que só o servidor enxerga. Os dois viram erro definitivo (não adianta tentar de novo).
+const OWN_HOSTS = new Set(['agenciapulse.tech', 'www.agenciapulse.tech']); // o próprio site (/uploads)
+const mediaError = (message) => Object.assign(new Error(message), { permanent: true });
+
+function isInternalAddress(address) {
+  let ip = String(address || '').toLowerCase().replace(/^\[|\]$/g, '');
+  const mappedHex = ip.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (mappedHex) {
+    const hi = parseInt(mappedHex[1], 16);
+    const lo = parseInt(mappedHex[2], 16);
+    ip = `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
+  } else if (ip.startsWith('::ffff:')) {
+    ip = ip.slice(7); // IPv4 escrito dentro de IPv6
+  }
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
+  }
+  if (net.isIPv6(ip)) return ip.startsWith('::') || /^f[cd]/.test(ip) || /^fe[89ab]/.test(ip) || ip.startsWith('ff') || ip.startsWith('64:ff9b:');
+  return true;
+}
+
+async function checkMediaUrl(raw) {
+  let url;
+  try {
+    url = new URL(String(raw || '').trim());
+  } catch {
+    throw mediaError('Link do arquivo inválido');
+  }
+  if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username || url.password) {
+    throw mediaError('Link do arquivo inválido (só http ou https)');
+  }
+  const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (OWN_HOSTS.has(host)) return url;
+  let addresses;
+  if (net.isIP(host)) addresses = [host];
+  else {
+    try {
+      addresses = (await dns.lookup(host, { all: true, verbatim: true })).map((a) => a.address);
+    } catch (error) {
+      throw new Error(`Não achei o servidor do arquivo (${host}): ${error.code || error.message}`); // tenta de novo depois
+    }
+  }
+  if (!addresses.length || addresses.some(isInternalAddress)) throw mediaError('Link do arquivo aponta para um endereço interno');
+  return url;
+}
+
 // ── Uma conexão (um número) ────────────────────────────────────
 class Connection {
   constructor(row) {
@@ -213,7 +267,9 @@ class Connection {
     this.state = 'iniciando';
     this.stopping = false;
     clearTimeout(this.restartTimer);
-    await setConn(this.id, { status: this.retries ? 'reconectando' : 'conectando', last_error: null });
+    // o status na tela é só informativo: banco fora do ar aqui não pode deixar o número preso em "iniciando"
+    await setConn(this.id, { status: this.retries ? 'reconectando' : 'conectando', last_error: null })
+      .catch((e) => log(this.name, 'status:', e.message));
     try {
       const { state, saveCreds } = await usePgAuthState(this.id);
       this.registered = !!state.creds.registered;
@@ -353,9 +409,11 @@ class Connection {
     this.retries += 1;
     const delay = Math.min(300, 2 ** Math.min(this.retries, 8)) * 1000;
     this.state = 'reconectando';
-    await setConn(this.id, { status: 'reconectando', last_error: `Caiu (${reason}); tento de novo em ${Math.round(delay / 1000)} s` });
+    // agenda a nova tentativa ANTES de gravar o status: se o banco falhar, o número continua tentando
     clearTimeout(this.restartTimer);
     this.restartTimer = setTimeout(() => this.start().catch(() => {}), delay);
+    await setConn(this.id, { status: 'reconectando', last_error: `Caiu (${reason}); tento de novo em ${Math.round(delay / 1000)} s` })
+      .catch((e) => log(this.name, 'status:', e.message));
   }
 
   async stop(status = 'desligada', error = null) {
@@ -481,21 +539,35 @@ class Connection {
 
   async buildContent(row) {
     if (!row.media_url) return { text: row.body };
-    // confere tipo e tamanho antes; a Baileys baixa e envia em streaming a partir da URL
+    // confere tipo e tamanho antes; a Baileys baixa e envia em streaming a partir da URL.
+    // Os redirecionamentos são seguidos aqui, um a um, conferindo cada destino (ver checkMediaUrl).
+    let target = await checkMediaUrl(row.media_url);
     let mimetype = 'application/octet-stream';
     let size = 0;
-    try {
-      const head = await fetch(row.media_url, { method: 'HEAD' });
+    for (let hop = 0; ; hop++) {
+      let head;
+      try {
+        head = await fetch(target, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(15_000) });
+      } catch {
+        break; // servidor que não responde HEAD: segue com o tipo pela extensão
+      }
+      const location = head.status >= 300 && head.status < 400 ? head.headers.get('location') : null;
+      if (location) {
+        if (hop >= 5) throw mediaError('Redirecionamentos demais no link do arquivo');
+        target = await checkMediaUrl(new URL(location, target).href);
+        continue;
+      }
       if (head.ok) {
-        mimetype = (head.headers.get('content-type') || mimetype).split(';')[0];
+        mimetype = (head.headers.get('content-type') || mimetype).split(';')[0].trim().toLowerCase();
         size = Number(head.headers.get('content-length') || 0);
       } else if (head.status === 404 || head.status === 410) {
-        throw Object.assign(new Error(`Arquivo não encontrado (${head.status})`), { permanent: true });
+        throw mediaError(`Arquivo não encontrado (${head.status})`);
       }
-    } catch (error) {
-      if (error.permanent) throw error;
+      break;
     }
-    const url = row.media_url;
+    const url = target.href;
+    // página (ex.: link do Drive) não é arquivo: manda o link no texto em vez de um anexo quebrado
+    if (mimetype === 'text/html') return { text: [row.body, url].filter(Boolean).join('\n\n') };
     const fileName = row.media_name || decodeURIComponent(url.split('/').pop()?.split('?')[0] || 'arquivo');
     if (mimetype === 'application/octet-stream') {
       const ext = fileName.split('.').pop()?.toLowerCase();
@@ -604,7 +676,7 @@ async function resolveGroupJid(to, conn) {
   const raw = String(to || '').trim();
   if (raw.endsWith('@g.us')) return raw;
   const invite = raw.match(/chat\.whatsapp\.com\/(?:invite\/)?([A-Za-z0-9]+)/i);
-  if (!invite) throw new Error(raw);
+  if (!invite) throw Object.assign(new Error(raw), { permanent: true });
   const cacheKey = `grupo:${invite[1]}`;
   const { rows } = await pool.query('SELECT jid FROM wa_jid_cache WHERE number = $1', [cacheKey]);
   if (rows[0]?.jid) return rows[0].jid;
@@ -620,18 +692,26 @@ async function resolveGroupJid(to, conn) {
 async function dispatch() {
   // mensagens presas em "enviando" (processo reiniciou no meio) voltam para a fila
   await pool.query(`UPDATE wa_outbox SET status = 'fila' WHERE status = 'enviando' AND next_try_at < now() - interval '5 minutes'`);
-  // velhas demais: não envia mais
+  // velhas demais (ou com hora marcada que já passou): não envia mais
   const { rows: expired } = await pool.query(
-    `UPDATE wa_outbox SET status = 'falhou', error = 'Expirou na fila (${QUEUE_TTL_H} h sem conexão conectada com esta função)'
-      WHERE status = 'fila' AND created_at < now() - interval '${QUEUE_TTL_H} hours' RETURNING id, log_id`
+    `UPDATE wa_outbox SET status = 'falhou', error = CASE
+         WHEN expires_at IS NOT NULL AND expires_at < created_at + interval '${QUEUE_TTL_H} hours'
+           THEN 'Expirou na fila (passou o horário do compromisso sem um número conectado para enviar)'
+         ELSE 'Expirou na fila (${QUEUE_TTL_H} h sem um número conectado que pudesse enviar)' END
+      WHERE status = 'fila' AND LEAST(expires_at, created_at + interval '${QUEUE_TTL_H} hours') < now() RETURNING id, log_id`
   );
   for (const r of expired) {
     if (r.log_id) await pool.query(`UPDATE whatsapp_messages SET status = 'failed' WHERE id = $1`, [r.log_id]).catch(() => {});
   }
 
   const all = [...connections.values()];
-  const ready = all.filter((c) => c.state === 'conectada' && c.sock && !c.busy && Date.now() >= c.nextSendAt);
+  const connected = all.filter((c) => c.state === 'conectada' && c.sock);
+  const ready = connected.filter((c) => !c.busy && Date.now() >= c.nextSendAt);
   if (!ready.length) return;
+  // nenhum número conectado consegue mandar esta linha: tenta de novo daqui a pouco, sem travar as mais novas da fila
+  const postpone = (row) => pool.query(
+    `UPDATE wa_outbox SET next_try_at = now() + interval '2 minutes' WHERE id = $1 AND status = 'fila'`, [row.id]
+  );
   const { rows } = await pool.query(
     `SELECT * FROM wa_outbox WHERE status = 'fila' AND next_try_at <= now() ORDER BY created_at LIMIT 50`
   );
@@ -645,7 +725,17 @@ async function dispatch() {
       try {
         groupJid = await resolveGroupJid(row.to_number, free[0]);
       } catch (error) {
-        await finish(row, { status: 'falhou', error: `Grupo inválido: ${error.message}` }, 'failed', { purpose: row.purpose, error: error.message });
+        // convite inválido ou revogado é definitivo; timeout, conexão caindo ou limite do WhatsApp tenta de novo
+        const code = error?.output?.statusCode;
+        const permanent = error.permanent || GROUP_INVITE_PERMANENT.has(code)
+          || /not-authorized|item-not-found|not-acceptable|\bgone\b/i.test(String(error?.message || ''));
+        const attempts = (row.attempts || 0) + 1;
+        if (permanent || attempts >= MAX_ATTEMPTS) {
+          await finish(row, { status: 'falhou', attempts, error: `Grupo inválido: ${error.message}` }, 'failed', { purpose: row.purpose, error: error.message });
+        } else {
+          await finish(row, { attempts, error: `Convite do grupo: ${error.message}`, next_try_at: new Date(Date.now() + 30_000 * attempts) }, null);
+          log(free[0].name, 'convite do grupo (tenta de novo):', error.message);
+        }
         continue;
       }
       const { rows: members } = await pool.query('SELECT connection_id FROM wa_groups WHERE jid = $1', [groupJid]);
@@ -655,14 +745,28 @@ async function dispatch() {
           'failed', { purpose: row.purpose, error: 'fora_do_grupo', group: groupJid });
         continue;
       }
-      const inGroup = free.filter((c) => memberIds.has(c.id));
-      conn = inGroup.find((c) => c.purposes.includes(row.purpose)) || inGroup.find((c) => c.purposes.includes('geral')) || null;
-      if (!conn) continue; // quem está no grupo está ocupado ou desconectado: espera
+      // a função é vista entre TODOS os números conectados que estão no grupo, não só os livres agora: se o número
+      // certo só está ocupado, espera por ele. Se nenhum deles tem a função (nem "geral"), vai por qualquer um que está
+      // no grupo, em vez de esperar 48 h por um número que não está lá.
+      const inGroup = connected.filter((c) => memberIds.has(c.id));
+      if (!inGroup.length) { // quem está no grupo está desconectado: espera (até o prazo da fila)
+        await postpone(row);
+        continue;
+      }
+      const own = inGroup.filter((c) => c.purposes.includes(row.purpose));
+      const general = inGroup.filter((c) => c.purposes.includes('geral'));
+      const candidates = (own.length ? own : general.length ? general : inGroup).filter((c) => free.includes(c));
+      conn = candidates.length ? candidates.reduce((a, b) => (a.nextSendAt <= b.nextSendAt ? a : b)) : null;
+      if (!conn) continue; // o número certo está ocupado: espera
       row._jid = groupJid;
     } else {
       // sem conexão para a função (nem "geral"): espera na fila — sai quando alguém conectar um número com a função,
-      // ou falha ao completar 48 h (ver QUEUE_TTL_H)
+      // ou falha no prazo (48 h, ou a hora do compromisso; ver QUEUE_TTL_H)
       conn = pickConnection(row, free);
+      if (!conn && !pickConnection(row, connected)) {
+        await postpone(row);
+        continue;
+      }
     }
     if (!conn) continue;
     const { rowCount } = await pool.query(

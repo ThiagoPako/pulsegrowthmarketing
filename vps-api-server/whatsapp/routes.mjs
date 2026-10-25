@@ -14,6 +14,8 @@
 //   PATCH  /api/whatsapp/config      (admin, social media, gestor de projetos) { integration_active, auto_*, msg_* }
 //          A configuração é uma só para as duas cidades: é a mesma linha que o servidor usa nos envios.
 //   GET    /api/whatsapp/groups      (gestão) grupos em que os números conectados estão — para o cadastro do cliente
+//   POST   /api/whatsapp/holidays/:id/notify  (gestão) "Avisar" de um feriado: avisa os clientes das duas cidades
+//          com gravação agendada na próxima ocorrência e marca a ocorrência como avisada
 //
 // Fluxos automáticos (laços abaixo):
 //   - vídeo novo no portal (status "pendente") → UMA mensagem ao cliente (no grupo dele) com o link do portal;
@@ -310,6 +312,109 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
     }
   }
 
+  // ── Feriado: avisa quem tem gravação no dia (Configurações → Feriados → "Envio automático (2 dias antes)") ──
+  // Feriado "Anual" vale todo ano no mesmo dia e mês. Cada ocorrência avisa uma vez (holidays.last_notified_date,
+  // que o "Avisar" manual também grava). Olha amanhã e depois de amanhã: se o agendador não rodou num dia, ainda avisa.
+  // O feriado e a marca de "avisado" são um só para as duas cidades: o aviso (automático ou o "Avisar") vai para os
+  // clientes das duas cidades com gravação no dia, senão a marca de uma cidade deixaria a outra sem aviso.
+  const HOLIDAY_DEFAULT_MSG = 'Olá, {nome_cliente}! 🚀\n\nInformamos que no dia *{data_feriado}* ({nome_feriado}) *não haverá gravações*.\n\nNossa equipe retorna normalmente no próximo dia útil.\n\n📱 Acompanhe tudo na sua Área do Cliente:\n{link_portal}\n\nEquipe Pulse Growth Marketing';
+  const isoDay = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v || '').slice(0, 10));
+  const addDays = (day, n) => {
+    const d = new Date(`${day}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  };
+  const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  const holidayOccursOn = (h, day) => {
+    const base = isoDay(h.date);
+    if (!h.recurring) return base === day;
+    if (base.slice(5) === day.slice(5)) return true;
+    return base.slice(5) === '02-29' && day.slice(5) === '02-28' && !isLeapYear(Number(day.slice(0, 4))); // 29/02 cai em 28/02
+  };
+  // próxima ocorrência a partir de hoje (a mesma conta da tela): a própria data, ou, no "Anual", o mesmo dia e mês
+  const holidayNextOccurrence = (h, today) => {
+    const base = isoDay(h.date);
+    if (!h.recurring) return base;
+    const inYear = (y) => (base.slice(5) === '02-29' && !isLeapYear(y) ? `${y}-02-28` : `${y}-${base.slice(5)}`);
+    const year = Number(today.slice(0, 4));
+    return inYear(year) >= today ? inYear(year) : inYear(year + 1);
+  };
+  const holidayNotified = (h, occurrence) => isoDay(h.last_notified_date) === occurrence || (!h.recurring && h.notification_sent);
+  const holidayLabel = (day) => {
+    const weekday = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${day}T12:00:00Z`));
+    return `${day.slice(8, 10)}/${day.slice(5, 7)}/${day.slice(0, 4)} (${weekday})`;
+  };
+  // clientes das duas cidades com gravação agendada no dia
+  const holidayClients = async (occurrence) => (await pool.query(
+    `SELECT DISTINCT c.id, c.company_name, c.responsible_person, c.whatsapp, c.whatsapp_group
+       FROM recordings r JOIN clients c ON c.id::text = r.client_id::text
+      WHERE r.date = $1 AND r.status = 'agendada'`, [occurrence]
+  )).rows;
+  // marca antes de enviar: um reinício no meio (ou um segundo clique) não manda duas vezes
+  const claimHoliday = async (h, occurrence) => (await pool.query(
+    `UPDATE holidays SET last_notified_date = $2, notification_sent = true
+      WHERE id = $1 AND last_notified_date IS DISTINCT FROM $2::date RETURNING id`, [h.id, occurrence]
+  )).rows.length > 0;
+  async function sendHolidayNotices(config, h, occurrence, clients, { triggerType, sentBy, expiresAt }) {
+    let enviados = 0;
+    for (const client of clients) {
+      const to = clientTarget(client, 'agenda');
+      if (!to) continue;
+      const body = fill(config.msg_holiday || HOLIDAY_DEFAULT_MSG, {
+        nome_cliente: client.company_name, data_feriado: holidayLabel(occurrence), nome_feriado: h.name || 'feriado',
+        link_portal: `${PORTAL_URL}/${client.id}`,
+      });
+      await enqueueWhatsApp(pool, { to, body, clientId: client.id, triggerType, sentBy, purpose: 'agenda', expiresAt });
+      enviados++;
+    }
+    return enviados;
+  }
+
+  async function runHolidayNotifications() {
+    const { rows: [config] } = await pool.query('SELECT * FROM whatsapp_config LIMIT 1');
+    if (!config?.integration_active || config?.auto_holiday_notification !== true) return { skipped: 'desligado' };
+    const { day } = brazilNow();
+    const targets = [addDays(day, 1), addDays(day, 2)];
+    const { rows: holidays } = await pool.query('SELECT * FROM holidays');
+    const result = { feriados: 0, enviados: 0 };
+    for (const h of holidays) {
+      const occurrence = targets.find((t) => holidayOccursOn(h, t));
+      if (!occurrence || holidayNotified(h, occurrence)) continue;
+      if (!(await claimHoliday(h, occurrence))) continue;
+      result.feriados++;
+      result.enviados += await sendHolidayNotices(config, h, occurrence, await holidayClients(occurrence),
+        { triggerType: 'auto_holiday', expiresAt: new Date(`${occurrence}T00:00:00-03:00`) });
+    }
+    return result;
+  }
+
+  // "Avisar" (Configurações → Feriados): o mesmo aviso do automático, já, para a próxima ocorrência. Só marca como
+  // avisado quando há a quem mandar; o aviso fica na fila até o fim do dia do feriado.
+  app.post('/api/whatsapp/holidays/:id/notify', async (req, res) => {
+    try {
+      const { user } = await verifyTeamManager(req);
+      await ensureWhatsAppSchema(pool);
+      const { rows: [config] } = await pool.query('SELECT * FROM whatsapp_config LIMIT 1');
+      if (!config?.integration_active) return res.status(400).json({ error: 'Integração WhatsApp desativada' });
+      const { rows: [h] } = await pool.query('SELECT * FROM holidays WHERE id::text = $1', [String(req.params.id)]);
+      if (!h) return res.status(404).json({ error: 'Feriado não encontrado' });
+      const { day } = brazilNow();
+      const occurrence = holidayNextOccurrence(h, day);
+      if (occurrence < day) return res.status(400).json({ error: 'Este feriado já passou' });
+      if (holidayNotified(h, occurrence)) return res.status(409).json({ error: 'Os clientes já foram avisados deste feriado' });
+      const clients = await holidayClients(occurrence);
+      const reachable = clients.filter((c) => clientTarget(c, 'agenda'));
+      const counts = { ok: true, data: occurrence, clientes: clients.length, sem_whatsapp: clients.length - reachable.length, enviados: 0 };
+      if (!reachable.length) return res.json(counts);
+      if (!(await claimHoliday(h, occurrence))) return res.status(409).json({ error: 'Os clientes já foram avisados deste feriado' });
+      counts.enviados = await sendHolidayNotices(config, h, occurrence, reachable,
+        { triggerType: 'manual', sentBy: user?.id, expiresAt: new Date(`${occurrence}T23:59:59-03:00`) });
+      res.json(counts);
+    } catch (error) {
+      fail(res, error);
+    }
+  });
+
   // ── Aprovar / pedir ajuste (o mesmo que o portal faz) ──
   async function notifyTeam(title, message, type, link) {
     const { rows } = await pool.query(`SELECT DISTINCT user_id FROM user_roles WHERE role IN ('admin', 'social_media')`);
@@ -319,12 +424,14 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
     }
   }
 
+  // Só age em conteúdo ainda "pendente": se o cliente já aprovou ou pediu ajuste pelo portal (ou a equipe mexeu),
+  // uma mensagem atrasada no WhatsApp não muda nada. Devolve false nesse caso.
   async function approveContent(contentId, who) {
     const { rows: [content] } = await pool.query(
-      `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW() WHERE id = $1
+      `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW() WHERE id = $1 AND status = 'pendente'
        RETURNING id, client_id, title`, [contentId]
     );
-    if (!content) return;
+    if (!content) return false;
     await pool.query(`INSERT INTO client_portal_comments (content_id, author_name, author_type, message) VALUES ($1, $2, 'client', $3)`,
       [content.id, who || 'Cliente', '✅ Aprovado pelo WhatsApp']).catch(() => {});
     const { rows: [task] } = await pool.query(
@@ -337,18 +444,21 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
         [task.id, '✅ Aprovado pelo cliente via WhatsApp', who || null]);
     }
     await notifyTeam('✅ Conteúdo aprovado pelo cliente', `"${content.title}" foi aprovado pelo WhatsApp`, 'approval', '/conteudo');
+    return true;
   }
 
   async function requestAdjustment(contentId, note, who) {
     const { rows: [content] } = await pool.query(
-      `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW() WHERE id = $1 RETURNING id, client_id, title`,
+      `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW() WHERE id = $1 AND status = 'pendente'
+       RETURNING id, client_id, title`,
       [contentId]
     );
-    if (!content) return;
+    if (!content) return false;
     await pool.query(`INSERT INTO client_portal_comments (content_id, author_name, author_type, message) VALUES ($1, $2, 'client', $3)`,
       [content.id, who || 'Cliente', `🔧 Ajuste solicitado (WhatsApp): ${note}`]).catch(() => {});
+    // card já aprovado (agendamentos) não volta para alteração por mensagem do WhatsApp
     const { rows: [task] } = await pool.query(
-      `SELECT id, assigned_to FROM content_tasks WHERE client_id = $1 AND title = $2 AND kanban_column IN ('envio', 'revisao', 'agendamentos')
+      `SELECT id, assigned_to FROM content_tasks WHERE client_id = $1 AND title = $2 AND kanban_column IN ('envio', 'revisao')
         ORDER BY created_at DESC LIMIT 1`, [content.client_id, content.title]
     );
     if (task) {
@@ -361,6 +471,7 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
       }
     }
     await notifyTeam('🔧 Ajuste solicitado pelo WhatsApp', `Cliente pediu ajuste em "${content.title}": ${note.slice(0, 80)}`, 'adjustment', '/entregas-social');
+    return true;
   }
 
   const norm = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
@@ -368,6 +479,28 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
   // aprova: "aprovado…", "pode postar…", ou um "ok/sim/👍" sozinho (um "ok, vou ver" não aprova)
   const APPROVE = /^(aprovad[oa]s?|aprovo|aprovei|aprova|pode postar|pode publicar|pode subir|ta aprovado|esta aprovado|tudo certo|ficou otimo|ficou perfeito)\b/;
   const APPROVE_ALONE = /^(ok|okay|sim|show|top|perfeito|amei|otimo|👍|✅|👏)[!. 👍✅👏]*$/;
+  // "aprovado, mas troca a música" não é só aprovação
+  const NOT_ONLY_APPROVAL = /\b(nao|mas|porem|so que|exceto|menos|antes)\b|\b(troc|mud|ajust|corrig|alter|tir[ae]|remov)\w*/;
+  // aprovação de um item: "1 aprovado", "o 2 tá ok"
+  const ITEM_APPROVE = /^(?:ta |esta |ficou |foi )?(?:aprovad[oa]s?|aprovo|aprova|ok|okay|pode postar|pode publicar|perfeito|otimo|show|top|tudo certo|certo|sim)(?![a-z0-9])/;
+  // o lote inteiro: "os dois aprovados", "todos ok", "ambos podem postar" (só vale se a quantidade é a do lote)
+  const ALL_APPROVE = /^(?:(todos|todas|ambos|ambas)(?:\s+(?:os|as))?(?:\s+(\d{1,2}|dois|duas|tres))?|(?:os|as)\s+(\d{1,2}|dois|duas|tres))\s+(?:(?:videos?|artes?)\s+)?(?:(?:foram|estao|tao|ta|ficaram)\s+)?(?:aprovad[oa]s?|ok|okay|perfeitos?|otimos?|podem? postar|podem? publicar)(?![a-z0-9])/;
+  const COUNT_WORDS = { dois: 2, duas: 2, tres: 3 };
+  const approvesAll = (n, total) => {
+    const m = n.match(ALL_APPROVE);
+    if (!m) return false;
+    const num = m[2] || m[3];
+    return (num ? COUNT_WORDS[num] || Number(num) : /^amb/.test(m[1]) ? 2 : total) === total;
+  };
+  // "o 2 também", "o 3 idem": a mesma resposta do trecho anterior
+  const SAME_AS = /^(?:tambem|tb|tbm|idem|igual|mesma coisa|o mesmo|a mesma coisa)[!. ]*$/;
+  // pedido de mudança claro (com um vídeo só, vira ajuste sem precisar do número)
+  const CHANGE_REQUEST = /\b(ajust|troc|mud|tir[ae]|corrig|alter|coloc|bot[ae]|aument|diminu|abaix|remov|substitu|acrescent|adicion|refaz|cort[ae]|errad|faltou|falta)\w*|\berro\b/;
+  // cortesia / "vou ver depois": não é aprovação nem ajuste
+  const COURTESY = /^(?:obrigad[oa]|obg|valeu|vlw|bom dia|boa tarde|boa noite|oi|ola|opa|blz|beleza|recebi|recebido|vou ver|vou assistir|vou olhar|depois vejo|depois eu vejo|ja vejo|ja vou ver|assisto|kk+|ha(?:ha)+|rs+)(?![a-z0-9])/;
+  // "o 1 tá aprovado, o 2 troca a música" → um trecho por vídeo ("1 ok 2 ok", sem vírgula, também separa)
+  const SEGMENT_SPLIT = /(?:\s*[\n;,]+\s*|\s+e\s+|(?<=(?:^|[\s.!])(?:aprovad[oa]s?|ok|okay|sim|perfeito|[oó]timo|show|top|certo)[!.]*)\s+)(?=(?:(?:o|a|no|na)\s+)?(?:v[ií]deo\s+|arte\s+)?\d{1,2}(?!\d))/i;
+  const SEGMENT = /^(?:(?:o|a|no|na)\s+)?(?:v[ií]deo\s+|arte\s+)?(\d{1,2})(?!\d)\s*(?:[-:.)º°]\s*)?(.*)$/is;
   const phoneVariants = (phone) => {
     const d = String(phone || '').replace(/\D/g, '');
     const local = d.startsWith('55') && d.length > 11 ? d.slice(2) : d;
@@ -388,7 +521,7 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
     );
     if (recent.length) return { skipped: 'ja_mandado_ha_pouco' };
     const { rows: contents } = await pool.query(
-      `SELECT id, title, file_url FROM client_portal_contents
+      `SELECT id, title, file_url, content_type FROM client_portal_contents
         WHERE client_id = $1 AND status = 'pendente' AND file_url IS NOT NULL AND file_url <> ''
         ORDER BY created_at DESC LIMIT 5`, [client.id]
     );
@@ -402,6 +535,9 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
     if (!target) return { skipped: 'sem_numero' };
     contents.reverse(); // do mais antigo para o mais novo
     const batch = (await pool.query('SELECT gen_random_uuid() AS id')).rows[0].id;
+    // arte vai como imagem (sem forçar ".mp4"); link de fora (ex.: Drive) vai no texto, não como anexo
+    const isArt = (c) => c.content_type === 'arte' || /\.(jpe?g|png|gif|webp|bmp|svg)(\?|$)/i.test(c.file_url);
+    const allVideos = contents.every((c) => !isArt(c));
     for (let i = 0; i < contents.length; i++) {
       const c = contents[i];
       await pool.query(
@@ -409,56 +545,138 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
         [batch, i + 1, client.id, c.id, c.title, target]
       );
       const url = c.file_url.startsWith('/') ? `${UPLOADS_ORIGIN}${c.file_url}` : c.file_url;
-      const caption = contents.length > 1 ? `🎬 Vídeo ${i + 1} de ${contents.length}: ${c.title}` : `🎬 ${c.title}`;
-      await enqueueWhatsApp(pool, { to: target, body: caption, mediaUrl: url, mediaName: `${c.title}.mp4`,
-        clientId: client.id, triggerType: 'portal_ajuda', purpose: 'aprovacao' });
+      const ownFile = url.startsWith(`${UPLOADS_ORIGIN}/`);
+      const art = isArt(c);
+      const label = art ? `🎨 Arte` : `🎬 Vídeo`;
+      const caption = contents.length > 1 ? `${label} ${i + 1} de ${contents.length}: ${c.title}` : `${art ? '🎨' : '🎬'} ${c.title}`;
+      const hasVideoExt = /\.(mp4|mov|m4v|webm)(\?|$)/i.test(url);
+      await enqueueWhatsApp(pool, ownFile
+        ? { to: target, body: caption, mediaUrl: url, mediaName: art || hasVideoExt ? undefined : `${c.title}.mp4`,
+            clientId: client.id, triggerType: 'portal_ajuda', purpose: 'aprovacao' }
+        : { to: target, body: `${caption}\n${url}`, clientId: client.id, triggerType: 'portal_ajuda', purpose: 'aprovacao' });
     }
     const how = contents.length > 1
-      ? `Para aprovar todos, responda *APROVADO*.\nPara pedir ajuste, escreva o número do vídeo e o que mudar (ex.: *2 trocar a música*).`
-      : `Para aprovar, responda *APROVADO*.\nSe quiser algum ajuste, é só escrever aqui o que mudar.`;
-    await enqueueWhatsApp(pool, { to: target, body: `Oi${name ? `, ${name}` : ''}! Como o portal não abriu, mandei ${contents.length > 1 ? 'os vídeos' : 'o vídeo'} aqui. 😊\n\n${how}`,
+      ? `Para aprovar todos, responda *APROVADO*.\nPara pedir ajuste, escreva o número do ${allVideos ? 'vídeo' : 'conteúdo'} e o que mudar (ex.: *2 trocar a música*).`
+      : `Para aprovar, responda *APROVADO*.\nSe quiser algum ajuste, escreva *AJUSTE* e o que mudar (ex.: *AJUSTE trocar a música*).`;
+    const what = allVideos ? (contents.length > 1 ? 'os vídeos' : 'o vídeo') : (contents.length > 1 ? 'os conteúdos' : 'o conteúdo');
+    await enqueueWhatsApp(pool, { to: target, body: `Oi${name ? `, ${name}` : ''}! Como o portal não abriu, mandei ${what} aqui. 😊\n\n${how}`,
       clientId: client.id, triggerType: 'portal_ajuda', purpose: 'aprovacao' });
-    await enqueueWhatsApp(pool, { to: groupJid, body: `${name ? `${name}, m` : 'M'}andei ${contents.length > 1 ? 'os vídeos' : 'o vídeo'} no seu privado para você assistir e aprovar por lá 👍`,
+    await enqueueWhatsApp(pool, { to: groupJid, body: `${name ? `${name}, m` : 'M'}andei ${what} no seu privado para você ${allVideos ? 'assistir' : 'ver'} e aprovar por lá 👍`,
       clientId: client.id, triggerType: 'portal_ajuda', purpose: 'aprovacao' });
     return { ok: true, enviados: contents.length };
   }
 
   // no privado: resposta aos vídeos mandados (APROVADO ou o ajuste)
+  // Só vale intenção clara: "APROVADO" (a frase inteira) aprova tudo; "2 trocar a música" ou "AJUSTE trocar a música"
+  // pedem ajuste; "1 aprovado, 2 trocar a música" vale item a item. Cortesia ("obrigado", "vou assistir") não faz nada,
+  // e o resto recebe UMA explicação de como responder (sem virar ajuste nem aprovar).
   async function handlePrivateApproval({ phone, pushName, text }) {
     const { rows: pending } = await pool.query(
-      `SELECT * FROM wa_approval_requests WHERE phone = ANY($1) AND status = 'pendente' AND created_at > now() - interval '7 days'
-        ORDER BY created_at DESC, position`, [phoneVariants(phone)]
+      `SELECT r.*, c.status AS content_status
+         FROM wa_approval_requests r LEFT JOIN client_portal_contents c ON c.id = r.content_id
+        WHERE r.phone = ANY($1) AND r.status = 'pendente' AND r.created_at > now() - interval '7 days'
+        ORDER BY r.created_at DESC, r.position`, [phoneVariants(phone)]
     );
-    if (!pending.length) return { skipped: 'sem_aprovacao_pendente' };
-    const latestBatch = pending[0].batch_id;
-    const items = pending.filter((p) => p.batch_id === latestBatch).sort((a, b) => a.position - b.position);
-    const n = norm(text);
+    // aprovado ou com ajuste pedido pelo portal (ou mexido pela equipe): o pedido pelo WhatsApp acabou
+    const closed = pending.filter((p) => p.content_status !== 'pendente');
+    if (closed.length) {
+      await pool.query(`UPDATE wa_approval_requests SET status = 'encerrado', answered_at = now() WHERE id = ANY($1)`, [closed.map((p) => p.id)]);
+    }
+    const open = pending.filter((p) => p.content_status === 'pendente');
+    if (!open.length) return { skipped: 'sem_aprovacao_pendente' };
+    const latestBatch = open[0].batch_id;
+    const items = open.filter((p) => p.batch_id === latestBatch).sort((a, b) => a.position - b.position);
     const who = pushName || 'Cliente';
-    const reply = (body) => enqueueWhatsApp(pool, { to: items[0].phone, body, clientId: items[0].client_id, triggerType: 'portal_ajuda', purpose: 'aprovacao' });
-    if (APPROVE.test(n) || APPROVE_ALONE.test(n) || (/aprovad/.test(n) && !/\bnao\b/.test(n))) {
-      for (const item of items) {
-        await approveContent(item.content_id, who);
-        await pool.query(`UPDATE wa_approval_requests SET status = 'aprovado', answer = $2, answered_at = now() WHERE id = $1`, [item.id, text.slice(0, 500)]);
+    const reply = (message) => enqueueWhatsApp(pool, { to: items[0].phone, body: message, clientId: items[0].client_id, triggerType: 'portal_ajuda', purpose: 'aprovacao' });
+    const raw = String(text || '').trim();
+    const explicitAdjust = raw.match(/^ajust(?:e|ar)\b[\s:,.-]*(.*)$/is);
+    const body = explicitAdjust ? explicitAdjust[1].trim() : raw;
+    const n = norm(body);
+
+    const approveItem = async (item) => {
+      const ok = await approveContent(item.content_id, who);
+      await pool.query(`UPDATE wa_approval_requests SET status = $3, answer = $2, answered_at = now() WHERE id = $1`,
+        [item.id, raw.slice(0, 500), ok ? 'aprovado' : 'encerrado']);
+      return ok;
+    };
+    const adjustItem = async (item, note) => {
+      const ok = await requestAdjustment(item.content_id, note, who);
+      await pool.query(`UPDATE wa_approval_requests SET status = $3, answer = $2, answered_at = now() WHERE id = $1`,
+        [item.id, note.slice(0, 500), ok ? 'ajuste' : 'encerrado']);
+      return ok;
+    };
+    const respond = async (approved, adjusted) => {
+      const parts = [];
+      if (approved.length) {
+        parts.push(approved.length === items.length
+          ? `Aprovado ✅ Obrigado! Vamos seguir com a publicação${items.length > 1 ? ' dos vídeos' : ''}. 🚀`
+          : `Aprovado ✅ ${listTitles(approved.map((i) => i.title || 'Conteúdo'))}.`);
       }
-      await reply(`Aprovado ✅ Obrigado! Vamos seguir com a publicação${items.length > 1 ? ' dos vídeos' : ''}. 🚀`);
-      return { ok: true, aprovados: items.length };
+      if (adjusted.length) {
+        parts.push(`Anotado! ✍️ Vamos fazer o ajuste em ${listTitles(adjusted.map((i) => i.title || 'Conteúdo'))} e te mandamos de novo.`);
+      }
+      if (parts.length) await reply(parts.join('\n\n'));
+      return { ok: true, aprovados: approved.length, ajustes: adjusted.map((i) => i.content_id) };
+    };
+    // explica uma vez só por lote (não responde a cada mensagem da semana)
+    const askOnce = async (message) => {
+      const { rowCount } = await pool.query(
+        `UPDATE wa_approval_requests SET help_sent_at = now() WHERE batch_id = $1 AND status = 'pendente' AND help_sent_at IS NULL`, [latestBatch]
+      );
+      if (!rowCount) return { skipped: 'ajuda_ja_enviada' };
+      await reply(message);
+      return { ok: true, perguntou: true };
+    };
+
+    // 1) aprovar tudo: a frase é a aprovação ("aprovado, mas troca a música" não é)
+    if (!explicitAdjust && (APPROVE.test(n) || APPROVE_ALONE.test(n) || approvesAll(n, items.length)) && !NOT_ONLY_APPROVAL.test(n)) {
+      const approved = [];
+      for (const item of items) if (await approveItem(item)) approved.push(item);
+      return respond(approved, []);
     }
-    if (n.length < 3) return { skipped: 'resposta_curta' };
-    let item = items.length === 1 ? items[0] : null;
-    let note = text.trim();
-    const numbered = text.trim().match(/^(\d{1,2})\s*[-:.)]?\s+(.+)$/s);
-    if (!item && numbered) {
-      item = items.find((i) => i.position === Number(numbered[1])) || null;
-      note = numbered[2].trim();
+
+    // 2) por número: "2 trocar a música", "o 1 tá aprovado, o 2 troca a música", "1 e 2 aprovados", "o 1 ok, o 2 também"
+    const segments = body.split(SEGMENT_SPLIT).map((s) => s.trim())
+      .filter((s) => s && (SEGMENT.test(s) || !COURTESY.test(norm(s)))); // "bom dia, o 2 trocar…": ignora o "bom dia"
+    const parsed = segments.map((segment) => {
+      const m = segment.match(SEGMENT);
+      const item = m ? items.find((i) => i.position === Number(m[1])) : null;
+      const note = m ? m[2].trim() : '';
+      if (!item) return null;
+      const ns = norm(note).replace(/^(?:tambem|tb|tbm)\s+(?=\S)/, ''); // "o 2 também tá ok"
+      if (!ns) return { item, follows: 'next' }; // "1 e 2 aprovados": o "1" segue o trecho seguinte
+      if (SAME_AS.test(ns)) return { item, follows: 'previous' };
+      if (ITEM_APPROVE.test(ns) && !NOT_ONLY_APPROVAL.test(ns)) return { item, approve: true };
+      // ajuste só com pedido de mudança claro (ou depois de "AJUSTE"): "o 2 ficou lindo" não abre ajuste
+      return ns.length >= 3 && (explicitAdjust || CHANGE_REQUEST.test(ns)) ? { item, note } : null;
+    });
+    // "também" repete a resposta do trecho anterior; o número sozinho, a do seguinte (sem ela, cai na explicação)
+    const inherit = (p, from) => (from && !from.follows ? { ...from, item: p.item } : null);
+    parsed.forEach((p, i) => { if (p?.follows === 'previous') parsed[i] = inherit(p, parsed[i - 1]); });
+    for (let i = parsed.length - 1; i >= 0; i--) if (parsed[i]?.follows === 'next') parsed[i] = inherit(parsed[i], parsed[i + 1]);
+    if (segments.length && parsed.every(Boolean)) {
+      const approved = [];
+      const adjusted = [];
+      for (const p of parsed) {
+        if (p.approve) {
+          if (await approveItem(p.item)) approved.push(p.item);
+        } else if (await adjustItem(p.item, p.note)) adjusted.push(p.item);
+      }
+      return respond(approved, adjusted);
     }
-    if (!item) {
-      await reply(`Qual vídeo? Responda com o número e o ajuste, por exemplo: *${items.length} trocar a música*.`);
-      return { ok: true, perguntou_qual: true };
+
+    // 3) um vídeo só: "AJUSTE …" ou um pedido de mudança claro vira ajuste
+    if (items.length === 1 && n.length >= 3 && (explicitAdjust || CHANGE_REQUEST.test(n))) {
+      const ok = await adjustItem(items[0], body);
+      return respond([], ok ? [items[0]] : []);
     }
-    await requestAdjustment(item.content_id, note, who);
-    await pool.query(`UPDATE wa_approval_requests SET status = 'ajuste', answer = $2, answered_at = now() WHERE id = $1`, [item.id, note.slice(0, 500)]);
-    await reply(`Anotado! ✍️ Vamos fazer o ajuste em "${item.title}" e te mandamos de novo.`);
-    return { ok: true, ajuste: item.content_id };
+
+    // 4) cortesia ou texto solto
+    if (!explicitAdjust && (COURTESY.test(n) || n.length < 3)) return { skipped: 'nao_e_resposta' };
+    if (items.length > 1) {
+      return askOnce(`Qual vídeo? Responda com o número e o ajuste, por exemplo: *${items.length} trocar a música*.\nPara aprovar todos, responda *APROVADO*.`);
+    }
+    return askOnce(`Não entendi se é um ajuste 🙂\nPara aprovar, responda *APROVADO*.\nPara pedir ajuste, escreva *AJUSTE* e o que mudar (ex.: *AJUSTE trocar a música*).`);
   }
 
   app.get('/api/whatsapp/groups', async (req, res) => {
@@ -477,19 +695,25 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
   });
 
   // ── Respostas recebidas (ex.: 1/2 da confirmação de gravação) ──
+  const INBOUND_MAX_ATTEMPTS = 3;
   let handling = false;
   setInterval(async () => {
     if (handling) return;
     handling = true;
     try {
       await ensureWhatsAppSchema(pool);
+      // reserva o lote (claimed_at) e só marca handled_at depois de tratar cada mensagem: um restart ou uma falha
+      // do banco no meio não perde o "1" do cliente. Reservada há 5 min sem conclusão volta a ser tratada (até 3 vezes).
       const { rows } = await pool.query(
-        `UPDATE wa_inbound SET handled_at = now()
-          WHERE id IN (SELECT id FROM wa_inbound WHERE handled_at IS NULL ORDER BY received_at LIMIT 20)
-          RETURNING id, phone, text, group_jid, push_name`
+        `UPDATE wa_inbound SET claimed_at = now(), attempts = attempts + 1
+          WHERE id IN (SELECT id FROM wa_inbound
+                        WHERE handled_at IS NULL AND (claimed_at IS NULL OR claimed_at < now() - interval '5 minutes')
+                        ORDER BY received_at LIMIT 20)
+          RETURNING id, phone, text, group_jid, push_name, attempts`
       );
       for (const row of rows) {
         let result;
+        let failed = false;
         try {
           const msg = { groupJid: row.group_jid, phone: row.phone, pushName: row.push_name, text: row.text };
           // 1º confirmação de gravação (1/2); senão, no grupo: pedido de ajuda; no privado: aprovação de vídeo
@@ -498,9 +722,14 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
             result = row.group_jid ? await handleGroupHelp(msg) : row.phone ? await handlePrivateApproval(msg) : { skipped: 'sem_telefone' };
           }
         } catch (error) {
-          result = { error: error.message };
+          failed = true;
+          result = { error: error.message, tentativa: row.attempts };
         }
-        await pool.query('UPDATE wa_inbound SET result = $2 WHERE id = $1', [row.id, JSON.stringify(result).slice(0, 500)]);
+        const done = !failed || row.attempts >= INBOUND_MAX_ATTEMPTS;
+        await pool.query(
+          `UPDATE wa_inbound SET result = $2${done ? ', handled_at = now()' : ''} WHERE id = $1`,
+          [row.id, JSON.stringify(result).slice(0, 500)]
+        );
       }
     } catch (error) {
       console.error('[whatsapp] respostas:', error.message);
@@ -527,6 +756,7 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
   const JOBS = [
     { job: 'cobranca', fromHour: 9, run: runBillingAutomation },
     { job: 'confirmacao_gravacao', fromHour: 10, run: runConfirmationCron },
+    { job: 'aviso_feriado', fromHour: 9, run: runHolidayNotifications },
   ];
   setInterval(async () => {
     try {

@@ -31,7 +31,7 @@ interface AppContextType {
   addClient: (client: Client) => Promise<boolean>;
   updateClient: (client: Client) => Promise<boolean>;
   deleteClient: (id: string) => Promise<boolean>;
-  addRecording: (recording: Recording, options?: { skipClientDayCheck?: boolean }) => Promise<boolean>;
+  addRecording: (recording: Recording, options?: { skipClientDayCheck?: boolean; notify?: boolean }) => Promise<boolean>;
   updateRecording: (recording: Recording) => void;
   cancelRecording: (id: string) => void;
   deleteRecording: (id: string) => Promise<boolean>;
@@ -312,17 +312,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [data.settings]);
 
 
-  const addRecording = useCallback(async (recording: Recording, options?: { skipClientDayCheck?: boolean }): Promise<boolean> => {
+  const addRecording = useCallback(async (recording: Recording, options?: { skipClientDayCheck?: boolean; notify?: boolean }): Promise<boolean> => {
     if (hasConflict(recording.videomakerId, recording.date, recording.startTime, undefined, recording.type, recording.clientId, options).hasConflict) return false;
     const ok = await data.addRecording(recording);
     if (!ok) {
       console.error('addRecording: VPS insert failed for recording', recording);
       return false;
     }
-    // Send WhatsApp notification
+    // Send WhatsApp notification (notify: false na geração em massa e no encaixe de backup, que manda o convite)
     const client = data.clients.find(c => c.id === recording.clientId);
     const vm = users.find(u => u.id === recording.videomakerId);
-    if (client?.whatsapp && vm) {
+    if (options?.notify !== false && client?.whatsapp && vm) {
       sendRecordingScheduledNotification(
         client.whatsapp, client.companyName, client.id,
         recording.date, recording.startTime, vm.name

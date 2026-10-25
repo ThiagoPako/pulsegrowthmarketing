@@ -267,7 +267,9 @@ class Connection {
     this.state = 'iniciando';
     this.stopping = false;
     clearTimeout(this.restartTimer);
-    await setConn(this.id, { status: this.retries ? 'reconectando' : 'conectando', last_error: null });
+    // o status na tela é só informativo: banco fora do ar aqui não pode deixar o número preso em "iniciando"
+    await setConn(this.id, { status: this.retries ? 'reconectando' : 'conectando', last_error: null })
+      .catch((e) => log(this.name, 'status:', e.message));
     try {
       const { state, saveCreds } = await usePgAuthState(this.id);
       this.registered = !!state.creds.registered;
@@ -407,9 +409,11 @@ class Connection {
     this.retries += 1;
     const delay = Math.min(300, 2 ** Math.min(this.retries, 8)) * 1000;
     this.state = 'reconectando';
-    await setConn(this.id, { status: 'reconectando', last_error: `Caiu (${reason}); tento de novo em ${Math.round(delay / 1000)} s` });
+    // agenda a nova tentativa ANTES de gravar o status: se o banco falhar, o número continua tentando
     clearTimeout(this.restartTimer);
     this.restartTimer = setTimeout(() => this.start().catch(() => {}), delay);
+    await setConn(this.id, { status: 'reconectando', last_error: `Caiu (${reason}); tento de novo em ${Math.round(delay / 1000)} s` })
+      .catch((e) => log(this.name, 'status:', e.message));
   }
 
   async stop(status = 'desligada', error = null) {

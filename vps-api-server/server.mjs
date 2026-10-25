@@ -373,6 +373,38 @@ async function hasNullableClientIdOnContentTasks() {
   return rows[0]?.is_nullable === 'YES';
 }
 
+/**
+ * Tarefa avulsa (sem cliente) precisa de content_tasks.client_id aceitando NULL.
+ * Antes o ALTER rodava a cada chamada das rotas de avulso (lock exclusivo na
+ * tabela mais usada); agora confere uma vez e só altera se ainda for NOT NULL,
+ * com lock_timeout curto para nunca enfileirar o tráfego.
+ */
+let contentTasksClientIdNullablePromise = null;
+function ensureContentTasksClientIdNullable() {
+  if (!contentTasksClientIdNullablePromise) {
+    contentTasksClientIdNullablePromise = (async () => {
+      if (await hasNullableClientIdOnContentTasks()) return true;
+      const client = await pool.connect();
+      try {
+        await client.query(`SET lock_timeout = '2s'`);
+        await client.query(`ALTER TABLE content_tasks ALTER COLUMN client_id DROP NOT NULL`);
+        return true;
+      } finally {
+        await client.query('RESET lock_timeout').catch(() => {});
+        client.release();
+      }
+    })().catch((error) => {
+      // Tenta de novo na próxima chamada
+      contentTasksClientIdNullablePromise = null;
+      console.warn('[avulso] client_id de content_tasks ainda NOT NULL:', error?.message || error);
+      return false;
+    });
+  }
+  return contentTasksClientIdNullablePromise;
+}
+// Na subida: confere (e ajusta, se preciso) uma única vez
+ensureContentTasksClientIdNullable();
+
 async function getTableJsonColumns(tableName) {
   const cached = getSchemaCacheValue(tableJsonColumnsPromiseCache, tableName);
   if (cached) return cached;
@@ -4947,10 +4979,8 @@ app.post('/api/avulso-create-task', async (req, res) => {
 
     if (!title) return res.status(400).json({ error: 'title required' });
 
-    // Ensure client_id column accepts NULL
-    try {
-      await pool.query(`ALTER TABLE content_tasks ALTER COLUMN client_id DROP NOT NULL`);
-    } catch (_) { /* already nullable */ }
+    // Ensure client_id column accepts NULL (confere uma vez por processo)
+    await ensureContentTasksClientIdNullable();
 
     const { rows: [task] } = await pool.query(
       `INSERT INTO content_tasks
@@ -4979,10 +5009,8 @@ app.post('/api/avulso-actions', async (req, res) => {
 
     if (!task_id) return res.status(400).json({ error: 'task_id required' });
 
-    // Ensure client_id column accepts NULL
-    try {
-      await pool.query(`ALTER TABLE content_tasks ALTER COLUMN client_id DROP NOT NULL`);
-    } catch (_) { /* already nullable */ }
+    // Ensure client_id column accepts NULL (confere uma vez por processo)
+    await ensureContentTasksClientIdNullable();
 
     if (action === 'get_task') {
       const { rows: [task] } = await pool.query(

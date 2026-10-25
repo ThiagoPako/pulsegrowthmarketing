@@ -4638,7 +4638,13 @@ app.post('/api/portal-actions', async (req, res) => {
         if (currentContent.status === 'aprovado') return res.json({ success: true, already_approved: true });
         return res.status(409).json({ error: 'Este conteúdo ainda está em revisão interna' });
       }
-      await syncPortalApprovalToKanban(approvedContent, isTeamCaller ? caller.user : null);
+      // A aprovação já foi gravada: falha no Kanban/avisos só vai para o log. Devolver erro aqui
+      // faria o cliente tentar de novo e cair em already_approved, sem sincronizar nada.
+      try {
+        await syncPortalApprovalToKanban(approvedContent, isTeamCaller ? caller.user : null);
+      } catch (syncErr) {
+        console.error('[portal-actions] approve: falha ao sincronizar Kanban/avisos', content_id, syncErr);
+      }
       return res.json({ success: true });
     }
 
@@ -4662,7 +4668,13 @@ app.post('/api/portal-actions', async (req, res) => {
         `INSERT INTO client_portal_comments (content_id, author_name, author_type, author_id, message) VALUES ($1, $2, $3, $4, $5)`,
         [content_id, author_name || 'Cliente', author_type || 'client', author_id || null, `🔧 Ajuste solicitado: ${message}`]
       );
-      await syncPortalAdjustmentToKanban(adjustedContent, message, isTeamCaller ? caller.user : null);
+      // Pedido e comentário já gravados: falha no Kanban/avisos só vai para o log (nova tentativa
+      // do cliente duplicaria o comentário).
+      try {
+        await syncPortalAdjustmentToKanban(adjustedContent, message, isTeamCaller ? caller.user : null);
+      } catch (syncErr) {
+        console.error('[portal-actions] request_adjustment: falha ao sincronizar Kanban/avisos', content_id, syncErr);
+      }
       return res.json({ success: true });
     }
 

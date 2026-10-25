@@ -833,7 +833,7 @@ export default function FinancialRevenues() {
                     key={r.id}
                     initial={{ opacity: 0, x: -15 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.25 + i * 0.04, duration: 0.3 }}
+                    transition={{ delay: 0.25 + Math.min(i, 10) * 0.03, duration: 0.3 }}
                     className={`border-b transition-all duration-500 hover:bg-muted/50 ${isPaid ? 'bg-emerald-500/5' : ''}`}
                   >
                     {/* Logo */}
@@ -889,17 +889,12 @@ export default function FinancialRevenues() {
                                 whileHover={{ scale: 1.08, boxShadow: '0 0 20px rgba(16,185,129,0.5)' }}
                                 whileTap={{ scale: 0.92 }}
                               >
-                                <motion.div
+                                {/* Borda e brilho estáticos/no hover: animação infinita por linha pesava com muitas receitas */}
+                                <div
                                   className="absolute inset-0 rounded-lg"
                                   style={{ border: '2px solid rgba(52,211,153,0.6)' }}
-                                  animate={{ opacity: [0.4, 1, 0.4], scale: [1, 1.03, 1] }}
-                                  transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
                                 />
-                                <motion.div
-                                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent -skew-x-12"
-                                  animate={{ x: ['-150%', '150%'] }}
-                                  transition={{ repeat: Infinity, duration: 3, ease: 'linear' }}
-                                />
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent -skew-x-12 -translate-x-[150%] group-hover:translate-x-[150%] transition-transform duration-700 ease-linear motion-reduce:hidden" />
                                 <CheckCircle size={13} className="relative z-10" />
                                 <span className="relative z-10">Recebida</span>
                               </motion.button>
@@ -912,11 +907,9 @@ export default function FinancialRevenues() {
                                 whileHover={{ scale: 1.08, boxShadow: '0 0 15px hsl(var(--primary) / 0.3)' }}
                                 whileTap={{ scale: 0.92 }}
                               >
-                                <motion.div
+                                <div
                                   className="absolute inset-0 rounded-lg"
                                   style={{ border: '1px solid hsl(var(--primary) / 0.4)' }}
-                                  animate={{ opacity: [0.3, 0.8, 0.3] }}
-                                  transition={{ repeat: Infinity, duration: 2.5 }}
                                 />
                                 {sendingBilling === r.id ? (
                                   <Loader2 size={13} className="animate-spin" />

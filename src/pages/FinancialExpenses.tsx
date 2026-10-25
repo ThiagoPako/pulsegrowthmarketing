@@ -149,37 +149,22 @@ function SalaryPayButtons({ paid, busy = false, onPay, onPayWithBonus, onRevert 
           className="flex items-center gap-1.5"
         >
           {/* Pagar button */}
+          {/* Visual estático com brilho no hover: as animações infinitas (inclusive
+              boxShadow e backgroundPosition) rodavam por linha e forçavam repaint */}
           <motion.button
             onClick={onPay}
             disabled={busy}
-            className="disabled:opacity-60 disabled:pointer-events-none relative px-3 py-1.5 rounded-lg font-semibold text-xs text-white overflow-hidden"
+            className="disabled:opacity-60 disabled:pointer-events-none relative px-3 py-1.5 rounded-lg font-semibold text-xs text-white overflow-hidden shadow-[0_0_8px_rgba(245,158,11,0.4),0_0_16px_rgba(239,68,68,0.2)] hover:shadow-[0_0_16px_rgba(245,158,11,0.6),0_0_32px_rgba(239,68,68,0.4)] transition-shadow"
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.92 }}
           >
-            <motion.div
+            <div
               className="absolute inset-0 rounded-lg"
-              style={{ background: 'linear-gradient(135deg, #f59e0b, #ef4444, #f59e0b, #ef4444)', backgroundSize: '300% 300%' }}
-              animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
-              transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+              style={{ background: 'linear-gradient(135deg, #f59e0b, #ef4444)' }}
             />
-            <motion.div
-              className="absolute inset-0 rounded-lg"
-              animate={{
-                boxShadow: [
-                  '0 0 8px rgba(245,158,11,0.4), 0 0 16px rgba(239,68,68,0.2)',
-                  '0 0 16px rgba(245,158,11,0.6), 0 0 32px rgba(239,68,68,0.4)',
-                  '0 0 8px rgba(245,158,11,0.4), 0 0 16px rgba(239,68,68,0.2)',
-                ],
-              }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-            />
-            <motion.span
-              className="absolute -top-1 -right-1 text-sm"
-              animate={{ y: [-2, -6, -2], opacity: [0.7, 1, 0.7], scale: [0.8, 1, 0.8] }}
-              transition={{ duration: 1, repeat: Infinity }}
-            >
+            <span className="absolute -top-1 -right-1 text-sm">
               🔥
-            </motion.span>
+            </span>
             <span className="relative z-10 flex items-center gap-1">
               <Wallet size={13} /> Pagar
             </span>
@@ -189,34 +174,17 @@ function SalaryPayButtons({ paid, busy = false, onPay, onPayWithBonus, onRevert 
           <motion.button
             onClick={onPayWithBonus}
             disabled={busy}
-            className="disabled:opacity-60 disabled:pointer-events-none relative px-3 py-1.5 rounded-lg font-semibold text-xs text-white overflow-hidden"
+            className="disabled:opacity-60 disabled:pointer-events-none relative px-3 py-1.5 rounded-lg font-semibold text-xs text-white overflow-hidden shadow-[0_0_8px_rgba(139,92,246,0.4),0_0_16px_rgba(236,72,153,0.2)] hover:shadow-[0_0_16px_rgba(139,92,246,0.6),0_0_32px_rgba(236,72,153,0.4)] transition-shadow"
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.92 }}
           >
-            <motion.div
+            <div
               className="absolute inset-0 rounded-lg"
-              style={{ background: 'linear-gradient(135deg, #8b5cf6, #ec4899, #8b5cf6, #ec4899)', backgroundSize: '300% 300%' }}
-              animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
-              transition={{ duration: 2.5, repeat: Infinity, ease: 'linear' }}
+              style={{ background: 'linear-gradient(135deg, #8b5cf6, #ec4899)' }}
             />
-            <motion.div
-              className="absolute inset-0 rounded-lg"
-              animate={{
-                boxShadow: [
-                  '0 0 8px rgba(139,92,246,0.4), 0 0 16px rgba(236,72,153,0.2)',
-                  '0 0 16px rgba(139,92,246,0.6), 0 0 32px rgba(236,72,153,0.4)',
-                  '0 0 8px rgba(139,92,246,0.4), 0 0 16px rgba(236,72,153,0.2)',
-                ],
-              }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-            />
-            <motion.span
-              className="absolute -top-1 -right-1 text-sm"
-              animate={{ y: [-2, -6, -2], rotate: [0, 15, -15, 0], scale: [0.8, 1.1, 0.8] }}
-              transition={{ duration: 1.2, repeat: Infinity }}
-            >
+            <span className="absolute -top-1 -right-1 text-sm">
               🎁
-            </motion.span>
+            </span>
             <span className="relative z-10 flex items-center gap-1">
               <Gift size={13} /> + Bônus
             </span>
@@ -724,7 +692,7 @@ export default function FinancialExpenses() {
                           key={e.id}
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: i * 0.04, duration: 0.2 }}
+                          transition={{ delay: Math.min(i, 10) * 0.03, duration: 0.2 }}
                           className={`border-b transition-colors hover:bg-muted/50 ${paid ? 'bg-emerald-50/50 dark:bg-emerald-900/10' : ''}`}
                         >
                           <TableCell>
@@ -950,7 +918,7 @@ function ExpensesTable({
                     key={e.id}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.03, duration: 0.2 }}
+                    transition={{ delay: Math.min(i, 10) * 0.03, duration: 0.2 }}
                     className="border-b transition-colors hover:bg-muted/50"
                   >
                     <TableCell>{(() => { const d = normalizeDate(e.date); const [y,m,day] = d.split('-'); return `${day}/${m}/${y}`; })()}</TableCell>

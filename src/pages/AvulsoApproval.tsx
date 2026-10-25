@@ -69,6 +69,18 @@ interface ClientLogo {
   color: string;
 }
 
+// Equipe mostrada na página. A API pública não lista a equipe nem os logos dos clientes
+// (get_team/get_client_logos nunca existiram e só geravam erro): a lista fica aqui,
+// fácil de editar.
+const AVULSO_TEAM: TeamMember[] = [
+  { name: 'Victor Morais', role: 'admin' },
+  { name: 'Fabiely', role: 'videomaker' },
+  { name: 'Victor Oliveira', role: 'editor' },
+  { name: 'Adriely', role: 'designer' },
+  { name: 'Rayssa', role: 'social_media' },
+  { name: 'Thiago', role: 'admin' },
+];
+
 export default function AvulsoApproval() {
   const { taskId } = useParams<{ taskId: string }>();
   const [task, setTask] = useState<any>(null);
@@ -77,8 +89,10 @@ export default function AvulsoApproval() {
   const [revisionNotes, setRevisionNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [approved, setApproved] = useState(false);
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
-  const [clientLogos, setClientLogos] = useState<ClientLogo[]>([]);
+  // Revisão já pedida (agora ou antes): esconde os botões até o editor reenviar
+  const [revisionSent, setRevisionSent] = useState(false);
+  // Carrossel de logos desligado até existir uma lista de clientes que aceitam aparecer
+  const clientLogos: ClientLogo[] = [];
 
   useEffect(() => {
     if (!taskId) return;
@@ -88,25 +102,13 @@ export default function AvulsoApproval() {
         toast.error(result.error);
       } else if (result.task) {
         setTask(result.task);
+        // Estado real da tarefa: já aprovado (arquivado) ou revisão já pedida
+        if (result.task.approved_at || result.task.kanban_column === 'arquivado') setApproved(true);
+        else if (result.task.kanban_column === 'alteracao') setRevisionSent(true);
       }
       setLoading(false);
     };
     loadTask();
-
-    // Load team and clients via public avulso endpoint
-    const loadExtras = async () => {
-      try {
-        const [teamRes, clientsRes] = await Promise.all([
-          avulsoAction({ action: 'get_team' }),
-          avulsoAction({ action: 'get_client_logos' }),
-        ]);
-        if (Array.isArray(teamRes?.team)) setTeamMembers(teamRes.team.filter((m: any) => m.name && m.role));
-        if (Array.isArray(clientsRes?.clients)) setClientLogos(clientsRes.clients.filter((c: any) => c.logo_url));
-      } catch (e) {
-        console.warn('Failed to load extras:', e);
-      }
-    };
-    loadExtras();
   }, [taskId]);
 
   const handleApprove = async () => {
@@ -138,6 +140,7 @@ export default function AvulsoApproval() {
     }
     setSubmitting(false);
     setShowRevisionForm(false);
+    setRevisionSent(true);
     toast.success('Solicitação de revisão enviada! Nosso editor vai ajustar seu vídeo.');
   };
 
@@ -183,16 +186,7 @@ export default function AvulsoApproval() {
   const prospectName = task.prospect_name || task.title;
 
   // Filter unique team roles for display
-  const displayTeam = teamMembers.length > 0
-    ? teamMembers
-    : [
-        { name: 'Victor Morais', role: 'admin' },
-        { name: 'Fabiely', role: 'videomaker' },
-        { name: 'Victor Oliveira', role: 'editor' },
-        { name: 'Adriely', role: 'designer' },
-        { name: 'Rayssa', role: 'social_media' },
-        { name: 'Thiago', role: 'admin' },
-      ];
+  const displayTeam = AVULSO_TEAM;
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white overflow-x-hidden">
@@ -342,7 +336,17 @@ export default function AvulsoApproval() {
               </div>
             </motion.div>
 
+            {/* Sem vídeo ainda ou revisão já pedida: sem aprovar/revisar */}
+            {(!videoUrl || revisionSent) && (
+              <div className="max-w-lg mx-auto mb-8 text-center bg-white/5 border border-gray-700/50 rounded-2xl p-5 text-sm text-gray-300">
+                {revisionSent
+                  ? 'Revisão enviada! Nosso editor está ajustando o vídeo e você recebe a nova versão neste mesmo link.'
+                  : 'Seu vídeo ainda está em produção. Assim que ficar pronto, você poderá aprová-lo aqui.'}
+              </div>
+            )}
+
             {/* Action Buttons */}
+            {videoUrl && !revisionSent && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -380,10 +384,11 @@ export default function AvulsoApproval() {
                 Solicitar Revisão
               </Button>
             </motion.div>
+            )}
 
             {/* Revision Form */}
             <AnimatePresence>
-              {showRevisionForm && (
+              {showRevisionForm && videoUrl && !revisionSent && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}

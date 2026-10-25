@@ -4968,13 +4968,22 @@ app.post('/api/avulso-actions', async (req, res) => {
     }
 
     if (action === 'approve') {
+      // Só com o vídeo editado pronto (fora de ideias/captação/edição). Já aprovado: sucesso sem repetir.
       const { rowCount } = await pool.query(
         `UPDATE content_tasks
          SET kanban_column = 'arquivado', approved_at = NOW(), updated_at = NOW()
-         WHERE id = $1 AND client_id IS NULL`,
+         WHERE id = $1 AND client_id IS NULL AND edited_video_link IS NOT NULL
+           AND kanban_column NOT IN ('ideias', 'captacao', 'edicao', 'arquivado')`,
         [task_id]
       );
-      if (!rowCount) return res.status(404).json({ error: 'Vídeo avulso não encontrado' });
+      if (!rowCount) {
+        const { rows: [avulsoTask] } = await pool.query(
+          'SELECT kanban_column FROM content_tasks WHERE id = $1 AND client_id IS NULL', [task_id]
+        );
+        if (!avulsoTask) return res.status(404).json({ error: 'Vídeo avulso não encontrado' });
+        if (avulsoTask.kanban_column === 'arquivado') return res.json({ success: true, already_approved: true });
+        return res.status(409).json({ error: 'O vídeo ainda não está pronto para aprovação' });
+      }
       await pool.query(
         `INSERT INTO task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, $4)`,
         [task_id, 'Cliente avulso aprovou o vídeo', null, null]
@@ -4984,14 +4993,23 @@ app.post('/api/avulso-actions', async (req, res) => {
 
     if (action === 'request_revision') {
       if (!message) return res.status(400).json({ error: 'message required' });
+      // Revisão só de vídeo pronto e ainda não aprovado (arquivado não volta para alteração)
       const { rowCount } = await pool.query(
         `UPDATE content_tasks
          SET kanban_column = 'alteracao', adjustment_notes = $2, editing_started_at = NULL,
              editing_paused_at = NULL, editing_paused_seconds = 0, updated_at = NOW()
-         WHERE id = $1 AND client_id IS NULL`,
+         WHERE id = $1 AND client_id IS NULL AND edited_video_link IS NOT NULL
+           AND kanban_column NOT IN ('ideias', 'captacao', 'edicao', 'arquivado')`,
         [task_id, message]
       );
-      if (!rowCount) return res.status(404).json({ error: 'Vídeo avulso não encontrado' });
+      if (!rowCount) {
+        const { rows: [avulsoTask] } = await pool.query(
+          'SELECT kanban_column FROM content_tasks WHERE id = $1 AND client_id IS NULL', [task_id]
+        );
+        if (!avulsoTask) return res.status(404).json({ error: 'Vídeo avulso não encontrado' });
+        if (avulsoTask.kanban_column === 'arquivado') return res.status(409).json({ error: 'Este vídeo já foi aprovado' });
+        return res.status(409).json({ error: 'O vídeo ainda não está pronto para revisão' });
+      }
       await pool.query(
         `INSERT INTO task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, $4)`,
         [task_id, 'Cliente avulso solicitou revisão', message, null]

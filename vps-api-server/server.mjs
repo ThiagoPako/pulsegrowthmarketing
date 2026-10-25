@@ -4048,7 +4048,28 @@ app.post('/api/generate-caption', async (req, res) => {
 
 // ─── 5. Client Portal Auth ──────────────────────────────────
 // Senhas do portal: bcrypt. O SHA-256 salgado antigo ('pulse_portal_salt_2026')
-// ainda é aceito por verifyStoredPassword e regravado em bcrypt no login.
+// ainda é aceito por verifyPortalPassword e regravado em bcrypt no login.
+const PORTAL_LEGACY_PASSWORD_SALT = 'pulse_portal_salt_2026';
+
+/**
+ * Verificador só do portal: bcrypt ou o SHA-256 salgado antigo. Não usa o
+ * verifyStoredPassword da equipe (texto puro e SHA-256 sem sal): o hash guardado
+ * em clients/client_portal_users é legível pela equipe e não pode valer como senha.
+ */
+async function verifyPortalPassword(rawPassword, passwordHash) {
+  const raw = String(rawPassword ?? '');
+  const stored = typeof passwordHash === 'string' ? passwordHash.trim() : '';
+  if (!raw || !stored) return false;
+  try {
+    if (stored.startsWith('$2')) return await bcrypt.compare(raw, stored);
+    if (!/^[a-f0-9]{64}$/i.test(stored)) return false;
+    const salted = crypto.createHash('sha256').update(raw + PORTAL_LEGACY_PASSWORD_SALT).digest();
+    return crypto.timingSafeEqual(salted, Buffer.from(stored, 'hex'));
+  } catch (error) {
+    console.error('[portal-login] falha ao conferir a senha:', error?.message || error);
+    return false;
+  }
+}
 
 // Ensure client_portal_users table exists (multi-user per company)
 (async () => {
@@ -4102,7 +4123,7 @@ app.post('/api/client-portal-auth', async (req, res) => {
       );
       if (portalUser) {
         // Aceita bcrypt e o SHA-256 salgado antigo; no primeiro login certo regrava em bcrypt
-        if (!(await verifyStoredPassword(password, portalUser.password_hash))) return invalidLogin();
+        if (!(await verifyPortalPassword(password, portalUser.password_hash))) return invalidLogin();
         clearLoginFailures(attemptKey);
         if (!String(portalUser.password_hash || '').startsWith('$2')) {
           const upgraded = await bcrypt.hash(password, 12);
@@ -4117,7 +4138,7 @@ app.post('/api/client-portal-auth', async (req, res) => {
         [login.trim()]
       );
       if (!client) return invalidLogin();
-      if (!(await verifyStoredPassword(password, client.client_password_hash))) return invalidLogin();
+      if (!(await verifyPortalPassword(password, client.client_password_hash))) return invalidLogin();
       clearLoginFailures(attemptKey);
       return res.json({ success: true, client_id: client.id, company_name: client.company_name, color: client.color, logo_url: client.logo_url, display_name: client.company_name });
     }

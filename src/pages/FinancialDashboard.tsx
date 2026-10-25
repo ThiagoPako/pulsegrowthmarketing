@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFinancialData, normalizeDate, isExpensePaid } from '@/hooks/useFinancialData';
-import { computeClientProfitability, sumAmounts, toAmount, accountBalance, reserveBalance, isRevenueReceived, isRevenueOverdue, isRevenuePending, safeDivide, safePercent, isSameMonth } from '@/lib/financialCalc';
+import { computeClientProfitability, sumAmounts, toAmount, accountBalance, reserveBalance, isRevenueReceived, isRevenueOverdue, isRevenuePending, safeDivide, safePercent, isSameMonth, todayLocal } from '@/lib/financialCalc';
 
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -403,7 +403,7 @@ export default function FinancialDashboard() {
 
   const handleMarkPaid = async (item: typeof dueThisWeek[0]) => {
     if (item.revenueId) {
-      const ok = await updateRevenue(item.revenueId, { status: 'recebida', paid_at: new Date().toISOString().split('T')[0] });
+      const ok = await updateRevenue(item.revenueId, { status: 'recebida', paid_at: todayLocal() });
       if (ok) {
         setPaidClientName(item.clientName);
         setPaidCelebration(true);

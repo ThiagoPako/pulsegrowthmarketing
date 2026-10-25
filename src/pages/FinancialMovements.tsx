@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useFinancialData, normalizeDate, isExpensePaid, isSalaryLikeExpense, type Revenue, type Expense, type CashMovement } from '@/hooks/useFinancialData';
-import { isMirroredCashMovement, toAmount, sumAmounts, isRevenueReceived } from '@/lib/financialCalc';
+import { isMirroredCashMovement, toAmount, sumAmounts, isRevenueReceived, todayLocal } from '@/lib/financialCalc';
 
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -253,7 +253,7 @@ export default function FinancialMovements() {
       const originalRevenue = editTarget.original as Revenue;
       // Mantém a data original do pagamento — editar valor não pode mudar quando foi pago
       const paidAt = editStatus === 'recebida'
-        ? normalizeDate(originalRevenue.paid_at || '') || new Date().toISOString().split('T')[0]
+        ? normalizeDate(originalRevenue.paid_at || '') || todayLocal()
         : null;
       ok = await updateRevenue(editTarget.id, {
         amount: val,

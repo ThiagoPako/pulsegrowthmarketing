@@ -11,6 +11,7 @@ import { Upload, FileSpreadsheet, CheckCircle, AlertTriangle, Loader2 } from 'lu
 import { toast } from 'sonner';
 import { supabase } from '@/lib/vpsDb';
 import type { Expense, ExpenseCategory } from '@/hooks/useFinancialData';
+import { todayLocal } from '@/lib/financialCalc';
 
 export const STRUCTURE_TAG = '[ESTRUTURA]';
 
@@ -86,7 +87,7 @@ export default function StructureImportDialog({
   const [fileName, setFileName] = useState('');
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const [fallbackDate, setFallbackDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [fallbackDate, setFallbackDate] = useState(() => todayLocal());
   const [importing, setImporting] = useState(false);
 
   const existingKeys = useMemo(() => {

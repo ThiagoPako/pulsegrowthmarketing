@@ -385,7 +385,7 @@ export function useFinancialData() {
         amount: amountNum,
         type: 'entrada',
         description: `[Receita] ${label} - ID: ${revenueId}`,
-        date: normalizeDate(r.paid_at || r.due_date || new Date().toISOString().split('T')[0]),
+        date: normalizeDate(r.paid_at || r.due_date || todayLocal()),
         is_reserve: false,
       } as any);
     }
@@ -437,7 +437,7 @@ export function useFinancialData() {
           amount: revenueAmount,
           type: 'entrada',
           description: `[Receita] ${descLabel} - ID: ${id}`,
-          date: normalizeDate(updates.paid_at || previousRevenue?.due_date || new Date().toISOString().split('T')[0]),
+          date: normalizeDate(updates.paid_at || previousRevenue?.due_date || todayLocal()),
           is_reserve: false,
         } as any);
       } else if (!isReceived && wasReceived) {
@@ -726,7 +726,7 @@ export function useFinancialData() {
       amount: toAmount(e.amount),
       type: 'saida',
       description: `[Despesa] ${e.description || 'Despesa'} - ID: ${expenseId}`,
-      date: normalizeDate(e.date) || new Date().toISOString().split('T')[0],
+      date: normalizeDate(e.date) || todayLocal(),
       is_reserve: false,
     } as any);
   };
@@ -991,7 +991,7 @@ export function useFinancialData() {
         amount: amountNum,
         type: 'entrada',
         description: `[Receita] Recebimento - ${amountNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} - ID: ${r.id}`,
-        date: normalizeDate(r.paid_at || r.due_date) || new Date().toISOString().split('T')[0],
+        date: normalizeDate(r.paid_at || r.due_date) || todayLocal(),
         is_reserve: false,
       } as any);
     }

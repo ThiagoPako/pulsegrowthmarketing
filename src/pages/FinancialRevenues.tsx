@@ -20,7 +20,7 @@ import { format, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
 import { generateDeliveryReport, resolvePaymentInfo, groupRevenuesByClient, buildBillingBreakdown } from '@/lib/billingReport';
-import { isRevenueReceived, isRevenueOverdue, PLACEHOLDER_CLIENT_ID } from '@/lib/financialCalc';
+import { isRevenueReceived, isRevenueOverdue, PLACEHOLDER_CLIENT_ID, todayLocal } from '@/lib/financialCalc';
 import BulkBillingConfirmDialog from '@/components/financial/BulkBillingConfirmDialog';
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -318,7 +318,7 @@ export default function FinancialRevenues() {
     const id = confirmPaidId;
     const rev = revenues.find(r => r.id === id);
     const cl = clients.find(c => c.id === rev?.client_id);
-    const dateToUse = paidDate || new Date().toISOString().split('T')[0];
+    const dateToUse = paidDate || todayLocal();
     setConfirmPaidId(null);
     setPaidDate('');
     setAnimatingPaid(id);

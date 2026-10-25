@@ -15,6 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/lib/vpsDb';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { todayLocal } from '@/lib/financialCalc';
 
 const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'destructive' | 'secondary' | 'outline' }> = {
   ativo: { label: 'Ativo', variant: 'default' },
@@ -31,10 +32,11 @@ const PAYMENT_METHODS: Record<string, string> = {
   pix: 'PIX', boleto: 'Boleto', cartao: 'Cartão', transferencia: 'Transferência',
 };
 
-const emptyForm = {
-  client_id: '', plan_id: '', contract_value: 0, contract_start_date: new Date().toISOString().split('T')[0],
+// Função: a data padrão é a de hoje (local) quando o formulário abre
+const emptyForm = () => ({
+  client_id: '', plan_id: '', contract_value: 0, contract_start_date: todayLocal(),
   due_day: 10, payment_method: 'pix', status: 'ativo',
-};
+});
 
 export default function FinancialContracts() {
   const navigate = useNavigate();
@@ -56,7 +58,7 @@ export default function FinancialContracts() {
   const handleSave = async () => {
     if (!form.client_id) { toast.error('Selecione um cliente'); return; }
     const ok = await upsertContract(editingId ? { id: editingId, ...form } : form);
-    if (ok) { toast.success('Contrato salvo!'); setOpen(false); setForm(emptyForm); setEditingId(null); }
+    if (ok) { toast.success('Contrato salvo!'); setOpen(false); setForm(emptyForm()); setEditingId(null); }
   };
 
   const handleEdit = (c: FinancialContract) => {
@@ -97,7 +99,7 @@ export default function FinancialContracts() {
             <SelectItem value="suspenso">Suspensos</SelectItem>
           </SelectContent>
         </Select>
-        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setForm(emptyForm); setEditingId(null); } }}>
+        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setForm(emptyForm()); setEditingId(null); } }}>
           <DialogTrigger asChild><Button size="sm"><Plus size={16} className="mr-1" /> Novo Contrato</Button></DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>{editingId ? 'Editar Contrato' : 'Novo Contrato'}</DialogTitle></DialogHeader>

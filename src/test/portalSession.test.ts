@@ -3,6 +3,7 @@ import {
   createPortalSession,
   effectiveClientId,
   itemScopeClientId,
+  pickBackupOption,
 } from '../../vps-api-server/lib/portalSession.mjs';
 
 // jwt de mentira: guarda o payload em JSON e confere o segredo (o suficiente para a lógica do módulo)
@@ -51,6 +52,32 @@ describe('sessão do portal', () => {
 
   it('sem nenhuma sessão devolve null', async () => {
     expect(await session.resolveCaller({ headers: {} }, async () => ({ user: null }))).toBeNull();
+  });
+});
+
+describe('oferta de remarcação (accept_backup)', () => {
+  const session = createPortalSession({ jwt: fakeJwt, secret: 'portal-secret' });
+  const options = [
+    { vm: 'vm-principal', date: '2026-11-03', times: ['10:00'], main: true },
+    { vm: 'vm-alt', date: '2026-11-03', times: ['08:30', '14:30'] },
+  ];
+  const token = session.signBackupOffer({ clientId: CLIENT_A, recordingId: 'r1', options });
+
+  it('só vale para o próprio cliente e não vira sessão do portal', () => {
+    expect(session.readBackupOffer(token, CLIENT_A)?.options).toEqual(options);
+    expect(session.readBackupOffer(token, CLIENT_B)).toBeNull();
+    expect(session.read(token)).toBeNull();
+  });
+
+  it('aceita só uma opção oferecida', () => {
+    const offer = session.readBackupOffer(token, CLIENT_A);
+    expect(pickBackupOption(offer, { date: '2026-11-03', time: '10:00' })?.vm).toBe('vm-principal');
+    expect(pickBackupOption(offer, { videomakerId: 'vm-alt', date: '2026-11-03', time: '14:30' })?.vm).toBe('vm-alt');
+    expect(pickBackupOption(offer, { date: '2026-11-03', time: '14:30' })).toBeNull();
+    expect(pickBackupOption(offer, { videomakerId: 'vm-alt', date: '2026-11-03', time: '10:00' })).toBeNull();
+    expect(pickBackupOption(offer, { videomakerId: 'vm-outro', date: '2026-11-03', time: '08:30' })).toBeNull();
+    expect(pickBackupOption(offer, { date: '2026-11-07', time: '10:00' })).toBeNull();
+    expect(pickBackupOption(null, { date: '2026-11-03', time: '10:00' })).toBeNull();
   });
 });
 

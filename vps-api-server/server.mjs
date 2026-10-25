@@ -21,7 +21,7 @@ import { createPgClient } from './pgClient.mjs';
 import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerWhatsAppRoutes } from './whatsapp/routes.mjs';
 import { enqueueWhatsApp, clientTarget, clientsForGroup } from './whatsapp/shared.mjs';
-import { createPortalSession, effectiveClientId, itemScopeClientId } from './lib/portalSession.mjs';
+import { createPortalSession, effectiveClientId, itemScopeClientId, pickBackupOption } from './lib/portalSession.mjs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -5093,15 +5093,35 @@ app.post('/api/portal-recordings', async (req, res) => {
         await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
           [u.user_id, 'Gravação cancelada pelo cliente', `${clientCancel?.company_name || 'Cliente'} cancelou gravação ${recCancel.date} ${recCancel.start_time}`, 'warning', '/agenda']);
       }
-      return res.json({ success: true, backup_available: backupAvailable, backup_slot: backupSlot, next_fixed_date: nextFixedDate, alternative_videomakers: alternativeVideomakers });
+      // Oferta assinada: o accept_backup só aceita uma destas opções (data, hora e videomaker).
+      const backupOfferOptions = [
+        ...(backupSlot ? [{ vm: clientCancel?.videomaker_id || null, date: backupSlot.date, times: [backupSlot.time], main: true }] : []),
+        ...alternativeVideomakers.map(vm => ({ vm: vm.id, date: vm.date, times: vm.available_slots })),
+      ];
+      const backupOffer = backupOfferOptions.length > 0
+        ? portalSession.signBackupOffer({ clientId: client_id, recordingId: recording_id, options: backupOfferOptions })
+        : null;
+      return res.json({ success: true, backup_available: backupAvailable, backup_slot: backupSlot, next_fixed_date: nextFixedDate, alternative_videomakers: alternativeVideomakers, backup_offer: backupOffer });
     }
 
     /* ── accept_backup ── */
     if (action === 'accept_backup') {
-      const { backup_date, backup_time, videomaker_id: requestedVmId } = req.body;
+      const { backup_date, backup_time, videomaker_id: requestedVmId, backup_offer } = req.body;
       if (!backup_date || !backup_time) return res.status(400).json({ error: 'backup_date and backup_time required' });
-      // Use requested videomaker_id (alternative) or fallback to client's default
-      let vmId = requestedVmId || null;
+      // Só uma das opções oferecidas no cancelamento (oferta assinada, válida por 2 h), uma vez só.
+      const offer = portalSession.readBackupOffer(backup_offer, client_id);
+      if (!offer) return res.status(400).json({ error: 'Essa opção de remarcação expirou. Fale com a equipe para remarcar.' });
+      const offerOption = pickBackupOption(offer, { videomakerId: requestedVmId || null, date: backup_date, time: backup_time });
+      if (!offerOption) return res.status(400).json({ error: 'Horário não faz parte das opções oferecidas' });
+      if (offer.issuedAt) {
+        const { rows: [alreadyAccepted] } = await pool.query(
+          `SELECT id FROM recordings WHERE client_id = $1 AND type = 'secundaria' AND created_at >= to_timestamp($2) LIMIT 1`,
+          [client_id, offer.issuedAt]
+        );
+        if (alreadyAccepted) return res.status(409).json({ error: 'Essa remarcação já foi feita' });
+      }
+      // Videomaker da opção escolhida; o backup sem videomaker definido cai no do cliente
+      let vmId = offerOption.vm || null;
       if (!vmId) {
         const { rows: [clientBackup] } = await pool.query('SELECT videomaker_id FROM clients WHERE id = $1', [client_id]);
         vmId = clientBackup?.videomaker_id;
@@ -5320,6 +5340,13 @@ app.post('/api/portal-recordings', async (req, res) => {
           [u.user_id, 'Solicitação de gravação especial', `${clientSpecial?.company_name || 'Cliente'}: ${comment} — Data: ${requested_date} ${requested_time || ''} — AGUARDANDO APROVAÇÃO`, 'warning', '/relacionamento']);
       }
       return res.json({ success: true, recording_id: newSpecialRec?.id });
+    }
+
+    /* ── approve_special / reject_special: só a equipe (Relacionamento) ── */
+    if (action === 'approve_special' || action === 'reject_special') {
+      const canDecideSpecial = caller?.kind === 'team'
+        && (await isAdminUser(caller.user) || await userHasAssignedRole(caller.user, 'gestor_projetos'));
+      if (!canDecideSpecial) return res.status(403).json({ error: 'Só a equipe aprova ou recusa gravação especial' });
     }
 
     /* ── approve_special ── */

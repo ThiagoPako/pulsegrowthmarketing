@@ -56,7 +56,41 @@ export function createPortalSession({ jwt, secret, expiresIn = '7d' }) {
     return null;
   }
 
-  return { sign, read, resolveCaller };
+  /**
+   * Oferta de remarcação feita no cancelamento (backup do videomaker do cliente ou
+   * horários de videomakers alternativos). O accept_backup só aceita uma opção desta
+   * oferta: data, hora e videomaker não vêm mais livres do corpo.
+   * options: [{ vm, date, times: ['09:00', ...], main? }] (main = backup do videomaker do cliente)
+   */
+  function signBackupOffer({ clientId, recordingId, options, expiresIn: offerExpiresIn = '2h' }) {
+    return jwt.sign({ typ: 'backup_offer', cid: String(clientId), rid: String(recordingId || ''), opts: options || [] }, secret, { expiresIn: offerExpiresIn });
+  }
+
+  /** { recordingId, options, issuedAt } ou null se faltar, expirou, não é oferta ou é de outro cliente. */
+  function readBackupOffer(rawToken, clientId) {
+    if (!rawToken || typeof rawToken !== 'string') return null;
+    try {
+      const decoded = jwt.verify(rawToken, secret);
+      if (!decoded || decoded.typ !== 'backup_offer' || decoded.sub || decoded.cid !== String(clientId)) return null;
+      return { recordingId: decoded.rid || null, options: Array.isArray(decoded.opts) ? decoded.opts : [], issuedAt: decoded.iat || null };
+    } catch {
+      return null;
+    }
+  }
+
+  return { sign, read, resolveCaller, signBackupOffer, readBackupOffer };
+}
+
+/**
+ * Opção escolhida dentro da oferta. Sem videomaker escolhido vale só o backup do
+ * videomaker do cliente (opção marcada com main). Devolve a opção ou null.
+ */
+export function pickBackupOption(offer, { videomakerId, date, time }) {
+  if (!offer || !Array.isArray(offer.options)) return null;
+  const candidates = videomakerId
+    ? offer.options.filter(o => o && !o.main && o.vm === videomakerId)
+    : offer.options.filter(o => o && o.main);
+  return candidates.find(o => o.date === date && Array.isArray(o.times) && o.times.includes(time)) || null;
 }
 
 /** client_id usado pela ação: o do token para o cliente (o do corpo é ignorado); o do corpo para a equipe. */

@@ -199,7 +199,7 @@ interface AlternativeVideomaker {
   id: string; name: string; date: string; available_slots: string[]; total_free: number;
 }
 
-type CancelFlow = null | { step: 'confirming'; rec: Recording } | { step: 'result'; rec: Recording; backupAvailable: boolean; backupSlot: { date: string; time: string } | null; nextFixedDate: string | null; alternativeVideomakers: AlternativeVideomaker[] };
+type CancelFlow = null | { step: 'confirming'; rec: Recording } | { step: 'result'; rec: Recording; backupAvailable: boolean; backupSlot: { date: string; time: string } | null; nextFixedDate: string | null; alternativeVideomakers: AlternativeVideomaker[]; backupOffer: string | null };
 
 export default function PortalRecordingCalendar({ clientId, clientColor }: Props) {
   const [recordings, setRecordings] = useState<Recording[]>([]);
@@ -438,7 +438,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     setCancelling(true);
     const { data, error } = await portalRecordings({ action: 'cancel', client_id: clientId, recording_id: rec.id });
     if (data?.success) {
-      setCancelFlow({ step: 'result', rec, backupAvailable: data.backup_available, backupSlot: data.backup_slot, nextFixedDate: data.next_fixed_date, alternativeVideomakers: data.alternative_videomakers || [] });
+      setCancelFlow({ step: 'result', rec, backupAvailable: data.backup_available, backupSlot: data.backup_slot, nextFixedDate: data.next_fixed_date, alternativeVideomakers: data.alternative_videomakers || [], backupOffer: data.backup_offer || null });
       await loadRecordings();
     } else {
       toast.error(error?.message || data?.error || 'Erro ao cancelar');
@@ -451,7 +451,8 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     const time = altVmId ? altTime! : cancelFlow?.step === 'result' ? cancelFlow.backupSlot?.time : undefined;
     if (!date || !time) return;
     setAcceptingBackup(true);
-    const body: any = { action: 'accept_backup', client_id: clientId, backup_date: date, backup_time: time };
+    // A oferta assinada do cancelamento: o servidor só aceita uma das opções dela
+    const body: any = { action: 'accept_backup', client_id: clientId, backup_date: date, backup_time: time, backup_offer: cancelFlow?.step === 'result' ? cancelFlow.backupOffer : null };
     if (altVmId) body.videomaker_id = altVmId;
     const { data, error } = await portalRecordings(body);
     if (data?.success) {

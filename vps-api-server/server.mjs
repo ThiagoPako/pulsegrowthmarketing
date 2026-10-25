@@ -5570,20 +5570,43 @@ function streamLocalPortalMedia(req, res, filePath, quality) {
   return fs.createReadStream(filePath).pipe(res.status(200));
 }
 
+// Fila do ffmpeg do 480p: no máximo 2 transcodificações ao mesmo tempo. Sem ela, abrir
+// a biblioteca subia um ffmpeg por vídeo e a VPS inteira ficava lenta.
+const PORTAL_TRANSCODE_CONCURRENCY = 2;
+let portalTranscodesRunning = 0;
+const portalTranscodeQueue = [];
+function runPortalTranscodeSlot(task) {
+  return new Promise((resolve, reject) => {
+    const start = () => {
+      portalTranscodesRunning++;
+      Promise.resolve()
+        .then(task)
+        .then(resolve, reject)
+        .finally(() => {
+          portalTranscodesRunning--;
+          const next = portalTranscodeQueue.shift();
+          if (next) next();
+        });
+    };
+    if (portalTranscodesRunning < PORTAL_TRANSCODE_CONCURRENCY) start();
+    else portalTranscodeQueue.push(start);
+  });
+}
+
 function warmPortal480pCache(sourcePath, cachedFile) {
   if (fs.existsSync(cachedFile)) return Promise.resolve(cachedFile);
   const existingJob = activePortalTranscodes.get(cachedFile);
   if (existingJob) return existingJob;
 
   const tempFile = `${cachedFile}.tmp`;
-  const job = execFileAsync('ffmpeg', [
+  const job = runPortalTranscodeSlot(() => execFileAsync('ffmpeg', [
     '-i', sourcePath,
     '-vf', 'scale=-2:480',
     '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
     '-c:a', 'aac', '-b:a', '96k',
     '-movflags', '+faststart',
     '-y', tempFile,
-  ], { timeout: 120000 })
+  ], { timeout: 120000 }))
     .then(() => {
       fs.renameSync(tempFile, cachedFile);
       return cachedFile;

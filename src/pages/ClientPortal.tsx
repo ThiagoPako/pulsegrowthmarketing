@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/vpsDb';
 import { portalAction, hasPortalSession, clearPortalSession } from '@/lib/portalApi';
@@ -221,7 +221,13 @@ export default function ClientPortal() {
   const loadComments = async (contentId: string) => {
     const result = await portalAction({ action: 'get_comments', content_id: contentId });
     if (result?.comments) {
-      setComments(result.comments as PortalComment[]);
+      const next = result.comments as PortalComment[];
+      // Só re-renderiza quando a lista mudou (o polling roda a cada 5 s com o vídeo aberto)
+      setComments(prev => (
+        prev.length === next.length && prev.every((c, i) => c.id === next[i]?.id && c.message === next[i]?.message)
+          ? prev
+          : next
+      ));
     }
   };
 
@@ -229,12 +235,15 @@ export default function ClientPortal() {
   useEffect(() => {
     if (!selectedContent?.id) return;
     const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       loadComments(selectedContent.id);
     }, 5000);
     return () => clearInterval(interval);
   }, [selectedContent?.id]);
 
-  const handleSelectContent = (content: PortalContent) => {
+  // Estável (useCallback): os cards memorizados não re-renderizam a cada timeupdate do player.
+  // Abre em 'original' (nginx direto); o 480p (ffmpeg na VPS) fica só como escolha do usuário.
+  const handleSelectContent = useCallback((content: PortalContent) => {
     setSelectedContent(content);
     setShowAdjustment(false);
     setAdjustmentNote('');
@@ -243,9 +252,9 @@ export default function ClientPortal() {
     setVideoDuration(0);
     setResolvedVideoUrl(null);
     setVideoLoadError(null);
-    setVideoQuality('480p');
+    setVideoQuality('original');
     loadComments(content.id);
-  };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -853,6 +862,7 @@ export default function ClientPortal() {
                   items={items}
                   clientColor={clientColor}
                   onSelect={handleSelectContent}
+                  paused={!!selectedContent}
                   delay={idx * 0.05}
                 />
               ))}
@@ -870,6 +880,7 @@ export default function ClientPortal() {
                         items={season.items}
                         clientColor={clientColor}
                         onSelect={handleSelectContent}
+                        paused={!!selectedContent}
                         delay={0}
                       />
                     ))}
@@ -914,7 +925,7 @@ export default function ClientPortal() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
                 {optimizedContents.map(content => (
-                  <ReelsCard key={content.id} content={content} clientColor={clientColor} onSelect={handleSelectContent} />
+                  <ReelsCard key={content.id} content={content} clientColor={clientColor} onSelect={handleSelectContent} paused={!!selectedContent} />
                 ))}
               </div>
             )}
@@ -1406,11 +1417,12 @@ export default function ClientPortal() {
 }
 
 /* ── Content Row Component ── */
-function ContentRow({ label, items, clientColor, onSelect, delay = 0 }: {
+const ContentRow = memo(function ContentRow({ label, items, clientColor, onSelect, paused = false, delay = 0 }: {
   label: string;
   items: PortalContent[];
   clientColor: string;
   onSelect: (c: PortalContent) => void;
+  paused?: boolean;
   delay?: number;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1459,18 +1471,21 @@ function ContentRow({ label, items, clientColor, onSelect, delay = 0 }: {
 
       <div ref={scrollRef} className="flex gap-3 overflow-x-auto pb-2 scrollbar-none snap-x snap-mandatory" onScroll={checkScroll}>
         {items.map(content => (
-          <ReelsCard key={content.id} content={content} clientColor={clientColor} onSelect={onSelect} />
+          <ReelsCard key={content.id} content={content} clientColor={clientColor} onSelect={onSelect} paused={paused} />
         ))}
       </div>
     </motion.section>
   );
-}
+});
 
 /* ── Reels Card with always-on 6s loop preview ── */
-function ReelsCard({ content, clientColor, onSelect }: {
+// Prévia direto do nginx (sem o 480p do proxy: cada card subia um ffmpeg na VPS), só
+// enquanto o card está na tela e pausada com um conteúdo aberto no player.
+const ReelsCard = memo(function ReelsCard({ content, clientColor, onSelect, paused = false }: {
   content: PortalContent;
   clientColor: string;
   onSelect: (c: PortalContent) => void;
+  paused?: boolean;
 }) {
   const isVideo = isPortalVideo(content);
   const Icon = CONTENT_TYPE_ICONS[content.content_type] || Film;
@@ -1478,9 +1493,11 @@ function ReelsCard({ content, clientColor, onSelect }: {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewVisible, setPreviewVisible] = useState(false);
   const cardRef = useRef<HTMLButtonElement>(null);
+  const previewRef = useRef<HTMLVideoElement>(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [inView, setInView] = useState(false);
 
-  // IntersectionObserver: load preview only when card scrolls into view
+  // IntersectionObserver: carrega a prévia quando o card aparece e pausa quando sai da tela
   useEffect(() => {
     if (!isVideo || !content.file_url) return;
     const el = cardRef.current;
@@ -1488,10 +1505,8 @@ function ReelsCard({ content, clientColor, onSelect }: {
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
-          setIsVisible(true);
-          observer.disconnect();
-        }
+        setInView(entry.isIntersecting);
+        if (entry.isIntersecting) setIsVisible(true);
       },
       { rootMargin: '200px' }
     );
@@ -1499,24 +1514,19 @@ function ReelsCard({ content, clientColor, onSelect }: {
     return () => observer.disconnect();
   }, [isVideo, content.file_url]);
 
-  // Resolve streaming URL once card becomes visible
+  // URL da prévia: o arquivo direto (Range do nginx), sem passar pelo proxy/ffmpeg
   useEffect(() => {
     if (!isVisible || !isVideo || !content.file_url || previewUrl) return;
-
-    if (!shouldProxyPortalVideo(content.file_url)) {
-      setPreviewUrl(content.file_url);
-      return;
-    }
-
-    let cancelled = false;
-    createPortalVideoObjectUrl(content.file_url)
-      .then((url) => {
-        if (!cancelled) setPreviewUrl(url);
-      })
-      .catch(() => {});
-
-    return () => { cancelled = true; };
+    setPreviewUrl(content.file_url);
   }, [isVisible, isVideo, content.file_url, previewUrl]);
+
+  // Pausa com o player aberto ou fora da tela; volta a tocar quando reaparece
+  useEffect(() => {
+    const vid = previewRef.current;
+    if (!vid) return;
+    if (paused || !inView) vid.pause();
+    else vid.play().catch(() => {});
+  }, [paused, inView, previewUrl]);
 
   const showPreview = isVideo && !!previewUrl;
 
@@ -1542,11 +1552,12 @@ function ReelsCard({ content, clientColor, onSelect }: {
         {/* Always-on 6s loop video preview */}
         {showPreview && (
           <video
+            ref={previewRef}
             src={previewUrl!}
             muted
             playsInline
-            autoPlay
-            preload="auto"
+            autoPlay={!paused}
+            preload="metadata"
             className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${previewVisible ? 'opacity-100' : 'opacity-0'}`}
             onLoadedData={() => setPreviewVisible(true)}
             onError={() => {
@@ -1599,4 +1610,4 @@ function ReelsCard({ content, clientColor, onSelect }: {
       </div>
     </button>
   );
-}
+});

@@ -58,8 +58,9 @@ export default function FinancialEmpresaSaude() {
   }, [periodType, customStart, customEnd]);
 
   // Retirada de sócio: categoria Pró-labore, ou lançamento no nome de um sócio
-  // (usuário admin, pelo nome completo). Antes era qualquer texto com "thiago" ou
-  // "victor", o que tirava dos custos o salário de funcionários com o mesmo nome.
+  // (papel admin ou sócio gestor, principal ou adicional). Antes era qualquer texto
+  // com "thiago" ou "victor", o que tirava dos custos o salário de funcionários com
+  // o mesmo nome.
   const prolaboreCategoryId = useMemo(
     () => categories.find(c => /pr[oó][- ]?labore/i.test(c.name || ''))?.id || null,
     [categories]
@@ -69,13 +70,25 @@ export default function FinancialEmpresaSaude() {
     [categories]
   );
   const socioKeys = useMemo(() => {
+    const isSocio = (u: (typeof users)[number]) =>
+      (u.roles?.length ? u.roles : [u.role]).some(r => r === 'admin' || r === 'socio_gestor');
+    const firstName = (v?: string) => personKey((v || '').trim().split(/\s+/)[0]);
+    // Nomes e primeiros nomes de quem não é sócio: nome de sócio igual a um deles é
+    // ambíguo (ex.: sócio cadastrado só como "Victor" e o editor Victor Oliveira)
+    const others = new Set<string>();
+    users.filter(u => !isSocio(u)).forEach(u => {
+      [u.displayName, u.name].forEach(v => {
+        others.add(personKey(v));
+        others.add(firstName(v));
+      });
+    });
     const full = new Set<string>();
     const first = new Set<string>();
-    users.filter(u => u.role === 'admin').forEach(u => {
+    users.filter(isSocio).forEach(u => {
       [u.displayName, u.name].forEach(v => {
         const k = personKey(v);
-        if (k.length >= 3) full.add(k);
-        const f = personKey((v || '').trim().split(/\s+/)[0]);
+        if (k.length >= 4 && !others.has(k)) full.add(k);
+        const f = firstName(v);
         if (f.length >= 4) first.add(f);
       });
     });
@@ -88,10 +101,12 @@ export default function FinancialEmpresaSaude() {
     if (salaryCategoryId && e.category_id === salaryCategoryId) {
       return socioKeys.full.has(personKey(salaryPersonName(e))) || socioKeys.full.has(personKey(e.responsible));
     }
-    // Demais categorias: só quando o texto indica retirada e cita um sócio
-    if (!WITHDRAWAL_TEXT.test(e.description || '')) return false;
+    // Demais categorias: o nome completo do sócio basta (ex.: "Plano de saúde Thiago
+    // Pereira Silva"); o primeiro nome só conta junto com texto de retirada
     const hay = personKey(`${e.description || ''} ${e.responsible || ''}`);
-    return [...socioKeys.full, ...socioKeys.first].some(k => hay.includes(k));
+    if ([...socioKeys.full].some(k => hay.includes(k))) return true;
+    if (!WITHDRAWAL_TEXT.test(e.description || '')) return false;
+    return [...socioKeys.first].some(k => hay.includes(k));
   };
 
   const catById = useMemo(() => Object.fromEntries(categories.map(c => [c.id, c.name])), [categories]);
@@ -327,7 +342,7 @@ export default function FinancialEmpresaSaude() {
                   <CardTitle className="text-sm text-muted-foreground">Retiradas dos Sócios (excluídas do cálculo)</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-xs text-muted-foreground mb-2">Pró-labore e lançamentos de retirada no nome dos sócios (usuários admin) não entram como custos operacionais.</p>
+                  <p className="text-xs text-muted-foreground mb-2">Pró-labore, lançamentos no nome completo de um sócio (papel admin ou sócio gestor) e retiradas que citam o primeiro nome do sócio não entram como custos operacionais.</p>
                   <Table>
                     <TableHeader>
                       <TableRow>

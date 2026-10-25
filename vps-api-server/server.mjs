@@ -6584,7 +6584,7 @@ async function runScheduledPost(post) {
     // Avisa a equipe de social media que a postagem falhou
     await pool.query(
       `INSERT INTO notifications (user_id, title, message, type, link)
-       SELECT ur.user_id, '⚠️ Postagem automática falhou', $1, 'error', '/social-media'
+       SELECT ur.user_id, '⚠️ Postagem automática falhou', $1, 'error', '/entregas-social'
        FROM user_roles ur WHERE ur.role IN ('admin','social_media')`,
       [`Cliente ${post.client_id}: ${errors[0]}`.slice(0, 500)]
     ).catch(() => {});

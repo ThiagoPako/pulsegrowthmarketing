@@ -48,16 +48,24 @@ export default function NotificationBell() {
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(30);
-    console.log('[NotificationBell] fetched:', data?.length, 'error:', error);
-    if (data) setNotifications(data as Notification[]);
+    if (data && !error) setNotifications(data as Notification[]);
   }, [user?.id]);
 
   useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
 
-  // Poll every 15s for real-time feel
+  // O polling é a única fonte (o servidor não emite postgres_changes): a cada 30 s
+  // com a aba visível, e na hora em que a aba volta a ficar visível.
   useEffect(() => {
-    const interval = setInterval(fetchNotifications, 15000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      fetchNotifications();
+    }, 30000);
+    const onVisibility = () => { if (document.visibilityState === 'visible') fetchNotifications(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [fetchNotifications]);
 
   useEffect(() => {
@@ -82,8 +90,12 @@ export default function NotificationBell() {
       supabase.from('notifications').update({ read: true } as any).eq('id', n.id).then();
     }
     setOpen(false);
-    if (n.link) {
-      window.open(n.link, '_blank');
+    if (!n.link) return;
+    // Caminho interno abre na mesma aba (antes abria outra aba e recarregava o sistema todo).
+    if (n.link.startsWith('/') && !n.link.startsWith('//')) {
+      navigate(n.link);
+    } else if (/^https?:\/\//i.test(n.link)) {
+      window.open(n.link, '_blank', 'noopener,noreferrer');
     }
   };
 

@@ -1434,7 +1434,7 @@ export default function VideomakerDashboard() {
         _title: `📱 ${ok} novo(s) Story(s) para revisar`,
         _message: `${client?.companyName || 'Cliente'} — ${ok} story(s) editado(s) enviado(s) para revisão.`,
         _type: 'story_upload',
-        _link: '/content-kanban',
+        _link: '/conteudo',
       });
 
       // Update session counter

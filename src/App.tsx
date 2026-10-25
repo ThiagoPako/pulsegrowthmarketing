@@ -307,6 +307,11 @@ function AppRoutes() {
         <Route path="/briefing-provedor/:clientId" element={<ClientBriefingProvider />} />
         {/* a Central de WhatsApp agora fica em Configurações → WhatsApp */}
         <Route path="/whatsapp" element={<Navigate to="/configuracoes?aba=whatsapp" replace />} />
+        {/* endereços antigos gravados em notificações já salvas */}
+        <Route path="/editor" element={<Navigate to="/edicao" replace />} />
+        <Route path="/videomaker" element={<Navigate to="/videomakers" replace />} />
+        <Route path="/social-media" element={<Navigate to="/entregas-social" replace />} />
+        <Route path="/content-kanban" element={<Navigate to="/conteudo" replace />} />
         <Route path="/financeiro" element={<ProtectedRoute><FinancialDashboard /></ProtectedRoute>} />
         <Route path="/financeiro/contratos" element={<ProtectedRoute><FinancialContracts /></ProtectedRoute>} />
         <Route path="/financeiro/receitas" element={<ProtectedRoute><FinancialRevenues /></ProtectedRoute>} />

@@ -454,6 +454,8 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     setAcceptingBackup(true);
     const body: any = { action: 'accept_backup', client_id: clientId, backup_date: date, backup_time: time };
     if (altVmId) body.videomaker_id = altVmId;
+    // O servidor só remarca a partir da gravação que acabou de ser cancelada
+    if (cancelFlow?.step === 'result') body.recording_id = cancelFlow.rec.id;
     const { data, error } = await invokeVpsFunction('portal-recordings', { body });
     if (data?.success) {
       toast.success('🚀 Gravação remarcada!');

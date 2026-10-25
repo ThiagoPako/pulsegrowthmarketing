@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { organizeRecordingsForDate } from '@/lib/schedulingUtils';
-import type { CompanySettings, Recording } from '@/types';
+import type { CompanySettings, Recording, RecordingStatus } from '@/types';
 
 const settings = { recordingDuration: 90 } as CompanySettings;
+// Status do portal para pedido especial em análise (fora do RecordingStatus do front)
+const SOLICITADA = 'solicitada' as string as RecordingStatus;
 const DATE = '2026-11-03';
 const VM = 'vm-1';
 const clientIds = new Set(['c1', 'c2', 'c3', 'c4', 'c5', 'c6']);
@@ -32,12 +34,12 @@ describe('Organizar Agenda (organizeRecordingsForDate)', () => {
       rec({ clientId: 'c1', type: 'fixa', startTime: '08:30' }),
       rec({ clientId: 'c2', type: 'fixa', startTime: '14:30' }),
       rec({ clientId: 'c3', type: 'backup', startTime: '16:30' }),
-      rec({ clientId: 'c4', type: 'extra', status: 'solicitada', startTime: '09:00' }),
+      rec({ clientId: 'c4', type: 'extra', status: SOLICITADA, startTime: '09:00' }),
     ];
     const { toCancel, toUpdate } = organize(recs);
     expect(toCancel).toEqual([]);
     // O pedido não é mexido
-    expect(toUpdate.find(r => r.status === 'solicitada')).toBeUndefined();
+    expect(toUpdate.find(r => r.status === SOLICITADA)).toBeUndefined();
   });
 
   it('gravação concluída fora do horário padrão ocupa só uma vaga', () => {

@@ -484,7 +484,9 @@ export function organizeRecordingsForDate(
   // não reserva horário: pode nem ser aprovado, e a aprovação confere conflito.
   const isMovable = (r: Recording) => r.status === 'agendada' && !activeRecordingIds?.has(r.id);
   const dayRecordings = allDayRecordings.filter(isMovable);
-  const fixedOccupants = allDayRecordings.filter(r => !isMovable(r) && r.status !== 'solicitada');
+  // ('solicitada' vem do portal e não está no RecordingStatus do front)
+  const isPendingRequest = (r: Recording) => (r.status as string) === 'solicitada';
+  const fixedOccupants = allDayRecordings.filter(r => !isMovable(r) && !isPendingRequest(r));
 
   const toUpdate: Recording[] = [];
   const toCancel: Recording[] = [];

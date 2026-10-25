@@ -1883,6 +1883,10 @@ function parseWeeklyGoal(value, fallback = 0) {
 
 // ─── JWT Config ─────────────────────────────────────────────
 const JWT_SECRET = process.env.JWT_SECRET || 'CHANGE_ME_IN_PRODUCTION';
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'CHANGE_ME_IN_PRODUCTION') {
+  // Não derruba a API (trocaria todos os tokens de uma vez), mas deixa claro no log do PM2.
+  console.error('[Auth-Config] JWT_SECRET ausente ou com o valor padrão: qualquer pessoa consegue forjar tokens. Defina JWT_SECRET no .env da VPS.');
+}
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30d';
 const JWT_REFRESH_GRACE_SECONDS = Number(process.env.JWT_REFRESH_GRACE_SECONDS || 60 * 60 * 24 * 14);
 
@@ -1940,28 +1944,41 @@ async function verifyUser(req) {
       throw new Error('Unauthorized');
     }
 
+    // Token de escopo (ex.: vídeo do treinamento) usa o mesmo segredo, mas não é sessão.
+    if (decoded.scope) throw new Error('Unauthorized');
+
+    let profileLookupFailed = false;
     const profile = await getAuthProfileById(decoded.sub).catch(err => {
       console.error("[Auth-DB-Error] Failed to fetch profile from DB:", { sub: decoded.sub, error: err.message });
+      profileLookupFailed = true;
       return null;
     });
 
-    if (!profile) {
-      console.warn("[Auth-ProfileNotFound] User ID not found in profiles table, using token claims:", { sub: decoded.sub });
+    // Erro de banco: não autentica pelo que vem no token, mas também não derruba
+    // a sessão (503, o front não desloga).
+    if (profileLookupFailed) {
+      throw Object.assign(new Error('Autenticação indisponível no momento'), { statusCode: 503 });
     }
 
-    const role = profile
-      ? await getUserPrimaryRole(profile.id, profile.role || decoded.role || 'editor')
-      : (decoded.role || 'editor');
+    // Perfil apagado (excluído pela Equipe): o token deixa de valer na hora,
+    // em vez de seguir com o papel gravado nele por até 30 dias.
+    if (!profile) {
+      console.warn("[Auth-ProfileNotFound] User ID not found in profiles/auth_users, token refused:", { sub: decoded.sub });
+      throw new Error('Unauthorized');
+    }
+
+    const role = await getUserPrimaryRole(profile.id, profile.role || 'editor');
 
     return {
       user: {
-        id: profile?.id || decoded.sub,
-        email: profile?.email || decoded.email,
+        id: profile.id || decoded.sub,
+        email: profile.email || decoded.email,
         role,
       },
       userClient: getUserClient(authHeader),
     };
   } catch (error) {
+    if (error?.statusCode === 503) throw error;
     const errorDetail = {
       message: error.message,
       name: error.name,
@@ -2245,6 +2262,8 @@ async function ensureProfilesMonthlySalaryColumn() {
  }
 
 
+// Sem perfil nem user_roles o papel fica NULL (vira 'editor' no getUserPrimaryRole):
+// antes caía como 'admin', e um login antigo que sobrou no auth_users entrava como admin.
 async function getLocalAuthUserByEmail(email) {
   const normalizedEmail = email.toLowerCase().trim();
 
@@ -2276,7 +2295,7 @@ async function getLocalAuthUserByEmail(email) {
          COALESCE(${profileId}, au.id) AS id,
          COALESCE(${profileName}, split_part(au.email, '@', 1)) AS name,
          au.email,
-         COALESCE(${profileRole}, ${userRole}, 'admin') AS role,
+         COALESCE(${profileRole}, ${userRole}) AS role,
          ${profileAvatar} AS avatar_url,
          ${profileDisplayName} AS display_name,
          ${profileJobTitle} AS job_title,
@@ -2299,7 +2318,7 @@ async function getLocalAuthUserByEmail(email) {
            id,
            split_part(email, '@', 1) AS name,
            email,
-           'admin'::text AS role,
+           NULL::text AS role,
            NULL::text AS avatar_url,
            split_part(email, '@', 1) AS display_name,
            NULL::text AS job_title,
@@ -2350,7 +2369,7 @@ async function getLocalAuthUserById(userId) {
          COALESCE(${profileId}, au.id) AS id,
          COALESCE(${profileName}, split_part(au.email, '@', 1)) AS name,
          COALESCE(${profileEmail}, au.email) AS email,
-         COALESCE(${profileRole}, ${userRole}, 'admin') AS role,
+         COALESCE(${profileRole}, ${userRole}) AS role,
          ${profileAvatar} AS avatar_url,
          ${profileDisplayName} AS display_name,
          ${profileJobTitle} AS job_title,
@@ -2374,7 +2393,7 @@ async function getLocalAuthUserById(userId) {
            id,
            split_part(email, '@', 1) AS name,
            email,
-           'admin'::text AS role,
+           NULL::text AS role,
            NULL::text AS avatar_url,
            split_part(email, '@', 1) AS display_name,
            NULL::text AS job_title,
@@ -2572,7 +2591,7 @@ async function getAuthProfileById(userId) {
         `SELECT id,
                 split_part(email, '@', 1) AS name,
                 email,
-                'admin'::text AS role,
+                NULL::text AS role,
                 NULL::text AS avatar_url,
                 split_part(email, '@', 1) AS display_name,
                 NULL::text AS job_title,
@@ -2922,11 +2941,12 @@ app.post('/api/auth/refresh', async (req, res) => {
 
     const currentToken = authHeader.replace('Bearer ', '');
     const { decoded } = decodeTokenForRefresh(currentToken);
+    if (!decoded?.sub || decoded.scope) return res.status(401).json({ error: 'Sessão expirada. Faça login novamente.' });
     const profile = await getAuthProfileById(decoded.sub);
 
     if (!profile) return res.status(401).json({ error: 'Perfil não encontrado' });
 
-    const role = await getUserPrimaryRole(profile.id, profile.role || decoded.role || 'editor');
+    const role = await getUserPrimaryRole(profile.id, profile.role || 'editor');
     const token = signToken({ sub: profile.id, email: profile.email, role });
 
     res.json({
@@ -2941,7 +2961,13 @@ app.post('/api/auth/refresh', async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(401).json({ error: 'Sessão expirada. Faça login novamente.' });
+    // 401 só quando o token é inválido ou venceu além da carência; erro de banco
+    // vira 503 para o front não apagar a sessão numa oscilação.
+    if (['JsonWebTokenError', 'TokenExpiredError', 'NotBeforeError'].includes(error?.name)) {
+      return res.status(401).json({ error: 'Sessão expirada. Faça login novamente.' });
+    }
+    console.error('Refresh error:', error?.message || error);
+    res.status(503).json({ error: 'Servidor indisponível. Tente de novo.' });
   }
 });
 
@@ -3021,7 +3047,9 @@ app.get('/api/auth/me', async (req, res) => {
       monthly_salary: profile.monthly_salary || 0,
     });
   } catch (error) {
-    res.status(401).json({ error: 'Não autenticado' });
+    if (error?.message === 'Unauthorized') return res.status(401).json({ error: 'Não autenticado' });
+    console.error('Auth me error:', error?.message || error);
+    res.status(503).json({ error: 'Servidor indisponível. Tente de novo.' });
   }
 });
 

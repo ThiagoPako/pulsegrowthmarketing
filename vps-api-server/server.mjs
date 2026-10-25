@@ -10114,18 +10114,24 @@ app.post('/api/active-recordings/:recordingId/stop', async (req, res) => {
       });
 
       if (!deferDelivery) {
-        if (completedScriptIds?.length > 0) {
+        // social_media_deliveries.client_id é NOT NULL: gravação avulsa/sem cliente não gera entrega
+        // (igual ao 'skipped' do upsertDeliveryRecord). A falha de um roteiro não derruba a finalização.
+        if (completedScriptIds?.length > 0 && active.client_id) {
           const smdHasCity = Boolean(deliveryCity) && await tableHasCityColumn('social_media_deliveries');
           for (const scriptId of completedScriptIds) {
-            const { rows: scriptRows } = await pool.query('SELECT title, content_format FROM scripts WHERE id = $1', [scriptId]);
-            const script = scriptRows[0];
-            await pool.query(
-              `INSERT INTO social_media_deliveries (client_id, content_type, title, status, delivered_at, script_id, recording_id, created_by${smdHasCity ? ', city' : ''})
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8${smdHasCity ? ',$9' : ''})`,
-              [active.client_id, script?.content_format || 'reels', script?.title || 'Vídeo gravado',
-               'entregue', new Date().toISOString().split('T')[0], scriptId, recordingId, active.videomaker_id,
-               ...(smdHasCity ? [deliveryCity] : [])]
-            );
+            try {
+              const { rows: scriptRows } = await pool.query('SELECT title, content_format FROM scripts WHERE id = $1', [scriptId]);
+              const script = scriptRows[0];
+              await pool.query(
+                `INSERT INTO social_media_deliveries (client_id, content_type, title, status, delivered_at, script_id, recording_id, created_by${smdHasCity ? ', city' : ''})
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8${smdHasCity ? ',$9' : ''})`,
+                [active.client_id, script?.content_format || 'reels', script?.title || 'Vídeo gravado',
+                 'entregue', new Date().toISOString().split('T')[0], scriptId, recordingId, active.videomaker_id,
+                 ...(smdHasCity ? [deliveryCity] : [])]
+              );
+            } catch (smdErr) {
+              console.warn('[active-recordings/stop] social_media_deliveries insert failed:', scriptId, smdErr.message);
+            }
           }
         }
 

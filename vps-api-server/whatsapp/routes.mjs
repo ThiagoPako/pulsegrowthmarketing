@@ -465,7 +465,7 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
     );
     if (recent.length) return { skipped: 'ja_mandado_ha_pouco' };
     const { rows: contents } = await pool.query(
-      `SELECT id, title, file_url FROM client_portal_contents
+      `SELECT id, title, file_url, content_type FROM client_portal_contents
         WHERE client_id = $1 AND status = 'pendente' AND file_url IS NOT NULL AND file_url <> ''
         ORDER BY created_at DESC LIMIT 5`, [client.id]
     );
@@ -479,6 +479,9 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
     if (!target) return { skipped: 'sem_numero' };
     contents.reverse(); // do mais antigo para o mais novo
     const batch = (await pool.query('SELECT gen_random_uuid() AS id')).rows[0].id;
+    // arte vai como imagem (sem forçar ".mp4"); link de fora (ex.: Drive) vai no texto, não como anexo
+    const isArt = (c) => c.content_type === 'arte' || /\.(jpe?g|png|gif|webp|bmp|svg)(\?|$)/i.test(c.file_url);
+    const allVideos = contents.every((c) => !isArt(c));
     for (let i = 0; i < contents.length; i++) {
       const c = contents[i];
       await pool.query(
@@ -486,16 +489,23 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
         [batch, i + 1, client.id, c.id, c.title, target]
       );
       const url = c.file_url.startsWith('/') ? `${UPLOADS_ORIGIN}${c.file_url}` : c.file_url;
-      const caption = contents.length > 1 ? `🎬 Vídeo ${i + 1} de ${contents.length}: ${c.title}` : `🎬 ${c.title}`;
-      await enqueueWhatsApp(pool, { to: target, body: caption, mediaUrl: url, mediaName: `${c.title}.mp4`,
-        clientId: client.id, triggerType: 'portal_ajuda', purpose: 'aprovacao' });
+      const ownFile = url.startsWith(`${UPLOADS_ORIGIN}/`);
+      const art = isArt(c);
+      const label = art ? `🎨 Arte` : `🎬 Vídeo`;
+      const caption = contents.length > 1 ? `${label} ${i + 1} de ${contents.length}: ${c.title}` : `${art ? '🎨' : '🎬'} ${c.title}`;
+      const hasVideoExt = /\.(mp4|mov|m4v|webm)(\?|$)/i.test(url);
+      await enqueueWhatsApp(pool, ownFile
+        ? { to: target, body: caption, mediaUrl: url, mediaName: art || hasVideoExt ? undefined : `${c.title}.mp4`,
+            clientId: client.id, triggerType: 'portal_ajuda', purpose: 'aprovacao' }
+        : { to: target, body: `${caption}\n${url}`, clientId: client.id, triggerType: 'portal_ajuda', purpose: 'aprovacao' });
     }
     const how = contents.length > 1
-      ? `Para aprovar todos, responda *APROVADO*.\nPara pedir ajuste, escreva o número do vídeo e o que mudar (ex.: *2 trocar a música*).`
+      ? `Para aprovar todos, responda *APROVADO*.\nPara pedir ajuste, escreva o número do ${allVideos ? 'vídeo' : 'conteúdo'} e o que mudar (ex.: *2 trocar a música*).`
       : `Para aprovar, responda *APROVADO*.\nSe quiser algum ajuste, escreva *AJUSTE* e o que mudar (ex.: *AJUSTE trocar a música*).`;
-    await enqueueWhatsApp(pool, { to: target, body: `Oi${name ? `, ${name}` : ''}! Como o portal não abriu, mandei ${contents.length > 1 ? 'os vídeos' : 'o vídeo'} aqui. 😊\n\n${how}`,
+    const what = allVideos ? (contents.length > 1 ? 'os vídeos' : 'o vídeo') : (contents.length > 1 ? 'os conteúdos' : 'o conteúdo');
+    await enqueueWhatsApp(pool, { to: target, body: `Oi${name ? `, ${name}` : ''}! Como o portal não abriu, mandei ${what} aqui. 😊\n\n${how}`,
       clientId: client.id, triggerType: 'portal_ajuda', purpose: 'aprovacao' });
-    await enqueueWhatsApp(pool, { to: groupJid, body: `${name ? `${name}, m` : 'M'}andei ${contents.length > 1 ? 'os vídeos' : 'o vídeo'} no seu privado para você assistir e aprovar por lá 👍`,
+    await enqueueWhatsApp(pool, { to: groupJid, body: `${name ? `${name}, m` : 'M'}andei ${what} no seu privado para você ${allVideos ? 'assistir' : 'ver'} e aprovar por lá 👍`,
       clientId: client.id, triggerType: 'portal_ajuda', purpose: 'aprovacao' });
     return { ok: true, enviados: contents.length };
   }

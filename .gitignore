@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Dumps de produção (dados de clientes e tokens): nunca versionar
+vps-migration/data/

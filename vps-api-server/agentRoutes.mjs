@@ -1268,8 +1268,11 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           await client.query('DELETE FROM social_media_deliveries WHERE content_task_id = $1', [task.id]);
         }
         if (column === 'revisao' && task.edited_video_link) {
+          // Vínculo pelo título: ignora conteúdos já fechados (aprovado/agendado/publicado), como o
+          // contentTaskSync — senão o vídeo novo sobrescreveria o de um mês anterior com o mesmo título.
           const { rows: portalRows } = await client.query(
-            'SELECT id FROM client_portal_contents WHERE client_id = $1 AND title = $2 ORDER BY created_at DESC LIMIT 1',
+            `SELECT id FROM client_portal_contents WHERE client_id = $1 AND title = $2
+               AND status NOT IN ('aprovado', 'agendado', 'publicado') ORDER BY created_at DESC LIMIT 1`,
             [task.client_id, task.title]
           );
           if (portalRows.length) {

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { useFinancialData, normalizeDate } from '@/hooks/useFinancialData';
 import { useApp } from '@/contexts/AppContext';
@@ -19,7 +19,9 @@ import { toast } from 'sonner';
 import { format, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { sendWhatsAppMessage } from '@/services/whatsappService';
-import { generateDeliveryReport, resolvePaymentInfo } from '@/lib/billingReport';
+import { generateDeliveryReport, resolvePaymentInfo, groupRevenuesByClient, buildBillingBreakdown } from '@/lib/billingReport';
+import { isRevenueReceived, isRevenueOverdue, PLACEHOLDER_CLIENT_ID } from '@/lib/financialCalc';
+import BulkBillingConfirmDialog from '@/components/financial/BulkBillingConfirmDialog';
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
@@ -128,6 +130,7 @@ export default function FinancialRevenues() {
   const [sendingBilling, setSendingBilling] = useState<string | null>(null);
   const [sendingAll, setSendingAll] = useState(false);
   const [showRocket, setShowRocket] = useState(false);
+  const [confirmBulkOpen, setConfirmBulkOpen] = useState(false);
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [newRev, setNewRev] = useState({ client_id: '', amount: '', due_date: '', description: '', category: '', is_recurring: false, mark_paid: false });
 
@@ -394,35 +397,47 @@ export default function FinancialRevenues() {
     }
   };
 
-  const pendingRevenues = filtered.filter(r => r.status !== 'recebida');
+  // Cobrança em massa: só receitas em aberto (recebida/pago ficam de fora) de
+  // clientes reais, agrupadas para cada cliente receber uma mensagem com o total.
+  const pendingRevenues = filtered.filter(r =>
+    !isRevenueReceived(r) && r.client_id && r.client_id !== PLACEHOLDER_CLIENT_ID
+  );
+  const billingGroups = groupRevenuesByClient(pendingRevenues);
 
-  const handleBigCobrarClick = useCallback(() => {
-    if (pendingRevenues.length === 0) { toast.info('Nenhuma receita pendente'); return; }
+  const handleBigCobrarClick = () => {
+    if (billingGroups.length === 0) { toast.info('Nenhuma receita pendente'); return; }
+    setConfirmBulkOpen(true);
+  };
+
+  const handleConfirmBulkBilling = () => {
+    setConfirmBulkOpen(false);
     setShowRocket(true);
-    handleSendAllBilling();
-  }, [pendingRevenues.length]);
+    void handleSendAllBilling(billingGroups);
+  };
 
-  const handleSendAllBilling = async () => {
-    if (pendingRevenues.length === 0) { toast.info('Nenhuma receita pendente'); return; }
+  const handleSendAllBilling = async (groups: typeof billingGroups) => {
+    if (groups.length === 0) { toast.info('Nenhuma receita pendente'); return; }
     setSendingAll(true);
     let sent = 0;
     let errors = 0;
-    for (const r of pendingRevenues) {
-      const client = clients.find(c => c.id === r.client_id);
+    for (const group of groups) {
+      const client = clients.find(c => c.id === group.clientId);
       if (!client?.whatsapp) { errors++; continue; }
-      setSendingBilling(r.id);
+      setSendingBilling(group.revenues[0].id);
       try {
-        const value = fmt(Number(r.amount));
-        const dueDay = r.due_date?.split('-')[2] || '—';
+        const value = fmt(group.total);
+        // Vencimento mais próximo entre as cobranças do cliente
+        const firstDue = group.revenues.map(r => normalizeDate(r.due_date)).filter(Boolean).sort()[0];
+        const dueDay = firstDue ? firstDue.slice(8, 10) : '—';
         const paymentInfo = resolvePaymentInfo(paymentConfig);
-        const isOverdue = r.status === 'em_atraso';
+        const isOverdue = group.revenues.some(isRevenueOverdue);
         const template = isOverdue
           ? (paymentConfig?.msg_billing_overdue || 'Olá, {nome_cliente}! Lembrete: {valor}. {dados_pagamento}')
           : (paymentConfig?.msg_billing_due || 'Olá, {nome_cliente}! Mensalidade {valor} vence dia {dia_vencimento}. {dados_pagamento}');
 
-        const contract = contracts.find(c => c.client_id === r.client_id);
+        const contract = contracts.find(c => c.client_id === group.clientId);
         const report = paymentConfig?.include_delivery_report !== false
-          ? await generateDeliveryReport(r.client_id, contract?.plan_id, selectedMonth, paymentConfig?.msg_delivery_report || undefined)
+          ? await generateDeliveryReport(group.clientId, contract?.plan_id, selectedMonth, paymentConfig?.msg_delivery_report || undefined)
           : { text: '' };
 
         let message = template
@@ -431,6 +446,8 @@ export default function FinancialRevenues() {
           .replace(/\{dia_vencimento\}/g, dueDay)
           .replace(/\{dados_pagamento\}/g, paymentInfo)
           .replace(/\{relatorio_entregas\}/g, report.text);
+        // Mensalidade + extras no mesmo mês: total no {valor} e o detalhamento abaixo
+        message += buildBillingBreakdown(group.revenues, fmt);
         if (report.text && !template.includes('{relatorio_entregas}')) {
           message += report.text;
         }
@@ -648,13 +665,30 @@ export default function FinancialRevenues() {
               <div className="relative z-10 text-left">
                 <span className="block text-lg leading-tight">🚀 Cobrar Todos</span>
                 <span className="block text-xs font-normal opacity-80">
-                  {pendingRevenues.length} cliente{pendingRevenues.length > 1 ? 's' : ''} pendente{pendingRevenues.length > 1 ? 's' : ''} • {fmt(pendingRevenues.reduce((s, r) => s + Number(r.amount), 0))}
+                  {billingGroups.length} cliente{billingGroups.length > 1 ? 's' : ''} pendente{billingGroups.length > 1 ? 's' : ''} • {fmt(pendingRevenues.reduce((s, r) => s + Number(r.amount), 0))}
                 </span>
               </div>
             </motion.button>
           </motion.div>
         )}
       </AnimatePresence>
+
+      <BulkBillingConfirmDialog
+        open={confirmBulkOpen}
+        onOpenChange={setConfirmBulkOpen}
+        title="Cobrar todos os pendentes do mês?"
+        items={billingGroups.map(g => {
+          const client = clients.find(c => c.id === g.clientId);
+          return {
+            clientId: g.clientId,
+            clientName: client?.companyName || 'Cliente',
+            count: g.revenues.length,
+            total: g.total,
+            hasWhatsapp: Boolean(client?.whatsapp),
+          };
+        })}
+        onConfirm={handleConfirmBulkBilling}
+      />
 
       {/* Rocket Overlay */}
       <AnimatePresence>

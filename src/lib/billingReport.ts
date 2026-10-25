@@ -12,6 +12,43 @@ export function resolvePaymentInfo(config: { pix_key?: string; receiver_name?: s
     .replace(/\{documento\}/g, config.document || '');
 }
 
+export interface ClientBillingGroup<T> {
+  clientId: string;
+  revenues: T[];
+  total: number;
+}
+
+/**
+ * Agrupa as receitas em aberto por cliente para a cobrança em massa: cada
+ * cliente recebe uma mensagem só, com o total (mensalidade + extras do mês).
+ */
+export function groupRevenuesByClient<T extends { client_id?: string | null; amount: unknown }>(list: T[]): ClientBillingGroup<T>[] {
+  const byClient = new Map<string, ClientBillingGroup<T>>();
+  for (const revenue of list) {
+    const clientId = revenue.client_id;
+    if (!clientId) continue;
+    const group = byClient.get(clientId) || { clientId, revenues: [], total: 0 };
+    group.revenues.push(revenue);
+    group.total = Math.round((group.total + (Number(revenue.amount) || 0)) * 100) / 100;
+    byClient.set(clientId, group);
+  }
+  return Array.from(byClient.values());
+}
+
+/** Detalhamento da cobrança quando o cliente tem mais de uma receita no mês. */
+export function buildBillingBreakdown(
+  revenues: { amount: unknown; description?: string | null; due_date?: string | null }[],
+  fmt: (value: number) => string,
+): string {
+  if (revenues.length <= 1) return '';
+  const lines = revenues.map(r => {
+    const label = (r.description || '').trim() || 'Mensalidade';
+    const day = r.due_date ? r.due_date.slice(8, 10) : '';
+    return `• ${label}: ${fmt(Number(r.amount) || 0)}${day ? ` (venc. dia ${day})` : ''}`;
+  });
+  return `\n\n📋 *Detalhamento:*\n${lines.join('\n')}`;
+}
+
 interface DeliveryReport {
   text: string;
 }

@@ -30,7 +30,8 @@ const safeFormatDate = (dateStr: string | null | undefined, pattern: string, opt
 };
 
 import { sendWhatsAppMessage } from '@/services/whatsappService';
-import { generateDeliveryReport, resolvePaymentInfo } from '@/lib/billingReport';
+import { generateDeliveryReport, resolvePaymentInfo, groupRevenuesByClient, buildBillingBreakdown } from '@/lib/billingReport';
+import BulkBillingConfirmDialog from '@/components/financial/BulkBillingConfirmDialog';
 import ClientLogo from '@/components/ClientLogo';
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
 import SalaryRaiseAlert from '@/components/financial/SalaryRaiseAlert';
@@ -56,6 +57,7 @@ export default function FinancialDashboard() {
   const { clients, recordings, users } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
   const [sendingAllOverdue, setSendingAllOverdue] = useState(false);
+  const [confirmOverdueOpen, setConfirmOverdueOpen] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMsg, setCelebrationMsg] = useState('');
   const [showImport, setShowImport] = useState(false);
@@ -315,11 +317,15 @@ export default function FinancialDashboard() {
         const dueDate = new Date(today.getFullYear(), today.getMonth(), contract.due_day);
         const isDueThisWeek = isWithinInterval(dueDate, { start: weekStart, end: weekEnd });
 
-        // Check if already paid this month
-        const monthRevenue = revenues.find(
-          r => r.client_id === contract.client_id && normalizeDate(r.reference_month) === refMonth
+        // Check if already paid this month — só a mensalidade do contrato (sem
+        // recorrência extra nem lançamento manual, mesmo critério da geração do mês)
+        const monthlyFees = revenues.filter(
+          r => r.client_id === contract.client_id &&
+            normalizeDate(r.reference_month) === refMonth &&
+            !r.recurrence_id && !r.description
         );
-        const isPaid = monthRevenue?.status === 'recebida';
+        const monthRevenue = monthlyFees.find(r => r.contract_id === contract.id) || monthlyFees[0];
+        const isPaid = monthRevenue ? isRevenueReceived(monthRevenue) : false;
 
         return {
           contractId: contract.id,
@@ -404,33 +410,43 @@ export default function FinancialDashboard() {
   );
 
   const totalInadimplente = inadimplentes.reduce((s, r) => s + Number(r.amount), 0);
+  // Uma cobrança por cliente (mensalidade + extras em atraso somados)
+  const overdueGroups = groupRevenuesByClient(inadimplentes);
 
-  const handleCobrarInadimplentes = async () => {
-    if (inadimplentes.length === 0) { toast.info('Nenhum inadimplente no mês'); return; }
+  const handleCobrarInadimplentes = () => {
+    if (overdueGroups.length === 0) { toast.info('Nenhum inadimplente no mês'); return; }
+    setConfirmOverdueOpen(true);
+  };
+
+  const sendOverdueBilling = async (groups: typeof overdueGroups) => {
+    setConfirmOverdueOpen(false);
+    if (groups.length === 0) { toast.info('Nenhum inadimplente no mês'); return; }
     setSendingAllOverdue(true);
     let sent = 0, errors = 0;
-    for (const r of inadimplentes) {
-      const client = clients.find(c => c.id === r.client_id);
+    for (const group of groups) {
+      const client = clients.find(c => c.id === group.clientId);
       if (!client?.whatsapp) { errors++; continue; }
       try {
-        const value = fmt(Number(r.amount));
+        const value = fmt(group.total);
         const paymentInfo = resolvePaymentInfo(paymentConfig);
 
         // Get plan_id from contract
-        const contract = contracts.find(c => c.client_id === r.client_id);
+        const contract = contracts.find(c => c.client_id === group.clientId);
         const refMonth = selectedMonth;
         const report = paymentConfig?.include_delivery_report !== false
-          ? await generateDeliveryReport(r.client_id, contract?.plan_id, refMonth, paymentConfig?.msg_delivery_report || undefined)
+          ? await generateDeliveryReport(group.clientId, contract?.plan_id, refMonth, paymentConfig?.msg_delivery_report || undefined)
           : { text: '' };
 
+        const firstDue = group.revenues.map(r => normalizeDate(r.due_date)).filter(Boolean).sort()[0];
         const template = paymentConfig?.msg_billing_overdue ||
           'Olá, {nome_cliente}! 😊\n\nIdentificamos uma pendência referente à mensalidade no valor de {valor}.\n\nSe já realizou o pagamento, por favor desconsidere esta mensagem.\n\n{dados_pagamento}';
         let message = template
           .replace(/\{nome_cliente\}/g, client.companyName)
           .replace(/\{valor\}/g, value)
-          .replace(/\{dia_vencimento\}/g, r.due_date?.split('-')[2] || '')
+          .replace(/\{dia_vencimento\}/g, firstDue ? firstDue.slice(8, 10) : '')
           .replace(/\{dados_pagamento\}/g, paymentInfo)
           .replace(/\{relatorio_entregas\}/g, report.text);
+        message += buildBillingBreakdown(group.revenues, fmt);
         if (report.text && !template.includes('{relatorio_entregas}')) {
           message += report.text;
         }
@@ -640,7 +656,7 @@ export default function FinancialDashboard() {
                 <div className="flex-1 text-left">
                   <h3 className="font-bold text-foreground flex items-center gap-2">
                     <AlertTriangle size={16} className="text-destructive" />
-                    {inadimplentes.length} cliente{inadimplentes.length > 1 ? 's' : ''} inadimplente{inadimplentes.length > 1 ? 's' : ''}
+                    {overdueGroups.length} cliente{overdueGroups.length > 1 ? 's' : ''} inadimplente{overdueGroups.length > 1 ? 's' : ''}
                   </h3>
                   <p className="text-sm text-muted-foreground">Total em atraso: <span className="font-semibold text-destructive">{fmt(totalInadimplente)}</span></p>
                   <p className="text-xs text-muted-foreground mt-0.5">Clique aqui para cobrar todos os inadimplentes via WhatsApp</p>
@@ -657,6 +673,23 @@ export default function FinancialDashboard() {
           </Card>
         </motion.div>
       )}
+
+      <BulkBillingConfirmDialog
+        open={confirmOverdueOpen}
+        onOpenChange={setConfirmOverdueOpen}
+        title="Cobrar todos os inadimplentes do mês?"
+        items={overdueGroups.map(g => {
+          const client = clients.find(c => c.id === g.clientId);
+          return {
+            clientId: g.clientId,
+            clientName: client?.companyName || 'Cliente',
+            count: g.revenues.length,
+            total: g.total,
+            hasWhatsapp: Boolean(client?.whatsapp),
+          };
+        })}
+        onConfirm={() => { void sendOverdueBilling(overdueGroups); }}
+      />
 
       {/* Quick Navigation */}
       <motion.div className="grid grid-cols-2 md:grid-cols-4 gap-3" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.4 }}>

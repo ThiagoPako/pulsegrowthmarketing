@@ -13410,10 +13410,27 @@ app.get('/api/upload-health', (_req, res) => {
 // ─── Endpoint de Reparo e Diagnóstico Atômico ───────────────
 // Executa manutenções críticas no banco e filesystem sem deletar dados.
 // API Admin atomic repair
+/**
+ * Chave do reparo atômico (header X-Repair-Key contra REPAIR_KEY do .env).
+ * Não usa JWT de propósito: a rota existe para quando o login está quebrado.
+ * Sem REPAIR_KEY configurada a rota fica desligada (404).
+ */
+function repairKeyMatches(req) {
+  const expected = String(process.env.REPAIR_KEY || '').trim();
+  const provided = String(req.headers['x-repair-key'] || '').trim();
+  if (!expected || !provided) return false;
+  const a = crypto.createHash('sha256').update(expected).digest();
+  const b = crypto.createHash('sha256').update(provided).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
 app.post('/api/admin/repair-atomic', async (req, res) => {
+  if (!String(process.env.REPAIR_KEY || '').trim()) return res.status(404).json({ error: 'Not found' });
+  if (!repairKeyMatches(req)) return res.status(401).json({ error: 'Chave de reparo inválida' });
+
   try {
-    // Nota: O endpoint de reparo deve ser público ou usar uma chave secreta no header
-    // para permitir recuperação quando o JWT está expirado/inválido.
+    // Público só com a chave secreta no header (X-Repair-Key), para permitir
+    // recuperação quando o JWT está expirado/inválido.
     const results = [];
 
     // 1. Garantir colunas do CRM (Geladeira, etc)

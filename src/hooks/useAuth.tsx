@@ -128,7 +128,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const fetchProfile = useCallback(async (userId: string) => {
+  // prefetchedAuth: resposta do /auth/me que quem chamou já tem (abertura do app),
+  // para não pedir o mesmo /auth/me duas vezes seguidas.
+  const fetchProfile = useCallback(async (userId: string, prefetchedAuth?: Partial<Profile> | null) => {
     const hasVpsToken = typeof window !== 'undefined' && !!localStorage.getItem(TOKEN_KEY);
     const token = typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
 
@@ -137,8 +139,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    let authProfile: Partial<Profile> | null = null;
-    if (token) {
+    let authProfile: Partial<Profile> | null = prefetchedAuth || null;
+    if (token && !authProfile) {
       try {
         const response = await fetch(`${VPS_API_BASE}/auth/me`, {
           headers: {
@@ -155,19 +157,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Funções adicionais (colaborador com 2+ funções, ex.: videomaker + editor)
+    // Funções adicionais (colaborador com 2+ funções, ex.: videomaker + editor).
+    // O /auth/me já junta user_roles de todos os ids ligados; só consulta a tabela
+    // quando ele não respondeu.
     let extraRoles: AppRole[] = Array.isArray(authProfile?.roles) ? authProfile.roles : [];
-    try {
-      const { data: rolesData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId);
-      extraRoles = Array.from(new Set<AppRole>([
-        ...extraRoles,
-        ...((rolesData || []) as Array<{ role: AppRole }>).map(r => r.role).filter(Boolean),
-      ]));
-    } catch (error) {
-      console.warn('fetchProfile user_roles failed:', error);
+    if (!Array.isArray(authProfile?.roles)) {
+      try {
+        const { data: rolesData } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userId);
+        extraRoles = Array.from(new Set<AppRole>([
+          ...extraRoles,
+          ...((rolesData || []) as Array<{ role: AppRole }>).map(r => r.role).filter(Boolean),
+        ]));
+      } catch (error) {
+        console.warn('fetchProfile user_roles failed:', error);
+      }
     }
 
     const mergeRoles = (primary: AppRole): AppRole[] =>
@@ -250,8 +256,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           let data: VpsAuthPayload | VpsAuthUser | null = response?.ok
             ? await response.json().catch(() => null)
             : null;
+          // Resposta do próprio /auth/me: o fetchProfile reaproveita em vez de pedir de novo.
+          let authMePayload: Partial<Profile> | null = data ? (data as Partial<Profile>) : null;
 
           if (!response?.ok || !data) {
+            authMePayload = null;
             const { payload: refreshed, rejected } = await refreshVpsSession(token);
             if (cancelled) return;
             if (!refreshed?.token) {
@@ -277,7 +286,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const u = { id: userData.id, email: userData.email };
           setUser(u);
           setSession({ access_token: activeToken });
-          fetchProfile(u.id);
+          fetchProfile(u.id, authMePayload);
         } catch {
           if (cancelled) return;
           toast.dismiss(RETRY_TOAST_ID);

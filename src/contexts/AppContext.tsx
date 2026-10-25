@@ -97,7 +97,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const { isLoading: cityLoading } = useCity();
   const data = useSupabaseData();
 
-  const [myRoles, setMyRoles] = useState<UserRole[]>([]);
+  // profile.roles já traz as funções de user_roles (o /auth/me junta todas): não
+  // precisa buscar user_roles de novo aqui.
   const baseCurrentUser = profile ? profileToUser(profile) : null;
   const currentUser = baseCurrentUser
     ? {
@@ -105,18 +106,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         roles: Array.from(new Set([
           baseCurrentUser.role,
           ...(baseCurrentUser.roles || []),
-          ...myRoles,
         ])),
       }
     : null;
-
-  useEffect(() => {
-    if (!profile?.id) { setMyRoles([]); return; }
-    (async () => {
-      const { data } = await supabase.from('user_roles').select('role').eq('user_id', profile.id);
-      if (data) setMyRoles((data as Array<{ role: UserRole }>).map(r => r.role));
-    })();
-  }, [profile?.id]);
 
   // Heartbeat for virtual office presence
   usePresenceHeartbeat(user?.id ?? profile?.id);

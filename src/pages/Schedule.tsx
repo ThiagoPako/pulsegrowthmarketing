@@ -2305,7 +2305,7 @@ export default function Schedule() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Regenerar Agenda</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Remove todas as gravações futuras com status "agendada" do cliente selecionado e gera novas com base nas configurações atuais.
+            Remove as gravações futuras "agendadas" geradas pela agenda (fixas, backups e extras) do cliente selecionado e gera as fixas de novo com base nas configurações atuais. Ficam as que já começaram, as pedidas ou confirmadas pelo cliente e as que já têm vídeos ou entrega vinculados.
           </p>
           <div className="space-y-3">
             <div className="space-y-1">

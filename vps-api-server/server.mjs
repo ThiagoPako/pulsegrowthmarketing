@@ -4943,13 +4943,16 @@ async function getCompanySettingsForCity(city) {
 
 // Insere uma gravação vinda das rotas públicas já na cidade certa. Sem cidade (cliente global),
 // fica o default da tabela e o trigger apply_global_client_city cuida do resto.
-async function insertPublicRecording(db, { clientId, videomakerId, date, startTime, type, status, confirmationStatus, city }) {
-  const withCity = Boolean(city) && await tableHasCityColumn('recordings');
+async function insertPublicRecording(db, { clientId, videomakerId, date, startTime, type, status, confirmationStatus, city, source = null }) {
+  await ensurePublicReschedTable();
+  const cols = ['client_id', 'videomaker_id', 'date', 'start_time', 'type', 'status', 'confirmation_status'];
+  const vals = [clientId, videomakerId, date, startTime, type, status, confirmationStatus];
+  if (city && await tableHasCityColumn('recordings')) { cols.push('city'); vals.push(city); }
+  if (source && recordingsSourceColumnReady) { cols.push('source'); vals.push(source); }
   const { rows: [row] } = await db.query(
-    `INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status${withCity ? ', city' : ''})
-     VALUES ($1, $2, $3, $4, $5, $6, $7${withCity ? ', $8' : ''})
+    `INSERT INTO recordings (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')})
      RETURNING id, date::text, start_time`,
-    [clientId, videomakerId, date, startTime, type, status, confirmationStatus, ...(withCity ? [city] : [])]
+    vals
   );
   return row;
 }
@@ -5272,7 +5275,7 @@ app.post('/api/portal-recordings', async (req, res) => {
         }
         const newBackupRec = await insertPublicRecording(txClient, {
           clientId: client_id, videomakerId: vmId, date: backup_date, startTime: backup_time,
-          type: 'secundaria', status: 'agendada', confirmationStatus: 'confirmada', city: clientCityBackup,
+          type: 'secundaria', status: 'agendada', confirmationStatus: 'confirmada', city: clientCityBackup, source: 'portal',
         });
         await txClient.query('UPDATE recordings SET rescheduled_to_id = $1 WHERE id = $2', [newBackupRec.id, cancelledRec.id]);
         await txClient.query('COMMIT');
@@ -5468,7 +5471,7 @@ app.post('/api/portal-recordings', async (req, res) => {
 
       const newSpecialRec = await insertPublicRecording(pool, {
         clientId: client_id, videomakerId: specialVmId, date: requested_date, startTime: requested_time || '09:00',
-        type: 'extra', status: 'solicitada', confirmationStatus: 'pendente', city: clientCityRequest,
+        type: 'extra', status: 'solicitada', confirmationStatus: 'pendente', city: clientCityRequest, source: 'portal',
       });
       await pool.query(`INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)`,
         [client_id, '📨 Solicitação enviada', `Sua solicitação de gravação especial para ${requested_date} foi enviada para aprovação. Aguarde a confirmação da equipe.`, 'info']);
@@ -9608,16 +9611,51 @@ app.delete('/api/recordings/:id', async (req, res) => {
 });
 
 // Bulk delete future recordings for a client
+// Regenerar agenda do cliente: apaga as gravações futuras geradas pela agenda (fixa, backup, extra)
+// para recriar as fixas com a configuração nova. Ficam: as que o cliente criou ou confirmou pelo
+// portal/link, as que já começaram (hoje, no fuso de Brasília) e as que têm algo vinculado
+// (em andamento, entrega, vídeos). Tudo numa transação, limpando o vínculo dos roteiros.
 app.delete('/api/recordings/future/:clientId', async (req, res) => {
+  let txClient = null;
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
-    const today = new Date().toISOString().split('T')[0];
-    const { rowCount } = await pool.query(
-      `DELETE FROM recordings WHERE client_id = $1 AND status = 'agendada' AND date >= $2${scopeCity ? ` AND ${cityVisibilityExpression('city', '$3')}` : ''}`,
-      scopeCity ? [req.params.clientId, today, activeCity] : [req.params.clientId, today]
+    await ensurePublicReschedTable();
+    const today = brtDateString();
+    const nowMinutes = brtMinutesNow();
+    const params = [req.params.clientId, today, nowMinutes];
+    let cityClause = '';
+    if (scopeCity) { params.push(activeCity); cityClause = ` AND ${cityVisibilityExpression('r.city', `$${params.length}`)}`; }
+    txClient = await pool.connect();
+    await txClient.query('BEGIN');
+    const { rows: deletedRows } = await txClient.query(
+      `DELETE FROM recordings r
+        WHERE r.client_id = $1 AND r.status::text = 'agendada'
+          AND r.type::text IN ('fixa', 'backup', 'extra')
+          AND (r.date > $2::date OR (r.date = $2::date
+               AND (CASE WHEN r.start_time::text ~ '^[0-9]{1,2}:[0-9]{2}'
+                         THEN split_part(r.start_time::text, ':', 1)::int * 60 + split_part(r.start_time::text, ':', 2)::int
+                         ELSE 0 END) > $3))
+          AND NOT (r.type::text <> 'fixa' AND COALESCE(r.confirmation_status::text, '') = 'confirmada')
+          ${recordingsSourceColumnReady ? "AND COALESCE(r.source, '') NOT IN ('portal', 'link')" : ''}
+          AND NOT EXISTS (SELECT 1 FROM recordings o WHERE o.rescheduled_to_id = r.id)
+          AND NOT EXISTS (SELECT 1 FROM active_recordings a WHERE a.recording_id = r.id)
+          AND NOT EXISTS (SELECT 1 FROM delivery_records d WHERE d.recording_id = r.id)
+          AND NOT EXISTS (SELECT 1 FROM content_tasks ct WHERE ct.recording_id = r.id)${cityClause}
+        RETURNING r.id::text AS id`,
+      params
     );
-    res.json({ deleted: rowCount });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    const deletedIds = deletedRows.map(row => row.id);
+    if (deletedIds.length > 0) {
+      await txClient.query('UPDATE scripts SET recording_id = NULL, updated_at = NOW() WHERE recording_id::text = ANY($1::text[])', [deletedIds]);
+    }
+    await txClient.query('COMMIT');
+    res.json({ deleted: deletedIds.length, deleted_ids: deletedIds });
+  } catch (e) {
+    if (txClient) await txClient.query('ROLLBACK').catch(() => {});
+    res.status(e?.message === 'Unauthorized' ? 401 : 500).json({ error: e.message });
+  } finally {
+    if (txClient) txClient.release();
+  }
 });
 
 // ─── Kanban Tasks ───────────────────────────────────────────
@@ -13314,6 +13352,7 @@ app.get('/api/gestao/history', async (req, res) => {
 
 // ─── Public reschedule (link enviado ao cliente após cancelamento manual) ───
 let publicReschedTableReady = null;
+let recordingsSourceColumnReady = false;
 async function ensurePublicReschedTable() {
   if (publicReschedTableReady) return publicReschedTableReady;
   publicReschedTableReady = (async () => {
@@ -13323,9 +13362,16 @@ async function ensurePublicReschedTable() {
           ADD COLUMN IF NOT EXISTS rescheduled_to_id uuid REFERENCES recordings(id) ON DELETE SET NULL
       `);
     } catch (e) { console.warn('ensurePublicReschedTable:', e?.message || e); }
+    // Origem das gravações criadas pelo cliente: 'portal' (pedido especial, remarcação no portal)
+    // ou 'link' (link público de reagendamento). Vazio = criada pela equipe.
+    try {
+      await pool.query(`ALTER TABLE recordings ADD COLUMN IF NOT EXISTS source text`);
+      recordingsSourceColumnReady = true;
+    } catch (e) { console.warn('ensurePublicReschedTable (source):', e?.message || e); }
   })();
   return publicReschedTableReady;
 }
+ensurePublicReschedTable().catch(() => {});
 
 const DAY_MAP_PR = { domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6 };
 
@@ -13460,7 +13506,7 @@ app.post('/api/public-reschedule', async (req, res) => {
 
         newRec = await insertPublicRecording(txClient, {
           clientId: rec.client_id, videomakerId: rec.videomaker_id, date: newDate, startTime: newTime,
-          type: 'backup', status: 'agendada', confirmationStatus: 'confirmada', city: recCity,
+          type: 'backup', status: 'agendada', confirmationStatus: 'confirmada', city: recCity, source: 'link',
         });
         await txClient.query(`UPDATE recordings SET rescheduled_to_id = $1 WHERE id = $2`, [newRec.id, rec.id]);
         await txClient.query('COMMIT');

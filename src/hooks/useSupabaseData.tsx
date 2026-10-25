@@ -616,14 +616,24 @@ export function useSupabaseData() {
     }
   }, []);
 
-  const deleteFutureRecordingsForClient = useCallback(async (clientId: string): Promise<number> => {
-    const { data } = await invokeVpsFunction(`recordings/future/${clientId}`, { method: 'DELETE' });
+  /** Apaga as futuras geradas pela agenda. deletedIds = null quando o servidor não informa quais (versão antiga). */
+  const deleteFutureRecordingsForClient = useCallback(async (clientId: string): Promise<{ deleted: number; deletedIds: string[] | null }> => {
+    const { data, error } = await invokeVpsFunction(`recordings/future/${clientId}`, { method: 'DELETE' });
+    // Sem isso, um erro do servidor seguia como "0 apagadas" e as fixas novas eram criadas por cima das antigas
+    if (error) throw new Error(error.message || 'Erro ao apagar as gravações futuras');
     const deleted = data?.deleted || 0;
+    const deletedIds: string[] | null = Array.isArray(data?.deleted_ids) ? data.deleted_ids.map(String) : null;
     if (deleted > 0) {
-      const today = new Date().toISOString().split('T')[0];
-      setRecordings(prev => prev.filter(r => !(r.clientId === clientId && r.status === 'agendada' && r.date >= today)));
+      // O servidor preserva as criadas/confirmadas pelo cliente e as que já começaram: tira só as apagadas
+      if (deletedIds) {
+        const deletedSet = new Set(deletedIds);
+        setRecordings(prev => prev.filter(r => !deletedSet.has(r.id)));
+      } else {
+        const today = new Date().toISOString().split('T')[0];
+        setRecordings(prev => prev.filter(r => !(r.clientId === clientId && r.status === 'agendada' && r.date >= today)));
+      }
     }
-    return deleted;
+    return { deleted, deletedIds };
   }, []);
 
   // ── Task CRUD ──

@@ -468,9 +468,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   /** Delete future agendada recordings for a client and regenerate (fixed only) */
   const regenerateScheduleForClient = useCallback(async (client: Client, options: FixedScheduleGenerationOptions = {}): Promise<{ deleted: number; created: number }> => {
-    const deleted = await data.deleteFutureRecordingsForClient(client.id);
+    const { deleted, deletedIds } = await data.deleteFutureRecordingsForClient(client.id);
     const today = new Date().toISOString().split('T')[0];
-    const remainingRecs = data.recordings.filter(r => !(r.clientId === client.id && r.status === 'agendada' && r.date >= today));
+    // As que o servidor preservou (já começaram, pedidas/confirmadas pelo cliente) continuam ocupando
+    // o dia: sem isso a fixa de hoje em andamento ganhava uma duplicata
+    const deletedSet = deletedIds ? new Set(deletedIds) : null;
+    const remainingRecs = deletedSet
+      ? data.recordings.filter(r => !deletedSet.has(r.id))
+      : data.recordings.filter(r => !(r.clientId === client.id && r.status === 'agendada' && r.date >= today));
     
     const availableVideomakerIds = Array.from(new Set([
       ...users.filter(user => user.role === 'videomaker').map(user => user.id),

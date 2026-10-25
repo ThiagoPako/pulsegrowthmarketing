@@ -124,28 +124,44 @@ export default function SalaryRaiseAlert() {
   const [monthsData, setMonthsData] = useState<Record<string, { dr: any[]; ct: any[]; dt: any[]; smd: any[]; pt: any[]; rec: any[] }>>({});
   const [loaded, setLoaded] = useState(false);
 
-  // Load data for current month and previous month
+  // Load data for current month and previous month — uma consulta por tabela
+  // cobrindo os dois meses (antes eram duas, e as entregas de social media
+  // vinham inteiras, sem filtro), separada por mês aqui com os mesmos critérios.
   useEffect(() => {
     const now = new Date();
     const months = [now, subMonths(now, 1)];
-    const promises = months.map(async (m) => {
-      const mStart = format(startOfMonth(m), 'yyyy-MM-dd');
-      const mEnd = format(endOfMonth(m), 'yyyy-MM-dd');
-      const key = format(m, 'yyyy-MM');
-      const [dr, ct, dt, smd, pt, rec] = await Promise.all([
-        supabase.from('delivery_records').select('*').gte('date', mStart).lte('date', mEnd),
-        supabase.from('content_tasks').select('*').gte('updated_at', mStart + 'T00:00:00'),
-        supabase.from('design_tasks').select('*').gte('created_at', mStart + 'T00:00:00'),
-        supabase.from('social_media_deliveries').select('*'),
-        supabase.from('endomarketing_partner_tasks').select('*').gte('date', mStart).lte('date', mEnd),
-        supabase.from('recordings').select('*').gte('date', mStart).lte('date', mEnd),
-      ]);
-      return { key, dr: dr.data || [], ct: ct.data || [], dt: dt.data || [], smd: smd.data || [], pt: pt.data || [], rec: rec.data || [] };
-    });
+    const rangeStart = format(startOfMonth(subMonths(now, 1)), 'yyyy-MM-dd');
+    const rangeEnd = format(endOfMonth(now), 'yyyy-MM-dd');
+    const day = (v: unknown) => String(v || '').slice(0, 10);
 
-    Promise.all(promises).then(results => {
+    Promise.all([
+      supabase.from('delivery_records').select('*').gte('date', rangeStart).lte('date', rangeEnd),
+      supabase.from('content_tasks').select('*').gte('updated_at', rangeStart + 'T00:00:00'),
+      supabase.from('design_tasks').select('*').gte('created_at', rangeStart + 'T00:00:00'),
+      // A data de referência da entrega varia por status (postada, entregue, criada,
+      // atualizada): traz o que tem qualquer uma delas a partir do mês anterior.
+      supabase.from('social_media_deliveries').select('*').or(
+        `posted_at.gte.${rangeStart},delivered_at.gte.${rangeStart},created_at.gte.${rangeStart},updated_at.gte.${rangeStart}`
+      ),
+      supabase.from('endomarketing_partner_tasks').select('*').gte('date', rangeStart).lte('date', rangeEnd),
+      supabase.from('recordings').select('*').gte('date', rangeStart).lte('date', rangeEnd),
+    ]).then(([dr, ct, dt, smd, pt, rec]) => {
       const map: Record<string, any> = {};
-      results.forEach(r => { map[r.key] = r; });
+      months.forEach(m => {
+        const mStart = format(startOfMonth(m), 'yyyy-MM-dd');
+        const mEnd = format(endOfMonth(m), 'yyyy-MM-dd');
+        const key = format(m, 'yyyy-MM');
+        const inMonth = (v: unknown) => day(v) >= mStart && day(v) <= mEnd;
+        map[key] = {
+          key,
+          dr: ((dr.data as any[]) || []).filter(r => inMonth(r.date)),
+          ct: ((ct.data as any[]) || []).filter(t => day(t.updated_at) >= mStart),
+          dt: ((dt.data as any[]) || []).filter(t => day(t.created_at) >= mStart),
+          smd: (smd.data as any[]) || [],
+          pt: ((pt.data as any[]) || []).filter(t => inMonth(t.date)),
+          rec: ((rec.data as any[]) || []).filter(r => inMonth(r.date)),
+        };
+      });
       setMonthsData(map);
       setLoaded(true);
     });

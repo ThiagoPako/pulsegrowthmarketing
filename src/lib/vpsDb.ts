@@ -553,6 +553,11 @@ class ChannelBuilder {
 
 const activeChannels = new Map<string, ChannelBuilder>();
 
+// Funções públicas em que o 401 é a resposta do próprio fluxo (senha errada do
+// portal), não sessão da equipe vencida: não renova nem repete o pedido (a
+// repetição contava a tentativa de login em dobro).
+const FUNCTIONS_WITHOUT_SESSION_RETRY = new Set(['client-portal-auth']);
+
 /**
  * Invoke a VPS API function (replaces supabase.functions.invoke)
  * Routes to https://agenciapulse.tech/api/<functionName>
@@ -565,7 +570,7 @@ async function invokeFunction(functionName: string, options?: { body?: any }): P
       body: options?.body ? JSON.stringify(options.body) : undefined,
     });
 
-    if (response.status === 401 && await refreshVpsSession()) {
+    if (response.status === 401 && !FUNCTIONS_WITHOUT_SESSION_RETRY.has(functionName) && await refreshVpsSession()) {
       response = await fetch(`${VPS_API_BASE}/${functionName}`, {
         method: 'POST',
         headers: getAuthHeaders(),

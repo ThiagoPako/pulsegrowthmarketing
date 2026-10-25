@@ -23,6 +23,10 @@ const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'destruct
   suspenso: { label: 'Suspenso', variant: 'outline' },
 };
 
+// 'Em Atraso' fica só para exibir contratos antigos: atraso é estado da receita do
+// mês, e contrato fora de 'ativo' não gera mensalidade nem cobrança automática.
+const LEGACY_CONTRACT_STATUSES = ['em_atraso'];
+
 const PAYMENT_METHODS: Record<string, string> = {
   pix: 'PIX', boleto: 'Boleto', cartao: 'Cartão', transferencia: 'Transferência',
 };
@@ -47,6 +51,7 @@ export default function FinancialContracts() {
   }, [clients, contracts]);
 
   const filtered = filter === 'todos' ? contracts : contracts.filter(c => c.status === filter);
+  const legacyOverdueCount = contracts.filter(c => LEGACY_CONTRACT_STATUSES.includes(c.status)).length;
 
   const handleSave = async () => {
     if (!form.client_id) { toast.error('Selecione um cliente'); return; }
@@ -138,15 +143,28 @@ export default function FinancialContracts() {
                 <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {Object.entries(STATUS_MAP).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                    {Object.entries(STATUS_MAP)
+                      .filter(([k]) => !LEGACY_CONTRACT_STATUSES.includes(k) || form.status === k)
+                      .map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {LEGACY_CONTRACT_STATUSES.includes(form.status) && (
+                  <p className="text-xs text-destructive mt-1">
+                    Contrato "Em Atraso" não gera mensalidade nem cobrança automática. O atraso é marcado na receita do mês: mude para Ativo.
+                  </p>
+                )}
               </div>
               <Button className="w-full" onClick={handleSave}>Salvar</Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
+
+      {legacyOverdueCount > 0 && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm">
+          {legacyOverdueCount} contrato{legacyOverdueCount > 1 ? 's' : ''} com status "Em Atraso" não gera{legacyOverdueCount > 1 ? 'm' : ''} mensalidade nem cobrança automática e fica{legacyOverdueCount > 1 ? 'm' : ''} fora do MRR. O atraso é controlado pela receita do mês: edite e mude para Ativo.
+        </div>
+      )}
 
       <Card>
         <CardContent className="p-0">

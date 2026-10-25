@@ -45,7 +45,7 @@ const LUNCH_SLOTS = ['12:30', '13:30'];
 
 
 export default function RecordingControl() {
-  const { recordings, clients, users, scripts, addScript, updateScript, updateRecording, addRecording, deleteRecording, hasConflict, settings, refetchData, currentUser } = useApp();
+  const { recordings, clients, users, servesActiveCity, scripts, addScript, updateScript, updateRecording, addRecording, deleteRecording, hasConflict, settings, refetchData, currentUser } = useApp();
   const { user: authUser } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'day' | 'week'>('day');
@@ -84,18 +84,27 @@ export default function RecordingControl() {
     [clients]
   );
 
-  // Get all videomakers
-  const videomakers = useMemo(() =>
-    users.filter(u => u.role === 'videomaker').sort((a, b) => a.name.localeCompare(b.name)),
-    [users]
-  );
-
   // Get dates to display
   const displayDates = useMemo(() => {
     if (viewMode === 'day') return [format(selectedDate, 'yyyy-MM-dd')];
     const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
     return Array.from({ length: 6 }, (_, i) => format(addDays(weekStart, i), 'yyyy-MM-dd'));
   }, [selectedDate, viewMode]);
+
+  // Videomakers da cidade ativa; quem é da outra cidade só ganha coluna se tiver gravação aqui nos dias mostrados
+  const videomakerIdsWithRecordings = useMemo(
+    () => new Set(recordings
+      .filter(r => r.status !== 'cancelada' && displayDates.includes(r.date))
+      .map(r => r.videomakerId)
+      .filter(Boolean)),
+    [recordings, displayDates]
+  );
+  const videomakers = useMemo(() =>
+    users
+      .filter(u => u.role === 'videomaker' && (servesActiveCity(u.id) || videomakerIdsWithRecordings.has(u.id)))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    [users, servesActiveCity, videomakerIdsWithRecordings]
+  );
 
   // Filter recordings for selected date(s) — exclude cancelled
   const filteredRecordings = useMemo(() =>

@@ -96,7 +96,7 @@ function mapEventRecordingRow(e: any): EventRecording {
 
 export default function Schedule() {
   const {
-    clients, users, recordings, scripts, settings, activeRecordings,
+    clients, users, cityVideomakers, servesActiveCity, recordings, scripts, settings, activeRecordings,
     currentUser, updateScript, addRecording, addRecordingsBulk, updateRecording, cancelRecording, deleteRecording, cancelAndReschedule,
     regenerateScheduleForClient, generateFixedSchedulesForMonth, previewFixedSchedulesForMonth, commitFixedSchedules, autoFillVacanciesForDate, organizeSchedule, startActiveRecording, stopActiveRecording, refetchData,
     hasConflict, isWithinWorkHours,
@@ -217,7 +217,8 @@ export default function Schedule() {
   const [finishVerbalScripts, setFinishVerbalScripts] = useState<Set<string>>(new Set());
   const [finishAlterationNotes, setFinishAlterationNotes] = useState<Record<string, string>>({});
 
-  const videomakers = users.filter(u => u.role === 'videomaker');
+  // Só os videomakers da cidade ativa (não oferece nem distribui gravação para quem atende a outra cidade)
+  const videomakers = cityVideomakers;
   const currentMonth = addMonths(new Date(), monthOffset);
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -1254,7 +1255,7 @@ export default function Schedule() {
     }
     const generationVideomakers = new Set([
       ...videomakers.map(vm => vm.id),
-      ...recordings.map(recording => recording.videomakerId),
+      ...recordings.map(recording => recording.videomakerId).filter(servesActiveCity),
       ...fixedClients.map(client => client.videomaker),
     ].filter(Boolean));
 

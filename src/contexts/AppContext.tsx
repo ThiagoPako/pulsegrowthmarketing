@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useCallback, useState, useEffect } from 'react'; // refreshed
+import React, { createContext, useContext, useCallback, useState, useEffect, useMemo } from 'react'; // refreshed
 import { getDay } from 'date-fns';
 
 import { useAuth, type Profile } from '@/hooks/useAuth';
 import { useCity } from '@/contexts/CityContext';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { supabase } from '@/lib/vpsDb';
+import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { usePresenceHeartbeat } from '@/hooks/usePresence';
 import { generateFixedRecordings, findAvailableSlots, organizeRecordingsForDate } from '@/lib/schedulingUtils';
 import { sendRecordingScheduledNotification } from '@/services/whatsappService';
@@ -27,6 +28,10 @@ export interface ConflictCheckOptions {
 interface AppContextType {
   currentUser: User | null;
   users: User[];
+  /** Videomakers que atendem a cidade ativa (user_cities). Antes de a lista carregar, todos. */
+  cityVideomakers: User[];
+  /** O usuário atende a cidade ativa? (true enquanto a lista não carregou) */
+  servesActiveCity: (userId?: string | null) => boolean;
   clients: Client[];
   recordings: Recording[];
   tasks: KanbanTask[];
@@ -172,18 +177,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   
   const [users, setUsers] = useState<User[]>([]);
+  // Ids de quem atende a cidade ativa. null = não carregou (servidor antigo ou erro): não filtra.
+  const [cityMemberIds, setCityMemberIds] = useState<Set<string> | null>(null);
 
   const fetchUsers = useCallback(async () => {
     const hasVpsToken = typeof window !== 'undefined' && !!localStorage.getItem('pulse_jwt');
     if (cityLoading) return;
     if (!hasVpsToken) {
       setUsers([]);
+      setCityMemberIds(null);
       return;
     }
-    const [profilesRes, rolesRes] = await Promise.all([
+    const [profilesRes, rolesRes, cityMembersRes] = await Promise.all([
       supabase.from('profiles').select('*'),
       supabase.from('user_roles').select('user_id, role'),
+      invokeVpsFunction('team/city-members', { method: 'GET' }),
     ]);
+    setCityMemberIds(!cityMembersRes.error && Array.isArray(cityMembersRes.data?.user_ids)
+      ? new Set<string>(cityMembersRes.data.user_ids.map(String))
+      : null);
 
     if (profilesRes.error) {
       console.error('[AppContext] error loading profiles:', profilesRes.error);
@@ -212,6 +224,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [cityLoading, activeCity]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers, profile]);
+
+  // profiles não tem cidade: sem esse filtro a Agenda oferecia e distribuía gravações
+  // para videomakers da outra cidade (Minaçu x Uruaçu)
+  const servesActiveCity = useCallback(
+    (userId?: string | null) => !!userId && (!cityMemberIds || cityMemberIds.has(userId)),
+    [cityMemberIds]
+  );
+  const cityVideomakers = useMemo(
+    () => users.filter(u => u.role === 'videomaker' && servesActiveCity(u.id)),
+    [users, servesActiveCity]
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -347,8 +370,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
    * manualmente quando um admin preenche a vaga após cancelamento. */
   const generateScheduleForClient = useCallback(async (client: Client, options: FixedScheduleGenerationOptions = {}): Promise<number> => {
     const availableVideomakerIds = Array.from(new Set([
-      ...users.filter(user => user.role === 'videomaker').map(user => user.id),
-      ...data.recordings.map(recording => recording.videomakerId),
+      ...cityVideomakers.map(user => user.id),
+      ...data.recordings.map(recording => recording.videomakerId).filter(servesActiveCity),
       client.videomaker,
     ].filter(Boolean)));
 
@@ -362,12 +385,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!saved) throw new Error('A API da VPS recusou a criação das gravações fixas.');
     }
     return fixedRecs.length;
-  }, [data, users]);
+  }, [data, cityVideomakers, servesActiveCity]);
 
   const previewFixedSchedulesForMonth = useCallback((clientsToGenerate: Client[], startDate: string, endDate: string): Recording[] => {
     const availableVideomakerIds = Array.from(new Set([
-      ...users.filter(user => user.role === 'videomaker').map(user => user.id),
-      ...data.recordings.map(recording => recording.videomakerId),
+      ...cityVideomakers.map(user => user.id),
+      ...data.recordings.map(recording => recording.videomakerId).filter(servesActiveCity),
       ...clientsToGenerate.map(client => client.videomaker),
     ].filter(Boolean)));
     const activeFixedClients = clientsToGenerate.filter(c => c.fixedDay && c.status === 'ativo');
@@ -410,7 +433,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     return generatedRecordings;
-  }, [data, users]);
+  }, [data, cityVideomakers, servesActiveCity]);
 
   const commitFixedSchedules = useCallback(async (generatedRecordings: Recording[]): Promise<number> => {
     if (generatedRecordings.length === 0) return 0;
@@ -478,8 +501,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       : data.recordings.filter(r => !(r.clientId === client.id && r.status === 'agendada' && r.date >= today));
     
     const availableVideomakerIds = Array.from(new Set([
-      ...users.filter(user => user.role === 'videomaker').map(user => user.id),
-      ...data.recordings.map(recording => recording.videomakerId),
+      ...cityVideomakers.map(user => user.id),
+      ...data.recordings.map(recording => recording.videomakerId).filter(servesActiveCity),
       client.videomaker,
     ].filter(Boolean)));
 
@@ -493,7 +516,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!saved) throw new Error('A API da VPS recusou a criação das gravações fixas.');
     }
     return { deleted, created: fixedRecs.length };
-  }, [data, users]);
+  }, [data, cityVideomakers, servesActiveCity]);
 
   const autoFillVacanciesForDate = useCallback(async (date: string): Promise<number> => {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -515,7 +538,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     let createdCount = 0;
     const currentRecs = [...data.recordings];
-    const allVmIds = users.filter(u => u.role === 'videomaker').map(u => u.id);
+    // Só os videomakers da cidade ativa: extra não vai para a agenda de quem atende a outra cidade
+    const allVmIds = cityVideomakers.map(u => u.id);
 
     // Distribution among videomakers: iterate slots first, then videomakers
     for (const slot of FIXED_SLOTS) {
@@ -564,7 +588,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     }
     return createdCount;
-  }, [data, users, hasConflict]);
+  }, [data, cityVideomakers, hasConflict]);
   const organizeSchedule = useCallback(async (requestedStartDate: string, endDate: string): Promise<{ updated: number; cancelled: number }> => {
     // Dias que já passaram não são reorganizados: começa no maior entre o início pedido e hoje
     const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
@@ -717,7 +741,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      currentUser, users, clients: data.clients, recordings: data.recordings,
+      currentUser, users, cityVideomakers, servesActiveCity, clients: data.clients, recordings: data.recordings,
       tasks: data.tasks, scripts: data.scripts, settings: data.settings,
       activeRecordings: data.activeRecordings,
       logout, addUser, updateUser, deleteUser,

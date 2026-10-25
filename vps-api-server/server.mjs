@@ -3137,6 +3137,38 @@ app.get('/api/admin/user-cities', async (req, res) => {
   }
 });
 
+// ─── Equipe da cidade ativa: ids de quem atende a cidade (user_cities) ───
+// A Agenda e o Controle de Gravações usam para não oferecer nem distribuir gravação para
+// videomaker da outra cidade. Mesma regra do resolveActiveCity: sem cidade cadastrada = Minaçu;
+// contas ligadas pelo e-mail (profiles x auth_users) contam juntas.
+app.get('/api/team/city-members', async (req, res) => {
+  try {
+    await ensureUserCitiesTable();
+    const { user } = await verifyUser(req);
+    const city = await resolveActiveCity(req, user.id, user);
+    const profileColumns = await getExistingColumns('profiles').catch(() => new Set());
+    const authColumns = await getExistingColumns('auth_users').catch(() => new Set());
+    const linkByEmail = profileColumns.has('email') && authColumns.has('id') && authColumns.has('email');
+    const { rows } = await pool.query(
+      `WITH ids AS (
+         SELECT p.id::text AS profile_id, p.id::text AS uid FROM profiles p
+         ${linkByEmail ? `UNION
+         SELECT p.id::text, a.id::text FROM profiles p
+           JOIN auth_users a ON p.email IS NOT NULL AND lower(a.email) = lower(p.email)` : ''}
+       )
+       SELECT ids.profile_id AS id
+         FROM ids LEFT JOIN user_cities uc ON uc.user_id::text = ids.uid
+        GROUP BY ids.profile_id
+       HAVING COALESCE(bool_or(uc.user_id IS NOT NULL AND ${cityScopeCondition('uc.city', '$1')}), false)
+           OR ($1::text = 'minacu' AND COUNT(uc.user_id) = 0)`,
+      [city]
+    );
+    res.json({ city, user_ids: rows.map(r => r.id) });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+  }
+});
+
 // ─── Admin: Atualizar cidades de um usuário ─────────────────
 app.post('/api/admin/user-cities', async (req, res) => {
   try {
@@ -9463,6 +9495,23 @@ app.post('/api/recordings', async (req, res) => {
         return res.status(500).json({
           error: 'Schema da VPS desatualizado: coluna prospect_name não existe na tabela recordings.'
         });
+      }
+    }
+
+    // Videomaker que atende as duas cidades: a tela só enxerga as gravações da cidade ativa,
+    // então o mesmo horário na outra cidade é conferido aqui (gravação avulsa, uma por vez)
+    if (scopeCity && items.length === 1 && items[0]?.videomaker_id && items[0]?.date && items[0]?.start_time
+        && (items[0].status || 'agendada') !== 'cancelada') {
+      const one = items[0];
+      const { rows: otherCity } = await pool.query(
+        `SELECT 1 FROM recordings
+          WHERE videomaker_id::text = $1::text AND date = $2::date AND start_time::text = $3::text
+            AND status::text <> 'cancelada' AND NOT ${cityVisibilityExpression('city', '$4')}
+          LIMIT 1`,
+        [one.videomaker_id, one.date, one.start_time, activeCity]
+      );
+      if (otherCity.length > 0) {
+        return res.status(409).json({ error: 'O videomaker já tem gravação neste horário na outra cidade' });
       }
     }
 

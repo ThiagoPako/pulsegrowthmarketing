@@ -11,7 +11,9 @@ type SyncFinancialContractInput = {
   status?: string | null;
 };
 
-const OPEN_REVENUE_STATUSES = ['prevista', 'em_atraso', 'vencido'];
+// Só a mensalidade ainda não vencida acompanha o contrato. Dívidas em atraso já
+// foram cobradas com o valor da época e não podem mudar num reajuste.
+const SYNCABLE_REVENUE_STATUSES = ['prevista'];
 
 const normalizeDate = (value: string | null | undefined) => {
   if (!value) return '';
@@ -77,15 +79,25 @@ export async function syncFinancialContract(input: SyncFinancialContractInput) {
   if (shouldSyncOpenRevenues) {
     const openRevenuesResult = await supabase
       .from('revenues')
-      .select('id, reference_month')
+      .select('id, reference_month, recurrence_id, description, status')
       .eq('client_id', input.client_id)
-      .in('status', OPEN_REVENUE_STATUSES as any);
+      .in('status', SYNCABLE_REVENUE_STATUSES as any);
 
     if (openRevenuesResult.error) {
       throw new Error(openRevenuesResult.error.message || 'Erro ao sincronizar receitas em aberto');
     }
 
-    const openRevenues = Array.isArray(openRevenuesResult.data) ? openRevenuesResult.data : [];
+    // Mesmo critério de mensalidade usado na geração do mês: sem recorrência e
+    // sem descrição (receitas recorrentes extras e manuais têm valor próprio).
+    // Competências passadas ficam como estão.
+    const now = new Date();
+    const currentMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const openRevenues = (Array.isArray(openRevenuesResult.data) ? openRevenuesResult.data : []).filter(
+      (revenue: any) =>
+        !revenue.recurrence_id &&
+        !revenue.description &&
+        normalizeDate(revenue.reference_month) >= currentMonthStart
+    );
 
     if (openRevenues.length > 0) {
       const revenueUpdates = await Promise.all(

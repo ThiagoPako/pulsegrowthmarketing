@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/lib/vpsDb';
 import { Button } from '@/components/ui/button';
@@ -316,13 +316,14 @@ export default function CostByContentType() {
    * que era a causa do painel aparecer vazio silenciosamente), refaz a consulta
    * com `*` e só então desiste, registrando o erro para o usuário.
    */
-  const safeSelect = useCallback(async <T,>(table: string, columns: string): Promise<T[]> => {
+  const safeSelect = useCallback(async <T,>(table: string, columns: string, applyFilter?: (query: any) => any): Promise<T[]> => {
+    const filtered = (query: any) => (applyFilter ? applyFilter(query) : query);
     try {
-      const primary = await supabase.from(table).select(columns);
+      const primary = await filtered(supabase.from(table).select(columns));
       if (!primary.error && Array.isArray(primary.data)) return primary.data as T[];
       console.warn(`[pente-fino] ${table} falhou com colunas explícitas:`, primary.error);
 
-      const fallback = await supabase.from(table).select('*');
+      const fallback = await filtered(supabase.from(table).select('*'));
       if (!fallback.error && Array.isArray(fallback.data)) return fallback.data as T[];
       console.error(`[pente-fino] ${table} indisponível:`, fallback.error);
       setLoadError(`Não foi possível carregar "${table}".`);
@@ -334,19 +335,50 @@ export default function CostByContentType() {
     }
   }, []);
 
-  const fetchData = useCallback(async () => {
+  const dateRange = useMemo(() => {
+    const now = new Date();
+    if (periodType === 'current') return { start: format(startOfMonth(now), 'yyyy-MM-dd'), end: format(endOfMonth(now), 'yyyy-MM-dd') };
+    if (periodType === 'previous') {
+      const prev = subMonths(now, 1);
+      return { start: format(startOfMonth(prev), 'yyyy-MM-dd'), end: format(endOfMonth(prev), 'yyyy-MM-dd') };
+    }
+    return { start: customStart || format(startOfMonth(now), 'yyyy-MM-dd'), end: customEnd || format(endOfMonth(now), 'yyyy-MM-dd') };
+  }, [periodType, customStart, customEnd]);
+
+  // A produção (gravações, entregas, tarefas, roteiros) vem do banco só a partir
+  // do início do período, com 1 dia de folga por causa do fuso. Antes vinham as
+  // tabelas inteiras. A data de referência de cada item é a primeira preenchida
+  // entre várias colunas, então o filtro é um OR sobre todas elas: se a data de
+  // referência cai no período, pelo menos uma delas passa no filtro.
+  // Despesas, categorias, planos e esperas continuam completas: o salário usa o
+  // último lançamento fora do período como estimativa.
+  const fetchFrom = useMemo(() => {
+    const [y, m, d] = dateRange.start.split('-').map(Number);
+    return format(new Date(y, (m || 1) - 1, (d || 1) - 1), 'yyyy-MM-dd');
+  }, [dateRange.start]);
+  // Recargas sobrepostas (troca rápida de período): só a mais recente grava
+  const fetchSeqRef = useRef(0);
+
+  const fetchData = useCallback(async (from: string) => {
+    const seq = ++fetchSeqRef.current;
     setLoadError(null);
     const [rRes, sRes, edRes, dRes, scRes, catRes, expRes, plRes, wRes] = await Promise.all([
-      safeSelect<DeliveryRecord>('delivery_records', 'recording_id,started_at,finished_at,client_id,videomaker_id,date,reels_produced,creatives_produced,stories_produced,arts_produced,delivery_status,videos_recorded,recording_duration_seconds,wait_duration_seconds'),
-      safeSelect<SocialDelivery>('social_media_deliveries', 'client_id,content_type,delivered_at,posted_at,created_at,updated_at,status,created_by'),
-      safeSelect<EditorTask>('content_tasks', 'client_id,content_type,kanban_column,approved_at,updated_at,created_at,assigned_to,edited_by'),
-      safeSelect<DesignTask>('design_tasks', 'client_id,kanban_column,completed_at,updated_at,created_at,attachment_url,attachment_urls,editable_file_url,mockup_url,assigned_to'),
-      safeSelect<ScriptRecord>('scripts', 'client_id,content_format,created_by,created_at,updated_at'),
+      safeSelect<DeliveryRecord>('delivery_records', 'recording_id,started_at,finished_at,client_id,videomaker_id,date,reels_produced,creatives_produced,stories_produced,arts_produced,delivery_status,videos_recorded,recording_duration_seconds,wait_duration_seconds',
+        q => q.gte('date', from)),
+      safeSelect<SocialDelivery>('social_media_deliveries', 'client_id,content_type,delivered_at,posted_at,created_at,updated_at,status,created_by',
+        q => q.or(`posted_at.gte.${from},delivered_at.gte.${from},updated_at.gte.${from},created_at.gte.${from}`)),
+      safeSelect<EditorTask>('content_tasks', 'client_id,content_type,kanban_column,approved_at,updated_at,created_at,assigned_to,edited_by',
+        q => q.or(`approved_at.gte.${from},updated_at.gte.${from},created_at.gte.${from}`)),
+      safeSelect<DesignTask>('design_tasks', 'client_id,kanban_column,completed_at,updated_at,created_at,attachment_url,attachment_urls,editable_file_url,mockup_url,assigned_to',
+        q => q.or(`completed_at.gte.${from},updated_at.gte.${from},created_at.gte.${from}`)),
+      safeSelect<ScriptRecord>('scripts', 'client_id,content_format,created_by,created_at,updated_at',
+        q => q.or(`created_at.gte.${from},updated_at.gte.${from}`)),
       safeSelect<ExpenseCategory>('expense_categories', 'id,name'),
       safeSelect<SalaryExpense>('expenses', 'date,amount,description,responsible,category_id,expense_type'),
       safeSelect<PlanRow>('plans', 'id,name,price,reels_qty,creatives_qty,stories_qty,arts_qty,recording_sessions,status'),
       safeSelect<WaitLogRow>('recording_wait_logs', 'recording_id,started_at,ended_at,wait_duration_seconds'),
     ]);
+    if (seq !== fetchSeqRef.current) return;
     // Registros antigos não têm espera/duração gravadas: completa a partir dos logs reais.
     const waitByRecording = new Map<string, number>();
     wRes.forEach(w => {
@@ -387,18 +419,8 @@ export default function CostByContentType() {
     setProlaboreExpenses(allExp.filter(e => prolaboreCategoryIds.has(e.category_id || '')));
   }, [safeSelect]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchData(fetchFrom); }, [fetchData, fetchFrom]);
 
-
-  const dateRange = useMemo(() => {
-    const now = new Date();
-    if (periodType === 'current') return { start: format(startOfMonth(now), 'yyyy-MM-dd'), end: format(endOfMonth(now), 'yyyy-MM-dd') };
-    if (periodType === 'previous') {
-      const prev = subMonths(now, 1);
-      return { start: format(startOfMonth(prev), 'yyyy-MM-dd'), end: format(endOfMonth(prev), 'yyyy-MM-dd') };
-    }
-    return { start: customStart || format(startOfMonth(now), 'yyyy-MM-dd'), end: customEnd || format(endOfMonth(now), 'yyyy-MM-dd') };
-  }, [periodType, customStart, customEnd]);
 
   const data = useMemo(() => {
     const clientOk = (cid?: string | null) => selectedClient === 'all' || cid === selectedClient;

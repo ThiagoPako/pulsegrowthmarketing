@@ -67,9 +67,15 @@ app.use(express.json({ limit: '10mb' }));
 
 // Health Check: endpoint leve para monitoramento do Nginx/Uptime e Banco de Dados
 // Diagnóstico do Pente Fino: mostra o que faltava e repara o schema.
+// Só admin: a rota expõe nomes de tabelas/colunas e pode rodar DDL.
 app.get('/api/diagnostics/pente-fino', async (req, res) => {
   // Roda CREATE/ALTER: só admin
   if (!(await requireAdminRoute(req, res))) return;
+  try {
+    await verifyAdmin(req);
+  } catch (error) {
+    return res.status(error?.message === 'Admin access required' ? 403 : 401).json({ error: error?.message || 'Unauthorized' });
+  }
   try {
     const before = {};
     for (const [table, columns] of Object.entries(PENTE_FINO_SCHEMA)) {
@@ -89,10 +95,14 @@ app.get('/api/diagnostics/pente-fino', async (req, res) => {
       };
     }
 
-    penteFinoEnsuredPromise = null;
-    await ensurePenteFinoTables();
+    // Só força nova verificação (e DDL) quando de fato falta tabela ou coluna.
+    const needsRepair = Object.values(before).some((t) => !t.exists || t.missingColumns.length > 0);
+    if (needsRepair) {
+      penteFinoEnsuredPromise = null;
+      await ensurePenteFinoTables();
+    }
 
-    res.json({ repaired: true, before });
+    res.json({ repaired: needsRepair, before });
   } catch (error) {
     res.status(500).json({ error: error?.message || 'diagnostics failed' });
   }
@@ -1010,6 +1020,36 @@ async function ensureRecurringRevenuesTables() {
 
 ensureRecurringRevenuesTables().catch((error) => {
   console.error('Failed to ensure recurring revenues tables:', error);
+});
+
+// ─── Bônus de salário (registro do "Pagar + Bônus" e banner de parabéns) ───
+// A tabela só existia no Supabase antigo: na VPS o insert falhava em silêncio.
+let salaryBonusesPromise = null;
+async function ensureSalaryBonusesTable() {
+  if (!salaryBonusesPromise) {
+    salaryBonusesPromise = pool.query(`
+      CREATE TABLE IF NOT EXISTS salary_bonuses (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        expense_id UUID NOT NULL,
+        user_name TEXT NOT NULL DEFAULT '',
+        user_role TEXT NOT NULL DEFAULT '',
+        bonus_amount NUMERIC NOT NULL DEFAULT 0,
+        reference_month TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      ALTER TABLE salary_bonuses ADD COLUMN IF NOT EXISTS user_id UUID;
+      ALTER TABLE salary_bonuses ADD COLUMN IF NOT EXISTS city TEXT;
+      CREATE INDEX IF NOT EXISTS idx_salary_bonuses_month ON salary_bonuses (reference_month);
+    `).catch((error) => {
+      salaryBonusesPromise = null;
+      throw error;
+    });
+  }
+  return salaryBonusesPromise;
+}
+
+ensureSalaryBonusesTable().catch((error) => {
+  console.error('Failed to ensure salary bonuses table:', error);
 });
 
 // ─── Campanhas: garante tabelas e o vínculo de roteiro/tarefas com o slot ───
@@ -3674,13 +3714,14 @@ app.post('/api/financial-chat', async (req, res) => {
     const { question, conversationHistory, aiModel, aiProvider } = req.body;
     if (!question) return res.status(400).json({ error: 'Question is required' });
 
-    const selectedModel = aiModel || 'gemini-2.5-flash';
     const now = new Date();
     const SYSTEM_START = '2026-03-01'; // Sistema iniciou em março 2026
     const startOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
     const fmt = v => Number(v || 0).toLocaleString('pt-BR');
     const fmtMoney = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const fmtDate = d => { if (!d) return 'N/A'; const dt = typeof d === 'string' ? d : d.toISOString(); return dt.slice(0, 10).split('-').reverse().join('/'); };
+
+    const aiConfigCity = (await tableHasCityColumn('api_integrations')) ? await resolveActiveCity(req, user.id, user) : null;
 
     // Fetch ALL system data in parallel from local PostgreSQL
     // NOTE: All operational data filtered from SYSTEM_START (March 2026). Only contracts can have earlier dates.
@@ -3697,7 +3738,12 @@ app.post('/api/financial-chat', async (req, res) => {
       pool.query(`SELECT fc.*, c.company_name AS client_name, p.name AS plan_name, p.price AS plan_price FROM financial_contracts fc LEFT JOIN clients c ON c.id = fc.client_id LEFT JOIN plans p ON p.id = fc.plan_id WHERE fc.status = 'ativo'`),
       pool.query(`SELECT c.*, p.name AS plan_name FROM clients c LEFT JOIN plans p ON p.id = c.plan_id`),
       pool.query(`SELECT * FROM cash_reserve_movements WHERE date >= $1 ORDER BY date DESC LIMIT 100`, [SYSTEM_START]),
-      pool.query(`SELECT config FROM api_integrations WHERE provider = ANY($1) AND status = 'ativo' LIMIT 1`, [['ai_gemini', 'ai_openai', 'ai_claude']]),
+      // Configuração de IA ativa: a da cidade ativa primeiro, depois a mais recente
+      pool.query(
+        `SELECT config FROM api_integrations WHERE provider = ANY($1) AND status = 'ativo'
+          ORDER BY ${aiConfigCity ? `(${cityScopeExpression('city')} = $2) DESC, ` : ''}updated_at DESC LIMIT 1`,
+        aiConfigCity ? [['ai_gemini', 'ai_openai', 'ai_claude'], aiConfigCity] : [['ai_gemini', 'ai_openai', 'ai_claude']]
+      ),
       pool.query(`SELECT r.*, c.company_name AS client_name, pf.name AS videomaker_name FROM recordings r LEFT JOIN clients c ON c.id = r.client_id LEFT JOIN profiles pf ON pf.id = r.videomaker_id WHERE r.date >= $1 ORDER BY r.date DESC LIMIT 200`, [SYSTEM_START]),
       pool.query(`SELECT ct.*, c.company_name AS client_name, pf.name AS assigned_name FROM content_tasks ct LEFT JOIN clients c ON c.id = ct.client_id LEFT JOIN profiles pf ON pf.id = ct.assigned_to ORDER BY ct.updated_at DESC LIMIT 200`),
       pool.query(`SELECT dt.*, c.company_name AS client_name, pf.name AS assigned_name FROM design_tasks dt LEFT JOIN clients c ON c.id = dt.client_id LEFT JOIN profiles pf ON pf.id = dt.assigned_to ORDER BY dt.updated_at DESC LIMIT 200`),
@@ -4070,7 +4116,7 @@ ${contextData}`;
       ].filter(Boolean).join('\n\n');
 
       await pool.query(
-        `INSERT INTO financial_chat_messages (id, user_id, role, content, created_at) VALUES ($1, $2, 'user', $3, NOW()), ($4, $2, 'assistant', $5, NOW())`,
+        `INSERT INTO financial_chat_messages (id, user_id, role, content, created_at) VALUES ($1, $2, 'user', $3, NOW()), ($4, $2, 'assistant', $5, NOW() + interval '1 millisecond')`,
         [crypto.randomUUID(), user.id, question, crypto.randomUUID(), answer]
       );
 
@@ -4079,19 +4125,27 @@ ${contextData}`;
 
     const messages = [{ role: 'system', content: systemPrompt }];
     if (conversationHistory && Array.isArray(conversationHistory)) {
-      for (const msg of conversationHistory.slice(-10)) messages.push({ role: msg.role, content: msg.content });
+      // Histórico vem do navegador: só papéis de conversa (nunca 'system') e texto limitado
+      const safeHistory = conversationHistory
+        .filter((msg) => msg && (msg.role === 'user' || msg.role === 'assistant') && typeof msg.content === 'string' && msg.content.trim())
+        .slice(-10);
+      for (const msg of safeHistory) messages.push({ role: msg.role, content: msg.content.slice(0, 4000) });
     }
     messages.push({ role: 'user', content: question });
 
-    // Get API key from local DB
+    // Get API key from local DB — provedor e modelo configurados na tela APIs valem
+    // quando o front não manda os seus (sem provedor, getAiConfig ignora a chave do banco).
     const dbApiKeyConfig = apiKeyRes.rows?.[0]?.config;
     const dbApiKey = dbApiKeyConfig?.api_key_encrypted;
-    const ai = getAiConfig(aiProvider, dbApiKey);
+    const ai = getAiConfig(aiProvider || dbApiKeyConfig?.ai_provider, dbApiKey);
+    const DEFAULT_CHAT_MODELS = { gemini: 'gemini-2.5-flash', openai: 'gpt-4o-mini', claude: 'claude-3-haiku-20240307' };
+    const configuredModel = (!dbApiKeyConfig?.ai_provider || dbApiKeyConfig.ai_provider === ai.provider) ? dbApiKeyConfig?.ai_model : null;
+    const selectedModel = aiModel || configuredModel || DEFAULT_CHAT_MODELS[ai.provider] || 'gemini-2.5-flash';
     const answer = await callAi(ai, selectedModel, messages, { temperature: 0.3, max_tokens: 3000 });
 
     // Save chat messages to local DB
     await pool.query(
-      `INSERT INTO financial_chat_messages (id, user_id, role, content, created_at) VALUES ($1, $2, 'user', $3, NOW()), ($4, $2, 'assistant', $5, NOW())`,
+      `INSERT INTO financial_chat_messages (id, user_id, role, content, created_at) VALUES ($1, $2, 'user', $3, NOW()), ($4, $2, 'assistant', $5, NOW() + interval '1 millisecond')`,
       [crypto.randomUUID(), user.id, question, crypto.randomUUID(), answer]
     );
 
@@ -6731,16 +6785,31 @@ app.post('/api/meta-store-credentials', async (req, res) => {
     if (secret_name && secret_value) {
       const keyToProviderMap = { GOOGLE_GEMINI_API_KEY: 'ai_gemini', OPENAI_API_KEY: 'ai_openai', ANTHROPIC_API_KEY: 'ai_claude' };
       const dbProvider = keyToProviderMap[secret_name];
-      if (dbProvider) {
-        const { data: existing } = await admin.from('api_integrations').select('id, config').eq('provider', dbProvider).limit(1).single();
-        if (existing) {
-          const cfg = existing.config || {};
-          cfg.api_key_encrypted = secret_value;
-          cfg.api_key_set = true;
-          cfg.api_key_hint = '••••' + secret_value.slice(-4);
-          await admin.from('api_integrations').update({ config: cfg, updated_at: new Date().toISOString() }).eq('id', existing.id);
-        }
+      if (!dbProvider) return res.status(400).json({ error: `Chave desconhecida: ${secret_name}` });
+      const apiKey = String(secret_value).trim();
+      // Grava com merge no próprio SQL (não troca o config inteiro). Com integration_id
+      // vai na linha que a tela acabou de salvar; sem ele, na linha ativa mais recente
+      // do provedor na cidade ativa.
+      const keyParams = [apiKey, '••••' + apiKey.slice(-4), dbProvider];
+      let target;
+      if (integration_id) {
+        keyParams.push(String(integration_id));
+        target = 'id::text = $4';
+      } else {
+        const scopeCity = await tableHasCityColumn('api_integrations');
+        const activeCity = scopeCity ? await resolveActiveCity(req, user.id, user) : null;
+        const cityClause = scopeCity ? `AND ${cityVisibilityExpression('city', '$4')}` : '';
+        if (scopeCity) keyParams.push(activeCity);
+        target = `id = (SELECT id FROM api_integrations WHERE provider = $3 AND status = 'ativo' ${cityClause} ORDER BY updated_at DESC LIMIT 1)`;
       }
+      const { rowCount } = await pool.query(
+        `UPDATE api_integrations
+            SET config = COALESCE(config, '{}'::jsonb) || jsonb_build_object('api_key_encrypted', $1::text, 'api_key_set', true, 'api_key_hint', $2::text),
+                updated_at = now()
+          WHERE provider = $3 AND ${target}`,
+        keyParams
+      );
+      if (!rowCount) return res.status(404).json({ error: 'Configuração de IA não encontrada para gravar a chave' });
       return res.json({ success: true, message: `Secret ${secret_name} stored` });
     }
 
@@ -8322,49 +8391,112 @@ app.post('/api/billing-automation', async (req, res) => {
 async function runBillingAutomation() {
   {
     const admin = getAdminClient();
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    const currentDay = today.getDate();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
+    await ensureRecurringRevenuesTables().catch(() => {});
+    // Datas no calendário de Brasília (o agendador roda das 9h às 20h de lá)
+    const brDate = (d) => d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    const todayStr = brDate(new Date());
+    const [currentYear, currentMonthNum] = todayStr.split('-').map(Number);
+    const currentMonth = currentMonthNum - 1;
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const monthStart = (year, monthIdx) => {
+      const d = new Date(Date.UTC(year, monthIdx, 1));
+      return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-01`;
+    };
+    // Vencimento do contrato no mês, limitado ao último dia (dia 30/31 em fevereiro etc.)
+    const contractDueDate = (year, monthIdx, dueDay) => {
+      const first = new Date(Date.UTC(year, monthIdx, 1));
+      const lastDay = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+      const day = Math.min(Math.max(Number(dueDay) || 10, 1), lastDay);
+      return `${first.getUTCFullYear()}-${pad2(first.getUTCMonth() + 1)}-${pad2(day)}`;
+    };
+    const addDays = (dateStr, days) => {
+      const d = new Date(`${dateStr}T12:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + days);
+      return d.toISOString().slice(0, 10);
+    };
+    const toDateKey = (v) => {
+      if (!v) return '';
+      if (v instanceof Date) return v.toISOString().slice(0, 10);
+      return String(v).slice(0, 10);
+    };
+    const isReceived = (r) => r?.status === 'recebida' || r?.status === 'pago';
 
     const { data: contracts } = await admin.from('financial_contracts').select('*').eq('status', 'ativo');
     if (!contracts?.length) return { message: 'No active contracts', processed: 0 };
-    const { data: paymentConfigs } = await admin.from('payment_config').select('*').limit(1);
-    const paymentConfig = paymentConfigs?.[0];
+    // PIX/templates por cidade: cada contrato usa a config da sua cidade; sem config
+    // própria, cai na primeira cadastrada (comportamento anterior).
+    const paymentConfigHasCity = await tableHasCityColumn('payment_config');
+    const { rows: paymentConfigRows } = await pool.query('SELECT * FROM payment_config');
+    const paymentConfigByCity = new Map();
+    for (const pc of paymentConfigRows) {
+      const city = paymentConfigHasCity ? (normalizeCityValue(pc.city) || 'minacu') : 'minacu';
+      if (!paymentConfigByCity.has(city)) paymentConfigByCity.set(city, pc);
+    }
+    const billingMessagesHasCity = await tableHasCityColumn('billing_messages');
     const { data: whatsappConfigs } = await admin.from('whatsapp_config').select('*').limit(1);
     const whatsappConfig = whatsappConfigs?.[0];
     const results = [];
 
+    const refThis = monthStart(currentYear, currentMonth);
+    const refPrev = monthStart(currentYear, currentMonth - 1);
+
     for (const contract of contracts) {
       if (contract.billing_enabled === false) continue;
-      const isDueDay = currentDay === contract.due_day;
-      const dueDate = new Date(currentYear, currentMonth, contract.due_day);
-      const daysSinceDue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
-      const isReminder = daysSinceDue === 3;
-      if (!isDueDay && !isReminder) continue;
+
+      // Só a mensalidade do contrato (sem recorrência extra nem lançamento manual),
+      // do mês atual e do anterior — o lembrete de +3 dias atravessa a virada do mês.
+      const { rows: monthlyRevenues } = await pool.query(
+        `SELECT * FROM revenues
+          WHERE client_id = $1
+            AND recurrence_id IS NULL
+            AND (description IS NULL OR btrim(description) = '')
+            AND (contract_id IS NULL OR contract_id = $2)
+            AND reference_month = ANY($3::date[])
+          ORDER BY (contract_id = $2) DESC NULLS LAST, created_at ASC`,
+        [contract.client_id, contract.id, [refThis, refPrev]]
+      );
+      const revenuesOf = (ref) => monthlyRevenues.filter((r) => toDateKey(r.reference_month) === ref);
+      // Mês atual: sem receita gerada ainda, vale o dia do contrato (como antes).
+      // Mês anterior: só lembra se a mensalidade daquele mês existe.
+      const prevRevenues = revenuesOf(refPrev);
+      const candidates = [
+        { revenues: revenuesOf(refThis), fallbackDue: contractDueDate(currentYear, currentMonth, contract.due_day) },
+        ...(prevRevenues.length ? [{ revenues: prevRevenues, fallbackDue: '' }] : []),
+      ].map((c) => ({ ...c, dueDate: toDateKey(c.revenues[0]?.due_date) || c.fallbackDue }))
+        .filter((c) => c.dueDate);
+
+      // Cobrança no dia do vencimento da receita do mês; lembrete 3 dias depois
+      const dueToday = candidates[0]?.dueDate === todayStr ? candidates[0] : null;
+      const reminder = dueToday ? null : candidates.find((c) => addDays(c.dueDate, 3) === todayStr) || null;
+      const target = dueToday || reminder;
+      if (!target) continue;
+      const isReminder = Boolean(reminder);
+
+      // Já pago (qualquer mensalidade do mês recebida) → não cobra
+      if (target.revenues.some(isReceived)) continue;
+      const revenue = target.revenues[0] || null;
 
       const { data: clientData } = await admin.from('clients').select('*').eq('id', contract.client_id).single();
       if (!clientData?.whatsapp) continue;
-      const refMonth = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
-      const { data: existingRevenues } = await admin.from('revenues').select('*').eq('client_id', contract.client_id).eq('reference_month', refMonth);
-      const revenue = existingRevenues?.[0];
-      if (revenue?.status === 'recebida') continue;
       const { data: existingMessages } = await admin.from('billing_messages').select('*').eq('client_id', contract.client_id).gte('sent_at', todayStr + 'T00:00:00').lte('sent_at', todayStr + 'T23:59:59');
       if (existingMessages?.length) continue;
 
-      const value = Number(contract.contract_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const contractCity = normalizeCityValue(contract.city) || normalizeCityValue(clientData.city) || 'minacu';
+      const paymentConfig = paymentConfigByCity.get(contractCity) || paymentConfigByCity.get('minacu') || paymentConfigRows[0];
+
+      const value = Number(revenue?.amount ?? contract.contract_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       let paymentInfo = '';
       if (paymentConfig?.pix_key) {
         const template = paymentConfig.msg_payment_data || '💳 *Dados:*\nNome: {nome_recebedor}\nBanco: {banco}\nPIX: {chave_pix}\nDoc: {documento}';
         paymentInfo = template.replace(/\{nome_recebedor\}/g, paymentConfig.receiver_name || '').replace(/\{banco\}/g, paymentConfig.bank || '').replace(/\{chave_pix\}/g, paymentConfig.pix_key || '').replace(/\{documento\}/g, paymentConfig.document || '');
       }
 
-      const applyVars = tpl => tpl.replace(/\{nome_cliente\}/g, clientData.company_name).replace(/\{valor\}/g, value).replace(/\{dia_vencimento\}/g, String(contract.due_day)).replace(/\{dados_pagamento\}/g, paymentInfo);
+      const dueDayLabel = String(Number(target.dueDate.slice(8, 10)));
+      const applyVars = tpl => tpl.replace(/\{nome_cliente\}/g, clientData.company_name).replace(/\{valor\}/g, value).replace(/\{dia_vencimento\}/g, dueDayLabel).replace(/\{dados_pagamento\}/g, paymentInfo);
       let message;
       if (isReminder) {
         message = applyVars(paymentConfig?.msg_billing_overdue || `Olá, {nome_cliente}! Identificamos pendência de {valor}. Se já pagou, desconsidere.{dados_pagamento}`);
-        if (revenue) await admin.from('revenues').update({ status: 'em_atraso' }).eq('id', revenue.id);
+        if (revenue && revenue.status === 'prevista') await admin.from('revenues').update({ status: 'em_atraso' }).eq('id', revenue.id);
       } else {
         message = applyVars(paymentConfig?.msg_billing_due || `Olá, {nome_cliente}! 🚀\n💰 Mensalidade: {valor}\n📅 Vencimento: Dia {dia_vencimento}{dados_pagamento}`);
       }
@@ -8372,7 +8504,13 @@ async function runBillingAutomation() {
       if (whatsappConfig?.integration_active) {
         try {
           await sendWhatsAppDirect(whatsappConfig, clientData.whatsapp, message, admin, contract.client_id, isReminder ? 'cobranca_lembrete' : 'cobranca', 'cobranca');
-          await admin.from('billing_messages').insert({ revenue_id: revenue?.id || null, client_id: contract.client_id, message_type: isReminder ? 'lembrete' : 'cobranca', status: 'enviada' });
+          await admin.from('billing_messages').insert({
+            revenue_id: revenue?.id || null,
+            client_id: contract.client_id,
+            message_type: isReminder ? 'lembrete' : 'cobranca',
+            status: 'enviada',
+            ...(billingMessagesHasCity ? { city: contractCity } : {}),
+          });
           results.push({ client: clientData.company_name, type: isReminder ? 'lembrete' : 'cobranca', status: 'sent' });
         } catch (err) { results.push({ client: clientData.company_name, status: 'error', error: String(err) }); }
       }
@@ -8667,6 +8805,7 @@ const ALLOWED_TABLES = [
   'story_editing_sessions','script_requests','manual_video_tasks','plan_promotions',
   'client_professionals','client_units','client_collaborators','short_links','client_bio_links','client_bio_buttons',
   'warehouse_items','warehouse_movements','structure_investments','recurring_revenues',
+  'salary_bonuses',
 
 
 
@@ -8683,6 +8822,7 @@ const TABLES_WITH_CITY = new Set([
   'content_tasks','task_history','task_comments',
   'design_tasks','design_task_history','delivery_records',
   'revenues','expenses','financial_contracts','financial_activity_log','recurring_revenues',
+  'salary_bonuses',
   'financial_chat_messages','cash_reserve_movements','billing_messages',
   'social_media_deliveries','social_accounts','integration_logs',
   'automation_flows','automation_logs','api_integrations','api_integration_logs',
@@ -9402,6 +9542,12 @@ app.post('/api/db/query', async (req, res) => {
 
     if (safeTable === 'short_links' || safeTable === 'short_link_clicks') {
       await ensureShortLinksTables();
+    }
+
+    if (safeTable === 'salary_bonuses') {
+      await ensureSalaryBonusesTable().catch((error) => {
+        console.warn('Could not ensure salary bonuses table:', error?.message || error);
+      });
     }
 
     if (safeTable === 'recurring_revenues' || safeTable === 'revenues') {

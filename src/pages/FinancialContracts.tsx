@@ -15,6 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/lib/vpsDb';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { todayLocal } from '@/lib/financialCalc';
 
 const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'destructive' | 'secondary' | 'outline' }> = {
   ativo: { label: 'Ativo', variant: 'default' },
@@ -23,14 +24,19 @@ const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'destruct
   suspenso: { label: 'Suspenso', variant: 'outline' },
 };
 
+// 'Em Atraso' fica só para exibir contratos antigos: atraso é estado da receita do
+// mês, e contrato fora de 'ativo' não gera mensalidade nem cobrança automática.
+const LEGACY_CONTRACT_STATUSES = ['em_atraso'];
+
 const PAYMENT_METHODS: Record<string, string> = {
   pix: 'PIX', boleto: 'Boleto', cartao: 'Cartão', transferencia: 'Transferência',
 };
 
-const emptyForm = {
-  client_id: '', plan_id: '', contract_value: 0, contract_start_date: new Date().toISOString().split('T')[0],
+// Função: a data padrão é a de hoje (local) quando o formulário abre
+const emptyForm = () => ({
+  client_id: '', plan_id: '', contract_value: 0, contract_start_date: todayLocal(),
   due_day: 10, payment_method: 'pix', status: 'ativo',
-};
+});
 
 export default function FinancialContracts() {
   const navigate = useNavigate();
@@ -47,11 +53,12 @@ export default function FinancialContracts() {
   }, [clients, contracts]);
 
   const filtered = filter === 'todos' ? contracts : contracts.filter(c => c.status === filter);
+  const legacyOverdueCount = contracts.filter(c => LEGACY_CONTRACT_STATUSES.includes(c.status)).length;
 
   const handleSave = async () => {
     if (!form.client_id) { toast.error('Selecione um cliente'); return; }
     const ok = await upsertContract(editingId ? { id: editingId, ...form } : form);
-    if (ok) { toast.success('Contrato salvo!'); setOpen(false); setForm(emptyForm); setEditingId(null); }
+    if (ok) { toast.success('Contrato salvo!'); setOpen(false); setForm(emptyForm()); setEditingId(null); }
   };
 
   const handleEdit = (c: FinancialContract) => {
@@ -76,14 +83,14 @@ export default function FinancialContracts() {
   return (
     <div className="space-y-5">
       <FinancialQuickNav />
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro')}><ArrowLeft size={18} /></Button>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <h1 className="text-xl font-bold">Contratos de Clientes</h1>
           <p className="text-sm text-muted-foreground">{contracts.length} contratos</p>
         </div>
         <Select value={filter} onValueChange={setFilter}>
-          <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-36"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todos</SelectItem>
             <SelectItem value="ativo">Ativos</SelectItem>
@@ -92,7 +99,7 @@ export default function FinancialContracts() {
             <SelectItem value="suspenso">Suspensos</SelectItem>
           </SelectContent>
         </Select>
-        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setForm(emptyForm); setEditingId(null); } }}>
+        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setForm(emptyForm()); setEditingId(null); } }}>
           <DialogTrigger asChild><Button size="sm"><Plus size={16} className="mr-1" /> Novo Contrato</Button></DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>{editingId ? 'Editar Contrato' : 'Novo Contrato'}</DialogTitle></DialogHeader>
@@ -138,15 +145,28 @@ export default function FinancialContracts() {
                 <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {Object.entries(STATUS_MAP).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                    {Object.entries(STATUS_MAP)
+                      .filter(([k]) => !LEGACY_CONTRACT_STATUSES.includes(k) || form.status === k)
+                      .map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {LEGACY_CONTRACT_STATUSES.includes(form.status) && (
+                  <p className="text-xs text-destructive mt-1">
+                    Contrato "Em Atraso" não gera mensalidade nem cobrança automática. O atraso é marcado na receita do mês: mude para Ativo.
+                  </p>
+                )}
               </div>
               <Button className="w-full" onClick={handleSave}>Salvar</Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
+
+      {legacyOverdueCount > 0 && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm">
+          {legacyOverdueCount} contrato{legacyOverdueCount > 1 ? 's' : ''} com status "Em Atraso" não gera{legacyOverdueCount > 1 ? 'm' : ''} mensalidade nem cobrança automática e fica{legacyOverdueCount > 1 ? 'm' : ''} fora do MRR. O atraso é controlado pela receita do mês: edite e mude para Ativo.
+        </div>
+      )}
 
       <Card>
         <CardContent className="p-0">

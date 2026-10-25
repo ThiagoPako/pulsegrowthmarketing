@@ -11,6 +11,7 @@ import { supabase } from '@/lib/vpsDb';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Expense, ExpenseCategory } from '@/hooks/useFinancialData';
+import { todayLocal } from '@/lib/financialCalc';
 
 interface TeamMember {
   id: string;
@@ -27,14 +28,18 @@ interface ExpenseFormDialogProps {
   onSave: (form: any, editingId: string | null) => Promise<void>;
 }
 
-const emptyForm = { 
-  date: new Date().toISOString().split('T')[0], 
-  amount: 0, 
-  category_id: '', 
-  expense_type: 'fixa', 
-  description: '', 
+// Calculado a cada abertura: como constante, a data ficava a do carregamento do
+// módulo (e em UTC, que depois das 21h já é o dia seguinte).
+const makeEmptyForm = () => ({
+  date: todayLocal(),
+  amount: 0,
+  category_id: '',
+  expense_type: 'fixa',
+  description: '',
   responsible: ''
-};
+});
+
+const PAID_SUFFIX = /\s-\s*PAGO\s*$/i;
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin',
@@ -48,7 +53,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 export default function ExpenseFormDialog({ open, onOpenChange, categories, editingExpense, onSave }: ExpenseFormDialogProps) {
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(makeEmptyForm);
   const [isSalaryMode, setIsSalaryMode] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [selectedMember, setSelectedMember] = useState('');
@@ -78,11 +83,22 @@ export default function ExpenseFormDialog({ open, onOpenChange, categories, edit
         setIsSalaryMode(true);
       }
     } else {
-      setForm(emptyForm);
+      setForm(makeEmptyForm());
       setIsSalaryMode(false);
       setSelectedMember('');
     }
   }, [editingExpense, salaryCategory]);
+
+  // Ao editar um salário, o colaborador já vem selecionado (antes o seletor vinha
+  // vazio e escolher de novo apagava o " - PAGO" da descrição)
+  useEffect(() => {
+    if (!editingExpense || selectedMember || teamMembers.length === 0) return;
+    const responsible = (editingExpense.responsible || '').trim().toLowerCase();
+    if (!responsible) return;
+    const member = teamMembers.find(m => (m.display_name || m.name || '').trim().toLowerCase() === responsible)
+      || teamMembers.find(m => (m.name || '').trim().toLowerCase() === responsible);
+    if (member) setSelectedMember(member.id);
+  }, [editingExpense, teamMembers, selectedMember]);
 
   // When toggling salary mode
   useEffect(() => {
@@ -98,10 +114,11 @@ export default function ExpenseFormDialog({ open, onOpenChange, categories, edit
     if (member) {
       const displayName = member.display_name || member.name;
       const roleLabel = ROLE_LABELS[member.role] || member.role;
+      // Mantém o status de pago: ele fica no fim da descrição
       setForm(f => ({
         ...f,
         responsible: displayName,
-        description: `Salário - ${displayName} (${roleLabel})`,
+        description: `Salário - ${displayName} (${roleLabel})${PAID_SUFFIX.test(f.description || '') ? ' - PAGO' : ''}`,
       }));
     }
   };
@@ -112,7 +129,7 @@ export default function ExpenseFormDialog({ open, onOpenChange, categories, edit
     const year = now.getFullYear();
     const month = now.getMonth();
     const d = new Date(year, month, day);
-    setForm(f => ({ ...f, date: d.toISOString().split('T')[0] }));
+    setForm(f => ({ ...f, date: todayLocal(d) }));
   };
 
   const [saving, setSaving] = useState(false);
@@ -130,7 +147,7 @@ export default function ExpenseFormDialog({ open, onOpenChange, categories, edit
       setTimeout(() => {
         setShowSuccess(false);
         onOpenChange(false);
-        setForm(emptyForm);
+        setForm(makeEmptyForm());
         setIsSalaryMode(false);
         setSelectedMember('');
         setSaving(false);
@@ -143,7 +160,7 @@ export default function ExpenseFormDialog({ open, onOpenChange, categories, edit
 
   const handleClose = (o: boolean) => {
     if (!o) {
-      setForm(emptyForm);
+      setForm(makeEmptyForm());
       setIsSalaryMode(false);
       setSelectedMember('');
     }

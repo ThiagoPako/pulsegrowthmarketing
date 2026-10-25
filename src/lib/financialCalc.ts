@@ -43,6 +43,13 @@ export const toDateKey = (value: string | null | undefined): string => {
   return value.includes('T') ? value.split('T')[0] : value;
 };
 
+/**
+ * Data de hoje (yyyy-MM-dd) no fuso do navegador. `toISOString()` dá a data em UTC:
+ * em Goiás, depois das 21h, já seria o dia seguinte.
+ */
+export const todayLocal = (now: Date = new Date()): string =>
+  `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
 /** Compara datas como texto — imune a fuso horário. */
 export const isSameMonth = (value: string | null | undefined, ym: string): boolean =>
   toDateKey(value).startsWith(ym);

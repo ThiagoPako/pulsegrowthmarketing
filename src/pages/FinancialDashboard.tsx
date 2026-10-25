@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFinancialData, normalizeDate, isExpensePaid } from '@/hooks/useFinancialData';
-import { computeClientProfitability, sumAmounts, toAmount, accountBalance, reserveBalance, isRevenueReceived, isRevenueOverdue, isRevenuePending, safeDivide, safePercent, isSameMonth } from '@/lib/financialCalc';
+import { computeClientProfitability, sumAmounts, toAmount, accountBalance, reserveBalance, isRevenueReceived, isRevenueOverdue, isRevenuePending, safeDivide, safePercent, isSameMonth, todayLocal } from '@/lib/financialCalc';
 
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,11 +30,13 @@ const safeFormatDate = (dateStr: string | null | undefined, pattern: string, opt
 };
 
 import { sendWhatsAppMessage } from '@/services/whatsappService';
-import { generateDeliveryReport, resolvePaymentInfo } from '@/lib/billingReport';
+import { generateDeliveryReport, resolvePaymentInfo, groupRevenuesByClient, buildBillingBreakdown } from '@/lib/billingReport';
+import BulkBillingConfirmDialog from '@/components/financial/BulkBillingConfirmDialog';
 import ClientLogo from '@/components/ClientLogo';
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
 import SalaryRaiseAlert from '@/components/financial/SalaryRaiseAlert';
 import BankStatementImport from '@/components/financial/BankStatementImport';
+import { findImportedStatementLines, BANK_IMPORT_DEFAULT_DESCRIPTION, type BankImportItem, type BankImportResult } from '@/lib/bankImport';
 import FinancialStartImport from '@/components/financial/FinancialStartImport';
 import { supabase } from '@/lib/vpsDb';
 import PiggyBankWidget from '@/components/financial/PiggyBankWidget';
@@ -56,18 +58,22 @@ export default function FinancialDashboard() {
   const { clients, recordings, users } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
   const [sendingAllOverdue, setSendingAllOverdue] = useState(false);
+  const [confirmOverdueOpen, setConfirmOverdueOpen] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMsg, setCelebrationMsg] = useState('');
   const [showImport, setShowImport] = useState(false);
   const [showFinancialStart, setShowFinancialStart] = useState(false);
 
-  const handleBankImport = async (items: { date: string; description: string; amount: number }[], type: 'entrada' | 'saida') => {
+  const handleBankImport = async (items: BankImportItem[], type: 'entrada' | 'saida'): Promise<BankImportResult | false> => {
+    // Cada insert é conferido: o cliente da API devolve { error } em vez de lançar
+    let imported = 0, failed = 0, cashFailed = 0;
     try {
       if (type === 'entrada') {
         // Import as standalone revenues (not linked to any specific client/contract)
         for (const item of items) {
+          const description = item.description || BANK_IMPORT_DEFAULT_DESCRIPTION;
           // Espelho no caixa junto com a receita, para o saldo não divergir
-          const { data: insertedRev } = await supabase.from('revenues').insert({
+          const { data: insertedRev, error: revError } = await supabase.from('revenues').insert({
             client_id: '00000000-0000-0000-0000-000000000000',
             contract_id: '00000000-0000-0000-0000-000000000000',
             reference_month: item.date.slice(0, 8) + '01',
@@ -75,17 +81,20 @@ export default function FinancialDashboard() {
             due_date: item.date,
             status: 'recebida',
             paid_at: item.date,
+            // A descrição do extrato fica na receita para reconhecer reimportações
+            description,
           } as any).select('id').single();
           const revId = (insertedRev as any)?.id;
-          if (revId) {
-            await supabase.from('cash_reserve_movements').insert({
-              amount: item.amount,
-              type: 'entrada',
-              description: `[Receita] ${item.description || 'Extrato bancário'} - ID: ${revId}`,
-              date: item.date,
-              is_reserve: false,
-            } as any);
-          }
+          if (revError || !revId) { failed++; continue; }
+          imported++;
+          const { error: cashError } = await supabase.from('cash_reserve_movements').insert({
+            amount: item.amount,
+            type: 'entrada',
+            description: `[Receita] ${description} - ID: ${revId}`,
+            date: item.date,
+            is_reserve: false,
+          } as any);
+          if (cashError) cashFailed++;
         }
       } else {
         // Import as expenses — ensure category exists
@@ -100,7 +109,7 @@ export default function FinancialDashboard() {
           return false;
         }
         for (const item of items) {
-          const { data: insertedExp } = await supabase.from('expenses').insert({
+          const { data: insertedExp, error: expError } = await supabase.from('expenses').insert({
             date: item.date,
             amount: item.amount,
             description: item.description,
@@ -109,55 +118,85 @@ export default function FinancialDashboard() {
             responsible: 'Extrato Bancário',
           } as any).select('id').single();
           const expId = (insertedExp as any)?.id;
-          if (expId) {
-            await supabase.from('cash_reserve_movements').insert({
-              amount: item.amount,
-              type: 'saida',
-              description: `[Despesa] ${item.description || 'Extrato bancário'} - ID: ${expId}`,
-              date: item.date,
-              is_reserve: false,
-            } as any);
-          }
+          if (expError || !expId) { failed++; continue; }
+          imported++;
+          const { error: cashError } = await supabase.from('cash_reserve_movements').insert({
+            amount: item.amount,
+            type: 'saida',
+            description: `[Despesa] ${item.description || 'Extrato bancário'} - ID: ${expId}`,
+            date: item.date,
+            is_reserve: false,
+          } as any);
+          if (cashError) cashFailed++;
         }
       }
       await refetch();
-      return true;
+      return { imported, failed, cashFailed };
     } catch (err) {
       console.error('[FinancialDashboard] import error:', err);
+      if (imported > 0) { await refetch(); return { imported, failed: failed + (items.length - imported - failed), cashFailed }; }
       return false;
     }
   };
 
-  const handleFinancialStart = async (items: { date: string; description: string; amount: number; type: 'entrada' | 'saida' }[], currentBalance: number) => {
+  const handleFinancialStart = async (items: (BankImportItem & { type: 'entrada' | 'saida' })[], currentBalance: number): Promise<BankImportResult | false> => {
     try {
-      // 1. Save the final balance directly as the cash reserve entry
-      // First clear any existing "Start Financeiro" adjustments
-      const { data: existingAdj } = await supabase
+      // 1. Movimentações que já estão lançadas (Start anterior ou importação de
+      // extrato) são puladas: refazer o Start não pode dobrar receitas e despesas.
+      const saidasAll = items.filter(i => i.type === 'saida');
+      const entradasAll = items.filter(i => i.type === 'entrada');
+      let dupSaidas: boolean[];
+      let dupEntradas: boolean[];
+      try {
+        [dupSaidas, dupEntradas] = await Promise.all([
+          findImportedStatementLines(saidasAll, 'saida'),
+          findImportedStatementLines(entradasAll, 'entrada'),
+        ]);
+      } catch (err) {
+        console.error('[FinancialStart] duplicate check error:', err);
+        toast.error('Não foi possível conferir o que já está lançado. Nada foi alterado.');
+        return false;
+      }
+      const saidas = saidasAll.filter((_, i) => !dupSaidas[i]);
+      const entradas = entradasAll.filter((_, i) => !dupEntradas[i]);
+      const skipped = items.length - saidas.length - entradas.length;
+
+      // 2. Saldo final: grava o novo e só então remove os ajustes anteriores do Start
+      // (só os de saldo — um lançamento manual que cite "Start Financeiro" fica)
+      const { data: existingAdj, error: adjError } = await supabase
         .from('cash_reserve_movements')
         .select('id')
-        .ilike('description', '%Start Financeiro%');
-      
-      if (existingAdj && existingAdj.length > 0) {
-        for (const adj of existingAdj) {
-          await supabase.from('cash_reserve_movements').delete().eq('id', adj.id);
-        }
+        .ilike('description', '%Start Financeiro - Saldo sincronizado%');
+      if (adjError) {
+        console.error('[FinancialStart] cash reserve lookup error:', adjError);
+        return false;
       }
 
-      // 2. Insert the final balance as a single cash reserve entry
-      const { error: cashError } = await supabase.from('cash_reserve_movements').insert({
+      const { data: newAdj, error: cashError } = await supabase.from('cash_reserve_movements').insert({
         amount: Math.abs(currentBalance),
         type: currentBalance >= 0 ? 'entrada' : 'saida',
         description: `Start Financeiro - Saldo sincronizado do extrato bancário: ${currentBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`,
-        date: new Date().toISOString().split('T')[0],
-      } as any);
+        date: format(new Date(), 'yyyy-MM-dd'),
+      } as any).select('id').single();
 
-      if (cashError) {
+      if (cashError || !(newAdj as any)?.id) {
         console.error('[FinancialStart] cash reserve insert error:', cashError);
         return false;
       }
 
+      for (const adj of (existingAdj as any[]) || []) {
+        const { error } = await supabase.from('cash_reserve_movements').delete().eq('id', adj.id);
+        if (error) {
+          // Sem apagar o saldo antigo, o caixa ficaria com os dois: desfaz o novo
+          console.error('[FinancialStart] cash reserve cleanup error:', error);
+          await supabase.from('cash_reserve_movements').delete().eq('id', (newAdj as any).id);
+          return false;
+        }
+      }
+
+      let imported = 0, failed = 0;
+
       // 3. Import individual movements as expenses (saidas) for tracking history
-      const saidas = items.filter(i => i.type === 'saida');
       if (saidas.length > 0) {
         let catId = categories.find(c => c.name === 'Outros')?.id;
         if (!catId) {
@@ -166,7 +205,7 @@ export default function FinancialDashboard() {
         }
         if (catId) {
           for (const item of saidas) {
-            await supabase.from('expenses').insert({
+            const { error } = await supabase.from('expenses').insert({
               date: item.date,
               amount: item.amount,
               description: item.description,
@@ -174,14 +213,16 @@ export default function FinancialDashboard() {
               expense_type: 'variavel',
               responsible: 'Start Financeiro',
             } as any);
+            if (error) failed++; else imported++;
           }
+        } else {
+          failed += saidas.length;
         }
       }
 
       // 4. Import entradas as revenues for tracking history
-      const entradas = items.filter(i => i.type === 'entrada');
       for (const item of entradas) {
-        await supabase.from('revenues').insert({
+        const { error } = await supabase.from('revenues').insert({
           client_id: '00000000-0000-0000-0000-000000000000',
           contract_id: '00000000-0000-0000-0000-000000000000',
           reference_month: item.date.slice(0, 8) + '01',
@@ -189,11 +230,14 @@ export default function FinancialDashboard() {
           due_date: item.date,
           status: 'recebida',
           paid_at: item.date,
+          // Descrição do extrato: identifica a entrada se o Start for refeito
+          description: item.description || BANK_IMPORT_DEFAULT_DESCRIPTION,
         } as any);
+        if (error) failed++; else imported++;
       }
 
       await refetch();
-      return true;
+      return { imported, failed, skipped };
     } catch (err) {
       console.error('[FinancialStart] import error:', err);
       return false;
@@ -315,11 +359,15 @@ export default function FinancialDashboard() {
         const dueDate = new Date(today.getFullYear(), today.getMonth(), contract.due_day);
         const isDueThisWeek = isWithinInterval(dueDate, { start: weekStart, end: weekEnd });
 
-        // Check if already paid this month
-        const monthRevenue = revenues.find(
-          r => r.client_id === contract.client_id && normalizeDate(r.reference_month) === refMonth
+        // Check if already paid this month — só a mensalidade do contrato (sem
+        // recorrência extra nem lançamento manual, mesmo critério da geração do mês)
+        const monthlyFees = revenues.filter(
+          r => r.client_id === contract.client_id &&
+            normalizeDate(r.reference_month) === refMonth &&
+            !r.recurrence_id && !r.description
         );
-        const isPaid = monthRevenue?.status === 'recebida';
+        const monthRevenue = monthlyFees.find(r => r.contract_id === contract.id) || monthlyFees[0];
+        const isPaid = monthRevenue ? isRevenueReceived(monthRevenue) : false;
 
         return {
           contractId: contract.id,
@@ -355,7 +403,7 @@ export default function FinancialDashboard() {
 
   const handleMarkPaid = async (item: typeof dueThisWeek[0]) => {
     if (item.revenueId) {
-      const ok = await updateRevenue(item.revenueId, { status: 'recebida', paid_at: new Date().toISOString().split('T')[0] });
+      const ok = await updateRevenue(item.revenueId, { status: 'recebida', paid_at: todayLocal() });
       if (ok) {
         setPaidClientName(item.clientName);
         setPaidCelebration(true);
@@ -404,33 +452,43 @@ export default function FinancialDashboard() {
   );
 
   const totalInadimplente = inadimplentes.reduce((s, r) => s + Number(r.amount), 0);
+  // Uma cobrança por cliente (mensalidade + extras em atraso somados)
+  const overdueGroups = groupRevenuesByClient(inadimplentes);
 
-  const handleCobrarInadimplentes = async () => {
-    if (inadimplentes.length === 0) { toast.info('Nenhum inadimplente no mês'); return; }
+  const handleCobrarInadimplentes = () => {
+    if (overdueGroups.length === 0) { toast.info('Nenhum inadimplente no mês'); return; }
+    setConfirmOverdueOpen(true);
+  };
+
+  const sendOverdueBilling = async (groups: typeof overdueGroups) => {
+    setConfirmOverdueOpen(false);
+    if (groups.length === 0) { toast.info('Nenhum inadimplente no mês'); return; }
     setSendingAllOverdue(true);
     let sent = 0, errors = 0;
-    for (const r of inadimplentes) {
-      const client = clients.find(c => c.id === r.client_id);
+    for (const group of groups) {
+      const client = clients.find(c => c.id === group.clientId);
       if (!client?.whatsapp) { errors++; continue; }
       try {
-        const value = fmt(Number(r.amount));
+        const value = fmt(group.total);
         const paymentInfo = resolvePaymentInfo(paymentConfig);
 
         // Get plan_id from contract
-        const contract = contracts.find(c => c.client_id === r.client_id);
+        const contract = contracts.find(c => c.client_id === group.clientId);
         const refMonth = selectedMonth;
         const report = paymentConfig?.include_delivery_report !== false
-          ? await generateDeliveryReport(r.client_id, contract?.plan_id, refMonth, paymentConfig?.msg_delivery_report || undefined)
+          ? await generateDeliveryReport(group.clientId, contract?.plan_id, refMonth, paymentConfig?.msg_delivery_report || undefined)
           : { text: '' };
 
+        const firstDue = group.revenues.map(r => normalizeDate(r.due_date)).filter(Boolean).sort()[0];
         const template = paymentConfig?.msg_billing_overdue ||
           'Olá, {nome_cliente}! 😊\n\nIdentificamos uma pendência referente à mensalidade no valor de {valor}.\n\nSe já realizou o pagamento, por favor desconsidere esta mensagem.\n\n{dados_pagamento}';
         let message = template
           .replace(/\{nome_cliente\}/g, client.companyName)
           .replace(/\{valor\}/g, value)
-          .replace(/\{dia_vencimento\}/g, r.due_date?.split('-')[2] || '')
+          .replace(/\{dia_vencimento\}/g, firstDue ? firstDue.slice(8, 10) : '')
           .replace(/\{dados_pagamento\}/g, paymentInfo)
           .replace(/\{relatorio_entregas\}/g, report.text);
+        message += buildBillingBreakdown(group.revenues, fmt);
         if (report.text && !template.includes('{relatorio_entregas}')) {
           message += report.text;
         }
@@ -536,8 +594,8 @@ export default function FinancialDashboard() {
       )}
 
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="flex items-center justify-between">
-        <div className="flex items-center gap-6">
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-4 sm:gap-6">
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <motion.span animate={{ rotate: [0, 10, -10, 0] }} transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}>💰</motion.span>
@@ -565,7 +623,7 @@ export default function FinancialDashboard() {
             }}
           />
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Button size="sm" onClick={() => setShowFinancialStart(true)} className="gap-2 shadow-sm bg-gradient-to-r from-primary to-primary/80">
             <Rocket className="h-4 w-4" />
             Start Financeiro
@@ -575,7 +633,7 @@ export default function FinancialDashboard() {
             Importar Extrato
           </Button>
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="w-48 shadow-sm"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-48 shadow-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
               {monthOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
             </SelectContent>
@@ -640,7 +698,7 @@ export default function FinancialDashboard() {
                 <div className="flex-1 text-left">
                   <h3 className="font-bold text-foreground flex items-center gap-2">
                     <AlertTriangle size={16} className="text-destructive" />
-                    {inadimplentes.length} cliente{inadimplentes.length > 1 ? 's' : ''} inadimplente{inadimplentes.length > 1 ? 's' : ''}
+                    {overdueGroups.length} cliente{overdueGroups.length > 1 ? 's' : ''} inadimplente{overdueGroups.length > 1 ? 's' : ''}
                   </h3>
                   <p className="text-sm text-muted-foreground">Total em atraso: <span className="font-semibold text-destructive">{fmt(totalInadimplente)}</span></p>
                   <p className="text-xs text-muted-foreground mt-0.5">Clique aqui para cobrar todos os inadimplentes via WhatsApp</p>
@@ -657,6 +715,23 @@ export default function FinancialDashboard() {
           </Card>
         </motion.div>
       )}
+
+      <BulkBillingConfirmDialog
+        open={confirmOverdueOpen}
+        onOpenChange={setConfirmOverdueOpen}
+        title="Cobrar todos os inadimplentes do mês?"
+        items={overdueGroups.map(g => {
+          const client = clients.find(c => c.id === g.clientId);
+          return {
+            clientId: g.clientId,
+            clientName: client?.companyName || 'Cliente',
+            count: g.revenues.length,
+            total: g.total,
+            hasWhatsapp: Boolean(client?.whatsapp),
+          };
+        })}
+        onConfirm={() => { void sendOverdueBilling(overdueGroups); }}
+      />
 
       {/* Quick Navigation */}
       <motion.div className="grid grid-cols-2 md:grid-cols-4 gap-3" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.4 }}>
@@ -949,13 +1024,13 @@ export default function FinancialDashboard() {
                     </span>
                   </div>
                   <span className={`text-sm font-bold ${m.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>
-                    {m.type === 'entrada' ? '+' : '-'}{fmt(m.amount)}
+                    {m.type === 'entrada' ? '+' : '-'}{fmt(toAmount(m.amount))}
                   </span>
                 </div>
               ))}
               <div className="text-center pt-2">
                 <p className="text-xs text-muted-foreground">
-                  Saldo atual: <span className="font-bold">{fmt(cashMovements.reduce((acc, m) => acc + (m.type === 'entrada' ? m.amount : -m.amount), 0))}</span>
+                  Saldo em conta: <span className="font-bold">{fmt(saldoCaixa)}</span>
                 </p>
               </div>
             </div>

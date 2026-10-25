@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft, Hammer, Plus, Pencil, Trash2, Layers, CalendarRange, Info } from 'lucide-react';
 import { toast } from 'sonner';
+import { todayLocal } from '@/lib/financialCalc';
 
 const ALL = '__all__';
 
@@ -57,7 +58,7 @@ interface InvestmentForm {
 }
 
 const emptyForm = (): InvestmentForm => ({
-  date: new Date().toISOString().split('T')[0],
+  date: todayLocal(),
   amount: 0,
   category: 'reforma',
   description: '',

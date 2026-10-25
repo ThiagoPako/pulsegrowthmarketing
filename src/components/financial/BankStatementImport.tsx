@@ -12,6 +12,7 @@ import { Upload, FileSpreadsheet, CheckCircle, XCircle, AlertTriangle, Loader2, 
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { normalizeDate } from '@/hooks/useFinancialData';
+import { findImportedStatementLines, type BankImportResult } from '@/lib/bankImport';
 import * as pdfjsLib from 'pdfjs-dist';
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -21,12 +22,14 @@ interface ParsedLine {
   description: string;
   amount: number;
   selected: boolean;
+  /** Já existe lançamento com a mesma data, valor e descrição */
+  duplicate?: boolean;
 }
 
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onImport: (items: { date: string; description: string; amount: number }[], type: 'entrada' | 'saida') => Promise<boolean>;
+  onImport: (items: { date: string; description: string; amount: number }[], type: 'entrada' | 'saida') => Promise<BankImportResult | false>;
 }
 
 // ── PDF parsing (reuse logic) ────────────────────────────────────────
@@ -200,9 +203,18 @@ export default function BankStatementImport({ open, onOpenChange, onImport }: Pr
         setLoading(false);
         return;
       }
-      setParsedLines(raw.map(l => ({ ...l, id: `line_${++idCounter}`, selected: true })));
+      // Linhas já lançadas (extrato importado antes) vêm desmarcadas
+      let duplicates: boolean[] = raw.map(() => false);
+      try {
+        duplicates = await findImportedStatementLines(raw, statementType || 'saida');
+      } catch (err) {
+        console.error('[BankStatementImport] duplicate check error:', err);
+        toast.warning('Não foi possível conferir o que já foi importado. Revise antes de importar.');
+      }
+      setParsedLines(raw.map((l, i) => ({ ...l, id: `line_${++idCounter}`, selected: !duplicates[i], duplicate: duplicates[i] })));
       setStep('preview');
-      toast.success(`${raw.length} lançamentos encontrados`);
+      const dupCount = duplicates.filter(Boolean).length;
+      toast.success(`${raw.length} lançamentos encontrados${dupCount > 0 ? ` (${dupCount} já lançado${dupCount > 1 ? 's' : ''}, desmarcado${dupCount > 1 ? 's' : ''})` : ''}`);
     } catch (err) {
       console.error('[BankStatementImport] Parse error:', err);
       toast.error('Erro ao processar o arquivo.');
@@ -234,13 +246,18 @@ export default function BankStatementImport({ open, onOpenChange, onImport }: Pr
     }
     setStep('importing');
     const items = selectedLines.map(l => ({ date: l.date, description: l.description, amount: l.amount }));
-    const ok = await onImport(items, statementType);
-    if (ok) {
-      toast.success(`${items.length} lançamento(s) importado(s) com sucesso!`);
+    const result = await onImport(items, statementType);
+    if (result && result.imported > 0) {
+      const problems = [
+        result.failed > 0 ? `${result.failed} com erro (não gravado${result.failed > 1 ? 's' : ''})` : '',
+        result.cashFailed ? `${result.cashFailed} sem lançamento no caixa (use "Sincronizar caixa")` : '',
+      ].filter(Boolean);
+      if (problems.length > 0) toast.warning(`${result.imported} lançamento(s) importado(s); ${problems.join('; ')}`);
+      else toast.success(`${result.imported} lançamento(s) importado(s) com sucesso!`);
       reset();
       onOpenChange(false);
     } else {
-      toast.error('Erro ao importar lançamentos');
+      toast.error('Erro ao importar lançamentos: nada foi gravado');
       setStep('preview');
     }
   };
@@ -420,6 +437,7 @@ export default function BankStatementImport({ open, onOpenChange, onImport }: Pr
                         </TableCell>
                         <TableCell className="text-xs font-mono whitespace-nowrap">{formatDate(line.date)}</TableCell>
                         <TableCell className="text-xs max-w-[300px] truncate" title={line.description}>
+                          {line.duplicate && <Badge variant="secondary" className="text-[9px] mr-1.5">Já lançado</Badge>}
                           {line.description}
                         </TableCell>
                         <TableCell className={`text-xs font-bold text-right whitespace-nowrap ${

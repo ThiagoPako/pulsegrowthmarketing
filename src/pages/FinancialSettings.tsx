@@ -151,8 +151,9 @@ export default function FinancialSettings() {
   }, [previewClientId, previewTab, form, clients, contracts, deliveryReportText]);
 
   const handleSave = async () => {
-    await updatePaymentConfig(form);
-    toast.success('Configurações atualizadas');
+    const ok = await updatePaymentConfig(form);
+    if (ok) toast.success('Configurações atualizadas');
+    else toast.error('Não foi possível salvar as configurações');
   };
 
   const handleAddCat = async () => {

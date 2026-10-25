@@ -1055,16 +1055,18 @@ export default function Schedule() {
 
   // Apaga em lote as backups ou extras ainda agendadas de hoje em diante (desfaz o "Gerar Mensal").
   // Não entram as já feitas, as em andamento, os pedidos do portal em análise nem as confirmadas pelo cliente.
+  // Pedido do cliente já aprovado (source portal/link) também fica, com a mesma regra do Regenerar Agenda.
   const handleDeleteAllOfType = async (type: 'backup' | 'extra') => {
     if (!canBulkManageRecordings) { toast.error('Só admin e social media podem apagar em lote'); return; }
     const label = type === 'backup' ? 'backup' : 'extra';
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const candidates = recordings.filter(r => r.type === type && r.date >= todayStr && r.status === 'agendada' && !isRecordingActive(r.id));
-    const confirmedByClient = candidates.filter(r => r.confirmationStatus === 'confirmada');
-    const toDelete = candidates.filter(r => r.confirmationStatus !== 'confirmada');
+    const isClientRequest = (r: Recording) => r.source === 'portal' || r.source === 'link';
+    const keptByClient = candidates.filter(r => r.confirmationStatus === 'confirmada' || isClientRequest(r));
+    const toDelete = candidates.filter(r => r.confirmationStatus !== 'confirmada' && !isClientRequest(r));
     if (toDelete.length === 0) {
-      toast.info(confirmedByClient.length > 0
-        ? `Nenhuma gravação ${label} para apagar (${confirmedByClient.length} confirmada(s) pelo cliente foram mantidas)`
+      toast.info(keptByClient.length > 0
+        ? `Nenhuma gravação ${label} para apagar (${keptByClient.length} pedida(s) ou confirmada(s) pelo cliente foram mantidas)`
         : `Nenhuma gravação ${label} para apagar`);
       return;
     }
@@ -1073,7 +1075,7 @@ export default function Schedule() {
     const period = firstDate === lastDate
       ? format(new Date(firstDate + 'T12:00:00'), 'dd/MM')
       : `${format(new Date(firstDate + 'T12:00:00'), 'dd/MM')} a ${format(new Date(lastDate + 'T12:00:00'), 'dd/MM')}`;
-    const keptNote = confirmedByClient.length > 0 ? `\n\n${confirmedByClient.length} confirmada(s) pelo cliente não serão apagadas.` : '';
+    const keptNote = keptByClient.length > 0 ? `\n\n${keptByClient.length} pedida(s) ou confirmada(s) pelo cliente não serão apagadas.` : '';
     if (!window.confirm(`Apagar ${toDelete.length} gravação(ões) ${label} agendada(s) (${period})?${keptNote}\n\nEsta ação não pode ser desfeita.`)) return;
 
     let deleted = 0;

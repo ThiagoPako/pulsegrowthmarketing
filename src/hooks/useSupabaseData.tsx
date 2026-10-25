@@ -157,6 +157,7 @@ function rowToRecording(r: any): Recording {
     status: r.status as RecordingStatus,
     confirmationStatus: (r.confirmation_status || 'pendente') as ConfirmationStatus,
     ...(r.prospect_name ? { prospectName: r.prospect_name } : {}),
+    ...(r.source ? { source: String(r.source) } : {}),
   };
 }
 

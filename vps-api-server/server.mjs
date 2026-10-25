@@ -2066,6 +2066,13 @@ async function userHasAssignedRole(user, role) {
   }
 }
 
+/** Admin "de verdade" (sem social_media), o mesmo critério do isStrictAdmin dos agentes. */
+async function isStrictAdminUser(user) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  return userHasAssignedRole(user, 'admin');
+}
+
 async function verifyAdmin(req) {
   const { user, userClient } = await verifyUser(req);
   if (await isAdminUser(user)) {
@@ -8099,6 +8106,194 @@ async function getDbQueryStripOptions(user, tables) {
   return { canSeeManagerColumns, ownIds };
 }
 
+// Papéis que só um admin pode conceder ou tirar.
+const DB_QUERY_PRIVILEGED_ROLES = new Set(['admin', 'social_media', 'socio_gestor']);
+
+// Papéis do endomarketing: o contrato de parceiro lança a despesa (useEndomarketing.createEndoExpense).
+const DB_QUERY_ENDO_ROLES = ['endomarketing', 'parceiro'];
+
+// Regras por tabela do /api/db/query (antes a única barreira era ALLOWED_TABLES).
+// 'admin' = isAdminUser (admin ou social_media); 'team' = quem gerencia a equipe
+// (admin, social_media ou gestor_projetos, como o verifyTeamManager); uma lista
+// = quem gerencia a equipe ou tem um desses papéis. Os papéis saíram das telas
+// que usam cada tabela (menu do Layout): financeiro só admin, Metas/Clientes/
+// Relatórios/Contratos admin, social_media e gestor_projetos.
+// Sem regra, qualquer pessoa logada lê e grava, como antes.
+const DB_QUERY_TABLE_RULES = {
+  user_roles: { write: 'team' },        // Equipe (Team.tsx) troca funções
+  user_permissions: { write: 'team' },  // Equipe → permissões de módulo
+  login_logs: { read: 'admin', write: 'admin' }, // insert do próprio login é liberado abaixo
+  payment_config: { read: 'team', write: 'admin' }, // Financeiro → configurações (chave PIX da cobrança)
+  whatsapp_config: { read: 'team', write: 'team' }, // o front usa /api/whatsapp/config
+  whatsapp_messages: { read: 'team', write: 'team' }, // telefones e valores de cobrança
+  api_integrations: { write: 'admin' }, // Financeiro → APIs e Configurações → integrações
+  api_integration_logs: { read: 'admin', write: 'admin' },
+  plans: { write: 'admin' },
+  commercial_proposals: { write: 'admin' },
+  plan_promotions: { write: 'admin' },
+  client_testimonials: { write: 'admin' },
+  revenues: { read: 'team', write: 'team' },
+  recurring_revenues: { read: 'team', write: 'team' },
+  financial_contracts: { read: 'team', write: 'team' },
+  financial_activity_log: { read: 'team', write: 'team' },
+  financial_chat_messages: { read: 'team', write: 'team' },
+  cash_reserve_movements: { read: 'team', write: 'team' },
+  billing_messages: { read: 'team', write: 'team' },
+  structure_investments: { read: 'team', write: 'team' },
+  expenses: { read: DB_QUERY_ENDO_ROLES, write: DB_QUERY_ENDO_ROLES },
+  expense_categories: { read: DB_QUERY_ENDO_ROLES, write: DB_QUERY_ENDO_ROLES },
+};
+
+// Tabelas de papel e perfil: upsert (ninguém usa no front) só para admin, porque
+// o ON CONFLICT DO UPDATE passaria por cima das regras de update abaixo.
+const DB_QUERY_STRICT_UPSERT_TABLES = new Set(['user_roles', 'profiles', 'user_permissions']);
+
+/** Tem algum dos papéis (principal ou em user_roles, pelos ids ligados). */
+async function userHasAnyAssignedRole(user, roles) {
+  if (!user || !Array.isArray(roles) || roles.length === 0) return false;
+  if (roles.includes(user.role)) return true;
+  try {
+    await ensureAuthSupportTables();
+    const linkedIds = await getLinkedUserIds(user);
+    if (linkedIds.length === 0) return false;
+    const { rows } = await pool.query(
+      'SELECT 1 FROM user_roles WHERE user_id::text = ANY($1::text[]) AND role::text = ANY($2::text[]) LIMIT 1',
+      [linkedIds, roles]
+    );
+    return rows.length > 0;
+  } catch (error) {
+    console.error('Role lookup failed:', error?.message || error);
+    return false;
+  }
+}
+
+async function dbQueryLevelAllows(user, level) {
+  if (!level) return true;
+  if (level === 'admin') return isAdminUser(user);
+  if (await isTeamManagerUser(user)) return true;
+  return Array.isArray(level) ? userHasAnyAssignedRole(user, level) : false;
+}
+
+/** Chaves de uma linha como o insert/update vão gravar (sanitizeIdentifier) e em minúsculas. */
+function dbQueryRowKeys(item) {
+  if (!item || typeof item !== 'object') return [];
+  return Object.keys(item).map((key) => sanitizeIdentifier(String(key)).toLowerCase());
+}
+
+/** Valor de uma coluna procurando pela chave já limpa (evita "ro-le" virar "role" depois da checagem). */
+function dbQueryRowValue(item, column) {
+  if (!item || typeof item !== 'object') return undefined;
+  const entry = Object.entries(item).find(([key]) => sanitizeIdentifier(String(key)).toLowerCase() === column);
+  return entry ? entry[1] : undefined;
+}
+
+// Chaves de api_integrations.config que quem não é admin pode ler (o resto são segredos).
+const API_INTEGRATION_PUBLIC_CONFIG_KEYS = new Set(['ai_model', 'ai_provider', 'api_key_set']);
+
+function sanitizeApiIntegrationRows(rows) {
+  for (const row of Array.isArray(rows) ? rows : [rows]) {
+    if (!row || typeof row !== 'object' || !row.config || typeof row.config !== 'object') continue;
+    row.config = Object.fromEntries(
+      Object.entries(row.config).filter(([key]) => API_INTEGRATION_PUBLIC_CONFIG_KEYS.has(key))
+    );
+  }
+  return rows;
+}
+
+async function selectRolesForDbQueryFilters(table, filters) {
+  const params = [];
+  const whereClauses = buildDbQueryWhere(filters, table, params);
+  if (whereClauses.length === 0) return [];
+  const { rows } = await pool.query(
+    `SELECT ${table}.role::text AS role FROM ${table} WHERE ${whereClauses.join(' AND ')}`,
+    params
+  );
+  return rows.map((row) => row.role).filter(Boolean);
+}
+
+/**
+ * Aplica as regras por papel do /api/db/query. Lança erro 403 quando o papel não
+ * permite. Devolve { data, filters } a usar: em profiles, quem não gerencia a
+ * equipe só altera a própria linha; em login_logs, o insert vai sempre com o
+ * próprio user_id.
+ */
+async function enforceDbQueryRules({ safeTable, operation, data, filters, user, select, joins }) {
+  if (operation === 'rpc') return { data, filters };
+  const isWrite = operation !== 'select';
+  const forbidden = (message) => dbQueryError(message || 'Sem permissão para esta operação.', 403);
+
+  if (safeTable === 'login_logs' && operation === 'insert') {
+    const items = (Array.isArray(data) ? data : [data]).map((item) => ({
+      ...Object.fromEntries(Object.entries(item || {}).filter(([key]) => sanitizeIdentifier(String(key)).toLowerCase() !== 'user_id')),
+      user_id: user.id,
+    }));
+    return { data: Array.isArray(data) ? items : items[0], filters };
+  }
+
+  const rule = DB_QUERY_TABLE_RULES[safeTable];
+  const level = rule ? (isWrite ? rule.write : rule.read) : null;
+  if (level && !(await dbQueryLevelAllows(user, level))) throw forbidden();
+
+  if (operation === 'select') {
+    // Join também lê a outra tabela: vale a regra de leitura dela.
+    for (const join of Array.isArray(joins) ? joins : []) {
+      const joinTable = sanitizeIdentifier(String(join?.table || ''));
+      if (!joinTable || !ALLOWED_TABLES.includes(joinTable)) continue;
+      const joinLevel = joinTable === 'api_integrations' ? 'admin' : DB_QUERY_TABLE_RULES[joinTable]?.read;
+      if (joinLevel && !(await dbQueryLevelAllows(user, joinLevel))) throw forbidden();
+    }
+    // A limpeza de api_integrations.config é pelo nome da coluna: sem alias para quem não é admin.
+    if (safeTable === 'api_integrations' && /\sas\s/i.test(String(select || '')) && !(await isAdminUser(user))) {
+      throw forbidden();
+    }
+  }
+
+  if (operation === 'upsert' && DB_QUERY_STRICT_UPSERT_TABLES.has(safeTable) && !(await isStrictAdminUser(user))) {
+    throw forbidden();
+  }
+
+  if (safeTable === 'user_roles' && isWrite && !(await isStrictAdminUser(user))) {
+    const items = Array.isArray(data) ? data : [data];
+    const grantsPrivileged = (operation === 'insert' || operation === 'upsert' || operation === 'update')
+      && items.some((item) => DB_QUERY_PRIVILEGED_ROLES.has(String(dbQueryRowValue(item, 'role') ?? '')));
+    const touchesPrivileged = (operation === 'update' || operation === 'delete')
+      && (await selectRolesForDbQueryFilters('user_roles', filters)).some((role) => DB_QUERY_PRIVILEGED_ROLES.has(role));
+    if (grantsPrivileged || touchesPrivileged) {
+      throw forbidden('Só um administrador pode dar ou tirar as funções admin, social_media e socio_gestor.');
+    }
+  }
+
+  if (safeTable === 'profiles' && isWrite) {
+    const isTeam = await isTeamManagerUser(user);
+    if (operation !== 'update') {
+      // Ninguém cria nem apaga perfil pelo front (usa /api/auth/create-user e /api/delete-user).
+      if (!(await isStrictAdminUser(user))) throw forbidden();
+      return { data, filters };
+    }
+    const keys = dbQueryRowKeys(data);
+    const blocked = ['id', 'password_hash', 'profile_password_hash', 'auth_password_hash'];
+    if (!(await isStrictAdminUser(user))) blocked.push('email');
+    if (!isTeam) blocked.push('role', 'monthly_salary');
+    const blockedKey = keys.find((key) => blocked.includes(key));
+    if (blockedKey) throw forbidden(`Sem permissão para alterar "${blockedKey}" do perfil.`);
+
+    if (!isTeam) {
+      // Quem não gerencia a equipe só altera o próprio perfil.
+      const ownIds = await getLinkedUserIds(user);
+      return { data, filters: [...(Array.isArray(filters) ? filters : []), { column: 'id', op: 'in', value: ownIds.length ? ownIds : [String(user.id)] }] };
+    }
+
+    if (keys.includes('role') && !(await isStrictAdminUser(user))) {
+      const currentRoles = await selectRolesForDbQueryFilters('profiles', filters);
+      if (DB_QUERY_PRIVILEGED_ROLES.has(String(dbQueryRowValue(data, 'role') ?? '')) || currentRoles.some((role) => DB_QUERY_PRIVILEGED_ROLES.has(role))) {
+        throw forbidden('Só um administrador pode dar ou tirar as funções admin, social_media e socio_gestor.');
+      }
+    }
+  }
+
+  return { data, filters };
+}
+
 // Funções do banco que o front chama por supabase.rpc(). Qualquer outra é recusada.
 const DB_QUERY_ALLOWED_RPC = new Set([
   'notify_role', 'notify_user', 'increment_promotion_redemption', 'cleanup_old_portal_videos',
@@ -8183,7 +8378,8 @@ async function validateCrmStageTransition({ leadId, nextStatus, payload, user })
 app.post('/api/db/query', async (req, res) => {
   try {
     const { user } = await verifyUser(req);
-    const { table, operation, data, filters, select, order, limit: queryLimit, single, joins, onConflict } = req.body;
+    const { table, operation, select, order, limit: queryLimit, single, joins, onConflict } = req.body;
+    let { data, filters } = req.body;
 
     const safeTable = sanitizeIdentifier(table);
     if (!ALLOWED_TABLES.includes(safeTable)) {
@@ -8265,6 +8461,9 @@ app.post('/api/db/query', async (req, res) => {
     const scopeCity = TABLES_WITH_CITY.has(safeTable) && await tableHasCityColumn(safeTable);
     const activeCity = scopeCity ? await resolveActiveCity(req, user.id, user) : null;
 
+    // Regras por papel (user_roles, profiles, configurações...). Pode restringir os filtros.
+    ({ data, filters } = await enforceDbQueryRules({ safeTable, operation, data, filters, user, select, joins }));
+
     let result;
 
 
@@ -8340,6 +8539,7 @@ app.post('/api/db/query', async (req, res) => {
         const { rows } = await pool.query({ text: query, values: params, queryMode: 'extended' });
         const selectTables = [safeTable, ...joinTables];
         stripDbQueryColumns(rows, selectTables, await getDbQueryStripOptions(user, selectTables));
+        if (safeTable === 'api_integrations' && !(await isAdminUser(user))) sanitizeApiIntegrationRows(rows);
         result = { data: single ? (rows[0] || null) : rows, error: null };
         break;
       }

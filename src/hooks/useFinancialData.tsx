@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { syncFinancialContract } from '@/lib/financialContracts';
-import { PLACEHOLDER_CLIENT_ID, toAmount } from '@/lib/financialCalc';
+import { PLACEHOLDER_CLIENT_ID, toAmount, todayLocal } from '@/lib/financialCalc';
 
 
 /** Normalize date strings like "2026-03-01T00:00:00.000Z" to "2026-03-01" */
@@ -208,13 +208,18 @@ export function useFinancialData() {
   const [activityLog, setActivityLog] = useState<FinancialActivity[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
-    // Fetch active clients first to filter related data
-    const activeClientsRes = await supabase.from('clients').select('id').neq('status', 'cancelado');
-    const activeClientIds = new Set((activeClientsRes.data || []).map((c: any) => c.id));
+  // Só a primeira carga mostra "Carregando": as recargas depois de cada ação
+  // atualizam em segundo plano, sem trocar a tela inteira pelo spinner.
+  const loadedOnceRef = useRef(false);
+  // Recargas sobrepostas: só a mais recente grava o estado
+  const fetchSeqRef = useRef(0);
 
-    const [cRes, rRes, eRes, catRes, pRes, bRes, cashRes, logRes] = await Promise.all([
+  const fetchAll = useCallback(async () => {
+    const seq = ++fetchSeqRef.current;
+    if (!loadedOnceRef.current) setLoading(true);
+    // Uma rodada só: os clientes ativos servem para filtrar o resto
+    const [activeClientsRes, cRes, rRes, eRes, catRes, pRes, bRes, cashRes, logRes, recurringRes] = await Promise.all([
+      supabase.from('clients').select('id').neq('status', 'cancelado'),
       supabase.from('financial_contracts').select('*').order('created_at', { ascending: false }),
       supabase.from('revenues').select('*').order('due_date', { ascending: false }),
       supabase.from('expenses').select('*').order('date', { ascending: false }),
@@ -223,9 +228,11 @@ export function useFinancialData() {
       supabase.from('billing_messages').select('*').order('sent_at', { ascending: false }),
       supabase.from('cash_reserve_movements').select('*').order('date', { ascending: false }),
       supabase.from('financial_activity_log').select('*').order('created_at', { ascending: false }).limit(50),
+      supabase.from('recurring_revenues').select('*').order('created_at', { ascending: false }),
     ]);
+    if (seq !== fetchSeqRef.current) return;
+    const activeClientIds = new Set((activeClientsRes.data || []).map((c: any) => c.id));
 
-    const recurringRes = await supabase.from('recurring_revenues').select('*').order('created_at', { ascending: false });
     if (recurringRes.error) console.error('[useFinancialData] recurring revenues fetch error:', recurringRes.error);
     setRecurringRevenues(((recurringRes.data as any[]) || []) as RecurringRevenue[]);
     // Debug logging removed for production
@@ -248,7 +255,8 @@ export function useFinancialData() {
     // Auto-mark overdue revenues: if due_date < today and status is still 'prevista', update to 'em_atraso'
     if (rRes.error) console.error('[useFinancialData] revenues fetch error:', rRes.error);
     if (rRes.data) {
-      const today = new Date().toISOString().split('T')[0];
+      // Data local: em UTC, depois das 21h a receita que vence hoje já viraria atraso
+      const today = todayLocal();
       const revenueData = rRes.data as any[];
 
       const uniqueRevenues = deduplicateRevenues(revenueData);
@@ -265,12 +273,15 @@ export function useFinancialData() {
       }
 
       if (overdueIds.length > 0) {
-        await Promise.all(
-          overdueIds.map(id =>
-            supabase.from('revenues').update({ status: 'em_atraso' } as any).eq('id', id)
-          )
-        );
+        // Um UPDATE só, e só no que ainda está 'prevista' (não volta uma recebida)
+        const { error: overdueError } = await supabase
+          .from('revenues')
+          .update({ status: 'em_atraso' } as any)
+          .in('id', overdueIds)
+          .eq('status', 'prevista');
+        if (overdueError) console.error('[useFinancialData] overdue mark error:', overdueError);
       }
+      if (seq !== fetchSeqRef.current) return;
 
       const overdueSet = new Set(overdueIds);
       setRevenues(
@@ -280,20 +291,25 @@ export function useFinancialData() {
       );
     }
 
-
-
+    loadedOnceRef.current = true;
     setLoading(false);
   }, []);
 
+  /** Recarrega sem segurar a ação: o toast aparece assim que o banco confirma. */
+  const refreshInBackground = () => { void fetchAll(); };
+
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Activity logger
+  // Activity logger — o usuário é buscado uma vez (antes era um /auth/me por ação)
+  const activityUserIdRef = useRef<string | null>(null);
   const logActivity = async (actionType: string, entityType: string, description: string, entityId?: string, details?: any) => {
     try {
-      const authResult = await supabase.auth.getUser();
-      const user = authResult.data?.user ?? null;
+      if (!activityUserIdRef.current) {
+        const authResult = await supabase.auth.getUser();
+        activityUserIdRef.current = authResult.data?.user?.id ?? null;
+      }
       const { error } = await supabase.from('financial_activity_log').insert({
-        user_id: user?.id || null,
+        user_id: activityUserIdRef.current || null,
         action_type: actionType,
         entity_type: entityType,
         entity_id: entityId || null,
@@ -389,6 +405,8 @@ export function useFinancialData() {
         console.error('[useFinancialData] Failed to update revenue:', error);
         return false;
       }
+      // Atualiza a tela na hora; a recarga completa vem em segundo plano
+      setRevenues(prev => prev.map(r => (r.id === id ? ({ ...r, ...updates } as Revenue) : r)));
 
       const action = updates.status === 'recebida' ? 'Marcou receita como paga' : updates.status === 'prevista' ? 'Reverteu receita para pendente' : 'Atualizou receita';
       const revenueAmount = toAmount(updates.amount ?? previousRevenue?.amount);
@@ -440,8 +458,8 @@ export function useFinancialData() {
       }
 
 
-      await logActivity('edição', 'receita', `${action} - R$ ${revenueAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, updates);
-      await fetchAll();
+      void logActivity('edição', 'receita', `${action} - R$ ${revenueAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, updates);
+      refreshInBackground();
 
       return true;
     } catch (error) {
@@ -464,11 +482,21 @@ export function useFinancialData() {
     const lastDay = new Date(year, monthNum, 0).getDate();
 
     // Fetch fresh contracts, active clients and ALL existing revenues for this month
+    // (só a competência do mês, não o histórico inteiro)
     const [freshContracts, freshClients, freshExisting] = await Promise.all([
       supabase.from('financial_contracts').select('*'),
       supabase.from('clients').select('id, company_name, status'),
-      supabase.from('revenues').select('*'),
+      supabase.from('revenues').select('*').eq('reference_month', refMonth),
     ]);
+    // Sem a lista do mês não dá para checar duplicidade: não gera nada
+    if (freshContracts.error || freshClients.error || freshExisting.error) {
+      return {
+        inserted: 0,
+        updated: 0,
+        skipped: [] as { client: string; reason: string }[],
+        failed: [{ client: 'Geração do mês', reason: 'não foi possível carregar contratos e receitas' }],
+      };
+    }
 
     const allContracts = (freshContracts.data as any[]) || [];
     const activeClients = ((freshClients.data as any[]) || []).filter(
@@ -742,6 +770,8 @@ export function useFinancialData() {
 
       // Estado final da despesa após a edição
       const merged = { ...(previous || {}), ...payload } as Expense;
+      // Atualiza a tela na hora; a recarga completa vem em segundo plano
+      setExpenses(prev => prev.map(ex => (ex.id === id ? ({ ...ex, ...payload } as Expense) : ex)));
       const linked = await findLinkedExpenseMovements(id);
       const shouldHaveMovement = isExpensePaid(merged);
 
@@ -765,8 +795,8 @@ export function useFinancialData() {
         }
       }
 
-      await fetchAll();
-      await logActivity('edição', 'despesa', `Editou despesa - R$ ${toAmount(updates.amount ?? previous?.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, payload);
+      refreshInBackground();
+      void logActivity('edição', 'despesa', `Editou despesa - R$ ${toAmount(updates.amount ?? previous?.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, id, payload);
       return true;
     } catch (err) {
       console.error('[useFinancialData] updateExpense unexpected error:', err);

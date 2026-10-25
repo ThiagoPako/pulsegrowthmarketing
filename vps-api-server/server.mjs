@@ -4157,6 +4157,8 @@ app.all('/api/client-briefing', async (req, res) => {
       );
       const client = rows[0];
       if (!client) return res.status(404).json({ error: 'Client not found' });
+      // Link público (só o id do cliente): o formulário volta sem as senhas; o POST mantém as salvas.
+      client.briefing_data = withoutBriefingSecrets(client.briefing_data);
 
       let briefingCompleted = false;
       try {
@@ -4204,7 +4206,7 @@ app.all('/api/client-briefing', async (req, res) => {
       } catch (_) { /* tabela pode não existir ainda */ }
 
       // Reforça que clientId/_completed dentro do payload batem com a URL + versão
-      const incoming = (briefing_data && typeof briefing_data === 'object') ? briefing_data : {};
+      const incoming = mergeBriefingSecrets((briefing_data && typeof briefing_data === 'object') ? briefing_data : {}, prevObj);
       // Preserva o tipo do briefing entre reenvios (padrão x provedor de internet)
       const briefingType = incoming._type || prevObj?._type || 'padrao';
 
@@ -4298,7 +4300,7 @@ app.all('/api/client-briefing', async (req, res) => {
 // ── BRIEFING VERSIONS (admin/social_media) ──
 app.get('/api/briefing-versions', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { user } = await verifyUser(req);
     const { clientId } = req.query;
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!clientId || !UUID_RE.test(String(clientId))) {
@@ -4311,6 +4313,7 @@ app.get('/api/briefing-versions', async (req, res) => {
        ORDER BY version DESC`,
       [clientId]
     );
+    if (!(await isTeamManagerUser(user))) stripBriefingSecretsFromRows(rows, ['briefing_versions']);
     return res.json({ versions: rows });
   } catch (err) {
     console.error('briefing-versions error:', err);
@@ -7464,6 +7467,8 @@ app.all('/api/client-onboarding', async (req, res) => {
       );
       const client = clients[0];
       if (!client) return res.status(404).json({ error: 'Client not found' });
+      // Link público: sem as senhas do briefing (o POST mantém as já salvas).
+      client.briefing_data = withoutBriefingSecrets(client.briefing_data);
 
       const { rows: videomakers } = await pool.query(
         `SELECT id, name, display_name, avatar_url, bio, job_title FROM profiles WHERE role = 'videomaker'`
@@ -7518,8 +7523,10 @@ app.all('/api/client-onboarding', async (req, res) => {
     let paramIdx = 18;
     let extraSets = '';
     if (briefing_data && Object.keys(briefing_data).length > 0) {
+      // O GET não devolve as senhas: campo vazio mantém a que já estava salva.
+      const { rows: [prevBriefing] } = await pool.query('SELECT briefing_data FROM clients WHERE id = $1', [clientId]);
       extraSets += `, briefing_data = $${paramIdx}`;
-      vals.push(JSON.stringify(briefing_data));
+      vals.push(JSON.stringify(mergeBriefingSecrets(briefing_data, prevBriefing?.briefing_data)));
       paramIdx++;
       if (briefing_data.instagram_login) {
         extraSets += `, client_login = $${paramIdx}`;
@@ -8144,6 +8151,67 @@ const DB_QUERY_MANAGER_COLUMNS = {
   profiles: ['monthly_salary'],
 };
 
+// Senhas de Instagram/Facebook que o cliente digita no briefing e no onboarding
+// (ficam dentro de briefing_data). Só quem gerencia (admin, social_media,
+// gestor_projetos) recebe; o resto da equipe e as rotas públicas (o link do
+// briefing abre só com o id do cliente) recebem o briefing sem elas.
+const BRIEFING_SECRET_KEYS = ['instagramPassword', 'facebookPassword', 'instagram_password', 'facebook_password'];
+const BRIEFING_DATA_TABLES = new Set(['clients', 'onboarding_tasks', 'briefing_versions']);
+
+function parseBriefingObject(value) {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    try { value = JSON.parse(value); } catch { return null; }
+  }
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+}
+
+/** briefing_data sem as senhas (mesmo formato de entrada: objeto ou texto JSON). */
+function withoutBriefingSecrets(value) {
+  const obj = parseBriefingObject(value);
+  if (!obj || !BRIEFING_SECRET_KEYS.some((key) => key in obj)) return value;
+  const copy = { ...obj };
+  for (const key of BRIEFING_SECRET_KEYS) delete copy[key];
+  return typeof value === 'string' ? JSON.stringify(copy) : copy;
+}
+
+/**
+ * Reenvio do formulário: como o GET público não devolve mais as senhas, o campo
+ * volta vazio. Vazio ou ausente mantém a senha que já estava salva.
+ */
+function mergeBriefingSecrets(incoming, previous) {
+  const prevObj = parseBriefingObject(previous);
+  if (!incoming || typeof incoming !== 'object' || !prevObj) return incoming;
+  const merged = { ...incoming };
+  for (const key of BRIEFING_SECRET_KEYS) {
+    const value = merged[key];
+    const isEmpty = value === undefined || value === null || (typeof value === 'string' && value.trim() === '');
+    if (isEmpty && prevObj[key]) merged[key] = prevObj[key];
+  }
+  return merged;
+}
+
+/** Tira as senhas do briefing_data das linhas (base e joins: `clients_briefing_data`). */
+function stripBriefingSecretsFromRows(rows, tables = ['clients']) {
+  const columns = ['briefing_data', ...tables.filter((table) => BRIEFING_DATA_TABLES.has(table)).map((table) => `${table}_briefing_data`)];
+  for (const row of Array.isArray(rows) ? rows : [rows]) {
+    if (!row || typeof row !== 'object') continue;
+    for (const column of columns) {
+      if (row[column]) row[column] = withoutBriefingSecrets(row[column]);
+    }
+  }
+  return rows;
+}
+
+/** Linhas de clients para a equipe: nunca o hash do portal; senhas do briefing só para quem gerencia. */
+async function sanitizeClientRowsForUser(rows, user) {
+  for (const row of Array.isArray(rows) ? rows : [rows]) {
+    if (row && typeof row === 'object') delete row.client_password_hash;
+  }
+  if (!(await isTeamManagerUser(user))) stripBriefingSecretsFromRows(rows);
+  return rows;
+}
+
 /**
  * Lista fechada para o campo `select` do /api/db/query.
  * Aceita só o que o src/lib/vpsDb.ts (_parseSelect) gera: `*`, `col`,
@@ -8739,6 +8807,9 @@ app.post('/api/db/query', async (req, res) => {
         const selectTables = [safeTable, ...joinTables];
         stripDbQueryColumns(rows, selectTables, await getDbQueryStripOptions(user, selectTables));
         if (safeTable === 'api_integrations' && !(await isAdminUser(user))) sanitizeApiIntegrationRows(rows);
+        if (selectTables.some((table) => BRIEFING_DATA_TABLES.has(table)) && !(await isTeamManagerUser(user))) {
+          stripBriefingSecretsFromRows(rows, selectTables);
+        }
         result = { data: single ? (rows[0] || null) : rows, error: null };
         break;
       }
@@ -9049,6 +9120,9 @@ app.post('/api/db/query', async (req, res) => {
     // RETURNING * de insert/update/upsert/delete também não devolve colunas sensíveis
     if (operation !== 'select' && operation !== 'rpc' && result?.data) {
       stripDbQueryColumns(result.data, [safeTable], await getDbQueryStripOptions(user, [safeTable]));
+      if (BRIEFING_DATA_TABLES.has(safeTable) && !(await isTeamManagerUser(user))) {
+        stripBriefingSecretsFromRows(result.data, [safeTable]);
+      }
     }
 
     res.json(result);
@@ -9189,7 +9263,9 @@ app.get('/api/design-tasks/fast', async (req, res) => {
       } : null,
     }));
 
-    res.set('Cache-Control', 'private, max-age=10');
+    // A cidade vai só no cabeçalho x-pulse-city (a URL é a mesma): sem cache no
+    // navegador, senão a troca de cidade (ou criar/excluir card) recebia a lista antiga.
+    res.set('Cache-Control', 'no-store');
     res.json(data);
   } catch (e) {
     console.error('GET /api/design-tasks/fast error:', e);
@@ -9200,17 +9276,17 @@ app.get('/api/design-tasks/fast', async (req, res) => {
 // ─── Clients ────────────────────────────────────────────────
 app.get('/api/clients', async (req, res) => {
   try {
-    const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
+    const { user, activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
     const { rows } = scopeCity
       ? await pool.query(`SELECT * FROM clients WHERE ${cityVisibilityExpression('city', '$1')} ORDER BY company_name`, [activeCity])
       : await pool.query('SELECT * FROM clients ORDER BY company_name');
-    res.json(rows);
+    res.json(await sanitizeClientRowsForUser(rows, user));
   } catch (e) { res.status(e.message === 'Unauthorized' ? 401 : 500).json({ error: e.message }); }
 });
 
 app.post('/api/clients', async (req, res) => {
   try {
-    const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
+    const { user, activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
     // Garante colunas NUMERIC antes de gravar metas fracionadas do plano especial
     await ensureClientFractionalGoalColumns().catch(() => {});
     await ensureClientExperienceColumns().catch(() => {});
@@ -9253,7 +9329,7 @@ app.post('/api/clients', async (req, res) => {
       );
       created = upd.rows[0] || created;
     }
-    res.json(created);
+    res.json(await sanitizeClientRowsForUser(created, user));
   } catch (e) {
     console.error('POST /api/clients error:', e);
     // 23505 = violação de índice único (ex.: client_login repetido)
@@ -9405,7 +9481,7 @@ app.get('/api/clients/:id/transfer-preview', async (req, res) => {
 app.put('/api/clients/:id', async (req, res) => {
 
   try {
-    const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
+    const { user, activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
     const { id } = req.params;
     const c = req.body;
     
@@ -9528,7 +9604,7 @@ app.put('/api/clients/:id', async (req, res) => {
         ).catch(() => {});
       }
 
-      res.json(rows[0]);
+      res.json(await sanitizeClientRowsForUser(rows[0], user));
 
     } catch (e) {
       await client.query('ROLLBACK');

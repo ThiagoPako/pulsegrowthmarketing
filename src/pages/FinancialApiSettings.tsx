@@ -182,32 +182,29 @@ export default function FinancialApiSettings() {
     if (!providerInfo) return;
 
     const dbProvider = `ai_${providerKey}`;
-    const configData: any = { ai_model: model, ai_provider: providerKey };
 
-    // If API key provided, store it via edge function
-    if (apiKey && apiKey.trim()) {
-      try {
-        await supabase.functions.invoke('meta-store-credentials', {
-          body: {
-            secret_name: providerInfo.keyName,
-            secret_value: apiKey.trim(),
-          },
-        });
-        configData.api_key_set = true;
-        configData.api_key_hint = '••••' + apiKey.slice(-4);
-      } catch (err: any) {
-        toast.error('Erro ao salvar API Key: ' + (err.message || 'Erro'));
-        setSavingAi(false);
-        return;
-      }
+    // Reaproveita a linha mais recente do provedor (mesmo inativa) em vez de criar
+    // outra a cada troca, e preserva o config atual (a chave fica lá dentro).
+    const { data: existingRows, error: existingError } = await supabase
+      .from('api_integrations')
+      .select('id, config')
+      .eq('provider', dbProvider)
+      .order('updated_at', { ascending: false })
+      .limit(1);
+    if (existingError) {
+      toast.error('Erro ao carregar a configuração de IA');
+      setSavingAi(false);
+      return;
     }
+    const existing = (existingRows as any[])?.[0] || null;
+    const currentConfig = existing?.config && typeof existing.config === 'object' ? existing.config : {};
 
     const payload: any = {
       name: providerInfo.label,
       provider: dbProvider,
       api_type: 'ai_gateway',
       endpoint_url: providerInfo.getKeyUrl,
-      config: configData,
+      config: { ...currentConfig, ai_model: model, ai_provider: providerKey },
       status: 'ativo',
       updated_at: new Date().toISOString(),
     };
@@ -217,12 +214,43 @@ export default function FinancialApiSettings() {
       .update({ status: 'inativo' } as any)
       .in('provider', ['ai_gemini', 'ai_openai', 'ai_claude']);
 
-    if (aiConfig.integrationId && aiConfig.provider === providerKey) {
-      await supabase.from('api_integrations').update(payload).eq('id', aiConfig.integrationId);
+    let integrationId: string | null = existing?.id || null;
+    if (existing) {
+      const { error } = await supabase.from('api_integrations').update(payload).eq('id', existing.id);
+      if (error) {
+        toast.error('Erro ao salvar a configuração de IA');
+        setSavingAi(false);
+        return;
+      }
     } else {
       payload.created_by = user?.id;
-      const { data } = await supabase.from('api_integrations').insert(payload).select().single();
-      if (data) setAiConfig(prev => ({ ...prev, integrationId: (data as any).id }));
+      const { data, error } = await supabase.from('api_integrations').insert(payload).select().single();
+      if (error || !data) {
+        toast.error('Erro ao salvar a configuração de IA');
+        setSavingAi(false);
+        return;
+      }
+      integrationId = (data as any).id;
+    }
+
+    // A chave vai depois da linha salva: o servidor faz merge no config da própria
+    // linha (antes o update acima apagava a chave recém-gravada).
+    let apiKeySet = Boolean(currentConfig.api_key_set);
+    if (apiKey && apiKey.trim()) {
+      const { error } = await supabase.functions.invoke('meta-store-credentials', {
+        body: {
+          secret_name: providerInfo.keyName,
+          secret_value: apiKey.trim(),
+          integration_id: integrationId,
+        },
+      });
+      if (error) {
+        toast.error('Erro ao salvar API Key: ' + (error.message || error || 'Erro'));
+        setAiConfig(prev => ({ ...prev, provider: providerKey, model, active: true, integrationId, apiKeySet }));
+        setSavingAi(false);
+        return;
+      }
+      apiKeySet = true;
     }
 
     setAiConfig(prev => ({
@@ -230,7 +258,8 @@ export default function FinancialApiSettings() {
       provider: providerKey,
       model,
       active: true,
-      apiKeySet: configData.api_key_set || prev.apiKeySet,
+      integrationId,
+      apiKeySet,
     }));
     setAiApiKey('');
     setSavingAi(false);

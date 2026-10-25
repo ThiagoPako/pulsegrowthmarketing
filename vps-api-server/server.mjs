@@ -3297,6 +3297,8 @@ app.post('/api/financial-chat', async (req, res) => {
     const fmtMoney = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const fmtDate = d => { if (!d) return 'N/A'; const dt = typeof d === 'string' ? d : d.toISOString(); return dt.slice(0, 10).split('-').reverse().join('/'); };
 
+    const aiConfigCity = (await tableHasCityColumn('api_integrations')) ? await resolveActiveCity(req, user.id, user) : null;
+
     // Fetch ALL system data in parallel from local PostgreSQL
     // NOTE: All operational data filtered from SYSTEM_START (March 2026). Only contracts can have earlier dates.
     const [
@@ -3312,7 +3314,12 @@ app.post('/api/financial-chat', async (req, res) => {
       pool.query(`SELECT fc.*, c.company_name AS client_name, p.name AS plan_name, p.price AS plan_price FROM financial_contracts fc LEFT JOIN clients c ON c.id = fc.client_id LEFT JOIN plans p ON p.id = fc.plan_id WHERE fc.status = 'ativo'`),
       pool.query(`SELECT c.*, p.name AS plan_name FROM clients c LEFT JOIN plans p ON p.id = c.plan_id`),
       pool.query(`SELECT * FROM cash_reserve_movements WHERE date >= $1 ORDER BY date DESC LIMIT 100`, [SYSTEM_START]),
-      pool.query(`SELECT config FROM api_integrations WHERE provider = ANY($1) AND status = 'ativo' LIMIT 1`, [['ai_gemini', 'ai_openai', 'ai_claude']]),
+      // Configuração de IA ativa: a da cidade ativa primeiro, depois a mais recente
+      pool.query(
+        `SELECT config FROM api_integrations WHERE provider = ANY($1) AND status = 'ativo'
+          ORDER BY ${aiConfigCity ? `(${cityScopeExpression('city')} = $2) DESC, ` : ''}updated_at DESC LIMIT 1`,
+        aiConfigCity ? [['ai_gemini', 'ai_openai', 'ai_claude'], aiConfigCity] : [['ai_gemini', 'ai_openai', 'ai_claude']]
+      ),
       pool.query(`SELECT r.*, c.company_name AS client_name, pf.name AS videomaker_name FROM recordings r LEFT JOIN clients c ON c.id = r.client_id LEFT JOIN profiles pf ON pf.id = r.videomaker_id WHERE r.date >= $1 ORDER BY r.date DESC LIMIT 200`, [SYSTEM_START]),
       pool.query(`SELECT ct.*, c.company_name AS client_name, pf.name AS assigned_name FROM content_tasks ct LEFT JOIN clients c ON c.id = ct.client_id LEFT JOIN profiles pf ON pf.id = ct.assigned_to ORDER BY ct.updated_at DESC LIMIT 200`),
       pool.query(`SELECT dt.*, c.company_name AS client_name, pf.name AS assigned_name FROM design_tasks dt LEFT JOIN clients c ON c.id = dt.client_id LEFT JOIN profiles pf ON pf.id = dt.assigned_to ORDER BY dt.updated_at DESC LIMIT 200`),
@@ -5899,16 +5906,31 @@ app.post('/api/meta-store-credentials', async (req, res) => {
     if (secret_name && secret_value) {
       const keyToProviderMap = { GOOGLE_GEMINI_API_KEY: 'ai_gemini', OPENAI_API_KEY: 'ai_openai', ANTHROPIC_API_KEY: 'ai_claude' };
       const dbProvider = keyToProviderMap[secret_name];
-      if (dbProvider) {
-        const { data: existing } = await admin.from('api_integrations').select('id, config').eq('provider', dbProvider).limit(1).single();
-        if (existing) {
-          const cfg = existing.config || {};
-          cfg.api_key_encrypted = secret_value;
-          cfg.api_key_set = true;
-          cfg.api_key_hint = '••••' + secret_value.slice(-4);
-          await admin.from('api_integrations').update({ config: cfg, updated_at: new Date().toISOString() }).eq('id', existing.id);
-        }
+      if (!dbProvider) return res.status(400).json({ error: `Chave desconhecida: ${secret_name}` });
+      const apiKey = String(secret_value).trim();
+      // Grava com merge no próprio SQL (não troca o config inteiro). Com integration_id
+      // vai na linha que a tela acabou de salvar; sem ele, na linha ativa mais recente
+      // do provedor na cidade ativa.
+      const keyParams = [apiKey, '••••' + apiKey.slice(-4), dbProvider];
+      let target;
+      if (integration_id) {
+        keyParams.push(String(integration_id));
+        target = 'id::text = $4';
+      } else {
+        const scopeCity = await tableHasCityColumn('api_integrations');
+        const activeCity = scopeCity ? await resolveActiveCity(req, user.id, user) : null;
+        const cityClause = scopeCity ? `AND ${cityVisibilityExpression('city', '$4')}` : '';
+        if (scopeCity) keyParams.push(activeCity);
+        target = `id = (SELECT id FROM api_integrations WHERE provider = $3 AND status = 'ativo' ${cityClause} ORDER BY updated_at DESC LIMIT 1)`;
       }
+      const { rowCount } = await pool.query(
+        `UPDATE api_integrations
+            SET config = COALESCE(config, '{}'::jsonb) || jsonb_build_object('api_key_encrypted', $1::text, 'api_key_set', true, 'api_key_hint', $2::text),
+                updated_at = now()
+          WHERE provider = $3 AND ${target}`,
+        keyParams
+      );
+      if (!rowCount) return res.status(404).json({ error: 'Configuração de IA não encontrada para gravar a chave' });
       return res.json({ success: true, message: `Secret ${secret_name} stored` });
     }
 

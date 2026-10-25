@@ -3873,6 +3873,58 @@ function rejectPortalCallWithoutSession(res, route, action) {
   return true;
 }
 
+// ── Cidade do cliente nas rotas do portal ──
+// O portal não manda x-pulse-city: a cidade vem do cadastro do cliente. Cliente global
+// (city NULL) não filtra a equipe e deixa a cidade no DEFAULT da tabela.
+async function getPortalClientCity(clientId) {
+  if (!clientId) return null;
+  const { rows: [row] } = await pool.query('SELECT city::text AS city FROM clients WHERE id = $1', [clientId]);
+  return normalizeCityValue(row?.city) || null;
+}
+
+// Condição SQL "este usuário atende a cidade $n": vínculo em user_cities, ou sem
+// vínculo nenhum (o resolveActiveCity trata esse usuário como Minaçu). Sem cidade, todos.
+function portalCityMemberSql(userIdExpr, cityParam) {
+  return `(${cityParam}::text IS NULL
+    OR EXISTS (SELECT 1 FROM user_cities uc WHERE uc.user_id::text = ${userIdExpr}::text AND uc.city::text = ${cityParam}::text)
+    OR (${cityParam}::text = 'minacu' AND NOT EXISTS (SELECT 1 FROM user_cities uc WHERE uc.user_id::text = ${userIdExpr}::text)))`;
+}
+
+/**
+ * Avisa a equipe (pelos papéis) de algo que aconteceu no portal de um cliente: só quem
+ * atende a cidade do cliente (admin vê todas) e com a cidade gravada na notificação —
+ * sem ela, o DEFAULT 'minacu' esconderia o aviso da equipe de Uruaçu.
+ */
+async function notifyPortalTeam(clientId, roles, title, message, type = 'info', link = null) {
+  const city = await getPortalClientCity(clientId).catch(() => null);
+  const { rows } = await pool.query(
+    `SELECT DISTINCT ur.user_id FROM user_roles ur
+      WHERE ur.role::text = ANY($1::text[])
+        AND (ur.role::text = 'admin' OR ${portalCityMemberSql('ur.user_id', '$2')})`,
+    [roles, city]
+  );
+  await insertPortalTeamNotifications(city, rows.map(r => r.user_id), title, message, type, link);
+}
+
+/** Grava a notificação para cada usuário, com a cidade do cliente quando houver. */
+async function insertPortalTeamNotifications(city, userIds, title, message, type = 'info', link = null) {
+  const withCity = !!city && await tableHasCityColumn('notifications');
+  for (const userId of userIds) {
+    if (!userId) continue;
+    await pool.query(
+      withCity
+        ? `INSERT INTO notifications (user_id, title, message, type, link, city) VALUES ($1, $2, $3, $4, $5, $6)`
+        : `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
+      withCity ? [userId, title, message, type, link, city] : [userId, title, message, type, link]
+    );
+  }
+}
+
+/** Cidade a gravar numa linha nova do cliente (recordings): null = deixa o DEFAULT/trigger. */
+async function portalInsertCity(tableName, clientCity) {
+  return clientCity && await tableHasCityColumn(tableName) ? clientCity : null;
+}
+
 // Ensure client_portal_users table exists (multi-user per company)
 (async () => {
   try {
@@ -4590,22 +4642,7 @@ app.post('/api/portal-actions', async (req, res) => {
       );
       if (!script) return res.status(404).json({ error: 'Roteiro não encontrado' });
 
-      const { rows: notifUsers } = await pool.query(
-        `SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`
-      );
-
-      for (const u of notifUsers) {
-        await pool.query(
-          `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [
-            u.user_id,
-            '✏️ Roteiro editado pelo cliente',
-            `${client_name || 'Cliente'} editou o roteiro "${script?.title || 'Roteiro'}" no Pulse Club`,
-            'info',
-            '/roteiros',
-          ]
-        );
-      }
+      await notifyPortalTeam(client_id, ['admin', 'social_media'], '✏️ Roteiro editado pelo cliente', `${client_name || 'Cliente'} editou o roteiro "${script?.title || 'Roteiro'}" no Pulse Club`, 'info', '/roteiros');
 
       return res.json({ success: true });
     }
@@ -4625,11 +4662,7 @@ app.post('/api/portal-actions', async (req, res) => {
           [task.id, '✅ Aprovado pelo cliente via Pulse Club', null, null]);
       }
       // Notify social_media and admin
-      const { rows: notifUsers } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
-      for (const u of notifUsers) {
-        await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, '✅ Conteúdo aprovado pelo cliente', `"${content_title}" foi aprovado no Pulse Club`, 'approval', '/conteudo']);
-      }
+      await notifyPortalTeam(client_id, ['admin', 'social_media'], '✅ Conteúdo aprovado pelo cliente', `"${content_title}" foi aprovado no Pulse Club`, 'approval', '/conteudo');
       return res.json({ success: true });
     }
 
@@ -4646,15 +4679,10 @@ app.post('/api/portal-actions', async (req, res) => {
         await pool.query(`INSERT INTO task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, $4)`,
           [task.id, '🔧 Ajuste solicitado pelo cliente via Pulse Club', adjustment_note, null]);
         if (task.assigned_to) {
-          await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-            [task.assigned_to, '🔧 Ajuste solicitado pelo cliente', `"${content_title}" precisa de ajustes: ${(adjustment_note || '').substring(0, 80)}`, 'adjustment', '/edicao/kanban']);
+          await insertPortalTeamNotifications(await getPortalClientCity(client_id), [task.assigned_to], '🔧 Ajuste solicitado pelo cliente', `"${content_title}" precisa de ajustes: ${(adjustment_note || '').substring(0, 80)}`, 'adjustment', '/edicao/kanban');
         }
       }
-      const { rows: notifUsers } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
-      for (const u of notifUsers) {
-        await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, '🔧 Ajuste solicitado no Pulse Club', `Cliente solicitou ajuste em "${content_title}": ${(adjustment_note || '').substring(0, 80)}`, 'adjustment', '/entregas-social']);
-      }
+      await notifyPortalTeam(client_id, ['admin', 'social_media'], '🔧 Ajuste solicitado no Pulse Club', `Cliente solicitou ajuste em "${content_title}": ${(adjustment_note || '').substring(0, 80)}`, 'adjustment', '/entregas-social');
       return res.json({ success: true });
     }
 
@@ -4663,11 +4691,7 @@ app.post('/api/portal-actions', async (req, res) => {
       const { content_title, author_name: syncAuthorName, message: syncMessage } = req.body;
       const syncAuthorType = isTeamCaller ? req.body.author_type : 'client';
       if (syncAuthorType === 'client') {
-        const { rows: notifUsers } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
-        for (const u of notifUsers) {
-          await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-            [u.user_id, '💬 Comentário do cliente', `${syncAuthorName} comentou em "${content_title}": ${(syncMessage || '').substring(0, 60)}`, 'comment', '/conteudos-portal']);
-        }
+        await notifyPortalTeam(client_id, ['admin', 'social_media'], '💬 Comentário do cliente', `${syncAuthorName} comentou em "${content_title}": ${(syncMessage || '').substring(0, 60)}`, 'comment', '/conteudos-portal');
       }
       if (syncAuthorType === 'team' && client_id) {
         await pool.query(`INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)`,
@@ -4681,11 +4705,7 @@ app.post('/api/portal-actions', async (req, res) => {
       const { script_title, new_priority, client_name } = req.body;
       const emoji = new_priority === 'urgent' ? '🚨' : '⭐';
       const label = new_priority === 'urgent' ? 'URGENTE' : 'Prioridade';
-      const { rows: notifUsers } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
-      for (const u of notifUsers) {
-        await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, `${emoji} Roteiro marcado como ${label}`, `${client_name} marcou "${script_title}" como ${label} no Pulse Club`, 'priority', '/roteiros']);
-      }
+      await notifyPortalTeam(client_id, ['admin', 'social_media'], `${emoji} Roteiro marcado como ${label}`, `${client_name} marcou "${script_title}" como ${label} no Pulse Club`, 'priority', '/roteiros');
       // Create portal notification
       if (client_id) {
         const { rows: [script] } = await pool.query('SELECT id FROM scripts WHERE client_id = $1 AND title = $2 LIMIT 1', [client_id, script_title]);
@@ -4743,15 +4763,7 @@ app.post('/api/portal-actions', async (req, res) => {
       );
 
       // Notify designers (fotografo + designer roles)
-      const { rows: notifUsers } = await pool.query(
-        `SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'fotografo', 'designer')`
-      );
-      for (const u of notifUsers) {
-        await pool.query(
-          `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, '🎨 Nova solicitação de arte do cliente', `${clientInfo?.company_name || 'Cliente'} solicitou: "${title}"`, 'design', '/designer']
-        );
-      }
+      await notifyPortalTeam(client_id, ['admin', 'fotografo', 'designer'], '🎨 Nova solicitação de arte do cliente', `${clientInfo?.company_name || 'Cliente'} solicitou: "${title}"`, 'design', '/designer');
 
       return res.json({ success: true, task_id: task.id });
     }
@@ -4770,16 +4782,8 @@ app.post('/api/portal-actions', async (req, res) => {
         [task_id, '✅ Aprovado pelo cliente via Pulse Club']
       );
       // Notify designers
-      const { rows: notifUsers } = await pool.query(
-        `SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'fotografo', 'designer')`
-      );
-      const { rows: [taskInfo] } = await pool.query('SELECT title FROM design_tasks WHERE id = $1', [task_id]);
-      for (const u of notifUsers) {
-        await pool.query(
-          `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, '✅ Arte aprovada pelo cliente', `"${taskInfo?.title || 'Arte'}" foi aprovada no Pulse Club`, 'design', '/designer']
-        );
-      }
+      const { rows: [taskInfo] } = await pool.query('SELECT title, client_id FROM design_tasks WHERE id = $1', [task_id]);
+      await notifyPortalTeam(taskInfo?.client_id || client_id, ['admin', 'fotografo', 'designer'], '✅ Arte aprovada pelo cliente', `"${taskInfo?.title || 'Arte'}" foi aprovada no Pulse Club`, 'design', '/designer');
       return res.json({ success: true });
     }
 
@@ -4797,16 +4801,8 @@ app.post('/api/portal-actions', async (req, res) => {
         [task_id, '🔧 Ajuste solicitado pelo cliente via Pulse Club', note]
       );
       // Notify designers
-      const { rows: [taskInfo] } = await pool.query('SELECT title, assigned_to FROM design_tasks WHERE id = $1', [task_id]);
-      const { rows: notifUsers } = await pool.query(
-        `SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'fotografo', 'designer')`
-      );
-      for (const u of notifUsers) {
-        await pool.query(
-          `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, '🔧 Ajuste solicitado na arte', `Cliente pediu ajuste em "${taskInfo?.title || 'Arte'}": ${(note || '').substring(0, 80)}`, 'design', '/designer']
-        );
-      }
+      const { rows: [taskInfo] } = await pool.query('SELECT title, assigned_to, client_id FROM design_tasks WHERE id = $1', [task_id]);
+      await notifyPortalTeam(taskInfo?.client_id || client_id, ['admin', 'fotografo', 'designer'], '🔧 Ajuste solicitado na arte', `Cliente pediu ajuste em "${taskInfo?.title || 'Arte'}": ${(note || '').substring(0, 80)}`, 'design', '/designer');
       return res.json({ success: true });
     }
 
@@ -4992,15 +4988,7 @@ app.post('/api/portal-recordings', async (req, res) => {
       const { rows: [clientInfo] } = await pool.query('SELECT company_name FROM clients WHERE id = $1', [client_id]);
       const notifMsg = `${clientInfo?.company_name || 'Cliente'} reagendou gravação de ${rec.date} ${rec.start_time} para ${new_date} ${new_time}`;
       // Notify admins and social_media via local notifications table
-      const { rows: notifUsers } = await pool.query(
-        `SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`
-      );
-      for (const u of notifUsers) {
-        await pool.query(
-          `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, 'Reagendamento pelo cliente', notifMsg, 'warning', '/agenda']
-        );
-      }
+      await notifyPortalTeam(client_id, ['admin', 'social_media'], 'Reagendamento pelo cliente', notifMsg, 'warning', '/agenda');
       return res.json({ success: true });
     }
 
@@ -5009,11 +4997,7 @@ app.post('/api/portal-recordings', async (req, res) => {
       if (!recording_id) return res.status(400).json({ error: 'recording_id required' });
       await pool.query(`UPDATE recordings SET confirmation_status = 'confirmada' WHERE id = $1 AND client_id = $2`, [recording_id, client_id]);
       const { rows: [clientInfoConf] } = await pool.query('SELECT company_name FROM clients WHERE id = $1', [client_id]);
-      const { rows: notifUsersConf } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
-      for (const u of notifUsersConf) {
-        await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, 'Gravação confirmada pelo cliente', `${clientInfoConf?.company_name || 'Cliente'} confirmou a gravação`, 'info', '/agenda']);
-      }
+      await notifyPortalTeam(client_id, ['admin', 'social_media'], 'Gravação confirmada pelo cliente', `${clientInfoConf?.company_name || 'Cliente'} confirmou a gravação`, 'info', '/agenda');
       return res.json({ success: true });
     }
 
@@ -5045,20 +5029,26 @@ app.post('/api/portal-recordings', async (req, res) => {
       // If main videomaker backup not available, find alternative videomakers with space
       let alternativeVideomakers = [];
       if (!backupAvailable && backupDateCancel) {
+        // Só videomakers que atendem a cidade do cliente
+        const cancelCity = await getPortalClientCity(client_id);
         const { rows: allVideomakers } = await pool.query(
-          `SELECT p.id, p.name FROM profiles p JOIN user_roles ur ON ur.user_id = p.id WHERE ur.role = 'videomaker' AND p.id != $1`,
-          [clientCancel.videomaker_id]
+          `SELECT DISTINCT p.id, p.name FROM profiles p JOIN user_roles ur ON ur.user_id = p.id
+            WHERE ur.role = 'videomaker' AND p.id IS DISTINCT FROM $1 AND ${portalCityMemberSql('p.id', '$2')}`,
+          [clientCancel?.videomaker_id || null, cancelCity]
         );
+        const { rows: altRecsCancel } = allVideomakers.length > 0
+          ? await pool.query(
+            `SELECT videomaker_id, start_time FROM recordings WHERE videomaker_id = ANY($1::uuid[]) AND date = $2 AND status != 'cancelada'`,
+            [allVideomakers.map(vm => vm.id), backupDateCancel]
+          )
+          : { rows: [] };
         const shiftAStart = settingsCancel?.shift_a_start || '08:30';
         const shiftAEnd = settingsCancel?.shift_a_end || '12:00';
         const shiftBStart = settingsCancel?.shift_b_start || '14:30';
         const shiftBEnd = settingsCancel?.shift_b_end || '18:00';
 
         for (const vm of allVideomakers) {
-          const { rows: vmRecs } = await pool.query(
-            `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,
-            [vm.id, backupDateCancel]
-          );
+          const vmRecs = altRecsCancel.filter(r => String(r.videomaker_id) === String(vm.id));
           const occupied = vmRecs.map(r => { const [h, m] = r.start_time.split(':').map(Number); return { start: h * 60 + m, end: h * 60 + m + durationCancel }; });
           // Find available slots for this videomaker
           const slots = [];
@@ -5087,12 +5077,8 @@ app.post('/api/portal-recordings', async (req, res) => {
       const fixedDayCancel = dayMapCancel[clientCancel?.fixed_day] ?? 1;
       let nextFixedDate = null;
       for (let i = 1; i <= 14; i++) { const d = new Date(todayCancel); d.setDate(d.getDate() + i); if (d.getDay() === fixedDayCancel) { nextFixedDate = d.toISOString().split('T')[0]; break; } }
-      await pool.query(`UPDATE recordings SET status = 'cancelada' WHERE id = $1`, [recording_id]);
-      const { rows: notifUsersCancel } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
-      for (const u of notifUsersCancel) {
-        await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, 'Gravação cancelada pelo cliente', `${clientCancel?.company_name || 'Cliente'} cancelou gravação ${recCancel.date} ${recCancel.start_time}`, 'warning', '/agenda']);
-      }
+      await pool.query(`UPDATE recordings SET status = 'cancelada' WHERE id = $1 AND client_id = $2`, [recording_id, client_id]);
+      await notifyPortalTeam(client_id, ['admin', 'social_media'], 'Gravação cancelada pelo cliente', `${clientCancel?.company_name || 'Cliente'} cancelou gravação ${recCancel.date} ${recCancel.start_time}`, 'warning', '/agenda');
       // Oferta assinada: o accept_backup só aceita uma destas opções (data, hora e videomaker).
       const backupOfferOptions = [
         ...(backupSlot ? [{ vm: clientCancel?.videomaker_id || null, date: backupSlot.date, times: [backupSlot.time], main: true }] : []),
@@ -5156,7 +5142,13 @@ app.post('/api/portal-recordings', async (req, res) => {
         return newStartBackup < cStart + durationBackup + bufferBackup && newStartBackup + durationBackup + bufferBackup > cStart;
       });
       if (hasConflictBackup) return res.status(409).json({ error: 'Horário não está mais disponível' });
-      await pool.query(`INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ($1, $2, $3, $4, 'secundaria', 'agendada', 'confirmada')`, [client_id, vmId, backup_date, backup_time]);
+      // Cidade do cliente na gravação (sem ela o DEFAULT 'minacu' tira a gravação da agenda de Uruaçu)
+      const backupCity = await portalInsertCity('recordings', await getPortalClientCity(client_id));
+      if (backupCity) {
+        await pool.query(`INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status, city) VALUES ($1, $2, $3, $4, 'secundaria', 'agendada', 'confirmada', $5)`, [client_id, vmId, backup_date, backup_time, backupCity]);
+      } else {
+        await pool.query(`INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ($1, $2, $3, $4, 'secundaria', 'agendada', 'confirmada')`, [client_id, vmId, backup_date, backup_time]);
+      }
       return res.json({ success: true });
     }
 
@@ -5277,12 +5269,21 @@ app.post('/api/portal-recordings', async (req, res) => {
 
       // Get alternative videomakers
       const alternativeVideomakers = [];
+      // Só videomakers que atendem a cidade do cliente; gravações do dia numa consulta só
+      const specialCity = await getPortalClientCity(client_id);
       const { rows: allVms } = await pool.query(
-        `SELECT p.id, p.name FROM profiles p JOIN user_roles ur ON ur.user_id = p.id WHERE ur.role = 'videomaker'${mainVmId ? ' AND p.id != $1' : ''}`,
-        mainVmId ? [mainVmId] : []
+        `SELECT DISTINCT p.id, p.name FROM profiles p JOIN user_roles ur ON ur.user_id = p.id
+          WHERE ur.role = 'videomaker' AND p.id IS DISTINCT FROM $1 AND ${portalCityMemberSql('p.id', '$2')}`,
+        [mainVmId || null, specialCity]
       );
+      const { rows: altRecsSpecial } = allVms.length > 0
+        ? await pool.query(
+          `SELECT videomaker_id, start_time FROM recordings WHERE videomaker_id = ANY($1::uuid[]) AND date = $2 AND status != 'cancelada'`,
+          [allVms.map(vm => vm.id), requested_date]
+        )
+        : { rows: [] };
       for (const vm of allVms) {
-        const { rows: vmRecs } = await pool.query(`SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`, [vm.id, requested_date]);
+        const vmRecs = altRecsSpecial.filter(r => String(r.videomaker_id) === String(vm.id));
         const occ = vmRecs.map(r => { const [h, m] = r.start_time.split(':').map(Number); return { start: h*60+m, end: h*60+m+duration+buffer }; });
         const sl = [];
         const genAltSlots = (s, e) => {
@@ -5313,6 +5314,16 @@ app.post('/api/portal-recordings', async (req, res) => {
       if (!requested_date || !comment) return res.status(400).json({ error: 'requested_date and comment required' });
 
       const { rows: [clientSpecial] } = await pool.query('SELECT company_name, videomaker_id FROM clients WHERE id = $1', [client_id]);
+      const requestCity = await getPortalClientCity(client_id);
+      // Videomaker escolhido no portal: o do cliente ou um videomaker que atende a cidade dele
+      if (selected_videomaker_id && selected_videomaker_id !== clientSpecial?.videomaker_id) {
+        const { rows: [validVm] } = await pool.query(
+          `SELECT p.id FROM profiles p JOIN user_roles ur ON ur.user_id = p.id
+            WHERE p.id::text = $1::text AND ur.role = 'videomaker' AND ${portalCityMemberSql('p.id', '$2')} LIMIT 1`,
+          [selected_videomaker_id, requestCity]
+        );
+        if (!validVm) return res.status(400).json({ error: 'Videomaker indisponível para este cliente' });
+      }
       let specialVmId = selected_videomaker_id || clientSpecial?.videomaker_id || null;
 
       if (!specialVmId) {
@@ -5321,24 +5332,26 @@ app.post('/api/portal-recordings', async (req, res) => {
       }
       if (!specialVmId) {
         const { rows: [fallbackVm] } = await pool.query(
-          `SELECT p.id FROM profiles p JOIN user_roles ur ON ur.user_id = p.id LEFT JOIN recordings r ON r.videomaker_id = p.id AND r.date = $1 AND r.status != 'cancelada' WHERE ur.role = 'videomaker' GROUP BY p.id, p.name ORDER BY COUNT(r.id) ASC, p.name ASC LIMIT 1`,
-          [requested_date]
+          `SELECT p.id FROM profiles p JOIN user_roles ur ON ur.user_id = p.id LEFT JOIN recordings r ON r.videomaker_id = p.id AND r.date = $1 AND r.status != 'cancelada' WHERE ur.role = 'videomaker' AND ${portalCityMemberSql('p.id', '$2')} GROUP BY p.id, p.name ORDER BY COUNT(r.id) ASC, p.name ASC LIMIT 1`,
+          [requested_date, requestCity]
         );
         specialVmId = fallbackVm?.id || null;
       }
       if (!specialVmId) return res.status(400).json({ error: 'Nenhum videomaker disponível para esta solicitação' });
 
-      const { rows: [newSpecialRec] } = await pool.query(
-        `INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ($1, $2, $3, $4, 'extra', 'solicitada', 'pendente') RETURNING id`,
-        [client_id, specialVmId, requested_date, requested_time || '09:00']
-      );
+      const specialInsertCity = await portalInsertCity('recordings', requestCity);
+      const { rows: [newSpecialRec] } = specialInsertCity
+        ? await pool.query(
+          `INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status, city) VALUES ($1, $2, $3, $4, 'extra', 'solicitada', 'pendente', $5) RETURNING id`,
+          [client_id, specialVmId, requested_date, requested_time || '09:00', specialInsertCity]
+        )
+        : await pool.query(
+          `INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ($1, $2, $3, $4, 'extra', 'solicitada', 'pendente') RETURNING id`,
+          [client_id, specialVmId, requested_date, requested_time || '09:00']
+        );
       await pool.query(`INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)`,
         [client_id, '📨 Solicitação enviada', `Sua solicitação de gravação especial para ${requested_date} foi enviada para aprovação. Aguarde a confirmação da equipe.`, 'info']);
-      const { rows: notifUsersSpecial } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
-      for (const u of notifUsersSpecial) {
-        await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, 'Solicitação de gravação especial', `${clientSpecial?.company_name || 'Cliente'}: ${comment} — Data: ${requested_date} ${requested_time || ''} — AGUARDANDO APROVAÇÃO`, 'warning', '/relacionamento']);
-      }
+      await notifyPortalTeam(client_id, ['admin', 'social_media'], 'Solicitação de gravação especial', `${clientSpecial?.company_name || 'Cliente'}: ${comment} — Data: ${requested_date} ${requested_time || ''} — AGUARDANDO APROVAÇÃO`, 'warning', '/relacionamento');
       return res.json({ success: true, recording_id: newSpecialRec?.id });
     }
 

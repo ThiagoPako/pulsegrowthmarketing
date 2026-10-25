@@ -138,6 +138,16 @@ function clientToRow(c: Client) {
   };
 }
 
+// Polling de 2 min: quando o servidor devolve o mesmo conteúdo, mantém a referência
+// anterior (o React não redesenha as telas que usam useApp() à toa).
+function keepIfEqual<T>(prev: T, next: T): T {
+  try {
+    return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+  } catch {
+    return next;
+  }
+}
+
 function normalizeDate(d: string): string {
   // API may return ISO timestamps like "2026-03-20T00:00:00.000Z"
   // Normalize to "YYYY-MM-DD" for consistent comparisons
@@ -356,13 +366,17 @@ export function useSupabaseData() {
     if (setRes.data && !setRes.error) {
       const settingsData = Array.isArray(setRes.data) ? setRes.data[0] : setRes.data;
       if (settingsData) {
-        setSettings(rowToSettings(settingsData));
+        const nextSettings = rowToSettings(settingsData);
+        setSettings(prev => keepIfEqual(prev, nextSettings));
         setSettingsId(settingsData.id);
       }
     }
 
     const hasClients = !cRes.error && Array.isArray(cRes.data);
-    if (hasClients) setClients((cRes.data as any[]).map(rowToClient));
+    if (hasClients) {
+      const nextClients = (cRes.data as any[]).map(rowToClient);
+      setClients(prev => keepIfEqual(prev, nextClients));
+    }
     setLoading(false);
     hasFetched.current = true;
 
@@ -389,27 +403,31 @@ export function useSupabaseData() {
       const allRecordings = (Array.isArray(rRes.data) ? rRes.data : []).map(rowToRecording);
       // Filter out recordings for canceled clients unless they are not 'agendada' (keep history).
       // Preserve avulso/story sessions (no clientId, or type 'avulso') which are internal agency slots.
-      setRecordings(
-        shouldFilterByActiveClients
-          ? allRecordings.filter(r =>
-              !r.clientId ||
-              r.type === 'avulso' ||
-              activeClientIds.has(r.clientId) ||
-              r.status !== 'agendada'
-            )
-          : allRecordings
-      );
+      const nextRecordings = shouldFilterByActiveClients
+        ? allRecordings.filter(r =>
+            !r.clientId ||
+            r.type === 'avulso' ||
+            activeClientIds.has(r.clientId) ||
+            r.status !== 'agendada'
+          )
+        : allRecordings;
+      setRecordings(prev => keepIfEqual(prev, nextRecordings));
     }
     if (tRes.data && !tRes.error) {
       const allTasks = (Array.isArray(tRes.data) ? tRes.data : []).map(rowToTask);
-      setTasks(shouldFilterByActiveClients ? allTasks.filter(t => !t.clientId || activeClientIds.has(t.clientId)) : allTasks);
+      const nextTasks = shouldFilterByActiveClients ? allTasks.filter(t => !t.clientId || activeClientIds.has(t.clientId)) : allTasks;
+      setTasks(prev => keepIfEqual(prev, nextTasks));
     }
     if (sRes.data && !sRes.error) {
       const allScripts = (Array.isArray(sRes.data) ? sRes.data : []).map(rowToScript);
-      setScripts(shouldFilterByActiveClients ? allScripts.filter(s => !s.clientId || activeClientIds.has(s.clientId)) : allScripts);
+      const nextScripts = shouldFilterByActiveClients ? allScripts.filter(s => !s.clientId || activeClientIds.has(s.clientId)) : allScripts;
+      setScripts(prev => keepIfEqual(prev, nextScripts));
     }
 
-    if (arRes.data && !arRes.error) setActiveRecordings((Array.isArray(arRes.data) ? arRes.data : []).map(rowToActiveRecording));
+    if (arRes.data && !arRes.error) {
+      const nextActive = (Array.isArray(arRes.data) ? arRes.data : []).map(rowToActiveRecording);
+      setActiveRecordings(prev => keepIfEqual(prev, nextActive));
+    }
   }, [cityLoading]);
 
   // Wrapper com dedupe + intervalo mínimo — evita rajadas de bootstrap concorrentes.

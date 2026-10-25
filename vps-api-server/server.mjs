@@ -3754,13 +3754,58 @@ const FORMAT_CONTEXT = {
   criativo: 'Formato: Criativo/Arte (peça visual estática)',
 };
 
-app.post('/api/generate-script', async (req, res) => {
+/**
+ * Nome de modelo de IA vindo do corpo. Não é lista fixa (o admin escolhe o
+ * modelo em Configurações), só o formato: na URL do Gemini não pode ter '/',
+ * '?' etc.; OpenAI/Claude/gateway aceitam também 'provedor/modelo'.
+ */
+function sanitizeAiModelName(model, provider, fallback) {
+  let raw = String(model || '').trim();
+  if (!raw) return fallback;
+  // 'google/gemini-...' (formato de gateway) vira o nome que a URL do Gemini espera
+  if (provider === 'gemini') raw = raw.replace(/^(?:google|models)\//i, '');
+  const pattern = provider === 'gemini' ? /^[A-Za-z0-9._-]{1,64}$/ : /^[A-Za-z0-9._:\/-]{1,96}$/;
+  if (!pattern.test(raw)) throw Object.assign(new Error('Modelo de IA inválido'), { status: 400 });
+  return raw;
+}
+
+function clipAiText(value, max) {
+  const text = String(value ?? '');
+  return text.length > max ? text.slice(0, max) : text;
+}
+
+async function requireAiUser(req, res) {
   try {
-    const { editorial, videoType, contentFormat, clientName, niche, exampleScripts, aiModel, aiProvider } = req.body;
+    await verifyUser(req);
+    return true;
+  } catch {
+    res.status(401).json({ error: 'Unauthorized' });
+    return false;
+  }
+}
+
+app.post('/api/generate-script', async (req, res) => {
+  // Usa a chave paga da agência: só para a equipe logada.
+  if (!(await requireAiUser(req, res))) return;
+  try {
+    const { videoType, contentFormat, aiModel, aiProvider } = req.body;
+    const editorial = clipAiText(req.body.editorial, 8000);
+    const clientName = clipAiText(req.body.clientName, 200);
+    const niche = clipAiText(req.body.niche, 200);
+    // Referências: até 5 roteiros de até 4.000 caracteres cada
+    const exampleScripts = Array.isArray(req.body.exampleScripts)
+      ? req.body.exampleScripts.slice(0, 5).map((ex) => ({
+          title: clipAiText(ex?.title, 200),
+          videoType: clipAiText(ex?.videoType, 60),
+          contentFormat: clipAiText(ex?.contentFormat, 60),
+          clientName: clipAiText(ex?.clientName, 200),
+          content: clipAiText(ex?.content, 4000),
+        }))
+      : [];
     const admin = getAdminClient();
     const dbApiKey = await fetchDbApiKey(admin, aiProvider);
     const ai = getAiConfig(aiProvider, dbApiKey);
-    const selectedModel = aiModel || 'gemini-2.5-flash';
+    const selectedModel = sanitizeAiModelName(aiModel, ai.provider, 'gemini-2.5-flash');
     const structure = VIDEO_TYPE_STRUCTURES[videoType] || VIDEO_TYPE_STRUCTURES.vendas;
     const format = FORMAT_CONTEXT[contentFormat] || FORMAT_CONTEXT.reels;
 
@@ -3775,7 +3820,7 @@ app.post('/api/generate-script', async (req, res) => {
     let scriptContent = '', captionContent = '';
 
     if (ai.provider === 'gemini') {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${ai.key}`;
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(selectedModel)}:generateContent?key=${ai.key}`;
       const response = await fetch(geminiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3797,26 +3842,31 @@ app.post('/api/generate-script', async (req, res) => {
     res.json({ content: scriptContent, caption: captionContent });
   } catch (error) {
     console.error('Generate script error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
 // ─── 4. Generate Caption ────────────────────────────────────
 app.post('/api/generate-caption', async (req, res) => {
+  // Usa a chave paga da agência: só para a equipe logada.
+  if (!(await requireAiUser(req, res))) return;
   try {
-    const { scriptContent, clientName, niche, aiModel, aiProvider } = req.body;
-    if (!scriptContent) return res.status(400).json({ error: 'scriptContent is required' });
+    const { aiModel, aiProvider } = req.body;
+    if (!req.body.scriptContent) return res.status(400).json({ error: 'scriptContent is required' });
+    const scriptContent = clipAiText(req.body.scriptContent, 20000);
+    const clientName = clipAiText(req.body.clientName, 200);
+    const niche = clipAiText(req.body.niche, 200);
 
     const admin = getAdminClient();
     const dbApiKey = await fetchDbApiKey(admin, aiProvider);
     const ai = getAiConfig(aiProvider, dbApiKey);
-    const model = aiModel || 'gemini-2.5-flash';
+    const model = sanitizeAiModelName(aiModel, ai.provider, 'gemini-2.5-flash');
 
     const prompt = `Você é um social media profissional brasileiro. Gere uma LEGENDA curta para Instagram.\nRegras: Máximo 200 chars, CTA, 1-3 emojis, sem hashtags.\n${clientName ? `CLIENTE: ${clientName}` : ''}\n${niche ? `NICHO: ${niche}` : ''}\nROTEIRO:\n${scriptContent}\n\nResponda APENAS com a legenda.`;
 
     let caption = '';
     if (ai.provider === 'gemini') {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${ai.key}`;
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${ai.key}`;
       const response = await fetch(geminiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3832,7 +3882,7 @@ app.post('/api/generate-caption', async (req, res) => {
     res.json({ caption });
   } catch (error) {
     console.error('Generate caption error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 

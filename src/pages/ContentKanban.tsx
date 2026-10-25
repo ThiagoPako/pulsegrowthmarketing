@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import AgentFixBadge from '@/components/kanban/AgentFixBadge';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
@@ -1917,6 +1918,7 @@ function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, lin
             <span className="text-[9px] font-bold text-white uppercase tracking-widest">🚨 Imediato</span>
           </div>
         )}
+        <AgentFixBadge task={task as any} users={assignedUser ? [assignedUser as any] : []} />
         {task.content_type === 'otimizacao' && (
           <div className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-fuchsia-500 via-pink-500 to-violet-500 animate-pulse shadow-lg shadow-fuchsia-500/40">
             <Rocket size={11} className="text-white animate-bounce" />

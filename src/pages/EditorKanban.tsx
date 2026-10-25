@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import AgentFixBadge from '@/components/kanban/AgentFixBadge';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth, profileHasRole, profileOwnsUserId } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
@@ -255,6 +256,11 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
             <Eye size={12} />🎬 Assistir no Portal
           </a>
         )}
+
+        {/* Agente corrigindo a alteração agora */}
+        <div className="-mx-3 overflow-hidden rounded-md">
+          <AgentFixBadge task={task as any} users={users} />
+        </div>
 
         {/* Deadlines per column */}
         {task.kanban_column === 'edicao' && task.editing_deadline && (

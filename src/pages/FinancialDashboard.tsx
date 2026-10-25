@@ -1024,13 +1024,13 @@ export default function FinancialDashboard() {
                     </span>
                   </div>
                   <span className={`text-sm font-bold ${m.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>
-                    {m.type === 'entrada' ? '+' : '-'}{fmt(m.amount)}
+                    {m.type === 'entrada' ? '+' : '-'}{fmt(toAmount(m.amount))}
                   </span>
                 </div>
               ))}
               <div className="text-center pt-2">
                 <p className="text-xs text-muted-foreground">
-                  Saldo atual: <span className="font-bold">{fmt(cashMovements.reduce((acc, m) => acc + (m.type === 'entrada' ? m.amount : -m.amount), 0))}</span>
+                  Saldo em conta: <span className="font-bold">{fmt(saldoCaixa)}</span>
                 </p>
               </div>
             </div>

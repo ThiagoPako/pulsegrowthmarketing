@@ -6,7 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import { AppProvider, useApp } from "@/contexts/AppContext";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { CityProvider } from "@/contexts/CityContext";
-import Layout from "@/components/Layout";
+import Layout, { isAdminOnlyPath } from "@/components/Layout";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Login from "@/pages/Login";
 import PrivacyPolicy from "@/pages/legal/PrivacyPolicy";
@@ -212,6 +212,11 @@ function ProtectedRoute({
   const isMetaReviewer = roles.length > 0 && roles.every(r => r === 'revisor_meta');
   if (isMetaReviewer && !isMetaReviewerPath(location.pathname)) {
     return <Navigate to={META_REVIEWER_HOME} replace />;
+  }
+
+  // Área só de admin no menu (financeiro, agentes...): digitar o endereço não abre a tela.
+  if (currentUser && !roles.includes('admin') && isAdminOnlyPath(location.pathname)) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   if (noLayout) return <>{children}</>;

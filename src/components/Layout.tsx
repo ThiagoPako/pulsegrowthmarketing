@@ -202,6 +202,25 @@ const navCategories: NavCategory[] = [
 
 ];
 
+/**
+ * Áreas que o menu mostra só para admin (financeiro, agentes, propostas...): a rota
+ * também barra quem não é admin, em vez de só esconder o link. Vale o item do menu
+ * mais específico que casa com o caminho (exato ou prefixo, ex. /financeiro/receitas).
+ * As demais telas seguem abertas como antes: há atalhos legítimos entre papéis
+ * (ex.: o painel do editor abre /roteiros).
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function isAdminOnlyPath(pathname: string): boolean {
+  let match: { path: string; roles: string[] } | null = null;
+  for (const cat of navCategories) {
+    for (const item of cat.items) {
+      if (pathname !== item.path && !pathname.startsWith(item.path + '/')) continue;
+      if (!match || item.path.length > match.path.length) match = item;
+    }
+  }
+  return !!match && match.roles.length === 1 && match.roles[0] === 'admin';
+}
+
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { currentUser } = useApp();
   const { signOut } = useAuth();

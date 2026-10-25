@@ -249,7 +249,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
   const LOWER_PRIORITY_TYPES_FOR_FIXED = new Set<RecordingType>(['extra', 'backup', 'secundaria']);
 
-  const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType, clientId?: string, options?: { skipClientDayCheck?: boolean }) => {
+  // `recs`: lista a usar no lugar de data.recordings (ex.: logo após cancelar, quando o
+  // estado deste render ainda tem a gravação como agendada).
+  const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType, clientId?: string, options?: { skipClientDayCheck?: boolean }, recs?: Recording[]) => {
+    const sourceRecs = recs || data.recordings;
     const newStart = timeToMinutes(startTime);
     const duration = data.settings.recordingDuration || 90;
     const newEnd = newStart + duration;
@@ -257,7 +260,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // 1. Check if client already has a recording on this day (unless full-shift or explicitly skipped)
     if (clientId && !options?.skipClientDayCheck) {
       const client = data.clients.find(c => c.id === clientId);
-      const clientDayRecs = data.recordings.filter(r => r.clientId === clientId && r.date === date && r.status !== 'cancelada' && r.id !== excludeId);
+      const clientDayRecs = sourceRecs.filter(r => r.clientId === clientId && r.date === date && r.status !== 'cancelada' && r.id !== excludeId);
       
       if (client) {
         if (client.fullShiftRecording) {
@@ -274,7 +277,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     // 2. Check videomaker availability
-    const conflict = data.recordings.find(r => {
+    const conflict = sourceRecs.find(r => {
       if (r.id === excludeId || r.status === 'cancelada') return false;
       if (r.videomakerId !== videomakerId || r.date !== date) return false;
 
@@ -480,7 +483,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return { deleted, created: fixedRecs.length };
   }, [data, users]);
 
-  const autoFillVacanciesForDate = useCallback(async (date: string): Promise<number> => {
+  const autoFillVacanciesForDate = useCallback(async (date: string, recs?: Recording[]): Promise<number> => {
     const todayStr = new Date().toISOString().split('T')[0];
     const dateObj = new Date(date + 'T12:00:00');
     const dayName = DATE_TO_DAY[getDay(dateObj)];
@@ -499,7 +502,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (extraClients.length === 0) return 0;
 
     let createdCount = 0;
-    const currentRecs = [...data.recordings];
+    const currentRecs = [...(recs || data.recordings)];
     const allVmIds = users.filter(u => u.role === 'videomaker').map(u => u.id);
 
     // Distribution among videomakers: iterate slots first, then videomakers
@@ -515,7 +518,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (vmDayRecsCount >= 4) continue;
 
         // Check if slot is available for this VM
-        if (!hasConflict(vmId, date, slot).hasConflict) {
+        // currentRecs inclui os extras criados neste laço: eles também ocupam o horário.
+        if (!hasConflict(vmId, date, slot, undefined, undefined, undefined, undefined, currentRecs).hasConflict) {
           // Find an eligible client who isn't already recording on this day
           const eligibleClient = extraClients.find(c => 
             !currentRecs.some(r => r.clientId === c.id && r.date === date && r.status !== 'cancelada')
@@ -663,9 +667,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateRecording = useCallback((recording: Recording) => { data.updateRecording(recording); }, [data]);
   const cancelRecording = useCallback(async (id: string) => { 
     const rec = data.recordings.find(r => r.id === id);
-    await data.cancelRecording(id); 
-    if (data.settings.autoFillVacancies && rec) {
-      autoFillVacanciesForDate(rec.date);
+    const cancelled = await data.cancelRecording(id);
+    if (cancelled && data.settings.autoFillVacancies && rec) {
+      // A lista deste render ainda tem a gravação como agendada: passa já com o cancelamento,
+      // senão a vaga liberada nunca é preenchida.
+      const updated = data.recordings.map(r => r.id === id ? { ...r, status: 'cancelada' as const } : r);
+      autoFillVacanciesForDate(rec.date, updated);
     }
   }, [data, autoFillVacanciesForDate]);
 

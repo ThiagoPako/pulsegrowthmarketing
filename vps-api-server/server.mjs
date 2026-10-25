@@ -2090,6 +2090,28 @@ async function verifyTeamManager(req) {
   throw new Error('Admin access required');
 }
 
+// Papéis da equipe interna. Parceiro, endomarketing e revisor_meta também fazem login, mas não falam com o
+// cliente pelo número da agência (nenhuma tela deles envia WhatsApp).
+const INTERNAL_TEAM_ROLES = ['admin', 'social_media', 'gestor_projetos', 'socio_gestor', 'designer', 'videomaker', 'editor', 'copywriter', 'fotografo'];
+
+async function userHasAnyRole(user, roles) {
+  if (!user || !roles?.length) return false;
+  if (roles.includes(user.role)) return true;
+  try {
+    await ensureAuthSupportTables();
+    const linkedIds = await getLinkedUserIds(user);
+    if (linkedIds.length === 0) return false;
+    const { rows } = await pool.query(
+      'SELECT 1 FROM user_roles WHERE user_id::text = ANY($1::text[]) AND role::text = ANY($2::text[]) LIMIT 1',
+      [linkedIds, roles]
+    );
+    return rows.length > 0;
+  } catch (error) {
+    console.error('Role lookup failed:', error?.message || error);
+    return false;
+  }
+}
+
 
 
 let profilesPasswordHashColumnPromise;
@@ -3715,7 +3737,16 @@ ${contextData}`;
 app.post('/api/send-whatsapp', async (req, res) => {
   try {
     const { user } = await verifyUser(req);
-    const { action, number, message, clientId, triggerType, mediaUrl, mediaFileName, purpose, connectionId } = req.body || {};
+    if (!(await userHasAnyRole(user, INTERNAL_TEAM_ROLES))) {
+      return res.status(403).json({ error: 'Envio de WhatsApp restrito à equipe' });
+    }
+    const { action, number, message, clientId, triggerType, mediaUrl, mediaFileName, purpose } = req.body || {};
+    // escolher a conexão à mão é só do admin (nenhuma tela manda; os outros seguem a função)
+    const connectionId = req.body?.connectionId && (await isAdminUser(user)) ? req.body.connectionId : null;
+    // anexo só por link http(s); arquivo do próprio servidor pode vir como "/uploads/..."
+    let media = mediaUrl ? String(mediaUrl).trim() : '';
+    if (media.startsWith('/uploads/')) media = `https://agenciapulse.tech${media}`;
+    if (media && !/^https?:\/\/\S/i.test(media)) return res.status(400).json({ error: 'Link do arquivo inválido' });
 
     if (action === 'test_connection') {
       const { rows } = await pool.query(
@@ -3725,10 +3756,10 @@ app.post('/api/send-whatsapp', async (req, res) => {
       return res.json({ success: connected.length > 0, connections: rows });
     }
 
-    if (!number || (!message && !mediaUrl)) return res.status(400).json({ error: 'number and message are required' });
+    if (!number || (!message && !media)) return res.status(400).json({ error: 'number and message are required' });
     const queued = await enqueueWhatsApp(pool, {
       to: number, body: message || '', clientId, triggerType: triggerType || 'manual', purpose,
-      sentBy: user.id, mediaUrl, mediaName: mediaFileName, connectionId,
+      sentBy: user.id, mediaUrl: media || null, mediaName: mediaFileName, connectionId,
     });
     res.json({ success: true, status: 'fila', id: queued.id, purpose: queued.purpose });
   } catch (error) {

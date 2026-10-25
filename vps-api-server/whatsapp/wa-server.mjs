@@ -16,6 +16,8 @@
 
 import path from 'node:path';
 import crypto from 'node:crypto';
+import dns from 'node:dns/promises';
+import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import pg from 'pg';
@@ -187,6 +189,56 @@ async function baileysVersion() {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const digits = (v) => String(v || '').replace(/\D/g, '');
+
+// ── Anexo: só link público http(s) ─────────────────────────────
+// A Baileys lê do disco quando a URL não é http(s), e um link para endereço interno (localhost, rede privada)
+// mandaria ao cliente o que só o servidor enxerga. Os dois viram erro definitivo (não adianta tentar de novo).
+const OWN_HOSTS = new Set(['agenciapulse.tech', 'www.agenciapulse.tech']); // o próprio site (/uploads)
+const mediaError = (message) => Object.assign(new Error(message), { permanent: true });
+
+function isInternalAddress(address) {
+  let ip = String(address || '').toLowerCase().replace(/^\[|\]$/g, '');
+  const mappedHex = ip.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (mappedHex) {
+    const hi = parseInt(mappedHex[1], 16);
+    const lo = parseInt(mappedHex[2], 16);
+    ip = `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
+  } else if (ip.startsWith('::ffff:')) {
+    ip = ip.slice(7); // IPv4 escrito dentro de IPv6
+  }
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
+  }
+  if (net.isIPv6(ip)) return ip.startsWith('::') || /^f[cd]/.test(ip) || /^fe[89ab]/.test(ip) || ip.startsWith('ff') || ip.startsWith('64:ff9b:');
+  return true;
+}
+
+async function checkMediaUrl(raw) {
+  let url;
+  try {
+    url = new URL(String(raw || '').trim());
+  } catch {
+    throw mediaError('Link do arquivo inválido');
+  }
+  if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username || url.password) {
+    throw mediaError('Link do arquivo inválido (só http ou https)');
+  }
+  const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (OWN_HOSTS.has(host)) return url;
+  let addresses;
+  if (net.isIP(host)) addresses = [host];
+  else {
+    try {
+      addresses = (await dns.lookup(host, { all: true, verbatim: true })).map((a) => a.address);
+    } catch (error) {
+      throw new Error(`Não achei o servidor do arquivo (${host}): ${error.code || error.message}`); // tenta de novo depois
+    }
+  }
+  if (!addresses.length || addresses.some(isInternalAddress)) throw mediaError('Link do arquivo aponta para um endereço interno');
+  return url;
+}
 
 // ── Uma conexão (um número) ────────────────────────────────────
 class Connection {
@@ -481,21 +533,35 @@ class Connection {
 
   async buildContent(row) {
     if (!row.media_url) return { text: row.body };
-    // confere tipo e tamanho antes; a Baileys baixa e envia em streaming a partir da URL
+    // confere tipo e tamanho antes; a Baileys baixa e envia em streaming a partir da URL.
+    // Os redirecionamentos são seguidos aqui, um a um, conferindo cada destino (ver checkMediaUrl).
+    let target = await checkMediaUrl(row.media_url);
     let mimetype = 'application/octet-stream';
     let size = 0;
-    try {
-      const head = await fetch(row.media_url, { method: 'HEAD' });
+    for (let hop = 0; ; hop++) {
+      let head;
+      try {
+        head = await fetch(target, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(15_000) });
+      } catch {
+        break; // servidor que não responde HEAD: segue com o tipo pela extensão
+      }
+      const location = head.status >= 300 && head.status < 400 ? head.headers.get('location') : null;
+      if (location) {
+        if (hop >= 5) throw mediaError('Redirecionamentos demais no link do arquivo');
+        target = await checkMediaUrl(new URL(location, target).href);
+        continue;
+      }
       if (head.ok) {
-        mimetype = (head.headers.get('content-type') || mimetype).split(';')[0];
+        mimetype = (head.headers.get('content-type') || mimetype).split(';')[0].trim().toLowerCase();
         size = Number(head.headers.get('content-length') || 0);
       } else if (head.status === 404 || head.status === 410) {
-        throw Object.assign(new Error(`Arquivo não encontrado (${head.status})`), { permanent: true });
+        throw mediaError(`Arquivo não encontrado (${head.status})`);
       }
-    } catch (error) {
-      if (error.permanent) throw error;
+      break;
     }
-    const url = row.media_url;
+    const url = target.href;
+    // página (ex.: link do Drive) não é arquivo: manda o link no texto em vez de um anexo quebrado
+    if (mimetype === 'text/html') return { text: [row.body, url].filter(Boolean).join('\n\n') };
     const fileName = row.media_name || decodeURIComponent(url.split('/').pop()?.split('?')[0] || 'arquivo');
     if (mimetype === 'application/octet-stream') {
       const ext = fileName.split('.').pop()?.toLowerCase();

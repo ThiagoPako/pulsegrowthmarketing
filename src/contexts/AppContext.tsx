@@ -32,8 +32,8 @@ interface AppContextType {
   updateClient: (client: Client) => Promise<void>;
   deleteClient: (id: string) => Promise<boolean>;
   addRecording: (recording: Recording, options?: { skipClientDayCheck?: boolean }) => Promise<boolean>;
-  updateRecording: (recording: Recording) => void;
-  cancelRecording: (id: string) => void;
+  updateRecording: (recording: Recording) => Promise<boolean>;
+  cancelRecording: (id: string) => Promise<boolean>;
   deleteRecording: (id: string, options?: { force?: boolean }) => Promise<boolean>;
   deleteRecordingsBulk: (ids: string[]) => Promise<boolean>;
   cancelRecordingsBulk: (ids: string[]) => Promise<boolean>;
@@ -53,8 +53,9 @@ interface AppContextType {
   updateScript: (script: Script) => void;
   deleteScript: (id: string) => void;
   updateSettings: (settings: CompanySettings) => void;
-  startActiveRecording: (rec: ActiveRecording) => void;
-  stopActiveRecording: (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]) => void;
+  startActiveRecording: (rec: ActiveRecording) => Promise<boolean>;
+  stopActiveRecording: (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[], options?: { deferDelivery?: boolean }) => Promise<boolean>;
+  finalizeRecordingDelivery: (recordingId: string, deliveryOverrides: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds: string[], plannedScriptIds: string[]) => Promise<boolean>;
   hasConflict: (videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType, clientId?: string, options?: { skipClientDayCheck?: boolean }) => { hasConflict: boolean; message?: string };
   isWithinWorkHours: (day: DayOfWeek, startTime: string) => boolean;
 
@@ -645,13 +646,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return { success: false };
   }, [data]);
 
-  const updateRecording = useCallback((recording: Recording) => { data.updateRecording(recording); }, [data]);
+  const updateRecording = useCallback((recording: Recording) => data.updateRecording(recording), [data]);
   const cancelRecording = useCallback(async (id: string) => { 
     const rec = data.recordings.find(r => r.id === id);
-    await data.cancelRecording(id); 
-    if (data.settings.autoFillVacancies && rec) {
+    const ok = await data.cancelRecording(id); 
+    if (ok && data.settings.autoFillVacancies && rec) {
       autoFillVacanciesForDate(rec.date);
     }
+    return ok;
   }, [data, autoFillVacanciesForDate]);
 
   const deleteRecording = useCallback(async (id: string, options?: { force?: boolean }) => { return data.deleteRecording(id, options); }, [data]);
@@ -662,8 +664,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateScript = useCallback((script: Script) => { data.updateScript(script); }, [data]);
   const deleteScript = useCallback((id: string) => { data.deleteScript(id); }, [data]);
   const updateSettings = useCallback((s: CompanySettings) => { data.updateSettings(s); }, [data]);
-  const startActiveRecording = useCallback(async (rec: ActiveRecording) => { await data.startActiveRecording(rec); }, [data]);
-  const stopActiveRecording = useCallback((recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]) => { data.stopActiveRecording(recordingId, deliveryOverrides, completedScriptIds); }, [data]);
+  const startActiveRecording = useCallback((rec: ActiveRecording) => data.startActiveRecording(rec), [data]);
+  const stopActiveRecording = useCallback((recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[], options?: { deferDelivery?: boolean }) => data.stopActiveRecording(recordingId, deliveryOverrides, completedScriptIds, options), [data]);
+  const finalizeRecordingDelivery = useCallback((recordingId: string, deliveryOverrides: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds: string[], plannedScriptIds: string[]) => data.finalizeRecordingDelivery(recordingId, deliveryOverrides, completedScriptIds, plannedScriptIds), [data]);
 
   const getSuggestionsForCancellation = useCallback((recording: Recording) => {
     return data.clients.filter(c => {
@@ -689,7 +692,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addTask, updateTask, deleteTask,
 
       addScript, updateScript, deleteScript,
-      updateSettings, startActiveRecording, stopActiveRecording,
+      updateSettings, startActiveRecording, stopActiveRecording, finalizeRecordingDelivery,
       hasConflict, isWithinWorkHours,
       getSuggestionsForCancellation,
       refetchData: data.refetch,

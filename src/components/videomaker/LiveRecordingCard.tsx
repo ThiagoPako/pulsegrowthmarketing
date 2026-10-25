@@ -4,6 +4,7 @@ import { Clock, Video, FileText, Zap, Rocket, Hourglass, Play, RotateCcw, Coffee
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import {
   loadWaitSession,
   restoreOpenWaitSession,
@@ -44,6 +45,8 @@ export default function LiveRecordingCard({
   onCancel,
 }: LiveRecordingCardProps) {
   const [elapsed, setElapsed] = useState(0);
+  // "Reiniciar" apaga o início da gravação: só depois de confirmar
+  const [confirmRestartOpen, setConfirmRestartOpen] = useState(false);
   const [isLunchBreak, setIsLunchBreak] = useState(false);
   const [lunchStartedAt, setLunchStartedAt] = useState<Date | null>(null);
   /**
@@ -476,7 +479,7 @@ export default function LiveRecordingCard({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={onCancel}
+                  onClick={() => setConfirmRestartOpen(true)}
                   className="gap-1 border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive text-xs"
                 >
                   <RotateCcw size={13} />
@@ -541,6 +544,29 @@ export default function LiveRecordingCard({
           </motion.div>
         </div>
       </div>
+
+      {onCancel && (
+        <AlertDialog open={confirmRestartOpen} onOpenChange={setConfirmRestartOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Reiniciar a gravação?</AlertDialogTitle>
+              <AlertDialogDescription>
+                A gravação de {clientName} já tem {formatTime(elapsed)} contados. Reiniciar apaga esse início,
+                devolve os roteiros para Ideias e você precisa iniciar de novo.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Continuar gravando</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => onCancel()}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Reiniciar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </motion.div>
   );
 }

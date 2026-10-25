@@ -39,7 +39,7 @@ import EditorKanban from '@/pages/EditorKanban';
 export default function VideomakerDashboard() {
   const {
     currentUser, recordings, clients, scripts, users, activeRecordings, settings,
-    updateRecording, updateScript, startActiveRecording, stopActiveRecording, refetchData,
+    updateRecording, updateScript, startActiveRecording, stopActiveRecording, finalizeRecordingDelivery, refetchData,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'recordings' | 'editing' | 'kanban'>('recordings');
@@ -621,8 +621,14 @@ export default function VideomakerDashboard() {
         clientId: rec.clientId,
         startedAt: new Date().toISOString(),
         plannedScriptIds: [],
+      }).then(ok => {
+        if (ok) {
+          toast.success(`Gravação endomarketing iniciada — ${getClientName(rec.clientId, rec)}`);
+        } else {
+          setLocalActiveRecordingId(prev => (prev === rec.id ? null : prev));
+          toast.error('Não foi possível iniciar a gravação. Verifique a conexão e tente de novo.');
+        }
       });
-      toast.success(`Gravação endomarketing iniciada — ${getClientName(rec.clientId, rec)}`);
       return;
     }
     setScriptsClientId(rec.clientId);
@@ -660,13 +666,19 @@ export default function VideomakerDashboard() {
     // Store planned scripts and mark recording as locally active
     setPlannedScripts(prev => ({ ...prev, [rec.id]: Array.from(selectedScriptIds) }));
     setLocalActiveRecordingId(rec.id);
-    startActiveRecording({
+    const started = await startActiveRecording({
       recordingId: rec.id,
       videomarkerId: vmId,
       clientId: rec.clientId,
       startedAt: new Date().toISOString(),
       plannedScriptIds: Array.from(selectedScriptIds),
     });
+    if (!started) {
+      // Servidor não registrou o início: desfaz o estado local e não mexe nos roteiros
+      setLocalActiveRecordingId(prev => (prev === rec.id ? null : prev));
+      toast.error('Não foi possível iniciar a gravação. Verifique a conexão e tente de novo.');
+      return;
+    }
     
     // Move content_tasks linked to selected scripts to "captacao"
     for (const scriptId of selectedScriptIds) {
@@ -680,10 +692,11 @@ export default function VideomakerDashboard() {
   };
 
   // ── Finish recording flow ──
-  const handleFinishRecording = (rec: Recording) => {
+  const handleFinishRecording = async (rec: Recording) => {
     // Endomarketing recordings: simplified finalization (no scripts, no Drive)
     if (rec.type === 'endomarketing') {
-      stopActiveRecording(rec.id, { videos_recorded: 1 });
+      const stopped = await stopActiveRecording(rec.id, { videos_recorded: 1 });
+      if (!stopped) { toast.error('Não foi possível finalizar a gravação. Verifique a conexão e tente de novo.'); return; }
       updateRecording({ ...rec, status: 'concluida' });
       setLocalActiveRecordingId(null);
       toast.success(`Gravação endomarketing finalizada — ${getClientName(rec.clientId, rec)}`);
@@ -691,8 +704,10 @@ export default function VideomakerDashboard() {
       setShowCelebration(true);
       return;
     }
-    // Stop active recording and set status to "organizando_material"
-    stopActiveRecording(rec.id);
+    // Fecha só o cronômetro (deferDelivery): roteiros e contagens são gravados no confirmFinish,
+    // depois que o videomaker escolher o que foi gravado. Até lá os roteiros ficam na captação.
+    const stopped = await stopActiveRecording(rec.id, undefined, undefined, { deferDelivery: true });
+    if (!stopped) { toast.error('Não foi possível finalizar a gravação. Verifique a conexão e tente de novo.'); return; }
     updateRecording({ ...rec, status: 'organizando_material' as RecordingStatus });
     setLocalActiveRecordingId(null);
     toast.success(`Gravação finalizada — organizando material`);
@@ -859,21 +874,18 @@ export default function VideomakerDashboard() {
       else extrasCount++;
     }
     const totalVideos = allRecordedArray.length;
-    // For avulso recordings without clientId, skip delivery_records (requires client_id NOT NULL)
-    if (rec.clientId) {
-      try {
-        await supabase.from('delivery_records').insert({
-          client_id: rec.clientId,
-          videomaker_id: currentUser?.id || '',
-          date: rec.date,
-          recording_id: rec.id,
-          reels_produced: reelsCount,
-          creatives_produced: creativesCount,
-          stories_produced: storiesCount,
-          extras_produced: extrasCount,
-          videos_recorded: Math.max(totalVideos, 1),
-        });
-      } catch {}
+    // Contagens no registro de entrega criado no Finalizar (um por gravação; avulso sem cliente não tem)
+    // e devolução para "ideias" dos roteiros planejados que não foram gravados
+    const deliverySaved = await finalizeRecordingDelivery(rec.id, {
+      reels_produced: reelsCount,
+      creatives_produced: creativesCount,
+      stories_produced: storiesCount,
+      extras_produced: extrasCount,
+      videos_recorded: Math.max(totalVideos, 1),
+    }, allRecordedArray, planned.filter(id => !rejectedScripts.has(id)));
+    if (!deliverySaved) {
+      toast.error('Não foi possível registrar a entrega desta gravação. Tente finalizar de novo.');
+      return;
     }
     updateRecording({ ...rec, status: 'concluida' });
 
@@ -1663,6 +1675,7 @@ export default function VideomakerDashboard() {
             : (timeToMin(settings.shiftAEnd) - timeToMin(settings.shiftAStart)))
           : settings.recordingDuration;
         return (
+          <div id="live-recording-card" className="scroll-mt-4">
           <LiveRecordingCard
             clientName={getClientName(activeRec.clientId, activeRec as Recording)}
             clientColor={getClientColor(activeRec.clientId, activeRec as Recording)}
@@ -1677,6 +1690,7 @@ export default function VideomakerDashboard() {
             onViewScripts={() => openScripts(activeRec.clientId, activeRec.id)}
             onCancel={handleCancelActiveRecording}
           />
+          </div>
         );
       })()}
 
@@ -2080,7 +2094,8 @@ export default function VideomakerDashboard() {
                             return;
                           }
                           if (isActive) {
-                            handleFinishRecording(rec);
+                            // Tocar no card não encerra a gravação: leva ao painel ao vivo, onde fica o Finalizar
+                            document.getElementById('live-recording-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                           } else if (isStartable) {
                             handleStartRecording(rec);
                           }

@@ -9323,20 +9323,33 @@ app.get('/api/recordings', async (req, res) => {
   } catch (e) { res.status(401).json({ error: e.message }); }
 });
 
+// Colunas opcionais de recordings (prospect_name, client_id anulável), em cache como o tableHasCityColumn
+const _recordingsSchemaCache = new Map();
+async function getRecordingsSchemaInfo() {
+  const cached = getSchemaCacheValue(_recordingsSchemaCache, 'recordings');
+  if (cached !== null) return cached;
+  const schemaResult = await pool.query(`
+    SELECT column_name, is_nullable
+    FROM information_schema.columns
+    WHERE table_name = 'recordings'
+      AND column_name IN ('client_id', 'prospect_name')
+  `);
+  const info = {
+    hasProspectName: schemaResult.rows.some((row) => row.column_name === 'prospect_name'),
+    clientIdNullable: schemaResult.rows.some((row) => row.column_name === 'client_id' && row.is_nullable === 'YES'),
+  };
+  _recordingsSchemaCache.set('recordings', { value: info, cachedAt: Date.now() });
+  return info;
+}
+
 app.post('/api/recordings', async (req, res) => {
+  let txClient = null;
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
     const items = Array.isArray(req.body) ? req.body : [req.body];
-    const schemaResult = await pool.query(`
-      SELECT column_name, is_nullable
-      FROM information_schema.columns
-      WHERE table_name = 'recordings'
-        AND column_name IN ('client_id', 'prospect_name')
-    `);
-    const hasProspectName = schemaResult.rows.some((row) => row.column_name === 'prospect_name');
-    const clientIdNullable = schemaResult.rows.some((row) => row.column_name === 'client_id' && row.is_nullable === 'YES');
+    const { hasProspectName, clientIdNullable } = await getRecordingsSchemaInfo();
 
-    const results = [];
+    // Valida o lote inteiro antes de gravar qualquer linha
     for (const r of items) {
       const isAvulso = r.type === 'avulso' || Boolean(r.prospect_name);
       if (isAvulso && !clientIdNullable && !r.client_id) {
@@ -9349,7 +9362,14 @@ app.post('/api/recordings', async (req, res) => {
           error: 'Schema da VPS desatualizado: coluna prospect_name não existe na tabela recordings.'
         });
       }
+    }
 
+    // Lote numa transação: ou entra tudo, ou nada (sem metade gravada para duplicar na nova tentativa).
+    // ON CONFLICT (id) DO NOTHING deixa reenviar o mesmo lote (mesmos ids) sem erro nem duplicata.
+    txClient = await pool.connect();
+    await txClient.query('BEGIN');
+    const results = [];
+    for (const r of items) {
       const cols = ['id', 'client_id', 'videomaker_id', 'date', 'start_time', 'type', 'status', 'confirmation_status'];
       const vals = [r.id || crypto.randomUUID(), r.client_id || null, r.videomaker_id, r.date, r.start_time, r.type || 'fixa', r.status || 'agendada', r.confirmation_status || 'pendente'];
       if (scopeCity) {
@@ -9364,17 +9384,27 @@ app.post('/api/recordings', async (req, res) => {
         vals.push(r.prospect_name);
       }
       const placeholders = cols.map((_, i) => `$${i + 1}`).join(',');
-      const { rows } = await pool.query(
-        `INSERT INTO recordings (${cols.join(', ')}) VALUES (${placeholders}) RETURNING *`,
+      const { rows } = await txClient.query(
+        `INSERT INTO recordings (${cols.join(', ')}) VALUES (${placeholders}) ON CONFLICT (id) DO NOTHING RETURNING *`,
         vals
       );
-      results.push(rows[0]);
+      if (rows[0]) {
+        results.push(rows[0]);
+      } else {
+        // Já existia (reenvio do mesmo lote): devolve a linha atual
+        const { rows: existingRows } = await txClient.query('SELECT * FROM recordings WHERE id = $1', [vals[0]]);
+        if (existingRows[0]) results.push(existingRows[0]);
+      }
     }
+    await txClient.query('COMMIT');
     res.json(results.length === 1 ? results[0] : results);
   } catch (e) {
+    if (txClient) await txClient.query('ROLLBACK').catch(() => {});
     console.error('POST /api/recordings error:', e);
-    const status = e?.statusCode === 400 ? 400 : 500;
+    const status = e?.statusCode === 400 ? 400 : e?.message === 'Unauthorized' ? 401 : 500;
     res.status(status).json({ error: e.message });
+  } finally {
+    if (txClient) txClient.release();
   }
 });
 
@@ -9383,14 +9413,7 @@ app.put('/api/recordings/:id', async (req, res) => {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
     const { id } = req.params;
     const r = req.body;
-    const schemaResult = await pool.query(`
-      SELECT column_name, is_nullable
-      FROM information_schema.columns
-      WHERE table_name = 'recordings'
-        AND column_name IN ('client_id', 'prospect_name')
-    `);
-    const hasProspectName = schemaResult.rows.some((row) => row.column_name === 'prospect_name');
-    const clientIdNullable = schemaResult.rows.some((row) => row.column_name === 'client_id' && row.is_nullable === 'YES');
+    const { hasProspectName, clientIdNullable } = await getRecordingsSchemaInfo();
     if ((r.type === 'avulso' || r.prospect_name) && r.client_id == null && !clientIdNullable) {
       return res.status(500).json({ error: 'Schema da VPS desatualizado: client_id da tabela recordings ainda está NOT NULL e bloqueia vídeo avulso.' });
     }
@@ -9410,9 +9433,11 @@ app.put('/api/recordings/:id', async (req, res) => {
     const cityClause = scopeCity ? ` AND ${cityVisibilityExpression('city', `$${idx + 1}`)}` : '';
     if (scopeCity) vals.push(activeCity);
     const { rows } = await pool.query(`UPDATE recordings SET ${sets.join(', ')} WHERE id = $${idx}${cityClause} RETURNING *`, vals);
+    // Nada atualizado (apagada ou de outra cidade): erro, para a tela não mostrar sucesso
+    if (!rows[0]) return res.status(404).json({ error: 'Gravação não encontrada' });
     res.json(rows[0]);
   } catch (e) {
-    const status = e?.statusCode === 400 ? 400 : 500;
+    const status = e?.statusCode === 400 ? 400 : e?.message === 'Unauthorized' ? 401 : 500;
     res.status(status).json({ error: e.message });
   }
 });
@@ -9726,96 +9751,237 @@ async function ensureRecordingMetricsSchema() {
 }
 ensureRecordingMetricsSchema().catch(err => console.error('[recording-metrics] schema init failed:', err.message));
 
+// Contagens do registro de entrega (o que não vier fica 0, e pelo menos 1 vídeo gravado)
+function deliveryCountsFrom(overrides) {
+  return {
+    reels_produced: overrides?.reels_produced ?? 0,
+    creatives_produced: overrides?.creatives_produced ?? 0,
+    stories_produced: overrides?.stories_produced ?? 0,
+    arts_produced: overrides?.arts_produced ?? 0,
+    extras_produced: overrides?.extras_produced ?? 0,
+    videos_recorded: overrides?.videos_recorded ?? 1,
+  };
+}
+
+// Cidade do registro de entrega: a da gravação ativa, senão a da gravação, senão a do cliente.
+async function getRecordingCityForDelivery(recordingId, activeCity = null) {
+  const fromActive = normalizeCityValue(activeCity);
+  if (fromActive) return fromActive;
+  try {
+    const hasRecCity = await tableHasCityColumn('recordings');
+    const { rows: [row] } = await pool.query(
+      `SELECT ${hasRecCity ? 'r.city::text' : 'NULL'} AS rec_city, c.city::text AS client_city
+         FROM recordings r LEFT JOIN clients c ON c.id = r.client_id
+        WHERE r.id = $1`,
+      [recordingId]
+    );
+    return normalizeCityValue(row?.rec_city) || normalizeCityValue(row?.client_city) || null;
+  } catch {
+    return null;
+  }
+}
+
+// Um registro de entrega por gravação: atualiza o que existe e só insere quando não há nenhum.
+// Funciona com ou sem o índice único delivery_records_recording_id_unique.
+async function upsertDeliveryRecord({ recordingId, clientId, videomakerId, date, city, counts = null, timing = null }) {
+  const updates = { ...(counts || {}), ...(timing || {}) };
+  const keys = Object.keys(updates);
+  if (keys.length > 0) {
+    const { rowCount } = await pool.query(
+      `UPDATE delivery_records SET ${keys.map((k, i) => `${k} = $${i + 2}`).join(', ')}, updated_at = NOW() WHERE recording_id = $1`,
+      [recordingId, ...keys.map(k => updates[k])]
+    );
+    if (rowCount > 0) return 'updated';
+  } else {
+    const { rows } = await pool.query('SELECT 1 FROM delivery_records WHERE recording_id = $1 LIMIT 1', [recordingId]);
+    if (rows.length > 0) return 'exists';
+  }
+  // client_id e videomaker_id são obrigatórios: gravação avulsa (sem cliente) não gera entrega
+  if (!clientId || !videomakerId) return 'skipped';
+  const row = {
+    recording_id: recordingId,
+    client_id: clientId,
+    videomaker_id: videomakerId,
+    date,
+    ...deliveryCountsFrom(null),
+    ...(counts || {}),
+    delivery_status: 'realizada',
+    observations: 'Registro automático ao finalizar gravação',
+    ...(timing || {}),
+  };
+  if (city && await tableHasCityColumn('delivery_records')) row.city = city;
+  const cols = Object.keys(row);
+  await pool.query(
+    `INSERT INTO delivery_records (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')})`,
+    cols.map(c => row[c])
+  );
+  return 'inserted';
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Roteiros planejados que NÃO foram gravados voltam para "ideias"
+// (e desvinculam do recording para sumir da captação dessa gravação)
+async function returnUnrecordedScriptsToIdeas(notRecorded) {
+  const ids = [...new Set((notRecorded || []).map(String))].filter(id => UUID_PATTERN.test(id));
+  if (ids.length === 0) return;
+  await pool.query(
+    `UPDATE content_tasks
+       SET kanban_column = 'ideias',
+           recording_id = NULL,
+           drive_link = NULL,
+           updated_at = NOW()
+     WHERE script_id = ANY($1::uuid[])
+       AND kanban_column IN ('captacao', 'captacao_concluida', 'aguardando_link')`,
+    [ids]
+  );
+  // Garante que os scripts não fiquem marcados como gravados
+  await pool.query(
+    `UPDATE scripts SET recorded = false, recording_id = NULL, updated_at = NOW()
+     WHERE id = ANY($1::uuid[])`,
+    [ids]
+  );
+}
+
 // Stop active recording with delivery record creation
+// deferDelivery: o painel do videomaker fecha o cronômetro ao tocar em Finalizar, mas só informa
+// roteiros e contagens depois, no diálogo de finalização (rota /finalize). Nesse modo o stop grava
+// só o tempo (início, fim, duração e espera) e não mexe em roteiros nem em contagens.
 app.post('/api/active-recordings/:recordingId/stop', async (req, res) => {
   try {
     await verifyUser(req);
     await ensureRecordingMetricsSchema().catch(() => {});
     const { recordingId } = req.params;
-    const { deliveryOverrides, completedScriptIds } = req.body;
-    
+    const { deliveryOverrides, completedScriptIds, deferDelivery } = req.body || {};
+
     const { rows: activeRows } = await pool.query('SELECT * FROM active_recordings WHERE recording_id = $1', [recordingId]);
     await pool.query('DELETE FROM active_recordings WHERE recording_id = $1', [recordingId]);
-    
+
     const active = activeRows[0];
     if (active) {
       const finishedAt = new Date();
       const startedAt = active.started_at ? new Date(active.started_at) : null;
 
-      // Fecha esperas ainda abertas dessa gravação e soma o total de espera
+      // Fecha esperas ainda abertas dessa gravação e soma o total de espera.
+      // Há dois tipos: a espera antes do início ("Aguardar cliente", que o Iniciar encerra) e a pausa
+      // durante a gravação ("Em Espera" no card ao vivo). Uma espera aberta que começou antes do início
+      // termina no início (senão o tempo gravado entraria como espera); a pausa termina agora.
       let waitSeconds = 0;
+      let pausedSeconds = 0;
       try {
         await pool.query(
           `UPDATE recording_wait_logs
-              SET ended_at = NOW(),
-                  wait_duration_seconds = GREATEST(0, EXTRACT(EPOCH FROM (NOW() - started_at))::int)
+              SET ended_at = CASE WHEN $2::timestamptz IS NOT NULL AND started_at < $2::timestamptz THEN $2::timestamptz ELSE NOW() END,
+                  wait_duration_seconds = GREATEST(0, EXTRACT(EPOCH FROM (
+                    (CASE WHEN $2::timestamptz IS NOT NULL AND started_at < $2::timestamptz THEN $2::timestamptz ELSE NOW() END) - started_at
+                  ))::int)
             WHERE recording_id = $1 AND ended_at IS NULL`,
-          [recordingId]
+          [recordingId, startedAt ? startedAt.toISOString() : null]
         );
+        // total = toda a espera (informativo); during = só o trecho de espera dentro da gravação
         const { rows: waitRows } = await pool.query(
-          'SELECT COALESCE(SUM(wait_duration_seconds), 0)::int AS total FROM recording_wait_logs WHERE recording_id = $1',
-          [recordingId]
+          `SELECT COALESCE(SUM(wait_duration_seconds), 0)::int AS total,
+                  COALESCE(SUM(CASE WHEN $2::timestamptz IS NULL THEN 0 ELSE GREATEST(0, EXTRACT(EPOCH FROM (
+                    LEAST(COALESCE(ended_at, $3::timestamptz), $3::timestamptz) - GREATEST(started_at, $2::timestamptz)
+                  ))) END), 0)::int AS during
+             FROM recording_wait_logs WHERE recording_id = $1`,
+          [recordingId, startedAt ? startedAt.toISOString() : null, finishedAt.toISOString()]
         );
         waitSeconds = Number(waitRows[0]?.total || 0);
+        pausedSeconds = Number(waitRows[0]?.during || 0);
       } catch (waitErr) {
         console.warn('[recording-metrics] wait aggregation failed:', waitErr.message);
       }
 
-      // Duração efetiva = total decorrido - espera (nunca negativa)
+      // Duração efetiva = total decorrido - pausas durante a gravação (nunca negativa).
+      // A espera antes do início não é descontada: fica só em wait_duration_seconds.
       const grossSeconds = startedAt ? Math.max(0, Math.floor((finishedAt - startedAt) / 1000)) : null;
-      const recordingSeconds = grossSeconds === null ? null : Math.max(0, grossSeconds - waitSeconds);
+      const recordingSeconds = grossSeconds === null ? null : Math.max(0, grossSeconds - pausedSeconds);
+      const deliveryCity = await getRecordingCityForDelivery(recordingId, active.city);
 
-      await pool.query(
-        `INSERT INTO delivery_records (recording_id, client_id, videomaker_id, date, reels_produced, creatives_produced, stories_produced, arts_produced, extras_produced, videos_recorded, delivery_status, observations,
-                                       started_at, finished_at, recording_duration_seconds, wait_duration_seconds)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-        [recordingId, active.client_id, active.videomaker_id, finishedAt.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
-         deliveryOverrides?.reels_produced ?? 0, deliveryOverrides?.creatives_produced ?? 0,
-         deliveryOverrides?.stories_produced ?? 0, deliveryOverrides?.arts_produced ?? 0,
-         deliveryOverrides?.extras_produced ?? 0, deliveryOverrides?.videos_recorded ?? 1,
-         'realizada', 'Registro automático ao finalizar gravação',
-         startedAt ? startedAt.toISOString() : null, finishedAt.toISOString(), recordingSeconds, waitSeconds]
-      );
-      
-      if (completedScriptIds?.length > 0) {
-        for (const scriptId of completedScriptIds) {
-          const { rows: scriptRows } = await pool.query('SELECT title, content_format FROM scripts WHERE id = $1', [scriptId]);
-          const script = scriptRows[0];
-          await pool.query(
-            `INSERT INTO social_media_deliveries (client_id, content_type, title, status, delivered_at, script_id, recording_id, created_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [active.client_id, script?.content_format || 'reels', script?.title || 'Vídeo gravado',
-             'entregue', new Date().toISOString().split('T')[0], scriptId, recordingId, active.videomaker_id]
-          );
+      await upsertDeliveryRecord({
+        recordingId,
+        clientId: active.client_id,
+        videomakerId: active.videomaker_id,
+        date: finishedAt.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
+        city: deliveryCity,
+        counts: deferDelivery ? null : deliveryCountsFrom(deliveryOverrides),
+        timing: {
+          started_at: startedAt ? startedAt.toISOString() : null,
+          finished_at: finishedAt.toISOString(),
+          recording_duration_seconds: recordingSeconds,
+          wait_duration_seconds: waitSeconds,
+        },
+      });
+
+      if (!deferDelivery) {
+        if (completedScriptIds?.length > 0) {
+          const smdHasCity = Boolean(deliveryCity) && await tableHasCityColumn('social_media_deliveries');
+          for (const scriptId of completedScriptIds) {
+            const { rows: scriptRows } = await pool.query('SELECT title, content_format FROM scripts WHERE id = $1', [scriptId]);
+            const script = scriptRows[0];
+            await pool.query(
+              `INSERT INTO social_media_deliveries (client_id, content_type, title, status, delivered_at, script_id, recording_id, created_by${smdHasCity ? ', city' : ''})
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8${smdHasCity ? ',$9' : ''})`,
+              [active.client_id, script?.content_format || 'reels', script?.title || 'Vídeo gravado',
+               'entregue', new Date().toISOString().split('T')[0], scriptId, recordingId, active.videomaker_id,
+               ...(smdHasCity ? [deliveryCity] : [])]
+            );
+          }
         }
-      }
 
-      // Roteiros planejados que NÃO foram gravados voltam para "ideias"
-      // (e desvinculam do recording para sumir da captação dessa gravação)
-      const planned = Array.isArray(active.planned_script_ids) ? active.planned_script_ids : [];
-      const completed = new Set(completedScriptIds || []);
-      const notRecorded = planned.filter(id => !completed.has(id));
-      if (notRecorded.length > 0) {
-        await pool.query(
-          `UPDATE content_tasks
-             SET kanban_column = 'ideias',
-                 recording_id = NULL,
-                 drive_link = NULL,
-                 updated_at = NOW()
-           WHERE script_id = ANY($1::uuid[])
-             AND kanban_column IN ('captacao', 'captacao_concluida', 'aguardando_link')`,
-          [notRecorded]
-        );
-        // Garante que os scripts não fiquem marcados como gravados
-        await pool.query(
-          `UPDATE scripts SET recorded = false, recording_id = NULL, updated_at = NOW()
-           WHERE id = ANY($1::uuid[])`,
-          [notRecorded]
-        );
+        const planned = Array.isArray(active.planned_script_ids) ? active.planned_script_ids : [];
+        const completed = new Set(completedScriptIds || []);
+        await returnUnrecordedScriptsToIdeas(planned.filter(id => !completed.has(id)));
       }
     }
     res.json({ success: true });
-  } catch (e) { console.error('POST /api/active-recordings/stop error:', e); res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('POST /api/active-recordings/stop error:', e);
+    res.status(e?.message === 'Unauthorized' ? 401 : 500).json({ error: e.message });
+  }
+});
+
+// Segundo passo do stop com deferDelivery: depois do diálogo de finalização, grava as contagens
+// no registro de entrega (sem mexer no tempo de gravação) e só então devolve para "ideias"
+// os roteiros planejados que não foram gravados.
+app.post('/api/active-recordings/:recordingId/finalize', async (req, res) => {
+  try {
+    const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
+    await ensureRecordingMetricsSchema().catch(() => {});
+    const { recordingId } = req.params;
+    const { deliveryOverrides, completedScriptIds, plannedScriptIds } = req.body || {};
+    const { rows: [rec] } = await pool.query(
+      `SELECT id, client_id, videomaker_id, date::text AS date FROM recordings
+        WHERE id = $1${scopeCity ? ` AND ${cityVisibilityExpression('city', '$2')}` : ''}`,
+      scopeCity ? [recordingId, activeCity] : [recordingId]
+    );
+    if (!rec) return res.status(404).json({ error: 'Gravação não encontrada' });
+
+    await upsertDeliveryRecord({
+      recordingId,
+      clientId: rec.client_id,
+      videomakerId: rec.videomaker_id,
+      date: rec.date,
+      city: await getRecordingCityForDelivery(recordingId),
+      counts: deliveryCountsFrom(deliveryOverrides),
+    });
+
+    // Não gravados = planejados informados pelo painel + os que ainda estão na captação desta gravação
+    const completed = new Set((Array.isArray(completedScriptIds) ? completedScriptIds : []).map(String));
+    const { rows: pendingTasks } = await pool.query(
+      `SELECT script_id::text AS script_id FROM content_tasks
+        WHERE recording_id = $1 AND script_id IS NOT NULL
+          AND kanban_column IN ('captacao', 'captacao_concluida', 'aguardando_link')`,
+      [recordingId]
+    );
+    const candidates = [...(Array.isArray(plannedScriptIds) ? plannedScriptIds : []), ...pendingTasks.map(t => t.script_id)];
+    await returnUnrecordedScriptsToIdeas(candidates.filter(id => !completed.has(String(id))));
+    res.json({ success: true });
+  } catch (e) {
+    console.error('POST /api/active-recordings/finalize error:', e);
+    res.status(e?.message === 'Unauthorized' ? 401 : 500).json({ error: e.message });
+  }
 });
 
 // ─── Production Assistant (AI Mascot) ──────────────────────

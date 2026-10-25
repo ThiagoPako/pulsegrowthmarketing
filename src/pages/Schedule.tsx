@@ -134,7 +134,7 @@ export default function Schedule() {
   const [scriptsClientId, setScriptsClientId] = useState('');
   const [selectedScriptIds, setSelectedScriptIds] = useState<Set<string>>(new Set());
   const [form, setForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '08:30', type: 'fixa' as RecordingType, prospectName: '' });
-  const [editForm, setEditForm] = useState({ clientId: '', videomakerId: '', date: '', startTime: '', type: 'fixa' as RecordingType, status: 'agendada' as Recording['status'] });
+  const [editForm, setEditForm] = useState({ clientId: '', prospectName: '', videomakerId: '', date: '', startTime: '', type: 'fixa' as RecordingType, status: 'agendada' as Recording['status'] });
   const [filterVideomaker, setFilterVideomaker] = useState('all');
   const [filterCity, setFilterCity] = useState<string>('all');
   const [weekOffset, setWeekOffset] = useState(0);
@@ -503,7 +503,9 @@ export default function Schedule() {
     if (!cancellingRec) return;
     const recId = cancellingRec.id;
     const client = clients.find(c => c.id === cancellingRec.clientId);
-    cancelRecording(recId);
+    // Só avisa o cliente e gera o link de reagendamento se o cancelamento foi gravado no servidor
+    const cancelled = await cancelRecording(recId);
+    if (!cancelled) { toast.error('Não foi possível cancelar a gravação. Verifique a conexão e tente de novo.'); return; }
     if (client?.whatsapp) {
       await sendRecordingCancelledNotification(client.whatsapp, client.companyName, client.id);
       toast.info('Mensagem de cancelamento enviada ao cliente');
@@ -523,7 +525,8 @@ export default function Schedule() {
   const handleSelectBackup = async (backupClient: Client) => {
     if (!cancellingRec) return;
     // Cancel original
-    cancelRecording(cancellingRec.id);
+    const cancelled = await cancelRecording(cancellingRec.id);
+    if (!cancelled) { toast.error('Não foi possível cancelar a gravação. Verifique a conexão e tente de novo.'); return; }
 
     // Send cancellation message to original client
     const originalClient = clients.find(c => c.id === cancellingRec.clientId);
@@ -541,7 +544,13 @@ export default function Schedule() {
       type: 'backup',
       status: 'agendada',
     };
-    await addRecording(newRec);
+    const backupAdded = await addRecording(newRec);
+    if (!backupAdded) {
+      toast.error(`A gravação foi cancelada, mas não foi possível encaixar ${backupClient.companyName}. Tente de novo.`);
+      setBackupOpen(false);
+      setCancellingRec(null);
+      return;
+    }
 
     // Send backup invite to the backup client
     if (backupClient.whatsapp) {
@@ -557,13 +566,15 @@ export default function Schedule() {
     setCancellingRec(null);
   };
 
-  const handleNoShow = (rec: Recording) => {
-    updateRecording({ ...rec, status: 'cancelada' });
+  const handleNoShow = async (rec: Recording) => {
+    const ok = await updateRecording({ ...rec, status: 'cancelada' });
+    if (!ok) { toast.error('Não foi possível salvar no servidor. Verifique a conexão e tente de novo.'); return; }
     toast.warning(`${getClientName(rec.clientId)} — não gravou`);
   };
 
   const handleComplete = async (rec: Recording) => {
-    updateRecording({ ...rec, status: 'concluida' });
+    const ok = await updateRecording({ ...rec, status: 'concluida' });
+    if (!ok) { toast.error('Não foi possível salvar no servidor. Verifique a conexão e tente de novo.'); return; }
     toast.success('Gravação concluída');
     // Send confirmed message via WhatsApp
     const client = clients.find(c => c.id === rec.clientId);
@@ -577,24 +588,33 @@ export default function Schedule() {
 
   const openEditRecording = (rec: Recording) => {
     setEditingRec(rec);
-    setEditForm({ clientId: rec.clientId, videomakerId: rec.videomakerId, date: rec.date, startTime: rec.startTime, type: rec.type, status: rec.status });
+    setEditForm({ clientId: rec.clientId, prospectName: rec.prospectName || '', videomakerId: rec.videomakerId, date: rec.date, startTime: rec.startTime, type: rec.type, status: rec.status });
     setEditOpen(true);
   };
 
-  const handleEditSave = () => {
+  const handleEditSave = async () => {
     if (!editingRec) return;
-    if (!editForm.clientId || !editForm.videomakerId || !editForm.date || !editForm.startTime) {
-      toast.error('Preencha todos os campos'); return;
+    // Gravação avulsa ou "Produção de Story" não tem cliente: vale o nome do prospect
+    const withoutClient = !editForm.clientId;
+    if (withoutClient && !editForm.prospectName.trim()) {
+      toast.error('Selecione um cliente ou informe o nome do prospect'); return;
     }
+    if (withoutClient && editForm.type !== editingRec.type && editForm.type !== 'avulso') {
+      toast.error('Para mudar o tipo desta gravação, escolha o cliente'); return;
+    }
+    if (!editForm.videomakerId) { toast.error('Selecione o videomaker'); return; }
+    if (!editForm.date || !editForm.startTime) { toast.error('Informe a data e o horário'); return; }
     // Check conflict only if date/time/videomaker changed
     const changed = editForm.date !== editingRec.date || editForm.startTime !== editingRec.startTime || editForm.videomakerId !== editingRec.videomakerId;
-    const conflictCheck = hasConflict(editForm.videomakerId, editForm.date, editForm.startTime, editingRec.id, editForm.type as RecordingType, editForm.clientId);
+    const conflictCheck = hasConflict(editForm.videomakerId, editForm.date, editForm.startTime, editingRec.id, editForm.type as RecordingType, editForm.clientId || undefined);
     if (changed && editForm.status !== 'cancelada' && conflictCheck.hasConflict) {
       toast.error(conflictCheck.message || 'Conflito de horário!'); return;
     }
 
-    const updated = { ...editingRec, ...editForm };
-    updateRecording(updated);
+    const { prospectName, ...editFields } = editForm;
+    const updated: Recording = { ...editingRec, ...editFields, prospectName: prospectName.trim() || editingRec.prospectName };
+    const ok = await updateRecording(updated);
+    if (!ok) { toast.error('Não foi possível salvar no servidor. Verifique a conexão e tente de novo.'); return; }
     
     // If status changed to 'agendada', remove active recording entry
     if (editForm.status === 'agendada' && editingRec.status !== 'agendada') {
@@ -629,7 +649,8 @@ export default function Schedule() {
           .eq('script_id', scriptId).in('kanban_column', ['captacao']);
       }
     }
-    updateRecording({ ...rec, status: 'agendada' });
+    const ok = await updateRecording({ ...rec, status: 'agendada' });
+    if (!ok) { toast.error('Não foi possível salvar no servidor. Verifique a conexão e tente de novo.'); return; }
     toast.success('Gravação resetada para Agendada');
   };
 
@@ -710,9 +731,11 @@ export default function Schedule() {
     if (isRecordingActive(rec.id)) {
       // Endomarketing recordings: simplified finalization (no scripts, no Drive)
       if (rec.type === 'endomarketing') {
-        stopActiveRecording(rec.id, { videos_recorded: 1 });
-        updateRecording({ ...rec, status: 'concluida' });
-        toast.success(`Gravação endomarketing finalizada — ${getClientName(rec.clientId)}`);
+        stopActiveRecording(rec.id, { videos_recorded: 1 }).then(stopped => {
+          if (!stopped) { toast.error('Não foi possível finalizar a gravação. Verifique a conexão e tente de novo.'); return; }
+          updateRecording({ ...rec, status: 'concluida' });
+          toast.success(`Gravação endomarketing finalizada — ${getClientName(rec.clientId)}`);
+        });
         return;
       }
       setFinishRecordingState(rec);
@@ -733,8 +756,10 @@ export default function Schedule() {
           clientId: rec.clientId,
           startedAt: new Date().toISOString(),
           plannedScriptIds: [],
+        }).then(started => {
+          if (started) toast.success(`Gravação endomarketing iniciada — ${getClientName(rec.clientId)}`);
+          else toast.error('Não foi possível iniciar a gravação. Verifique a conexão e tente de novo.');
         });
-        toast.success(`Gravação endomarketing iniciada — ${getClientName(rec.clientId)}`);
         return;
       }
       setStartRecordingState(rec);
@@ -760,14 +785,15 @@ export default function Schedule() {
       toast.error('Selecione pelo menos 1 roteiro para iniciar');
       return;
     }
-    setPlannedScriptsMap(prev => ({ ...prev, [startRecording.id]: Array.from(startSelectedScripts) }));
-    startActiveRecording({
+    const started = await startActiveRecording({
       recordingId: startRecording.id,
       videomarkerId: startRecording.videomakerId,
       clientId: startRecording.clientId,
       startedAt: new Date().toISOString(),
       plannedScriptIds: Array.from(startSelectedScripts),
     });
+    if (!started) { toast.error('Não foi possível iniciar a gravação. Verifique a conexão e tente de novo.'); return; }
+    setPlannedScriptsMap(prev => ({ ...prev, [startRecording.id]: Array.from(startSelectedScripts) }));
     
     // Move content_tasks linked to selected scripts to "captacao"
     for (const scriptId of startSelectedScripts) {
@@ -848,13 +874,14 @@ export default function Schedule() {
       else extrasCount++;
     }
     const totalVideos = allRecordedArray.length;
-    stopActiveRecording(finishRecording.id, {
+    const stopped = await stopActiveRecording(finishRecording.id, {
       reels_produced: reelsCount,
       creatives_produced: creativesCount,
       stories_produced: storiesCount,
       extras_produced: extrasCount,
       videos_recorded: Math.max(totalVideos, 1),
     }, allRecordedArray);
+    if (!stopped) { toast.error('Não foi possível finalizar a gravação no servidor. Tente de novo.'); return; }
     updateRecording({ ...finishRecording, status: 'concluida' });
 
     const editingDeadline = new Date();
@@ -1560,7 +1587,10 @@ export default function Schedule() {
                                     )}
                                     <button onClick={() => openScriptsForClient(evt.recording!.clientId)} className="p-0.5 rounded hover:bg-primary/20 text-primary" title="Roteiros"><FileText size={10} /></button>
                                     <button onClick={() => handleSendConfirmation(evt.recording!)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Enviar Confirmação"><MessageSquare size={10} /></button>
-                                    <button onClick={() => handleComplete(evt.recording!)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Gravado"><Check size={10} /></button>
+                                    {/* Gravação em andamento só sai pelo Finalizar (fecha o cronômetro e registra a entrega) */}
+                                    {!isRecordingActive(evt.recording!.id) && (
+                                      <button onClick={() => handleComplete(evt.recording!)} className="p-0.5 rounded hover:bg-success/20 text-success" title="Gravado"><Check size={10} /></button>
+                                    )}
                                     <button onClick={() => handleCancel(evt.recording!)} className="p-0.5 rounded hover:bg-destructive/20 text-destructive" title="Cancelar"><XCircle size={10} /></button>
                                     <button onClick={() => handleDeleteRecording(evt.recording!)} className="p-0.5 rounded hover:bg-destructive/20 text-destructive" title="Apagar"><Trash2 size={10} /></button>
                                   </>
@@ -1719,9 +1749,11 @@ export default function Schedule() {
                                 <button onClick={() => handleSendConfirmation(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-success/10 text-success hover:bg-success/20 transition-colors flex items-center justify-center gap-1">
                                   <MessageSquare size={10} /> Confirmar
                                 </button>
-                                <button onClick={() => handleComplete(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-success/10 text-success hover:bg-success/20 transition-colors flex items-center justify-center gap-1">
-                                  <Check size={10} /> Gravado
-                                </button>
+                                {!isRecordingActive(evt.recording!.id) && (
+                                  <button onClick={() => handleComplete(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-success/10 text-success hover:bg-success/20 transition-colors flex items-center justify-center gap-1">
+                                    <Check size={10} /> Gravado
+                                  </button>
+                                )}
                                 <button onClick={() => handleCancel(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/15 transition-colors flex items-center justify-center gap-1">
                                   <XCircle size={10} /> Cancelar
                                 </button>
@@ -2062,10 +2094,16 @@ export default function Schedule() {
             <div className="space-y-1">
               <Label>Cliente</Label>
               <Select value={editForm.clientId} onValueChange={v => setEditForm({ ...editForm, clientId: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={editingRec && !editingRec.clientId ? 'Sem cliente (avulso)' : 'Selecione'} /></SelectTrigger>
                 <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+            {editingRec && !editingRec.clientId && !editForm.clientId && (
+              <div className="space-y-1">
+                <Label>Nome do prospect</Label>
+                <Input value={editForm.prospectName} onChange={e => setEditForm({ ...editForm, prospectName: e.target.value })} placeholder="Ex: Loja do João" />
+              </div>
+            )}
             <div className="space-y-1">
               <Label>Videomaker</Label>
               <Select value={editForm.videomakerId} onValueChange={v => setEditForm({ ...editForm, videomakerId: v })}>
@@ -2088,6 +2126,7 @@ export default function Schedule() {
                   <SelectItem value="secundaria">Secundária</SelectItem>
                   <SelectItem value="backup">Backup</SelectItem>
                   <SelectItem value="endomarketing">Endomarketing</SelectItem>
+                  <SelectItem value="avulso">Avulso</SelectItem>
                 </SelectContent>
                 </Select>
               </div>
@@ -2097,6 +2136,7 @@ export default function Schedule() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="agendada">Agendada</SelectItem>
+                    <SelectItem value="organizando_material">Organizando material</SelectItem>
                     <SelectItem value="concluida">Concluída</SelectItem>
                     <SelectItem value="cancelada">Cancelada</SelectItem>
                   </SelectContent>

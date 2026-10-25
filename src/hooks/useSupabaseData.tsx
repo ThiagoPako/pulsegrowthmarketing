@@ -545,9 +545,12 @@ export function useSupabaseData() {
   }, []);
 
   // ── Recording CRUD ──
-  const cancelRecording = useCallback(async (id: string) => {
-    await invokeVpsFunction(`recordings/${id}`, { body: { status: 'cancelada' }, method: 'PUT' });
+  // Devolve false quando o servidor recusa: a tela não pode mostrar sucesso nem avisar o cliente
+  const cancelRecording = useCallback(async (id: string): Promise<boolean> => {
+    const { error } = await invokeVpsFunction(`recordings/${id}`, { body: { status: 'cancelada' }, method: 'PUT' });
+    if (error) { console.error('cancelRecording error:', error); return false; }
     setRecordings(prev => prev.map(r => r.id === id ? { ...r, status: 'cancelada' as const } : r));
+    return true;
   }, []);
 
   // ── Recording CRUD ──
@@ -590,10 +593,12 @@ export function useSupabaseData() {
   }, [recordings, settings, cancelRecording]);
 
 
-  const updateRecording = useCallback(async (recording: Recording) => {
+  const updateRecording = useCallback(async (recording: Recording): Promise<boolean> => {
     const { id, ...rest } = recordingToRow(recording);
-    await invokeVpsFunction(`recordings/${id}`, { body: rest, method: 'PUT' });
+    const { error } = await invokeVpsFunction(`recordings/${id}`, { body: rest, method: 'PUT' });
+    if (error) { console.error('updateRecording error:', error); return false; }
     setRecordings(prev => prev.map(r => r.id === recording.id ? recording : r));
+    return true;
   }, []);
 
 
@@ -683,8 +688,8 @@ export function useSupabaseData() {
   }, [settingsId]);
 
   // ── Active recordings ──
-  const startActiveRecording = useCallback(async (rec: ActiveRecording) => {
-    await invokeVpsFunction('active-recordings', {
+  const startActiveRecording = useCallback(async (rec: ActiveRecording): Promise<boolean> => {
+    const { error } = await invokeVpsFunction('active-recordings', {
       body: {
         recording_id: rec.recordingId,
         videomaker_id: rec.videomarkerId,
@@ -693,14 +698,29 @@ export function useSupabaseData() {
         planned_script_ids: rec.plannedScriptIds || [],
       },
     });
+    if (error) { console.error('startActiveRecording error:', error); return false; }
     setActiveRecordings(prev => [...prev.filter(a => a.recordingId !== rec.recordingId), rec]);
+    return true;
   }, []);
 
-  const stopActiveRecording = useCallback(async (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]) => {
-    await invokeVpsFunction(`active-recordings/${recordingId}/stop`, {
-      body: { deliveryOverrides, completedScriptIds },
+  // deferDelivery: fecha só o cronômetro; roteiros e contagens vão depois, no finalizeRecordingDelivery
+  const stopActiveRecording = useCallback(async (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[], options?: { deferDelivery?: boolean }): Promise<boolean> => {
+    const { error } = await invokeVpsFunction(`active-recordings/${recordingId}/stop`, {
+      body: { deliveryOverrides, completedScriptIds, deferDelivery: Boolean(options?.deferDelivery) },
     });
+    if (error) { console.error('stopActiveRecording error:', error); return false; }
     setActiveRecordings(prev => prev.filter(a => a.recordingId !== recordingId));
+    return true;
+  }, []);
+
+  // Segundo passo do stop com deferDelivery: grava as contagens da entrega e devolve para "ideias"
+  // os roteiros planejados que não foram gravados.
+  const finalizeRecordingDelivery = useCallback(async (recordingId: string, deliveryOverrides: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds: string[], plannedScriptIds: string[]): Promise<boolean> => {
+    const { error } = await invokeVpsFunction(`active-recordings/${recordingId}/finalize`, {
+      body: { deliveryOverrides, completedScriptIds, plannedScriptIds },
+    });
+    if (error) { console.error('finalizeRecordingDelivery error:', error); return false; }
+    return true;
   }, []);
 
   return {
@@ -710,7 +730,7 @@ export function useSupabaseData() {
     deleteRecordingsBulk, cancelRecordingsBulk,
     addTask, updateTask, deleteTask,
     addScript, updateScript, deleteScript,
-    updateSettings, startActiveRecording, stopActiveRecording,
+    updateSettings, startActiveRecording, stopActiveRecording, finalizeRecordingDelivery,
     refetch: fetchAll,
   };
 }

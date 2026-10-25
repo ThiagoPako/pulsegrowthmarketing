@@ -27,7 +27,6 @@ import ClientLogo from '@/components/ClientLogo';
 import {
   sendManualConfirmation,
   sendRecordingCancelledNotification,
-  sendRecordingConfirmedNotification,
   sendBackupInviteNotification,
 } from '@/services/whatsappService';
 
@@ -564,17 +563,11 @@ export default function Schedule() {
     toast.warning(`${getClientName(rec.clientId)} — não gravou`);
   };
 
-  const handleComplete = async (rec: Recording) => {
+  // "Gravado" não manda WhatsApp: o modelo "Gravação Confirmada" é a resposta quando o cliente confirma antes
+  // da gravação (não serve para depois que ela aconteceu)
+  const handleComplete = (rec: Recording) => {
     updateRecording({ ...rec, status: 'concluida' });
     toast.success('Gravação concluída');
-    // Send confirmed message via WhatsApp
-    const client = clients.find(c => c.id === rec.clientId);
-    if (client?.whatsapp) {
-      const result = await sendRecordingConfirmedNotification(
-        client.whatsapp, client.companyName, client.id, rec.date, rec.startTime
-      );
-      if (result.success) toast.success('Mensagem de confirmação enviada ao cliente');
-    }
   };
 
   const openEditRecording = (rec: Recording) => {

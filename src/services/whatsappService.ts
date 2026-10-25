@@ -298,27 +298,6 @@ export async function sendRecordingCancelledNotification(
   return sendWhatsAppMessage({ number: clientPhone, message, clientId, triggerType: 'auto_confirmation', purpose: 'agenda' });
 }
 
-export async function sendRecordingConfirmedNotification(
-  clientPhone: string,
-  clientName: string,
-  clientId: string,
-  date: string,
-  time: string,
-): Promise<{ success: boolean; error?: string }> {
-  const config = await getWhatsAppConfig();
-  if (!config?.integrationActive) return { success: false, error: 'Integração desativada' };
-  if (!clientPhone) return { success: false, error: 'Cliente sem WhatsApp' };
-
-  const message = applyTemplate(config.msgConfirmationConfirmed, {
-    nome_cliente: clientName,
-    data_gravacao: date,
-    hora_gravacao: time,
-    link_portal: getPortalLink(clientId),
-  });
-
-  return sendWhatsAppMessage({ number: clientPhone, message, clientId, triggerType: 'auto_confirmation', purpose: 'agenda' });
-}
-
 export async function sendBackupInviteNotification(
   clientPhone: string,
   clientName: string,

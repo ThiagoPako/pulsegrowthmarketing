@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -22,6 +22,7 @@ import {
   getWhatsAppConfig,
   updateWhatsAppConfig,
   getWhatsAppMessages,
+  WHATSAPP_HISTORY_PAGE,
   getMessageStats,
   getWhatsAppConfirmations,
   getConfirmationStats,
@@ -46,6 +47,9 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
   const [confirmations, setConfirmations] = useState<WhatsAppConfirmation[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(true);
+  const [messagesHasMore, setMessagesHasMore] = useState(false);
+  const [loadingMoreMessages, setLoadingMoreMessages] = useState(false);
+  const historyRequest = useRef(0);
   const [filterClient, setFilterClient] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [editingTemplate, setEditingTemplate] = useState<string | null>(null);
@@ -53,21 +57,41 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
-    const [cfg, msgs, st, confs, cStats] = await Promise.all([
+    const [cfg, st, confs, cStats] = await Promise.all([
       getWhatsAppConfig(),
-      getWhatsAppMessages(),
       getMessageStats(),
       getWhatsAppConfirmations(),
       getConfirmationStats(),
     ]);
     setConfig(cfg);
-    setMessages(msgs);
     setStats(st);
     setConfirmations(confs);
     setConfirmationStats(cStats);
     setConfigLoading(false);
-    setMessagesLoading(false);
   };
+
+  // histórico: uma página por vez, com cliente e status filtrados no servidor
+  const loadMessages = useCallback(async (before?: string) => {
+    const request = ++historyRequest.current;
+    if (before) setLoadingMoreMessages(true);
+    else setMessagesLoading(true);
+    const page = await getWhatsAppMessages({
+      clientId: filterClient !== 'all' ? filterClient : undefined,
+      status: filterStatus !== 'all' ? filterStatus : undefined,
+      before,
+    });
+    if (request !== historyRequest.current) return; // filtro mudou no meio: vale a busca mais nova
+    setMessages(prev => {
+      if (!before) return page;
+      const seen = new Set(prev.map(m => m.id));
+      return [...prev, ...page.filter(m => !seen.has(m.id))];
+    });
+    setMessagesHasMore(page.length >= WHATSAPP_HISTORY_PAGE);
+    setMessagesLoading(false);
+    setLoadingMoreMessages(false);
+  }, [filterClient, filterStatus]);
+
+  useEffect(() => { loadMessages(); }, [loadMessages]);
 
   const handleConfigSave = async () => {
     if (!config) return;
@@ -370,6 +394,18 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
                   </CardContent>
                 </Card>
               ))}
+              {messagesHasMore && (
+                <div className="flex justify-center pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={loadingMoreMessages}
+                    onClick={() => loadMessages(messages[messages.length - 1]?.sentAt)}
+                  >
+                    {loadingMoreMessages ? 'Carregando...' : 'Carregar mais'}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </TabsContent>

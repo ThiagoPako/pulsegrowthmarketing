@@ -214,11 +214,17 @@ export async function sendWhatsAppMediaMessage(params: {
   });
 }
 
+// O histórico não é limpo: busca uma página por vez (as mais recentes primeiro). `before` é o sent_at da última
+// mensagem já carregada (a mesma pode voltar e é descartada pelo id na tela).
+export const WHATSAPP_HISTORY_PAGE = 100;
+
 export async function getWhatsAppMessages(filters?: {
   clientId?: string;
   status?: string;
   dateFrom?: string;
   dateTo?: string;
+  before?: string;
+  limit?: number;
 }): Promise<WhatsAppMessage[]> {
   let query = supabase.from('whatsapp_messages').select('*').order('sent_at', { ascending: false });
   
@@ -226,17 +232,21 @@ export async function getWhatsAppMessages(filters?: {
   if (filters?.status) query = query.eq('status', filters.status);
   if (filters?.dateFrom) query = query.gte('sent_at', filters.dateFrom);
   if (filters?.dateTo) query = query.lte('sent_at', filters.dateTo);
+  if (filters?.before) query = query.lte('sent_at', filters.before);
+  query = query.limit(filters?.limit ?? WHATSAPP_HISTORY_PAGE);
 
   const { data } = await query;
   return (data || []).map(rowToMessage);
 }
 
 export async function getMessageStats(): Promise<{ total: number; sent: number; failed: number }> {
-  const today = new Date().toISOString().split('T')[0];
+  // "hoje" é o dia local (Brasília), não o dia UTC — depois das 21h o UTC já virou
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
   const { data } = await supabase
     .from('whatsapp_messages')
     .select('status')
-    .gte('sent_at', today + 'T00:00:00');
+    .gte('sent_at', startOfToday.toISOString());
   
   const messages = data || [];
   return {
@@ -366,11 +376,12 @@ export async function clearConfirmationHistory(): Promise<boolean> {
   return !error;
 }
 
-export async function getWhatsAppConfirmations(): Promise<WhatsAppConfirmation[]> {
+export async function getWhatsAppConfirmations(limit = 200): Promise<WhatsAppConfirmation[]> {
   const { data } = await supabase
     .from('whatsapp_confirmations')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(limit);
   
   return (data || []).map((r: any) => ({
     id: r.id,

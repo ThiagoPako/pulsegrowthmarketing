@@ -6,6 +6,56 @@
 
 const VPS_BASE_URL = 'https://agenciapulse.tech/api';
 const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
+const TOKEN_KEY = 'pulse_jwt';
+
+function readStoredToken(): string | null {
+  try {
+    return typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** true quando o JWT já venceu (ou vence no próximo minuto). */
+function tokenExpiresSoon(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof payload?.exp === 'number' && payload.exp * 1000 < Date.now() + 60_000;
+  } catch {
+    return false;
+  }
+}
+
+/** Renova a sessão da equipe (mesmo fluxo do vpsDb). */
+async function refreshUploadSession(): Promise<boolean> {
+  const token = readStoredToken();
+  if (!token) return false;
+  try {
+    const response = await fetch(`${VPS_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.token) return false;
+    localStorage.setItem(TOKEN_KEY, payload.token);
+    window.dispatchEvent(new CustomEvent('pulse:auth-token-refreshed', { detail: { token: payload.token } }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Cabeçalho Authorization da equipe para upload/exclusão. Sem login (portal do
+ * cliente) volta null e o servidor só aceita as pastas da panfletagem.
+ */
+async function getUploadAuthHeader(): Promise<string | null> {
+  let token = readStoredToken();
+  if (token && tokenExpiresSoon(token) && (await refreshUploadSession())) {
+    token = readStoredToken();
+  }
+  return token ? `Bearer ${token}` : null;
+}
 
 function normalizeVpsPath(path: string) {
   return path.replace(/^\/+/, '').replace(/^uploads\//, '');
@@ -143,6 +193,7 @@ function uploadOnce(
   normalizedFolder: string | undefined,
   onProgress?: (p: UploadProgress) => void,
   signal?: AbortSignal,
+  authHeader?: string | null,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -181,6 +232,7 @@ function uploadOnce(
     xhr.onload = () => {
       if (signal) signal.removeEventListener('abort', onAbort);
       const ct = xhr.getResponseHeader('content-type') || '';
+      if (xhr.status === 401) return reject(new Error('UNAUTHORIZED'));
       if (xhr.status < 200 || xhr.status >= 300) {
         if (!ct.includes('application/json')) {
           const proxyHint = xhr.status === 413
@@ -207,6 +259,7 @@ function uploadOnce(
     };
 
     xhr.open('POST', `${VPS_BASE_URL}/upload`);
+    if (authHeader) xhr.setRequestHeader('Authorization', authHeader);
     // Long timeout for big videos (30 min)
     xhr.timeout = 30 * 60 * 1000;
     xhr.send(formData);
@@ -234,10 +287,12 @@ export async function uploadFileToVps(
 
   let attempt = 0;
   let lastError: any;
+  let refreshedAfter401 = false;
 
   while (attempt <= maxRetries) {
     try {
-      const publicUrl = await uploadOnce(file, normalizedFolder, opts.onProgress, opts.signal);
+      const authHeader = await getUploadAuthHeader();
+      const publicUrl = await uploadOnce(file, normalizedFolder, opts.onProgress, opts.signal, authHeader);
       await verifyUploadedFile(publicUrl, file);
       return publicUrl;
     } catch (err: any) {
@@ -246,6 +301,14 @@ export async function uploadFileToVps(
       if (err?.name === 'AbortError') throw err;
 
       const msg = String(err?.message || '');
+      if (msg === 'UNAUTHORIZED') {
+        // Sessão vencida: renova uma vez e reenvia; senão pede login de novo.
+        if (!refreshedAfter401 && (await refreshUploadSession())) {
+          refreshedAfter401 = true;
+          continue;
+        }
+        throw new Error('Sua sessão expirou. Entre novamente para enviar arquivos.');
+      }
       const isTransient =
         msg === 'NETWORK' ||
         msg === 'TIMEOUT' ||
@@ -293,18 +356,47 @@ export function getVpsMediaUrl(path: string): string {
   return buildPublicVpsUrl(path);
 }
 
+export interface DeleteFileOptions {
+  /** Não apaga se o arquivo ainda estiver publicado no portal do cliente. */
+  keepIfReferenced?: boolean;
+}
+
+export interface DeleteFileResult {
+  /** true só quando o servidor confirmou que apagou o arquivo. */
+  removed: boolean;
+  skipped?: string;
+}
+
 /**
- * Delete a file from the VPS
+ * Delete a file from the VPS (exige login da equipe).
+ * Aceita a URL completa (https://agenciapulse.tech/uploads/...) ou o caminho relativo.
  */
-export async function deleteFileFromVps(path: string): Promise<void> {
-  const response = await fetch(`${VPS_BASE_URL}/upload`, {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: normalizeVpsPath(path) }),
-  });
-  if (!response.ok) {
-    console.error('Delete failed:', await response.text());
+export async function deleteFileFromVps(path: string, options: DeleteFileOptions = {}): Promise<DeleteFileResult> {
+  const target = /^https?:\/\//i.test(path) ? path : normalizeVpsPath(path);
+  const send = async () => {
+    const authHeader = await getUploadAuthHeader();
+    return fetch(`${VPS_BASE_URL}/upload`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authHeader ? { Authorization: authHeader } : {}),
+      },
+      body: JSON.stringify({ path: target, keep_if_referenced: options.keepIfReferenced || undefined }),
+    });
+  };
+
+  let response = await send();
+  if (response.status === 401 && (await refreshUploadSession())) {
+    response = await send();
   }
+  // Arquivo já não existia: nada a remover.
+  if (response.status === 404) return { removed: false };
+
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(data?.error || `Falha ao remover arquivo (HTTP ${response.status}).`);
+  }
+  return { removed: data?.removed !== false, skipped: data?.skipped };
 }
 
 export { VPS_BASE_URL, VPS_UPLOADS_URL };

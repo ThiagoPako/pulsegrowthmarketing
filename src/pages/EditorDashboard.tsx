@@ -432,8 +432,9 @@ export default function EditorDashboard() {
        const previousVideo = oldVideoLink || activeEditTask.edited_video_link;
        if (previousVideo && previousVideo !== url && previousVideo.includes('agenciapulse.tech')) {
          try {
-           await deleteFileFromVps(previousVideo);
-           await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo anterior removido (substituição)' });
+           // Só registra "removido" quando o servidor confirma; se o vídeo ainda está no portal, fica.
+           const { removed } = await deleteFileFromVps(previousVideo, { keepIfReferenced: true });
+           if (removed) await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo anterior removido (substituição)' });
          } catch (delErr) {
            console.warn('Falha ao remover vídeo anterior:', delErr);
          }
@@ -463,8 +464,8 @@ export default function EditorDashboard() {
     const previousVideo = oldVideoLink || activeEditTask.edited_video_link;
     if (previousVideo && previousVideo !== videoLink.trim() && previousVideo.includes('agenciapulse.tech')) {
       try {
-        await deleteFileFromVps(previousVideo);
-        await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo anterior removido (substituição)' });
+        const { removed } = await deleteFileFromVps(previousVideo, { keepIfReferenced: true });
+        if (removed) await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo anterior removido (substituição)' });
       } catch (delErr) {
         console.warn('Falha ao remover vídeo anterior:', delErr);
       }
@@ -553,7 +554,7 @@ export default function EditorDashboard() {
     // Delete VPS file if editor uploaded one
     if (targetTask.edited_video_link?.includes('agenciapulse.tech')) {
       try {
-        await deleteFileFromVps(targetTask.edited_video_link);
+        await deleteFileFromVps(targetTask.edited_video_link, { keepIfReferenced: true });
       } catch (err) { console.warn('Erro ao remover vídeo:', err); }
     }
     await supabase.from('content_tasks').update({

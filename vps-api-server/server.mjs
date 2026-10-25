@@ -13118,7 +13118,8 @@ function sanitizeUploadFolder(raw) {
 const uploadStorage = multer.diskStorage({
   destination(req, _file, cb) {
     try {
-      const folder = sanitizeUploadFolder(req.body?.folder);
+      // Rotas públicas fixam a pasta (ex.: banco de clientes); as demais usam o campo folder.
+      const folder = req.forcedUploadFolder ?? sanitizeUploadFolder(req.body?.folder);
       const dest = path.resolve(UPLOAD_ROOT, folder);
       if (!dest.startsWith(path.resolve(UPLOAD_ROOT))) return cb(new Error('Pasta inválida'));
       fs.mkdirSync(dest, { recursive: true });
@@ -13134,15 +13135,100 @@ const uploadStorage = multer.diskStorage({
   },
 });
 
+function uploadExtension(originalname) {
+  return path.extname(originalname || '').toLowerCase().replace(/[^.a-z0-9]/g, '');
+}
+
+// Extensões que o navegador executaria se o arquivo fosse aberto direto em
+// /uploads (mesmo domínio do app, onde fica o JWT da equipe): nunca aceitar.
+const BLOCKED_UPLOAD_EXTENSIONS = new Set([
+  '.html', '.htm', '.xhtml', '.xht', '.shtml', '.mht', '.mhtml',
+  '.js', '.mjs', '.cjs', '.php', '.phtml', '.phar', '.hta',
+]);
+
+// Mídias aceitas nos envios sem login da equipe (portal e links públicos).
+const PUBLIC_MEDIA_EXTENSIONS = new Set([
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif', '.avif', '.bmp',
+  '.mp4', '.mov', '.m4v', '.webm', '.mkv', '.avi', '.3gp',
+  '.mp3', '.m4a', '.aac', '.wav', '.ogg', '.oga', '.opus', '.flac',
+]);
+
+function isPublicMediaUpload(file) {
+  const ext = uploadExtension(file?.originalname);
+  const mime = String(file?.mimetype || '').toLowerCase();
+  if (ext === '.svg' || ext === '.xml' || mime.includes('svg') || mime.includes('xml')) return false;
+  if (PUBLIC_MEDIA_EXTENSIONS.has(ext)) return true;
+  return /^(image|video|audio)\//.test(mime);
+}
+
+// Pastas que o portal do cliente (sem login da equipe) usa na panfletagem:
+// flyers/<client_id>[/generated] e panfletagem/<client_id>[/generated].
+const PORTAL_UPLOAD_FOLDER_RE = /^(?:flyers|panfletagem)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/generated)?$/i;
+
+function uploadRejection(status, message, code) {
+  return Object.assign(new Error(message), { status, code });
+}
+
+function uploadFileFilter(req, file, cb) {
+  if (BLOCKED_UPLOAD_EXTENSIONS.has(uploadExtension(file?.originalname))) {
+    return cb(uploadRejection(415, 'Tipo de arquivo não permitido', 'BLOCKED_FILE_TYPE'));
+  }
+  // Equipe logada: qualquer tipo (designers enviam .ai, .psd, .svg, .xml...).
+  if (!req.uploadPublicScope) return cb(null, true);
+
+  if (!isPublicMediaUpload(file)) {
+    return cb(uploadRejection(415, 'Envie apenas fotos, vídeos ou áudios', 'BLOCKED_FILE_TYPE'));
+  }
+  if (req.uploadPublicScope !== 'portal') return cb(null, true);
+
+  // Portal: só as pastas da panfletagem de um cliente que existe.
+  const match = PORTAL_UPLOAD_FOLDER_RE.exec(sanitizeUploadFolder(req.body?.folder));
+  if (!match) return cb(uploadRejection(401, 'Faça login para enviar arquivos', 'UNAUTHORIZED'));
+  pool.query('SELECT 1 FROM clients WHERE id::text = lower($1) LIMIT 1', [match[1]])
+    .then(({ rows }) => (rows.length
+      ? cb(null, true)
+      : cb(uploadRejection(404, 'Cliente não encontrado', 'CLIENT_NOT_FOUND'))))
+    .catch((error) => cb(error));
+}
+
 const uploadHandler = multer({
   storage: uploadStorage,
-  limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // 2 GB
+  fileFilter: uploadFileFilter,
+  limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // 2 GB (equipe logada)
+});
+
+// Envios sem login da equipe (portal do cliente e banco de clientes público).
+const publicUploadHandler = multer({
+  storage: uploadStorage,
+  fileFilter: uploadFileFilter,
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB
 });
 
 function uploadErrorStatus(error) {
+  if (error?.status) return error.status;
   if (error?.code === 'LIMIT_FILE_SIZE') return 413;
   if (error?.code === 'ENOSPC') return 507;
   return 500;
+}
+
+/**
+ * Caminho relativo a /uploads/ a partir do que o front manda no DELETE:
+ * URL completa (https://agenciapulse.tech/uploads/...), '/uploads/...',
+ * 'uploads/...' ou só o relativo ('content/...').
+ */
+function uploadDeleteRelativePath(rawPath) {
+  const raw = String(rawPath || '').trim();
+  if (!raw) return null;
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      if (new URL(raw).origin !== 'https://agenciapulse.tech') return null;
+    } catch {
+      return null;
+    }
+    return uploadRelativePath(raw);
+  }
+  const relative = raw.replace(/^\/+/, '').replace(/^uploads\//, '');
+  return uploadRelativePath(`/uploads/${relative}`);
 }
 
 app.get('/api/upload-health', (_req, res) => {
@@ -13243,8 +13329,17 @@ app.post('/api/admin/repair-atomic', async (req, res) => {
   }
 });
 
-app.post('/api/upload', (req, res) => {
-  uploadHandler.single('file')(req, res, async (err) => {
+app.post('/api/upload', async (req, res) => {
+  // Equipe logada: qualquer pasta, até 2 GB. Sem login: só a panfletagem do
+  // portal do cliente (flyers/<id>, panfletagem/<id>), só mídia e até 500 MB.
+  let isTeamUpload = false;
+  if (req.headers.authorization?.startsWith('Bearer ')) {
+    isTeamUpload = await verifyUser(req).then(() => true).catch(() => false);
+  }
+  if (!isTeamUpload) req.uploadPublicScope = 'portal';
+  const handler = isTeamUpload ? uploadHandler : publicUploadHandler;
+
+  handler.single('file')(req, res, async (err) => {
     if (err) {
       console.error('[upload] error:', err);
       return res.status(uploadErrorStatus(err)).json({
@@ -13279,16 +13374,41 @@ app.post('/api/upload', (req, res) => {
   });
 });
 
-app.delete('/api/upload', express.json(), (req, res) => {
+app.delete('/api/upload', express.json(), async (req, res) => {
   try {
-    const raw = String(req.body?.path || '').replace(/^\/+/, '').replace(/^uploads\//, '');
-    const relative = sanitizeUploadFolder(raw);
-    if (!relative) return res.status(400).json({ error: 'Caminho inválido' });
+    await verifyUser(req);
+  } catch {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
 
-    const abs = path.resolve(UPLOAD_ROOT, relative);
-    if (!abs.startsWith(path.resolve(UPLOAD_ROOT))) return res.status(400).json({ error: 'Caminho inválido' });
-    if (fs.existsSync(abs)) fs.unlinkSync(abs);
-    res.json({ success: true });
+  try {
+    // Aceita a URL completa (o EditorDashboard manda https://agenciapulse.tech/uploads/...)
+    const relative = uploadDeleteRelativePath(req.body?.path);
+    if (!relative) return res.status(400).json({ error: 'Caminho inválido' });
+    const publicPath = `/uploads/${relative}`;
+
+    // Troca de vídeo: o mesmo arquivo pode estar publicado no portal do cliente.
+    if (req.body?.keep_if_referenced) {
+      const { rows } = await pool.query(
+        `SELECT 1 FROM client_portal_contents
+          WHERE right(coalesce(file_url, ''), length($1)) = $1
+             OR right(coalesce(thumbnail_url, ''), length($1)) = $1
+          LIMIT 1`,
+        [publicPath]
+      );
+      if (rows.length > 0) return res.json({ success: true, removed: false, skipped: 'referenced' });
+    }
+
+    let removed = 0;
+    for (const root of uploadRoots()) {
+      const candidate = path.resolve(root, relative);
+      if (!candidate.startsWith(`${root}${path.sep}`)) continue;
+      if (!fs.existsSync(candidate) || !fs.statSync(candidate).isFile()) continue;
+      fs.unlinkSync(candidate);
+      removed += 1;
+    }
+    if (removed === 0) return res.status(404).json({ error: 'Arquivo não encontrado', removed: false });
+    res.json({ success: true, removed: true });
   } catch (error) {
     console.error('[upload:delete] error:', error);
     res.status(500).json({ error: error.message || 'Falha ao remover arquivo' });
@@ -14239,18 +14359,33 @@ function sanitizeText(value, max = 500) {
 }
 
 /** Upload público de mídia, restrito a um token de compartilhamento válido. */
-app.post('/api/public/client-database/:token/upload', (req, res) => {
-  uploadHandler.single('file')(req, res, async (err) => {
+app.post('/api/public/client-database/:token/upload', async (req, res) => {
+  // Valida o token ANTES de gravar qualquer coisa no disco.
+  try {
+    await resolveShareClientId(req.params.token);
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message || 'Falha no upload' });
+  }
+  req.uploadPublicScope = 'client-database';
+  req.forcedUploadFolder = 'client-database';
+
+  publicUploadHandler.single('file')(req, res, async (err) => {
+    const discardFile = () => {
+      try { if (req.file?.path) fs.unlinkSync(req.file.path); } catch {}
+    };
     try {
-      if (err) return res.status(uploadErrorStatus(err)).json({ error: err.message || 'Falha no upload' });
+      if (err) {
+        discardFile();
+        return res.status(uploadErrorStatus(err)).json({ error: err.message || 'Falha no upload' });
+      }
       if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
-      await resolveShareClientId(req.params.token);
       const relative = path
         .relative(path.resolve(UPLOAD_ROOT), req.file.path)
         .split(path.sep)
         .join('/');
       return res.json({ path: relative, url: `/uploads/${relative}` });
     } catch (error) {
+      discardFile();
       console.error('[public-clientdb:upload]', error);
       return res.status(error.status || 500).json({ error: error.message || 'Falha no upload' });
     }

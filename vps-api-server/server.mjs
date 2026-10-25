@@ -62,7 +62,13 @@ app.use(express.json({ limit: '10mb' }));
 
 // Health Check: endpoint leve para monitoramento do Nginx/Uptime e Banco de Dados
 // Diagnóstico do Pente Fino: mostra o que faltava e repara o schema.
+// Só admin: a rota expõe nomes de tabelas/colunas e pode rodar DDL.
 app.get('/api/diagnostics/pente-fino', async (req, res) => {
+  try {
+    await verifyAdmin(req);
+  } catch (error) {
+    return res.status(error?.message === 'Admin access required' ? 403 : 401).json({ error: error?.message || 'Unauthorized' });
+  }
   try {
     const before = {};
     for (const [table, columns] of Object.entries(PENTE_FINO_SCHEMA)) {
@@ -82,10 +88,14 @@ app.get('/api/diagnostics/pente-fino', async (req, res) => {
       };
     }
 
-    penteFinoEnsuredPromise = null;
-    await ensurePenteFinoTables();
+    // Só força nova verificação (e DDL) quando de fato falta tabela ou coluna.
+    const needsRepair = Object.values(before).some((t) => !t.exists || t.missingColumns.length > 0);
+    if (needsRepair) {
+      penteFinoEnsuredPromise = null;
+      await ensurePenteFinoTables();
+    }
 
-    res.json({ repaired: true, before });
+    res.json({ repaired: needsRepair, before });
   } catch (error) {
     res.status(500).json({ error: error?.message || 'diagnostics failed' });
   }

@@ -3092,13 +3092,25 @@ app.post('/api/auth/change-password', async (req, res) => {
     const { user } = await verifyUser(req);
     const { currentPassword, newPassword } = req.body;
     if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: 'Nova senha deve ter pelo menos 6 caracteres' });
+    // Sem a senha atual, quem pegasse um token trocaria a senha e trancaria a pessoa fora.
+    if (!currentPassword) return res.status(400).json({ error: 'Informe a senha atual' });
+
+    const attemptKey = `change-password:${user.id}`;
+    if (authAttemptCount(attemptKey) >= 10) {
+      return res.status(429).json({ error: 'Muitas tentativas. Tente de novo em alguns minutos.' });
+    }
 
     const profile = await getAuthProfileById(user.id);
     if (!profile) return res.status(404).json({ error: 'Perfil não encontrado' });
 
-    if (profile.password_hash && currentPassword) {
-      const valid = await verifyStoredPassword(currentPassword, profile.password_hash, profile.auth_password_hash, profile.profile_password_hash);
-      if (!valid) return res.status(401).json({ error: 'Senha atual incorreta' });
+    const storedHashes = [profile.password_hash, profile.auth_password_hash, profile.profile_password_hash].filter(Boolean);
+    if (storedHashes.length === 0) {
+      return res.status(400).json({ error: 'Conta sem senha cadastrada: peça a redefinição a um administrador' });
+    }
+    const valid = await verifyStoredPassword(currentPassword, ...storedHashes);
+    if (!valid) {
+      registerAuthAttempt(attemptKey);
+      return res.status(401).json({ error: 'Senha atual incorreta' });
     }
 
     await storeUserPassword(user.id, newPassword);
@@ -3106,7 +3118,7 @@ app.post('/api/auth/change-password', async (req, res) => {
     res.json({ success: true, message: 'Senha alterada com sucesso' });
   } catch (error) {
     console.error('Change password error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error?.message === 'Unauthorized' ? 401 : (error?.statusCode || 500)).json({ error: error.message });
   }
 });
 
@@ -8080,9 +8092,9 @@ function cityScopeCondition(columnName = 'city', placeholder) {
 async function resolveActiveCity(req, userId, userObj = null) {
   const requested = normalizeCityValue(req.headers['x-pulse-city']);
   const requestedValid = requested && ALLOWED_CITIES.has(requested) ? requested : null;
-  const linkedUserIds = await getLinkedUserIds(userObj || { id: userId });
 
   // Admins podem acessar qualquer cidade sem precisar de registro em user_cities
+  // (conferido antes dos ids ligados, que o admin não usa)
   try {
     if (userObj && await isAdminUser(userObj)) {
       return assertValidCity(requestedValid || 'minacu');
@@ -8092,19 +8104,26 @@ async function resolveActiveCity(req, userId, userObj = null) {
     /* segue fluxo normal */
   }
 
+  const linkedUserIds = await getLinkedUserIds(userObj || { id: userId });
   try {
     const { rows } = await pool.query(
       'SELECT city, is_primary FROM user_cities WHERE user_id::text = ANY($1::text[])',
       [linkedUserIds.length ? linkedUserIds : [String(userId)]]
     );
-    if (rows.length === 0) return assertValidCity(requestedValid || 'minacu');
+    // Sem registro em user_cities: só Minaçu, igual ao /api/me/cities (antes valia
+    // qualquer cidade mandada no cabeçalho).
+    if (rows.length === 0) return 'minacu';
     const allowed = rows.map(r => normalizeCityValue(r.city)).filter(Boolean);
     if (requestedValid && allowed.includes(requestedValid)) return requestedValid;
     const primary = normalizeCityValue(rows.find(r => r.is_primary)?.city);
     return assertValidCity(primary || allowed[0]);
   } catch (e) {
     if (e && e.statusCode === 400) throw e;
-    return assertValidCity(requestedValid || 'minacu');
+    // Banco sem a tabela user_cities: ninguém tem registro, vale a cidade padrão.
+    if (e?.code === '42P01') return 'minacu';
+    // Outra falha: não aceita o cabeçalho às cegas (gravaria na cidade errada).
+    console.error('resolveActiveCity: falha ao ler user_cities:', e?.message || e);
+    throw Object.assign(new Error('Não foi possível conferir a cidade agora. Tente de novo.'), { statusCode: 503 });
   }
 }
 

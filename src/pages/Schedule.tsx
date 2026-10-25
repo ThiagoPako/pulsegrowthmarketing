@@ -6,7 +6,7 @@ import type { Recording, RecordingType, Script, DayOfWeek, Client, EventRecordin
 import { SCRIPT_VIDEO_TYPE_LABELS, DAY_LABELS } from '@/types';
 import { useEndoClientes, useEndoAgendamentos, useEndoContracts } from '@/hooks/useEndomarketing';
 import { findAvailableSlots } from '@/lib/schedulingUtils';
-import { confirmRecordingDelete } from '@/lib/recordingDelete';
+import { deleteRecordingWithConfirm } from '@/lib/recordingDelete';
 
 import AgencyCapacityWidget from '@/components/AgencyCapacityWidget';
 import { Button } from '@/components/ui/button';
@@ -97,7 +97,7 @@ function mapEventRecordingRow(e: any): EventRecording {
 export default function Schedule() {
   const {
     clients, users, cityVideomakers, servesActiveCity, recordings, scripts, settings, activeRecordings,
-    currentUser, updateScript, addRecording, addRecordingsBulk, updateRecording, cancelRecording, deleteRecording, cancelAndReschedule,
+    currentUser, updateScript, addRecording, addRecordingsBulk, updateRecording, cancelRecording, deleteRecording, tryDeleteRecording, cancelAndReschedule,
     regenerateScheduleForClient, generateFixedSchedulesForMonth, previewFixedSchedulesForMonth, commitFixedSchedules, autoFillVacanciesForDate, organizeSchedule, startActiveRecording, stopActiveRecording, refetchData,
     hasConflict, isWithinWorkHours,
 
@@ -524,13 +524,12 @@ export default function Schedule() {
 
   const handleDeleteRecording = async (rec: Recording) => {
     const client = clients.find(c => c.id === rec.clientId);
-    const decision = confirmRecordingDelete(rec, client?.companyName || rec.prospectName || 'esta gravação', currentUser);
-    if (!decision) return;
-    const success = await deleteRecording(rec.id, decision);
-    if (success) {
+    const result = await deleteRecordingWithConfirm(rec, client?.companyName || rec.prospectName || 'esta gravação', currentUser, tryDeleteRecording);
+    if (!result) return;
+    if (result.ok) {
       toast.success('Gravação apagada com sucesso');
     } else {
-      toast.error('Erro ao apagar gravação');
+      toast.error(result.error || 'Erro ao apagar gravação');
     }
   };
 

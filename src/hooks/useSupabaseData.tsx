@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { useCity } from '@/contexts/CityContext';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
+import type { RecordingDeleteResult } from '@/lib/recordingDelete';
 import type { Client, Recording, KanbanTask, Script, CompanySettings, DayOfWeek, ActiveRecording, ContentType, RecordingType, RecordingStatus, ConfirmationStatus, KanbanColumn, ScriptVideoType, ScriptPriority, ScriptContentFormat } from '@/types';
 
 // ── Mappers: DB row ↔ App type ──
@@ -602,19 +603,33 @@ export function useSupabaseData() {
   }, []);
 
 
-  const deleteRecording = useCallback(async (id: string, options?: { force?: boolean }): Promise<boolean> => {
+  /** DELETE com o motivo da recusa (409 quando a gravação já foi realizada e faltou force/admin) */
+  const tryDeleteRecording = useCallback(async (id: string, options?: { force?: boolean }): Promise<RecordingDeleteResult> => {
     try {
       // force: só admin apaga gravação já realizada (o servidor confere o papel)
       const { error } = await invokeVpsFunction(`recordings/${id}${options?.force ? '?force=1' : ''}`, { method: 'DELETE' });
-      if (error) { console.error('deleteRecording error:', error); return false; }
+      if (error) {
+        console.error('deleteRecording error:', error);
+        const status = Number(error.status) || 0;
+        return {
+          ok: false,
+          error: status >= 400 && status < 500 ? error.message : undefined,
+          alreadyRecorded: status === 409
+            && (error.details?.already_recorded === true || typeof error.details?.videos_in_production === 'number'),
+        };
+      }
       setRecordings(prev => prev.filter(r => r.id !== id));
       setActiveRecordings(prev => prev.filter(a => a.recordingId !== id));
-      return true;
+      return { ok: true };
     } catch (err) {
       console.error('deleteRecording error:', err);
-      return false;
+      return { ok: false };
     }
   }, []);
+
+  const deleteRecording = useCallback(async (id: string, options?: { force?: boolean }): Promise<boolean> => {
+    return (await tryDeleteRecording(id, options)).ok;
+  }, [tryDeleteRecording]);
 
   /** Apaga as futuras geradas pela agenda. deletedIds = null quando o servidor não informa quais (versão antiga). */
   const deleteFutureRecordingsForClient = useCallback(async (clientId: string): Promise<{ deleted: number; deletedIds: string[] | null }> => {
@@ -736,7 +751,7 @@ export function useSupabaseData() {
   return {
     clients, recordings, tasks, scripts, settings, activeRecordings, loading,
     addClient, updateClient, deleteClient,
-    addRecording, addRecordingsBulk, updateRecording, cancelRecording, deleteRecording, deleteFutureRecordingsForClient,
+    addRecording, addRecordingsBulk, updateRecording, cancelRecording, deleteRecording, tryDeleteRecording, deleteFutureRecordingsForClient,
     deleteRecordingsBulk, cancelRecordingsBulk,
     addTask, updateTask, deleteTask,
     addScript, updateScript, deleteScript,

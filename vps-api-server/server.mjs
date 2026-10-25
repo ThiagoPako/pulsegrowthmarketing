@@ -9637,6 +9637,7 @@ app.delete('/api/recordings/:id', async (req, res) => {
         await txClient.query('ROLLBACK');
         return res.status(409).json({
           error: 'Esta gravação já foi realizada e não pode ser apagada. Use Cancelar ou peça a um admin.',
+          already_recorded: true,
           videos_in_production: Number(usage?.videos_in_production || 0),
         });
       }

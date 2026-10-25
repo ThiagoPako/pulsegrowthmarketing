@@ -9,6 +9,7 @@ import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { usePresenceHeartbeat } from '@/hooks/usePresence';
 import { generateFixedRecordings, findAvailableSlots, organizeRecordingsForDate } from '@/lib/schedulingUtils';
 import { sendRecordingScheduledNotification } from '@/services/whatsappService';
+import type { RecordingDeleteResult } from '@/lib/recordingDelete';
 import type { User, Client, Recording, KanbanTask, CompanySettings, DayOfWeek, Script, ActiveRecording, UserRole, RecordingType } from '@/types';
 
 const DATE_TO_DAY: Record<number, DayOfWeek> = {
@@ -59,6 +60,8 @@ interface AppContextType {
   updateRecording: (recording: Recording) => Promise<boolean>;
   cancelRecording: (id: string) => Promise<boolean>;
   deleteRecording: (id: string, options?: { force?: boolean }) => Promise<boolean>;
+  /** Igual ao deleteRecording, mas devolve o motivo da recusa do servidor */
+  tryDeleteRecording: (id: string, options?: { force?: boolean }) => Promise<RecordingDeleteResult>;
   deleteRecordingsBulk: (ids: string[]) => Promise<boolean>;
   cancelRecordingsBulk: (ids: string[]) => Promise<boolean>;
   cancelAndReschedule: (recording: Recording) => { success: boolean; rescheduled?: { date: string; startTime: string; videomakerId: string; type: string } };
@@ -728,6 +731,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [data, autoFillVacanciesForDate]);
 
   const deleteRecording = useCallback(async (id: string, options?: { force?: boolean }) => { return data.deleteRecording(id, options); }, [data]);
+  const tryDeleteRecording = useCallback((id: string, options?: { force?: boolean }) => data.tryDeleteRecording(id, options), [data]);
   const addRecordingsBulk = useCallback((recs: Recording[]) => data.addRecordingsBulk(recs), [data]);
   const addTask = useCallback((task: KanbanTask) => { data.addTask(task); }, [data]);
   const updateTask = useCallback((task: KanbanTask) => { data.updateTask(task); }, [data]);
@@ -755,7 +759,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       activeRecordings: data.activeRecordings,
       logout, addUser, updateUser, deleteUser,
       addClient, updateClient, deleteClient,
-      addRecording, addRecordingsBulk, updateRecording, cancelRecording, deleteRecording,
+      addRecording, addRecordingsBulk, updateRecording, cancelRecording, deleteRecording, tryDeleteRecording,
       deleteRecordingsBulk: data.deleteRecordingsBulk, cancelRecordingsBulk: data.cancelRecordingsBulk,
       cancelAndReschedule, generateScheduleForClient, regenerateScheduleForClient, generateFixedSchedulesForMonth,
       previewFixedSchedulesForMonth, commitFixedSchedules,

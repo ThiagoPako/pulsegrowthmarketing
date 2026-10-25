@@ -23,7 +23,7 @@ import { toast } from 'sonner';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import TimeMarker from '@/components/scheduling/TimeMarker';
-import { confirmRecordingDelete } from '@/lib/recordingDelete';
+import { deleteRecordingWithConfirm } from '@/lib/recordingDelete';
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
   agendada: { bg: 'bg-blue-500/15', text: 'text-blue-400', label: 'Agendada' },
@@ -45,7 +45,7 @@ const LUNCH_SLOTS = ['12:30', '13:30'];
 
 
 export default function RecordingControl() {
-  const { recordings, clients, users, servesActiveCity, scripts, addScript, updateScript, updateRecording, addRecording, deleteRecording, hasConflict, settings, refetchData, currentUser } = useApp();
+  const { recordings, clients, users, servesActiveCity, scripts, addScript, updateScript, updateRecording, addRecording, tryDeleteRecording, hasConflict, settings, refetchData, currentUser } = useApp();
   const { user: authUser } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'day' | 'week'>('day');
@@ -312,11 +312,10 @@ export default function RecordingControl() {
 
   const handleDeleteRecording = async (rec: Recording) => {
     const label = getClient(rec.clientId)?.companyName || rec.prospectName || 'esta gravação';
-    const decision = confirmRecordingDelete(rec, label, currentUser);
-    if (!decision) return;
-    const ok = await deleteRecording(rec.id, decision);
-    if (ok) { toast.success('Gravação apagada'); setTimeout(() => refetchData(), 300); }
-    else toast.error('Erro ao apagar');
+    const result = await deleteRecordingWithConfirm(rec, label, currentUser, tryDeleteRecording);
+    if (!result) return;
+    if (result.ok) { toast.success('Gravação apagada'); setTimeout(() => refetchData(), 300); }
+    else toast.error(result.error || 'Erro ao apagar');
   };
 
   const dateLabel = viewMode === 'day'

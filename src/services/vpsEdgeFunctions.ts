@@ -90,7 +90,8 @@ export async function invokeVpsFunction(
       const message = typeof data?.error === 'string'
         ? data.error
         : data?.error?.message || data?.message || `HTTP ${response.status}`;
-      return { data: null, error: { message } };
+      // status e corpo da resposta vão junto para quem precisa do motivo (ex.: 409 com detalhes)
+      return { data: null, error: { message, status: response.status, details: data } };
     }
 
     return { data, error: null };

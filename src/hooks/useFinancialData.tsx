@@ -861,8 +861,22 @@ export function useFinancialData() {
    */
   const reconcileCash = async (options?: { dryRun?: boolean }) => {
     const dryRun = options?.dryRun ?? false;
-    const { data: movsData } = await supabase.from('cash_reserve_movements').select('*');
-    const movs = (movsData as any[]) || [];
+    // Os IDs de origem vêm direto do banco: o estado `revenues` esconde clientes
+    // cancelados e receitas descartadas pela deduplicação, e usar ele faria os
+    // espelhos dessas entradas parecerem órfãos (e serem apagados do caixa).
+    const [movsRes, revIdsRes, expIdsRes] = await Promise.all([
+      supabase.from('cash_reserve_movements').select('*'),
+      supabase.from('revenues').select('id'),
+      supabase.from('expenses').select('id'),
+    ]);
+    // Sem as três listas completas não dá para comparar: aborta sem criar nem apagar nada.
+    if (
+      movsRes.error || revIdsRes.error || expIdsRes.error ||
+      !Array.isArray(movsRes.data) || !Array.isArray(revIdsRes.data) || !Array.isArray(expIdsRes.data)
+    ) {
+      throw new Error('Não foi possível carregar os lançamentos para conferir o caixa');
+    }
+    const movs = movsRes.data as any[];
 
     const startDate = movs
       .filter(m => /Start Financeiro/i.test(m.description || ''))
@@ -898,8 +912,9 @@ export function useFinancialData() {
       toAmount(r.amount) > 0
     );
 
-    const expenseIds = new Set(expenses.map(e => e.id));
-    const revenueIds = new Set(revenues.map(r => r.id));
+    // Órfão é só o espelho cujo lançamento não existe mais em nenhuma das tabelas
+    const expenseIds = new Set((expIdsRes.data as any[]).map(e => String(e.id)));
+    const revenueIds = new Set((revIdsRes.data as any[]).map(r => String(r.id)));
     const orphans: any[] = [];
     const duplicates: any[] = [];
 

@@ -1186,13 +1186,23 @@ async function cleanupOldPortalVideos(options = {}) {
     clientId = null, 
     allClients = true, 
     olderThanDays = 60,
-    contentTypes = []
+    contentTypes = [],
+    // Por padrão não apaga o que ainda está em andamento (pendente, ajuste, revisão
+    // interna) nem a temporada do mês atual; includeOpen = true libera tudo.
+    includeOpen = false,
+    // dryRun: só conta (por status e quantos clientes), sem apagar nada.
+    dryRun = false,
   } = options;
 
-  let query = `DELETE FROM client_portal_contents
+  let query = `FROM client_portal_contents
     WHERE file_url IS NOT NULL
       AND content_type <> 'arte'`;
   const params = [];
+
+  if (!includeOpen) {
+    query += ` AND status NOT IN ('pendente', 'ajuste_solicitado', 'revisao_interna')`;
+    query += ` AND NOT (season_year = EXTRACT(YEAR FROM NOW())::int AND season_month = EXTRACT(MONTH FROM NOW())::int)`;
+  }
 
   const types = Array.isArray(contentTypes)
     ? contentTypes.map((t) => String(t || '').trim()).filter((t) => t && t !== 'arte')
@@ -1217,9 +1227,18 @@ async function cleanupOldPortalVideos(options = {}) {
   } else if (olderThanDays) {
     query += ` AND created_at < NOW() - INTERVAL '${olderThanDays} days'`;
   }
-  
-  query += ' RETURNING file_url, thumbnail_url';
-  const { rows, rowCount } = await pool.query(query, params);
+
+  if (dryRun) {
+    const { rows: byStatus } = await pool.query(
+      `SELECT status, count(*)::int AS total, count(DISTINCT client_id)::int AS clients ${query} GROUP BY status`, params
+    );
+    const { rows: [totals] } = await pool.query(
+      `SELECT count(*)::int AS total, count(DISTINCT client_id)::int AS clients ${query}`, params
+    );
+    return { total: totals?.total || 0, clients: totals?.clients || 0, byStatus };
+  }
+
+  const { rows, rowCount } = await pool.query(`DELETE ${query} RETURNING file_url, thumbnail_url`, params);
 
   let freedBytes = 0;
   // Proteção global: só remove do disco o arquivo que não é citado por
@@ -12648,18 +12667,27 @@ app.post('/api/portal-videos/bulk-delete', async (req, res) => {
   try {
     const { user } = await verifyUser(req);
     if (!(await userHasAssignedRole(user, 'admin'))) return res.status(403).json({ error: 'Acesso restrito ao administrador' });
-    const { months = [], clientId = null, allClients = true, contentTypes = [] } = req.body;
+    const { months = [], clientId = null, allClients = true, contentTypes = [], includeOpen = false, dryRun = false } = req.body;
     if (!Array.isArray(months) || months.length === 0 || months.some(month => !/^\d{4}-(0[1-9]|1[0-2])$/.test(String(month)))) {
       return res.status(400).json({ error: 'Selecione ao menos um mês válido' });
     }
-    
-    const deletedCount = await cleanupOldPortalVideos({
+    // Sem cliente escolhido não apaga de todos por engano: "todos" precisa vir explícito.
+    if (!clientId && allClients !== true) return res.status(400).json({ error: 'Escolha o cliente' });
+
+    const cleanupOptions = {
       months,
       clientId,
       allClients,
       contentTypes: Array.isArray(contentTypes) ? contentTypes : [],
-      olderThanDays: months.length > 0 ? null : 60
-    });
+      olderThanDays: months.length > 0 ? null : 60,
+      includeOpen: includeOpen === true,
+    };
+    if (dryRun === true) {
+      const preview = await cleanupOldPortalVideos({ ...cleanupOptions, dryRun: true });
+      return res.json({ success: true, dryRun: true, ...preview });
+    }
+
+    const deletedCount = await cleanupOldPortalVideos(cleanupOptions);
 
     res.json({ success: true, deletedCount, freedBytes: lastCleanupStats.freedBytes });
 

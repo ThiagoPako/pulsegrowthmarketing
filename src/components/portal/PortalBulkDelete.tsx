@@ -36,7 +36,8 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
   const [contentTypes, setContentTypes] = useState<VideoContentType[]>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [clients, setClients] = useState<Array<{ id: string; company_name: string }>>([]);
-  const [selectedClient, setSelectedClient] = useState(clientId || 'all');
+  // Sem padrão: o admin escolhe o cliente (ou "Todos os clientes") de propósito.
+  const [selectedClient, setSelectedClient] = useState(clientId || '');
   const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -47,7 +48,7 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
     setLoading(true);
     try {
       const search = new URLSearchParams();
-      if (selectedClient !== 'all') search.set('clientId', selectedClient);
+      if (selectedClient && selectedClient !== 'all') search.set('clientId', selectedClient);
       if (selectedTypes.length > 0) search.set('contentTypes', selectedTypes.join(','));
       const params = search.toString() ? `?${search.toString()}` : '';
       const res = await vpsAuthedFetch(`/portal-videos/months${params}`);
@@ -83,21 +84,48 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
       toast.error('Selecione ao menos um mês para deletar');
       return;
     }
-
-    if (!confirm(`Tem certeza que deseja deletar os vídeos de ${selectedMonths.length} mês(es)? Esta ação é irreversível.`)) {
+    if (!selectedClient) {
+      toast.error('Escolha o cliente (ou "Todos os clientes")');
       return;
     }
 
+    const allClients = selectedClient === 'all';
+    const requestBody = {
+      months: selectedMonths,
+      clientId: allClients ? null : selectedClient,
+      allClients,
+      contentTypes: selectedTypes,
+    };
+
     setDeleting(true);
     try {
+      // Prévia: quantos vídeos e de quantos clientes (pendentes, ajustes e o mês atual ficam de fora)
+      const previewRes = await vpsAuthedFetch('/portal-videos/bulk-delete', {
+        method: 'POST',
+        body: JSON.stringify({ ...requestBody, dryRun: true }),
+      });
+      const preview = await previewRes.json().catch(() => ({}));
+      if (!previewRes.ok || !preview.success) throw new Error(preview.error || 'Não foi possível calcular a limpeza');
+      if (!preview.total) {
+        toast.info('Nada para apagar: entregas pendentes, em ajuste ou do mês atual são preservadas.');
+        return;
+      }
+      const months = selectedMonths.map(m => m.split('-').reverse().join('/')).join(', ');
+      const who = allClients ? `de TODOS os clientes (${preview.clients} cliente(s))` : 'deste cliente';
+      if (!confirm(`Apagar ${preview.total} entrega(s) do portal ${who}, temporada(s) ${months}?\n\nEntregas pendentes, em ajuste e do mês atual não são apagadas. Esta ação é irreversível.`)) {
+        return;
+      }
+      if (allClients) {
+        const typed = window.prompt('Para apagar de todos os clientes, digite APAGAR');
+        if ((typed || '').trim().toUpperCase() !== 'APAGAR') {
+          toast.info('Limpeza cancelada');
+          return;
+        }
+      }
+
       const response = await vpsAuthedFetch('/portal-videos/bulk-delete', {
         method: 'POST',
-        body: JSON.stringify({
-          months: selectedMonths,
-          clientId: selectedClient === 'all' ? null : selectedClient,
-          allClients: selectedClient === 'all',
-          contentTypes: selectedTypes,
-        })
+        body: JSON.stringify(requestBody)
       });
 
       const data = await response.json().catch(() => ({}));
@@ -164,11 +192,12 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
     <div className="space-y-4 p-4 border border-border rounded-xl bg-card">
       <div className="flex items-center gap-2 text-primary font-semibold">
         <Trash2 size={18} />
-        <h3>Limpeza de Vídeos do Portal</h3>
+        <h3>Limpeza de entregas dos clientes</h3>
       </div>
       
       <p className="text-xs text-muted-foreground">
-        Selecione os meses dos vídeos que deseja remover permanentemente do sistema para liberar espaço.
+        Remove do portal as entregas (reels, stories, vídeos) dos meses escolhidos para liberar espaço.
+        Entregas pendentes, em ajuste e do mês atual são preservadas.
       </p>
 
       {!clientId && (
@@ -247,7 +276,7 @@ export default function PortalBulkDelete({ clientId }: { clientId?: string }) {
       <Button 
         variant="destructive" 
         className="w-full gap-2" 
-        disabled={selectedMonths.length === 0 || deleting}
+        disabled={selectedMonths.length === 0 || !selectedClient || deleting}
         onClick={handleDelete}
       >
         {deleting ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}

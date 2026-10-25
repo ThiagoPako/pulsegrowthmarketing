@@ -102,8 +102,9 @@ export default function AvulsoApproval() {
         toast.error(result.error);
       } else if (result.task) {
         setTask(result.task);
-        // Estado real da tarefa: já aprovado (arquivado) ou revisão já pedida
-        if (result.task.approved_at || result.task.kanban_column === 'arquivado') setApproved(true);
+        // Estado real da tarefa: já aprovado pelo cliente (arquivado, mesmo critério do servidor)
+        // ou revisão já pedida. approved_at sozinho não serve: a aprovação interna da equipe também grava.
+        if (result.task.kanban_column === 'arquivado') setApproved(true);
         else if (result.task.kanban_column === 'alteracao') setRevisionSent(true);
       }
       setLoading(false);

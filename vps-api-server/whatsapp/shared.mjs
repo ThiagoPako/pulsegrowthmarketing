@@ -159,6 +159,8 @@ export function ensureWhatsAppSchema(pool) {
         )
       `);
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_wa_approval_phone ON wa_approval_requests (phone, status)`);
+      // texto que não deu para entender: a explicação de como responder vai uma vez só por lote
+      await pool.query(`ALTER TABLE wa_approval_requests ADD COLUMN IF NOT EXISTS help_sent_at TIMESTAMPTZ`);
       // aviso "vídeo novo no portal": cada conteúdo avisa uma vez só
       await pool.query(`ALTER TABLE client_portal_contents ADD COLUMN IF NOT EXISTS wa_notified_at TIMESTAMPTZ`).catch(() => {});
       await pool.query(`

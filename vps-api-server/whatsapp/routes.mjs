@@ -319,12 +319,14 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
     }
   }
 
+  // Só age em conteúdo ainda "pendente": se o cliente já aprovou ou pediu ajuste pelo portal (ou a equipe mexeu),
+  // uma mensagem atrasada no WhatsApp não muda nada. Devolve false nesse caso.
   async function approveContent(contentId, who) {
     const { rows: [content] } = await pool.query(
-      `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW() WHERE id = $1
+      `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW() WHERE id = $1 AND status = 'pendente'
        RETURNING id, client_id, title`, [contentId]
     );
-    if (!content) return;
+    if (!content) return false;
     await pool.query(`INSERT INTO client_portal_comments (content_id, author_name, author_type, message) VALUES ($1, $2, 'client', $3)`,
       [content.id, who || 'Cliente', '✅ Aprovado pelo WhatsApp']).catch(() => {});
     const { rows: [task] } = await pool.query(
@@ -337,18 +339,21 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
         [task.id, '✅ Aprovado pelo cliente via WhatsApp', who || null]);
     }
     await notifyTeam('✅ Conteúdo aprovado pelo cliente', `"${content.title}" foi aprovado pelo WhatsApp`, 'approval', '/conteudo');
+    return true;
   }
 
   async function requestAdjustment(contentId, note, who) {
     const { rows: [content] } = await pool.query(
-      `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW() WHERE id = $1 RETURNING id, client_id, title`,
+      `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW() WHERE id = $1 AND status = 'pendente'
+       RETURNING id, client_id, title`,
       [contentId]
     );
-    if (!content) return;
+    if (!content) return false;
     await pool.query(`INSERT INTO client_portal_comments (content_id, author_name, author_type, message) VALUES ($1, $2, 'client', $3)`,
       [content.id, who || 'Cliente', `🔧 Ajuste solicitado (WhatsApp): ${note}`]).catch(() => {});
+    // card já aprovado (agendamentos) não volta para alteração por mensagem do WhatsApp
     const { rows: [task] } = await pool.query(
-      `SELECT id, assigned_to FROM content_tasks WHERE client_id = $1 AND title = $2 AND kanban_column IN ('envio', 'revisao', 'agendamentos')
+      `SELECT id, assigned_to FROM content_tasks WHERE client_id = $1 AND title = $2 AND kanban_column IN ('envio', 'revisao')
         ORDER BY created_at DESC LIMIT 1`, [content.client_id, content.title]
     );
     if (task) {
@@ -361,6 +366,7 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
       }
     }
     await notifyTeam('🔧 Ajuste solicitado pelo WhatsApp', `Cliente pediu ajuste em "${content.title}": ${note.slice(0, 80)}`, 'adjustment', '/entregas-social');
+    return true;
   }
 
   const norm = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
@@ -368,6 +374,17 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
   // aprova: "aprovado…", "pode postar…", ou um "ok/sim/👍" sozinho (um "ok, vou ver" não aprova)
   const APPROVE = /^(aprovad[oa]s?|aprovo|aprovei|aprova|pode postar|pode publicar|pode subir|ta aprovado|esta aprovado|tudo certo|ficou otimo|ficou perfeito)\b/;
   const APPROVE_ALONE = /^(ok|okay|sim|show|top|perfeito|amei|otimo|👍|✅|👏)[!. 👍✅👏]*$/;
+  // "aprovado, mas troca a música" não é só aprovação
+  const NOT_ONLY_APPROVAL = /\b(nao|mas|porem|so que|exceto|menos|antes)\b|\b(troc|mud|ajust|corrig|alter|tir[ae]|remov)\w*/;
+  // aprovação de um item: "1 aprovado", "o 2 tá ok"
+  const ITEM_APPROVE = /^(?:ta |esta |ficou |foi )?(?:aprovad[oa]s?|aprovo|aprova|ok|okay|pode postar|pode publicar|perfeito|otimo|show|top|tudo certo|certo|sim)(?![a-z0-9])/;
+  // pedido de mudança claro (com um vídeo só, vira ajuste sem precisar do número)
+  const CHANGE_REQUEST = /\b(ajust|troc|mud|tir[ae]|corrig|alter|coloc|bot[ae]|aument|diminu|abaix|remov|substitu|acrescent|adicion|refaz|cort[ae]|errad|faltou|falta)\w*|\berro\b/;
+  // cortesia / "vou ver depois": não é aprovação nem ajuste
+  const COURTESY = /^(?:obrigad[oa]|obg|valeu|vlw|bom dia|boa tarde|boa noite|oi|ola|opa|blz|beleza|recebi|recebido|vou ver|vou assistir|vou olhar|depois vejo|depois eu vejo|ja vejo|ja vou ver|assisto|kk+|ha(?:ha)+|rs+)(?![a-z0-9])/;
+  // "o 1 tá aprovado, o 2 troca a música" → um trecho por vídeo
+  const SEGMENT_SPLIT = /(?:\s*[\n;,]+\s*|\s+e\s+)(?=(?:(?:o|a|no|na)\s+)?(?:v[ií]deo\s+|arte\s+)?\d{1,2}(?!\d))/i;
+  const SEGMENT = /^(?:(?:o|a|no|na)\s+)?(?:v[ií]deo\s+|arte\s+)?(\d{1,2})(?!\d)\s*(?:[-:.)º°]\s*)?(.*)$/is;
   const phoneVariants = (phone) => {
     const d = String(phone || '').replace(/\D/g, '');
     const local = d.startsWith('55') && d.length > 11 ? d.slice(2) : d;
@@ -415,7 +432,7 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
     }
     const how = contents.length > 1
       ? `Para aprovar todos, responda *APROVADO*.\nPara pedir ajuste, escreva o número do vídeo e o que mudar (ex.: *2 trocar a música*).`
-      : `Para aprovar, responda *APROVADO*.\nSe quiser algum ajuste, é só escrever aqui o que mudar.`;
+      : `Para aprovar, responda *APROVADO*.\nSe quiser algum ajuste, escreva *AJUSTE* e o que mudar (ex.: *AJUSTE trocar a música*).`;
     await enqueueWhatsApp(pool, { to: target, body: `Oi${name ? `, ${name}` : ''}! Como o portal não abriu, mandei ${contents.length > 1 ? 'os vídeos' : 'o vídeo'} aqui. 😊\n\n${how}`,
       clientId: client.id, triggerType: 'portal_ajuda', purpose: 'aprovacao' });
     await enqueueWhatsApp(pool, { to: groupJid, body: `${name ? `${name}, m` : 'M'}andei ${contents.length > 1 ? 'os vídeos' : 'o vídeo'} no seu privado para você assistir e aprovar por lá 👍`,
@@ -424,41 +441,109 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
   }
 
   // no privado: resposta aos vídeos mandados (APROVADO ou o ajuste)
+  // Só vale intenção clara: "APROVADO" (a frase inteira) aprova tudo; "2 trocar a música" ou "AJUSTE trocar a música"
+  // pedem ajuste; "1 aprovado, 2 trocar a música" vale item a item. Cortesia ("obrigado", "vou assistir") não faz nada,
+  // e o resto recebe UMA explicação de como responder (sem virar ajuste nem aprovar).
   async function handlePrivateApproval({ phone, pushName, text }) {
     const { rows: pending } = await pool.query(
-      `SELECT * FROM wa_approval_requests WHERE phone = ANY($1) AND status = 'pendente' AND created_at > now() - interval '7 days'
-        ORDER BY created_at DESC, position`, [phoneVariants(phone)]
+      `SELECT r.*, c.status AS content_status
+         FROM wa_approval_requests r LEFT JOIN client_portal_contents c ON c.id = r.content_id
+        WHERE r.phone = ANY($1) AND r.status = 'pendente' AND r.created_at > now() - interval '7 days'
+        ORDER BY r.created_at DESC, r.position`, [phoneVariants(phone)]
     );
-    if (!pending.length) return { skipped: 'sem_aprovacao_pendente' };
-    const latestBatch = pending[0].batch_id;
-    const items = pending.filter((p) => p.batch_id === latestBatch).sort((a, b) => a.position - b.position);
-    const n = norm(text);
+    // aprovado ou com ajuste pedido pelo portal (ou mexido pela equipe): o pedido pelo WhatsApp acabou
+    const closed = pending.filter((p) => p.content_status !== 'pendente');
+    if (closed.length) {
+      await pool.query(`UPDATE wa_approval_requests SET status = 'encerrado', answered_at = now() WHERE id = ANY($1)`, [closed.map((p) => p.id)]);
+    }
+    const open = pending.filter((p) => p.content_status === 'pendente');
+    if (!open.length) return { skipped: 'sem_aprovacao_pendente' };
+    const latestBatch = open[0].batch_id;
+    const items = open.filter((p) => p.batch_id === latestBatch).sort((a, b) => a.position - b.position);
     const who = pushName || 'Cliente';
-    const reply = (body) => enqueueWhatsApp(pool, { to: items[0].phone, body, clientId: items[0].client_id, triggerType: 'portal_ajuda', purpose: 'aprovacao' });
-    if (APPROVE.test(n) || APPROVE_ALONE.test(n) || (/aprovad/.test(n) && !/\bnao\b/.test(n))) {
-      for (const item of items) {
-        await approveContent(item.content_id, who);
-        await pool.query(`UPDATE wa_approval_requests SET status = 'aprovado', answer = $2, answered_at = now() WHERE id = $1`, [item.id, text.slice(0, 500)]);
+    const reply = (message) => enqueueWhatsApp(pool, { to: items[0].phone, body: message, clientId: items[0].client_id, triggerType: 'portal_ajuda', purpose: 'aprovacao' });
+    const raw = String(text || '').trim();
+    const explicitAdjust = raw.match(/^ajust(?:e|ar)\b[\s:,.-]*(.*)$/is);
+    const body = explicitAdjust ? explicitAdjust[1].trim() : raw;
+    const n = norm(body);
+
+    const approveItem = async (item) => {
+      const ok = await approveContent(item.content_id, who);
+      await pool.query(`UPDATE wa_approval_requests SET status = $3, answer = $2, answered_at = now() WHERE id = $1`,
+        [item.id, raw.slice(0, 500), ok ? 'aprovado' : 'encerrado']);
+      return ok;
+    };
+    const adjustItem = async (item, note) => {
+      const ok = await requestAdjustment(item.content_id, note, who);
+      await pool.query(`UPDATE wa_approval_requests SET status = $3, answer = $2, answered_at = now() WHERE id = $1`,
+        [item.id, note.slice(0, 500), ok ? 'ajuste' : 'encerrado']);
+      return ok;
+    };
+    const respond = async (approved, adjusted) => {
+      const parts = [];
+      if (approved.length) {
+        parts.push(approved.length === items.length
+          ? `Aprovado ✅ Obrigado! Vamos seguir com a publicação${items.length > 1 ? ' dos vídeos' : ''}. 🚀`
+          : `Aprovado ✅ ${listTitles(approved.map((i) => i.title || 'Conteúdo'))}.`);
       }
-      await reply(`Aprovado ✅ Obrigado! Vamos seguir com a publicação${items.length > 1 ? ' dos vídeos' : ''}. 🚀`);
-      return { ok: true, aprovados: items.length };
+      if (adjusted.length) {
+        parts.push(`Anotado! ✍️ Vamos fazer o ajuste em ${listTitles(adjusted.map((i) => i.title || 'Conteúdo'))} e te mandamos de novo.`);
+      }
+      if (parts.length) await reply(parts.join('\n\n'));
+      return { ok: true, aprovados: approved.length, ajustes: adjusted.map((i) => i.content_id) };
+    };
+    // explica uma vez só por lote (não responde a cada mensagem da semana)
+    const askOnce = async (message) => {
+      const { rowCount } = await pool.query(
+        `UPDATE wa_approval_requests SET help_sent_at = now() WHERE batch_id = $1 AND status = 'pendente' AND help_sent_at IS NULL`, [latestBatch]
+      );
+      if (!rowCount) return { skipped: 'ajuda_ja_enviada' };
+      await reply(message);
+      return { ok: true, perguntou: true };
+    };
+
+    // 1) aprovar tudo: a frase é a aprovação ("aprovado, mas troca a música" não é)
+    if (!explicitAdjust && (APPROVE.test(n) || APPROVE_ALONE.test(n)) && !NOT_ONLY_APPROVAL.test(n)) {
+      const approved = [];
+      for (const item of items) if (await approveItem(item)) approved.push(item);
+      return respond(approved, []);
     }
-    if (n.length < 3) return { skipped: 'resposta_curta' };
-    let item = items.length === 1 ? items[0] : null;
-    let note = text.trim();
-    const numbered = text.trim().match(/^(\d{1,2})\s*[-:.)]?\s+(.+)$/s);
-    if (!item && numbered) {
-      item = items.find((i) => i.position === Number(numbered[1])) || null;
-      note = numbered[2].trim();
+
+    // 2) por número: "2 trocar a música", "o 1 tá aprovado, o 2 troca a música"
+    const segments = body.split(SEGMENT_SPLIT).map((s) => s.trim())
+      .filter((s) => s && (SEGMENT.test(s) || !COURTESY.test(norm(s)))); // "bom dia, o 2 trocar…": ignora o "bom dia"
+    const parsed = segments.map((segment) => {
+      const m = segment.match(SEGMENT);
+      const item = m ? items.find((i) => i.position === Number(m[1])) : null;
+      const note = m ? m[2].trim() : '';
+      if (!item) return null;
+      const ns = norm(note);
+      if (ITEM_APPROVE.test(ns) && !NOT_ONLY_APPROVAL.test(ns)) return { item, approve: true };
+      return ns.length >= 3 ? { item, note } : null;
+    });
+    if (segments.length && parsed.every(Boolean)) {
+      const approved = [];
+      const adjusted = [];
+      for (const p of parsed) {
+        if (p.approve) {
+          if (await approveItem(p.item)) approved.push(p.item);
+        } else if (await adjustItem(p.item, p.note)) adjusted.push(p.item);
+      }
+      return respond(approved, adjusted);
     }
-    if (!item) {
-      await reply(`Qual vídeo? Responda com o número e o ajuste, por exemplo: *${items.length} trocar a música*.`);
-      return { ok: true, perguntou_qual: true };
+
+    // 3) um vídeo só: "AJUSTE …" ou um pedido de mudança claro vira ajuste
+    if (items.length === 1 && n.length >= 3 && (explicitAdjust || CHANGE_REQUEST.test(n))) {
+      const ok = await adjustItem(items[0], body);
+      return respond([], ok ? [items[0]] : []);
     }
-    await requestAdjustment(item.content_id, note, who);
-    await pool.query(`UPDATE wa_approval_requests SET status = 'ajuste', answer = $2, answered_at = now() WHERE id = $1`, [item.id, note.slice(0, 500)]);
-    await reply(`Anotado! ✍️ Vamos fazer o ajuste em "${item.title}" e te mandamos de novo.`);
-    return { ok: true, ajuste: item.content_id };
+
+    // 4) cortesia ou texto solto
+    if (!explicitAdjust && (COURTESY.test(n) || n.length < 3)) return { skipped: 'nao_e_resposta' };
+    if (items.length > 1) {
+      return askOnce(`Qual vídeo? Responda com o número e o ajuste, por exemplo: *${items.length} trocar a música*.\nPara aprovar todos, responda *APROVADO*.`);
+    }
+    return askOnce(`Não entendi se é um ajuste 🙂\nPara aprovar, responda *APROVADO*.\nPara pedir ajuste, escreva *AJUSTE* e o que mudar (ex.: *AJUSTE trocar a música*).`);
   }
 
   app.get('/api/whatsapp/groups', async (req, res) => {

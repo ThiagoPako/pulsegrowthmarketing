@@ -92,10 +92,15 @@ export default function FinancialChat() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão expirada');
 
-      const response = await supabase.functions.invoke('pulse-ai-chat', {
+      // Rota da VPS (/api/financial-chat). Provedor, modelo e chave saem da
+      // configuração ativa na tela APIs, lida pelo próprio servidor.
+      const response = await supabase.functions.invoke('financial-chat', {
         body: {
           question: q,
-          conversationHistory: messages.slice(-15).map(m => ({ role: m.role, content: m.content })),
+          conversationHistory: messages
+            .filter(m => m.role === 'user' || m.role === 'assistant')
+            .slice(-15)
+            .map(m => ({ role: m.role, content: m.content })),
         },
       });
 

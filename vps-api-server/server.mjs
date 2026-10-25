@@ -3290,7 +3290,6 @@ app.post('/api/financial-chat', async (req, res) => {
     const { question, conversationHistory, aiModel, aiProvider } = req.body;
     if (!question) return res.status(400).json({ error: 'Question is required' });
 
-    const selectedModel = aiModel || 'gemini-2.5-flash';
     const now = new Date();
     const SYSTEM_START = '2026-03-01'; // Sistema iniciou em março 2026
     const startOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
@@ -3695,14 +3694,22 @@ ${contextData}`;
 
     const messages = [{ role: 'system', content: systemPrompt }];
     if (conversationHistory && Array.isArray(conversationHistory)) {
-      for (const msg of conversationHistory.slice(-10)) messages.push({ role: msg.role, content: msg.content });
+      // Histórico vem do navegador: só papéis de conversa (nunca 'system') e texto limitado
+      const safeHistory = conversationHistory
+        .filter((msg) => msg && (msg.role === 'user' || msg.role === 'assistant') && typeof msg.content === 'string' && msg.content.trim())
+        .slice(-10);
+      for (const msg of safeHistory) messages.push({ role: msg.role, content: msg.content.slice(0, 4000) });
     }
     messages.push({ role: 'user', content: question });
 
-    // Get API key from local DB
+    // Get API key from local DB — provedor e modelo configurados na tela APIs valem
+    // quando o front não manda os seus (sem provedor, getAiConfig ignora a chave do banco).
     const dbApiKeyConfig = apiKeyRes.rows?.[0]?.config;
     const dbApiKey = dbApiKeyConfig?.api_key_encrypted;
-    const ai = getAiConfig(aiProvider, dbApiKey);
+    const ai = getAiConfig(aiProvider || dbApiKeyConfig?.ai_provider, dbApiKey);
+    const DEFAULT_CHAT_MODELS = { gemini: 'gemini-2.5-flash', openai: 'gpt-4o-mini', claude: 'claude-3-haiku-20240307' };
+    const configuredModel = (!dbApiKeyConfig?.ai_provider || dbApiKeyConfig.ai_provider === ai.provider) ? dbApiKeyConfig?.ai_model : null;
+    const selectedModel = aiModel || configuredModel || DEFAULT_CHAT_MODELS[ai.provider] || 'gemini-2.5-flash';
     const answer = await callAi(ai, selectedModel, messages, { temperature: 0.3, max_tokens: 3000 });
 
     // Save chat messages to local DB

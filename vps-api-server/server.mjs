@@ -5613,12 +5613,59 @@ app.post('/api/meta-oauth-diagnose', async (req, res) => {
   }
 });
 
+/**
+ * Quem pode mexer nas conexões sociais dos clientes: os mesmos papéis do menu
+ * Conexões Sociais (admin, social_media, gestor_projetos, revisor_meta).
+ */
+async function verifySocialManager(req) {
+  const ctx = await verifyUser(req);
+  if (await isAdminUser(ctx.user)) return ctx;
+  if (await userHasAssignedRole(ctx.user, 'gestor_projetos')) return ctx;
+  if (await userHasAssignedRole(ctx.user, 'revisor_meta')) return ctx;
+  throw new Error('Admin access required');
+}
+
+function socialAuthErrorStatus(error) {
+  return error?.message === 'Admin access required' ? 403 : 401;
+}
+
+/**
+ * Cliente autorizado a conectar contas no /api/meta-oauth:
+ * equipe logada (Clientes) usa o client_id do corpo; o cliente na página
+ * pública /conectar-social usa o token do convite e o client_id vem do link.
+ */
+async function resolveMetaOAuthClientId(req) {
+  if (req.headers.authorization?.startsWith('Bearer ')) {
+    const isTeam = await verifyUser(req).then(() => true).catch(() => false);
+    if (isTeam) return req.body?.client_id || null;
+  }
+  const inviteToken = String(req.body?.invite_token || '').trim();
+  if (!inviteToken) throw Object.assign(new Error('Unauthorized'), { status: 401 });
+  await ensureSocialPostsSchema();
+  const { rows } = await pool.query(
+    'SELECT client_id, expires_at FROM social_connect_links WHERE token = $1 LIMIT 1',
+    [inviteToken]
+  );
+  if (!rows.length) throw Object.assign(new Error('Link inválido ou removido.'), { status: 401 });
+  if (new Date(rows[0].expires_at).getTime() < Date.now()) {
+    throw Object.assign(new Error('Este link expirou. Peça um novo para a agência.'), { status: 410 });
+  }
+  return rows[0].client_id;
+}
+
 app.post('/api/meta-oauth', async (req, res) => {
+  let client_id;
+  try {
+    client_id = await resolveMetaOAuthClientId(req);
+  } catch (authError) {
+    return res.status(authError.status || 401).json({ error: authError.message || 'Unauthorized' });
+  }
+
   try {
     const admin = getAdminClient();
     // redirect_uri ÚNICO: o mesmo texto vai na URL de login e na troca do código.
     // Valor do corpo é ignorado para nunca divergir (www, sem barra, preview…).
-    const { action, client_id, code } = req.body;
+    const { action, code } = req.body;
     const redirect_uri = META_OAUTH_REDIRECT_URI;
 
     const loaded = await loadMetaOAuthConfig(admin);
@@ -5774,6 +5821,12 @@ async function getMetaConfigFromDb() {
  */
 app.post('/api/social-accounts/manual-token', async (req, res) => {
   try {
+    await verifySocialManager(req);
+  } catch (authError) {
+    return res.status(socialAuthErrorStatus(authError)).json({ error: authError.message || 'Unauthorized' });
+  }
+
+  try {
     const { client_id, platform, token: rawToken, account_name, instagram_business_id, facebook_page_id, api_base } = req.body;
     if (!client_id || client_id === 'new') return res.status(400).json({ error: 'Salve o cliente primeiro antes de colar o token.' });
     if (!platform || !['instagram', 'facebook'].includes(platform)) return res.status(400).json({ error: 'platform deve ser instagram ou facebook' });
@@ -5881,6 +5934,12 @@ async function fetchMetaWithRetry(url, options, retries = 3) {
 
 app.post('/api/meta-publish', async (req, res) => {
   try {
+    await verifyAdmin(req);
+  } catch (authError) {
+    return res.status(socialAuthErrorStatus(authError)).json({ error: authError.message || 'Unauthorized' });
+  }
+
+  try {
     const admin = getAdminClient();
     const { integration_id, client_id, publish_type, media_url, caption, scheduled_time } = req.body;
     if (!integration_id || !client_id || !publish_type || !media_url) return res.status(400).json({ error: 'Missing required fields' });
@@ -5986,6 +6045,12 @@ app.post('/api/meta-store-credentials', async (req, res) => {
 // ─── 11. Meta Token Refresh ─────────────────────────────────
 app.post('/api/meta-token-refresh', async (req, res) => {
   try {
+    await verifySocialManager(req);
+  } catch (authError) {
+    return res.status(socialAuthErrorStatus(authError)).json({ error: authError.message || 'Unauthorized' });
+  }
+
+  try {
     const admin = getAdminClient();
     const { data: integrations } = await admin.from('api_integrations').select('*').eq('provider', 'meta_ads').eq('status', 'ativo');
     if (!integrations?.length) return res.json({ message: 'No active Meta integrations' });
@@ -6073,8 +6138,16 @@ ensureSocialPostsSchema().catch(err => console.error('[social-posts] schema init
 
 /** Cria (ou renova) o link de autorização de um cliente. */
 app.post('/api/social-connect-links', async (req, res) => {
+  let created_by = null;
   try {
-    const { client_id, created_by = null, days = 14 } = req.body || {};
+    const { user } = await verifySocialManager(req);
+    created_by = user?.id || null;
+  } catch (authError) {
+    return res.status(socialAuthErrorStatus(authError)).json({ error: authError.message || 'Unauthorized' });
+  }
+
+  try {
+    const { client_id, days = 14 } = req.body || {};
     if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
     await ensureSocialPostsSchema();
 

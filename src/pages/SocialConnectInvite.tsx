@@ -67,6 +67,8 @@ export default function SocialConnectInvite() {
         body: JSON.stringify({
           action: platform === 'instagram' ? 'get_instagram_oauth_url' : 'get_oauth_url',
           client_id: invite.client_id,
+          // O servidor confere o convite e usa o cliente do link (sem login da equipe)
+          invite_token: token,
           redirect_uri: redirectUri,
         }),
       });
@@ -120,6 +122,7 @@ export default function SocialConnectInvite() {
           code,
           redirect_uri: redirectUri,
           client_id: invite.client_id,
+          invite_token: token,
         }),
       });
       const result = await exchangeRes.json().catch(() => null);

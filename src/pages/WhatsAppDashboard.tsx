@@ -111,7 +111,8 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
     expired: { label: 'Expirado', variant: 'secondary' },
   };
 
-  const templateFields: { key: keyof WhatsAppConfig; toggleKey?: keyof WhatsAppConfig; label: string; description: string; variables: string }[] = [
+  // unavailable: o sistema ainda não manda este aviso (nenhuma rotina usa o modelo); a chave fica travada
+  const templateFields: { key: keyof WhatsAppConfig; toggleKey?: keyof WhatsAppConfig; label: string; description: string; variables: string; unavailable?: boolean }[] = [
     {
       key: 'msgRecordingScheduled',
       toggleKey: 'autoRecordingScheduled',
@@ -149,6 +150,7 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
       label: '🎯 Backup Confirmado',
       description: 'Enviada quando um cliente backup aceita a vaga',
       variables: '{nome_cliente}, {link_portal}',
+      unavailable: true,
     },
     {
       key: 'msgTaskEditing',
@@ -170,6 +172,7 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
       label: '✅ Vídeo Aprovado',
       description: 'Enviada quando o vídeo é aprovado e vai para agendamento',
       variables: '{nome_cliente}, {titulo}, {link_portal}',
+      unavailable: true,
     },
     {
       key: 'msgApprovalExpired',
@@ -177,6 +180,7 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
       label: '⏰ Aprovação Expirada',
       description: 'Enviada quando o prazo de aprovação expira e o vídeo segue automaticamente',
       variables: '{nome_cliente}, {titulo}, {link_portal}',
+      unavailable: true,
     },
   ];
 
@@ -377,7 +381,7 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
           ) : config ? (
             <div className="space-y-4">
               {templateFields.map(tmpl => (
-                <Card key={tmpl.key} className={tmpl.toggleKey && config[tmpl.toggleKey] === false ? 'opacity-60' : ''}>
+                <Card key={tmpl.key} className={tmpl.unavailable || (tmpl.toggleKey && config[tmpl.toggleKey] === false) ? 'opacity-60' : ''}>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex-1">
@@ -385,14 +389,19 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
                           <CardTitle className="text-sm">{tmpl.label}</CardTitle>
                           {tmpl.toggleKey && (
                             <Switch
-                              checked={config[tmpl.toggleKey] as boolean}
+                              checked={!tmpl.unavailable && (config[tmpl.toggleKey] as boolean)}
+                              disabled={tmpl.unavailable}
                               onCheckedChange={v => setConfig({ ...config, [tmpl.toggleKey!]: v })}
                             />
                           )}
+                          {tmpl.unavailable && <Badge variant="secondary" className="text-[10px]">Ainda não disponível</Badge>}
                         </div>
                         <CardDescription className="text-[11px]">
                           {tmpl.description}
-                          {tmpl.toggleKey && (
+                          {tmpl.unavailable && (
+                            <span className="ml-1 font-medium text-muted-foreground">— o sistema ainda não envia este aviso</span>
+                          )}
+                          {tmpl.toggleKey && !tmpl.unavailable && (
                             <span className={`ml-1 font-medium ${config[tmpl.toggleKey] ? 'text-success' : 'text-muted-foreground'}`}>
                               — {config[tmpl.toggleKey] ? 'Ativo' : 'Desativado'}
                             </span>

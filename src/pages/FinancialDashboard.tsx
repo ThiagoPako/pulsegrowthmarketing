@@ -594,8 +594,8 @@ export default function FinancialDashboard() {
       )}
 
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="flex items-center justify-between">
-        <div className="flex items-center gap-6">
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-4 sm:gap-6">
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <motion.span animate={{ rotate: [0, 10, -10, 0] }} transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}>💰</motion.span>
@@ -623,7 +623,7 @@ export default function FinancialDashboard() {
             }}
           />
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Button size="sm" onClick={() => setShowFinancialStart(true)} className="gap-2 shadow-sm bg-gradient-to-r from-primary to-primary/80">
             <Rocket className="h-4 w-4" />
             Start Financeiro
@@ -633,7 +633,7 @@ export default function FinancialDashboard() {
             Importar Extrato
           </Button>
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="w-48 shadow-sm"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-48 shadow-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
               {monthOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
             </SelectContent>

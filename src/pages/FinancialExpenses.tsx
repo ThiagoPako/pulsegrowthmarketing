@@ -492,13 +492,13 @@ export default function FinancialExpenses() {
         )}
       </AnimatePresence>
       <FinancialQuickNav />
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="flex items-center gap-3">
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="flex flex-wrap items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate('/financeiro')} className="hover:bg-primary/10"><ArrowLeft size={18} /></Button>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <h1 className="text-xl font-bold flex items-center gap-2">💸 Despesas</h1>
         </div>
         <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-          <SelectTrigger className="w-48 shadow-sm"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-48 shadow-sm"><SelectValue /></SelectTrigger>
           <SelectContent>
             {monthOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
           </SelectContent>

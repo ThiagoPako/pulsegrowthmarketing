@@ -4153,7 +4153,8 @@ app.post('/api/public-proposal', async (req, res) => {
     }
 
     if (action === 'get_clients') {
-      const { rows } = await pool.query('SELECT id, company_name, logo_url, color FROM clients WHERE status = $1 ORDER BY company_name', ['ativo']);
+      // Vitrine de logos da proposta: sem o id (o id do cliente abre o portal).
+      const { rows } = await pool.query('SELECT company_name, logo_url, color FROM clients WHERE status = $1 ORDER BY company_name', ['ativo']);
       return res.json({ clients: rows });
     }
 
@@ -4295,14 +4296,16 @@ app.post('/api/portal-actions', async (req, res) => {
     // ── Update script client priority ──
     if (action === 'set_script_priority') {
       const { script_id, priority } = req.body;
-      if (!script_id) return res.status(400).json({ error: 'script_id required' });
-      await pool.query('UPDATE scripts SET client_priority = $1 WHERE id = $2', [priority || 'normal', script_id]);
+      if (!script_id || !client_id) return res.status(400).json({ error: 'script_id and client_id required' });
+      // Só altera roteiro do próprio cliente do portal
+      const { rowCount } = await pool.query(
+        'UPDATE scripts SET client_priority = $1 WHERE id = $2 AND client_id = $3',
+        [priority || 'normal', script_id, client_id]
+      );
+      if (rowCount === 0) return res.status(404).json({ error: 'Roteiro não encontrado' });
       // Get client name for notifications
-      if (client_id) {
-        const { rows: [clientInfo] } = await pool.query('SELECT company_name FROM clients WHERE id = $1', [client_id]);
-        return res.json({ success: true, company_name: clientInfo?.company_name || '' });
-      }
-      return res.json({ success: true });
+      const { rows: [clientInfo] } = await pool.query('SELECT company_name FROM clients WHERE id = $1', [client_id]);
+      return res.json({ success: true, company_name: clientInfo?.company_name || '' });
     }
 
     // ── Get content tasks (for calendar) ──
@@ -4406,20 +4409,23 @@ app.post('/api/portal-actions', async (req, res) => {
     }
 
     if (action === 'approve') {
-      if (!content_id) return res.status(400).json({ error: 'content_id required' });
-      await pool.query(
-        `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW() WHERE id = $1`,
-        [content_id]
+      if (!content_id || !client_id) return res.status(400).json({ error: 'content_id and client_id required' });
+      // Só aprova conteúdo do próprio cliente do portal
+      const { rowCount } = await pool.query(
+        `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW() WHERE id = $1 AND client_id = $2`,
+        [content_id, client_id]
       );
+      if (rowCount === 0) return res.status(404).json({ error: 'Content not found' });
       return res.json({ success: true });
     }
 
     if (action === 'request_adjustment') {
-      if (!content_id || !message) return res.status(400).json({ error: 'content_id and message required' });
-      await pool.query(
-        `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW() WHERE id = $1`,
-        [content_id]
+      if (!content_id || !message || !client_id) return res.status(400).json({ error: 'content_id, client_id and message required' });
+      const { rowCount } = await pool.query(
+        `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW() WHERE id = $1 AND client_id = $2`,
+        [content_id, client_id]
       );
+      if (rowCount === 0) return res.status(404).json({ error: 'Content not found' });
       await pool.query(
         `INSERT INTO client_portal_comments (content_id, author_name, author_type, author_id, message) VALUES ($1, $2, $3, $4, $5)`,
         [content_id, author_name || 'Cliente', author_type || 'client', author_id || null, `🔧 Ajuste solicitado: ${message}`]

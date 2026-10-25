@@ -3914,15 +3914,17 @@ function portalCityMemberSql(userIdExpr, cityParam) {
 
 /**
  * Avisa a equipe (pelos papéis) de algo que aconteceu no portal de um cliente: só quem
- * atende a cidade do cliente (admin vê todas) e com a cidade gravada na notificação —
- * sem ela, o DEFAULT 'minacu' esconderia o aviso da equipe de Uruaçu.
+ * atende a cidade do cliente (admin e social_media veem todas, como no isAdminUser) e com
+ * a cidade gravada na notificação — sem ela, o DEFAULT 'minacu' esconderia o aviso da
+ * equipe de Uruaçu.
  */
 async function notifyPortalTeam(clientId, roles, title, message, type = 'info', link = null) {
   const city = await getPortalClientCity(clientId).catch(() => null);
   const { rows } = await pool.query(
     `SELECT DISTINCT ur.user_id FROM user_roles ur
       WHERE ur.role::text = ANY($1::text[])
-        AND (ur.role::text = 'admin' OR ${portalCityMemberSql('ur.user_id', '$2')})`,
+        AND (EXISTS (SELECT 1 FROM user_roles ura WHERE ura.user_id::text = ur.user_id::text AND ura.role::text IN ('admin', 'social_media'))
+          OR ${portalCityMemberSql('ur.user_id', '$2')})`,
     [roles, city]
   );
   await insertPortalTeamNotifications(city, rows.map(r => r.user_id), title, message, type, link);

@@ -4865,11 +4865,20 @@ app.post('/api/portal-actions', async (req, res) => {
     if (action === 'approve_design_task') {
       const { task_id } = req.body;
       if (!task_id) return res.status(400).json({ error: 'task_id required' });
+      // Só arte aguardando o cliente; clique repetido não grava nem avisa de novo
       const { rowCount: designApproved } = await pool.query(
-        `UPDATE design_tasks SET kanban_column = 'aprovado', client_approved_at = NOW(), completed_at = NOW(), updated_at = NOW() WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)`,
+        `UPDATE design_tasks SET kanban_column = 'aprovado', client_approved_at = NOW(), completed_at = NOW(), updated_at = NOW()
+          WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) AND kanban_column = 'enviar_cliente'`,
         [task_id, scopeClientId]
       );
-      if (!designApproved) return res.status(404).json({ error: 'Arte não encontrada' });
+      if (!designApproved) {
+        const { rows: [currentDesign] } = await pool.query(
+          'SELECT kanban_column FROM design_tasks WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)', [task_id, scopeClientId]
+        );
+        if (!currentDesign) return res.status(404).json({ error: 'Arte não encontrada' });
+        if (currentDesign.kanban_column === 'aprovado') return res.json({ success: true, already_approved: true });
+        return res.status(409).json({ error: 'Esta arte não está aguardando aprovação' });
+      }
       await pool.query(
         `INSERT INTO design_task_history (task_id, action) VALUES ($1, $2)`,
         [task_id, '✅ Aprovado pelo cliente via Pulse Club']
@@ -4884,11 +4893,20 @@ app.post('/api/portal-actions', async (req, res) => {
     if (action === 'request_design_adjustment') {
       const { task_id, note } = req.body;
       if (!task_id || !note) return res.status(400).json({ error: 'task_id and note required' });
+      // Só arte aguardando o cliente; pedido repetido (já em ajustes) não grava nem avisa de novo
       const { rowCount: designAdjusted } = await pool.query(
-        `UPDATE design_tasks SET kanban_column = 'ajustes', observations = $1, updated_at = NOW() WHERE id = $2 AND ($3::uuid IS NULL OR client_id = $3::uuid)`,
+        `UPDATE design_tasks SET kanban_column = 'ajustes', observations = $1, updated_at = NOW()
+          WHERE id = $2 AND ($3::uuid IS NULL OR client_id = $3::uuid) AND kanban_column = 'enviar_cliente'`,
         [note, task_id, scopeClientId]
       );
-      if (!designAdjusted) return res.status(404).json({ error: 'Arte não encontrada' });
+      if (!designAdjusted) {
+        const { rows: [currentDesign] } = await pool.query(
+          'SELECT kanban_column FROM design_tasks WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)', [task_id, scopeClientId]
+        );
+        if (!currentDesign) return res.status(404).json({ error: 'Arte não encontrada' });
+        if (currentDesign.kanban_column === 'ajustes') return res.json({ success: true, already_requested: true });
+        return res.status(409).json({ error: 'Esta arte não está aguardando aprovação' });
+      }
       await pool.query(
         `INSERT INTO design_task_history (task_id, action, details) VALUES ($1, $2, $3)`,
         [task_id, '🔧 Ajuste solicitado pelo cliente via Pulse Club', note]

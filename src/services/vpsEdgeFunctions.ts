@@ -27,7 +27,7 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
-async function refreshVpsSession(): Promise<boolean> {
+export async function refreshVpsSession(): Promise<boolean> {
   const token = typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
   if (!token) return false;
 

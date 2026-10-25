@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/vpsDb';
+import { savePortalSession } from '@/lib/portalApi';
 import { Lock, User, Eye, EyeOff, UserPlus, Users, ArrowLeft, CheckCircle2, AlertCircle, Rocket } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -66,10 +67,12 @@ export default function ClientPortalRegister() {
     const resolvedClientId = data.client_id || clientId;
 
     setSuccess(true);
-    sessionStorage.setItem('portal_client_id', resolvedClientId);
-    sessionStorage.setItem('portal_client_name', data.company_name || clientName);
-    sessionStorage.setItem('portal_user_name', data.display_name || displayName.trim());
-    sessionStorage.setItem('portal_auth_type', 'client');
+    savePortalSession({
+      clientId: resolvedClientId,
+      companyName: data.company_name || clientName,
+      userName: data.display_name || displayName.trim(),
+      token: data.portal_token,
+    });
 
     // Redirect after success animation
     setTimeout(() => {

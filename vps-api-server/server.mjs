@@ -21,6 +21,7 @@ import { createPgClient } from './pgClient.mjs';
 import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerWhatsAppRoutes } from './whatsapp/routes.mjs';
 import { enqueueWhatsApp, clientTarget, clientsForGroup } from './whatsapp/shared.mjs';
+import { createPortalSession, effectiveClientId, itemScopeClientId } from './lib/portalSession.mjs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -3845,6 +3846,33 @@ async function hashPassword(password) {
   return hash;
 }
 
+// Sessão do portal: o login devolve um token próprio (segredo derivado, sem `sub`),
+// exigido em /api/portal-actions e /api/portal-recordings junto com o JWT da equipe.
+const PORTAL_JWT_SECRET = process.env.PORTAL_JWT_SECRET
+  || crypto.createHash('sha256').update(`${JWT_SECRET}:pulse-portal-session`).digest('hex');
+// 'enforce' (padrão): sem token do portal nem JWT da equipe → 401.
+// 'log': só registra e deixa passar — válvula para voltar atrás sem novo deploy.
+const PORTAL_AUTH_MODE = String(process.env.PORTAL_AUTH_MODE || '').trim().toLowerCase() === 'log' ? 'log' : 'enforce';
+const portalSession = createPortalSession({
+  jwt,
+  secret: PORTAL_JWT_SECRET,
+  expiresIn: process.env.PORTAL_JWT_EXPIRES_IN || '7d',
+});
+
+function resolvePortalCaller(req) {
+  return portalSession.resolveCaller(req, verifyUser);
+}
+
+/** Sem sessão do portal nem da equipe. Devolve true quando já respondeu 401 (a rota para aí). */
+function rejectPortalCallWithoutSession(res, route, action) {
+  if (PORTAL_AUTH_MODE === 'log') {
+    console.warn(`[Portal-Auth] ${route} sem sessão (action=${action || '-'}) — liberado por PORTAL_AUTH_MODE=log`);
+    return false;
+  }
+  res.status(401).json({ error: 'Sua sessão do portal expirou. Entre de novo.', code: 'portal_session_required' });
+  return true;
+}
+
 // Ensure client_portal_users table exists (multi-user per company)
 (async () => {
   try {
@@ -3890,7 +3918,7 @@ app.post('/api/client-portal-auth', async (req, res) => {
       if (portalUser) {
         const passwordHash = await hashPassword(password);
         if (portalUser.password_hash !== passwordHash) return res.status(401).json({ error: 'Senha incorreta' });
-        return res.json({ success: true, client_id: portalUser.client_id, company_name: portalUser.company_name, color: portalUser.color, logo_url: portalUser.logo_url, display_name: portalUser.display_name, portal_user_id: portalUser.user_id });
+        return res.json({ success: true, client_id: portalUser.client_id, company_name: portalUser.company_name, color: portalUser.color, logo_url: portalUser.logo_url, display_name: portalUser.display_name, portal_user_id: portalUser.user_id, portal_token: portalSession.sign({ clientId: portalUser.client_id, portalUserId: portalUser.user_id }) });
       }
       // Fallback: legacy login on clients table
       const { rows: [client] } = await pool.query(
@@ -3900,7 +3928,7 @@ app.post('/api/client-portal-auth', async (req, res) => {
       if (!client) return res.status(404).json({ error: 'Login não encontrado' });
       const passwordHash = await hashPassword(password);
       if (client.client_password_hash !== passwordHash) return res.status(401).json({ error: 'Senha incorreta' });
-      return res.json({ success: true, client_id: client.id, company_name: client.company_name, color: client.color, logo_url: client.logo_url, display_name: client.company_name });
+      return res.json({ success: true, client_id: client.id, company_name: client.company_name, color: client.color, logo_url: client.logo_url, display_name: client.company_name, portal_token: portalSession.sign({ clientId: client.id }) });
     }
 
     if (action === 'register') {
@@ -3913,11 +3941,11 @@ app.post('/api/client-portal-auth', async (req, res) => {
       if (taken.length > 0) return res.status(409).json({ error: 'Nome de usuário já em uso' });
       const passwordHash = await hashPassword(password);
       const name = (display_name || login).trim();
-      await pool.query(
-        `INSERT INTO client_portal_users (client_id, username, display_name, password_hash) VALUES ($1, $2, $3, $4)`,
+      const { rows: [newPortalUser] } = await pool.query(
+        `INSERT INTO client_portal_users (client_id, username, display_name, password_hash) VALUES ($1, $2, $3, $4) RETURNING id`,
         [client_id, login.trim(), name, passwordHash]
       );
-      return res.json({ success: true, client_id, company_name: clientRow.company_name, display_name: name });
+      return res.json({ success: true, client_id, company_name: clientRow.company_name, display_name: name, portal_token: portalSession.sign({ clientId: clientRow.id, portalUserId: newPortalUser?.id }) });
     }
 
     if (action === 'get_info') {
@@ -3938,20 +3966,28 @@ app.post('/api/client-portal-auth', async (req, res) => {
       }
       const { rows: [data] } = await pool.query(query, params);
       if (!data) return res.status(404).json({ error: 'Cliente não encontrado' });
+      // Pelo slug (tela de login): só a marca. O id do cliente não sai antes do login.
+      if (!client_id) return res.json({ company_name: data.company_name, color: data.color, logo_url: data.logo_url });
       // Count existing portal users for this client
       const { rows: [countRow] } = await pool.query(`SELECT count(*)::int as total FROM client_portal_users WHERE client_id = $1`, [data.id]);
       return res.json({ id: data.id, company_name: data.company_name, color: data.color, logo_url: data.logo_url, registered_users: countRow?.total || 0, weekly_reels: data.weekly_reels, weekly_creatives: data.weekly_creatives, weekly_stories: data.weekly_stories, monthly_recordings: data.monthly_recordings, plan_id: data.plan_id, show_metrics: data.show_metrics, has_vehicle_flyer: data.has_vehicle_flyer, niche: data.niche, whatsapp: data.whatsapp, city: data.city });
     }
 
     if (action === 'get_contents') {
-      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      const caller = await resolvePortalCaller(req);
+      if (!caller && rejectPortalCallWithoutSession(res, 'client-portal-auth', action)) return;
+      const contentsClientId = effectiveClientId(caller, client_id);
+      if (!contentsClientId) return res.status(400).json({ error: 'client_id required' });
       const { rows } = await pool.query(
-        `SELECT * FROM client_portal_contents WHERE client_id = $1 ORDER BY created_at DESC`, [client_id]
+        `SELECT * FROM client_portal_contents WHERE client_id = $1 ORDER BY created_at DESC`, [contentsClientId]
       );
       return res.json({ contents: rows || [] });
     }
 
     if (action === 'list_users') {
+      // Lista os logins do cliente: só para a equipe.
+      const caller = await resolvePortalCaller(req);
+      if (caller?.kind !== 'team') return res.status(401).json({ error: 'Unauthorized' });
       if (!client_id) return res.status(400).json({ error: 'client_id required' });
       const { rows } = await pool.query(
         `SELECT id, username, display_name, created_at FROM client_portal_users WHERE client_id = $1 ORDER BY created_at`,
@@ -4195,7 +4231,20 @@ app.post('/api/public-proposal', async (req, res) => {
 
 app.post('/api/portal-actions', async (req, res) => {
   try {
-    const { action, client_id, content_id, author_name, author_type, author_id, message } = req.body;
+    const { action, content_id, message } = req.body;
+
+    // Sessão: cliente logado no portal (x-portal-token) ou equipe (JWT). O cliente
+    // só enxerga o próprio client_id (o do token; o do corpo é ignorado).
+    const caller = await resolvePortalCaller(req);
+    if (!caller && rejectPortalCallWithoutSession(res, 'portal-actions', action)) return;
+    const isTeamCaller = caller?.kind === 'team';
+    const client_id = effectiveClientId(caller, req.body.client_id);
+    // Filtro das ações por id de item (conteúdo, comentário, arte, panfleto, notificação).
+    const scopeClientId = itemScopeClientId(caller, req.body.client_id);
+    // Cliente não assina como equipe: comentário e ajuste do cliente saem sempre como 'client'.
+    const author_type = isTeamCaller ? req.body.author_type : 'client';
+    const author_id = isTeamCaller ? req.body.author_id : null;
+    const author_name = req.body.author_name;
 
     // ── Get client info ──
     if (action === 'get_client') {
@@ -4262,9 +4311,9 @@ app.post('/api/portal-actions', async (req, res) => {
     if (action === 'mark_notification_read') {
       const { notification_id, notification_ids } = req.body;
       if (notification_id) {
-        await pool.query('UPDATE client_portal_notifications SET read = true WHERE id = $1', [notification_id]);
+        await pool.query('UPDATE client_portal_notifications SET read = true WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)', [notification_id, scopeClientId]);
       } else if (notification_ids && notification_ids.length > 0) {
-        await pool.query('UPDATE client_portal_notifications SET read = true WHERE id = ANY($1)', [notification_ids]);
+        await pool.query('UPDATE client_portal_notifications SET read = true WHERE id = ANY($1) AND ($2::uuid IS NULL OR client_id = $2::uuid)', [notification_ids, scopeClientId]);
       }
       return res.json({ success: true });
     }
@@ -4296,7 +4345,11 @@ app.post('/api/portal-actions', async (req, res) => {
     if (action === 'set_script_priority') {
       const { script_id, priority } = req.body;
       if (!script_id) return res.status(400).json({ error: 'script_id required' });
-      await pool.query('UPDATE scripts SET client_priority = $1 WHERE id = $2', [priority || 'normal', script_id]);
+      const { rowCount: priorityUpdated } = await pool.query(
+        'UPDATE scripts SET client_priority = $1 WHERE id = $2 AND ($3::uuid IS NULL OR client_id = $3::uuid)',
+        [priority || 'normal', script_id, scopeClientId]
+      );
+      if (!priorityUpdated) return res.status(404).json({ error: 'Roteiro não encontrado' });
       // Get client name for notifications
       if (client_id) {
         const { rows: [clientInfo] } = await pool.query('SELECT company_name FROM clients WHERE id = $1', [client_id]);
@@ -4363,14 +4416,14 @@ app.post('/api/portal-actions', async (req, res) => {
     if (action === 'update_flyer_item') {
       const { item_id, status } = req.body;
       if (!item_id) return res.status(400).json({ error: 'item_id required' });
-      await pool.query('UPDATE flyer_items SET status = $1, updated_at = NOW() WHERE id = $2', [status, item_id]);
+      await pool.query('UPDATE flyer_items SET status = $1, updated_at = NOW() WHERE id = $2 AND ($3::uuid IS NULL OR client_id = $3::uuid)', [status, item_id, scopeClientId]);
       return res.json({ success: true });
     }
 
     if (action === 'delete_flyer_item') {
       const { item_id } = req.body;
       if (!item_id) return res.status(400).json({ error: 'item_id required' });
-      await pool.query('DELETE FROM flyer_items WHERE id = $1', [item_id]);
+      await pool.query('DELETE FROM flyer_items WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)', [item_id, scopeClientId]);
       return res.json({ success: true });
     }
 
@@ -4390,36 +4443,45 @@ app.post('/api/portal-actions', async (req, res) => {
     if (action === 'get_comments') {
       if (!content_id) return res.status(400).json({ error: 'content_id required' });
       const { rows } = await pool.query(
-        `SELECT c.*, p.avatar_url FROM client_portal_comments c LEFT JOIN profiles p ON p.id = c.author_id WHERE c.content_id = $1 ORDER BY c.created_at ASC`,
-        [content_id]
+        `SELECT c.*, p.avatar_url
+           FROM client_portal_comments c
+           JOIN client_portal_contents cpc ON cpc.id = c.content_id
+           LEFT JOIN profiles p ON p.id = c.author_id
+          WHERE c.content_id = $1 AND ($2::uuid IS NULL OR cpc.client_id = $2::uuid)
+          ORDER BY c.created_at ASC`,
+        [content_id, scopeClientId]
       );
       return res.json({ comments: rows });
     }
 
     if (action === 'add_comment') {
       if (!content_id || !message) return res.status(400).json({ error: 'content_id and message required' });
-      await pool.query(
-        `INSERT INTO client_portal_comments (content_id, author_name, author_type, author_id, message) VALUES ($1, $2, $3, $4, $5)`,
-        [content_id, author_name || 'Cliente', author_type || 'client', author_id || null, message]
+      const { rowCount: commentAdded } = await pool.query(
+        `INSERT INTO client_portal_comments (content_id, author_name, author_type, author_id, message)
+         SELECT id, $2, $3, $4, $5 FROM client_portal_contents WHERE id = $1 AND ($6::uuid IS NULL OR client_id = $6::uuid)`,
+        [content_id, author_name || 'Cliente', author_type || 'client', author_id || null, message, scopeClientId]
       );
+      if (!commentAdded) return res.status(404).json({ error: 'Conteúdo não encontrado' });
       return res.json({ success: true });
     }
 
     if (action === 'approve') {
       if (!content_id) return res.status(400).json({ error: 'content_id required' });
-      await pool.query(
-        `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW() WHERE id = $1`,
-        [content_id]
+      const { rowCount: approvedRows } = await pool.query(
+        `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW() WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)`,
+        [content_id, scopeClientId]
       );
+      if (!approvedRows) return res.status(404).json({ error: 'Conteúdo não encontrado' });
       return res.json({ success: true });
     }
 
     if (action === 'request_adjustment') {
       if (!content_id || !message) return res.status(400).json({ error: 'content_id and message required' });
-      await pool.query(
-        `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW() WHERE id = $1`,
-        [content_id]
+      const { rowCount: adjustedRows } = await pool.query(
+        `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW() WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)`,
+        [content_id, scopeClientId]
       );
+      if (!adjustedRows) return res.status(404).json({ error: 'Conteúdo não encontrado' });
       await pool.query(
         `INSERT INTO client_portal_comments (content_id, author_name, author_type, author_id, message) VALUES ($1, $2, $3, $4, $5)`,
         [content_id, author_name || 'Cliente', author_type || 'client', author_id || null, `🔧 Ajuste solicitado: ${message}`]
@@ -4430,7 +4492,10 @@ app.post('/api/portal-actions', async (req, res) => {
     // ── Get single content by ID ──
     if (action === 'get_content_by_id') {
       if (!content_id) return res.status(400).json({ error: 'content_id required' });
-      const { rows: [content] } = await pool.query('SELECT * FROM client_portal_contents WHERE id = $1', [content_id]);
+      const { rows: [content] } = await pool.query(
+        'SELECT * FROM client_portal_contents WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)',
+        [content_id, scopeClientId]
+      );
       if (!content) return res.status(404).json({ error: 'Content not found' });
       return res.json({ content });
     }
@@ -4439,6 +4504,13 @@ app.post('/api/portal-actions', async (req, res) => {
     if (action === 'create_portal_content') {
       const { title, content_type, file_url, season_month, season_year, status } = req.body;
       if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      // Cliente (vídeo do panfleto): só arquivo enviado para os uploads da agência e nunca como 'revisao_interna'.
+      if (!isTeamCaller) {
+        if (file_url && !/^(https:\/\/agenciapulse\.tech)?\/uploads\//.test(String(file_url))) {
+          return res.status(400).json({ error: 'Arquivo inválido' });
+        }
+        if (status === 'revisao_interna') return res.status(400).json({ error: 'Status inválido' });
+      }
       await pool.query(
         `INSERT INTO client_portal_contents (client_id, title, content_type, file_url, season_month, season_year, status) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [client_id, title || '', content_type || 'reel', file_url || null, season_month || new Date().getMonth() + 1, season_year || new Date().getFullYear(), status || 'pendente']
@@ -4509,9 +4581,10 @@ app.post('/api/portal-actions', async (req, res) => {
       if (!script_id) return res.status(400).json({ error: 'script_id required' });
 
       const { rows: [script] } = await pool.query(
-        'SELECT title FROM scripts WHERE id = $1 LIMIT 1',
-        [script_id]
+        'SELECT title FROM scripts WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) LIMIT 1',
+        [script_id, scopeClientId]
       );
+      if (!script) return res.status(404).json({ error: 'Roteiro não encontrado' });
 
       const { rows: notifUsers } = await pool.query(
         `SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`
@@ -4583,7 +4656,8 @@ app.post('/api/portal-actions', async (req, res) => {
 
     // ── Sync: Comment notification ──
     if (action === 'sync_comment') {
-      const { content_title, author_name: syncAuthorName, author_type: syncAuthorType, message: syncMessage } = req.body;
+      const { content_title, author_name: syncAuthorName, message: syncMessage } = req.body;
+      const syncAuthorType = isTeamCaller ? req.body.author_type : 'client';
       if (syncAuthorType === 'client') {
         const { rows: notifUsers } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
         for (const u of notifUsers) {
@@ -4682,10 +4756,11 @@ app.post('/api/portal-actions', async (req, res) => {
     if (action === 'approve_design_task') {
       const { task_id } = req.body;
       if (!task_id) return res.status(400).json({ error: 'task_id required' });
-      await pool.query(
-        `UPDATE design_tasks SET kanban_column = 'aprovado', client_approved_at = NOW(), completed_at = NOW(), updated_at = NOW() WHERE id = $1`,
-        [task_id]
+      const { rowCount: designApproved } = await pool.query(
+        `UPDATE design_tasks SET kanban_column = 'aprovado', client_approved_at = NOW(), completed_at = NOW(), updated_at = NOW() WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)`,
+        [task_id, scopeClientId]
       );
+      if (!designApproved) return res.status(404).json({ error: 'Arte não encontrada' });
       await pool.query(
         `INSERT INTO design_task_history (task_id, action) VALUES ($1, $2)`,
         [task_id, '✅ Aprovado pelo cliente via Pulse Club']
@@ -4708,10 +4783,11 @@ app.post('/api/portal-actions', async (req, res) => {
     if (action === 'request_design_adjustment') {
       const { task_id, note } = req.body;
       if (!task_id || !note) return res.status(400).json({ error: 'task_id and note required' });
-      await pool.query(
-        `UPDATE design_tasks SET kanban_column = 'ajustes', observations = $1, updated_at = NOW() WHERE id = $2`,
-        [note, task_id]
+      const { rowCount: designAdjusted } = await pool.query(
+        `UPDATE design_tasks SET kanban_column = 'ajustes', observations = $1, updated_at = NOW() WHERE id = $2 AND ($3::uuid IS NULL OR client_id = $3::uuid)`,
+        [note, task_id, scopeClientId]
       );
+      if (!designAdjusted) return res.status(404).json({ error: 'Arte não encontrada' });
       await pool.query(
         `INSERT INTO design_task_history (task_id, action, details) VALUES ($1, $2, $3)`,
         [task_id, '🔧 Ajuste solicitado pelo cliente via Pulse Club', note]
@@ -4840,7 +4916,11 @@ app.post('/api/avulso-actions', async (req, res) => {
 // ─── 6. Portal Recordings (uses local PostgreSQL) ───────────
 app.post('/api/portal-recordings', async (req, res) => {
   try {
-    const { action, client_id, recording_id, new_date, new_time } = req.body;
+    const { action, recording_id, new_date, new_time } = req.body;
+    // Mesma sessão do portal-actions: cliente pelo token (client_id do token) ou equipe pelo JWT.
+    const caller = await resolvePortalCaller(req);
+    if (!caller && rejectPortalCallWithoutSession(res, 'portal-recordings', action)) return;
+    const client_id = effectiveClientId(caller, req.body.client_id);
     if (!client_id) return res.status(400).json({ error: 'client_id required' });
 
     if (action === 'list') {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/vpsDb';
-import { portalAction } from '@/lib/portalApi';
+import { portalAction, hasPortalSession, clearPortalSession } from '@/lib/portalApi';
 import { useAuth } from '@/hooks/useAuth';
 import {
   Play, Pause, Maximize, Check, MessageSquare, X, ChevronLeft, ChevronRight,
@@ -127,7 +127,8 @@ export default function ClientPortal() {
 
   // Auth state: team member or client login
   const isTeamMember = !!user && !!profile;
-  const isClientLoggedIn = !!sessionStorage.getItem('portal_client_id');
+  // Login do cliente só vale com o token do portal (sessões de antes do token entram de novo)
+  const isClientLoggedIn = hasPortalSession();
   const isAuthenticated = isTeamMember || isClientLoggedIn;
   const portalUserName = sessionStorage.getItem('portal_user_name') || '';
   
@@ -139,10 +140,7 @@ export default function ClientPortal() {
   };
 
   const handleLogout = () => {
-    sessionStorage.removeItem('portal_client_id');
-    sessionStorage.removeItem('portal_client_name');
-    sessionStorage.removeItem('portal_user_name');
-    sessionStorage.removeItem('portal_auth_type');
+    clearPortalSession();
     toast.success('Até logo! 👋');
     navigate(`/portal-login/${paramSlug}`);
   };

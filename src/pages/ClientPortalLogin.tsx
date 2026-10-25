@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/vpsDb';
+import { hasPortalSession, savePortalSession } from '@/lib/portalApi';
 import { Lock, User, Eye, EyeOff, LogIn, UserPlus, Rocket } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -20,7 +21,7 @@ export default function ClientPortalLogin() {
   // Check if already logged in
   useEffect(() => {
     const storedClientId = sessionStorage.getItem('portal_client_id');
-    if (storedClientId) {
+    if (storedClientId && hasPortalSession()) {
       navigate(`/portal/${storedClientId}`, { replace: true });
       return;
     }
@@ -79,10 +80,12 @@ export default function ClientPortalLogin() {
       localStorage.removeItem('portal_remembered_login');
     }
 
-    sessionStorage.setItem('portal_client_id', data.client_id);
-    sessionStorage.setItem('portal_client_name', data.company_name);
-    sessionStorage.setItem('portal_user_name', data.display_name || data.company_name);
-    sessionStorage.setItem('portal_auth_type', 'client');
+    savePortalSession({
+      clientId: data.client_id,
+      companyName: data.company_name,
+      userName: data.display_name || data.company_name,
+      token: data.portal_token,
+    });
 
     toast.success(`Bem-vindo, ${data.display_name || data.company_name}! 🚀`);
     navigate(`/portal/${data.client_id}`);

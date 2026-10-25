@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/vpsDb';
+import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -83,13 +84,11 @@ export default function ClientRelationship() {
   const handleApprove = async (req: SpecialRequest) => {
     setProcessing(req.id);
     try {
-      const res = await fetch('https://agenciapulse.tech/api/portal-recordings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'approve_special', client_id: req.client_id, recording_id: req.id }),
+      // Ação da equipe: vai com o JWT (a rota recusa sem ele)
+      const { error } = await invokeVpsFunction('portal-recordings', {
+        body: { action: 'approve_special', client_id: req.client_id, recording_id: req.id },
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao aprovar');
+      if (error) throw new Error(error.message || 'Erro ao aprovar');
       toast.success(`Gravação aprovada para ${req.company_name}!`);
       fetchRequests();
     } catch (err: any) {
@@ -108,13 +107,10 @@ export default function ClientRelationship() {
     if (!req) return;
     setProcessing(req.id);
     try {
-      const res = await fetch('https://agenciapulse.tech/api/portal-recordings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'reject_special', client_id: req.client_id, recording_id: req.id, rejection_reason: rejectReason.trim() }),
+      const { error } = await invokeVpsFunction('portal-recordings', {
+        body: { action: 'reject_special', client_id: req.client_id, recording_id: req.id, rejection_reason: rejectReason.trim() },
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao rejeitar');
+      if (error) throw new Error(error.message || 'Erro ao rejeitar');
       toast.success('Solicitação rejeitada');
       setRejectDialog(null);
       setRejectReason('');

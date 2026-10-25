@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { isChunkLoadError, reloadForNewVersion } from '@/lib/staleChunks';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -31,6 +32,24 @@ class ErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
+
+      // Chunk de uma versão anterior (depois de um deploy): "Tentar novamente"
+      // não resolve, porque o React.lazy guarda o erro. Só recarregar resolve.
+      if (isChunkLoadError(this.state.error)) {
+        return (
+          <div className="flex min-h-[400px] flex-col items-center justify-center gap-4 p-8 text-center">
+            <RefreshCw className="h-12 w-12 text-primary" />
+            <h2 className="text-xl font-semibold text-foreground">Há uma versão nova do sistema</h2>
+            <p className="max-w-md text-sm text-muted-foreground">
+              O sistema foi atualizado enquanto esta tela estava aberta. Atualize a página para continuar.
+            </p>
+            <Button onClick={reloadForNewVersion}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Atualizar agora
+            </Button>
+          </div>
+        );
+      }
 
       return (
         <div className="flex min-h-[400px] flex-col items-center justify-center gap-4 p-8 text-center">

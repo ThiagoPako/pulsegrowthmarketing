@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { initAutoTranslate } from "./lib/i18n";
+import { listenForStaleChunks } from "./lib/staleChunks";
 
 // Tradução automática do sistema inteiro quando o idioma for inglês.
 initAutoTranslate();
@@ -21,4 +22,7 @@ try {
  * Roteiros, edições e outras atividades podem estar em andamento; uma nova
  * versão só entra quando o próprio usuário recarregar a página manualmente.
  */
+// Chunk antigo depois de um deploy: só avisa (o usuário decide quando atualizar).
+listenForStaleChunks();
+
 createRoot(document.getElementById("root")!).render(<App />);

@@ -4365,15 +4365,21 @@ app.post('/api/portal-actions', async (req, res) => {
 
     if (action === 'update_flyer_item') {
       const { item_id, status } = req.body;
-      if (!item_id) return res.status(400).json({ error: 'item_id required' });
-      await pool.query('UPDATE flyer_items SET status = $1, updated_at = NOW() WHERE id = $2', [status, item_id]);
+      if (!item_id || !client_id) return res.status(400).json({ error: 'item_id and client_id required' });
+      // Só altera panfleto do próprio cliente do portal
+      const { rowCount } = await pool.query(
+        'UPDATE flyer_items SET status = $1, updated_at = NOW() WHERE id = $2 AND client_id = $3',
+        [status, item_id, client_id]
+      );
+      if (rowCount === 0) return res.status(404).json({ error: 'Item not found' });
       return res.json({ success: true });
     }
 
     if (action === 'delete_flyer_item') {
       const { item_id } = req.body;
-      if (!item_id) return res.status(400).json({ error: 'item_id required' });
-      await pool.query('DELETE FROM flyer_items WHERE id = $1', [item_id]);
+      if (!item_id || !client_id) return res.status(400).json({ error: 'item_id and client_id required' });
+      const { rowCount } = await pool.query('DELETE FROM flyer_items WHERE id = $1 AND client_id = $2', [item_id, client_id]);
+      if (rowCount === 0) return res.status(404).json({ error: 'Item not found' });
       return res.json({ success: true });
     }
 

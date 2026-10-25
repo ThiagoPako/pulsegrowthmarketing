@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useFinancialData, type Expense, normalizeDate, isExpensePaid } from '@/hooks/useFinancialData';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -108,8 +108,10 @@ function SalaryRocketOverlay({ name, onComplete }: { name: string; onComplete: (
 }
 
 /* ── Fire Glow Button — now with "Pagar" and "Pagar com Bônus" ── */
-function SalaryPayButtons({ paid, onPay, onPayWithBonus, onRevert }: {
+function SalaryPayButtons({ paid, busy = false, onPay, onPayWithBonus, onRevert }: {
   paid: boolean;
+  /** Ação em andamento nesta linha: trava os botões (duplo clique pagava duas vezes) */
+  busy?: boolean;
   onPay: () => void;
   onPayWithBonus: () => void;
   onRevert: () => void;
@@ -130,7 +132,8 @@ function SalaryPayButtons({ paid, onPay, onPayWithBonus, onRevert }: {
           </Badge>
           <motion.button
             onClick={onRevert}
-            className="text-[10px] text-muted-foreground hover:text-destructive flex items-center gap-0.5 transition-colors"
+            disabled={busy}
+            className="disabled:opacity-50 disabled:pointer-events-none text-[10px] text-muted-foreground hover:text-destructive flex items-center gap-0.5 transition-colors"
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
           >
@@ -148,7 +151,8 @@ function SalaryPayButtons({ paid, onPay, onPayWithBonus, onRevert }: {
           {/* Pagar button */}
           <motion.button
             onClick={onPay}
-            className="relative px-3 py-1.5 rounded-lg font-semibold text-xs text-white overflow-hidden"
+            disabled={busy}
+            className="disabled:opacity-60 disabled:pointer-events-none relative px-3 py-1.5 rounded-lg font-semibold text-xs text-white overflow-hidden"
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.92 }}
           >
@@ -184,7 +188,8 @@ function SalaryPayButtons({ paid, onPay, onPayWithBonus, onRevert }: {
           {/* Pagar com Bônus button */}
           <motion.button
             onClick={onPayWithBonus}
-            className="relative px-3 py-1.5 rounded-lg font-semibold text-xs text-white overflow-hidden"
+            disabled={busy}
+            className="disabled:opacity-60 disabled:pointer-events-none relative px-3 py-1.5 rounded-lg font-semibold text-xs text-white overflow-hidden"
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.92 }}
           >
@@ -392,13 +397,30 @@ export default function FinancialExpenses() {
     }
   };
 
-  const handleMarkSalaryPaid = useCallback(async (expense: Expense) => {
+  // Trava por salário enquanto pagar/reverter roda: dois cliques rápidos viam
+  // zero saídas no caixa ao mesmo tempo e debitavam o salário duas vezes.
+  const payingRef = useRef<Set<string>>(new Set());
+  const [payingIds, setPayingIds] = useState<Set<string>>(() => new Set());
+  const withSalaryLock = useCallback(async (id: string, action: () => Promise<void>) => {
+    if (payingRef.current.has(id)) return;
+    payingRef.current.add(id);
+    setPayingIds(new Set(payingRef.current));
+    try {
+      await action();
+    } finally {
+      payingRef.current.delete(id);
+      setPayingIds(new Set(payingRef.current));
+    }
+  }, []);
+
+  const handleMarkSalaryPaid = useCallback((expense: Expense) => withSalaryLock(expense.id, async () => {
+    if (isExpensePaid(expense)) return;
     setRocketName(expense.responsible || expense.description);
     setShowRocket(true);
     const desc = `${expense.description} - PAGO`;
     const ok = await updateExpense(expense.id, { description: desc });
     if (!ok) toast.error('Erro ao marcar como pago');
-  }, [updateExpense]);
+  }), [updateExpense, withSalaryLock]);
 
   const handlePayWithBonus = useCallback((expense: Expense) => {
     setBonusExpense(expense);
@@ -406,7 +428,7 @@ export default function FinancialExpenses() {
     setBonusDialogOpen(true);
   }, []);
 
-  const handleConfirmBonus = useCallback(async () => {
+  const confirmBonus = useCallback(async () => {
     if (!bonusExpense || !bonusAmount) { toast.error('Informe o valor do bônus'); return; }
     const match = bonusExpense.description?.match(/^Salário - (.+?) \((.+?)\)/);
     const memberName = match ? match[1] : bonusExpense.responsible || bonusExpense.description;
@@ -461,12 +483,27 @@ export default function FinancialExpenses() {
     setBonusAmount('');
   }, [bonusExpense, bonusAmount, updateExpense, addExpense, selectedMonth, users]);
 
-  const handleRevertSalary = useCallback(async (expense: Expense) => {
+  // Confirmar o bônus uma vez só (duplo clique criava duas despesas de bônus)
+  const confirmingBonusRef = useRef(false);
+  const [confirmingBonus, setConfirmingBonus] = useState(false);
+  const handleConfirmBonus = useCallback(async () => {
+    if (confirmingBonusRef.current || !bonusExpense) return;
+    confirmingBonusRef.current = true;
+    setConfirmingBonus(true);
+    try {
+      await withSalaryLock(bonusExpense.id, confirmBonus);
+    } finally {
+      confirmingBonusRef.current = false;
+      setConfirmingBonus(false);
+    }
+  }, [bonusExpense, confirmBonus, withSalaryLock]);
+
+  const handleRevertSalary = useCallback((expense: Expense) => withSalaryLock(expense.id, async () => {
     const desc = expense.description.replace(/ - PAGO$/, '');
     const ok = await updateExpense(expense.id, { description: desc });
     if (ok) toast.success('Revertido para pendente');
     else toast.error('Erro ao reverter');
-  }, [updateExpense]);
+  }), [updateExpense, withSalaryLock]);
 
   const isSalaryPaid = (e: Expense) => isExpensePaid(e);
 
@@ -706,6 +743,7 @@ export default function FinancialExpenses() {
                           <TableCell>
                             <SalaryPayButtons
                               paid={paid}
+                              busy={payingIds.has(e.id)}
                               onPay={() => handleMarkSalaryPaid(e)}
                               onPayWithBonus={() => handlePayWithBonus(e)}
                               onRevert={() => handleRevertSalary(e)}
@@ -865,6 +903,7 @@ export default function FinancialExpenses() {
               <Button variant="outline" onClick={() => setBonusDialogOpen(false)}>Cancelar</Button>
               <Button
                 onClick={handleConfirmBonus}
+                disabled={confirmingBonus}
                 className="bg-gradient-to-r from-violet-500 to-pink-500 hover:from-violet-600 hover:to-pink-600 text-white"
               >
                 <Gift size={14} className="mr-1" /> Pagar + Bônus

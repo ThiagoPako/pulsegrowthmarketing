@@ -90,7 +90,9 @@ export function useUserPermissions(userId?: string) {
 export function useMyPermissions() {
   const { profile } = useAuth();
   const query = useQuery({
-    queryKey: ['my-permissions'],
+    // Com o id na chave, outra conta no mesmo navegador não herda as permissões em cache.
+    queryKey: ['my-permissions', profile?.id],
+    enabled: !!profile?.id,
     queryFn: async () => {
       const { data } = await supabase.auth.getUser();
       const user = data?.user;

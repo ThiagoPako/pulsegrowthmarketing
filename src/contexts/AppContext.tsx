@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useCallback, useState, useEffect } from 'react'; // refreshed
+import React, { createContext, useContext, useCallback, useState, useEffect, useRef } from 'react'; // refreshed
 import { getDay } from 'date-fns';
 
 import { useAuth, type Profile } from '@/hooks/useAuth';
@@ -94,7 +94,7 @@ const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { profile, signOut, loading: authLoading, user } = useAuth();
-  const { activeCity, isLoading: cityLoading } = useCity();
+  const { isLoading: cityLoading } = useCity();
   const data = useSupabaseData();
 
   const [myRoles, setMyRoles] = useState<UserRole[]>([]);
@@ -197,9 +197,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
     }));
 
-  }, [cityLoading, activeCity]);
+    // profiles e user_roles não têm cidade: trocar de cidade não precisa recarregar a equipe.
+  }, [cityLoading]);
 
-  useEffect(() => { fetchUsers(); }, [fetchUsers, profile]);
+  // Recarrega a equipe quando muda quem está logado ou o que aparece dele na lista
+  // (nome, foto, cargo), não a cada novo objeto de perfil (ex.: trocar o tamanho da fonte).
+  useEffect(() => { fetchUsers(); }, [fetchUsers, profile?.id, profile?.name, profile?.display_name, profile?.avatar_url, profile?.job_title]);
+
+  // Logout na mesma aba (o evento 'storage' só chega nas outras abas): zera o que foi
+  // carregado para a próxima conta não ver clientes, agenda e equipe da anterior.
+  const hadUserRef = useRef(false);
+  const { resetData } = data;
+  useEffect(() => {
+    if (user) { hadUserRef.current = true; return; }
+    if (!hadUserRef.current) return;
+    hadUserRef.current = false;
+    resetData();
+    setUsers([]);
+  }, [user, resetData]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 
 async function logLoginEntry(userId: string) {
   try {
@@ -99,6 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<{ access_token: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   // `rejected` = o servidor respondeu e recusou o token (401/403). Sem rede ou com a
   // API fora do ar (5xx) não é recusa: o token continua guardado.
@@ -369,6 +371,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     localStorage.removeItem(TOKEN_KEY);
+    // Cache do react-query (permissões, listas) não pode passar para a próxima conta.
+    queryClient.clear();
     setUser(null);
     setProfile(null);
     setSession(null);

@@ -318,13 +318,17 @@ export function useSupabaseData() {
   // Dedupe: evita disparar o mesmo bootstrap várias vezes (montagens simultâneas/efeitos duplicados).
   const inFlight = useRef<Promise<void> | null>(null);
   const lastFetchAt = useRef(0);
+  // Geração da carga: troca de cidade (ou logout) no meio da carga descarta a anterior,
+  // senão os dados da cidade antiga ficavam na tela com o rótulo da nova.
+  const fetchGen = useRef(0);
   const MIN_INTERVAL_MS = 10_000;
   const { activeCity, isLoading: cityLoading } = useCity();
 
   // Wait for auth token before fetching
   const hasToken = !!localStorage.getItem('pulse_jwt');
 
-  const runFetchAll = useCallback(async () => {
+  const runFetchAll = useCallback(async (gen: number) => {
+    const isStale = () => gen !== fetchGen.current;
     const token = localStorage.getItem('pulse_jwt');
     if (cityLoading) return;
     if (!token) { setLoading(false); return; }
@@ -335,6 +339,7 @@ export function useSupabaseData() {
       invokeVpsFunction('clients', { method: 'GET' }),
       invokeVpsFunction('company-settings', { method: 'GET' }),
     ]);
+    if (isStale()) return;
 
     if (setRes.data && !setRes.error) {
       const settingsData = Array.isArray(setRes.data) ? setRes.data[0] : setRes.data;
@@ -356,6 +361,7 @@ export function useSupabaseData() {
       invokeVpsFunction('scripts', { method: 'GET' }),
       invokeVpsFunction('active-recordings', { method: 'GET' }),
     ]);
+    if (isStale()) return;
     const hasClientsPayload = hasClients;
     const allClientRows: any[] = hasClientsPayload ? (cRes.data as any[]) : [];
 
@@ -395,16 +401,34 @@ export function useSupabaseData() {
   }, [cityLoading]);
 
   // Wrapper com dedupe + intervalo mínimo — evita rajadas de bootstrap concorrentes.
+  // Sem force reaproveita a carga em andamento; com force (troca de cidade, polling)
+  // começa outra, e a anterior é descartada quando terminar.
   const fetchAll = useCallback(async (options?: { force?: boolean }) => {
-    if (inFlight.current) return inFlight.current;
+    if (inFlight.current && !options?.force) return inFlight.current;
     if (!options?.force && hasFetched.current && Date.now() - lastFetchAt.current < MIN_INTERVAL_MS) return;
-    const promise = runFetchAll().finally(() => {
-      inFlight.current = null;
+    const gen = ++fetchGen.current;
+    const promise: Promise<void> = runFetchAll(gen).finally(() => {
+      if (inFlight.current === promise) inFlight.current = null;
       lastFetchAt.current = Date.now();
     });
     inFlight.current = promise;
     return promise;
   }, [runFetchAll]);
+
+  // Zera os dados (logout na mesma aba): o próximo usuário não vê nada do anterior.
+  const resetData = useCallback(() => {
+    fetchGen.current += 1;
+    inFlight.current = null;
+    setClients([]);
+    setRecordings([]);
+    setTasks([]);
+    setScripts([]);
+    setActiveRecordings([]);
+    setSettings(defaultSettings);
+    setSettingsId('');
+    setLoading(false);
+    hasFetched.current = false;
+  }, []);
 
 
   // ── Initial fetch — only when token exists ──
@@ -424,19 +448,13 @@ export function useSupabaseData() {
           setTimeout(() => fetchAll(), 100);
         } else {
           // Token was removed (logout) — clear data
-          setClients([]);
-          setRecordings([]);
-          setTasks([]);
-          setScripts([]);
-          setActiveRecordings([]);
-          setLoading(false);
-          hasFetched.current = false;
+          resetData();
         }
       }
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [fetchAll]);
+  }, [fetchAll, resetData]);
 
   // ── Re-fetch after login in same tab (storage event doesn't fire for same-tab changes) ──
   useEffect(() => {
@@ -711,5 +729,6 @@ export function useSupabaseData() {
     addScript, updateScript, deleteScript,
     updateSettings, startActiveRecording, stopActiveRecording,
     refetch: fetchAll,
+    resetData,
   };
 }

@@ -819,12 +819,15 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
       'arte': 'arte',
     };
 
-    // Check if already exists in portal
+    // Check if already exists in portal (só o conteúdo em aberto: um aprovado/agendado/publicado
+    // de outro mês com o mesmo título não pode ser sobrescrito)
     const { data: existing } = await supabase
       .from('client_portal_contents')
       .select('id')
       .eq('client_id', task.client_id)
       .eq('title', task.title)
+      .not('status', 'in', '(aprovado,agendado,publicado)')
+      .order('created_at', { ascending: false })
       .limit(1);
 
     if (existing && existing.length > 0) {

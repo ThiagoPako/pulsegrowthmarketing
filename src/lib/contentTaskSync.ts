@@ -240,11 +240,14 @@ export async function syncContentTaskColumnChange(
     // Skip for avulso (no client_id)
     if (ctx.editedVideoLink && ctx.clientId) {
       const now = new Date();
+      // O vínculo é pelo título: ignora conteúdos já fechados (aprovado/agendado/publicado),
+      // senão o vídeo novo sobrescrevia o de um mês anterior com o mesmo título.
       const { data: existing } = await supabase
         .from('client_portal_contents')
         .select('id')
         .eq('client_id', ctx.clientId)
         .eq('title', ctx.title)
+        .not('status', 'in', '(aprovado,agendado,publicado)')
         .order('created_at', { ascending: false })
         .limit(1);
 
@@ -309,13 +312,14 @@ export async function syncContentTaskColumnChange(
       // Aviso ao cliente pelo WhatsApp: o servidor manda sozinho quando o conteúdo fica "pendente" no portal
       // (uma mensagem só, juntando os vídeos que entram juntos — ver vps-api-server/whatsapp/routes.mjs).
 
-      // Create portal notification for the client
+      // Create portal notification for the client (o conteúdo em aberto, não um antigo já fechado)
       try {
         const { data: portalContent } = await supabase
           .from('client_portal_contents')
           .select('id')
           .eq('client_id', ctx.clientId)
           .eq('title', ctx.title)
+          .not('status', 'in', '(aprovado,agendado,publicado)')
           .order('created_at', { ascending: false })
           .limit(1);
 

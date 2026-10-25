@@ -36,6 +36,7 @@ import ClientLogo from '@/components/ClientLogo';
 import cobrarTodosImg from '@/assets/cobrar_todos.png';
 import SalaryRaiseAlert from '@/components/financial/SalaryRaiseAlert';
 import BankStatementImport from '@/components/financial/BankStatementImport';
+import { findImportedStatementLines, BANK_IMPORT_DEFAULT_DESCRIPTION, type BankImportItem, type BankImportResult } from '@/lib/bankImport';
 import FinancialStartImport from '@/components/financial/FinancialStartImport';
 import { supabase } from '@/lib/vpsDb';
 import PiggyBankWidget from '@/components/financial/PiggyBankWidget';
@@ -63,13 +64,16 @@ export default function FinancialDashboard() {
   const [showImport, setShowImport] = useState(false);
   const [showFinancialStart, setShowFinancialStart] = useState(false);
 
-  const handleBankImport = async (items: { date: string; description: string; amount: number }[], type: 'entrada' | 'saida') => {
+  const handleBankImport = async (items: BankImportItem[], type: 'entrada' | 'saida'): Promise<BankImportResult | false> => {
+    // Cada insert é conferido: o cliente da API devolve { error } em vez de lançar
+    let imported = 0, failed = 0, cashFailed = 0;
     try {
       if (type === 'entrada') {
         // Import as standalone revenues (not linked to any specific client/contract)
         for (const item of items) {
+          const description = item.description || BANK_IMPORT_DEFAULT_DESCRIPTION;
           // Espelho no caixa junto com a receita, para o saldo não divergir
-          const { data: insertedRev } = await supabase.from('revenues').insert({
+          const { data: insertedRev, error: revError } = await supabase.from('revenues').insert({
             client_id: '00000000-0000-0000-0000-000000000000',
             contract_id: '00000000-0000-0000-0000-000000000000',
             reference_month: item.date.slice(0, 8) + '01',
@@ -77,17 +81,20 @@ export default function FinancialDashboard() {
             due_date: item.date,
             status: 'recebida',
             paid_at: item.date,
+            // A descrição do extrato fica na receita para reconhecer reimportações
+            description,
           } as any).select('id').single();
           const revId = (insertedRev as any)?.id;
-          if (revId) {
-            await supabase.from('cash_reserve_movements').insert({
-              amount: item.amount,
-              type: 'entrada',
-              description: `[Receita] ${item.description || 'Extrato bancário'} - ID: ${revId}`,
-              date: item.date,
-              is_reserve: false,
-            } as any);
-          }
+          if (revError || !revId) { failed++; continue; }
+          imported++;
+          const { error: cashError } = await supabase.from('cash_reserve_movements').insert({
+            amount: item.amount,
+            type: 'entrada',
+            description: `[Receita] ${description} - ID: ${revId}`,
+            date: item.date,
+            is_reserve: false,
+          } as any);
+          if (cashError) cashFailed++;
         }
       } else {
         // Import as expenses — ensure category exists
@@ -102,7 +109,7 @@ export default function FinancialDashboard() {
           return false;
         }
         for (const item of items) {
-          const { data: insertedExp } = await supabase.from('expenses').insert({
+          const { data: insertedExp, error: expError } = await supabase.from('expenses').insert({
             date: item.date,
             amount: item.amount,
             description: item.description,
@@ -111,55 +118,85 @@ export default function FinancialDashboard() {
             responsible: 'Extrato Bancário',
           } as any).select('id').single();
           const expId = (insertedExp as any)?.id;
-          if (expId) {
-            await supabase.from('cash_reserve_movements').insert({
-              amount: item.amount,
-              type: 'saida',
-              description: `[Despesa] ${item.description || 'Extrato bancário'} - ID: ${expId}`,
-              date: item.date,
-              is_reserve: false,
-            } as any);
-          }
+          if (expError || !expId) { failed++; continue; }
+          imported++;
+          const { error: cashError } = await supabase.from('cash_reserve_movements').insert({
+            amount: item.amount,
+            type: 'saida',
+            description: `[Despesa] ${item.description || 'Extrato bancário'} - ID: ${expId}`,
+            date: item.date,
+            is_reserve: false,
+          } as any);
+          if (cashError) cashFailed++;
         }
       }
       await refetch();
-      return true;
+      return { imported, failed, cashFailed };
     } catch (err) {
       console.error('[FinancialDashboard] import error:', err);
+      if (imported > 0) { await refetch(); return { imported, failed: failed + (items.length - imported - failed), cashFailed }; }
       return false;
     }
   };
 
-  const handleFinancialStart = async (items: { date: string; description: string; amount: number; type: 'entrada' | 'saida' }[], currentBalance: number) => {
+  const handleFinancialStart = async (items: (BankImportItem & { type: 'entrada' | 'saida' })[], currentBalance: number): Promise<BankImportResult | false> => {
     try {
-      // 1. Save the final balance directly as the cash reserve entry
-      // First clear any existing "Start Financeiro" adjustments
-      const { data: existingAdj } = await supabase
+      // 1. Movimentações que já estão lançadas (Start anterior ou importação de
+      // extrato) são puladas: refazer o Start não pode dobrar receitas e despesas.
+      const saidasAll = items.filter(i => i.type === 'saida');
+      const entradasAll = items.filter(i => i.type === 'entrada');
+      let dupSaidas: boolean[];
+      let dupEntradas: boolean[];
+      try {
+        [dupSaidas, dupEntradas] = await Promise.all([
+          findImportedStatementLines(saidasAll, 'saida'),
+          findImportedStatementLines(entradasAll, 'entrada'),
+        ]);
+      } catch (err) {
+        console.error('[FinancialStart] duplicate check error:', err);
+        toast.error('Não foi possível conferir o que já está lançado. Nada foi alterado.');
+        return false;
+      }
+      const saidas = saidasAll.filter((_, i) => !dupSaidas[i]);
+      const entradas = entradasAll.filter((_, i) => !dupEntradas[i]);
+      const skipped = items.length - saidas.length - entradas.length;
+
+      // 2. Saldo final: grava o novo e só então remove os ajustes anteriores do Start
+      // (só os de saldo — um lançamento manual que cite "Start Financeiro" fica)
+      const { data: existingAdj, error: adjError } = await supabase
         .from('cash_reserve_movements')
         .select('id')
-        .ilike('description', '%Start Financeiro%');
-      
-      if (existingAdj && existingAdj.length > 0) {
-        for (const adj of existingAdj) {
-          await supabase.from('cash_reserve_movements').delete().eq('id', adj.id);
-        }
+        .ilike('description', '%Start Financeiro - Saldo sincronizado%');
+      if (adjError) {
+        console.error('[FinancialStart] cash reserve lookup error:', adjError);
+        return false;
       }
 
-      // 2. Insert the final balance as a single cash reserve entry
-      const { error: cashError } = await supabase.from('cash_reserve_movements').insert({
+      const { data: newAdj, error: cashError } = await supabase.from('cash_reserve_movements').insert({
         amount: Math.abs(currentBalance),
         type: currentBalance >= 0 ? 'entrada' : 'saida',
         description: `Start Financeiro - Saldo sincronizado do extrato bancário: ${currentBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`,
-        date: new Date().toISOString().split('T')[0],
-      } as any);
+        date: format(new Date(), 'yyyy-MM-dd'),
+      } as any).select('id').single();
 
-      if (cashError) {
+      if (cashError || !(newAdj as any)?.id) {
         console.error('[FinancialStart] cash reserve insert error:', cashError);
         return false;
       }
 
+      for (const adj of (existingAdj as any[]) || []) {
+        const { error } = await supabase.from('cash_reserve_movements').delete().eq('id', adj.id);
+        if (error) {
+          // Sem apagar o saldo antigo, o caixa ficaria com os dois: desfaz o novo
+          console.error('[FinancialStart] cash reserve cleanup error:', error);
+          await supabase.from('cash_reserve_movements').delete().eq('id', (newAdj as any).id);
+          return false;
+        }
+      }
+
+      let imported = 0, failed = 0;
+
       // 3. Import individual movements as expenses (saidas) for tracking history
-      const saidas = items.filter(i => i.type === 'saida');
       if (saidas.length > 0) {
         let catId = categories.find(c => c.name === 'Outros')?.id;
         if (!catId) {
@@ -168,7 +205,7 @@ export default function FinancialDashboard() {
         }
         if (catId) {
           for (const item of saidas) {
-            await supabase.from('expenses').insert({
+            const { error } = await supabase.from('expenses').insert({
               date: item.date,
               amount: item.amount,
               description: item.description,
@@ -176,14 +213,16 @@ export default function FinancialDashboard() {
               expense_type: 'variavel',
               responsible: 'Start Financeiro',
             } as any);
+            if (error) failed++; else imported++;
           }
+        } else {
+          failed += saidas.length;
         }
       }
 
       // 4. Import entradas as revenues for tracking history
-      const entradas = items.filter(i => i.type === 'entrada');
       for (const item of entradas) {
-        await supabase.from('revenues').insert({
+        const { error } = await supabase.from('revenues').insert({
           client_id: '00000000-0000-0000-0000-000000000000',
           contract_id: '00000000-0000-0000-0000-000000000000',
           reference_month: item.date.slice(0, 8) + '01',
@@ -191,11 +230,14 @@ export default function FinancialDashboard() {
           due_date: item.date,
           status: 'recebida',
           paid_at: item.date,
+          // Descrição do extrato: identifica a entrada se o Start for refeito
+          description: item.description || BANK_IMPORT_DEFAULT_DESCRIPTION,
         } as any);
+        if (error) failed++; else imported++;
       }
 
       await refetch();
-      return true;
+      return { imported, failed, skipped };
     } catch (err) {
       console.error('[FinancialStart] import error:', err);
       return false;

@@ -10,6 +10,7 @@ import { Upload, Rocket, Loader2, ArrowUpCircle, ArrowDownCircle, Trash2, AlertT
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import * as pdfjsLib from 'pdfjs-dist';
+import type { BankImportResult } from '@/lib/bankImport';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs`;
 
@@ -34,7 +35,7 @@ interface StatementSummary {
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onImport: (items: { date: string; description: string; amount: number; type: 'entrada' | 'saida' }[], currentBalance: number) => Promise<boolean>;
+  onImport: (items: { date: string; description: string; amount: number; type: 'entrada' | 'saida' }[], currentBalance: number) => Promise<BankImportResult | false>;
   currentBalance?: number;
 }
 
@@ -333,9 +334,16 @@ export default function FinancialStartImport({ open, onOpenChange, onImport }: P
     }
     setStep('importing');
     const items = selectedMvts.map(m => ({ date: m.date, description: m.description, amount: m.amount, type: m.type }));
-    const ok = await onImport(items, finalBalance);
-    if (ok) {
-      toast.success(`${items.length} movimentação(ões) importadas! Saldo sincronizado: ${fmt(finalBalance)}`);
+    const result = await onImport(items, finalBalance);
+    if (result) {
+      // O saldo já foi gravado; aqui só o resumo das movimentações
+      const extras = [
+        result.skipped ? `${result.skipped} já lançada${result.skipped > 1 ? 's' : ''} (pulada${result.skipped > 1 ? 's' : ''})` : '',
+        result.failed > 0 ? `${result.failed} com erro (não gravada${result.failed > 1 ? 's' : ''})` : '',
+      ].filter(Boolean);
+      const summary = `${result.imported} movimentação(ões) importadas! Saldo sincronizado: ${fmt(finalBalance)}${extras.length ? ` — ${extras.join('; ')}` : ''}`;
+      if (result.failed > 0) toast.warning(summary);
+      else toast.success(summary);
       reset();
       onOpenChange(false);
     } else {

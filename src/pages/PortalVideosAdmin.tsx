@@ -13,7 +13,6 @@ import { toast } from 'sonner';
 import { Trash2, Video, Eye, Upload, Sparkles, Megaphone, Rocket, Film, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
-import PortalBulkDelete from '@/components/portal/PortalBulkDelete';
 
 interface PortalVideo {
   id: string;
@@ -81,15 +80,25 @@ export default function PortalVideosAdmin() {
     }
   };
 
+  // Só muda a lista se o banco confirmou (o executeQuery devolve { error } em vez de lançar).
+  // O arquivo do vídeo excluído fica para a auditoria de arquivos sem uso (Gerenciador).
   const toggleActive = async (id: string, current: boolean) => {
-    await supabase.from('portal_videos').update({ is_active: !current }).eq('id', id);
+    const { error } = await supabase.from('portal_videos').update({ is_active: !current }).eq('id', id);
+    if (error) {
+      toast.error(`Não foi possível ${current ? 'desativar' : 'ativar'} o vídeo: ${error.message || 'erro desconhecido'}`);
+      return;
+    }
     setVideos(prev => prev.map(v => v.id === id ? { ...v, is_active: !current } : v));
     toast.success(!current ? 'Vídeo ativado ✅' : 'Vídeo desativado');
   };
 
   const deleteVideo = async (id: string) => {
     if (!confirm('Excluir este vídeo permanentemente?')) return;
-    await supabase.from('portal_videos').delete().eq('id', id);
+    const { error } = await supabase.from('portal_videos').delete().eq('id', id);
+    if (error) {
+      toast.error(`Não foi possível excluir o vídeo: ${error.message || 'erro desconhecido'}`);
+      return;
+    }
     setVideos(prev => prev.filter(v => v.id !== id));
     toast.success('Vídeo excluído');
   };
@@ -119,8 +128,6 @@ export default function PortalVideosAdmin() {
           <p className="text-sm text-muted-foreground">Gerencie os vídeos de boas-vindas e novidades do Pulse Club</p>
         </div>
       </motion.div>
-
-      <PortalBulkDelete />
 
       {/* Upload Card */}
       <motion.div

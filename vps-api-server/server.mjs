@@ -25,6 +25,7 @@ import { createPgClient } from './pgClient.mjs';
 import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerWhatsAppRoutes } from './whatsapp/routes.mjs';
 import { enqueueWhatsApp, clientTarget, clientsForGroup } from './whatsapp/shared.mjs';
+import { createPortalSession, effectiveClientId, itemScopeClientId, pickBackupOption } from './lib/portalSession.mjs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -295,6 +296,9 @@ const CLIENT_PORTAL_BASE_FIELDS = [
   'niche',
   'whatsapp',
   'city',
+  // aba 'Entregas' (sem_contrato) e boas-vindas de cliente novo (< 30 dias)
+  'client_type',
+  'created_at',
 ].join(', ');
 
 let clientsArtRequestsLimitColumnPromise;
@@ -1236,13 +1240,23 @@ async function cleanupOldPortalVideos(options = {}) {
     clientId = null, 
     allClients = true, 
     olderThanDays = 60,
-    contentTypes = []
+    contentTypes = [],
+    // Por padrão não apaga o que ainda está em andamento (pendente, ajuste, revisão
+    // interna) nem a temporada do mês atual; includeOpen = true libera tudo.
+    includeOpen = false,
+    // dryRun: só conta (por status e quantos clientes), sem apagar nada.
+    dryRun = false,
   } = options;
 
-  let query = `DELETE FROM client_portal_contents
+  let query = `FROM client_portal_contents
     WHERE file_url IS NOT NULL
       AND content_type <> 'arte'`;
   const params = [];
+
+  if (!includeOpen) {
+    query += ` AND status NOT IN ('pendente', 'ajuste_solicitado', 'revisao_interna')`;
+    query += ` AND NOT (season_year = EXTRACT(YEAR FROM NOW())::int AND season_month = EXTRACT(MONTH FROM NOW())::int)`;
+  }
 
   const types = Array.isArray(contentTypes)
     ? contentTypes.map((t) => String(t || '').trim()).filter((t) => t && t !== 'arte')
@@ -1267,9 +1281,18 @@ async function cleanupOldPortalVideos(options = {}) {
   } else if (olderThanDays) {
     query += ` AND created_at < NOW() - INTERVAL '${olderThanDays} days'`;
   }
-  
-  query += ' RETURNING file_url, thumbnail_url';
-  const { rows, rowCount } = await pool.query(query, params);
+
+  if (dryRun) {
+    const { rows: byStatus } = await pool.query(
+      `SELECT status, count(*)::int AS total, count(DISTINCT client_id)::int AS clients ${query} GROUP BY status`, params
+    );
+    const { rows: [totals] } = await pool.query(
+      `SELECT count(*)::int AS total, count(DISTINCT client_id)::int AS clients ${query}`, params
+    );
+    return { total: totals?.total || 0, clients: totals?.clients || 0, byStatus };
+  }
+
+  const { rows, rowCount } = await pool.query(`DELETE ${query} RETURNING file_url, thumbnail_url`, params);
 
   let freedBytes = 0;
   // Proteção global: só remove do disco o arquivo que não é citado por
@@ -4283,6 +4306,135 @@ async function verifyPortalPassword(rawPassword, passwordHash) {
   }
 }
 
+// Sessão do portal: o login devolve um token próprio (segredo derivado, sem `sub`),
+// exigido em /api/portal-actions e /api/portal-recordings junto com o JWT da equipe.
+const PORTAL_JWT_SECRET = process.env.PORTAL_JWT_SECRET
+  || crypto.createHash('sha256').update(`${JWT_SECRET}:pulse-portal-session`).digest('hex');
+// 'enforce' (padrão): sem token do portal nem JWT da equipe → 401.
+// 'log': só registra e deixa passar — válvula para voltar atrás sem novo deploy.
+const PORTAL_AUTH_MODE = String(process.env.PORTAL_AUTH_MODE || '').trim().toLowerCase() === 'log' ? 'log' : 'enforce';
+const portalSession = createPortalSession({
+  jwt,
+  secret: PORTAL_JWT_SECRET,
+  expiresIn: process.env.PORTAL_JWT_EXPIRES_IN || '7d',
+});
+
+function resolvePortalCaller(req) {
+  return portalSession.resolveCaller(req, verifyUser);
+}
+
+/** Sem sessão do portal nem da equipe. Devolve true quando já respondeu 401 (a rota para aí). */
+function rejectPortalCallWithoutSession(res, route, action) {
+  if (PORTAL_AUTH_MODE === 'log') {
+    console.warn(`[Portal-Auth] ${route} sem sessão (action=${action || '-'}) — liberado por PORTAL_AUTH_MODE=log`);
+    return false;
+  }
+  res.status(401).json({ error: 'Sua sessão do portal expirou. Entre de novo.', code: 'portal_session_required' });
+  return true;
+}
+
+// ── Cidade do cliente nas rotas do portal ──
+// O portal não manda x-pulse-city: a cidade vem do cadastro do cliente. Cliente global
+// (city NULL) não filtra a equipe e deixa a cidade no DEFAULT da tabela.
+async function getPortalClientCity(clientId) {
+  if (!clientId) return null;
+  const { rows: [row] } = await pool.query('SELECT city::text AS city FROM clients WHERE id = $1', [clientId]);
+  return normalizeCityValue(row?.city) || null;
+}
+
+// Condição SQL "este usuário atende a cidade $n": vínculo em user_cities, ou sem
+// vínculo nenhum (o resolveActiveCity trata esse usuário como Minaçu). Sem cidade, todos.
+function portalCityMemberSql(userIdExpr, cityParam) {
+  return `(${cityParam}::text IS NULL
+    OR EXISTS (SELECT 1 FROM user_cities uc WHERE uc.user_id::text = ${userIdExpr}::text AND uc.city::text = ${cityParam}::text)
+    OR (${cityParam}::text = 'minacu' AND NOT EXISTS (SELECT 1 FROM user_cities uc WHERE uc.user_id::text = ${userIdExpr}::text)))`;
+}
+
+/**
+ * Avisa a equipe (pelos papéis) de algo que aconteceu no portal de um cliente: só quem
+ * atende a cidade do cliente (admin e social_media veem todas, como no isAdminUser) e com
+ * a cidade gravada na notificação — sem ela, o DEFAULT 'minacu' esconderia o aviso da
+ * equipe de Uruaçu.
+ */
+async function notifyPortalTeam(clientId, roles, title, message, type = 'info', link = null) {
+  const city = await getPortalClientCity(clientId).catch(() => null);
+  const { rows } = await pool.query(
+    `SELECT DISTINCT ur.user_id FROM user_roles ur
+      WHERE ur.role::text = ANY($1::text[])
+        AND (EXISTS (SELECT 1 FROM user_roles ura WHERE ura.user_id::text = ur.user_id::text AND ura.role::text IN ('admin', 'social_media'))
+          OR ${portalCityMemberSql('ur.user_id', '$2')})`,
+    [roles, city]
+  );
+  await insertPortalTeamNotifications(city, rows.map(r => r.user_id), title, message, type, link);
+}
+
+/** Grava a notificação para cada usuário, com a cidade do cliente quando houver. */
+async function insertPortalTeamNotifications(city, userIds, title, message, type = 'info', link = null) {
+  const withCity = !!city && await tableHasCityColumn('notifications');
+  for (const userId of userIds) {
+    if (!userId) continue;
+    await pool.query(
+      withCity
+        ? `INSERT INTO notifications (user_id, title, message, type, link, city) VALUES ($1, $2, $3, $4, $5, $6)`
+        : `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
+      withCity ? [userId, title, message, type, link, city] : [userId, title, message, type, link]
+    );
+  }
+}
+
+// ── Aprovação e ajuste do portal → Kanban (content_tasks) ──
+// Antes o navegador chamava sync_approval/sync_adjustment depois do approve: se a aba
+// fechasse ou a rede caísse no meio, o Kanban não se mexia. Agora vai junto, no servidor.
+// teamUser: alguém da equipe aprovando/pedindo ajuste em nome do cliente (fica registrado).
+async function insertPortalTaskHistory(taskId, action, details, userId) {
+  try {
+    await pool.query(`INSERT INTO task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, $4)`, [taskId, action, details, userId || null]);
+  } catch (err) {
+    if (!userId) throw err;
+    // user_id que não bate com o cadastro: registra sem ele
+    await pool.query(`INSERT INTO task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, NULL)`, [taskId, action, details]);
+  }
+}
+
+async function syncPortalApprovalToKanban(content, teamUser = null) {
+  const { rows: [task] } = await pool.query(
+    `SELECT id FROM content_tasks WHERE client_id = $1 AND title = $2 AND kanban_column IN ('envio', 'agendamentos') ORDER BY created_at DESC LIMIT 1`,
+    [content.client_id, content.title]
+  );
+  if (task) {
+    await pool.query(`UPDATE content_tasks SET kanban_column = 'agendamentos', approved_at = NOW(), updated_at = NOW() WHERE id = $1`, [task.id]);
+    await insertPortalTaskHistory(task.id, teamUser ? '✅ Aprovado pela equipe em nome do cliente (Pulse Club)' : '✅ Aprovado pelo cliente via Pulse Club', null, teamUser?.id);
+  }
+  await notifyPortalTeam(content.client_id, ['admin', 'social_media'],
+    teamUser ? '✅ Conteúdo aprovado pela equipe' : '✅ Conteúdo aprovado pelo cliente',
+    teamUser ? `"${content.title}" foi aprovado pela equipe em nome do cliente no Pulse Club` : `"${content.title}" foi aprovado no Pulse Club`,
+    'approval', '/conteudo');
+}
+
+async function syncPortalAdjustmentToKanban(content, note, teamUser = null) {
+  const { rows: [task] } = await pool.query(
+    `SELECT id, assigned_to FROM content_tasks WHERE client_id = $1 AND title = $2 AND kanban_column IN ('envio', 'agendamentos') ORDER BY created_at DESC LIMIT 1`,
+    [content.client_id, content.title]
+  );
+  const shortNote = String(note || '').substring(0, 80);
+  if (task) {
+    await pool.query(`UPDATE content_tasks SET kanban_column = 'alteracao', adjustment_notes = $1, updated_at = NOW() WHERE id = $2`, [note, task.id]);
+    await insertPortalTaskHistory(task.id, teamUser ? '🔧 Ajuste solicitado pela equipe no Pulse Club' : '🔧 Ajuste solicitado pelo cliente via Pulse Club', note, teamUser?.id);
+    if (task.assigned_to) {
+      await insertPortalTeamNotifications(await getPortalClientCity(content.client_id), [task.assigned_to],
+        teamUser ? '🔧 Ajuste solicitado pela equipe' : '🔧 Ajuste solicitado pelo cliente',
+        `"${content.title}" precisa de ajustes: ${shortNote}`, 'adjustment', '/edicao/kanban');
+    }
+  }
+  await notifyPortalTeam(content.client_id, ['admin', 'social_media'], '🔧 Ajuste solicitado no Pulse Club',
+    `${teamUser ? 'Equipe' : 'Cliente'} solicitou ajuste em "${content.title}": ${shortNote}`, 'adjustment', '/entregas-social');
+}
+
+/** Cidade a gravar numa linha nova do cliente (recordings): null = deixa o DEFAULT/trigger. */
+async function portalInsertCity(tableName, clientCity) {
+  return clientCity && await tableHasCityColumn(tableName) ? clientCity : null;
+}
+
 // Ensure client_portal_users table exists (multi-user per company)
 (async () => {
   try {
@@ -4342,7 +4494,7 @@ app.post('/api/client-portal-auth', async (req, res) => {
           await pool.query('UPDATE client_portal_users SET password_hash = $1 WHERE id = $2', [upgraded, portalUser.user_id])
             .catch((error) => console.warn('[portal-login] falha ao migrar hash para bcrypt:', error?.message || error));
         }
-        return res.json({ success: true, client_id: portalUser.client_id, company_name: portalUser.company_name, color: portalUser.color, logo_url: portalUser.logo_url, display_name: portalUser.display_name, portal_user_id: portalUser.user_id });
+        return res.json({ success: true, client_id: portalUser.client_id, company_name: portalUser.company_name, color: portalUser.color, logo_url: portalUser.logo_url, display_name: portalUser.display_name, portal_user_id: portalUser.user_id, portal_token: portalSession.sign({ clientId: portalUser.client_id, portalUserId: portalUser.user_id }) });
       }
       // Fallback: legacy login on clients table
       const { rows: [client] } = await pool.query(
@@ -4352,7 +4504,7 @@ app.post('/api/client-portal-auth', async (req, res) => {
       if (!client) return invalidLogin();
       if (!(await verifyPortalPassword(password, client.client_password_hash))) return invalidLogin();
       clearLoginFailures(attemptKey);
-      return res.json({ success: true, client_id: client.id, company_name: client.company_name, color: client.color, logo_url: client.logo_url, display_name: client.company_name });
+      return res.json({ success: true, client_id: client.id, company_name: client.company_name, color: client.color, logo_url: client.logo_url, display_name: client.company_name, portal_token: portalSession.sign({ clientId: client.id }) });
     }
 
     if (action === 'register') {
@@ -4366,11 +4518,11 @@ app.post('/api/client-portal-auth', async (req, res) => {
       // Senhas novas do portal já nascem em bcrypt (o login aceita os dois formatos)
       const passwordHash = await bcrypt.hash(String(password), 12);
       const name = (display_name || login).trim();
-      await pool.query(
-        `INSERT INTO client_portal_users (client_id, username, display_name, password_hash) VALUES ($1, $2, $3, $4)`,
+      const { rows: [newPortalUser] } = await pool.query(
+        `INSERT INTO client_portal_users (client_id, username, display_name, password_hash) VALUES ($1, $2, $3, $4) RETURNING id`,
         [client_id, login.trim(), name, passwordHash]
       );
-      return res.json({ success: true, client_id, company_name: clientRow.company_name, display_name: name });
+      return res.json({ success: true, client_id, company_name: clientRow.company_name, display_name: name, portal_token: portalSession.sign({ clientId: clientRow.id, portalUserId: newPortalUser?.id }) });
     }
 
     if (action === 'get_info') {
@@ -4391,20 +4543,30 @@ app.post('/api/client-portal-auth', async (req, res) => {
       }
       const { rows: [data] } = await pool.query(query, params);
       if (!data) return res.status(404).json({ error: 'Cliente não encontrado' });
+      // Pelo slug (tela de login): só a marca. O id do cliente não sai antes do login.
+      if (!client_id) return res.json({ company_name: data.company_name, color: data.color, logo_url: data.logo_url });
       // Count existing portal users for this client
       const { rows: [countRow] } = await pool.query(`SELECT count(*)::int as total FROM client_portal_users WHERE client_id = $1`, [data.id]);
       return res.json({ id: data.id, company_name: data.company_name, color: data.color, logo_url: data.logo_url, registered_users: countRow?.total || 0, weekly_reels: data.weekly_reels, weekly_creatives: data.weekly_creatives, weekly_stories: data.weekly_stories, monthly_recordings: data.monthly_recordings, plan_id: data.plan_id, show_metrics: data.show_metrics, has_vehicle_flyer: data.has_vehicle_flyer, niche: data.niche, whatsapp: data.whatsapp, city: data.city });
     }
 
     if (action === 'get_contents') {
-      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      const caller = await resolvePortalCaller(req);
+      if (!caller && rejectPortalCallWithoutSession(res, 'client-portal-auth', action)) return;
+      const contentsClientId = effectiveClientId(caller, client_id);
+      if (!contentsClientId) return res.status(400).json({ error: 'client_id required' });
+      // 'revisao_interna' (vídeo ainda não liberado) só vai para a equipe.
       const { rows } = await pool.query(
-        `SELECT * FROM client_portal_contents WHERE client_id = $1 ORDER BY created_at DESC`, [client_id]
+        `SELECT * FROM client_portal_contents WHERE client_id = $1 AND ($2::boolean OR status <> 'revisao_interna') ORDER BY created_at DESC`,
+        [contentsClientId, caller?.kind === 'team']
       );
       return res.json({ contents: rows || [] });
     }
 
     if (action === 'list_users') {
+      // Lista os logins do cliente: só para a equipe.
+      const caller = await resolvePortalCaller(req);
+      if (caller?.kind !== 'team') return res.status(401).json({ error: 'Unauthorized' });
       if (!client_id) return res.status(400).json({ error: 'client_id required' });
       const { rows } = await pool.query(
         `SELECT id, username, display_name, created_at FROM client_portal_users WHERE client_id = $1 ORDER BY created_at`,
@@ -4652,7 +4814,20 @@ app.post('/api/public-proposal', async (req, res) => {
 
 app.post('/api/portal-actions', async (req, res) => {
   try {
-    const { action, client_id, content_id, author_name, author_type, author_id, message } = req.body;
+    const { action, content_id, message } = req.body;
+
+    // Sessão: cliente logado no portal (x-portal-token) ou equipe (JWT). O cliente
+    // só enxerga o próprio client_id (o do token; o do corpo é ignorado).
+    const caller = await resolvePortalCaller(req);
+    if (!caller && rejectPortalCallWithoutSession(res, 'portal-actions', action)) return;
+    const isTeamCaller = caller?.kind === 'team';
+    const client_id = effectiveClientId(caller, req.body.client_id);
+    // Filtro das ações por id de item (conteúdo, comentário, arte, panfleto, notificação).
+    const scopeClientId = itemScopeClientId(caller, req.body.client_id);
+    // Cliente não assina como equipe: comentário e ajuste do cliente saem sempre como 'client'.
+    const author_type = isTeamCaller ? req.body.author_type : 'client';
+    const author_id = isTeamCaller ? req.body.author_id : null;
+    const author_name = req.body.author_name;
 
     // ── Get client info ──
     if (action === 'get_client') {
@@ -4672,12 +4847,24 @@ app.post('/api/portal-actions', async (req, res) => {
       return res.json({ client: rows[0] });
     }
 
+    // ── Checklist de entregas (aba 'Entregas' do cliente sem contrato): só leitura ──
+    if (action === 'get_proposal_checklist') {
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      const { rows } = await pool.query(
+        `SELECT id, client_id, title, description, is_completed, completed_at, sort_order
+           FROM proposal_checklist_items WHERE client_id = $1 ORDER BY sort_order ASC`,
+        [client_id]
+      ).catch((err) => (err?.code === '42P01' ? { rows: [] } : Promise.reject(err)));
+      return res.json({ items: rows });
+    }
+
     // ── Get portal contents ──
     if (action === 'get_contents') {
       if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      // 'revisao_interna' (vídeo ainda não liberado) só vai para a equipe.
       const { rows } = await pool.query(
-        'SELECT * FROM client_portal_contents WHERE client_id = $1 ORDER BY created_at DESC',
-        [client_id]
+        `SELECT * FROM client_portal_contents WHERE client_id = $1 AND ($2::boolean OR status <> 'revisao_interna') ORDER BY created_at DESC`,
+        [client_id, isTeamCaller]
       );
       return res.json({ contents: rows });
     }
@@ -4717,11 +4904,13 @@ app.post('/api/portal-actions', async (req, res) => {
 
     // ── Mark notification read ──
     if (action === 'mark_notification_read') {
+      // Equipe olhando o portal não marca como lida a notificação do cliente
+      if (isTeamCaller) return res.json({ success: true, skipped: 'team' });
       const { notification_id, notification_ids } = req.body;
       if (notification_id) {
-        await pool.query('UPDATE client_portal_notifications SET read = true WHERE id = $1', [notification_id]);
+        await pool.query('UPDATE client_portal_notifications SET read = true WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)', [notification_id, scopeClientId]);
       } else if (notification_ids && notification_ids.length > 0) {
-        await pool.query('UPDATE client_portal_notifications SET read = true WHERE id = ANY($1)', [notification_ids]);
+        await pool.query('UPDATE client_portal_notifications SET read = true WHERE id = ANY($1) AND ($2::uuid IS NULL OR client_id = $2::uuid)', [notification_ids, scopeClientId]);
       }
       return res.json({ success: true });
     }
@@ -4752,13 +4941,12 @@ app.post('/api/portal-actions', async (req, res) => {
     // ── Update script client priority ──
     if (action === 'set_script_priority') {
       const { script_id, priority } = req.body;
-      if (!script_id || !client_id) return res.status(400).json({ error: 'script_id and client_id required' });
-      // Só altera roteiro do próprio cliente do portal
-      const { rowCount } = await pool.query(
-        'UPDATE scripts SET client_priority = $1 WHERE id = $2 AND client_id = $3',
-        [priority || 'normal', script_id, client_id]
+      if (!script_id) return res.status(400).json({ error: 'script_id required' });
+      const { rowCount: priorityUpdated } = await pool.query(
+        'UPDATE scripts SET client_priority = $1 WHERE id = $2 AND ($3::uuid IS NULL OR client_id = $3::uuid)',
+        [priority || 'normal', script_id, scopeClientId]
       );
-      if (rowCount === 0) return res.status(404).json({ error: 'Roteiro não encontrado' });
+      if (!priorityUpdated) return res.status(404).json({ error: 'Roteiro não encontrado' });
       // Get client name for notifications
       const { rows: [clientInfo] } = await pool.query('SELECT company_name FROM clients WHERE id = $1', [client_id]);
       return res.json({ success: true, company_name: clientInfo?.company_name || '' });
@@ -4767,22 +4955,32 @@ app.post('/api/portal-actions', async (req, res) => {
     // ── Get content tasks (for calendar) ──
     if (action === 'get_content_tasks') {
       if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      // Agenda: janela de 12 meses (a tela navega entre meses sem buscar de novo) e teto
+      // de linhas. Tarefa entra se qualquer data de evento cair na janela.
       const { rows: tasks } = await pool.query(
         `SELECT id, title, content_type, kanban_column, scheduled_recording_date, scheduled_recording_time,
                 editing_started_at, editing_deadline, approval_sent_at, approved_at, adjustment_notes,
                 recording_id, script_id, drive_link, updated_at, created_at
-         FROM content_tasks WHERE client_id = $1`,
+         FROM content_tasks
+         WHERE client_id = $1
+           AND GREATEST(updated_at, created_at, approved_at, approval_sent_at, editing_deadline::timestamptz, scheduled_recording_date::timestamptz) >= NOW() - INTERVAL '12 months'
+         ORDER BY updated_at DESC
+         LIMIT 1000`,
         [client_id]
       );
-      // Get task history
+      // Get task history (o cliente não recebe os detalhes internos: notas, links de upload, pausas)
       const taskIds = tasks.map(t => t.id);
       let history = [];
       if (taskIds.length > 0) {
         const { rows } = await pool.query(
-          'SELECT id, task_id, action, details, created_at FROM task_history WHERE task_id = ANY($1) ORDER BY created_at ASC',
-          [taskIds]
+          `SELECT id, task_id, action, CASE WHEN $2::boolean THEN details ELSE NULL END AS details, created_at
+             FROM task_history
+            WHERE task_id = ANY($1) AND created_at >= NOW() - INTERVAL '12 months'
+            ORDER BY created_at DESC
+            LIMIT 3000`,
+          [taskIds, isTeamCaller]
         );
-        history = rows;
+        history = rows.reverse();
       }
       return res.json({ tasks, history });
     }
@@ -4792,7 +4990,10 @@ app.post('/api/portal-actions', async (req, res) => {
       if (!client_id) return res.status(400).json({ error: 'client_id required' });
       const { rows } = await pool.query(
         `SELECT id, title, content_type, status, delivered_at, posted_at, scheduled_time, platform
-         FROM social_media_deliveries WHERE client_id = $1`,
+         FROM social_media_deliveries
+         WHERE client_id = $1 AND COALESCE(posted_at, delivered_at) >= (CURRENT_DATE - INTERVAL '12 months')
+         ORDER BY COALESCE(posted_at, delivered_at) DESC
+         LIMIT 1000`,
         [client_id]
       );
       return res.json({ deliveries: rows });
@@ -4821,20 +5022,16 @@ app.post('/api/portal-actions', async (req, res) => {
 
     if (action === 'update_flyer_item') {
       const { item_id, status } = req.body;
-      if (!item_id || !client_id) return res.status(400).json({ error: 'item_id and client_id required' });
-      // Só altera panfleto do próprio cliente do portal
-      const { rowCount } = await pool.query(
-        'UPDATE flyer_items SET status = $1, updated_at = NOW() WHERE id = $2 AND client_id = $3',
-        [status, item_id, client_id]
-      );
+      if (!item_id) return res.status(400).json({ error: 'item_id required' });
+      const { rowCount } = await pool.query('UPDATE flyer_items SET status = $1, updated_at = NOW() WHERE id = $2 AND ($3::uuid IS NULL OR client_id = $3::uuid)', [status, item_id, scopeClientId]);
       if (rowCount === 0) return res.status(404).json({ error: 'Item not found' });
       return res.json({ success: true });
     }
 
     if (action === 'delete_flyer_item') {
       const { item_id } = req.body;
-      if (!item_id || !client_id) return res.status(400).json({ error: 'item_id and client_id required' });
-      const { rowCount } = await pool.query('DELETE FROM flyer_items WHERE id = $1 AND client_id = $2', [item_id, client_id]);
+      if (!item_id) return res.status(400).json({ error: 'item_id required' });
+      const { rowCount } = await pool.query('DELETE FROM flyer_items WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)', [item_id, scopeClientId]);
       if (rowCount === 0) return res.status(404).json({ error: 'Item not found' });
       return res.json({ success: true });
     }
@@ -4855,50 +5052,95 @@ app.post('/api/portal-actions', async (req, res) => {
     if (action === 'get_comments') {
       if (!content_id) return res.status(400).json({ error: 'content_id required' });
       const { rows } = await pool.query(
-        `SELECT c.*, p.avatar_url FROM client_portal_comments c LEFT JOIN profiles p ON p.id = c.author_id WHERE c.content_id = $1 ORDER BY c.created_at ASC`,
-        [content_id]
+        `SELECT c.*, p.avatar_url
+           FROM client_portal_comments c
+           JOIN client_portal_contents cpc ON cpc.id = c.content_id
+           LEFT JOIN profiles p ON p.id = c.author_id
+          WHERE c.content_id = $1 AND ($2::uuid IS NULL OR cpc.client_id = $2::uuid)
+          ORDER BY c.created_at ASC`,
+        [content_id, scopeClientId]
       );
       return res.json({ comments: rows });
     }
 
     if (action === 'add_comment') {
       if (!content_id || !message) return res.status(400).json({ error: 'content_id and message required' });
-      await pool.query(
-        `INSERT INTO client_portal_comments (content_id, author_name, author_type, author_id, message) VALUES ($1, $2, $3, $4, $5)`,
-        [content_id, author_name || 'Cliente', author_type || 'client', author_id || null, message]
+      const { rowCount: commentAdded } = await pool.query(
+        `INSERT INTO client_portal_comments (content_id, author_name, author_type, author_id, message)
+         SELECT id, $2, $3, $4, $5 FROM client_portal_contents
+          WHERE id = $1 AND ($6::uuid IS NULL OR client_id = $6::uuid) AND ($7::boolean OR status <> 'revisao_interna')`,
+        [content_id, author_name || 'Cliente', author_type || 'client', author_id || null, message, scopeClientId, isTeamCaller]
       );
+      if (!commentAdded) return res.status(404).json({ error: 'Conteúdo não encontrado' });
       return res.json({ success: true });
     }
 
     if (action === 'approve') {
-      if (!content_id || !client_id) return res.status(400).json({ error: 'content_id and client_id required' });
-      // Só aprova conteúdo do próprio cliente do portal
-      const { rowCount } = await pool.query(
-        `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW() WHERE id = $1 AND client_id = $2`,
-        [content_id, client_id]
+      if (!content_id) return res.status(400).json({ error: 'content_id required' });
+      // Idempotente (clique duplo não aprova nem avisa duas vezes) e nunca em 'revisao_interna':
+      // o vídeo ainda não foi liberado para o cliente. O Kanban se mexe aqui mesmo.
+      const { rows: [approvedContent] } = await pool.query(
+        `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW()
+          WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) AND status NOT IN ('aprovado', 'revisao_interna')
+          RETURNING id, client_id, title`,
+        [content_id, scopeClientId]
       );
-      if (rowCount === 0) return res.status(404).json({ error: 'Content not found' });
+      if (!approvedContent) {
+        const { rows: [currentContent] } = await pool.query(
+          'SELECT status FROM client_portal_contents WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)',
+          [content_id, scopeClientId]
+        );
+        if (!currentContent || (currentContent.status === 'revisao_interna' && !isTeamCaller)) return res.status(404).json({ error: 'Conteúdo não encontrado' });
+        if (currentContent.status === 'aprovado') return res.json({ success: true, already_approved: true });
+        return res.status(409).json({ error: 'Este conteúdo ainda está em revisão interna' });
+      }
+      // A aprovação já foi gravada: falha no Kanban/avisos só vai para o log. Devolver erro aqui
+      // faria o cliente tentar de novo e cair em already_approved, sem sincronizar nada.
+      try {
+        await syncPortalApprovalToKanban(approvedContent, isTeamCaller ? caller.user : null);
+      } catch (syncErr) {
+        console.error('[portal-actions] approve: falha ao sincronizar Kanban/avisos', content_id, syncErr);
+      }
       return res.json({ success: true });
     }
 
     if (action === 'request_adjustment') {
-      if (!content_id || !message || !client_id) return res.status(400).json({ error: 'content_id, client_id and message required' });
-      const { rowCount } = await pool.query(
-        `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW() WHERE id = $1 AND client_id = $2`,
-        [content_id, client_id]
+      if (!content_id || !message) return res.status(400).json({ error: 'content_id and message required' });
+      const { rows: [adjustedContent] } = await pool.query(
+        `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW()
+          WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) AND status <> 'revisao_interna'
+          RETURNING id, client_id, title`,
+        [content_id, scopeClientId]
       );
-      if (rowCount === 0) return res.status(404).json({ error: 'Content not found' });
+      if (!adjustedContent) {
+        const { rows: [currentContent] } = await pool.query(
+          'SELECT status FROM client_portal_contents WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)',
+          [content_id, scopeClientId]
+        );
+        if (!currentContent || !isTeamCaller) return res.status(404).json({ error: 'Conteúdo não encontrado' });
+        return res.status(409).json({ error: 'Este conteúdo ainda está em revisão interna' });
+      }
       await pool.query(
         `INSERT INTO client_portal_comments (content_id, author_name, author_type, author_id, message) VALUES ($1, $2, $3, $4, $5)`,
         [content_id, author_name || 'Cliente', author_type || 'client', author_id || null, `🔧 Ajuste solicitado: ${message}`]
       );
+      // Pedido e comentário já gravados: falha no Kanban/avisos só vai para o log (nova tentativa
+      // do cliente duplicaria o comentário).
+      try {
+        await syncPortalAdjustmentToKanban(adjustedContent, message, isTeamCaller ? caller.user : null);
+      } catch (syncErr) {
+        console.error('[portal-actions] request_adjustment: falha ao sincronizar Kanban/avisos', content_id, syncErr);
+      }
       return res.json({ success: true });
     }
 
     // ── Get single content by ID ──
     if (action === 'get_content_by_id') {
       if (!content_id) return res.status(400).json({ error: 'content_id required' });
-      const { rows: [content] } = await pool.query('SELECT * FROM client_portal_contents WHERE id = $1', [content_id]);
+      const { rows: [content] } = await pool.query(
+        `SELECT * FROM client_portal_contents WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) AND ($3::boolean OR status <> 'revisao_interna')`,
+        [content_id, scopeClientId, isTeamCaller]
+      );
       if (!content) return res.status(404).json({ error: 'Content not found' });
       return res.json({ content });
     }
@@ -4907,6 +5149,13 @@ app.post('/api/portal-actions', async (req, res) => {
     if (action === 'create_portal_content') {
       const { title, content_type, file_url, season_month, season_year, status } = req.body;
       if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      // Cliente (vídeo do panfleto): só arquivo enviado para os uploads da agência e nunca como 'revisao_interna'.
+      if (!isTeamCaller) {
+        if (file_url && !/^(https:\/\/agenciapulse\.tech)?\/uploads\//.test(String(file_url))) {
+          return res.status(400).json({ error: 'Arquivo inválido' });
+        }
+        if (status === 'revisao_interna') return res.status(400).json({ error: 'Status inválido' });
+      }
       await pool.query(
         `INSERT INTO client_portal_contents (client_id, title, content_type, file_url, season_month, season_year, status) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [client_id, title || '', content_type || 'reel', file_url || null, season_month || new Date().getMonth() + 1, season_year || new Date().getFullYear(), status || 'pendente']
@@ -4932,6 +5181,8 @@ app.post('/api/portal-actions', async (req, res) => {
     if (action === 'mark_video_viewed') {
       const { video_id } = req.body;
       if (!client_id || !video_id) return res.status(400).json({ error: 'client_id and video_id required' });
+      // Vídeo de boas-vindas/novidades visto pela equipe não conta como visto pelo cliente
+      if (isTeamCaller) return res.json({ success: true, skipped: 'team' });
       await pool.query('INSERT INTO portal_video_views (video_id, client_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [video_id, client_id]);
       return res.json({ success: true });
     }
@@ -4943,7 +5194,11 @@ app.post('/api/portal-actions', async (req, res) => {
       if (!client_id || !script_id) return res.status(400).json({ error: 'client_id and script_id required' });
 
       const plainContent = String(content || '').trim();
-      const htmlContent = plainContent ? `<p>${plainContent.replace(/\n/g, '</p><p>')}</p>` : '';
+      // Texto puro do textarea: escapa & < > antes de virar <p> (sem isso, 'preço < 100'
+      // quebra o HTML e uma tag digitada vira HTML na tela da equipe). Aspas ficam: o
+      // highlightQuotes precisa delas para marcar as falas.
+      const escapedContent = plainContent.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const htmlContent = escapedContent ? `<p>${escapedContent.replace(/\n/g, '</p><p>')}</p>` : '';
 
       const { rows: [updatedScript] } = await pool.query(
         `UPDATE scripts
@@ -4977,87 +5232,29 @@ app.post('/api/portal-actions', async (req, res) => {
       if (!script_id) return res.status(400).json({ error: 'script_id required' });
 
       const { rows: [script] } = await pool.query(
-        'SELECT title FROM scripts WHERE id = $1 LIMIT 1',
-        [script_id]
+        'SELECT title FROM scripts WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) LIMIT 1',
+        [script_id, scopeClientId]
       );
+      if (!script) return res.status(404).json({ error: 'Roteiro não encontrado' });
 
-      const { rows: notifUsers } = await pool.query(
-        `SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`
-      );
-
-      for (const u of notifUsers) {
-        await pool.query(
-          `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [
-            u.user_id,
-            '✏️ Roteiro editado pelo cliente',
-            `${client_name || 'Cliente'} editou o roteiro "${script?.title || 'Roteiro'}" no Pulse Club`,
-            'info',
-            '/roteiros',
-          ]
-        );
-      }
+      await notifyPortalTeam(client_id, ['admin', 'social_media'], '✏️ Roteiro editado pelo cliente', `${client_name || 'Cliente'} editou o roteiro "${script?.title || 'Roteiro'}" no Pulse Club`, 'info', '/roteiros');
 
       return res.json({ success: true });
     }
 
-    // ── Sync: Approval ──
-    if (action === 'sync_approval') {
-      const { content_title } = req.body;
-      if (!client_id) return res.status(400).json({ error: 'client_id required' });
-      // Find matching content_task
-      const { rows: [task] } = await pool.query(
-        `SELECT id, assigned_to, script_id FROM content_tasks WHERE client_id = $1 AND title = $2 AND kanban_column IN ('envio', 'revisao', 'agendamentos') ORDER BY created_at DESC LIMIT 1`,
-        [client_id, content_title]
-      );
-      if (task) {
-        await pool.query(`UPDATE content_tasks SET kanban_column = 'agendamentos', approved_at = NOW(), updated_at = NOW() WHERE id = $1`, [task.id]);
-        await pool.query(`INSERT INTO task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, $4)`,
-          [task.id, '✅ Aprovado pelo cliente via Pulse Club', null, null]);
-      }
-      // Notify social_media and admin
-      const { rows: notifUsers } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
-      for (const u of notifUsers) {
-        await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, '✅ Conteúdo aprovado pelo cliente', `"${content_title}" foi aprovado no Pulse Club`, 'approval', '/conteudo']);
-      }
-      return res.json({ success: true });
-    }
-
-    // ── Sync: Adjustment ──
-    if (action === 'sync_adjustment') {
-      const { content_title, adjustment_note } = req.body;
-      if (!client_id) return res.status(400).json({ error: 'client_id required' });
-      const { rows: [task] } = await pool.query(
-        `SELECT id, assigned_to FROM content_tasks WHERE client_id = $1 AND title = $2 AND kanban_column IN ('envio', 'revisao', 'agendamentos') ORDER BY created_at DESC LIMIT 1`,
-        [client_id, content_title]
-      );
-      if (task) {
-        await pool.query(`UPDATE content_tasks SET kanban_column = 'alteracao', adjustment_notes = $1, updated_at = NOW() WHERE id = $2`, [adjustment_note, task.id]);
-        await pool.query(`INSERT INTO task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, $4)`,
-          [task.id, '🔧 Ajuste solicitado pelo cliente via Pulse Club', adjustment_note, null]);
-        if (task.assigned_to) {
-          await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-            [task.assigned_to, '🔧 Ajuste solicitado pelo cliente', `"${content_title}" precisa de ajustes: ${(adjustment_note || '').substring(0, 80)}`, 'adjustment', '/edicao/kanban']);
-        }
-      }
-      const { rows: notifUsers } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
-      for (const u of notifUsers) {
-        await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, '🔧 Ajuste solicitado no Pulse Club', `Cliente solicitou ajuste em "${content_title}": ${(adjustment_note || '').substring(0, 80)}`, 'adjustment', '/entregas-social']);
-      }
-      return res.json({ success: true });
+    // ── Sync: Approval / Adjustment (legado) ──
+    // O approve e o request_adjustment já movem o Kanban e avisam a equipe no servidor.
+    // Ficam respondendo sucesso para abas antigas do portal não repetirem tudo em dobro.
+    if (action === 'sync_approval' || action === 'sync_adjustment') {
+      return res.json({ success: true, legacy: true });
     }
 
     // ── Sync: Comment notification ──
     if (action === 'sync_comment') {
-      const { content_title, author_name: syncAuthorName, author_type: syncAuthorType, message: syncMessage } = req.body;
+      const { content_title, author_name: syncAuthorName, message: syncMessage } = req.body;
+      const syncAuthorType = isTeamCaller ? req.body.author_type : 'client';
       if (syncAuthorType === 'client') {
-        const { rows: notifUsers } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
-        for (const u of notifUsers) {
-          await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-            [u.user_id, '💬 Comentário do cliente', `${syncAuthorName} comentou em "${content_title}": ${(syncMessage || '').substring(0, 60)}`, 'comment', '/conteudos-portal']);
-        }
+        await notifyPortalTeam(client_id, ['admin', 'social_media'], '💬 Comentário do cliente', `${syncAuthorName} comentou em "${content_title}": ${(syncMessage || '').substring(0, 60)}`, 'comment', '/conteudos-portal');
       }
       if (syncAuthorType === 'team' && client_id) {
         await pool.query(`INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)`,
@@ -5071,11 +5268,7 @@ app.post('/api/portal-actions', async (req, res) => {
       const { script_title, new_priority, client_name } = req.body;
       const emoji = new_priority === 'urgent' ? '🚨' : '⭐';
       const label = new_priority === 'urgent' ? 'URGENTE' : 'Prioridade';
-      const { rows: notifUsers } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
-      for (const u of notifUsers) {
-        await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, `${emoji} Roteiro marcado como ${label}`, `${client_name} marcou "${script_title}" como ${label} no Pulse Club`, 'priority', '/roteiros']);
-      }
+      await notifyPortalTeam(client_id, ['admin', 'social_media'], `${emoji} Roteiro marcado como ${label}`, `${client_name} marcou "${script_title}" como ${label} no Pulse Club`, 'priority', '/roteiros');
       // Create portal notification
       if (client_id) {
         const { rows: [script] } = await pool.query('SELECT id FROM scripts WHERE client_id = $1 AND title = $2 LIMIT 1', [client_id, script_title]);
@@ -5133,15 +5326,7 @@ app.post('/api/portal-actions', async (req, res) => {
       );
 
       // Notify designers (fotografo + designer roles)
-      const { rows: notifUsers } = await pool.query(
-        `SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'fotografo', 'designer')`
-      );
-      for (const u of notifUsers) {
-        await pool.query(
-          `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, '🎨 Nova solicitação de arte do cliente', `${clientInfo?.company_name || 'Cliente'} solicitou: "${title}"`, 'design', '/designer']
-        );
-      }
+      await notifyPortalTeam(client_id, ['admin', 'fotografo', 'designer'], '🎨 Nova solicitação de arte do cliente', `${clientInfo?.company_name || 'Cliente'} solicitou: "${title}"`, 'design', '/designer');
 
       return res.json({ success: true, task_id: task.id });
     }
@@ -5150,25 +5335,27 @@ app.post('/api/portal-actions', async (req, res) => {
     if (action === 'approve_design_task') {
       const { task_id } = req.body;
       if (!task_id) return res.status(400).json({ error: 'task_id required' });
-      await pool.query(
-        `UPDATE design_tasks SET kanban_column = 'aprovado', client_approved_at = NOW(), completed_at = NOW(), updated_at = NOW() WHERE id = $1`,
-        [task_id]
+      // Só arte aguardando o cliente; clique repetido não grava nem avisa de novo
+      const { rowCount: designApproved } = await pool.query(
+        `UPDATE design_tasks SET kanban_column = 'aprovado', client_approved_at = NOW(), completed_at = NOW(), updated_at = NOW()
+          WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) AND kanban_column = 'enviar_cliente'`,
+        [task_id, scopeClientId]
       );
+      if (!designApproved) {
+        const { rows: [currentDesign] } = await pool.query(
+          'SELECT kanban_column FROM design_tasks WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)', [task_id, scopeClientId]
+        );
+        if (!currentDesign) return res.status(404).json({ error: 'Arte não encontrada' });
+        if (currentDesign.kanban_column === 'aprovado') return res.json({ success: true, already_approved: true });
+        return res.status(409).json({ error: 'Esta arte não está aguardando aprovação' });
+      }
       await pool.query(
         `INSERT INTO design_task_history (task_id, action) VALUES ($1, $2)`,
         [task_id, '✅ Aprovado pelo cliente via Pulse Club']
       );
       // Notify designers
-      const { rows: notifUsers } = await pool.query(
-        `SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'fotografo', 'designer')`
-      );
-      const { rows: [taskInfo] } = await pool.query('SELECT title FROM design_tasks WHERE id = $1', [task_id]);
-      for (const u of notifUsers) {
-        await pool.query(
-          `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, '✅ Arte aprovada pelo cliente', `"${taskInfo?.title || 'Arte'}" foi aprovada no Pulse Club`, 'design', '/designer']
-        );
-      }
+      const { rows: [taskInfo] } = await pool.query('SELECT title, client_id FROM design_tasks WHERE id = $1', [task_id]);
+      await notifyPortalTeam(taskInfo?.client_id || client_id, ['admin', 'fotografo', 'designer'], '✅ Arte aprovada pelo cliente', `"${taskInfo?.title || 'Arte'}" foi aprovada no Pulse Club`, 'design', '/designer');
       return res.json({ success: true });
     }
 
@@ -5176,25 +5363,27 @@ app.post('/api/portal-actions', async (req, res) => {
     if (action === 'request_design_adjustment') {
       const { task_id, note } = req.body;
       if (!task_id || !note) return res.status(400).json({ error: 'task_id and note required' });
-      await pool.query(
-        `UPDATE design_tasks SET kanban_column = 'ajustes', observations = $1, updated_at = NOW() WHERE id = $2`,
-        [note, task_id]
+      // Só arte aguardando o cliente; pedido repetido (já em ajustes) não grava nem avisa de novo
+      const { rowCount: designAdjusted } = await pool.query(
+        `UPDATE design_tasks SET kanban_column = 'ajustes', observations = $1, updated_at = NOW()
+          WHERE id = $2 AND ($3::uuid IS NULL OR client_id = $3::uuid) AND kanban_column = 'enviar_cliente'`,
+        [note, task_id, scopeClientId]
       );
+      if (!designAdjusted) {
+        const { rows: [currentDesign] } = await pool.query(
+          'SELECT kanban_column FROM design_tasks WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)', [task_id, scopeClientId]
+        );
+        if (!currentDesign) return res.status(404).json({ error: 'Arte não encontrada' });
+        if (currentDesign.kanban_column === 'ajustes') return res.json({ success: true, already_requested: true });
+        return res.status(409).json({ error: 'Esta arte não está aguardando aprovação' });
+      }
       await pool.query(
         `INSERT INTO design_task_history (task_id, action, details) VALUES ($1, $2, $3)`,
         [task_id, '🔧 Ajuste solicitado pelo cliente via Pulse Club', note]
       );
       // Notify designers
-      const { rows: [taskInfo] } = await pool.query('SELECT title, assigned_to FROM design_tasks WHERE id = $1', [task_id]);
-      const { rows: notifUsers } = await pool.query(
-        `SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'fotografo', 'designer')`
-      );
-      for (const u of notifUsers) {
-        await pool.query(
-          `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, '🔧 Ajuste solicitado na arte', `Cliente pediu ajuste em "${taskInfo?.title || 'Arte'}": ${(note || '').substring(0, 80)}`, 'design', '/designer']
-        );
-      }
+      const { rows: [taskInfo] } = await pool.query('SELECT title, assigned_to, client_id FROM design_tasks WHERE id = $1', [task_id]);
+      await notifyPortalTeam(taskInfo?.client_id || client_id, ['admin', 'fotografo', 'designer'], '🔧 Ajuste solicitado na arte', `Cliente pediu ajuste em "${taskInfo?.title || 'Arte'}": ${(note || '').substring(0, 80)}`, 'design', '/designer');
       return res.json({ success: true });
     }
 
@@ -5263,13 +5452,22 @@ app.post('/api/avulso-actions', async (req, res) => {
     }
 
     if (action === 'approve') {
+      // Só com o vídeo editado pronto (fora de ideias/captação/edição). Já aprovado: sucesso sem repetir.
       const { rowCount } = await pool.query(
         `UPDATE content_tasks
          SET kanban_column = 'arquivado', approved_at = NOW(), updated_at = NOW()
-         WHERE id = $1 AND client_id IS NULL`,
+         WHERE id = $1 AND client_id IS NULL AND edited_video_link IS NOT NULL
+           AND kanban_column NOT IN ('ideias', 'captacao', 'edicao', 'arquivado')`,
         [task_id]
       );
-      if (!rowCount) return res.status(404).json({ error: 'Vídeo avulso não encontrado' });
+      if (!rowCount) {
+        const { rows: [avulsoTask] } = await pool.query(
+          'SELECT kanban_column FROM content_tasks WHERE id = $1 AND client_id IS NULL', [task_id]
+        );
+        if (!avulsoTask) return res.status(404).json({ error: 'Vídeo avulso não encontrado' });
+        if (avulsoTask.kanban_column === 'arquivado') return res.json({ success: true, already_approved: true });
+        return res.status(409).json({ error: 'O vídeo ainda não está pronto para aprovação' });
+      }
       await pool.query(
         `INSERT INTO task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, $4)`,
         [task_id, 'Cliente avulso aprovou o vídeo', null, null]
@@ -5279,14 +5477,23 @@ app.post('/api/avulso-actions', async (req, res) => {
 
     if (action === 'request_revision') {
       if (!message) return res.status(400).json({ error: 'message required' });
+      // Revisão só de vídeo pronto e ainda não aprovado (arquivado não volta para alteração)
       const { rowCount } = await pool.query(
         `UPDATE content_tasks
          SET kanban_column = 'alteracao', adjustment_notes = $2, editing_started_at = NULL,
              editing_paused_at = NULL, editing_paused_seconds = 0, updated_at = NOW()
-         WHERE id = $1 AND client_id IS NULL`,
+         WHERE id = $1 AND client_id IS NULL AND edited_video_link IS NOT NULL
+           AND kanban_column NOT IN ('ideias', 'captacao', 'edicao', 'arquivado')`,
         [task_id, message]
       );
-      if (!rowCount) return res.status(404).json({ error: 'Vídeo avulso não encontrado' });
+      if (!rowCount) {
+        const { rows: [avulsoTask] } = await pool.query(
+          'SELECT kanban_column FROM content_tasks WHERE id = $1 AND client_id IS NULL', [task_id]
+        );
+        if (!avulsoTask) return res.status(404).json({ error: 'Vídeo avulso não encontrado' });
+        if (avulsoTask.kanban_column === 'arquivado') return res.status(409).json({ error: 'Este vídeo já foi aprovado' });
+        return res.status(409).json({ error: 'O vídeo ainda não está pronto para revisão' });
+      }
       await pool.query(
         `INSERT INTO task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, $4)`,
         [task_id, 'Cliente avulso solicitou revisão', message, null]
@@ -5304,7 +5511,11 @@ app.post('/api/avulso-actions', async (req, res) => {
 // ─── 6. Portal Recordings (uses local PostgreSQL) ───────────
 app.post('/api/portal-recordings', async (req, res) => {
   try {
-    const { action, client_id, recording_id, new_date, new_time } = req.body;
+    const { action, recording_id, new_date, new_time } = req.body;
+    // Mesma sessão do portal-actions: cliente pelo token (client_id do token) ou equipe pelo JWT.
+    const caller = await resolvePortalCaller(req);
+    if (!caller && rejectPortalCallWithoutSession(res, 'portal-recordings', action)) return;
+    const client_id = effectiveClientId(caller, req.body.client_id);
     if (!client_id) return res.status(400).json({ error: 'client_id required' });
 
     if (action === 'list') {
@@ -5372,15 +5583,7 @@ app.post('/api/portal-recordings', async (req, res) => {
       const { rows: [clientInfo] } = await pool.query('SELECT company_name FROM clients WHERE id = $1', [client_id]);
       const notifMsg = `${clientInfo?.company_name || 'Cliente'} reagendou gravação de ${rec.date} ${rec.start_time} para ${new_date} ${new_time}`;
       // Notify admins and social_media via local notifications table
-      const { rows: notifUsers } = await pool.query(
-        `SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`
-      );
-      for (const u of notifUsers) {
-        await pool.query(
-          `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, 'Reagendamento pelo cliente', notifMsg, 'warning', '/agenda']
-        );
-      }
+      await notifyPortalTeam(client_id, ['admin', 'social_media'], 'Reagendamento pelo cliente', notifMsg, 'warning', '/agenda');
       return res.json({ success: true });
     }
 
@@ -5389,11 +5592,7 @@ app.post('/api/portal-recordings', async (req, res) => {
       if (!recording_id) return res.status(400).json({ error: 'recording_id required' });
       await pool.query(`UPDATE recordings SET confirmation_status = 'confirmada' WHERE id = $1 AND client_id = $2`, [recording_id, client_id]);
       const { rows: [clientInfoConf] } = await pool.query('SELECT company_name FROM clients WHERE id = $1', [client_id]);
-      const { rows: notifUsersConf } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
-      for (const u of notifUsersConf) {
-        await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, 'Gravação confirmada pelo cliente', `${clientInfoConf?.company_name || 'Cliente'} confirmou a gravação`, 'info', '/agenda']);
-      }
+      await notifyPortalTeam(client_id, ['admin', 'social_media'], 'Gravação confirmada pelo cliente', `${clientInfoConf?.company_name || 'Cliente'} confirmou a gravação`, 'info', '/agenda');
       return res.json({ success: true });
     }
 
@@ -5425,20 +5624,26 @@ app.post('/api/portal-recordings', async (req, res) => {
       // If main videomaker backup not available, find alternative videomakers with space
       let alternativeVideomakers = [];
       if (!backupAvailable && backupDateCancel) {
+        // Só videomakers que atendem a cidade do cliente
+        const cancelCity = await getPortalClientCity(client_id);
         const { rows: allVideomakers } = await pool.query(
-          `SELECT p.id, p.name FROM profiles p JOIN user_roles ur ON ur.user_id = p.id WHERE ur.role = 'videomaker' AND p.id != $1`,
-          [clientCancel.videomaker_id]
+          `SELECT DISTINCT p.id, p.name FROM profiles p JOIN user_roles ur ON ur.user_id = p.id
+            WHERE ur.role = 'videomaker' AND p.id IS DISTINCT FROM $1 AND ${portalCityMemberSql('p.id', '$2')}`,
+          [clientCancel?.videomaker_id || null, cancelCity]
         );
+        const { rows: altRecsCancel } = allVideomakers.length > 0
+          ? await pool.query(
+            `SELECT videomaker_id, start_time FROM recordings WHERE videomaker_id = ANY($1::uuid[]) AND date = $2 AND status != 'cancelada'`,
+            [allVideomakers.map(vm => vm.id), backupDateCancel]
+          )
+          : { rows: [] };
         const shiftAStart = settingsCancel?.shift_a_start || '08:30';
         const shiftAEnd = settingsCancel?.shift_a_end || '12:00';
         const shiftBStart = settingsCancel?.shift_b_start || '14:30';
         const shiftBEnd = settingsCancel?.shift_b_end || '18:00';
 
         for (const vm of allVideomakers) {
-          const { rows: vmRecs } = await pool.query(
-            `SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`,
-            [vm.id, backupDateCancel]
-          );
+          const vmRecs = altRecsCancel.filter(r => String(r.videomaker_id) === String(vm.id));
           const occupied = vmRecs.map(r => { const [h, m] = r.start_time.split(':').map(Number); return { start: h * 60 + m, end: h * 60 + m + durationCancel }; });
           // Find available slots for this videomaker
           const slots = [];
@@ -5467,21 +5672,37 @@ app.post('/api/portal-recordings', async (req, res) => {
       const fixedDayCancel = dayMapCancel[clientCancel?.fixed_day] ?? 1;
       let nextFixedDate = null;
       for (let i = 1; i <= 14; i++) { const d = new Date(todayCancel); d.setDate(d.getDate() + i); if (d.getDay() === fixedDayCancel) { nextFixedDate = d.toISOString().split('T')[0]; break; } }
-      await pool.query(`UPDATE recordings SET status = 'cancelada' WHERE id = $1`, [recording_id]);
-      const { rows: notifUsersCancel } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
-      for (const u of notifUsersCancel) {
-        await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, 'Gravação cancelada pelo cliente', `${clientCancel?.company_name || 'Cliente'} cancelou gravação ${recCancel.date} ${recCancel.start_time}`, 'warning', '/agenda']);
-      }
-      return res.json({ success: true, backup_available: backupAvailable, backup_slot: backupSlot, next_fixed_date: nextFixedDate, alternative_videomakers: alternativeVideomakers });
+      await pool.query(`UPDATE recordings SET status = 'cancelada' WHERE id = $1 AND client_id = $2`, [recording_id, client_id]);
+      await notifyPortalTeam(client_id, ['admin', 'social_media'], 'Gravação cancelada pelo cliente', `${clientCancel?.company_name || 'Cliente'} cancelou gravação ${recCancel.date} ${recCancel.start_time}`, 'warning', '/agenda');
+      // Oferta assinada: o accept_backup só aceita uma destas opções (data, hora e videomaker).
+      const backupOfferOptions = [
+        ...(backupSlot ? [{ vm: clientCancel?.videomaker_id || null, date: backupSlot.date, times: [backupSlot.time], main: true }] : []),
+        ...alternativeVideomakers.map(vm => ({ vm: vm.id, date: vm.date, times: vm.available_slots })),
+      ];
+      const backupOffer = backupOfferOptions.length > 0
+        ? portalSession.signBackupOffer({ clientId: client_id, recordingId: recording_id, options: backupOfferOptions })
+        : null;
+      return res.json({ success: true, backup_available: backupAvailable, backup_slot: backupSlot, next_fixed_date: nextFixedDate, alternative_videomakers: alternativeVideomakers, backup_offer: backupOffer });
     }
 
     /* ── accept_backup ── */
     if (action === 'accept_backup') {
-      const { backup_date, backup_time, videomaker_id: requestedVmId } = req.body;
+      const { backup_date, backup_time, videomaker_id: requestedVmId, backup_offer } = req.body;
       if (!backup_date || !backup_time) return res.status(400).json({ error: 'backup_date and backup_time required' });
-      // Use requested videomaker_id (alternative) or fallback to client's default
-      let vmId = requestedVmId || null;
+      // Só uma das opções oferecidas no cancelamento (oferta assinada, válida por 2 h), uma vez só.
+      const offer = portalSession.readBackupOffer(backup_offer, client_id);
+      if (!offer) return res.status(400).json({ error: 'Essa opção de remarcação expirou. Fale com a equipe para remarcar.' });
+      const offerOption = pickBackupOption(offer, { videomakerId: requestedVmId || null, date: backup_date, time: backup_time });
+      if (!offerOption) return res.status(400).json({ error: 'Horário não faz parte das opções oferecidas' });
+      if (offer.issuedAt) {
+        const { rows: [alreadyAccepted] } = await pool.query(
+          `SELECT id FROM recordings WHERE client_id = $1 AND type = 'secundaria' AND created_at >= to_timestamp($2) LIMIT 1`,
+          [client_id, offer.issuedAt]
+        );
+        if (alreadyAccepted) return res.status(409).json({ error: 'Essa remarcação já foi feita' });
+      }
+      // Videomaker da opção escolhida; o backup sem videomaker definido cai no do cliente
+      let vmId = offerOption.vm || null;
       if (!vmId) {
         const { rows: [clientBackup] } = await pool.query('SELECT videomaker_id FROM clients WHERE id = $1', [client_id]);
         vmId = clientBackup?.videomaker_id;
@@ -5516,7 +5737,13 @@ app.post('/api/portal-recordings', async (req, res) => {
         return newStartBackup < cStart + durationBackup + bufferBackup && newStartBackup + durationBackup + bufferBackup > cStart;
       });
       if (hasConflictBackup) return res.status(409).json({ error: 'Horário não está mais disponível' });
-      await pool.query(`INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ($1, $2, $3, $4, 'secundaria', 'agendada', 'confirmada')`, [client_id, vmId, backup_date, backup_time]);
+      // Cidade do cliente na gravação (sem ela o DEFAULT 'minacu' tira a gravação da agenda de Uruaçu)
+      const backupCity = await portalInsertCity('recordings', await getPortalClientCity(client_id));
+      if (backupCity) {
+        await pool.query(`INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status, city) VALUES ($1, $2, $3, $4, 'secundaria', 'agendada', 'confirmada', $5)`, [client_id, vmId, backup_date, backup_time, backupCity]);
+      } else {
+        await pool.query(`INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ($1, $2, $3, $4, 'secundaria', 'agendada', 'confirmada')`, [client_id, vmId, backup_date, backup_time]);
+      }
       return res.json({ success: true });
     }
 
@@ -5637,12 +5864,21 @@ app.post('/api/portal-recordings', async (req, res) => {
 
       // Get alternative videomakers
       const alternativeVideomakers = [];
+      // Só videomakers que atendem a cidade do cliente; gravações do dia numa consulta só
+      const specialCity = await getPortalClientCity(client_id);
       const { rows: allVms } = await pool.query(
-        `SELECT p.id, p.name FROM profiles p JOIN user_roles ur ON ur.user_id = p.id WHERE ur.role = 'videomaker'${mainVmId ? ' AND p.id != $1' : ''}`,
-        mainVmId ? [mainVmId] : []
+        `SELECT DISTINCT p.id, p.name FROM profiles p JOIN user_roles ur ON ur.user_id = p.id
+          WHERE ur.role = 'videomaker' AND p.id IS DISTINCT FROM $1 AND ${portalCityMemberSql('p.id', '$2')}`,
+        [mainVmId || null, specialCity]
       );
+      const { rows: altRecsSpecial } = allVms.length > 0
+        ? await pool.query(
+          `SELECT videomaker_id, start_time FROM recordings WHERE videomaker_id = ANY($1::uuid[]) AND date = $2 AND status != 'cancelada'`,
+          [allVms.map(vm => vm.id), requested_date]
+        )
+        : { rows: [] };
       for (const vm of allVms) {
-        const { rows: vmRecs } = await pool.query(`SELECT start_time FROM recordings WHERE videomaker_id = $1 AND date = $2 AND status != 'cancelada'`, [vm.id, requested_date]);
+        const vmRecs = altRecsSpecial.filter(r => String(r.videomaker_id) === String(vm.id));
         const occ = vmRecs.map(r => { const [h, m] = r.start_time.split(':').map(Number); return { start: h*60+m, end: h*60+m+duration+buffer }; });
         const sl = [];
         const genAltSlots = (s, e) => {
@@ -5673,6 +5909,16 @@ app.post('/api/portal-recordings', async (req, res) => {
       if (!requested_date || !comment) return res.status(400).json({ error: 'requested_date and comment required' });
 
       const { rows: [clientSpecial] } = await pool.query('SELECT company_name, videomaker_id FROM clients WHERE id = $1', [client_id]);
+      const requestCity = await getPortalClientCity(client_id);
+      // Videomaker escolhido no portal: o do cliente ou um videomaker que atende a cidade dele
+      if (selected_videomaker_id && selected_videomaker_id !== clientSpecial?.videomaker_id) {
+        const { rows: [validVm] } = await pool.query(
+          `SELECT p.id FROM profiles p JOIN user_roles ur ON ur.user_id = p.id
+            WHERE p.id::text = $1::text AND ur.role = 'videomaker' AND ${portalCityMemberSql('p.id', '$2')} LIMIT 1`,
+          [selected_videomaker_id, requestCity]
+        );
+        if (!validVm) return res.status(400).json({ error: 'Videomaker indisponível para este cliente' });
+      }
       let specialVmId = selected_videomaker_id || clientSpecial?.videomaker_id || null;
 
       if (!specialVmId) {
@@ -5681,25 +5927,34 @@ app.post('/api/portal-recordings', async (req, res) => {
       }
       if (!specialVmId) {
         const { rows: [fallbackVm] } = await pool.query(
-          `SELECT p.id FROM profiles p JOIN user_roles ur ON ur.user_id = p.id LEFT JOIN recordings r ON r.videomaker_id = p.id AND r.date = $1 AND r.status != 'cancelada' WHERE ur.role = 'videomaker' GROUP BY p.id, p.name ORDER BY COUNT(r.id) ASC, p.name ASC LIMIT 1`,
-          [requested_date]
+          `SELECT p.id FROM profiles p JOIN user_roles ur ON ur.user_id = p.id LEFT JOIN recordings r ON r.videomaker_id = p.id AND r.date = $1 AND r.status != 'cancelada' WHERE ur.role = 'videomaker' AND ${portalCityMemberSql('p.id', '$2')} GROUP BY p.id, p.name ORDER BY COUNT(r.id) ASC, p.name ASC LIMIT 1`,
+          [requested_date, requestCity]
         );
         specialVmId = fallbackVm?.id || null;
       }
       if (!specialVmId) return res.status(400).json({ error: 'Nenhum videomaker disponível para esta solicitação' });
 
-      const { rows: [newSpecialRec] } = await pool.query(
-        `INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ($1, $2, $3, $4, 'extra', 'solicitada', 'pendente') RETURNING id`,
-        [client_id, specialVmId, requested_date, requested_time || '09:00']
-      );
+      const specialInsertCity = await portalInsertCity('recordings', requestCity);
+      const { rows: [newSpecialRec] } = specialInsertCity
+        ? await pool.query(
+          `INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status, city) VALUES ($1, $2, $3, $4, 'extra', 'solicitada', 'pendente', $5) RETURNING id`,
+          [client_id, specialVmId, requested_date, requested_time || '09:00', specialInsertCity]
+        )
+        : await pool.query(
+          `INSERT INTO recordings (client_id, videomaker_id, date, start_time, type, status, confirmation_status) VALUES ($1, $2, $3, $4, 'extra', 'solicitada', 'pendente') RETURNING id`,
+          [client_id, specialVmId, requested_date, requested_time || '09:00']
+        );
       await pool.query(`INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, $4)`,
         [client_id, '📨 Solicitação enviada', `Sua solicitação de gravação especial para ${requested_date} foi enviada para aprovação. Aguarde a confirmação da equipe.`, 'info']);
-      const { rows: notifUsersSpecial } = await pool.query(`SELECT ur.user_id FROM user_roles ur WHERE ur.role IN ('admin', 'social_media')`);
-      for (const u of notifUsersSpecial) {
-        await pool.query(`INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)`,
-          [u.user_id, 'Solicitação de gravação especial', `${clientSpecial?.company_name || 'Cliente'}: ${comment} — Data: ${requested_date} ${requested_time || ''} — AGUARDANDO APROVAÇÃO`, 'warning', '/relacionamento']);
-      }
+      await notifyPortalTeam(client_id, ['admin', 'social_media'], 'Solicitação de gravação especial', `${clientSpecial?.company_name || 'Cliente'}: ${comment} — Data: ${requested_date} ${requested_time || ''} — AGUARDANDO APROVAÇÃO`, 'warning', '/relacionamento');
       return res.json({ success: true, recording_id: newSpecialRec?.id });
+    }
+
+    /* ── approve_special / reject_special: só a equipe (Relacionamento) ── */
+    if (action === 'approve_special' || action === 'reject_special') {
+      const canDecideSpecial = caller?.kind === 'team'
+        && (await isAdminUser(caller.user) || await userHasAssignedRole(caller.user, 'gestor_projetos'));
+      if (!canDecideSpecial) return res.status(403).json({ error: 'Só a equipe aprova ou recusa gravação especial' });
     }
 
     /* ── approve_special ── */
@@ -5872,6 +6127,29 @@ function hasPortalTranscodeSlot() {
   return activePortalTranscodes.size < MAX_PORTAL_TRANSCODES;
 }
 
+// Fila do ffmpeg do 480p: no máximo 2 transcodificações ao mesmo tempo. Sem ela, abrir
+// a biblioteca subia um ffmpeg por vídeo e a VPS inteira ficava lenta.
+const PORTAL_TRANSCODE_CONCURRENCY = 2;
+let portalTranscodesRunning = 0;
+const portalTranscodeQueue = [];
+function runPortalTranscodeSlot(task) {
+  return new Promise((resolve, reject) => {
+    const start = () => {
+      portalTranscodesRunning++;
+      Promise.resolve()
+        .then(task)
+        .then(resolve, reject)
+        .finally(() => {
+          portalTranscodesRunning--;
+          const next = portalTranscodeQueue.shift();
+          if (next) next();
+        });
+    };
+    if (portalTranscodesRunning < PORTAL_TRANSCODE_CONCURRENCY) start();
+    else portalTranscodeQueue.push(start);
+  });
+}
+
 function warmPortal480pCache(sourcePath, cachedFile) {
   if (fs.existsSync(cachedFile)) return Promise.resolve(cachedFile);
   const existingJob = activePortalTranscodes.get(cachedFile);
@@ -5881,14 +6159,14 @@ function warmPortal480pCache(sourcePath, cachedFile) {
   }
 
   const tempFile = `${cachedFile}.tmp`;
-  const job = execFileAsync('ffmpeg', [
+  const job = runPortalTranscodeSlot(() => execFileAsync('ffmpeg', [
     '-i', sourcePath,
     '-vf', 'scale=-2:480',
     '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
     '-c:a', 'aac', '-b:a', '96k',
     '-movflags', '+faststart',
     '-y', tempFile,
-  ], { timeout: 120000 })
+  ], { timeout: 120000 }))
     .then(() => {
       fs.renameSync(tempFile, cachedFile);
       return cachedFile;
@@ -13702,18 +13980,27 @@ app.post('/api/portal-videos/bulk-delete', async (req, res) => {
   try {
     const { user } = await verifyUser(req);
     if (!(await userHasAssignedRole(user, 'admin'))) return res.status(403).json({ error: 'Acesso restrito ao administrador' });
-    const { months = [], clientId = null, allClients = true, contentTypes = [] } = req.body;
+    const { months = [], clientId = null, allClients = true, contentTypes = [], includeOpen = false, dryRun = false } = req.body;
     if (!Array.isArray(months) || months.length === 0 || months.some(month => !/^\d{4}-(0[1-9]|1[0-2])$/.test(String(month)))) {
       return res.status(400).json({ error: 'Selecione ao menos um mês válido' });
     }
-    
-    const deletedCount = await cleanupOldPortalVideos({
+    // Sem cliente escolhido não apaga de todos por engano: "todos" precisa vir explícito.
+    if (!clientId && allClients !== true) return res.status(400).json({ error: 'Escolha o cliente' });
+
+    const cleanupOptions = {
       months,
       clientId,
       allClients,
       contentTypes: Array.isArray(contentTypes) ? contentTypes : [],
-      olderThanDays: months.length > 0 ? null : 60
-    });
+      olderThanDays: months.length > 0 ? null : 60,
+      includeOpen: includeOpen === true,
+    };
+    if (dryRun === true) {
+      const preview = await cleanupOldPortalVideos({ ...cleanupOptions, dryRun: true });
+      return res.json({ success: true, dryRun: true, ...preview });
+    }
+
+    const deletedCount = await cleanupOldPortalVideos(cleanupOptions);
 
     res.json({ success: true, deletedCount, freedBytes: lastCleanupStats.freedBytes });
 

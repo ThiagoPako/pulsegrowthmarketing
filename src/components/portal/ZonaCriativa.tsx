@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { portalAction } from '@/lib/portalApi';
 import { FileText, Film, Palette, Video, Image, Sparkles, User, Tag, AlertTriangle, Flame, Rocket, ChevronRight, Pencil, Save, X as XIcon, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { syncPortalScriptPriority, syncPortalScriptEdit } from '@/lib/portalSync';
-import { highlightQuotes } from '@/lib/highlightQuotes';
+import { highlightQuotes, plainTextToScriptHtml, scriptHtmlToPlainText } from '@/lib/highlightQuotes';
 
 interface Script {
   id: string;
@@ -193,19 +193,28 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
   const [editCaption, setEditCaption] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // O polling lê o valor atual (refs): não atualiza com roteiro aberto, em edição ou salvando.
+  const busyRef = useRef(false);
+  busyRef.current = !!selectedScript || editing || saving;
+
   useEffect(() => { loadScripts(); }, [clientId]);
 
   useEffect(() => {
-    // Poll for script changes every 30s
-    const interval = setInterval(loadScripts, 30000);
+    // Poll for script changes every 30s — silencioso (sem spinner) e pausado com a aba oculta
+    const interval = setInterval(() => {
+      if (busyRef.current || (typeof document !== 'undefined' && document.hidden)) return;
+      loadScripts({ silent: true });
+    }, 30000);
     return () => clearInterval(interval);
   }, [clientId]);
 
-  const loadScripts = async () => {
-    setLoading(true);
+  const loadScripts = async ({ silent = false }: { silent?: boolean } = {}) => {
+    // Spinner só na primeira carga: no polling ele desmontava a lista e o modal aberto
+    if (!silent) setLoading(true);
     const result = await portalAction({ action: 'get_scripts', client_id: clientId });
     
     if (result?.error) { console.error('Error loading scripts for portal:', result.error); setLoading(false); return; }
+    if (silent && busyRef.current) { setLoading(false); return; }
     
     if (result?.scripts) {
       setScripts(result.scripts as Script[]);
@@ -255,8 +264,9 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
       toast.error('Erro ao salvar edição');
     } else {
       toast.success('Roteiro editado com sucesso!');
-      setScripts(prev => prev.map(s => s.id === selectedScript.id ? { ...s, content: `<p>${editContent.replace(/\n/g, '</p><p>')}</p>`, caption: editCaption, client_edited: true, client_edited_at: new Date().toISOString() } : s));
-      setSelectedScript(prev => prev ? { ...prev, content: `<p>${editContent.replace(/\n/g, '</p><p>')}</p>`, caption: editCaption, client_edited: true, client_edited_at: new Date().toISOString() } : null);
+      const editedHtml = plainTextToScriptHtml(editContent);
+      setScripts(prev => prev.map(s => s.id === selectedScript.id ? { ...s, content: editedHtml, caption: editCaption, client_edited: true, client_edited_at: new Date().toISOString() } : s));
+      setSelectedScript(prev => prev ? { ...prev, content: editedHtml, caption: editCaption, client_edited: true, client_edited_at: new Date().toISOString() } : null);
       setEditing(false);
       syncPortalScriptEdit(clientId, selectedScript.id, result?.company_name || '').catch(console.error);
     }
@@ -277,11 +287,8 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
 
   const getTag = (videoType: string) => VIDEO_TYPE_TAGS[videoType] || { label: videoType, bg: 'bg-white/10', text: 'text-white/60', border: 'border-white/10' };
 
-  const stripHtml = (html: string) => {
-    const tmp = document.createElement('div');
-    tmp.innerHTML = html;
-    return tmp.textContent || tmp.innerText || '';
-  };
+  // Sem innerHTML numa div solta: o roteiro pode trazer <img onerror> e ele dispararia.
+  const stripHtml = (html: string) => scriptHtmlToPlainText(html);
 
   const videoTypes = [...new Set(scripts.map(s => s.video_type))];
   

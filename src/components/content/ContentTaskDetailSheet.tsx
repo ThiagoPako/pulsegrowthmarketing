@@ -31,6 +31,7 @@ import { ptBR } from 'date-fns/locale';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
 import { sendWhatsAppMessage, getWhatsAppConfig } from '@/services/whatsappService';
 import type { Client, Script } from '@/types';
+import { sanitizeScriptHtml } from '@/lib/highlightQuotes';
 
 const CONTENT_TYPES = [
   { value: 'reels', label: 'Reels', icon: Film, color: 'text-blue-700 bg-blue-50 border border-blue-200/60 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800' },
@@ -818,12 +819,15 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
       'arte': 'arte',
     };
 
-    // Check if already exists in portal
+    // Check if already exists in portal (só o conteúdo em aberto: um aprovado/agendado/publicado
+    // de outro mês com o mesmo título não pode ser sobrescrito)
     const { data: existing } = await supabase
       .from('client_portal_contents')
       .select('id')
       .eq('client_id', task.client_id)
       .eq('title', task.title)
+      .not('status', 'in', '(aprovado,agendado,publicado)')
+      .order('created_at', { ascending: false })
       .limit(1);
 
     if (existing && existing.length > 0) {
@@ -1395,7 +1399,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                     <p className="text-sm font-medium text-foreground">{linkedScript.title}</p>
                     {linkedScript.content && (
                       <div className="mt-2 p-2.5 rounded bg-muted/50 border border-border/50 max-h-32 overflow-y-auto">
-                        <div className="prose prose-sm max-w-none text-foreground/80 text-xs" dangerouslySetInnerHTML={{ __html: linkedScript.content }} />
+                        <div className="prose prose-sm max-w-none text-foreground/80 text-xs" dangerouslySetInnerHTML={{ __html: sanitizeScriptHtml(linkedScript.content) }} />
                       </div>
                     )}
                   </div>

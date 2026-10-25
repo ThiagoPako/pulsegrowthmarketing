@@ -1,3 +1,35 @@
+import DOMPurify from 'dompurify';
+
+/**
+ * Sanitiza o HTML de roteiro na hora de mostrar. O roteiro pode ter sido editado
+ * pelo cliente no portal: tira scripts, handlers (onerror, onclick...) e links
+ * javascript:, mantendo a formatação (p, strong, mark, style...).
+ * Sempre na SAÍDA: a normalização de aspas mexe em atributos e não pode vir depois.
+ */
+export function sanitizeScriptHtml(html: string): string {
+  if (!html) return html;
+  return DOMPurify.sanitize(html);
+}
+
+/**
+ * Texto puro (textarea do portal) → HTML de roteiro, igual ao que o servidor grava
+ * em client_edit_script: escapa & < > e vira um <p> por linha.
+ */
+export function plainTextToScriptHtml(text: string): string {
+  const escaped = String(text || '').trim().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return escaped ? `<p>${escaped.replace(/\n/g, '</p><p>')}</p>` : '';
+}
+
+/**
+ * HTML de roteiro → texto puro, sem executar nada (DOMParser não dispara onerror
+ * como o innerHTML de uma div solta).
+ */
+export function scriptHtmlToPlainText(html: string): string {
+  if (!html) return '';
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  return doc.body.textContent || '';
+}
+
 /**
  * Limpa artefatos de HTML colado: remove estilos inline e remove spans vazios.
  */
@@ -108,11 +140,11 @@ export function highlightQuotes(html: string): string {
   const cleaned = cleanHtml(html);
   const normalized = normalizeQuotes(cleaned);
   
-  return replaceQuoted(normalized, (inner, kind) => {
+  return sanitizeScriptHtml(replaceQuoted(normalized, (inner, kind) => {
     const open = kind === 'double' ? '&ldquo;' : '&lsquo;';
     const close = kind === 'double' ? '&rdquo;' : '&rsquo;';
     return `<mark style="background-color: #fef9c3; padding: 0.1em 0.2em; border-radius: 2px;">${open}${inner}${close}</mark>`;
-  });
+  }));
 }
 
 /**
@@ -123,7 +155,7 @@ export function highlightQuotesForPdf(html: string): string {
   const cleaned = cleanHtml(html);
   const normalized = normalizeQuotes(cleaned);
 
-  return replaceQuoted(normalized, (inner, kind) => {
+  return sanitizeScriptHtml(replaceQuoted(normalized, (inner, kind) => {
     const open = kind === 'double' ? '&ldquo;' : '&lsquo;';
     const close = kind === 'double' ? '&rdquo;' : '&rsquo;';
     // Estilo otimizado para PDF: garante cobertura 100% sem sobrepor linhas.
@@ -142,5 +174,5 @@ export function highlightQuotesForPdf(html: string): string {
     ].join('; ');
     
     return `<span style="${style}">${open}${inner}${close}</span>`;
-  });
+  }));
 }

@@ -30,6 +30,7 @@ import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTask
 import ContentTaskDetailSheet from '@/components/content/ContentTaskDetailSheet';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { sanitizeScriptHtml } from '@/lib/highlightQuotes';
 
 const normalizeDateValue = (value?: string | null) => {
   if (!value) return null;
@@ -2220,7 +2221,7 @@ function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, lin
                 {linkedScript.content ? (
                   <div
                     className="prose prose-sm max-w-none text-foreground text-sm leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: linkedScript.content }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeScriptHtml(linkedScript.content) }}
                   />
                 ) : (
                   <p className="text-sm text-muted-foreground italic">Sem conteúdo no roteiro.</p>

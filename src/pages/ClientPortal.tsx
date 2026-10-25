@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/vpsDb';
-import { portalAction } from '@/lib/portalApi';
+import { portalAction, hasPortalSession, clearPortalSession } from '@/lib/portalApi';
 import { useAuth } from '@/hooks/useAuth';
 import {
   Play, Pause, Maximize, Check, MessageSquare, X, ChevronLeft, ChevronRight,
@@ -21,7 +21,7 @@ import PortalTutorial from '@/components/portal/PortalTutorial';
 import PortalRecordingCalendar from '@/components/portal/PortalRecordingCalendar';
 import PortalPanfletagem from '@/components/portal/PortalPanfletagem';
 import PortalDesigner from '@/components/portal/PortalDesigner';
-import { syncPortalApproval, syncPortalAdjustment, syncPortalComment } from '@/lib/portalSync';
+import { syncPortalComment } from '@/lib/portalSync';
 import PortalWelcomeOverlay from '@/components/portal/PortalWelcomeOverlay';
 import { PortalVideoButtons } from '@/components/portal/PortalWelcomeOverlay';
 import PortalDiscountClub from '@/components/portal/PortalDiscountClub';
@@ -111,6 +111,8 @@ export default function ClientPortal() {
   const [loading, setLoading] = useState(true);
   const [adjustmentNote, setAdjustmentNote] = useState('');
   const [showAdjustment, setShowAdjustment] = useState(false);
+  // Envio em andamento (aprovar / pedir ajuste / comentar): trava o botão e o Enter
+  const [sendingAction, setSendingAction] = useState<null | 'approve' | 'adjustment' | 'comment'>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -127,7 +129,8 @@ export default function ClientPortal() {
 
   // Auth state: team member or client login
   const isTeamMember = !!user && !!profile;
-  const isClientLoggedIn = !!sessionStorage.getItem('portal_client_id');
+  // Login do cliente só vale com o token do portal (sessões de antes do token entram de novo)
+  const isClientLoggedIn = hasPortalSession();
   const isAuthenticated = isTeamMember || isClientLoggedIn;
   const portalUserName = sessionStorage.getItem('portal_user_name') || '';
   
@@ -139,10 +142,7 @@ export default function ClientPortal() {
   };
 
   const handleLogout = () => {
-    sessionStorage.removeItem('portal_client_id');
-    sessionStorage.removeItem('portal_client_name');
-    sessionStorage.removeItem('portal_user_name');
-    sessionStorage.removeItem('portal_auth_type');
+    clearPortalSession();
     toast.success('Até logo! 👋');
     navigate(`/portal-login/${paramSlug}`);
   };
@@ -221,7 +221,13 @@ export default function ClientPortal() {
   const loadComments = async (contentId: string) => {
     const result = await portalAction({ action: 'get_comments', content_id: contentId });
     if (result?.comments) {
-      setComments(result.comments as PortalComment[]);
+      const next = result.comments as PortalComment[];
+      // Só re-renderiza quando a lista mudou (o polling roda a cada 5 s com o vídeo aberto)
+      setComments(prev => (
+        prev.length === next.length && prev.every((c, i) => c.id === next[i]?.id && c.message === next[i]?.message)
+          ? prev
+          : next
+      ));
     }
   };
 
@@ -229,12 +235,15 @@ export default function ClientPortal() {
   useEffect(() => {
     if (!selectedContent?.id) return;
     const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       loadComments(selectedContent.id);
     }, 5000);
     return () => clearInterval(interval);
   }, [selectedContent?.id]);
 
-  const handleSelectContent = (content: PortalContent) => {
+  // Estável (useCallback): os cards memorizados não re-renderizam a cada timeupdate do player.
+  // Abre em 'original' (nginx direto); o 480p (ffmpeg na VPS) fica só como escolha do usuário.
+  const handleSelectContent = useCallback((content: PortalContent) => {
     setSelectedContent(content);
     setShowAdjustment(false);
     setAdjustmentNote('');
@@ -243,9 +252,9 @@ export default function ClientPortal() {
     setVideoDuration(0);
     setResolvedVideoUrl(null);
     setVideoLoadError(null);
-    setVideoQuality('480p');
+    setVideoQuality('original');
     loadComments(content.id);
-  };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -307,19 +316,26 @@ export default function ClientPortal() {
     };
   }, [selectedContent?.id, selectedContent?.file_url, selectedContent?.content_type, videoQuality]);
 
+  // O servidor já move o Kanban e avisa a equipe junto com a aprovação/ajuste.
   const handleApprove = async () => {
-    if (!selectedContent || !client) return;
-    await portalAction({ action: 'approve', content_id: selectedContent.id, client_id: client.id });
+    if (!selectedContent || !client || sendingAction) return;
+    setSendingAction('approve');
+    const result = await portalAction({ action: 'approve', content_id: selectedContent.id, client_id: client.id });
+    setSendingAction(null);
+    if (result?.error) {
+      toast.error(`Não foi possível aprovar: ${result.error}`);
+      return;
+    }
     setContents(prev => prev.map(c => c.id === selectedContent.id ? { ...c, status: 'aprovado', approved_at: new Date().toISOString() } : c));
     setSelectedContent(prev => prev ? { ...prev, status: 'aprovado' } : null);
-    toast.success('Conteúdo aprovado com sucesso!');
-    syncPortalApproval(selectedContent.id, client.id, selectedContent.title).catch(console.error);
+    toast.success(isTeamMember ? 'Conteúdo aprovado em nome do cliente' : 'Conteúdo aprovado com sucesso!');
   };
 
   const handleRequestAdjustment = async () => {
-    if (!selectedContent || !adjustmentNote.trim() || !client) return;
+    if (!selectedContent || !adjustmentNote.trim() || !client || sendingAction) return;
     const author = getCommentAuthor();
-    await portalAction({
+    setSendingAction('adjustment');
+    const result = await portalAction({
       action: 'request_adjustment',
       content_id: selectedContent.id,
       client_id: client.id,
@@ -328,27 +344,37 @@ export default function ClientPortal() {
       author_id: author.id,
       message: adjustmentNote,
     });
+    setSendingAction(null);
+    if (result?.error) {
+      toast.error(`Não foi possível enviar o ajuste: ${result.error}`);
+      return;
+    }
     setContents(prev => prev.map(c => c.id === selectedContent.id ? { ...c, status: 'ajuste_solicitado' } : c));
     setSelectedContent(prev => prev ? { ...prev, status: 'ajuste_solicitado' } : null);
     setShowAdjustment(false);
     setAdjustmentNote('');
     loadComments(selectedContent.id);
     toast.success('Ajuste solicitado com sucesso!');
-    syncPortalAdjustment(selectedContent.id, client.id, selectedContent.title, adjustmentNote).catch(console.error);
   };
 
   const handleSendComment = async () => {
-    if (!selectedContent || !newComment.trim() || !client) return;
+    if (!selectedContent || !newComment.trim() || !client || sendingAction) return;
     const author = getCommentAuthor();
-    await portalAction({
+    const commentText = newComment;
+    setSendingAction('comment');
+    const result = await portalAction({
       action: 'add_comment',
       content_id: selectedContent.id,
       author_name: author.name,
       author_type: author.type,
       author_id: author.id,
-      message: newComment,
+      message: commentText,
     });
-    const commentText = newComment;
+    setSendingAction(null);
+    if (result?.error) {
+      toast.error(`Comentário não enviado: ${result.error}`);
+      return;
+    }
     setNewComment('');
     loadComments(selectedContent.id);
     setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 200);
@@ -509,6 +535,7 @@ export default function ClientPortal() {
       {/* Welcome / News video overlay */}
       <PortalWelcomeOverlay
         clientId={client.id}
+        isTeamMember={isTeamMember}
         onVideosLoaded={(data) => setPortalVideoState({ hasNews: data.hasNews, hasWelcome: data.hasWelcome, isNewClient: data.isNewClient })}
       />
       {/* ── HEADER ── */}
@@ -641,6 +668,7 @@ export default function ClientPortal() {
             <PortalNotifications
               clientId={client.id}
               clientColor={clientColor}
+              isTeamMember={isTeamMember}
               onSelectContent={(contentId) => {
                 const found = contents.find(c => c.id === contentId);
                 if (found) {
@@ -834,6 +862,7 @@ export default function ClientPortal() {
                   items={items}
                   clientColor={clientColor}
                   onSelect={handleSelectContent}
+                  paused={!!selectedContent}
                   delay={idx * 0.05}
                 />
               ))}
@@ -851,6 +880,7 @@ export default function ClientPortal() {
                         items={season.items}
                         clientColor={clientColor}
                         onSelect={handleSelectContent}
+                        paused={!!selectedContent}
                         delay={0}
                       />
                     ))}
@@ -895,7 +925,7 @@ export default function ClientPortal() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
                 {optimizedContents.map(content => (
-                  <ReelsCard key={content.id} content={content} clientColor={clientColor} onSelect={handleSelectContent} />
+                  <ReelsCard key={content.id} content={content} clientColor={clientColor} onSelect={handleSelectContent} paused={!!selectedContent} />
                 ))}
               </div>
             )}
@@ -917,7 +947,7 @@ export default function ClientPortal() {
         ) : activeTab === 'entregas' ? (
           <motion.div key="entregas" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[800px] mx-auto px-4 sm:px-8 py-8 pb-20">
             <h2 className="text-lg font-semibold text-white mb-4">📋 Checklist de Entregas</h2>
-            <ProposalChecklist clientId={client.id} editable={false} />
+            <ProposalChecklist clientId={client.id} editable={false} viaPortal />
           </motion.div>
         ) : activeTab === 'rendimento' ? (
           <motion.div key="rendimento" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
@@ -1227,14 +1257,20 @@ export default function ClientPortal() {
                   </div>
                 </div>
 
-                {/* Actions */}
-                {selectedContent.status !== 'aprovado' && (
+                {/* Actions — em revisão interna o vídeo ainda não foi liberado: sem aprovar/ajuste */}
+                {selectedContent.status === 'revisao_interna' && (
+                  <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white/60 text-sm">
+                    Em revisão interna: o cliente ainda não vê este conteúdo. Libere pelo Kanban.
+                  </div>
+                )}
+                {selectedContent.status !== 'aprovado' && selectedContent.status !== 'revisao_interna' && (
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={handleApprove}
-                      className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full font-semibold text-sm bg-emerald-500 hover:bg-emerald-400 text-white transition-all hover:scale-105 active:scale-95"
+                      disabled={!!sendingAction}
+                      className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full font-semibold text-sm bg-emerald-500 hover:bg-emerald-400 text-white transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
                     >
-                      <Check size={16} /> Aprovar conteúdo
+                      {sendingAction === 'approve' ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} {isTeamMember ? 'Aprovar em nome do cliente' : 'Aprovar conteúdo'}
                     </button>
                     <button
                       onClick={() => setShowAdjustment(!showAdjustment)}
@@ -1287,7 +1323,7 @@ export default function ClientPortal() {
                         <div className="flex justify-end">
                           <button
                             onClick={handleRequestAdjustment}
-                            disabled={!adjustmentNote.trim()}
+                            disabled={!adjustmentNote.trim() || !!sendingAction}
                             className="px-5 py-2 rounded-full text-sm font-semibold disabled:opacity-30 text-white transition-all hover:scale-105"
                             style={{ background: `hsl(${clientColor})` }}
                           >
@@ -1354,14 +1390,14 @@ export default function ClientPortal() {
                     <input
                       value={newComment}
                       onChange={e => setNewComment(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSendComment()}
+                      onKeyDown={e => e.key === 'Enter' && !e.shiftKey && !sendingAction && handleSendComment()}
                       placeholder="Escreva um comentário..."
                       className="flex-1 bg-white/[0.06] border border-white/[0.08] rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-1 transition-all"
                       style={{ '--tw-ring-color': `hsl(${clientColor})` } as any}
                     />
                     <button
                       onClick={handleSendComment}
-                      disabled={!newComment.trim()}
+                      disabled={!newComment.trim() || !!sendingAction}
                       className="p-2.5 rounded-full disabled:opacity-20 text-white transition-all hover:scale-105"
                       style={{ background: `hsl(${clientColor})` }}
                     >
@@ -1381,11 +1417,12 @@ export default function ClientPortal() {
 }
 
 /* ── Content Row Component ── */
-function ContentRow({ label, items, clientColor, onSelect, delay = 0 }: {
+const ContentRow = memo(function ContentRow({ label, items, clientColor, onSelect, paused = false, delay = 0 }: {
   label: string;
   items: PortalContent[];
   clientColor: string;
   onSelect: (c: PortalContent) => void;
+  paused?: boolean;
   delay?: number;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1434,18 +1471,21 @@ function ContentRow({ label, items, clientColor, onSelect, delay = 0 }: {
 
       <div ref={scrollRef} className="flex gap-3 overflow-x-auto pb-2 scrollbar-none snap-x snap-mandatory" onScroll={checkScroll}>
         {items.map(content => (
-          <ReelsCard key={content.id} content={content} clientColor={clientColor} onSelect={onSelect} />
+          <ReelsCard key={content.id} content={content} clientColor={clientColor} onSelect={onSelect} paused={paused} />
         ))}
       </div>
     </motion.section>
   );
-}
+});
 
 /* ── Reels Card with always-on 6s loop preview ── */
-function ReelsCard({ content, clientColor, onSelect }: {
+// Prévia direto do nginx (sem o 480p do proxy: cada card subia um ffmpeg na VPS), só
+// enquanto o card está na tela e pausada com um conteúdo aberto no player.
+const ReelsCard = memo(function ReelsCard({ content, clientColor, onSelect, paused = false }: {
   content: PortalContent;
   clientColor: string;
   onSelect: (c: PortalContent) => void;
+  paused?: boolean;
 }) {
   const isVideo = isPortalVideo(content);
   const Icon = CONTENT_TYPE_ICONS[content.content_type] || Film;
@@ -1453,9 +1493,11 @@ function ReelsCard({ content, clientColor, onSelect }: {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewVisible, setPreviewVisible] = useState(false);
   const cardRef = useRef<HTMLButtonElement>(null);
+  const previewRef = useRef<HTMLVideoElement>(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [inView, setInView] = useState(false);
 
-  // IntersectionObserver: load preview only when card scrolls into view
+  // IntersectionObserver: carrega a prévia quando o card aparece e pausa quando sai da tela
   useEffect(() => {
     if (!isVideo || !content.file_url) return;
     const el = cardRef.current;
@@ -1463,10 +1505,8 @@ function ReelsCard({ content, clientColor, onSelect }: {
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
-          setIsVisible(true);
-          observer.disconnect();
-        }
+        setInView(entry.isIntersecting);
+        if (entry.isIntersecting) setIsVisible(true);
       },
       { rootMargin: '200px' }
     );
@@ -1474,24 +1514,19 @@ function ReelsCard({ content, clientColor, onSelect }: {
     return () => observer.disconnect();
   }, [isVideo, content.file_url]);
 
-  // Resolve streaming URL once card becomes visible
+  // URL da prévia: o arquivo direto (Range do nginx), sem passar pelo proxy/ffmpeg
   useEffect(() => {
     if (!isVisible || !isVideo || !content.file_url || previewUrl) return;
-
-    if (!shouldProxyPortalVideo(content.file_url)) {
-      setPreviewUrl(content.file_url);
-      return;
-    }
-
-    let cancelled = false;
-    createPortalVideoObjectUrl(content.file_url)
-      .then((url) => {
-        if (!cancelled) setPreviewUrl(url);
-      })
-      .catch(() => {});
-
-    return () => { cancelled = true; };
+    setPreviewUrl(content.file_url);
   }, [isVisible, isVideo, content.file_url, previewUrl]);
+
+  // Pausa com o player aberto ou fora da tela; volta a tocar quando reaparece
+  useEffect(() => {
+    const vid = previewRef.current;
+    if (!vid) return;
+    if (paused || !inView) vid.pause();
+    else vid.play().catch(() => {});
+  }, [paused, inView, previewUrl]);
 
   const showPreview = isVideo && !!previewUrl;
 
@@ -1517,11 +1552,12 @@ function ReelsCard({ content, clientColor, onSelect }: {
         {/* Always-on 6s loop video preview */}
         {showPreview && (
           <video
+            ref={previewRef}
             src={previewUrl!}
             muted
             playsInline
-            autoPlay
-            preload="auto"
+            autoPlay={!paused}
+            preload="metadata"
             className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${previewVisible ? 'opacity-100' : 'opacity-0'}`}
             onLoadedData={() => setPreviewVisible(true)}
             onError={() => {
@@ -1574,4 +1610,4 @@ function ReelsCard({ content, clientColor, onSelect }: {
       </div>
     </button>
   );
-}
+});

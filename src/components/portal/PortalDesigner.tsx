@@ -58,6 +58,8 @@ export default function PortalDesigner({ clientId, clientColor }: Props) {
   const [selectedTask, setSelectedTask] = useState<DesignTask | null>(null);
   const [adjustmentNote, setAdjustmentNote] = useState('');
   const [showAdjustment, setShowAdjustment] = useState(false);
+  // Aprovação/ajuste em envio: trava os botões (vários cliques geravam vários avisos)
+  const [sendingDesign, setSendingDesign] = useState(false);
 
   useEffect(() => {
     loadDesignData();
@@ -98,32 +100,41 @@ export default function PortalDesigner({ clientId, clientColor }: Props) {
   };
 
   const handleApproveDesign = async (taskId: string) => {
+    if (sendingDesign) return;
+    setSendingDesign(true);
     const result = await portalAction({
       action: 'approve_design_task',
       client_id: clientId,
       task_id: taskId,
     });
+    setSendingDesign(false);
     if (result?.success) {
       toast.success('Arte aprovada com sucesso!');
       setSelectedTask(null);
       loadDesignData();
+    } else {
+      toast.error(result?.error ? `Não foi possível aprovar: ${result.error}` : 'Não foi possível aprovar a arte');
     }
   };
 
   const handleRequestDesignAdjustment = async (taskId: string) => {
-    if (!adjustmentNote.trim()) return;
+    if (!adjustmentNote.trim() || sendingDesign) return;
+    setSendingDesign(true);
     const result = await portalAction({
       action: 'request_design_adjustment',
       client_id: clientId,
       task_id: taskId,
       note: adjustmentNote.trim(),
     });
+    setSendingDesign(false);
     if (result?.success) {
       toast.success('Ajuste solicitado com sucesso!');
       setAdjustmentNote('');
       setShowAdjustment(false);
       setSelectedTask(null);
       loadDesignData();
+    } else {
+      toast.error(result?.error ? `Não foi possível enviar o ajuste: ${result.error}` : 'Não foi possível enviar o ajuste');
     }
   };
 
@@ -502,7 +513,8 @@ export default function PortalDesigner({ clientId, clientColor }: Props) {
                     {/* Approve button - glowing & attractive */}
                     <motion.button
                       onClick={() => handleApproveDesign(selectedTask.id)}
-                      className="relative w-full py-4 rounded-2xl font-bold text-base text-white overflow-hidden group"
+                      disabled={sendingDesign}
+                      className="relative w-full py-4 rounded-2xl font-bold text-base text-white overflow-hidden group disabled:opacity-60"
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.97 }}
                       style={{
@@ -590,7 +602,7 @@ export default function PortalDesigner({ clientId, clientColor }: Props) {
                               </button>
                               <motion.button
                                 onClick={() => handleRequestDesignAdjustment(selectedTask.id)}
-                                disabled={!adjustmentNote.trim()}
+                                disabled={!adjustmentNote.trim() || sendingDesign}
                                 className="px-5 py-2 rounded-xl text-sm font-semibold disabled:opacity-30 text-white bg-orange-500 hover:bg-orange-400 transition-all"
                                 whileHover={{ scale: 1.03 }}
                                 whileTap={{ scale: 0.97 }}

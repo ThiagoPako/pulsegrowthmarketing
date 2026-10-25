@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
-import { portalAction } from '@/lib/portalApi';
+import { portalAction, portalRecordings } from '@/lib/portalApi';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isSameDay, parseISO, isAfter, isBefore, isToday as isDateToday, addDays } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -200,7 +199,7 @@ interface AlternativeVideomaker {
   id: string; name: string; date: string; available_slots: string[]; total_free: number;
 }
 
-type CancelFlow = null | { step: 'confirming'; rec: Recording } | { step: 'result'; rec: Recording; backupAvailable: boolean; backupSlot: { date: string; time: string } | null; nextFixedDate: string | null; alternativeVideomakers: AlternativeVideomaker[] };
+type CancelFlow = null | { step: 'confirming'; rec: Recording } | { step: 'result'; rec: Recording; backupAvailable: boolean; backupSlot: { date: string; time: string } | null; nextFixedDate: string | null; alternativeVideomakers: AlternativeVideomaker[]; backupOffer: string | null };
 
 export default function PortalRecordingCalendar({ clientId, clientColor }: Props) {
   const [recordings, setRecordings] = useState<Recording[]>([]);
@@ -243,7 +242,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
   const loadAllData = async () => {
     setLoading(true);
     const [recResult, ctResult, delResult] = await Promise.all([
-      invokeVpsFunction('portal-recordings', { body: { action: 'list', client_id: clientId } }),
+      portalRecordings({ action: 'list', client_id: clientId }),
       portalAction({ action: 'get_content_tasks', client_id: clientId }),
       portalAction({ action: 'get_deliveries', client_id: clientId }),
     ]);
@@ -275,7 +274,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
   };
 
   const loadRecordings = async () => {
-    const { data } = await invokeVpsFunction('portal-recordings', { body: { action: 'list', client_id: clientId } });
+    const { data } = await portalRecordings({ action: 'list', client_id: clientId });
     if (data?.recordings) setRecordings(data.recordings);
   };
 
@@ -426,7 +425,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
 
   /* ── Actions ── */
   const handleConfirm = async (rec: Recording) => {
-    const { data, error } = await invokeVpsFunction('portal-recordings', { body: { action: 'confirm', client_id: clientId, recording_id: rec.id } });
+    const { data, error } = await portalRecordings({ action: 'confirm', client_id: clientId, recording_id: rec.id });
     if (data?.success) {
       toast.success('✅ Gravação confirmada!');
       await loadRecordings();
@@ -437,9 +436,9 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
 
   const handleCancel = async (rec: Recording) => {
     setCancelling(true);
-    const { data, error } = await invokeVpsFunction('portal-recordings', { body: { action: 'cancel', client_id: clientId, recording_id: rec.id } });
+    const { data, error } = await portalRecordings({ action: 'cancel', client_id: clientId, recording_id: rec.id });
     if (data?.success) {
-      setCancelFlow({ step: 'result', rec, backupAvailable: data.backup_available, backupSlot: data.backup_slot, nextFixedDate: data.next_fixed_date, alternativeVideomakers: data.alternative_videomakers || [] });
+      setCancelFlow({ step: 'result', rec, backupAvailable: data.backup_available, backupSlot: data.backup_slot, nextFixedDate: data.next_fixed_date, alternativeVideomakers: data.alternative_videomakers || [], backupOffer: data.backup_offer || null });
       await loadRecordings();
     } else {
       toast.error(error?.message || data?.error || 'Erro ao cancelar');
@@ -452,9 +451,10 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     const time = altVmId ? altTime! : cancelFlow?.step === 'result' ? cancelFlow.backupSlot?.time : undefined;
     if (!date || !time) return;
     setAcceptingBackup(true);
-    const body: any = { action: 'accept_backup', client_id: clientId, backup_date: date, backup_time: time };
+    // A oferta assinada do cancelamento: o servidor só aceita uma das opções dela
+    const body: any = { action: 'accept_backup', client_id: clientId, backup_date: date, backup_time: time, backup_offer: cancelFlow?.step === 'result' ? cancelFlow.backupOffer : null };
     if (altVmId) body.videomaker_id = altVmId;
-    const { data, error } = await invokeVpsFunction('portal-recordings', { body });
+    const { data, error } = await portalRecordings(body);
     if (data?.success) {
       toast.success('🚀 Gravação remarcada!');
       setCancelFlow(null);
@@ -472,7 +472,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     setAvailableSlots([]);
     setSelectedNewTime('');
     setSelectedNewDate(date);
-    const { data, error } = await invokeVpsFunction('portal-recordings', { body: { action: 'check_availability', client_id: clientId, new_date: date } });
+    const { data, error } = await portalRecordings({ action: 'check_availability', client_id: clientId, new_date: date });
     if (data?.available_slots) {
       setAvailableSlots(data.available_slots);
       setVmName(data.videomaker_name || '');
@@ -486,7 +486,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
     setExploringSlots(true);
     setExploreSlotsDate(date);
     setExploreSlotsData([]);
-    const { data, error } = await invokeVpsFunction('portal-recordings', { body: { action: 'check_availability', client_id: clientId, new_date: date } });
+    const { data, error } = await portalRecordings({ action: 'check_availability', client_id: clientId, new_date: date });
     if (data?.available_slots) {
       setExploreSlotsData(data.available_slots);
       setExploreVmName(data.videomaker_name || '');
@@ -499,7 +499,7 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
   const handleReschedule = async () => {
     if (!rescheduleRec || !selectedNewDate || !selectedNewTime) return;
     setRescheduling(true);
-    const { data, error } = await invokeVpsFunction('portal-recordings', { body: { action: 'reschedule', client_id: clientId, recording_id: rescheduleRec.id, new_date: selectedNewDate, new_time: selectedNewTime } });
+    const { data, error } = await portalRecordings({ action: 'reschedule', client_id: clientId, recording_id: rescheduleRec.id, new_date: selectedNewDate, new_time: selectedNewTime });
     if (data?.success) {
       toast.success('🚀 Gravação reagendada!');
       setRescheduleRec(null);
@@ -512,8 +512,8 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
 
   const handleCheckSpecialAvailability = async (date: string, time?: string) => {
     setSpecialStep('checking');
-    const { data, error } = await invokeVpsFunction('portal-recordings', {
-      body: { action: 'check_special_availability', client_id: clientId, requested_date: date, requested_time: time || null }
+    const { data, error } = await portalRecordings({
+      action: 'check_special_availability', client_id: clientId, requested_date: date, requested_time: time || null
     });
     if (data?.outside_hours) {
       setSpecialAvailability(data);
@@ -540,12 +540,10 @@ export default function PortalRecordingCalendar({ clientId, clientColor }: Props
       return;
     }
     setSendingSpecial(true);
-    const { data, error } = await invokeVpsFunction('portal-recordings', {
-      body: {
-        action: 'request_special', client_id: clientId,
-        requested_date: specialDate, requested_time: selectedSpecialSlot || specialTime || null,
-        comment: specialComment, selected_videomaker_id: selectedSpecialVm || null,
-      }
+    const { data, error } = await portalRecordings({
+      action: 'request_special', client_id: clientId,
+      requested_date: specialDate, requested_time: selectedSpecialSlot || specialTime || null,
+      comment: specialComment, selected_videomaker_id: selectedSpecialVm || null,
     });
     if (data?.success) {
       toast.success('📨 Solicitação enviada para aprovação!');

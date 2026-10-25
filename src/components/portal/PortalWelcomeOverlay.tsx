@@ -83,9 +83,11 @@ function SparkleParticle({ delay }: { delay: number }) {
 interface PortalWelcomeOverlayProps {
   clientId: string;
   onVideosLoaded?: (data: { hasNews: boolean; hasWelcome: boolean; isNewClient: boolean }) => void;
+  /** Equipe olhando o portal: sem abertura automática e sem marcar o vídeo como visto pelo cliente. */
+  isTeamMember?: boolean;
 }
 
-export default function PortalWelcomeOverlay({ clientId, onVideosLoaded }: PortalWelcomeOverlayProps) {
+export default function PortalWelcomeOverlay({ clientId, onVideosLoaded, isTeamMember = false }: PortalWelcomeOverlayProps) {
   const [allVideos, setAllVideos] = useState<PortalVideo[]>([]);
   const [video, setVideo] = useState<PortalVideo | null>(null);
   const [phase, setPhase] = useState<'idle' | 'animation' | 'video' | 'done'>('idle');
@@ -125,7 +127,8 @@ export default function PortalWelcomeOverlay({ clientId, onVideosLoaded }: Porta
 
     onVideosLoaded?.({ hasNews: hasActiveNews, hasWelcome: hasActiveWelcome, isNewClient: clientIsNew });
 
-    // Auto-play unseen videos
+    // Auto-play unseen videos (só para o cliente; a equipe abre pelos botões)
+    if (isTeamMember) return;
     const unseenWelcome = result.videos.find((v: any) => v.video_type === 'welcome' && !viewedIds.has(v.id));
     const unseenNews = result.videos.find((v: any) => v.video_type === 'news' && !viewedIds.has(v.id));
     const target = unseenWelcome || unseenNews;
@@ -153,6 +156,7 @@ export default function PortalWelcomeOverlay({ clientId, onVideosLoaded }: Porta
   }, [playVideo]);
 
   const markViewed = async (videoId: string) => {
+    if (isTeamMember) return;
     await portalAction({ action: 'mark_video_viewed', client_id: clientId, video_id: videoId });
   };
 

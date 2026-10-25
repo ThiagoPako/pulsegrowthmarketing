@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { portalAction } from '@/lib/portalApi';
 import { FileText, Film, Palette, Video, Image, Sparkles, User, Tag, AlertTriangle, Flame, Rocket, ChevronRight, Pencil, Save, X as XIcon, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -193,19 +193,28 @@ export default function ZonaCriativa({ clientId, clientColor, isAuthenticated }:
   const [editCaption, setEditCaption] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // O polling lê o valor atual (refs): não atualiza com roteiro aberto, em edição ou salvando.
+  const busyRef = useRef(false);
+  busyRef.current = !!selectedScript || editing || saving;
+
   useEffect(() => { loadScripts(); }, [clientId]);
 
   useEffect(() => {
-    // Poll for script changes every 30s
-    const interval = setInterval(loadScripts, 30000);
+    // Poll for script changes every 30s — silencioso (sem spinner) e pausado com a aba oculta
+    const interval = setInterval(() => {
+      if (busyRef.current || (typeof document !== 'undefined' && document.hidden)) return;
+      loadScripts({ silent: true });
+    }, 30000);
     return () => clearInterval(interval);
   }, [clientId]);
 
-  const loadScripts = async () => {
-    setLoading(true);
+  const loadScripts = async ({ silent = false }: { silent?: boolean } = {}) => {
+    // Spinner só na primeira carga: no polling ele desmontava a lista e o modal aberto
+    if (!silent) setLoading(true);
     const result = await portalAction({ action: 'get_scripts', client_id: clientId });
     
     if (result?.error) { console.error('Error loading scripts for portal:', result.error); setLoading(false); return; }
+    if (silent && busyRef.current) { setLoading(false); return; }
     
     if (result?.scripts) {
       setScripts(result.scripts as Script[]);

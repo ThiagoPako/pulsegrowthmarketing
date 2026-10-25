@@ -5302,14 +5302,42 @@ function getPortalMediaContentType(filePathOrUrl = '') {
   return 'application/octet-stream';
 }
 
-function resolvePortalMediaLocalPath(targetUrl) {
-  const parsed = new URL(targetUrl);
-  const decodedPath = decodeURIComponent(parsed.pathname);
-  const primaryPath = path.join('/var/www/html', decodedPath);
-  const uploadsPath = primaryPath.replace('/var/www/html/uploads/', '/var/www/uploads/');
+/**
+ * Caminho relativo (dentro de /uploads/) que o proxy de mídia aceita servir.
+ * Recusa '..' depois do decode (ex.: '..%2f..%2f.env'), barras invertidas,
+ * byte nulo, arquivos/pastas ocultos e os vídeos de treinamento — esses só
+ * saem por /api/training/stream com token assinado.
+ */
+function portalMediaRelativePath(targetUrl) {
+  const relative = uploadRelativePath(targetUrl);
+  if (!relative) return null;
+  if (relative.includes('\\') || relative.includes('\0')) return null;
+  const segments = relative.split('/').filter(Boolean);
+  if (segments.length === 0 || segments.some((seg) => seg.startsWith('.'))) return null;
+  if (segments[0].toLowerCase() === 'training-videos') return null;
+  return segments.join('/');
+}
 
-  if (fs.existsSync(primaryPath)) return primaryPath;
-  if (fs.existsSync(uploadsPath)) return uploadsPath;
+function resolvePortalMediaLocalPath(targetUrl) {
+  const relative = portalMediaRelativePath(targetUrl);
+  if (!relative) return null;
+
+  // Só aceita arquivos que estejam DENTRO de uma raiz de uploads (também
+  // depois de seguir symlinks), nunca qualquer caminho do disco.
+  for (const root of uploadRoots()) {
+    try {
+      const candidate = path.resolve(root, relative);
+      if (!candidate.startsWith(`${root}${path.sep}`)) continue;
+      if (!fs.existsSync(candidate)) continue;
+      const realRoot = fs.realpathSync(root);
+      const realCandidate = fs.realpathSync(candidate);
+      if (!realCandidate.startsWith(`${realRoot}${path.sep}`)) continue;
+      if (!fs.statSync(realCandidate).isFile()) continue;
+      return realCandidate;
+    } catch {
+      continue;
+    }
+  }
   return null;
 }
 
@@ -5372,10 +5400,21 @@ function streamLocalPortalMedia(req, res, filePath, quality) {
   return fs.createReadStream(filePath).pipe(res.status(200));
 }
 
+// Teto global de ffmpeg simultâneos: o proxy é público (portal do cliente),
+// então sem limite qualquer pessoa poderia disparar transcodes em paralelo.
+const MAX_PORTAL_TRANSCODES = 2;
+
+function hasPortalTranscodeSlot() {
+  return activePortalTranscodes.size < MAX_PORTAL_TRANSCODES;
+}
+
 function warmPortal480pCache(sourcePath, cachedFile) {
   if (fs.existsSync(cachedFile)) return Promise.resolve(cachedFile);
   const existingJob = activePortalTranscodes.get(cachedFile);
   if (existingJob) return existingJob;
+  if (!hasPortalTranscodeSlot()) {
+    return Promise.reject(new Error('fila de transcodificação cheia — servindo o original'));
+  }
 
   const tempFile = `${cachedFile}.tmp`;
   const job = execFileAsync('ffmpeg', [
@@ -5418,22 +5457,31 @@ app.all('/api/portal-media-proxy', async (req, res) => {
     } catch {
       return res.status(400).json({ error: 'Invalid URL' });
     }
+    // Barra codificada (%2f / %5c), '..' depois do decode ou vídeo de treinamento: recusa.
+    if (!portalMediaRelativePath(targetUrl)) {
+      return res.status(400).json({ error: 'URL not allowed' });
+    }
 
     const localSourcePath = resolvePortalMediaLocalPath(targetUrl);
     const isVideoFile = /\.(mp4|mov|webm)(\?|$)/i.test(targetUrl);
 
     if (quality === '480p' && isVideoFile && localSourcePath) {
-      const urlHash = crypto.createHash('md5').update(targetUrl).digest('hex');
+      // Chave do cache pelo arquivo local (não pela URL com query string),
+      // senão '?a=1', '?a=2'... disparariam um ffmpeg novo a cada pedido.
+      const urlHash = crypto.createHash('md5').update(localSourcePath).digest('hex');
       const cachedFile = path.join(TRANSCODE_CACHE_DIR, `${urlHash}_480p.mp4`);
 
       if (fs.existsSync(cachedFile)) {
         return streamLocalPortalMedia(req, res, cachedFile, '480p-cached');
       }
 
-      warmPortal480pCache(localSourcePath, cachedFile)
-        .catch((error) => console.error('ffmpeg warmup error:', error.message));
+      if (activePortalTranscodes.has(cachedFile) || hasPortalTranscodeSlot()) {
+        warmPortal480pCache(localSourcePath, cachedFile)
+          .catch((error) => console.error('ffmpeg warmup error:', error.message));
+        return streamLocalPortalMedia(req, res, localSourcePath, 'original-warming-480p');
+      }
 
-      return streamLocalPortalMedia(req, res, localSourcePath, 'original-warming-480p');
+      return streamLocalPortalMedia(req, res, localSourcePath, '480p-fallback');
     }
 
     if (localSourcePath) {

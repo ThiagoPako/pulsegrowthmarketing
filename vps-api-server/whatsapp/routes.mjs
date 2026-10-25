@@ -438,12 +438,23 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
   const NOT_ONLY_APPROVAL = /\b(nao|mas|porem|so que|exceto|menos|antes)\b|\b(troc|mud|ajust|corrig|alter|tir[ae]|remov)\w*/;
   // aprovação de um item: "1 aprovado", "o 2 tá ok"
   const ITEM_APPROVE = /^(?:ta |esta |ficou |foi )?(?:aprovad[oa]s?|aprovo|aprova|ok|okay|pode postar|pode publicar|perfeito|otimo|show|top|tudo certo|certo|sim)(?![a-z0-9])/;
+  // o lote inteiro: "os dois aprovados", "todos ok", "ambos podem postar" (só vale se a quantidade é a do lote)
+  const ALL_APPROVE = /^(?:(todos|todas|ambos|ambas)(?:\s+(?:os|as))?(?:\s+(\d{1,2}|dois|duas|tres))?|(?:os|as)\s+(\d{1,2}|dois|duas|tres))\s+(?:(?:videos?|artes?)\s+)?(?:(?:foram|estao|tao|ta|ficaram)\s+)?(?:aprovad[oa]s?|ok|okay|perfeitos?|otimos?|podem? postar|podem? publicar)(?![a-z0-9])/;
+  const COUNT_WORDS = { dois: 2, duas: 2, tres: 3 };
+  const approvesAll = (n, total) => {
+    const m = n.match(ALL_APPROVE);
+    if (!m) return false;
+    const num = m[2] || m[3];
+    return (num ? COUNT_WORDS[num] || Number(num) : /^amb/.test(m[1]) ? 2 : total) === total;
+  };
+  // "o 2 também", "o 3 idem": a mesma resposta do trecho anterior
+  const SAME_AS = /^(?:tambem|tb|tbm|idem|igual|mesma coisa|o mesmo|a mesma coisa)[!. ]*$/;
   // pedido de mudança claro (com um vídeo só, vira ajuste sem precisar do número)
   const CHANGE_REQUEST = /\b(ajust|troc|mud|tir[ae]|corrig|alter|coloc|bot[ae]|aument|diminu|abaix|remov|substitu|acrescent|adicion|refaz|cort[ae]|errad|faltou|falta)\w*|\berro\b/;
   // cortesia / "vou ver depois": não é aprovação nem ajuste
   const COURTESY = /^(?:obrigad[oa]|obg|valeu|vlw|bom dia|boa tarde|boa noite|oi|ola|opa|blz|beleza|recebi|recebido|vou ver|vou assistir|vou olhar|depois vejo|depois eu vejo|ja vejo|ja vou ver|assisto|kk+|ha(?:ha)+|rs+)(?![a-z0-9])/;
-  // "o 1 tá aprovado, o 2 troca a música" → um trecho por vídeo
-  const SEGMENT_SPLIT = /(?:\s*[\n;,]+\s*|\s+e\s+)(?=(?:(?:o|a|no|na)\s+)?(?:v[ií]deo\s+|arte\s+)?\d{1,2}(?!\d))/i;
+  // "o 1 tá aprovado, o 2 troca a música" → um trecho por vídeo ("1 ok 2 ok", sem vírgula, também separa)
+  const SEGMENT_SPLIT = /(?:\s*[\n;,]+\s*|\s+e\s+|(?<=(?:^|[\s.!])(?:aprovad[oa]s?|ok|okay|sim|perfeito|[oó]timo|show|top|certo)[!.]*)\s+)(?=(?:(?:o|a|no|na)\s+)?(?:v[ií]deo\s+|arte\s+)?\d{1,2}(?!\d))/i;
   const SEGMENT = /^(?:(?:o|a|no|na)\s+)?(?:v[ií]deo\s+|arte\s+)?(\d{1,2})(?!\d)\s*(?:[-:.)º°]\s*)?(.*)$/is;
   const phoneVariants = (phone) => {
     const d = String(phone || '').replace(/\D/g, '');
@@ -573,13 +584,13 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
     };
 
     // 1) aprovar tudo: a frase é a aprovação ("aprovado, mas troca a música" não é)
-    if (!explicitAdjust && (APPROVE.test(n) || APPROVE_ALONE.test(n)) && !NOT_ONLY_APPROVAL.test(n)) {
+    if (!explicitAdjust && (APPROVE.test(n) || APPROVE_ALONE.test(n) || approvesAll(n, items.length)) && !NOT_ONLY_APPROVAL.test(n)) {
       const approved = [];
       for (const item of items) if (await approveItem(item)) approved.push(item);
       return respond(approved, []);
     }
 
-    // 2) por número: "2 trocar a música", "o 1 tá aprovado, o 2 troca a música"
+    // 2) por número: "2 trocar a música", "o 1 tá aprovado, o 2 troca a música", "1 e 2 aprovados", "o 1 ok, o 2 também"
     const segments = body.split(SEGMENT_SPLIT).map((s) => s.trim())
       .filter((s) => s && (SEGMENT.test(s) || !COURTESY.test(norm(s)))); // "bom dia, o 2 trocar…": ignora o "bom dia"
     const parsed = segments.map((segment) => {
@@ -587,10 +598,17 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
       const item = m ? items.find((i) => i.position === Number(m[1])) : null;
       const note = m ? m[2].trim() : '';
       if (!item) return null;
-      const ns = norm(note);
+      const ns = norm(note).replace(/^(?:tambem|tb|tbm)\s+(?=\S)/, ''); // "o 2 também tá ok"
+      if (!ns) return { item, follows: 'next' }; // "1 e 2 aprovados": o "1" segue o trecho seguinte
+      if (SAME_AS.test(ns)) return { item, follows: 'previous' };
       if (ITEM_APPROVE.test(ns) && !NOT_ONLY_APPROVAL.test(ns)) return { item, approve: true };
-      return ns.length >= 3 ? { item, note } : null;
+      // ajuste só com pedido de mudança claro (ou depois de "AJUSTE"): "o 2 ficou lindo" não abre ajuste
+      return ns.length >= 3 && (explicitAdjust || CHANGE_REQUEST.test(ns)) ? { item, note } : null;
     });
+    // "também" repete a resposta do trecho anterior; o número sozinho, a do seguinte (sem ela, cai na explicação)
+    const inherit = (p, from) => (from && !from.follows ? { ...from, item: p.item } : null);
+    parsed.forEach((p, i) => { if (p?.follows === 'previous') parsed[i] = inherit(p, parsed[i - 1]); });
+    for (let i = parsed.length - 1; i >= 0; i--) if (parsed[i]?.follows === 'next') parsed[i] = inherit(parsed[i], parsed[i + 1]);
     if (segments.length && parsed.every(Boolean)) {
       const approved = [];
       const adjusted = [];

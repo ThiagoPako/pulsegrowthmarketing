@@ -13799,7 +13799,16 @@ function uploadFileFilter(req, file, cb) {
 
   // Portal: só as pastas da panfletagem de um cliente que existe.
   const match = PORTAL_UPLOAD_FOLDER_RE.exec(sanitizeUploadFolder(req.body?.folder));
-  if (!match) return cb(uploadRejection(401, 'Faça login para enviar arquivos', 'UNAUTHORIZED'));
+  if (!match) {
+    // Sem Authorization nenhum e fora da panfletagem: é uma aba da equipe aberta
+    // antes do deploy (o vpsApi antigo não mandava o login). "Faça login" confundia
+    // quem está logado; a saída é atualizar a página. A mensagem não pode conter
+    // "indisponível" (o front antigo repetiria o envio inteiro).
+    if (!req.headers.authorization) {
+      return cb(uploadRejection(401, 'Há uma versão nova do sistema: atualize a página e envie de novo', 'CLIENT_OUTDATED'));
+    }
+    return cb(uploadRejection(401, 'Faça login para enviar arquivos', 'UNAUTHORIZED'));
+  }
   pool.query('SELECT 1 FROM clients WHERE id::text = lower($1) LIMIT 1', [match[1]])
     .then(({ rows }) => (rows.length
       ? cb(null, true)

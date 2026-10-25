@@ -21,6 +21,14 @@ const TV_TOKEN = (() => {
 const withTvToken = (url: string) =>
   TV_TOKEN ? `${url}${url.includes('?') ? '&' : '?'}tv_token=${encodeURIComponent(TV_TOKEN)}` : url;
 
+// TV aberta por alguém da equipe (botão "Abrir TV" do painel abre /tv sem
+// tv_token): o login da equipe guardado no navegador também libera a API.
+const tvAuthHeaders = (extra: Record<string, string> = {}): Record<string, string> => {
+  let token: string | null = null;
+  try { token = localStorage.getItem('pulse_jwt'); } catch { /* storage bloqueado */ }
+  return token ? { ...extra, Authorization: `Bearer ${token}` } : extra;
+};
+
 /* ─── Types ─────────────────────────────────────────────── */
 interface TeamMember {
   id: string;
@@ -1706,7 +1714,9 @@ export default function TvDashboard() {
       const url = withTvToken(force
         ? `${VPS}/tv-dashboard?_=${Date.now()}`
         : `${VPS}/tv-dashboard`);
-      const res = await fetch(url, force ? { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } } : undefined);
+      const res = await fetch(url, force
+        ? { cache: 'no-store', headers: tvAuthHeaders({ 'Cache-Control': 'no-cache' }) }
+        : { headers: tvAuthHeaders() });
       if (!res.ok) throw new Error('fail');
       const data = await res.json();
       setMembers(data.members || []);
@@ -1770,7 +1780,7 @@ export default function TvDashboard() {
       // If edge function returned nothing, try VPS endpoint
       if (!alerts.length) {
         try {
-          const res = await fetch(withTvToken(`${VPS}/seasonal-alerts`));
+          const res = await fetch(withTvToken(`${VPS}/seasonal-alerts`), { headers: tvAuthHeaders() });
           if (res.ok) {
             const data = await res.json();
             alerts = data.alerts || [];

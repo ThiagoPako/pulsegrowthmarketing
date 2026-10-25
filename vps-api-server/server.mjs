@@ -9424,9 +9424,22 @@ app.delete('/api/clients/:id', async (req, res) => {
 });
 
 // ─── Recordings ─────────────────────────────────────────────
+// Índice da subconsulta do status efetivo (content_tasks por gravação). Idempotente, na subida.
+pool.query('CREATE INDEX IF NOT EXISTS idx_content_tasks_recording ON content_tasks(recording_id)')
+  .catch(e => console.warn('idx_content_tasks_recording:', e?.message || e));
+
 app.get('/api/recordings', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
+    // Período opcional (?from=AAAA-MM-DD&to=AAAA-MM-DD) para telas que não precisam do histórico todo.
+    // Sem os parâmetros, continua vindo tudo (relatórios dependem do histórico completo).
+    const params = [];
+    const where = [];
+    if (scopeCity) { params.push(activeCity); where.push(cityVisibilityExpression('r.city', `$${params.length}`)); }
+    const from = typeof req.query.from === 'string' && isValidAgendaDate(req.query.from) ? req.query.from : null;
+    const to = typeof req.query.to === 'string' && isValidAgendaDate(req.query.to) ? req.query.to : null;
+    if (from) { params.push(from); where.push(`r.date >= $${params.length}::date`); }
+    if (to) { params.push(to); where.push(`r.date <= $${params.length}::date`); }
     const { rows } = await pool.query(`
       SELECT
         r.*,
@@ -9446,9 +9459,9 @@ app.get('/api/recordings', async (req, res) => {
           ELSE r.status
         END AS effective_status
       FROM recordings r
-      ${scopeCity ? `WHERE ${cityVisibilityExpression('r.city', '$1')}` : ''}
+      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
       ORDER BY r.date DESC, r.start_time ASC
-    `, scopeCity ? [activeCity] : []);
+    `, params);
 
     res.json(rows.map(({ effective_status, ...recording }) => ({
       ...recording,

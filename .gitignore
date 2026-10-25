@@ -10,6 +10,9 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+# deploy (update_vps.sh): build novo e versão anterior
+dist-next
+dist-prev
 *.local
 
 # Editor directories and files

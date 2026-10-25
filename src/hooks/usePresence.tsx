@@ -8,10 +8,21 @@ export function usePresenceHeartbeat(userId: string | undefined) {
 
     subscribeOfficeChannel();
 
-    const beat = () => { if (active) void trackPresence(userId); };
+    // O servidor considera online quem deu sinal nos últimos 120 s: sinal a cada
+    // 30 s com a aba visível e a cada 60 s com ela escondida (antes era a cada 5 s
+    // sempre, e cada sinal reenviava a lista inteira para todos).
+    let lastBeatAt = 0;
+    const beat = () => {
+      if (!active) return;
+      lastBeatAt = Date.now();
+      void trackPresence(userId);
+    };
     beat();
 
-    const iv = window.setInterval(beat, 5_000);
+    const iv = window.setInterval(() => {
+      if (document.visibilityState === 'hidden' && Date.now() - lastBeatAt < 55_000) return;
+      beat();
+    }, 30_000);
 
     const onVis = () => { if (document.visibilityState === 'visible') beat(); };
     const onOn = () => beat();

@@ -3,10 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { ShieldCheck, AlertCircle, RefreshCw, Terminal, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export default function RepairAuth() {
   const [status, setStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
   const [logs, setLogs] = useState<string[]>([]);
+  // Chave de reparo (REPAIR_KEY do .env da VPS). Sem ela, só limpa a sessão local.
+  const [repairKey, setRepairKey] = useState('');
 
   const addLog = (msg: string) => setLogs(prev => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`]);
 
@@ -17,27 +20,36 @@ export default function RepairAuth() {
     
     try {
       addLog("Testando conexão com a API da VPS...");
-      const health = await fetch('https://agenciapulse.tech/api/health').catch(() => ({ ok: false }));
+      const health = await fetch('https://agenciapulse.tech/api/health').catch(() => ({ ok: false, status: 0 }));
       
       if (!health.ok) {
-        addLog("ERRO: API da VPS não respondeu (502 Bad Gateway?).");
-        addLog("Tente reiniciar o serviço na VPS via SSH antes de prosseguir.");
+        if (health.status === 503) {
+          // A API respondeu, mas o banco de dados não
+          addLog("ERRO: a API está no ar, mas o banco de dados não respondeu (503).");
+          addLog("Verifique o PostgreSQL na VPS via SSH antes de prosseguir.");
+        } else {
+          addLog("ERRO: API da VPS não respondeu (502 Bad Gateway?).");
+          addLog("Tente reiniciar o serviço na VPS via SSH antes de prosseguir.");
+        }
         setStatus('error');
         return;
       }
       
-      addLog("API está online. Solicitando reparo atômico de permissões...");
-      // Nota: Este endpoint precisa existir na VPS
-      const repair = await fetch('https://agenciapulse.tech/api/admin/repair-atomic', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      }).catch(() => ({ ok: false, json: () => Promise.resolve({ error: 'Falha na rede' }) }));
+      if (repairKey.trim()) {
+        addLog("API está online. Solicitando reparo atômico de permissões...");
+        const repair = await fetch('https://agenciapulse.tech/api/admin/repair-atomic', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Repair-Key': repairKey.trim() }
+        }).catch(() => ({ ok: false, json: () => Promise.resolve({ error: 'Falha na rede' }) }));
 
-      if (!repair.ok) {
-         const errorData = await repair.json().catch(() => ({ error: 'Erro desconhecido' }));
-         addLog(`Reparo atômico falhou: ${errorData.error || 'Erro no servidor'}`);
+        if (!repair.ok) {
+           const errorData = await repair.json().catch(() => ({ error: 'Erro desconhecido' }));
+           addLog(`Reparo atômico falhou: ${errorData.error || 'Erro no servidor'}`);
+        } else {
+           addLog("Permissões de banco sincronizadas com sucesso.");
+        }
       } else {
-         addLog("Permissões de banco sincronizadas com sucesso.");
+        addLog("Sem chave de reparo: pulando o reparo do banco (na VPS, rode `node repair-auth.mjs`).");
       }
 
       addLog("Limpando cache de autenticação local...");
@@ -74,6 +86,14 @@ export default function RepairAuth() {
                   <h2 className="font-bold">Problemas de Login detectados?</h2>
                   <p className="text-sm text-slate-400">Esta ferramenta irá sincronizar as tabelas de autenticação na VPS e limpar sessões corrompidas no navegador.</p>
                 </div>
+                <Input
+                  type="password"
+                  value={repairKey}
+                  onChange={(e) => setRepairKey(e.target.value)}
+                  placeholder="Chave de reparo (opcional)"
+                  autoComplete="off"
+                  className="bg-slate-950 border-slate-700 text-slate-100"
+                />
                 <Button onClick={runRepair} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold">
                   INICIAR REPARO AGORA
                 </Button>

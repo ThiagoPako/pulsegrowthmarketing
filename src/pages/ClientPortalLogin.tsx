@@ -67,7 +67,9 @@ export default function ClientPortalLogin() {
     });
 
     if (error || !data?.success) {
-      toast.error(data?.error || 'Login ou senha incorretos');
+      // Em erro o invoke devolve data=null e a mensagem do servidor em `error`
+      // (ex.: 429 "Muitas tentativas de login...").
+      toast.error((typeof error === 'string' && error) || data?.error || 'Login ou senha incorretos');
       setLoading(false);
       return;
     }

@@ -1597,13 +1597,13 @@ export default function PortalPanfletagem({ clientId, clientColor, clientName, c
     link.href = item.generated_image_url;
     link.download = `${item.vehicle_model}-${item.vehicle_year}.jpg`;
     link.click();
-    portalAction({ action: 'update_flyer_item', item_id: item.id, status: 'baixado' }).then(() => {
+    portalAction({ action: 'update_flyer_item', client_id: clientId, item_id: item.id, status: 'baixado' }).then(() => {
       setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'baixado' } : i));
     });
   };
 
   const handleDeleteItem = async (itemId: string) => {
-    const result = await portalAction({ action: 'delete_flyer_item', item_id: itemId });
+    const result = await portalAction({ action: 'delete_flyer_item', client_id: clientId, item_id: itemId });
     if (result?.error) { toast.error('Erro ao apagar'); return; }
     setItems(prev => prev.filter(i => i.id !== itemId));
     if (previewItem?.id === itemId) setPreviewItem(null);

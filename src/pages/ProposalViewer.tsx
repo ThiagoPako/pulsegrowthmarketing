@@ -84,7 +84,7 @@ function ClientLogosMarquee({ clients }: { clients: any[] }) {
       <p className="text-center text-xs font-semibold text-gray-400 uppercase tracking-[0.2em] mb-4">Empresas que confiam na Pulse</p>
       <div className="flex animate-marquee">
         {doubled.map((c, i) => (
-          <div key={`${c.id}-${i}`} className="flex-shrink-0 mx-4">
+          <div key={`${c.company_name}-${i}`} className="flex-shrink-0 mx-4">
             {c.logo_url ? (
               <img src={c.logo_url} alt={c.company_name} className="h-10 w-auto object-contain grayscale hover:grayscale-0 transition-all duration-500 opacity-60 hover:opacity-100" />
             ) : (

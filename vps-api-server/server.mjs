@@ -5,7 +5,11 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createServer } from 'node:http';
+import http, { createServer } from 'node:http';
+import https from 'node:https';
+import dns from 'node:dns';
+import net from 'node:net';
+import zlib from 'node:zlib';
 process.on('uncaughtException', (err) => {
   console.error('CRITICAL UNCAUGHT EXCEPTION:', err);
 });
@@ -63,6 +67,8 @@ app.use(express.json({ limit: '10mb' }));
 // Health Check: endpoint leve para monitoramento do Nginx/Uptime e Banco de Dados
 // Diagnóstico do Pente Fino: mostra o que faltava e repara o schema.
 app.get('/api/diagnostics/pente-fino', async (req, res) => {
+  // Roda CREATE/ALTER: só admin
+  if (!(await requireAdminRoute(req, res))) return;
   try {
     const before = {};
     for (const [table, columns] of Object.entries(PENTE_FINO_SCHEMA)) {
@@ -91,27 +97,43 @@ app.get('/api/diagnostics/pente-fino', async (req, res) => {
   }
 });
 
-app.get('/api/health', async (req, res) => {
-
-  let dbStatus = 'ok';
-  let dbError = null;
-  
+/** SELECT 1 com tempo limite curto, para o health check nunca ficar travado. */
+async function checkDatabaseHealth(timeoutMs = 3000) {
+  let timer;
   try {
-    const result = await pool.query('SELECT 1 as health');
-    if (!result.rows.length) dbStatus = 'error';
+    const result = await Promise.race([
+      pool.query('SELECT 1 as health'),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`timeout de ${timeoutMs} ms no SELECT 1`)), timeoutMs);
+      }),
+    ]);
+    return result?.rows?.length ? { status: 'ok', error: null } : { status: 'error', error: 'SELECT 1 sem linhas' };
   } catch (err) {
-    dbStatus = 'error';
-    dbError = err.message;
+    return { status: 'error', error: err?.message || String(err) };
+  } finally {
+    clearTimeout(timer);
   }
+}
 
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(), 
+// Público (Nginx, update_vps.sh, monitor): só o estado. 503 quando o banco
+// não responde, para o monitor e o deploy perceberem. Detalhes em /api/admin/health.
+app.get('/api/health', async (req, res) => {
+  const db = await checkDatabaseHealth();
+  const ok = db.status === 'ok';
+  res.status(ok ? 200 : 503).json({
+    status: ok ? 'ok' : 'degraded',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get('/api/admin/health', async (req, res) => {
+  if (!(await requireAdminRoute(req, res))) return;
+  const db = await checkDatabaseHealth();
+  res.status(db.status === 'ok' ? 200 : 503).json({
+    status: db.status === 'ok' ? 'ok' : 'degraded',
+    timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    database: {
-      status: dbStatus,
-      error: dbError
-    },
+    database: db,
     env: {
       has_jwt_secret: !!process.env.JWT_SECRET,
       has_db_url: !!process.env.DATABASE_URL,
@@ -350,6 +372,38 @@ async function hasNullableClientIdOnContentTasks() {
   `);
   return rows[0]?.is_nullable === 'YES';
 }
+
+/**
+ * Tarefa avulsa (sem cliente) precisa de content_tasks.client_id aceitando NULL.
+ * Antes o ALTER rodava a cada chamada das rotas de avulso (lock exclusivo na
+ * tabela mais usada); agora confere uma vez e só altera se ainda for NOT NULL,
+ * com lock_timeout curto para nunca enfileirar o tráfego.
+ */
+let contentTasksClientIdNullablePromise = null;
+function ensureContentTasksClientIdNullable() {
+  if (!contentTasksClientIdNullablePromise) {
+    contentTasksClientIdNullablePromise = (async () => {
+      if (await hasNullableClientIdOnContentTasks()) return true;
+      const client = await pool.connect();
+      try {
+        await client.query(`SET lock_timeout = '2s'`);
+        await client.query(`ALTER TABLE content_tasks ALTER COLUMN client_id DROP NOT NULL`);
+        return true;
+      } finally {
+        await client.query('RESET lock_timeout').catch(() => {});
+        client.release();
+      }
+    })().catch((error) => {
+      // Tenta de novo na próxima chamada
+      contentTasksClientIdNullablePromise = null;
+      console.warn('[avulso] client_id de content_tasks ainda NOT NULL:', error?.message || error);
+      return false;
+    });
+  }
+  return contentTasksClientIdNullablePromise;
+}
+// Na subida: confere (e ajusta, se preciso) uma única vez
+ensureContentTasksClientIdNullable();
 
 async function getTableJsonColumns(tableName) {
   const cached = getSchemaCacheValue(tableJsonColumnsPromiseCache, tableName);
@@ -2179,6 +2233,45 @@ async function verifyAdmin(req) {
   throw new Error('Admin access required');
 }
 
+/** true quando o pedido traz um JWT válido da equipe (sem lançar erro). */
+async function hasTeamSession(req) {
+  if (!req.headers.authorization?.startsWith('Bearer ')) return false;
+  return verifyUser(req).then(() => true).catch(() => false);
+}
+
+/** Compara um segredo do .env com o enviado, em tempo constante. */
+function secretMatches(expected, provided) {
+  const a = String(expected || '').trim();
+  const b = String(provided || '').trim();
+  if (!a || !b) return false;
+  return crypto.timingSafeEqual(
+    crypto.createHash('sha256').update(a).digest(),
+    crypto.createHash('sha256').update(b).digest(),
+  );
+}
+
+/** Rotas só de admin: 401 sem login, 403 sem papel. Devolve false se respondeu. */
+async function requireAdminRoute(req, res) {
+  try {
+    await verifyAdmin(req);
+    return true;
+  } catch (error) {
+    res.status(error?.message === 'Admin access required' ? 403 : 401).json({ error: error?.message || 'Unauthorized' });
+    return false;
+  }
+}
+
+/**
+ * TV do escritório (/tv, sem login). Com TV_ACCESS_TOKEN no .env, a TV precisa
+ * abrir /tv?tv_token=... (ou estar logada); sem a variável segue pública.
+ */
+async function tvAccessAllowed(req) {
+  const expected = String(process.env.TV_ACCESS_TOKEN || '').trim();
+  if (!expected) return true;
+  if (await hasTeamSession(req)) return true;
+  return secretMatches(expected, req.query?.tv_token || req.headers['x-tv-token']);
+}
+
 /**
  * Gestão de equipe: admin/social_media OU gestor_projetos.
  * O frontend (Team.tsx) libera essas ações para gestor_projetos,
@@ -2880,6 +2973,65 @@ function loginAttemptKeys(req, normalizedEmail) {
 // ═══════════════════════════════════════════════════════════════
 
 // ─── Login ──────────────────────────────────────────────────
+// ─── Limite de tentativas de login (memória do processo) ───
+// Conta só as FALHAS por login (e-mail da equipe ou usuário do portal), sem
+// depender de IP: atrás do Nginx o IP chega como 127.0.0.1 e o
+// X-Forwarded-For pode ser forjado. Depois de LOGIN_MAX_FAILURES erros em
+// 15 min aquele login fica bloqueado até a janela acabar; acertar a senha zera
+// o contador. O restart do PM2 no deploy zera tudo (a sonda do update_vps.sh
+// continua recebendo 401).
+const LOGIN_FAILURE_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_FAILURES = 10;
+const LOGIN_FAILURES_MAX_KEYS = 50000;
+const loginFailures = new Map();
+
+function loginAttemptKey(scope, login) {
+  return `${scope}:${String(login || '').trim().toLowerCase()}`;
+}
+
+/** Segundos até liberar o login (0 = pode tentar). */
+function loginRetryAfterSeconds(key) {
+  const entry = loginFailures.get(key);
+  if (!entry) return 0;
+  const elapsed = Date.now() - entry.firstAt;
+  if (elapsed > LOGIN_FAILURE_WINDOW_MS) {
+    loginFailures.delete(key);
+    return 0;
+  }
+  if (entry.count < LOGIN_MAX_FAILURES) return 0;
+  return Math.max(1, Math.ceil((LOGIN_FAILURE_WINDOW_MS - elapsed) / 1000));
+}
+
+function registerLoginFailure(key) {
+  const now = Date.now();
+  const entry = loginFailures.get(key);
+  if (!entry || now - entry.firstAt > LOGIN_FAILURE_WINDOW_MS) {
+    loginFailures.delete(key);
+    loginFailures.set(key, { count: 1, firstAt: now });
+  } else {
+    entry.count += 1;
+  }
+  if (loginFailures.size > LOGIN_FAILURES_MAX_KEYS) {
+    for (const [k, v] of loginFailures) {
+      if (now - v.firstAt > LOGIN_FAILURE_WINDOW_MS) loginFailures.delete(k);
+    }
+    // Ainda cheio (muitos logins diferentes): descarta os mais antigos
+    for (const k of loginFailures.keys()) {
+      if (loginFailures.size <= LOGIN_FAILURES_MAX_KEYS) break;
+      loginFailures.delete(k);
+    }
+  }
+}
+
+function clearLoginFailures(key) {
+  loginFailures.delete(key);
+}
+
+function sendTooManyLoginAttempts(res, retryAfter) {
+  res.setHeader('Retry-After', String(retryAfter));
+  return res.status(429).json({ error: 'Muitas tentativas de login. Aguarde alguns minutos e tente de novo.' });
+}
+
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -3973,13 +4125,58 @@ const FORMAT_CONTEXT = {
   criativo: 'Formato: Criativo/Arte (peça visual estática)',
 };
 
-app.post('/api/generate-script', async (req, res) => {
+/**
+ * Nome de modelo de IA vindo do corpo. Não é lista fixa (o admin escolhe o
+ * modelo em Configurações), só o formato: na URL do Gemini não pode ter '/',
+ * '?' etc.; OpenAI/Claude/gateway aceitam também 'provedor/modelo'.
+ */
+function sanitizeAiModelName(model, provider, fallback) {
+  let raw = String(model || '').trim();
+  if (!raw) return fallback;
+  // 'google/gemini-...' (formato de gateway) vira o nome que a URL do Gemini espera
+  if (provider === 'gemini') raw = raw.replace(/^(?:google|models)\//i, '');
+  const pattern = provider === 'gemini' ? /^[A-Za-z0-9._-]{1,64}$/ : /^[A-Za-z0-9._:\/-]{1,96}$/;
+  if (!pattern.test(raw)) throw Object.assign(new Error('Modelo de IA inválido'), { status: 400 });
+  return raw;
+}
+
+function clipAiText(value, max) {
+  const text = String(value ?? '');
+  return text.length > max ? text.slice(0, max) : text;
+}
+
+async function requireAiUser(req, res) {
   try {
-    const { editorial, videoType, contentFormat, clientName, niche, exampleScripts, aiModel, aiProvider } = req.body;
+    await verifyUser(req);
+    return true;
+  } catch {
+    res.status(401).json({ error: 'Unauthorized' });
+    return false;
+  }
+}
+
+app.post('/api/generate-script', async (req, res) => {
+  // Usa a chave paga da agência: só para a equipe logada.
+  if (!(await requireAiUser(req, res))) return;
+  try {
+    const { videoType, contentFormat, aiModel, aiProvider } = req.body;
+    const editorial = clipAiText(req.body.editorial, 8000);
+    const clientName = clipAiText(req.body.clientName, 200);
+    const niche = clipAiText(req.body.niche, 200);
+    // Referências: até 5 roteiros de até 4.000 caracteres cada
+    const exampleScripts = Array.isArray(req.body.exampleScripts)
+      ? req.body.exampleScripts.slice(0, 5).map((ex) => ({
+          title: clipAiText(ex?.title, 200),
+          videoType: clipAiText(ex?.videoType, 60),
+          contentFormat: clipAiText(ex?.contentFormat, 60),
+          clientName: clipAiText(ex?.clientName, 200),
+          content: clipAiText(ex?.content, 4000),
+        }))
+      : [];
     const admin = getAdminClient();
     const dbApiKey = await fetchDbApiKey(admin, aiProvider);
     const ai = getAiConfig(aiProvider, dbApiKey);
-    const selectedModel = aiModel || 'gemini-2.5-flash';
+    const selectedModel = sanitizeAiModelName(aiModel, ai.provider, 'gemini-2.5-flash');
     const structure = VIDEO_TYPE_STRUCTURES[videoType] || VIDEO_TYPE_STRUCTURES.vendas;
     const format = FORMAT_CONTEXT[contentFormat] || FORMAT_CONTEXT.reels;
 
@@ -3994,7 +4191,7 @@ app.post('/api/generate-script', async (req, res) => {
     let scriptContent = '', captionContent = '';
 
     if (ai.provider === 'gemini') {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${ai.key}`;
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(selectedModel)}:generateContent?key=${ai.key}`;
       const response = await fetch(geminiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4016,26 +4213,31 @@ app.post('/api/generate-script', async (req, res) => {
     res.json({ content: scriptContent, caption: captionContent });
   } catch (error) {
     console.error('Generate script error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
 // ─── 4. Generate Caption ────────────────────────────────────
 app.post('/api/generate-caption', async (req, res) => {
+  // Usa a chave paga da agência: só para a equipe logada.
+  if (!(await requireAiUser(req, res))) return;
   try {
-    const { scriptContent, clientName, niche, aiModel, aiProvider } = req.body;
-    if (!scriptContent) return res.status(400).json({ error: 'scriptContent is required' });
+    const { aiModel, aiProvider } = req.body;
+    if (!req.body.scriptContent) return res.status(400).json({ error: 'scriptContent is required' });
+    const scriptContent = clipAiText(req.body.scriptContent, 20000);
+    const clientName = clipAiText(req.body.clientName, 200);
+    const niche = clipAiText(req.body.niche, 200);
 
     const admin = getAdminClient();
     const dbApiKey = await fetchDbApiKey(admin, aiProvider);
     const ai = getAiConfig(aiProvider, dbApiKey);
-    const model = aiModel || 'gemini-2.5-flash';
+    const model = sanitizeAiModelName(aiModel, ai.provider, 'gemini-2.5-flash');
 
     const prompt = `Você é um social media profissional brasileiro. Gere uma LEGENDA curta para Instagram.\nRegras: Máximo 200 chars, CTA, 1-3 emojis, sem hashtags.\n${clientName ? `CLIENTE: ${clientName}` : ''}\n${niche ? `NICHO: ${niche}` : ''}\nROTEIRO:\n${scriptContent}\n\nResponda APENAS com a legenda.`;
 
     let caption = '';
     if (ai.provider === 'gemini') {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${ai.key}`;
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${ai.key}`;
       const response = await fetch(geminiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4051,17 +4253,34 @@ app.post('/api/generate-caption', async (req, res) => {
     res.json({ caption });
   } catch (error) {
     console.error('Generate caption error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
 
 // ─── 5. Client Portal Auth ──────────────────────────────────
-async function hashPassword(password) {
-  // Use Node.js crypto module (crypto.subtle may not be available in all Node versions)
-  const { createHash } = await import('crypto');
-  const hash = createHash('sha256').update(password + 'pulse_portal_salt_2026').digest('hex');
-  return hash;
+// Senhas do portal: bcrypt. O SHA-256 salgado antigo ('pulse_portal_salt_2026')
+// ainda é aceito por verifyPortalPassword e regravado em bcrypt no login.
+const PORTAL_LEGACY_PASSWORD_SALT = 'pulse_portal_salt_2026';
+
+/**
+ * Verificador só do portal: bcrypt ou o SHA-256 salgado antigo. Não usa o
+ * verifyStoredPassword da equipe (texto puro e SHA-256 sem sal): o hash guardado
+ * em clients/client_portal_users é legível pela equipe e não pode valer como senha.
+ */
+async function verifyPortalPassword(rawPassword, passwordHash) {
+  const raw = String(rawPassword ?? '');
+  const stored = typeof passwordHash === 'string' ? passwordHash.trim() : '';
+  if (!raw || !stored) return false;
+  try {
+    if (stored.startsWith('$2')) return await bcrypt.compare(raw, stored);
+    if (!/^[a-f0-9]{64}$/i.test(stored)) return false;
+    const salted = crypto.createHash('sha256').update(raw + PORTAL_LEGACY_PASSWORD_SALT).digest();
+    return crypto.timingSafeEqual(salted, Buffer.from(stored, 'hex'));
+  } catch (error) {
+    console.error('[portal-login] falha ao conferir a senha:', error?.message || error);
+    return false;
+  }
 }
 
 // Ensure client_portal_users table exists (multi-user per company)
@@ -4098,6 +4317,14 @@ app.post('/api/client-portal-auth', async (req, res) => {
 
     if (action === 'login') {
       if (!login || !password) return res.status(400).json({ error: 'Login e senha obrigatórios' });
+      const attemptKey = loginAttemptKey('portal', login);
+      const retryAfter = loginRetryAfterSeconds(attemptKey);
+      if (retryAfter > 0) return sendTooManyLoginAttempts(res, retryAfter);
+      // Mesma resposta para login inexistente e senha errada (não revela quais logins existem)
+      const invalidLogin = () => {
+        registerLoginFailure(attemptKey);
+        return res.status(401).json({ error: 'Login ou senha inválidos' });
+      };
       // Search in client_portal_users first, fallback to clients table
       const { rows: [portalUser] } = await pool.query(
         `SELECT cpu.id as user_id, cpu.client_id, cpu.username, cpu.display_name, cpu.password_hash, c.company_name, c.color, c.logo_url
@@ -4107,8 +4334,14 @@ app.post('/api/client-portal-auth', async (req, res) => {
         [login.trim()]
       );
       if (portalUser) {
-        const passwordHash = await hashPassword(password);
-        if (portalUser.password_hash !== passwordHash) return res.status(401).json({ error: 'Senha incorreta' });
+        // Aceita bcrypt e o SHA-256 salgado antigo; no primeiro login certo regrava em bcrypt
+        if (!(await verifyPortalPassword(password, portalUser.password_hash))) return invalidLogin();
+        clearLoginFailures(attemptKey);
+        if (!String(portalUser.password_hash || '').startsWith('$2')) {
+          const upgraded = await bcrypt.hash(password, 12);
+          await pool.query('UPDATE client_portal_users SET password_hash = $1 WHERE id = $2', [upgraded, portalUser.user_id])
+            .catch((error) => console.warn('[portal-login] falha ao migrar hash para bcrypt:', error?.message || error));
+        }
         return res.json({ success: true, client_id: portalUser.client_id, company_name: portalUser.company_name, color: portalUser.color, logo_url: portalUser.logo_url, display_name: portalUser.display_name, portal_user_id: portalUser.user_id });
       }
       // Fallback: legacy login on clients table
@@ -4116,9 +4349,9 @@ app.post('/api/client-portal-auth', async (req, res) => {
         `SELECT id, company_name, client_login, client_password_hash, color, logo_url FROM clients WHERE client_login = $1`,
         [login.trim()]
       );
-      if (!client) return res.status(404).json({ error: 'Login não encontrado' });
-      const passwordHash = await hashPassword(password);
-      if (client.client_password_hash !== passwordHash) return res.status(401).json({ error: 'Senha incorreta' });
+      if (!client) return invalidLogin();
+      if (!(await verifyPortalPassword(password, client.client_password_hash))) return invalidLogin();
+      clearLoginFailures(attemptKey);
       return res.json({ success: true, client_id: client.id, company_name: client.company_name, color: client.color, logo_url: client.logo_url, display_name: client.company_name });
     }
 
@@ -4130,7 +4363,8 @@ app.post('/api/client-portal-auth', async (req, res) => {
       // Check username not taken
       const { rows: taken } = await pool.query(`SELECT id FROM client_portal_users WHERE username = $1`, [login.trim()]);
       if (taken.length > 0) return res.status(409).json({ error: 'Nome de usuário já em uso' });
-      const passwordHash = await hashPassword(password);
+      // Senhas novas do portal já nascem em bcrypt (o login aceita os dois formatos)
+      const passwordHash = await bcrypt.hash(String(password), 12);
       const name = (display_name || login).trim();
       await pool.query(
         `INSERT INTO client_portal_users (client_id, username, display_name, password_hash) VALUES ($1, $2, $3, $4)`,
@@ -4375,7 +4609,8 @@ app.post('/api/public-proposal', async (req, res) => {
     }
 
     if (action === 'get_clients') {
-      const { rows } = await pool.query('SELECT id, company_name, logo_url, color FROM clients WHERE status = $1 ORDER BY company_name', ['ativo']);
+      // Vitrine de logos da proposta: sem o id (o id do cliente abre o portal).
+      const { rows } = await pool.query('SELECT company_name, logo_url, color FROM clients WHERE status = $1 ORDER BY company_name', ['ativo']);
       return res.json({ clients: rows });
     }
 
@@ -4517,14 +4752,16 @@ app.post('/api/portal-actions', async (req, res) => {
     // ── Update script client priority ──
     if (action === 'set_script_priority') {
       const { script_id, priority } = req.body;
-      if (!script_id) return res.status(400).json({ error: 'script_id required' });
-      await pool.query('UPDATE scripts SET client_priority = $1 WHERE id = $2', [priority || 'normal', script_id]);
+      if (!script_id || !client_id) return res.status(400).json({ error: 'script_id and client_id required' });
+      // Só altera roteiro do próprio cliente do portal
+      const { rowCount } = await pool.query(
+        'UPDATE scripts SET client_priority = $1 WHERE id = $2 AND client_id = $3',
+        [priority || 'normal', script_id, client_id]
+      );
+      if (rowCount === 0) return res.status(404).json({ error: 'Roteiro não encontrado' });
       // Get client name for notifications
-      if (client_id) {
-        const { rows: [clientInfo] } = await pool.query('SELECT company_name FROM clients WHERE id = $1', [client_id]);
-        return res.json({ success: true, company_name: clientInfo?.company_name || '' });
-      }
-      return res.json({ success: true });
+      const { rows: [clientInfo] } = await pool.query('SELECT company_name FROM clients WHERE id = $1', [client_id]);
+      return res.json({ success: true, company_name: clientInfo?.company_name || '' });
     }
 
     // ── Get content tasks (for calendar) ──
@@ -4584,15 +4821,21 @@ app.post('/api/portal-actions', async (req, res) => {
 
     if (action === 'update_flyer_item') {
       const { item_id, status } = req.body;
-      if (!item_id) return res.status(400).json({ error: 'item_id required' });
-      await pool.query('UPDATE flyer_items SET status = $1, updated_at = NOW() WHERE id = $2', [status, item_id]);
+      if (!item_id || !client_id) return res.status(400).json({ error: 'item_id and client_id required' });
+      // Só altera panfleto do próprio cliente do portal
+      const { rowCount } = await pool.query(
+        'UPDATE flyer_items SET status = $1, updated_at = NOW() WHERE id = $2 AND client_id = $3',
+        [status, item_id, client_id]
+      );
+      if (rowCount === 0) return res.status(404).json({ error: 'Item not found' });
       return res.json({ success: true });
     }
 
     if (action === 'delete_flyer_item') {
       const { item_id } = req.body;
-      if (!item_id) return res.status(400).json({ error: 'item_id required' });
-      await pool.query('DELETE FROM flyer_items WHERE id = $1', [item_id]);
+      if (!item_id || !client_id) return res.status(400).json({ error: 'item_id and client_id required' });
+      const { rowCount } = await pool.query('DELETE FROM flyer_items WHERE id = $1 AND client_id = $2', [item_id, client_id]);
+      if (rowCount === 0) return res.status(404).json({ error: 'Item not found' });
       return res.json({ success: true });
     }
 
@@ -4628,20 +4871,23 @@ app.post('/api/portal-actions', async (req, res) => {
     }
 
     if (action === 'approve') {
-      if (!content_id) return res.status(400).json({ error: 'content_id required' });
-      await pool.query(
-        `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW() WHERE id = $1`,
-        [content_id]
+      if (!content_id || !client_id) return res.status(400).json({ error: 'content_id and client_id required' });
+      // Só aprova conteúdo do próprio cliente do portal
+      const { rowCount } = await pool.query(
+        `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW() WHERE id = $1 AND client_id = $2`,
+        [content_id, client_id]
       );
+      if (rowCount === 0) return res.status(404).json({ error: 'Content not found' });
       return res.json({ success: true });
     }
 
     if (action === 'request_adjustment') {
-      if (!content_id || !message) return res.status(400).json({ error: 'content_id and message required' });
-      await pool.query(
-        `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW() WHERE id = $1`,
-        [content_id]
+      if (!content_id || !message || !client_id) return res.status(400).json({ error: 'content_id, client_id and message required' });
+      const { rowCount } = await pool.query(
+        `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW() WHERE id = $1 AND client_id = $2`,
+        [content_id, client_id]
       );
+      if (rowCount === 0) return res.status(404).json({ error: 'Content not found' });
       await pool.query(
         `INSERT INTO client_portal_comments (content_id, author_name, author_type, author_id, message) VALUES ($1, $2, $3, $4, $5)`,
         [content_id, author_name || 'Cliente', author_type || 'client', author_id || null, `🔧 Ajuste solicitado: ${message}`]
@@ -4969,10 +5215,8 @@ app.post('/api/avulso-create-task', async (req, res) => {
 
     if (!title) return res.status(400).json({ error: 'title required' });
 
-    // Ensure client_id column accepts NULL
-    try {
-      await pool.query(`ALTER TABLE content_tasks ALTER COLUMN client_id DROP NOT NULL`);
-    } catch (_) { /* already nullable */ }
+    // Ensure client_id column accepts NULL (confere uma vez por processo)
+    await ensureContentTasksClientIdNullable();
 
     const { rows: [task] } = await pool.query(
       `INSERT INTO content_tasks
@@ -5001,10 +5245,8 @@ app.post('/api/avulso-actions', async (req, res) => {
 
     if (!task_id) return res.status(400).json({ error: 'task_id required' });
 
-    // Ensure client_id column accepts NULL
-    try {
-      await pool.query(`ALTER TABLE content_tasks ALTER COLUMN client_id DROP NOT NULL`);
-    } catch (_) { /* already nullable */ }
+    // Ensure client_id column accepts NULL (confere uma vez por processo)
+    await ensureContentTasksClientIdNullable();
 
     if (action === 'get_task') {
       const { rows: [task] } = await pool.query(
@@ -5823,12 +6065,59 @@ app.post('/api/meta-oauth-diagnose', async (req, res) => {
   }
 });
 
+/**
+ * Quem pode mexer nas conexões sociais dos clientes: os mesmos papéis do menu
+ * Conexões Sociais (admin, social_media, gestor_projetos, revisor_meta).
+ */
+async function verifySocialManager(req) {
+  const ctx = await verifyUser(req);
+  if (await isAdminUser(ctx.user)) return ctx;
+  if (await userHasAssignedRole(ctx.user, 'gestor_projetos')) return ctx;
+  if (await userHasAssignedRole(ctx.user, 'revisor_meta')) return ctx;
+  throw new Error('Admin access required');
+}
+
+function socialAuthErrorStatus(error) {
+  return error?.message === 'Admin access required' ? 403 : 401;
+}
+
+/**
+ * Cliente autorizado a conectar contas no /api/meta-oauth:
+ * equipe logada (Clientes) usa o client_id do corpo; o cliente na página
+ * pública /conectar-social usa o token do convite e o client_id vem do link.
+ */
+async function resolveMetaOAuthClientId(req) {
+  if (req.headers.authorization?.startsWith('Bearer ')) {
+    const isTeam = await verifyUser(req).then(() => true).catch(() => false);
+    if (isTeam) return req.body?.client_id || null;
+  }
+  const inviteToken = String(req.body?.invite_token || '').trim();
+  if (!inviteToken) throw Object.assign(new Error('Unauthorized'), { status: 401 });
+  await ensureSocialPostsSchema();
+  const { rows } = await pool.query(
+    'SELECT client_id, expires_at FROM social_connect_links WHERE token = $1 LIMIT 1',
+    [inviteToken]
+  );
+  if (!rows.length) throw Object.assign(new Error('Link inválido ou removido.'), { status: 401 });
+  if (new Date(rows[0].expires_at).getTime() < Date.now()) {
+    throw Object.assign(new Error('Este link expirou. Peça um novo para a agência.'), { status: 410 });
+  }
+  return rows[0].client_id;
+}
+
 app.post('/api/meta-oauth', async (req, res) => {
+  let client_id;
+  try {
+    client_id = await resolveMetaOAuthClientId(req);
+  } catch (authError) {
+    return res.status(authError.status || 401).json({ error: authError.message || 'Unauthorized' });
+  }
+
   try {
     const admin = getAdminClient();
     // redirect_uri ÚNICO: o mesmo texto vai na URL de login e na troca do código.
     // Valor do corpo é ignorado para nunca divergir (www, sem barra, preview…).
-    const { action, client_id, code } = req.body;
+    const { action, code } = req.body;
     const redirect_uri = META_OAUTH_REDIRECT_URI;
 
     const loaded = await loadMetaOAuthConfig(admin);
@@ -5984,6 +6273,12 @@ async function getMetaConfigFromDb() {
  */
 app.post('/api/social-accounts/manual-token', async (req, res) => {
   try {
+    await verifySocialManager(req);
+  } catch (authError) {
+    return res.status(socialAuthErrorStatus(authError)).json({ error: authError.message || 'Unauthorized' });
+  }
+
+  try {
     const { client_id, platform, token: rawToken, account_name, instagram_business_id, facebook_page_id, api_base } = req.body;
     if (!client_id || client_id === 'new') return res.status(400).json({ error: 'Salve o cliente primeiro antes de colar o token.' });
     if (!platform || !['instagram', 'facebook'].includes(platform)) return res.status(400).json({ error: 'platform deve ser instagram ou facebook' });
@@ -6091,6 +6386,12 @@ async function fetchMetaWithRetry(url, options, retries = 3) {
 
 app.post('/api/meta-publish', async (req, res) => {
   try {
+    await verifyAdmin(req);
+  } catch (authError) {
+    return res.status(socialAuthErrorStatus(authError)).json({ error: authError.message || 'Unauthorized' });
+  }
+
+  try {
     const admin = getAdminClient();
     const { integration_id, client_id, publish_type, media_url, caption, scheduled_time } = req.body;
     if (!integration_id || !client_id || !publish_type || !media_url) return res.status(400).json({ error: 'Missing required fields' });
@@ -6196,6 +6497,12 @@ app.post('/api/meta-store-credentials', async (req, res) => {
 // ─── 11. Meta Token Refresh ─────────────────────────────────
 app.post('/api/meta-token-refresh', async (req, res) => {
   try {
+    await verifySocialManager(req);
+  } catch (authError) {
+    return res.status(socialAuthErrorStatus(authError)).json({ error: authError.message || 'Unauthorized' });
+  }
+
+  try {
     const admin = getAdminClient();
     const { data: integrations } = await admin.from('api_integrations').select('*').eq('provider', 'meta_ads').eq('status', 'ativo');
     if (!integrations?.length) return res.json({ message: 'No active Meta integrations' });
@@ -6283,8 +6590,16 @@ ensureSocialPostsSchema().catch(err => console.error('[social-posts] schema init
 
 /** Cria (ou renova) o link de autorização de um cliente. */
 app.post('/api/social-connect-links', async (req, res) => {
+  let created_by = null;
   try {
-    const { client_id, created_by = null, days = 14 } = req.body || {};
+    const { user } = await verifySocialManager(req);
+    created_by = user?.id || null;
+  } catch (authError) {
+    return res.status(socialAuthErrorStatus(authError)).json({ error: authError.message || 'Unauthorized' });
+  }
+
+  try {
+    const { client_id, days = 14 } = req.body || {};
     if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
     await ensureSocialPostsSchema();
 
@@ -7978,6 +8293,10 @@ app.post('/api/approval-deadline-cron', async (req, res) => {
 
 // ─── 19. Generate Monthly Revenues ──────────────────────────
 app.post('/api/generate-monthly-revenues', async (req, res) => {
+  // Admin logado ou agendador com a chave CRON_KEY do .env (header X-Cron-Key)
+  if (!secretMatches(process.env.CRON_KEY, req.headers['x-cron-key'])) {
+    if (!(await requireAdminRoute(req, res))) return;
+  }
   try {
     const admin = getAdminClient();
     const now = new Date();
@@ -10528,8 +10847,46 @@ app.post('/api/fix-content-task', async (req, res) => {
 // ─── CLUBE DE DESCONTOS ─────────────────────────────────────
 
 // Helper: generate random 6-digit code
+const COUPON_CODE_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const MAX_CAMPAIGN_COUPONS = 5000;
+
 function generateCouponCode() {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
+  // crypto.randomInt: sempre 6 caracteres (o Math.random às vezes gerava menos)
+  let code = '';
+  for (let i = 0; i < 6; i += 1) code += COUPON_CODE_CHARS[crypto.randomInt(COUPON_CODE_CHARS.length)];
+  return code;
+}
+
+/**
+ * Insere `count` cupons novos na campanha em lote. O código é único no banco
+ * inteiro: colisões são descartadas e completadas na rodada seguinte.
+ */
+async function insertCampaignCoupons(db, campaignId, count) {
+  let inserted = 0;
+  for (let round = 0; round < 5 && inserted < count; round += 1) {
+    const codes = new Set();
+    while (codes.size < count - inserted) codes.add(generateCouponCode());
+    const { rowCount } = await db.query(
+      `INSERT INTO discount_coupons (campaign_id, code)
+       SELECT $1, unnest($2::text[])
+       ON CONFLICT (code) DO NOTHING`,
+      [campaignId, [...codes]]
+    );
+    inserted += rowCount || 0;
+  }
+  if (inserted < count) throw new Error('Não foi possível gerar todos os cupons. Tente novamente.');
+  return inserted;
+}
+
+function discountAuthErrorStatus(error) {
+  return error?.message === 'Admin access required' ? 403 : 401;
+}
+
+/** Telefone de quem pegou cupom sem login da equipe: só os 4 últimos dígitos. */
+function maskClaimPhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return phone || null;
+  return `•••• ${digits.slice(-4)}`;
 }
 
 // List all clients with active discount campaigns (public)
@@ -10704,9 +11061,15 @@ app.post('/api/discount-verify', async (req, res) => {
 });
 
 // Get discount stats for portal
+// Equipe (admin/social_media, com Bearer) vê tudo; sem login (portal do cliente)
+// o telefone de quem pegou o cupom sai mascarado — o client_id é público.
 app.get('/api/discount-stats/:clientId', async (req, res) => {
   try {
     const { clientId } = req.params;
+    let isTeamAdmin = false;
+    if (req.headers.authorization?.startsWith('Bearer ')) {
+      isTeamAdmin = await verifyAdmin(req).then(() => true).catch(() => false);
+    }
     const { rows: campaigns } = await pool.query(
       `SELECT * FROM discount_campaigns WHERE client_id = $1 ORDER BY created_at DESC`,
       [clientId]
@@ -10734,7 +11097,9 @@ app.get('/api/discount-stats/:clientId', async (req, res) => {
 
     res.json({
       campaigns,
-      coupons,
+      coupons: isTeamAdmin
+        ? coupons
+        : coupons.map((c) => ({ ...c, claimed_by_phone: maskClaimPhone(c.claimed_by_phone) })),
       stats: {
         total_coupons_issued: coupons.length,
         total_claimed: coupons.filter(c => c.status === 'claimed').length,
@@ -10752,29 +11117,43 @@ app.get('/api/discount-stats/:clientId', async (req, res) => {
 
 // Admin: create campaign with coupons
 app.post('/api/discount-campaigns', async (req, res) => {
+  let user;
   try {
-    const { client_id, title, description, discount_type, discount_value, min_purchase_value, total_coupons, expires_at, created_by } = req.body;
-    if (!client_id || !title || !total_coupons) {
+    ({ user } = await verifyAdmin(req));
+  } catch (authError) {
+    return res.status(discountAuthErrorStatus(authError)).json({ error: authError.message || 'Unauthorized' });
+  }
+
+  try {
+    const { client_id, description, discount_type, discount_value, min_purchase_value, expires_at } = req.body;
+    const title = String(req.body?.title || '').trim();
+    const total_coupons = Number(req.body?.total_coupons);
+    if (!client_id || !title || !req.body?.total_coupons) {
       return res.status(400).json({ error: 'client_id, title e total_coupons são obrigatórios' });
     }
-
-    const { rows: [campaign] } = await pool.query(
-      `INSERT INTO discount_campaigns (client_id, title, description, discount_type, discount_value, min_purchase_value, total_coupons, expires_at, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [client_id, title, description || '', discount_type || 'percentage', discount_value || 0, min_purchase_value || 0, total_coupons, expires_at || null, created_by || null]
-    );
-
-    // Generate coupons
-    const codes = new Set();
-    while (codes.size < total_coupons) {
-      codes.add(generateCouponCode());
+    if (!Number.isInteger(total_coupons) || total_coupons < 1 || total_coupons > MAX_CAMPAIGN_COUPONS) {
+      return res.status(400).json({ error: `total_coupons deve ser um número inteiro entre 1 e ${MAX_CAMPAIGN_COUPONS}` });
     }
+    if (title.length > 120) return res.status(400).json({ error: 'Título muito longo (máximo de 120 caracteres)' });
+    if (String(description || '').length > 1000) return res.status(400).json({ error: 'Descrição muito longa (máximo de 1000 caracteres)' });
 
-    for (const code of codes) {
-      await pool.query(
-        `INSERT INTO discount_coupons (campaign_id, code) VALUES ($1, $2)`,
-        [campaign.id, code]
-      );
+    // Campanha e cupons juntos: se a geração falhar, nada fica pela metade.
+    const db = await pool.connect();
+    let campaign;
+    try {
+      await db.query('BEGIN');
+      ({ rows: [campaign] } = await db.query(
+        `INSERT INTO discount_campaigns (client_id, title, description, discount_type, discount_value, min_purchase_value, total_coupons, expires_at, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+        [client_id, title, description || '', discount_type || 'percentage', discount_value || 0, min_purchase_value || 0, total_coupons, expires_at || null, user?.id || null]
+      ));
+      await insertCampaignCoupons(db, campaign.id, total_coupons);
+      await db.query('COMMIT');
+    } catch (txError) {
+      await db.query('ROLLBACK').catch(() => {});
+      throw txError;
+    } finally {
+      db.release();
     }
 
     // Notify existing coupon holders from this client that new coupons are available
@@ -10808,18 +11187,106 @@ app.post('/api/discount-campaigns', async (req, res) => {
   }
 });
 
-// Admin: toggle campaign active status
+// Admin: editar campanha (título, desconto, validade...) ou ativar/desativar
 app.patch('/api/discount-campaigns/:id', async (req, res) => {
   try {
+    await verifyAdmin(req);
+  } catch (authError) {
+    return res.status(discountAuthErrorStatus(authError)).json({ error: authError.message || 'Unauthorized' });
+  }
+
+  const db = await pool.connect();
+  try {
     const { id } = req.params;
-    const { is_active } = req.body;
-    const { rows: [updated] } = await pool.query(
-      `UPDATE discount_campaigns SET is_active = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
-      [id, is_active]
-    );
+    const body = req.body || {};
+
+    // Só atualiza os campos enviados (antes o PATCH só lia is_active e a edição
+    // gravava is_active = NULL, falhando sem salvar nada).
+    const sets = [];
+    const params = [id];
+    const setField = (column, value) => {
+      params.push(value);
+      sets.push(`${column} = $${params.length}`);
+    };
+    if (body.title !== undefined) {
+      const title = String(body.title || '').trim();
+      if (!title) return res.status(400).json({ error: 'Título obrigatório' });
+      if (title.length > 120) return res.status(400).json({ error: 'Título muito longo (máximo de 120 caracteres)' });
+      setField('title', title);
+    }
+    if (body.description !== undefined) {
+      if (String(body.description || '').length > 1000) return res.status(400).json({ error: 'Descrição muito longa (máximo de 1000 caracteres)' });
+      setField('description', body.description || '');
+    }
+    if (body.discount_type !== undefined) setField('discount_type', body.discount_type || 'percentage');
+    if (body.discount_value !== undefined) setField('discount_value', Number(body.discount_value) || 0);
+    if (body.min_purchase_value !== undefined) setField('min_purchase_value', Number(body.min_purchase_value) || 0);
+    // expires_at pode ser limpo de propósito (null = sem validade)
+    if (body.expires_at !== undefined) setField('expires_at', body.expires_at || null);
+    if (body.is_active !== undefined && body.is_active !== null) setField('is_active', Boolean(body.is_active));
+
+    let targetTotal = null;
+    if (body.total_coupons !== undefined && body.total_coupons !== null && body.total_coupons !== '') {
+      targetTotal = Number(body.total_coupons);
+      if (!Number.isInteger(targetTotal) || targetTotal < 1 || targetTotal > MAX_CAMPAIGN_COUPONS) {
+        return res.status(400).json({ error: `total_coupons deve ser um número inteiro entre 1 e ${MAX_CAMPAIGN_COUPONS}` });
+      }
+    }
+
+    await db.query('BEGIN');
+    const { rows: [current] } = await db.query('SELECT id FROM discount_campaigns WHERE id = $1 FOR UPDATE', [id]);
+    if (!current) {
+      await db.query('ROLLBACK');
+      return res.status(404).json({ error: 'Campanha não encontrada' });
+    }
+
+    if (targetTotal !== null) {
+      const { rows: [counts] } = await db.query(
+        `SELECT COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE status = 'available')::int AS available
+           FROM discount_coupons WHERE campaign_id = $1`,
+        [id]
+      );
+      const used = counts.total - counts.available;
+      if (targetTotal < used) {
+        await db.query('ROLLBACK');
+        return res.status(400).json({ error: `Esta campanha já tem ${used} cupons resgatados; o total não pode ficar abaixo disso.` });
+      }
+      if (targetTotal > counts.total) {
+        await insertCampaignCoupons(db, id, targetTotal - counts.total);
+      } else if (targetTotal < counts.total) {
+        // Reduzir: tira só cupons ainda disponíveis (nunca os já resgatados)
+        await db.query(
+          `DELETE FROM discount_coupons
+            WHERE id IN (
+              SELECT id FROM discount_coupons
+               WHERE campaign_id = $1 AND status = 'available'
+               ORDER BY created_at DESC
+               LIMIT $2
+            )`,
+          [id, counts.total - targetTotal]
+        );
+      }
+      setField('total_coupons', targetTotal);
+    }
+
+    let updated = null;
+    if (sets.length > 0) {
+      ({ rows: [updated] } = await db.query(
+        `UPDATE discount_campaigns SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $1 RETURNING *`,
+        params
+      ));
+    } else {
+      ({ rows: [updated] } = await db.query('SELECT * FROM discount_campaigns WHERE id = $1', [id]));
+    }
+    await db.query('COMMIT');
     res.json({ campaign: updated });
   } catch (e) {
+    await db.query('ROLLBACK').catch(() => {});
+    console.error('PATCH /api/discount-campaigns/:id error:', e);
     res.status(500).json({ error: e.message });
+  } finally {
+    db.release();
   }
 });
 
@@ -10860,7 +11327,6 @@ app.delete('/api/discount-campaigns/:id', async (req, res) => {
 });
 
 // ─── Health check ───────────────────────────────────────────
-app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
 const TV_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -11100,6 +11566,7 @@ async function fetchSystemSeasonalAlerts({ clientIds = [], fallbackClients = nul
 
 // ─── TV Dashboard endpoint ──────────────────────────────────
 app.get('/api/tv-dashboard', async (req, res) => {
+  if (!(await tvAccessAllowed(req))) return res.status(401).json({ error: 'Unauthorized' });
   let stage = 'init';
   try {
     const safeQuery = async (label, sql, params = []) => {
@@ -11565,12 +12032,19 @@ app.get('/api/tv-dashboard', async (req, res) => {
 });
 
 // ─── Seasonal Alerts proxy (calls Supabase edge function) ───
+// Sem login (TV) os alertas saem sem o id do cliente: o id abre o portal.
+function publicSeasonalAlerts(alerts = []) {
+  return alerts.map(({ clientId, ...rest }) => rest);
+}
+
 app.post('/api/seasonal-alerts', async (req, res) => {
   try {
+    const isTeam = await hasTeamSession(req);
+    if (!isTeam && !(await tvAccessAllowed(req))) return res.status(401).json({ error: 'Unauthorized' });
     const clientIds = Array.isArray(req.body?.clientIds) ? req.body.clientIds : [];
     const seasonalClients = await loadSeasonalClients(clientIds);
     const alerts = await fetchSystemSeasonalAlerts({ clientIds, fallbackClients: seasonalClients });
-    res.json({ alerts });
+    res.json({ alerts: isTeam ? alerts : publicSeasonalAlerts(alerts) });
   } catch (err) {
     console.error('[seasonal-alerts] proxy error:', err?.message);
     res.json({ alerts: [] });
@@ -11580,9 +12054,11 @@ app.post('/api/seasonal-alerts', async (req, res) => {
 // Also support GET for simpler calls
 app.get('/api/seasonal-alerts', async (req, res) => {
   try {
+    const isTeam = await hasTeamSession(req);
+    if (!isTeam && !(await tvAccessAllowed(req))) return res.status(401).json({ error: 'Unauthorized' });
     const seasonalClients = await loadSeasonalClients();
     const alerts = await fetchSystemSeasonalAlerts({ fallbackClients: seasonalClients });
-    res.json({ alerts });
+    res.json({ alerts: isTeam ? alerts : publicSeasonalAlerts(alerts) });
   } catch (err) {
     console.error('[seasonal-alerts] proxy error:', err?.message);
     res.json({ alerts: [] });
@@ -11591,46 +12067,69 @@ app.get('/api/seasonal-alerts', async (req, res) => {
 
 
 
-app.get('/api/presence', (req, res) => {
+app.get('/api/presence', async (req, res) => {
+  // Quem está online (ids da equipe): só para a equipe logada
+  if (!(await hasTeamSession(req))) return res.status(401).json({ error: 'Unauthorized', users: [] });
   res.json({ users: collectOnlinePresenceUsers() });
 });
 
-app.post('/api/presence/heartbeat', (req, res) => {
-  const { userId } = req.body;
-  if (!userId) return res.status(400).json({ error: 'userId required' });
-  const now = new Date().toISOString();
-  const existing = presenceState.get(userId);
-  presenceState.set(userId, {
-    userId,
-    heartbeatAt: now,
-    connectedAt: existing?.connectedAt || now,
-  });
+/**
+ * Usuário da equipe para presença/Quick Chat por REST. O sendBeacon (saída ao
+ * fechar a aba) não manda cabeçalho, então o token também é aceito no corpo.
+ * O userId do corpo só vale se for do próprio usuário do token.
+ */
+async function presenceRequestUser(req) {
+  let user = null;
+  if (req.headers.authorization?.startsWith('Bearer ')) {
+    user = await verifyUser(req).then((ctx) => ctx.user).catch(() => null);
+  }
+  if (!user && typeof req.body?.token === 'string') {
+    const auth = await authenticateSocketToken(req.body.token);
+    user = auth?.user || null;
+  }
+  if (!user) return null;
+  const ids = await presenceIdsForUser(user);
+  const ownId = (id) => (id && ids.has(String(id)) ? String(id) : null);
+  return { user, ids, ownId };
+}
+
+app.post('/api/presence/heartbeat', async (req, res) => {
+  const auth = await presenceRequestUser(req);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  const userId = auth.ownId(req.body?.userId) || String(auth.user.id);
+  setPresenceHeartbeat(userId);
   // Broadcast to WebSocket clients
   broadcastPresence();
   res.json({ ok: true });
 });
 
-app.post('/api/presence/leave', (req, res) => {
-  const { userId } = req.body;
-  if (userId) presenceState.delete(userId);
+app.post('/api/presence/leave', async (req, res) => {
+  const auth = await presenceRequestUser(req);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  const userId = auth.ownId(req.body?.userId) || String(auth.user.id);
+  presenceState.delete(userId);
   broadcastPresence();
   res.json({ ok: true });
 });
 
 // ─── Quick Chat REST endpoint ──────────────────────────────
-app.post('/api/quick-chat', (req, res) => {
-  const { fromUserId, toUserId, message } = req.body;
-  if (!fromUserId || !toUserId || !message) {
+app.post('/api/quick-chat', async (req, res) => {
+  const auth = await presenceRequestUser(req);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  const { toUserId, message } = req.body;
+  // Remetente é sempre o usuário do token (o fromUserId do corpo só vale se for dele)
+  const fromUserId = auth.ownId(req.body?.fromUserId) || String(auth.user.id);
+  if (!toUserId || !message) {
     return res.status(400).json({ error: 'fromUserId, toUserId, message required' });
   }
   const payload = {
-    id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: String(req.body?.id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`),
     fromUserId,
-    toUserId,
-    message,
+    toUserId: String(toUserId),
+    message: String(message).slice(0, 4000),
     createdAt: new Date().toISOString(),
   };
-  // Broadcast to all WS clients
+  // Só para as abas do remetente e do destinatário
   broadcastQuickMessage(payload);
   res.json({ ok: true, message: payload });
 });
@@ -12656,37 +13155,71 @@ app.get('/api/promo/campaigns/:id/redemptions', async (req, res) => {
 
 // WebSocketServer already uses the global server instance initialized at the top
 
-const wss = new WebSocketServer({ server, path: '/api/realtime' });
+// Os três servidores usam `noServer` e um único listener de 'upgrade' que
+// despacha pelo caminho. Antes cada um tinha `{ server, path }`: no ws 8 o que
+// não era dono do caminho respondia 400 no mesmo socket e derrubava os outros
+// (presença, Quick Chat e realtime nunca funcionavam).
+const wssOffice = new WebSocketServer({ noServer: true });
+// /api/realtime (o front usa VPS_API_BASE + '/realtime') e /realtime caem no
+// mesmo servidor: relay de canais + avisos globais da equipe (broadcastToAll).
+const realtimeWss = new WebSocketServer({ noServer: true });
 
-wss.on('connection', (ws) => {
-  wssClients.add(ws);
-  ws.on('close', () => wssClients.delete(ws));
-  ws.on('error', () => wssClients.delete(ws));
-  
-  ws.on('message', (message) => {
-    try {
-      const data = JSON.parse(message);
-      if (data.type === 'subscribe') {
-        // Auth already handled by verifyUser on first REST call, 
-        // we keep it simple for now as it's a internal local network VPS.
-        ws.subscribedChannels = ws.subscribedChannels || new Set();
-        ws.subscribedChannels.add(data.channel);
-        return;
-      }
-      // channel.send() do front (ex.: Copy avisa 'copy_task_change'): repassa a quem
-      // assina o mesmo canal. Eventos 'crm:*' só saem do servidor (broadcastToAll).
-      if (data.type === 'broadcast' && typeof data.channel === 'string' && typeof data.event === 'string' && !data.event.startsWith('crm:')) {
-        const payload = JSON.stringify({ type: 'broadcast', channel: data.channel, event: data.event, payload: data.payload ?? null });
-        for (const client of wssClients) {
-          if (client === ws || client.readyState !== 1 || !client.subscribedChannels?.has(data.channel)) continue;
-          try { client.send(payload); } catch { /* ignore */ }
-        }
-      }
-    } catch (e) {}
-  });
+server.on('upgrade', (req, socket, head) => {
+  let pathname = '';
+  try {
+    pathname = new URL(req.url || '/', 'http://localhost').pathname.replace(/\/+$/, '');
+  } catch { /* caminho inválido */ }
+  const target = pathname === '/ws/office'
+    ? wssOffice
+    : (pathname === '/api/realtime' || pathname === '/realtime') ? realtimeWss : null;
+  if (!target) {
+    socket.destroy();
+    return;
+  }
+  target.handleUpgrade(req, socket, head, (ws) => target.emit('connection', ws, req));
 });
 
-const wssOffice = new WebSocketServer({ server, path: '/ws/office' });
+// ── Autenticação dos WebSockets ──
+// O token vai na primeira mensagem ({ type: 'auth', token } ou no 'subscribe'
+// do realtime), não na URL, para não ficar nos logs do Nginx. Sem token
+// válido em WS_AUTH_TIMEOUT_MS a conexão é fechada.
+const WS_AUTH_TIMEOUT_MS = 10_000;
+const presenceIdsCache = new Map();
+
+/** Ids que representam o mesmo usuário (profiles/auth_users), com cache curto. */
+async function presenceIdsForUser(user) {
+  const key = String(user?.id || '');
+  if (!key) return new Set();
+  const cached = presenceIdsCache.get(key);
+  if (cached && Date.now() - cached.at < 60_000) return cached.ids;
+  const ids = new Set((await getLinkedUserIds(user).catch(() => [key])).map(String));
+  ids.add(key);
+  presenceIdsCache.set(key, { ids, at: Date.now() });
+  if (presenceIdsCache.size > 2000) presenceIdsCache.delete(presenceIdsCache.keys().next().value);
+  return ids;
+}
+
+async function authenticateSocketToken(token) {
+  if (!token || typeof token !== 'string') return null;
+  try {
+    const decoded = verifyToken(token);
+    if (!decoded?.sub) return null;
+    const user = { id: String(decoded.sub), email: decoded.email || null };
+    return { user, ids: await presenceIdsForUser(user) };
+  } catch {
+    return null;
+  }
+}
+
+function armSocketAuthTimeout(ws) {
+  const timer = setTimeout(() => {
+    if (!ws._pulseUser) {
+      try { ws.close(4401, 'unauthorized'); } catch { /* ignore */ }
+    }
+  }, WS_AUTH_TIMEOUT_MS);
+  timer.unref?.();
+  ws.on('close', () => clearTimeout(timer));
+}
 
 const wsClients = new Set();
 
@@ -12698,36 +13231,77 @@ function broadcastPresence() {
   }
 }
 
+/** Quick Chat: só para as abas do remetente e do destinatário (antes ia para todos). */
 function broadcastQuickMessage(payload) {
   const msg = JSON.stringify({ type: 'quick_message', payload });
+  const from = String(payload?.fromUserId || '');
+  const to = String(payload?.toUserId || '');
   for (const ws of wsClients) {
+    const ids = ws._pulseIds;
+    if (!ids || !(ids.has(from) || ids.has(to))) continue;
     try { if (ws.readyState === 1) ws.send(msg); } catch { /* ignore */ }
   }
 }
 
+function setPresenceHeartbeat(userId) {
+  const now = new Date().toISOString();
+  const existing = presenceState.get(userId);
+  presenceState.set(userId, {
+    userId,
+    heartbeatAt: now,
+    connectedAt: existing?.connectedAt || now,
+  });
+}
+
 wssOffice.on('connection', (ws) => {
-  wsClients.add(ws);
+  armSocketAuthTimeout(ws);
+  let authPromise = null;
 
-  // Send current presence immediately
-  const online = collectOnlinePresenceUsers();
-  ws.send(JSON.stringify({ type: 'presence_sync', users: online }));
+  ws.on('message', async (raw) => {
+    let data;
+    try { data = JSON.parse(raw.toString()); } catch { return; }
+    if (!data || typeof data !== 'object') return;
 
-  ws.on('message', (raw) => {
+    if (data.type === 'auth') {
+      if (ws._pulseUser) return;
+      authPromise = authPromise || authenticateSocketToken(data.token);
+      const auth = await authPromise;
+      if (!auth) {
+        try { ws.close(4401, 'unauthorized'); } catch { /* ignore */ }
+        return;
+      }
+      ws._pulseUser = auth.user;
+      ws._pulseIds = auth.ids;
+      wsClients.add(ws);
+      // Send current presence immediately
+      try { ws.send(JSON.stringify({ type: 'presence_sync', users: collectOnlinePresenceUsers() })); } catch { /* ignore */ }
+      return;
+    }
+
+    if (authPromise && !ws._pulseUser) await authPromise;
+    if (!ws._pulseUser) return; // sem login não marca presença nem manda mensagem
+
     try {
-      const data = JSON.parse(raw.toString());
-      if (data.type === 'heartbeat' && data.userId) {
-        const existing = presenceState.get(data.userId);
-        presenceState.set(data.userId, {
-          userId: data.userId,
-          heartbeatAt: new Date().toISOString(),
-          connectedAt: existing?.connectedAt || new Date().toISOString(),
-        });
+      // O id do corpo só vale se for do próprio usuário do token
+      const ownId = (id) => (id && ws._pulseIds?.has(String(id)) ? String(id) : null);
+      if (data.type === 'heartbeat') {
+        const userId = ownId(data.userId) || ws._pulseUser.id;
+        setPresenceHeartbeat(userId);
         broadcastPresence();
-      } else if (data.type === 'leave' && data.userId) {
-        presenceState.delete(data.userId);
+      } else if (data.type === 'leave') {
+        const userId = ownId(data.userId) || ws._pulseUser.id;
+        presenceState.delete(userId);
         broadcastPresence();
       } else if (data.type === 'quick_message') {
-        broadcastQuickMessage(data.payload);
+        const payload = data.payload || {};
+        if (!ownId(payload.fromUserId) || !payload.toUserId || !payload.message) return;
+        broadcastQuickMessage({
+          id: String(payload.id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`),
+          fromUserId: String(payload.fromUserId),
+          toUserId: String(payload.toUserId),
+          message: String(payload.message).slice(0, 4000),
+          createdAt: payload.createdAt || new Date().toISOString(),
+        });
       }
     } catch { /* ignore malformed messages */ }
   });
@@ -12737,12 +13311,13 @@ wssOffice.on('connection', (ws) => {
 });
 
 // ─── Generic Realtime Channel Relay (WebSocket) ─────────
-// Client (src/lib/vpsDb.ts ChannelBuilder) connects to /realtime,
+// Client (src/lib/vpsDb.ts ChannelBuilder) connects to /api/realtime,
 // sends { type:'subscribe', channel, token, events } then
 // { type:'broadcast', channel, event, payload }.
 // Server relays broadcast frames to every other socket subscribed to that channel.
+// Só sockets autenticados (token no 'auth' ou no 'subscribe') entram nos canais
+// e recebem os avisos globais (broadcastToAll → wssClients).
 
-const realtimeWss = new WebSocketServer({ server, path: '/realtime' });
 // channel name -> Set<ws>
 const realtimeChannels = new Map();
 
@@ -12783,11 +13358,35 @@ function relayBroadcast(channel, event, payload, senderWs) {
 
 realtimeWss.on('connection', (ws) => {
   ws._pulseChannels = new Set();
+  armSocketAuthTimeout(ws);
+  let authPromise = null;
 
-  ws.on('message', (raw) => {
+  const ensureAuth = async (token) => {
+    if (ws._pulseUser) return true;
+    if (!authPromise && token) authPromise = authenticateSocketToken(token);
+    const auth = authPromise ? await authPromise : null;
+    if (!auth) return false;
+    if (!ws._pulseUser) {
+      ws._pulseUser = auth.user;
+      wssClients.add(ws);
+    }
+    return true;
+  };
+
+  ws.on('message', async (raw) => {
     let data;
     try { data = JSON.parse(raw.toString()); } catch { return; }
     if (!data || typeof data !== 'object') return;
+
+    if (data.type === 'auth' || data.type === 'subscribe') {
+      if (!(await ensureAuth(data.token))) {
+        try { ws.close(4401, 'unauthorized'); } catch { /* ignore */ }
+        return;
+      }
+      if (data.type === 'auth') return;
+    } else if (!(await ensureAuth(null))) {
+      return; // nada antes do login
+    }
 
     if (data.type === 'subscribe' && typeof data.channel === 'string') {
       subscribeSocketToChannel(ws, data.channel);
@@ -12805,7 +13404,8 @@ realtimeWss.on('connection', (ws) => {
       return;
     }
 
-    if (data.type === 'broadcast' && typeof data.channel === 'string' && typeof data.event === 'string') {
+    // Eventos 'crm:*' só saem do servidor (broadcastToAll), nunca de um cliente
+    if (data.type === 'broadcast' && typeof data.channel === 'string' && typeof data.event === 'string' && !data.event.startsWith('crm:')) {
       // Ensure sender is subscribed so they receive future broadcasts too
       if (!ws._pulseChannels?.has(data.channel)) subscribeSocketToChannel(ws, data.channel);
       relayBroadcast(data.channel, data.event, data.payload, ws);
@@ -12817,8 +13417,8 @@ realtimeWss.on('connection', (ws) => {
     }
   });
 
-  ws.on('close', () => { unsubscribeSocketFromAll(ws); });
-  ws.on('error', () => { unsubscribeSocketFromAll(ws); });
+  ws.on('close', () => { wssClients.delete(ws); unsubscribeSocketFromAll(ws); });
+  ws.on('error', () => { wssClients.delete(ws); unsubscribeSocketFromAll(ws); });
 });
 
 // Server-side helper to emit into a realtime channel (usable from any HTTP route)
@@ -13745,7 +14345,8 @@ function sanitizeUploadFolder(raw) {
 const uploadStorage = multer.diskStorage({
   destination(req, _file, cb) {
     try {
-      const folder = sanitizeUploadFolder(req.body?.folder);
+      // Rotas públicas fixam a pasta (ex.: banco de clientes); as demais usam o campo folder.
+      const folder = req.forcedUploadFolder ?? sanitizeUploadFolder(req.body?.folder);
       const dest = path.resolve(UPLOAD_ROOT, folder);
       if (!dest.startsWith(path.resolve(UPLOAD_ROOT))) return cb(new Error('Pasta inválida'));
       fs.mkdirSync(dest, { recursive: true });
@@ -13761,18 +14362,114 @@ const uploadStorage = multer.diskStorage({
   },
 });
 
+function uploadExtension(originalname) {
+  return path.extname(originalname || '').toLowerCase().replace(/[^.a-z0-9]/g, '');
+}
+
+// Extensões que o navegador executaria se o arquivo fosse aberto direto em
+// /uploads (mesmo domínio do app, onde fica o JWT da equipe): nunca aceitar.
+const BLOCKED_UPLOAD_EXTENSIONS = new Set([
+  '.html', '.htm', '.xhtml', '.xht', '.shtml', '.mht', '.mhtml',
+  '.js', '.mjs', '.cjs', '.php', '.phtml', '.phar', '.hta',
+]);
+
+// Mídias aceitas nos envios sem login da equipe (portal e links públicos).
+const PUBLIC_MEDIA_EXTENSIONS = new Set([
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif', '.avif', '.bmp',
+  '.mp4', '.mov', '.m4v', '.webm', '.mkv', '.avi', '.3gp',
+  '.mp3', '.m4a', '.aac', '.wav', '.ogg', '.oga', '.opus', '.flac',
+]);
+
+function isPublicMediaUpload(file) {
+  const ext = uploadExtension(file?.originalname);
+  const mime = String(file?.mimetype || '').toLowerCase();
+  if (ext === '.svg' || ext === '.xml' || mime.includes('svg') || mime.includes('xml')) return false;
+  if (PUBLIC_MEDIA_EXTENSIONS.has(ext)) return true;
+  return /^(image|video|audio)\//.test(mime);
+}
+
+// Pastas que o portal do cliente (sem login da equipe) usa na panfletagem:
+// flyers/<client_id>[/generated] e panfletagem/<client_id>[/generated].
+const PORTAL_UPLOAD_FOLDER_RE = /^(?:flyers|panfletagem)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/generated)?$/i;
+
+function uploadRejection(status, message, code) {
+  return Object.assign(new Error(message), { status, code });
+}
+
+function uploadFileFilter(req, file, cb) {
+  if (BLOCKED_UPLOAD_EXTENSIONS.has(uploadExtension(file?.originalname))) {
+    return cb(uploadRejection(415, 'Tipo de arquivo não permitido', 'BLOCKED_FILE_TYPE'));
+  }
+  // Equipe logada: qualquer tipo (designers enviam .ai, .psd, .svg, .xml...).
+  if (!req.uploadPublicScope) return cb(null, true);
+
+  if (!isPublicMediaUpload(file)) {
+    return cb(uploadRejection(415, 'Envie apenas fotos, vídeos ou áudios', 'BLOCKED_FILE_TYPE'));
+  }
+  if (req.uploadPublicScope !== 'portal') return cb(null, true);
+
+  // Portal: só as pastas da panfletagem de um cliente que existe.
+  const match = PORTAL_UPLOAD_FOLDER_RE.exec(sanitizeUploadFolder(req.body?.folder));
+  if (!match) {
+    // Sem Authorization nenhum e fora da panfletagem: é uma aba da equipe aberta
+    // antes do deploy (o vpsApi antigo não mandava o login). "Faça login" confundia
+    // quem está logado; a saída é atualizar a página. A mensagem não pode conter
+    // "indisponível" (o front antigo repetiria o envio inteiro).
+    if (!req.headers.authorization) {
+      return cb(uploadRejection(401, 'Há uma versão nova do sistema: atualize a página e envie de novo', 'CLIENT_OUTDATED'));
+    }
+    return cb(uploadRejection(401, 'Faça login para enviar arquivos', 'UNAUTHORIZED'));
+  }
+  pool.query('SELECT 1 FROM clients WHERE id::text = lower($1) LIMIT 1', [match[1]])
+    .then(({ rows }) => (rows.length
+      ? cb(null, true)
+      : cb(uploadRejection(404, 'Cliente não encontrado', 'CLIENT_NOT_FOUND'))))
+    .catch((error) => cb(error));
+}
+
 const uploadHandler = multer({
   storage: uploadStorage,
-  limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // 2 GB
+  fileFilter: uploadFileFilter,
+  limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // 2 GB (equipe logada)
+});
+
+// Envios sem login da equipe (portal do cliente e banco de clientes público).
+const publicUploadHandler = multer({
+  storage: uploadStorage,
+  fileFilter: uploadFileFilter,
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB
 });
 
 function uploadErrorStatus(error) {
+  if (error?.status) return error.status;
   if (error?.code === 'LIMIT_FILE_SIZE') return 413;
   if (error?.code === 'ENOSPC') return 507;
   return 500;
 }
 
-app.get('/api/upload-health', (_req, res) => {
+/**
+ * Caminho relativo a /uploads/ a partir do que o front manda no DELETE:
+ * URL completa (https://agenciapulse.tech/uploads/...), '/uploads/...',
+ * 'uploads/...' ou só o relativo ('content/...').
+ */
+function uploadDeleteRelativePath(rawPath) {
+  const raw = String(rawPath || '').trim();
+  if (!raw) return null;
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      if (new URL(raw).origin !== 'https://agenciapulse.tech') return null;
+    } catch {
+      return null;
+    }
+    return uploadRelativePath(raw);
+  }
+  const relative = raw.replace(/^\/+/, '').replace(/^uploads\//, '');
+  return uploadRelativePath(`/uploads/${relative}`);
+}
+
+app.get('/api/upload-health', async (req, res) => {
+  // Expõe caminho do disco e espaço livre: só admin
+  if (!(await requireAdminRoute(req, res))) return;
   try {
     fs.accessSync(UPLOAD_ROOT, fs.constants.R_OK | fs.constants.W_OK);
     const stats = fs.statfsSync(UPLOAD_ROOT);
@@ -13791,10 +14488,22 @@ app.get('/api/upload-health', (_req, res) => {
 // ─── Endpoint de Reparo e Diagnóstico Atômico ───────────────
 // Executa manutenções críticas no banco e filesystem sem deletar dados.
 // API Admin atomic repair
+/**
+ * Chave do reparo atômico (header X-Repair-Key contra REPAIR_KEY do .env).
+ * Não usa JWT de propósito: a rota existe para quando o login está quebrado.
+ * Sem REPAIR_KEY configurada a rota fica desligada (404).
+ */
+function repairKeyMatches(req) {
+  return secretMatches(process.env.REPAIR_KEY, req.headers['x-repair-key']);
+}
+
 app.post('/api/admin/repair-atomic', async (req, res) => {
+  if (!String(process.env.REPAIR_KEY || '').trim()) return res.status(404).json({ error: 'Not found' });
+  if (!repairKeyMatches(req)) return res.status(401).json({ error: 'Chave de reparo inválida' });
+
   try {
-    // Nota: O endpoint de reparo deve ser público ou usar uma chave secreta no header
-    // para permitir recuperação quando o JWT está expirado/inválido.
+    // Público só com a chave secreta no header (X-Repair-Key), para permitir
+    // recuperação quando o JWT está expirado/inválido.
     const results = [];
 
     // 1. Garantir colunas do CRM (Geladeira, etc)
@@ -13870,8 +14579,17 @@ app.post('/api/admin/repair-atomic', async (req, res) => {
   }
 });
 
-app.post('/api/upload', (req, res) => {
-  uploadHandler.single('file')(req, res, async (err) => {
+app.post('/api/upload', async (req, res) => {
+  // Equipe logada: qualquer pasta, até 2 GB. Sem login: só a panfletagem do
+  // portal do cliente (flyers/<id>, panfletagem/<id>), só mídia e até 500 MB.
+  let isTeamUpload = false;
+  if (req.headers.authorization?.startsWith('Bearer ')) {
+    isTeamUpload = await verifyUser(req).then(() => true).catch(() => false);
+  }
+  if (!isTeamUpload) req.uploadPublicScope = 'portal';
+  const handler = isTeamUpload ? uploadHandler : publicUploadHandler;
+
+  handler.single('file')(req, res, async (err) => {
     if (err) {
       console.error('[upload] error:', err);
       return res.status(uploadErrorStatus(err)).json({
@@ -13906,16 +14624,41 @@ app.post('/api/upload', (req, res) => {
   });
 });
 
-app.delete('/api/upload', express.json(), (req, res) => {
+app.delete('/api/upload', express.json(), async (req, res) => {
   try {
-    const raw = String(req.body?.path || '').replace(/^\/+/, '').replace(/^uploads\//, '');
-    const relative = sanitizeUploadFolder(raw);
-    if (!relative) return res.status(400).json({ error: 'Caminho inválido' });
+    await verifyUser(req);
+  } catch {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
 
-    const abs = path.resolve(UPLOAD_ROOT, relative);
-    if (!abs.startsWith(path.resolve(UPLOAD_ROOT))) return res.status(400).json({ error: 'Caminho inválido' });
-    if (fs.existsSync(abs)) fs.unlinkSync(abs);
-    res.json({ success: true });
+  try {
+    // Aceita a URL completa (o EditorDashboard manda https://agenciapulse.tech/uploads/...)
+    const relative = uploadDeleteRelativePath(req.body?.path);
+    if (!relative) return res.status(400).json({ error: 'Caminho inválido' });
+    const publicPath = `/uploads/${relative}`;
+
+    // Troca de vídeo: o mesmo arquivo pode estar publicado no portal do cliente.
+    if (req.body?.keep_if_referenced) {
+      const { rows } = await pool.query(
+        `SELECT 1 FROM client_portal_contents
+          WHERE right(coalesce(file_url, ''), length($1)) = $1
+             OR right(coalesce(thumbnail_url, ''), length($1)) = $1
+          LIMIT 1`,
+        [publicPath]
+      );
+      if (rows.length > 0) return res.json({ success: true, removed: false, skipped: 'referenced' });
+    }
+
+    let removed = 0;
+    for (const root of uploadRoots()) {
+      const candidate = path.resolve(root, relative);
+      if (!candidate.startsWith(`${root}${path.sep}`)) continue;
+      if (!fs.existsSync(candidate) || !fs.statSync(candidate).isFile()) continue;
+      fs.unlinkSync(candidate);
+      removed += 1;
+    }
+    if (removed === 0) return res.status(404).json({ error: 'Arquivo não encontrado', removed: false });
+    res.json({ success: true, removed: true });
   } catch (error) {
     console.error('[upload:delete] error:', error);
     res.status(500).json({ error: error.message || 'Falha ao remover arquivo' });
@@ -14148,6 +14891,7 @@ area["name"~"^${escapedArea}$",i]["boundary"="administrative"](area.state)->.sea
 //  3) Site oficial da empresa — varredura de tel:, mailto: e wa.me
 
 const ENRICH_CACHE = new Map();
+const ENRICH_CACHE_MAX = 5000;
 
 async function fetchJsonSafe(url, timeoutMs = 9000) {
   const controller = new AbortController();
@@ -14237,24 +14981,125 @@ function extractEmailsFromText(text = '') {
     .slice(0, 4);
 }
 
-async function fetchTextSafe(url, timeoutMs = 9000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const resp = await fetch(url, {
+// ─── Busca de páginas externas sem SSRF ───
+// O site vem do corpo do enriquecimento: nunca deixar a VPS acessar a própria
+// rede (127.0.0.1:3002, Postgres, metadados da nuvem...). O IP é conferido no
+// momento da conexão (lookup próprio), então DNS rebinding também não passa.
+function isPrivateAddress(address) {
+  if (net.isIPv4(address)) {
+    const [a, b] = address.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127
+      || (a === 100 && b >= 64 && b <= 127) // CGNAT
+      || (a === 169 && b === 254) // link-local / metadados
+      || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168)
+      || (a === 192 && b === 0)
+      || (a === 198 && (b === 18 || b === 19))
+      || a >= 224;
+  }
+  if (net.isIPv6(address)) {
+    const lower = address.toLowerCase();
+    if (lower === '::' || lower === '::1') return true;
+    const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (mapped) return isPrivateAddress(mapped[1]);
+    return /^(fc|fd|fe8|fe9|fea|feb|ff)/.test(lower);
+  }
+  return true;
+}
+
+function publicOnlyLookup(hostname, options, callback) {
+  dns.lookup(hostname, { ...options, all: true }, (error, addresses) => {
+    if (error) return callback(error);
+    const list = Array.isArray(addresses) ? addresses : [{ address: addresses, family: options?.family || 4 }];
+    if (!list.length || list.some((a) => isPrivateAddress(a.address))) {
+      return callback(Object.assign(new Error(`Endereço bloqueado: ${hostname}`), { code: 'EBLOCKEDHOST' }));
+    }
+    if (options?.all) return callback(null, list);
+    return callback(null, list[0].address, list[0].family);
+  });
+}
+
+function isAllowedExternalUrl(url) {
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+  if (url.username || url.password) return false;
+  if (url.port && !['80', '443'].includes(url.port)) return false;
+  const host = url.hostname.replace(/^\[|\]$/g, '');
+  if (net.isIP(host) && isPrivateAddress(host)) return false;
+  if (/^localhost$|\.localhost$|\.local$|\.internal$/i.test(host)) return false;
+  return true;
+}
+
+function requestExternalText(url, timeoutMs) {
+  return new Promise((resolve) => {
+    const client = url.protocol === 'https:' ? https : http;
+    const req = client.get(url, {
+      lookup: publicOnlyLookup,
+      timeout: timeoutMs,
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; PulseGrowthBot/1.0; +https://pulsegrowthmarketing.com)',
         'Accept-Language': 'pt-BR,pt;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
       },
-      signal: controller.signal,
-      redirect: 'follow',
+    }, (resp) => {
+      const status = resp.statusCode || 0;
+      if (status >= 300 && status < 400 && resp.headers.location) {
+        resp.resume();
+        return resolve({ redirect: resp.headers.location });
+      }
+      if (status < 200 || status >= 300) {
+        resp.resume();
+        return resolve(null);
+      }
+      const encoding = String(resp.headers['content-encoding'] || '').toLowerCase();
+      let stream = resp;
+      if (encoding.includes('br')) stream = resp.pipe(zlib.createBrotliDecompress());
+      else if (encoding.includes('gzip')) stream = resp.pipe(zlib.createGunzip());
+      else if (encoding.includes('deflate')) stream = resp.pipe(zlib.createInflate());
+      const chunks = [];
+      let size = 0;
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        resolve({ text: Buffer.concat(chunks).toString('utf8').slice(0, 500000) });
+      };
+      stream.on('data', (chunk) => {
+        chunks.push(chunk);
+        size += chunk.length;
+        // Mesmo teto de antes (500 mil caracteres): corta o download aí
+        if (size > 600000) {
+          finish();
+          req.destroy();
+        }
+      });
+      stream.on('end', finish);
+      stream.on('error', () => { if (!done) { done = true; resolve(null); } });
     });
-    if (!resp.ok) return null;
-    return (await resp.text()).slice(0, 500000);
+    req.on('timeout', () => req.destroy(new Error('timeout')));
+    req.on('error', () => resolve(null));
+  });
+}
+
+async function fetchTextSafe(url, timeoutMs = 9000) {
+  const deadline = Date.now() + timeoutMs;
+  try {
+    let current = new URL(url);
+    // Redirecionamentos seguidos à mão (até 3), revalidando cada destino
+    for (let hop = 0; hop <= 3; hop += 1) {
+      if (!isAllowedExternalUrl(current)) return null;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return null;
+      const result = await requestExternalText(current, remaining);
+      if (!result) return null;
+      if (result.redirect) {
+        current = new URL(result.redirect, current);
+        continue;
+      }
+      return result.text;
+    }
+    return null;
   } catch {
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -14357,7 +15202,9 @@ function registrarOrigem(origem, campo, valor, fonte) {
 }
 
 async function enrichCompany(company, opts = {}) {
-  const cacheKey = company.id;
+  // O resultado depende do site e do CNPJ enviados: entram na chave para um
+  // pedido com site falso não contaminar o cache do id real.
+  const cacheKey = `${company.id}|${company.website || ''}|${company.cnpj || ''}`;
   const cacheHit = ENRICH_CACHE.get(cacheKey);
   if (cacheHit && opts.force !== true) {
     return { ...company, ...cacheHit, cache: true };
@@ -14494,7 +15341,12 @@ async function enrichCompany(company, opts = {}) {
   patch.erros_fontes = erros;
   patch.enriquecido_em = new Date().toISOString();
 
+  ENRICH_CACHE.delete(cacheKey);
   ENRICH_CACHE.set(cacheKey, patch);
+  // Teto de memória: descarta os mais antigos
+  while (ENRICH_CACHE.size > ENRICH_CACHE_MAX) {
+    ENRICH_CACHE.delete(ENRICH_CACHE.keys().next().value);
+  }
   return { ...company, ...patch, cache: false };
 }
 
@@ -14637,6 +15489,12 @@ async function enrichCompanies(companies, maxItems = 400, concurrency = 10, opts
 
 app.post('/api/crm/harvest/search', async (req, res) => {
   try {
+    await verifyUser(req);
+  } catch {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
     const { city, location, niche, term, limit, state, onlyWithContact } = req.body || {};
 
     const cityName = city && city !== 'all' ? String(city).trim() : '';
@@ -14777,6 +15635,12 @@ app.post('/api/crm/harvest/search', async (req, res) => {
 // Enriquecimento sob demanda dos leads selecionados (botão "Enriquecer leads")
 app.post('/api/crm/harvest/enrich', async (req, res) => {
   try {
+    await verifyUser(req);
+  } catch {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
     const entrada = Array.isArray(req.body?.companies) ? req.body.companies : [];
     if (!entrada.length) return res.status(400).json({ error: 'Nenhuma empresa enviada para enriquecimento.' });
     if (entrada.length > 200) return res.status(400).json({ error: 'Selecione no máximo 200 empresas por vez.' });
@@ -14866,18 +15730,33 @@ function sanitizeText(value, max = 500) {
 }
 
 /** Upload público de mídia, restrito a um token de compartilhamento válido. */
-app.post('/api/public/client-database/:token/upload', (req, res) => {
-  uploadHandler.single('file')(req, res, async (err) => {
+app.post('/api/public/client-database/:token/upload', async (req, res) => {
+  // Valida o token ANTES de gravar qualquer coisa no disco.
+  try {
+    await resolveShareClientId(req.params.token);
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message || 'Falha no upload' });
+  }
+  req.uploadPublicScope = 'client-database';
+  req.forcedUploadFolder = 'client-database';
+
+  publicUploadHandler.single('file')(req, res, async (err) => {
+    const discardFile = () => {
+      try { if (req.file?.path) fs.unlinkSync(req.file.path); } catch {}
+    };
     try {
-      if (err) return res.status(uploadErrorStatus(err)).json({ error: err.message || 'Falha no upload' });
+      if (err) {
+        discardFile();
+        return res.status(uploadErrorStatus(err)).json({ error: err.message || 'Falha no upload' });
+      }
       if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
-      await resolveShareClientId(req.params.token);
       const relative = path
         .relative(path.resolve(UPLOAD_ROOT), req.file.path)
         .split(path.sep)
         .join('/');
       return res.json({ path: relative, url: `/uploads/${relative}` });
     } catch (error) {
+      discardFile();
       console.error('[public-clientdb:upload]', error);
       return res.status(error.status || 500).json({ error: error.message || 'Falha no upload' });
     }

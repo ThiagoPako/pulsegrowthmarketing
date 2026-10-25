@@ -14,6 +14,16 @@ export interface QuickMessage {
 const WS_URL = 'wss://agenciapulse.tech/ws/office';
 const REST_BASE = 'https://agenciapulse.tech/api';
 
+/** Authorization da equipe para as rotas REST de presença e chat. */
+function authHeaders(): Record<string, string> {
+  try {
+    const token = localStorage.getItem('pulse_jwt');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 let _ws: WebSocket | null = null;
 let _connecting = false;
 let _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -54,6 +64,11 @@ function connectWs() {
 
   _ws.onopen = () => {
     _connecting = false;
+    // O servidor só aceita o socket depois do token (primeira mensagem, fora da URL)
+    try {
+      const token = localStorage.getItem('pulse_jwt');
+      if (token) _ws?.send(JSON.stringify({ type: 'auth', token }));
+    } catch { /* ignore */ }
     // If we have a userId, immediately send heartbeat
     if (_currentUserId) {
       _ws?.send(JSON.stringify({ type: 'heartbeat', userId: _currentUserId }));
@@ -93,7 +108,7 @@ let _pollTimer: ReturnType<typeof setInterval> | null = null;
 
 async function pollPresenceRest() {
   try {
-    const res = await fetch(`${REST_BASE}/presence`);
+    const res = await fetch(`${REST_BASE}/presence`, { headers: authHeaders() });
     if (!res.ok) return;
     const data = await res.json();
     _presenceUsers = data.users || [];
@@ -236,7 +251,10 @@ export function getConversationKey(a: string, b: string) {
 export function sendLeaveBeacon(userId: string) {
   try {
     const url = `${REST_BASE}/presence/leave`;
-    const body = JSON.stringify({ userId });
+    // sendBeacon não manda cabeçalho: o token vai no corpo
+    let token: string | null = null;
+    try { token = localStorage.getItem('pulse_jwt'); } catch { /* ignore */ }
+    const body = JSON.stringify({ userId, token });
     if (navigator.sendBeacon) {
       navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
     } else {
@@ -249,7 +267,7 @@ export function sendLeaveBeacon(userId: string) {
 /** Fetch presence via REST (polling fallback when WS is down) */
 export async function fetchPresenceRest(): Promise<any[]> {
   try {
-    const res = await fetch(`${REST_BASE}/presence`);
+    const res = await fetch(`${REST_BASE}/presence`, { headers: authHeaders() });
     const data = await res.json();
     return data.users || [];
   } catch {

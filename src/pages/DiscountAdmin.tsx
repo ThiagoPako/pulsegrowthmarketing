@@ -117,7 +117,7 @@ export default function DiscountAdmin() {
       const campaignResults = await Promise.all(
         safeClients.map(async (client) => {
           try {
-            const res = await fetch(`${VPS_API}/discount-stats/${client.id}`);
+            const res = await fetch(`${VPS_API}/discount-stats/${client.id}`, { headers: getVpsAuthHeaders() });
             const data = await res.json();
             return data.campaigns || [];
           } catch {

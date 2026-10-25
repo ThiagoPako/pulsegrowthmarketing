@@ -238,7 +238,7 @@ export function useFinancialData() {
     if (eRes.data) setExpenses(eRes.data as any);
     else if (eRes.error) console.error('[useFinancialData] expenses fetch error:', eRes.error);
     if (catRes.data) setCategories(catRes.data as any);
-    if (pRes.data?.[0]) setPaymentConfigState(pRes.data[0] as any);
+    if (Array.isArray(pRes.data)) setPaymentConfigState((pRes.data[0] as any) || null);
     if (bRes.data) {
       setBillingMessages((bRes.data as any[]).filter(m => activeClientIds.has(m.client_id)));
     }
@@ -812,11 +812,24 @@ export function useFinancialData() {
 
   // Payment config
   const updatePaymentConfig = async (config: Partial<PaymentConfig>) => {
+    let error: any = null;
     if (paymentConfig) {
-      await supabase.from('payment_config').update(config as any).eq('id', paymentConfig.id);
-      await logActivity('edição', 'configuração', 'Atualizou configurações de pagamento');
+      ({ error } = await supabase.from('payment_config').update(config as any).eq('id', paymentConfig.id));
+    } else {
+      // Cidade ainda sem config (ex.: Uruaçu): cria a linha — o servidor grava a
+      // cidade ativa. Templates vazios ficam com o padrão do banco.
+      const payload = Object.fromEntries(
+        Object.entries(config).filter(([key, value]) => !(key.startsWith('msg_') && value === ''))
+      );
+      ({ error } = await supabase.from('payment_config').insert(payload as any));
     }
+    if (error) {
+      console.error('[useFinancialData] updatePaymentConfig error:', error);
+      return false;
+    }
+    await logActivity('edição', 'configuração', 'Atualizou configurações de pagamento');
     await fetchAll();
+    return true;
   };
 
   // Cash reserve

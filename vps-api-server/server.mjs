@@ -7921,37 +7921,188 @@ function sanitizeOrderColumn(column, fallbackTable) {
   return `${fallbackTable}.${sanitizeIdentifier(raw)}`;
 }
 
-function qualifyBaseSelectClause(selectClause, baseTable, joins = []) {
-  const raw = String(selectClause || '*').trim();
-  if (!raw || raw === '*') return `${baseTable}.*`;
+function dbQueryError(message, statusCode = 400) {
+  const err = new Error(message);
+  err.statusCode = statusCode;
+  return err;
+}
 
-  const joinTables = new Set(
-    (Array.isArray(joins) ? joins : [])
-      .map((join) => sanitizeIdentifier(join?.table || ''))
-      .filter(Boolean)
-  );
+// Colunas que nunca saem pelo /api/db/query (hash de senha da equipe e do portal).
+const DB_QUERY_HIDDEN_COLUMNS = {
+  profiles: ['password_hash', 'profile_password_hash', 'auth_password_hash'],
+  clients: ['client_password_hash'],
+};
 
-  return raw
-    .split(',')
-    .map((part) => part.trim())
-    .filter(Boolean)
+// Colunas que só quem gerencia a equipe enxerga (a pessoa sempre vê a própria linha).
+const DB_QUERY_MANAGER_COLUMNS = {
+  profiles: ['monthly_salary'],
+};
+
+/**
+ * Lista fechada para o campo `select` do /api/db/query.
+ * Aceita só o que o src/lib/vpsDb.ts (_parseSelect) gera: `*`, `col`,
+ * `col as alias`, `tabela.*` e `tabela.col as alias`, onde `tabela` é a base
+ * ou um join já aceito. Qualquer outra coisa (parênteses, aspas, `;`, `--`,
+ * subconsulta, função) volta 400 — antes o texto ia cru para o SQL.
+ */
+function buildSafeSelectClause(selectClause, baseTable, joinTables = []) {
+  const raw = selectClause === undefined || selectClause === null ? '*' : selectClause;
+  if (typeof raw !== 'string') throw dbQueryError('Campo "select" inválido.');
+  const allowedTables = new Set([baseTable, ...joinTables]);
+  const parts = raw.split(',').map((part) => part.trim()).filter(Boolean);
+  if (parts.length === 0) return `${baseTable}.*`;
+
+  return parts
     .map((part) => {
-      if (part === '*') return `${baseTable}.*`;
-      if (part.includes('.') || part.includes('(') || part.includes(')')) return part;
-
-      const aliasMatch = part.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s+as\s+([a-zA-Z_][a-zA-Z0-9_]*)$/i);
-      if (aliasMatch) {
-        const column = sanitizeIdentifier(aliasMatch[1]);
-        const alias = sanitizeIdentifier(aliasMatch[2]);
-        if (joinTables.has(column)) return part;
-        return `${baseTable}.${column} AS ${alias}`;
+      const match = part.match(/^(?:([a-z_][a-z0-9_]*)\.)?([a-z_][a-z0-9_]*|\*)(?:\s+as\s+([a-z_][a-z0-9_]*))?$/i);
+      if (!match) throw dbQueryError(`Item inválido no select: "${part.slice(0, 60)}"`);
+      const [, prefix, column, alias] = match;
+      const tableName = prefix || baseTable;
+      if (!allowedTables.has(tableName)) throw dbQueryError(`Tabela "${tableName}" não faz parte da consulta.`);
+      if (column === '*') {
+        if (alias) throw dbQueryError('Alias não é aceito em "*".');
+        return `${tableName}.*`;
       }
-
-      const safeColumn = sanitizeIdentifier(part);
-      return safeColumn ? `${baseTable}.${safeColumn}` : part;
+      // A limpeza da resposta é pelo nome da coluna: coluna protegida não pode ganhar outro nome.
+      const protectedColumns = [
+        ...(DB_QUERY_HIDDEN_COLUMNS[tableName] || []),
+        ...(DB_QUERY_MANAGER_COLUMNS[tableName] || []),
+      ];
+      if (alias && alias.toLowerCase() !== column.toLowerCase() && protectedColumns.includes(column.toLowerCase())) {
+        throw dbQueryError(`A coluna "${column}" não pode ser renomeada.`);
+      }
+      return alias ? `${tableName}.${column} AS ${alias}` : `${tableName}.${column}`;
     })
     .join(', ');
 }
+
+/**
+ * Tira da resposta do /api/db/query as colunas sensíveis das tabelas envolvidas
+ * (base + joins). `ownIds` libera as colunas de gestor na própria linha de profiles.
+ */
+function stripDbQueryColumns(rows, tables, { canSeeManagerColumns = false, ownIds = [] } = {}) {
+  const hidden = new Set();
+  const managerOnly = new Set();
+  for (const table of tables) {
+    for (const column of DB_QUERY_HIDDEN_COLUMNS[table] || []) hidden.add(column);
+    if (!canSeeManagerColumns) {
+      for (const column of DB_QUERY_MANAGER_COLUMNS[table] || []) managerOnly.add(column);
+    }
+  }
+  if (hidden.size === 0 && managerOnly.size === 0) return rows;
+  const own = new Set((ownIds || []).map(String));
+  const isProfilesBase = tables[0] === 'profiles';
+  for (const row of Array.isArray(rows) ? rows : [rows]) {
+    if (!row || typeof row !== 'object') continue;
+    for (const column of hidden) delete row[column];
+    if (managerOnly.size > 0 && !(isProfilesBase && own.has(String(row.id)))) {
+      for (const column of managerOnly) delete row[column];
+    }
+  }
+  return rows;
+}
+
+/**
+ * Monta o WHERE do /api/db/query a partir dos filtros do vpsDb (eq, neq, gt, gte,
+ * lt, lte, like, ilike, is, in, contains, not, or). Usado por select, update e
+ * delete — antes o update só entendia eq/in e descartava o resto em silêncio
+ * (o `.is('assigned_to', null)` do "pegar vídeo" sumia). Operador desconhecido
+ * volta 400. Os placeholders seguem `params`, que pode já ter os valores do SET.
+ */
+function buildDbQueryWhere(filters, safeTable, params) {
+  const whereClauses = [];
+  if (filters === undefined || filters === null) return whereClauses;
+  if (!Array.isArray(filters)) throw dbQueryError('Filtros inválidos.');
+  const protectedColumns = new Set([
+    ...(DB_QUERY_HIDDEN_COLUMNS[safeTable] || []),
+    ...(DB_QUERY_MANAGER_COLUMNS[safeTable] || []),
+  ]);
+  const qualify = (rawColumn) => {
+    const col = sanitizeIdentifier(String(rawColumn || ''));
+    if (!col) throw dbQueryError('Filtro sem coluna.');
+    if (protectedColumns.has(col.toLowerCase())) throw dbQueryError(`Não é possível filtrar por "${col}".`);
+    return `${safeTable}.${col}`;
+  };
+  const param = (value) => {
+    params.push(value);
+    return `$${params.length}`;
+  };
+
+  for (const f of filters) {
+    if (!f || typeof f !== 'object') throw dbQueryError('Filtro inválido.');
+    switch (f.op) {
+      case 'eq': whereClauses.push(`${qualify(f.column)} = ${param(f.value)}`); break;
+      case 'neq': whereClauses.push(`${qualify(f.column)} != ${param(f.value)}`); break;
+      case 'gt': whereClauses.push(`${qualify(f.column)} > ${param(f.value)}`); break;
+      case 'gte': whereClauses.push(`${qualify(f.column)} >= ${param(f.value)}`); break;
+      case 'lt': whereClauses.push(`${qualify(f.column)} < ${param(f.value)}`); break;
+      case 'lte': whereClauses.push(`${qualify(f.column)} <= ${param(f.value)}`); break;
+      case 'like': whereClauses.push(`${qualify(f.column)} LIKE ${param(f.value)}`); break;
+      case 'ilike': whereClauses.push(`${qualify(f.column)} ILIKE ${param(f.value)}`); break;
+      case 'is': whereClauses.push(`${qualify(f.column)} IS ${f.value === null ? 'NULL' : 'NOT NULL'}`); break;
+      case 'in': whereClauses.push(`${qualify(f.column)} = ANY(${param(f.value)})`); break;
+      case 'contains': whereClauses.push(`${qualify(f.column)} @> ${param(f.value)}`); break;
+      case 'or': {
+        const orClauses = [];
+        for (const part of splitOrFilterParts(f.value)) {
+          const [rawColumn, rawOp, ...rawValueParts] = part.split('.');
+          const orColumn = sanitizeIdentifier(rawColumn || '');
+          const orOp = String(rawOp || '').trim();
+          const rawValue = rawValueParts.join('.');
+          if (!orColumn || !orOp) continue;
+
+          switch (orOp) {
+            case 'eq': orClauses.push(`${qualify(orColumn)} = ${param(rawValue)}`); break;
+            case 'neq': orClauses.push(`${qualify(orColumn)} != ${param(rawValue)}`); break;
+            case 'gt': orClauses.push(`${qualify(orColumn)} > ${param(rawValue)}`); break;
+            case 'gte': orClauses.push(`${qualify(orColumn)} >= ${param(rawValue)}`); break;
+            case 'lt': orClauses.push(`${qualify(orColumn)} < ${param(rawValue)}`); break;
+            case 'lte': orClauses.push(`${qualify(orColumn)} <= ${param(rawValue)}`); break;
+            case 'like': orClauses.push(`${qualify(orColumn)} LIKE ${param(rawValue)}`); break;
+            case 'ilike': orClauses.push(`${qualify(orColumn)} ILIKE ${param(rawValue)}`); break;
+            case 'is': orClauses.push(`${qualify(orColumn)} IS ${rawValue === 'null' ? 'NULL' : 'NOT NULL'}`); break;
+            case 'in': orClauses.push(`${qualify(orColumn)} = ANY(${param(parseFilterArray(rawValue))})`); break;
+          }
+        }
+        if (orClauses.length > 0) whereClauses.push(`(${orClauses.join(' OR ')})`);
+        break;
+      }
+      case 'not': {
+        const nestedOp = f.value?.op;
+        const nestedValue = f.value?.value;
+        if (nestedOp === 'is') {
+          whereClauses.push(`${qualify(f.column)} IS ${nestedValue === null ? 'NOT NULL' : 'NULL'}`);
+        } else if (nestedOp === 'in') {
+          whereClauses.push(`NOT (${qualify(f.column)} = ANY(${param(parseFilterArray(nestedValue))}))`);
+        } else {
+          whereClauses.push(`${qualify(f.column)} != ${param(nestedValue)}`);
+        }
+        break;
+      }
+      default:
+        throw dbQueryError(`Operador de filtro desconhecido: "${String(f.op).slice(0, 20)}"`);
+    }
+  }
+  return whereClauses;
+}
+
+/** Quem gerencia a equipe (mesmo critério do verifyTeamManager). */
+async function isTeamManagerUser(user) {
+  if (await isAdminUser(user)) return true;
+  return userHasAssignedRole(user, 'gestor_projetos');
+}
+
+async function getDbQueryStripOptions(user, tables) {
+  if (!tables.some((table) => DB_QUERY_MANAGER_COLUMNS[table])) return {};
+  const canSeeManagerColumns = await isTeamManagerUser(user);
+  const ownIds = canSeeManagerColumns ? [] : await getLinkedUserIds(user);
+  return { canSeeManagerColumns, ownIds };
+}
+
+// Funções do banco que o front chama por supabase.rpc(). Qualquer outra é recusada.
+const DB_QUERY_ALLOWED_RPC = new Set([
+  'notify_role', 'notify_user', 'increment_promotion_redemption', 'cleanup_old_portal_videos',
+]);
 
 function isCrmLeadManagementPayload(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
@@ -8122,19 +8273,20 @@ app.post('/api/db/query', async (req, res) => {
         if (safeTable === 'crm_leads') {
           await ensureCrmLeadsColumns();
         }
-        const selectClause = joins && Array.isArray(joins)
-          ? qualifyBaseSelectClause(select || '*', safeTable, joins)
-          : (select || '*');
+        // Só entram joins de tabela liberada; o select só pode citar a base e esses joins.
+        const acceptedJoins = (Array.isArray(joins) ? joins : [])
+          .filter((join) => join && ALLOWED_TABLES.includes(sanitizeIdentifier(String(join.table || ''))));
+        const joinTables = acceptedJoins.map((join) => sanitizeIdentifier(String(join.table)));
+        const selectClause = buildSafeSelectClause(select, safeTable, joinTables);
         let query = `SELECT ${selectClause} FROM ${safeTable}`;
 
         const params = [];
         let paramIdx = 1;
 
         // Handle joins
-        if (joins && Array.isArray(joins)) {
-          for (const join of joins) {
-            const joinTable = sanitizeIdentifier(join.table);
-            if (!ALLOWED_TABLES.includes(joinTable)) continue;
+        if (acceptedJoins.length > 0) {
+          for (const join of acceptedJoins) {
+            const joinTable = sanitizeIdentifier(String(join.table));
             const joinType = join.type === 'inner' ? 'INNER JOIN' : 'LEFT JOIN';
 
             // Support structured join (leftTable.leftColumn = rightTable.rightColumn)
@@ -8155,106 +8307,10 @@ app.post('/api/db/query', async (req, res) => {
           }
         }
 
-        // Handle filters
-        if (filters && Array.isArray(filters)) {
-          const whereClauses = [];
-          for (const f of filters) {
-            const col = sanitizeIdentifier(f.column);
-            switch (f.op) {
-              case 'eq': whereClauses.push(`${safeTable}.${col} = $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'neq': whereClauses.push(`${safeTable}.${col} != $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'gt': whereClauses.push(`${safeTable}.${col} > $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'gte': whereClauses.push(`${safeTable}.${col} >= $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'lt': whereClauses.push(`${safeTable}.${col} < $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'lte': whereClauses.push(`${safeTable}.${col} <= $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'like': whereClauses.push(`${safeTable}.${col} LIKE $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'ilike': whereClauses.push(`${safeTable}.${col} ILIKE $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'is': whereClauses.push(`${safeTable}.${col} IS ${f.value === null ? 'NULL' : 'NOT NULL'}`); break;
-              case 'in': whereClauses.push(`${safeTable}.${col} = ANY($${paramIdx})`); params.push(f.value); paramIdx++; break;
-              case 'contains': whereClauses.push(`${safeTable}.${col} @> $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'or': {
-                const orClauses = [];
-                for (const part of splitOrFilterParts(f.value)) {
-                  const [rawColumn, rawOp, ...rawValueParts] = part.split('.');
-                  const orColumn = sanitizeIdentifier(rawColumn || '');
-                  const orOp = String(rawOp || '').trim();
-                  const rawValue = rawValueParts.join('.');
-                  if (!orColumn || !orOp) continue;
-
-                  switch (orOp) {
-                    case 'eq':
-                      orClauses.push(`${safeTable}.${orColumn} = $${paramIdx}`);
-                      params.push(rawValue);
-                      paramIdx++;
-                      break;
-                    case 'neq':
-                      orClauses.push(`${safeTable}.${orColumn} != $${paramIdx}`);
-                      params.push(rawValue);
-                      paramIdx++;
-                      break;
-                    case 'gt':
-                      orClauses.push(`${safeTable}.${orColumn} > $${paramIdx}`);
-                      params.push(rawValue);
-                      paramIdx++;
-                      break;
-                    case 'gte':
-                      orClauses.push(`${safeTable}.${orColumn} >= $${paramIdx}`);
-                      params.push(rawValue);
-                      paramIdx++;
-                      break;
-                    case 'lt':
-                      orClauses.push(`${safeTable}.${orColumn} < $${paramIdx}`);
-                      params.push(rawValue);
-                      paramIdx++;
-                      break;
-                    case 'lte':
-                      orClauses.push(`${safeTable}.${orColumn} <= $${paramIdx}`);
-                      params.push(rawValue);
-                      paramIdx++;
-                      break;
-                    case 'like':
-                      orClauses.push(`${safeTable}.${orColumn} LIKE $${paramIdx}`);
-                      params.push(rawValue);
-                      paramIdx++;
-                      break;
-                    case 'ilike':
-                      orClauses.push(`${safeTable}.${orColumn} ILIKE $${paramIdx}`);
-                      params.push(rawValue);
-                      paramIdx++;
-                      break;
-                    case 'is':
-                      orClauses.push(`${safeTable}.${orColumn} IS ${rawValue === 'null' ? 'NULL' : 'NOT NULL'}`);
-                      break;
-                    case 'in':
-                      orClauses.push(`${safeTable}.${orColumn} = ANY($${paramIdx})`);
-                      params.push(parseFilterArray(rawValue));
-                      paramIdx++;
-                      break;
-                  }
-                }
-                if (orClauses.length > 0) whereClauses.push(`(${orClauses.join(' OR ')})`);
-                break;
-              }
-              case 'not': {
-                const nestedOp = f.value?.op;
-                const nestedValue = f.value?.value;
-                if (nestedOp === 'is') {
-                  whereClauses.push(`${safeTable}.${col} IS ${nestedValue === null ? 'NOT NULL' : 'NULL'}`);
-                } else if (nestedOp === 'in') {
-                  whereClauses.push(`NOT (${safeTable}.${col} = ANY($${paramIdx}))`);
-                  params.push(parseFilterArray(nestedValue));
-                  paramIdx++;
-                } else {
-                  whereClauses.push(`${safeTable}.${col} != $${paramIdx}`);
-                  params.push(nestedValue);
-                  paramIdx++;
-                }
-                break;
-              }
-            }
-          }
-          if (whereClauses.length > 0) query += ` WHERE ${whereClauses.join(' AND ')}`;
-        }
+        // Handle filters (mesmo montador do update e do delete)
+        const whereClauses = buildDbQueryWhere(filters, safeTable, params);
+        if (whereClauses.length > 0) query += ` WHERE ${whereClauses.join(' AND ')}`;
+        paramIdx = params.length + 1;
 
         // Multi-city: força filtro de cidade no SELECT
         if (scopeCity) {
@@ -8267,14 +8323,23 @@ app.post('/api/db/query', async (req, res) => {
         // Handle order
         if (order) {
           const orderParts = Array.isArray(order) ? order : [order];
-          const orderClauses = orderParts.map(o => `${sanitizeOrderColumn(o.column, safeTable)} ${o.ascending === false ? 'DESC' : 'ASC'}`);
+          const orderClauses = orderParts.map(o => {
+            const orderColumn = sanitizeOrderColumn(o?.column, safeTable);
+            const [orderTable, orderName] = orderColumn.split('.');
+            const blocked = [...(DB_QUERY_HIDDEN_COLUMNS[orderTable] || []), ...(DB_QUERY_MANAGER_COLUMNS[orderTable] || [])];
+            if (blocked.includes(String(orderName || '').toLowerCase())) throw dbQueryError(`Não é possível ordenar por "${orderName}".`);
+            return `${orderColumn} ${o?.ascending === false ? 'DESC' : 'ASC'}`;
+          });
           query += ` ORDER BY ${orderClauses.join(', ')}`;
         }
 
         // Handle limit
         if (queryLimit) query += ` LIMIT ${parseInt(queryLimit)}`;
 
-        const { rows } = await pool.query(query, params);
+        // Protocolo estendido: impede comandos empilhados mesmo quando não há parâmetros.
+        const { rows } = await pool.query({ text: query, values: params, queryMode: 'extended' });
+        const selectTables = [safeTable, ...joinTables];
+        stripDbQueryColumns(rows, selectTables, await getDbQueryStripOptions(user, selectTables));
         result = { data: single ? (rows[0] || null) : rows, error: null };
         break;
       }
@@ -8483,15 +8548,14 @@ app.post('/api/db/query', async (req, res) => {
         let query = `UPDATE ${safeTable} SET ${setClauses.join(', ')}`;
         const params = [...values];
 
-        if (filters && Array.isArray(filters)) {
-          const whereClauses = [];
-          for (const f of filters) {
-            const col = sanitizeIdentifier(f.column);
-            if (f.op === 'eq') { whereClauses.push(`${col} = $${paramIdx}`); params.push(f.value); paramIdx++; }
-            else if (f.op === 'in') { whereClauses.push(`${col} = ANY($${paramIdx})`); params.push(f.value); paramIdx++; }
-          }
-          if (whereClauses.length > 0) query += ` WHERE ${whereClauses.join(' AND ')}`;
+        // Todos os filtros valem (antes só eq/in). Sem filtro do cliente, recusa:
+        // o filtro de cidade sozinho viraria um UPDATE na cidade inteira.
+        const whereClauses = buildDbQueryWhere(filters, safeTable, params);
+        if (whereClauses.length === 0) {
+          return res.status(400).json({ data: null, error: { message: 'Atualização sem filtro recusada.' } });
         }
+        query += ` WHERE ${whereClauses.join(' AND ')}`;
+        paramIdx = params.length + 1;
         // Multi-city: impede UPDATE cruzado
         if (scopeCity) {
           query += (query.includes(' WHERE ') ? ' AND ' : ' WHERE ') + `${cityVisibilityExpression('city', `$${paramIdx}`)}`;
@@ -8539,24 +8603,15 @@ app.post('/api/db/query', async (req, res) => {
 
         let query = `DELETE FROM ${safeTable}`;
         const params = [];
-        let paramIdx = 1;
 
-        if (filters && Array.isArray(filters)) {
-          const whereClauses = [];
-          for (const f of filters) {
-            const col = sanitizeIdentifier(f.column);
-            switch (f.op) {
-              case 'eq': whereClauses.push(`${col} = $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'neq': whereClauses.push(`${col} != $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'gt': whereClauses.push(`${col} > $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'gte': whereClauses.push(`${col} >= $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'lt': whereClauses.push(`${col} < $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'lte': whereClauses.push(`${col} <= $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'in': whereClauses.push(`${col} = ANY($${paramIdx})`); params.push(f.value); paramIdx++; break;
-            }
-          }
-          if (whereClauses.length > 0) query += ` WHERE ${whereClauses.join(' AND ')}`;
+        // Mesmo montador do select (antes is/not/or eram ignorados e apagavam a mais).
+        // Sem filtro do cliente, recusa: o filtro de cidade sozinho apagaria a cidade inteira.
+        const whereClauses = buildDbQueryWhere(filters, safeTable, params);
+        if (whereClauses.length === 0) {
+          return res.status(400).json({ data: null, error: { message: 'Exclusão sem filtro recusada.' } });
         }
+        query += ` WHERE ${whereClauses.join(' AND ')}`;
+        let paramIdx = params.length + 1;
         // Multi-city: impede DELETE cruzado
         if (scopeCity) {
           query += (query.includes(' WHERE ') ? ' AND ' : ' WHERE ') + `${cityVisibilityExpression('city', `$${paramIdx}`)}`;
@@ -8571,8 +8626,11 @@ app.post('/api/db/query', async (req, res) => {
       }
 
       case 'rpc': {
-        // Call a database function
-        const funcName = sanitizeIdentifier(data.function_name);
+        // Call a database function (só as da lista fechada)
+        const funcName = sanitizeIdentifier(String(data?.function_name || ''));
+        if (!DB_QUERY_ALLOWED_RPC.has(funcName)) {
+          return res.status(403).json({ error: `Função "${funcName}" não é permitida` });
+        }
         const args = data.args || {};
         const argKeys = Object.keys(args);
         const argValues = Object.values(args);
@@ -8589,10 +8647,17 @@ app.post('/api/db/query', async (req, res) => {
         return res.status(400).json({ error: `Unknown operation: ${operation}` });
     }
 
+    // RETURNING * de insert/update/upsert/delete também não devolve colunas sensíveis
+    if (operation !== 'select' && operation !== 'rpc' && result?.data) {
+      stripDbQueryColumns(result.data, [safeTable], await getDbQueryStripOptions(user, [safeTable]));
+    }
+
     res.json(result);
   } catch (e) {
     console.error('DB query error:', e);
-    const status = e?.statusCode === 400 ? 400 : 500;
+    const status = [400, 403, 409, 503].includes(e?.statusCode)
+      ? e.statusCode
+      : e?.message === 'Unauthorized' ? 401 : 500;
     res.status(status).json({ data: null, error: { message: e.message } });
   }
 });

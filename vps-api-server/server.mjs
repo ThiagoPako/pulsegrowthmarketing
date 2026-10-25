@@ -7518,22 +7518,42 @@ async function runBillingAutomation() {
 }
 
 // ─── 16. WhatsApp Webhook ───────────────────────────────────
-const CONFIRM_WORDS = ['1', 'confirmar', 'confirmado', 'ok', 'sim', 'quero aproveitar', 'quero'];
-const CANCEL_WORDS = ['2', 'cancelar', 'cancelado', 'não posso', 'nao posso', 'não', 'nao'];
+// A mensagem inteira tem que ser a opção (o modelo pede 1️⃣ ou 2️⃣): "1", "1 - confirmo", "Sim, confirmo!",
+// "Confirmado, estaremos lá", "2", "Cancelar". Frase solta não vale: "Não gostei da música" não cancela,
+// "100% aprovado" não confirma e "2ª feira pode?" ou "2 pessoas vão" não cancelam a gravação.
+const normalizeReply = (text) => String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+const REPLY_COURTESY = '(?: (?:obrigad[oa]|obg|valeu|vlw|beleza|blz|desculpa|desculpe))?';
+const CONFIRM_REPLY = new RegExp(`^(?:(?:1(?: (?:sim|ok|confirmo|confirmado|confirmada|confirmar))?|(?:sim |ok )?(?:confirmar|confirma))${REPLY_COURTESY}|(?:(?:sim|ok) )?(?:confirmo|confirmado|confirmada|confirmadissimo)(?: .*)?)$`, 'u');
+const CANCEL_REPLY = new RegExp(`^(?:2(?: (?:cancelar|cancelo|cancela|cancelado|cancelada))?|cancelar|cancelo|cancela|cancelado|cancelada|nao posso|nao vou poder|nao vamos poder)${REPLY_COURTESY}$`, 'u');
+// no privado, um "ok"/"sim" sozinho também confirma (no grupo não: pode ser de outra conversa)
+const CONFIRM_ALONE = new RegExp(`^(?:ok|okay|sim|sim sim)${REPLY_COURTESY}$`, 'u');
 
-function classifyResponse(text) {
-  const n = text.trim().toLowerCase().replace(/[^\w\sáéíóúãõâêîôûç]/g, '');
-  if (CONFIRM_WORDS.some(w => n === w || n.startsWith(w))) return 'confirm';
-  if (CANCEL_WORDS.some(w => n === w || n.startsWith(w))) return 'cancel';
+function classifyGroupResponse(text) {
+  if (String(text || '').includes('?')) return 'unknown'; // pergunta não é resposta
+  const n = normalizeReply(text);
+  if (CONFIRM_REPLY.test(n) && !/\bnao\b/.test(n)) return 'confirm';
+  if (CANCEL_REPLY.test(n)) return 'cancel';
   return 'unknown';
 }
 
-// No grupo as pessoas conversam: só vale resposta explícita ("ok"/"sim" de outra conversa não confirma gravação)
-function classifyGroupResponse(text) {
-  const n = String(text || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  if (/^(1|confirmo|confirmado|confirmada|confirmar)\b/.test(n)) return 'confirm';
-  if (/^(2|cancelar|cancelado|cancelada|cancela)\b/.test(n)) return 'cancel';
-  return 'unknown';
+function classifyResponse(text) {
+  const explicit = classifyGroupResponse(text);
+  if (explicit !== 'unknown' || String(text || '').includes('?')) return explicit;
+  return CONFIRM_ALONE.test(normalizeReply(text)) ? 'confirm' : 'unknown';
+}
+
+// Confirmação ainda válida: a gravação continua agendada e não passou. As outras (gravação feita, cancelada,
+// remarcada ou de um dia que já foi) viram "expired", para uma resposta solta não mexer em gravação antiga.
+async function pickActiveConfirmation(admin, confirmations) {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  for (const confirmation of confirmations || []) {
+    if (confirmation.type !== 'confirmation') continue;
+    const recording = confirmation.recordings;
+    if (recording?.status === 'agendada' && String(recording.date || '') >= today) return confirmation;
+    await admin.from('whatsapp_confirmations').update({ status: 'expired' }).eq('id', confirmation.id).eq('status', 'pending');
+  }
+  return null;
 }
 
 function extractPayload(body) {
@@ -7567,14 +7587,16 @@ async function handleWhatsAppReply(phoneInput, messageText, { groupJid = null } 
     const phoneNumber = String(phoneInput || '').replace(/\D/g, '');
     if ((!phoneNumber && !groupJid) || !messageText) return { ok: true, skipped: 'no_phone_or_message' };
     if (groupJid) {
-      if (classifyGroupResponse(messageText) === 'unknown') return { ok: true, skipped: 'unrecognized_response' };
+      const classification = classifyGroupResponse(messageText);
+      if (classification === 'unknown') return { ok: true, skipped: 'unrecognized_response' };
       const groupClients = await clientsForGroup(pool, groupJid);
       if (!groupClients.length) return { ok: true, skipped: 'group_without_client' };
       const { data: groupConfirmations } = await admin.from('whatsapp_confirmations').select('*, recordings(*), clients(*)')
         .in('client_id', groupClients.map((c) => c.id)).eq('status', 'pending').not('sent_at', 'is', null)
-        .order('sent_at', { ascending: false }).limit(1);
-      if (!groupConfirmations?.length) return { ok: true, skipped: 'no_pending_confirmation' };
-      return applyConfirmationReply(admin, groupConfirmations[0], messageText, groupJid);
+        .order('sent_at', { ascending: false }).limit(10);
+      const groupConfirmation = await pickActiveConfirmation(admin, groupConfirmations);
+      if (!groupConfirmation) return { ok: true, skipped: 'no_pending_confirmation' };
+      return applyConfirmationReply(admin, groupConfirmation, messageText, groupJid, classification);
     }
 
     // o cadastro pode ter o número com ou sem 55 e com ou sem o 9º dígito
@@ -7584,17 +7606,27 @@ async function handleWhatsAppReply(phoneInput, messageText, { groupJid = null } 
     if (local.length === 10) localVariants.add(`${local.slice(0, 2)}9${local.slice(2)}`);
     const phoneVariants = [...localVariants].flatMap((v) => [v, `55${v}`]);
 
-    const { data: confirmations } = await admin.from('whatsapp_confirmations').select('*, recordings(*), clients(*)').in('phone_number', phoneVariants).eq('status', 'pending').not('sent_at', 'is', null).order('sent_at', { ascending: false }).limit(1);
-    if (!confirmations?.length) return { ok: true, skipped: 'no_pending_confirmation' };
-    return applyConfirmationReply(admin, confirmations[0], messageText, null);
+    const classification = classifyResponse(messageText);
+    if (classification === 'unknown') return { ok: true, skipped: 'unrecognized_response' };
+    const { data: confirmations } = await admin.from('whatsapp_confirmations').select('*, recordings(*), clients(*)').in('phone_number', phoneVariants).eq('status', 'pending').not('sent_at', 'is', null).order('sent_at', { ascending: false }).limit(10);
+    const confirmation = await pickActiveConfirmation(admin, confirmations);
+    if (!confirmation) return { ok: true, skipped: 'no_pending_confirmation' };
+    // "ok"/"sim" sozinho logo depois de receber vídeos no privado é resposta aos vídeos, não à gravação
+    if (classification === 'confirm' && classifyGroupResponse(messageText) === 'unknown') {
+      const { rows: newerVideos } = await pool.query(
+        `SELECT 1 FROM wa_approval_requests WHERE phone = ANY($1) AND status = 'pendente' AND created_at > $2 LIMIT 1`,
+        [phoneVariants, confirmation.sent_at]
+      ).catch(() => ({ rows: [] }));
+      if (newerVideos.length) return { ok: true, skipped: 'resposta_aos_videos' };
+    }
+    return applyConfirmationReply(admin, confirmation, messageText, null, classification);
   }
 }
 
-async function applyConfirmationReply(admin, confirmation, messageText, replyTo) {
+async function applyConfirmationReply(admin, confirmation, messageText, replyTo, classification) {
   {
     const recording = confirmation.recordings;
     const client = confirmation.clients;
-    const classification = replyTo ? classifyGroupResponse(messageText) : classifyResponse(messageText);
     if (classification === 'unknown') return { ok: true, skipped: 'unrecognized_response' };
 
     const { data: configData } = await admin.from('whatsapp_config').select('*').limit(1).single();
@@ -7609,8 +7641,14 @@ async function applyConfirmationReply(admin, confirmation, messageText, replyTo)
         await admin.from('recordings').update({ confirmation_status: 'confirmada' }).eq('id', confirmation.recording_id);
         await sendWhatsAppDirect(configData, replyTo || clientTarget(client, 'agenda') || confirmation.phone_number, applyTemplate(configData.msg_confirmation_confirmed, templateVars), admin, client?.id, 'auto_confirmation', 'agenda');
       } else {
+        // só cancela gravação que ainda está agendada (nunca uma já feita ou já remarcada pela equipe)
+        const { data: cancelled } = await admin.from('recordings').update({ status: 'cancelada', confirmation_status: 'cancelada' })
+          .eq('id', confirmation.recording_id).eq('status', 'agendada');
+        if (!cancelled?.length) {
+          await admin.from('whatsapp_confirmations').update({ status: 'expired' }).eq('id', confirmation.id).eq('status', 'pending');
+          return { ok: true, skipped: 'recording_not_scheduled' };
+        }
         await admin.from('whatsapp_confirmations').update({ status: 'cancelled', responded_at: new Date().toISOString(), response_message: messageText }).eq('id', confirmation.id);
-        await admin.from('recordings').update({ status: 'cancelada', confirmation_status: 'cancelada' }).eq('id', confirmation.recording_id);
         await sendWhatsAppDirect(configData, replyTo || clientTarget(client, 'agenda') || confirmation.phone_number, applyTemplate(configData.msg_confirmation_cancelled, templateVars), admin, client?.id, 'auto_confirmation', 'agenda');
       }
     }
@@ -7634,6 +7672,13 @@ app.post('/api/whatsapp-confirmation-cron', async (req, res) => {
 async function runConfirmationCron() {
   {
     const admin = getAdminClient();
+    // pendentes de gravação que já passou ou não está mais agendada: não esperam mais resposta
+    await pool.query(
+      `UPDATE whatsapp_confirmations wc SET status = 'expired'
+         FROM recordings r
+        WHERE r.id = wc.recording_id AND wc.status = 'pending' AND wc.type = 'confirmation'
+          AND (r.date < (now() AT TIME ZONE 'America/Sao_Paulo')::date OR r.status <> 'agendada')`
+    ).catch((error) => console.error('confirmation-cron expirar:', error.message));
     const { data: config } = await admin.from('whatsapp_config').select('*').limit(1).single();
     if (!config?.integration_active || !config?.auto_confirmation) return { ok: true, skipped: 'disabled' };
 

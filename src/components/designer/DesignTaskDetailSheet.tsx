@@ -276,12 +276,13 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
   const handleSendToClient = async () => {
     const fileUrl = attachmentUrl || task.attachment_url;
+    let portalContentId: string | null = null;
     
     // Send art to client portal for approval (like videos)
     if (fileUrl && task.client_id) {
       try {
         const now = new Date();
-        await supabase.from('client_portal_contents').insert({
+        const { data: portalContent } = await supabase.from('client_portal_contents').insert({
           client_id: task.client_id,
           title: `Arte: ${task.title}`,
           content_type: 'arte',
@@ -291,7 +292,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           season_month: now.getMonth() + 1,
           season_year: now.getFullYear(),
           uploaded_by: user?.id,
-        } as any);
+        } as any).select('id').single();
+        portalContentId = (portalContent as any)?.id || null;
         
         // Notify client in portal
         await supabase.from('client_portal_notifications').insert({
@@ -321,6 +323,9 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
         if (!result.success) {
           console.error('WhatsApp media send error:', result.error);
           toast.error('Erro ao enviar arte: ' + (result.error || 'erro desconhecido'));
+        } else if (portalContentId) {
+          // o cliente já recebeu a arte aqui: o aviso automático de "conteúdo novo no portal" não manda de novo
+          await supabase.from('client_portal_contents').update({ wa_notified_at: new Date().toISOString() } as any).eq('id', portalContentId);
         }
       } else if (task.clients?.whatsapp) {
         await sendWhatsAppMessage({

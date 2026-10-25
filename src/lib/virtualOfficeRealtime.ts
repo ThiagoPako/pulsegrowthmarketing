@@ -64,6 +64,11 @@ function connectWs() {
 
   _ws.onopen = () => {
     _connecting = false;
+    // O servidor só aceita o socket depois do token (primeira mensagem, fora da URL)
+    try {
+      const token = localStorage.getItem('pulse_jwt');
+      if (token) _ws?.send(JSON.stringify({ type: 'auth', token }));
+    } catch { /* ignore */ }
     // If we have a userId, immediately send heartbeat
     if (_currentUserId) {
       _ws?.send(JSON.stringify({ type: 'heartbeat', userId: _currentUserId }));
@@ -244,7 +249,10 @@ export function getConversationKey(a: string, b: string) {
 export function sendLeaveBeacon(userId: string) {
   try {
     const url = `${REST_BASE}/presence/leave`;
-    const body = JSON.stringify({ userId });
+    // sendBeacon não manda cabeçalho: o token vai no corpo
+    let token: string | null = null;
+    try { token = localStorage.getItem('pulse_jwt'); } catch { /* ignore */ }
+    const body = JSON.stringify({ userId, token });
     if (navigator.sendBeacon) {
       navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
     } else {

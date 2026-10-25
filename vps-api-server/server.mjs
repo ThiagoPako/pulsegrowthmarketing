@@ -11399,42 +11399,63 @@ app.get('/api/presence', async (req, res) => {
   res.json({ users: collectOnlinePresenceUsers() });
 });
 
-app.post('/api/presence/heartbeat', (req, res) => {
-  const { userId } = req.body;
-  if (!userId) return res.status(400).json({ error: 'userId required' });
-  const now = new Date().toISOString();
-  const existing = presenceState.get(userId);
-  presenceState.set(userId, {
-    userId,
-    heartbeatAt: now,
-    connectedAt: existing?.connectedAt || now,
-  });
+/**
+ * Usuário da equipe para presença/Quick Chat por REST. O sendBeacon (saída ao
+ * fechar a aba) não manda cabeçalho, então o token também é aceito no corpo.
+ * O userId do corpo só vale se for do próprio usuário do token.
+ */
+async function presenceRequestUser(req) {
+  let user = null;
+  if (req.headers.authorization?.startsWith('Bearer ')) {
+    user = await verifyUser(req).then((ctx) => ctx.user).catch(() => null);
+  }
+  if (!user && typeof req.body?.token === 'string') {
+    const auth = await authenticateSocketToken(req.body.token);
+    user = auth?.user || null;
+  }
+  if (!user) return null;
+  const ids = await presenceIdsForUser(user);
+  const ownId = (id) => (id && ids.has(String(id)) ? String(id) : null);
+  return { user, ids, ownId };
+}
+
+app.post('/api/presence/heartbeat', async (req, res) => {
+  const auth = await presenceRequestUser(req);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  const userId = auth.ownId(req.body?.userId) || String(auth.user.id);
+  setPresenceHeartbeat(userId);
   // Broadcast to WebSocket clients
   broadcastPresence();
   res.json({ ok: true });
 });
 
-app.post('/api/presence/leave', (req, res) => {
-  const { userId } = req.body;
-  if (userId) presenceState.delete(userId);
+app.post('/api/presence/leave', async (req, res) => {
+  const auth = await presenceRequestUser(req);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  const userId = auth.ownId(req.body?.userId) || String(auth.user.id);
+  presenceState.delete(userId);
   broadcastPresence();
   res.json({ ok: true });
 });
 
 // ─── Quick Chat REST endpoint ──────────────────────────────
-app.post('/api/quick-chat', (req, res) => {
-  const { fromUserId, toUserId, message } = req.body;
-  if (!fromUserId || !toUserId || !message) {
+app.post('/api/quick-chat', async (req, res) => {
+  const auth = await presenceRequestUser(req);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  const { toUserId, message } = req.body;
+  // Remetente é sempre o usuário do token (o fromUserId do corpo só vale se for dele)
+  const fromUserId = auth.ownId(req.body?.fromUserId) || String(auth.user.id);
+  if (!toUserId || !message) {
     return res.status(400).json({ error: 'fromUserId, toUserId, message required' });
   }
   const payload = {
-    id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: String(req.body?.id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`),
     fromUserId,
-    toUserId,
-    message,
+    toUserId: String(toUserId),
+    message: String(message).slice(0, 4000),
     createdAt: new Date().toISOString(),
   };
-  // Broadcast to all WS clients
+  // Só para as abas do remetente e do destinatário
   broadcastQuickMessage(payload);
   res.json({ ok: true, message: payload });
 });
@@ -12460,27 +12481,71 @@ app.get('/api/promo/campaigns/:id/redemptions', async (req, res) => {
 
 // WebSocketServer already uses the global server instance initialized at the top
 
-const wss = new WebSocketServer({ server, path: '/api/realtime' });
+// Os três servidores usam `noServer` e um único listener de 'upgrade' que
+// despacha pelo caminho. Antes cada um tinha `{ server, path }`: no ws 8 o que
+// não era dono do caminho respondia 400 no mesmo socket e derrubava os outros
+// (presença, Quick Chat e realtime nunca funcionavam).
+const wssOffice = new WebSocketServer({ noServer: true });
+// /api/realtime (o front usa VPS_API_BASE + '/realtime') e /realtime caem no
+// mesmo servidor: relay de canais + avisos globais da equipe (broadcastToAll).
+const realtimeWss = new WebSocketServer({ noServer: true });
 
-wss.on('connection', (ws) => {
-  wssClients.add(ws);
-  ws.on('close', () => wssClients.delete(ws));
-  ws.on('error', () => wssClients.delete(ws));
-  
-  ws.on('message', (message) => {
-    try {
-      const data = JSON.parse(message);
-      if (data.type === 'subscribe') {
-        // Auth already handled by verifyUser on first REST call, 
-        // we keep it simple for now as it's a internal local network VPS.
-        ws.subscribedChannels = ws.subscribedChannels || new Set();
-        ws.subscribedChannels.add(data.channel);
-      }
-    } catch (e) {}
-  });
+server.on('upgrade', (req, socket, head) => {
+  let pathname = '';
+  try {
+    pathname = new URL(req.url || '/', 'http://localhost').pathname.replace(/\/+$/, '');
+  } catch { /* caminho inválido */ }
+  const target = pathname === '/ws/office'
+    ? wssOffice
+    : (pathname === '/api/realtime' || pathname === '/realtime') ? realtimeWss : null;
+  if (!target) {
+    socket.destroy();
+    return;
+  }
+  target.handleUpgrade(req, socket, head, (ws) => target.emit('connection', ws, req));
 });
 
-const wssOffice = new WebSocketServer({ server, path: '/ws/office' });
+// ── Autenticação dos WebSockets ──
+// O token vai na primeira mensagem ({ type: 'auth', token } ou no 'subscribe'
+// do realtime), não na URL, para não ficar nos logs do Nginx. Sem token
+// válido em WS_AUTH_TIMEOUT_MS a conexão é fechada.
+const WS_AUTH_TIMEOUT_MS = 10_000;
+const presenceIdsCache = new Map();
+
+/** Ids que representam o mesmo usuário (profiles/auth_users), com cache curto. */
+async function presenceIdsForUser(user) {
+  const key = String(user?.id || '');
+  if (!key) return new Set();
+  const cached = presenceIdsCache.get(key);
+  if (cached && Date.now() - cached.at < 60_000) return cached.ids;
+  const ids = new Set((await getLinkedUserIds(user).catch(() => [key])).map(String));
+  ids.add(key);
+  presenceIdsCache.set(key, { ids, at: Date.now() });
+  if (presenceIdsCache.size > 2000) presenceIdsCache.delete(presenceIdsCache.keys().next().value);
+  return ids;
+}
+
+async function authenticateSocketToken(token) {
+  if (!token || typeof token !== 'string') return null;
+  try {
+    const decoded = verifyToken(token);
+    if (!decoded?.sub) return null;
+    const user = { id: String(decoded.sub), email: decoded.email || null };
+    return { user, ids: await presenceIdsForUser(user) };
+  } catch {
+    return null;
+  }
+}
+
+function armSocketAuthTimeout(ws) {
+  const timer = setTimeout(() => {
+    if (!ws._pulseUser) {
+      try { ws.close(4401, 'unauthorized'); } catch { /* ignore */ }
+    }
+  }, WS_AUTH_TIMEOUT_MS);
+  timer.unref?.();
+  ws.on('close', () => clearTimeout(timer));
+}
 
 const wsClients = new Set();
 
@@ -12492,36 +12557,77 @@ function broadcastPresence() {
   }
 }
 
+/** Quick Chat: só para as abas do remetente e do destinatário (antes ia para todos). */
 function broadcastQuickMessage(payload) {
   const msg = JSON.stringify({ type: 'quick_message', payload });
+  const from = String(payload?.fromUserId || '');
+  const to = String(payload?.toUserId || '');
   for (const ws of wsClients) {
+    const ids = ws._pulseIds;
+    if (!ids || !(ids.has(from) || ids.has(to))) continue;
     try { if (ws.readyState === 1) ws.send(msg); } catch { /* ignore */ }
   }
 }
 
+function setPresenceHeartbeat(userId) {
+  const now = new Date().toISOString();
+  const existing = presenceState.get(userId);
+  presenceState.set(userId, {
+    userId,
+    heartbeatAt: now,
+    connectedAt: existing?.connectedAt || now,
+  });
+}
+
 wssOffice.on('connection', (ws) => {
-  wsClients.add(ws);
+  armSocketAuthTimeout(ws);
+  let authPromise = null;
 
-  // Send current presence immediately
-  const online = collectOnlinePresenceUsers();
-  ws.send(JSON.stringify({ type: 'presence_sync', users: online }));
+  ws.on('message', async (raw) => {
+    let data;
+    try { data = JSON.parse(raw.toString()); } catch { return; }
+    if (!data || typeof data !== 'object') return;
 
-  ws.on('message', (raw) => {
+    if (data.type === 'auth') {
+      if (ws._pulseUser) return;
+      authPromise = authPromise || authenticateSocketToken(data.token);
+      const auth = await authPromise;
+      if (!auth) {
+        try { ws.close(4401, 'unauthorized'); } catch { /* ignore */ }
+        return;
+      }
+      ws._pulseUser = auth.user;
+      ws._pulseIds = auth.ids;
+      wsClients.add(ws);
+      // Send current presence immediately
+      try { ws.send(JSON.stringify({ type: 'presence_sync', users: collectOnlinePresenceUsers() })); } catch { /* ignore */ }
+      return;
+    }
+
+    if (authPromise && !ws._pulseUser) await authPromise;
+    if (!ws._pulseUser) return; // sem login não marca presença nem manda mensagem
+
     try {
-      const data = JSON.parse(raw.toString());
-      if (data.type === 'heartbeat' && data.userId) {
-        const existing = presenceState.get(data.userId);
-        presenceState.set(data.userId, {
-          userId: data.userId,
-          heartbeatAt: new Date().toISOString(),
-          connectedAt: existing?.connectedAt || new Date().toISOString(),
-        });
+      // O id do corpo só vale se for do próprio usuário do token
+      const ownId = (id) => (id && ws._pulseIds?.has(String(id)) ? String(id) : null);
+      if (data.type === 'heartbeat') {
+        const userId = ownId(data.userId) || ws._pulseUser.id;
+        setPresenceHeartbeat(userId);
         broadcastPresence();
-      } else if (data.type === 'leave' && data.userId) {
-        presenceState.delete(data.userId);
+      } else if (data.type === 'leave') {
+        const userId = ownId(data.userId) || ws._pulseUser.id;
+        presenceState.delete(userId);
         broadcastPresence();
       } else if (data.type === 'quick_message') {
-        broadcastQuickMessage(data.payload);
+        const payload = data.payload || {};
+        if (!ownId(payload.fromUserId) || !payload.toUserId || !payload.message) return;
+        broadcastQuickMessage({
+          id: String(payload.id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`),
+          fromUserId: String(payload.fromUserId),
+          toUserId: String(payload.toUserId),
+          message: String(payload.message).slice(0, 4000),
+          createdAt: payload.createdAt || new Date().toISOString(),
+        });
       }
     } catch { /* ignore malformed messages */ }
   });
@@ -12531,12 +12637,13 @@ wssOffice.on('connection', (ws) => {
 });
 
 // ─── Generic Realtime Channel Relay (WebSocket) ─────────
-// Client (src/lib/vpsDb.ts ChannelBuilder) connects to /realtime,
+// Client (src/lib/vpsDb.ts ChannelBuilder) connects to /api/realtime,
 // sends { type:'subscribe', channel, token, events } then
 // { type:'broadcast', channel, event, payload }.
 // Server relays broadcast frames to every other socket subscribed to that channel.
+// Só sockets autenticados (token no 'auth' ou no 'subscribe') entram nos canais
+// e recebem os avisos globais (broadcastToAll → wssClients).
 
-const realtimeWss = new WebSocketServer({ server, path: '/realtime' });
 // channel name -> Set<ws>
 const realtimeChannels = new Map();
 
@@ -12577,11 +12684,35 @@ function relayBroadcast(channel, event, payload, senderWs) {
 
 realtimeWss.on('connection', (ws) => {
   ws._pulseChannels = new Set();
+  armSocketAuthTimeout(ws);
+  let authPromise = null;
 
-  ws.on('message', (raw) => {
+  const ensureAuth = async (token) => {
+    if (ws._pulseUser) return true;
+    if (!authPromise && token) authPromise = authenticateSocketToken(token);
+    const auth = authPromise ? await authPromise : null;
+    if (!auth) return false;
+    if (!ws._pulseUser) {
+      ws._pulseUser = auth.user;
+      wssClients.add(ws);
+    }
+    return true;
+  };
+
+  ws.on('message', async (raw) => {
     let data;
     try { data = JSON.parse(raw.toString()); } catch { return; }
     if (!data || typeof data !== 'object') return;
+
+    if (data.type === 'auth' || data.type === 'subscribe') {
+      if (!(await ensureAuth(data.token))) {
+        try { ws.close(4401, 'unauthorized'); } catch { /* ignore */ }
+        return;
+      }
+      if (data.type === 'auth') return;
+    } else if (!(await ensureAuth(null))) {
+      return; // nada antes do login
+    }
 
     if (data.type === 'subscribe' && typeof data.channel === 'string') {
       subscribeSocketToChannel(ws, data.channel);
@@ -12611,8 +12742,8 @@ realtimeWss.on('connection', (ws) => {
     }
   });
 
-  ws.on('close', () => { unsubscribeSocketFromAll(ws); });
-  ws.on('error', () => { unsubscribeSocketFromAll(ws); });
+  ws.on('close', () => { wssClients.delete(ws); unsubscribeSocketFromAll(ws); });
+  ws.on('error', () => { wssClients.delete(ws); unsubscribeSocketFromAll(ws); });
 });
 
 // Server-side helper to emit into a realtime channel (usable from any HTTP route)

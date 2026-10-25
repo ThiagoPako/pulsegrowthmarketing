@@ -17,6 +17,14 @@ const DATE_TO_DAY: Record<number, DayOfWeek> = {
 
 
 /** Opções da checagem de conflito de agenda */
+export interface AddRecordingOptions {
+  skipClientDayCheck?: boolean;
+  /** Gravação que não conta na checagem de conflito (ex.: a que acabou de ser cancelada para dar a vaga) */
+  excludeId?: string;
+  /** Não manda o aviso de gravação agendada (quem chama já avisa o cliente com outra mensagem) */
+  skipNotification?: boolean;
+}
+
 export interface ConflictCheckOptions {
   skipClientDayCheck?: boolean;
   /** Lista a conferir no lugar do estado atual (ex.: geração em lote com as já criadas no laço) */
@@ -45,7 +53,7 @@ interface AppContextType {
   addClient: (client: Client) => Promise<boolean>;
   updateClient: (client: Client) => Promise<void>;
   deleteClient: (id: string) => Promise<boolean>;
-  addRecording: (recording: Recording, options?: { skipClientDayCheck?: boolean }) => Promise<boolean>;
+  addRecording: (recording: Recording, options?: AddRecordingOptions) => Promise<boolean>;
   /** Cria várias gravações de uma vez, sem aviso de WhatsApp (ex.: backups e extras gerados em lote) */
   addRecordingsBulk: (recordings: Recording[]) => Promise<boolean>;
   updateRecording: (recording: Recording) => Promise<boolean>;
@@ -346,13 +354,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [data.settings]);
 
 
-  const addRecording = useCallback(async (recording: Recording, options?: { skipClientDayCheck?: boolean }): Promise<boolean> => {
-    if (hasConflict(recording.videomakerId, recording.date, recording.startTime, undefined, recording.type, recording.clientId, options).hasConflict) return false;
+  const addRecording = useCallback(async (recording: Recording, options?: AddRecordingOptions): Promise<boolean> => {
+    if (hasConflict(recording.videomakerId, recording.date, recording.startTime, options?.excludeId, recording.type, recording.clientId, { skipClientDayCheck: options?.skipClientDayCheck }).hasConflict) return false;
     const ok = await data.addRecording(recording);
     if (!ok) {
       console.error('addRecording: VPS insert failed for recording', recording);
       return false;
     }
+    if (options?.skipNotification) return true;
     // Send WhatsApp notification
     const client = data.clients.find(c => c.id === recording.clientId);
     const vm = users.find(u => u.id === recording.videomakerId);

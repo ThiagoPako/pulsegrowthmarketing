@@ -579,7 +579,9 @@ export default function Schedule() {
       type: 'backup',
       status: 'agendada',
     };
-    const backupAdded = await addRecording(newRec);
+    // O addRecording deste render ainda vê a original como 'agendada' no mesmo horário: ela fica
+    // fora da checagem. O cliente backup recebe só o convite abaixo, sem o aviso de agendada.
+    const backupAdded = await addRecording(newRec, { excludeId: cancellingRec.id, skipNotification: true });
     if (!backupAdded) {
       toast.error(`A gravação foi cancelada, mas não foi possível encaixar ${backupClient.companyName}. Tente de novo.`);
       setBackupOpen(false);

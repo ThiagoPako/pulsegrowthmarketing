@@ -6,6 +6,7 @@ import type { Recording, RecordingType, Script, DayOfWeek, Client, EventRecordin
 import { SCRIPT_VIDEO_TYPE_LABELS, DAY_LABELS } from '@/types';
 import { useEndoClientes, useEndoAgendamentos, useEndoContracts } from '@/hooks/useEndomarketing';
 import { findAvailableSlots } from '@/lib/schedulingUtils';
+import { confirmRecordingDelete } from '@/lib/recordingDelete';
 
 import AgencyCapacityWidget from '@/components/AgencyCapacityWidget';
 import { Button } from '@/components/ui/button';
@@ -488,9 +489,9 @@ export default function Schedule() {
 
   const handleDeleteRecording = async (rec: Recording) => {
     const client = clients.find(c => c.id === rec.clientId);
-    const confirmed = window.confirm(`Tem certeza que deseja APAGAR permanentemente esta gravação${client ? ` de ${client.companyName}` : ''}?\n\nEsta ação não pode ser desfeita.`);
-    if (!confirmed) return;
-    const success = await deleteRecording(rec.id);
+    const decision = confirmRecordingDelete(rec, client?.companyName || rec.prospectName || 'esta gravação', currentUser);
+    if (!decision) return;
+    const success = await deleteRecording(rec.id, decision);
     if (success) {
       toast.success('Gravação apagada com sucesso');
     } else {

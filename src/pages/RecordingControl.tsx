@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import TimeMarker from '@/components/scheduling/TimeMarker';
+import { confirmRecordingDelete } from '@/lib/recordingDelete';
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
   agendada: { bg: 'bg-blue-500/15', text: 'text-blue-400', label: 'Agendada' },
@@ -44,7 +45,7 @@ const LUNCH_SLOTS = ['12:30', '13:30'];
 
 
 export default function RecordingControl() {
-  const { recordings, clients, users, scripts, addScript, updateScript, updateRecording, addRecording, deleteRecording, hasConflict, settings, refetchData } = useApp();
+  const { recordings, clients, users, scripts, addScript, updateScript, updateRecording, addRecording, deleteRecording, hasConflict, settings, refetchData, currentUser } = useApp();
   const { user: authUser } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'day' | 'week'>('day');
@@ -259,6 +260,15 @@ export default function RecordingControl() {
 
   const getClient = (clientId: string) => clients.find(c => c.id === clientId);
 
+  const handleDeleteRecording = async (rec: Recording) => {
+    const label = getClient(rec.clientId)?.companyName || rec.prospectName || 'esta gravação';
+    const decision = confirmRecordingDelete(rec, label, currentUser);
+    if (!decision) return;
+    const ok = await deleteRecording(rec.id, decision);
+    if (ok) { toast.success('Gravação apagada'); setTimeout(() => refetchData(), 300); }
+    else toast.error('Erro ao apagar');
+  };
+
   const dateLabel = viewMode === 'day'
     ? format(selectedDate, "EEEE, dd 'de' MMMM", { locale: ptBR })
     : `${format(startOfWeek(selectedDate, { weekStartsOn: 1 }), "dd/MM")} - ${format(endOfWeek(selectedDate, { weekStartsOn: 1 }), "dd/MM")}`;
@@ -414,13 +424,7 @@ export default function RecordingControl() {
                           client={getClient(recording.clientId)}
                           isDragging={draggedRecording?.id === recording.id}
                           onDragStart={handleDragStart}
-                          onDelete={async () => {
-                            const label = getClient(recording.clientId)?.companyName || recording.prospectName || 'esta gravação';
-                            if (!window.confirm(`Apagar permanentemente "${label}" às ${recording.startTime}?`)) return;
-                            const ok = await deleteRecording(recording.id);
-                            if (ok) { toast.success('Gravação apagada'); setTimeout(() => refetchData(), 300); }
-                            else toast.error('Erro ao apagar');
-                          }}
+                          onDelete={() => handleDeleteRecording(recording)}
                         />
                       ) : isLunch ? (
                         <div className="h-full flex items-center justify-center bg-amber-500/5">
@@ -593,13 +597,9 @@ export default function RecordingControl() {
                                     </div>
                                     <button
                                       type="button"
-                                      onClick={async (e) => {
+                                      onClick={(e) => {
                                         e.stopPropagation();
-                                        const label = client?.companyName || rec.prospectName || 'esta gravação';
-                                        if (!window.confirm(`Apagar "${label}" às ${rec.startTime}?`)) return;
-                                        const ok = await deleteRecording(rec.id);
-                                        if (ok) { toast.success('Gravação apagada'); setTimeout(() => refetchData(), 300); }
-                                        else toast.error('Erro ao apagar');
+                                        handleDeleteRecording(rec);
                                       }}
                                       onMouseDown={e => e.stopPropagation()}
                                       draggable={false}
@@ -662,13 +662,7 @@ export default function RecordingControl() {
                 client={getClient(rec.clientId)}
                 isDragging={draggedRecording?.id === rec.id}
                 onDragStart={handleDragStart}
-                onDelete={async () => {
-                  const label = getClient(rec.clientId)?.companyName || rec.prospectName || 'esta gravação';
-                  if (!window.confirm(`Apagar permanentemente "${label}" às ${rec.startTime}?`)) return;
-                  const ok = await deleteRecording(rec.id);
-                  if (ok) { toast.success('Gravação apagada'); setTimeout(() => refetchData(), 300); }
-                  else toast.error('Erro ao apagar');
-                }}
+                onDelete={() => handleDeleteRecording(rec)}
               />
             ))}
           </div>

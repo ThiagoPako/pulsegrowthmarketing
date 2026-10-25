@@ -9418,29 +9418,69 @@ app.put('/api/recordings/:id', async (req, res) => {
 });
 
 app.delete('/api/recordings/:id', async (req, res) => {
+  let txClient = null;
   try {
-    const { activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
+    const { user, activeCity, scopeCity } = await getScopedCityContext(req, 'recordings');
     const id = req.params.id;
-    // Cascade: remove dependent records first
-    await pool.query('DELETE FROM active_recordings WHERE recording_id = $1', [id]);
-    await pool.query('DELETE FROM delivery_records WHERE recording_id = $1', [id]);
-    await pool.query('DELETE FROM recording_wait_logs WHERE recording_id = $1', [id]);
-    // Remove content_tasks linked to this recording (and their history/deliveries)
-    const { rows: linkedTasks } = await pool.query('SELECT id FROM content_tasks WHERE recording_id = $1', [id]);
-    if (linkedTasks.length > 0) {
-      const taskIds = linkedTasks.map(t => t.id);
-      await pool.query('DELETE FROM task_history WHERE task_id = ANY($1)', [taskIds]);
-      await pool.query('DELETE FROM social_media_deliveries WHERE content_task_id = ANY($1)', [taskIds]);
-      await pool.query('DELETE FROM content_tasks WHERE recording_id = $1', [id]);
-    }
-    // Mark linked scripts as not recorded
-    await pool.query("UPDATE scripts SET recorded = false, updated_at = NOW() WHERE recording_id = $1", [id]);
-    await pool.query(
-      `DELETE FROM recordings WHERE id = $1${scopeCity ? ` AND ${cityVisibilityExpression('city', '$2')}` : ''}`,
+    const force = req.query.force === '1' || req.query.force === 'true';
+    txClient = await pool.connect();
+    await txClient.query('BEGIN');
+    // Confere antes (com o filtro de cidade) se a gravação existe; nada é apagado de outra cidade
+    const { rows: [rec] } = await txClient.query(
+      `SELECT id, status FROM recordings WHERE id = $1${scopeCity ? ` AND ${cityVisibilityExpression('city', '$2')}` : ''} FOR UPDATE`,
       scopeCity ? [id, activeCity] : [id]
     );
+    if (!rec) {
+      await txClient.query('ROLLBACK');
+      return res.status(404).json({ error: 'Gravação não encontrada' });
+    }
+    // Gravação já realizada (concluída, organizando material, com entrega ou vídeos em produção)
+    // não é apagada no uso normal: o certo é cancelar. Só admin apaga, e de forma explícita (force).
+    const { rows: [usage] } = await txClient.query(
+      `SELECT EXISTS (SELECT 1 FROM delivery_records WHERE recording_id = $1) AS has_delivery,
+              (SELECT COUNT(*)::int FROM content_tasks WHERE recording_id = $1
+                 AND kanban_column IN ('captacao_concluida', 'edicao', 'revisao', 'alteracao', 'aprovado', 'finalizado')) AS videos_in_production`,
+      [id]
+    );
+    const alreadyRecorded = ['concluida', 'organizando_material'].includes(rec.status) || usage?.has_delivery || Number(usage?.videos_in_production || 0) > 0;
+    if (alreadyRecorded) {
+      if (!force || !(await isAdminUser(user))) {
+        await txClient.query('ROLLBACK');
+        return res.status(409).json({
+          error: 'Esta gravação já foi realizada e não pode ser apagada. Use Cancelar ou peça a um admin.',
+          videos_in_production: Number(usage?.videos_in_production || 0),
+        });
+      }
+    }
+    // Cascade: remove dependent records first
+    await txClient.query('DELETE FROM active_recordings WHERE recording_id = $1', [id]);
+    await txClient.query('DELETE FROM recording_wait_logs WHERE recording_id = $1', [id]);
+    if (alreadyRecorded) {
+      await txClient.query('DELETE FROM delivery_records WHERE recording_id = $1', [id]);
+    }
+    // Vídeos vinculados NÃO são apagados: os que ainda estão na captação voltam para "ideias"
+    // (igual a cancelar a gravação ativa) e os que já passaram dela só perdem o vínculo.
+    const backToIdeasColumns = alreadyRecorded ? ['captacao'] : ['captacao', 'captacao_concluida', 'aguardando_link'];
+    await txClient.query(
+      `UPDATE content_tasks SET kanban_column = 'ideias', recording_id = NULL, updated_at = NOW()
+        WHERE recording_id = $1 AND kanban_column = ANY($2::text[])`,
+      [id, backToIdeasColumns]
+    );
+    await txClient.query('UPDATE content_tasks SET recording_id = NULL, updated_at = NOW() WHERE recording_id = $1', [id]);
+    // Mark linked scripts as not recorded (só quando a gravação não chegou a acontecer)
+    if (!alreadyRecorded) {
+      await txClient.query("UPDATE scripts SET recorded = false, updated_at = NOW() WHERE recording_id = $1", [id]);
+    }
+    await txClient.query('DELETE FROM recordings WHERE id = $1', [id]);
+    await txClient.query('COMMIT');
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    if (txClient) await txClient.query('ROLLBACK').catch(() => {});
+    const status = e?.message === 'Unauthorized' ? 401 : 500;
+    res.status(status).json({ error: e.message });
+  } finally {
+    if (txClient) txClient.release();
+  }
 });
 
 // Bulk delete future recordings for a client

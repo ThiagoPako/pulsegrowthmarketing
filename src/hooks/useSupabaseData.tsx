@@ -597,9 +597,10 @@ export function useSupabaseData() {
   }, []);
 
 
-  const deleteRecording = useCallback(async (id: string): Promise<boolean> => {
+  const deleteRecording = useCallback(async (id: string, options?: { force?: boolean }): Promise<boolean> => {
     try {
-      const { error } = await invokeVpsFunction(`recordings/${id}`, { method: 'DELETE' });
+      // force: só admin apaga gravação já realizada (o servidor confere o papel)
+      const { error } = await invokeVpsFunction(`recordings/${id}${options?.force ? '?force=1' : ''}`, { method: 'DELETE' });
       if (error) { console.error('deleteRecording error:', error); return false; }
       setRecordings(prev => prev.filter(r => r.id !== id));
       setActiveRecordings(prev => prev.filter(a => a.recordingId !== id));

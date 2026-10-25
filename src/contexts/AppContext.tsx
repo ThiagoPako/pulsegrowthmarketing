@@ -34,7 +34,7 @@ interface AppContextType {
   addRecording: (recording: Recording, options?: { skipClientDayCheck?: boolean }) => Promise<boolean>;
   updateRecording: (recording: Recording) => void;
   cancelRecording: (id: string) => void;
-  deleteRecording: (id: string) => Promise<boolean>;
+  deleteRecording: (id: string, options?: { force?: boolean }) => Promise<boolean>;
   deleteRecordingsBulk: (ids: string[]) => Promise<boolean>;
   cancelRecordingsBulk: (ids: string[]) => Promise<boolean>;
   cancelAndReschedule: (recording: Recording) => { success: boolean; rescheduled?: { date: string; startTime: string; videomakerId: string; type: string } };
@@ -654,7 +654,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [data, autoFillVacanciesForDate]);
 
-  const deleteRecording = useCallback(async (id: string) => { return data.deleteRecording(id); }, [data]);
+  const deleteRecording = useCallback(async (id: string, options?: { force?: boolean }) => { return data.deleteRecording(id, options); }, [data]);
   const addTask = useCallback((task: KanbanTask) => { data.addTask(task); }, [data]);
   const updateTask = useCallback((task: KanbanTask) => { data.updateTask(task); }, [data]);
   const deleteTask = useCallback((id: string) => { data.deleteTask(id); }, [data]);

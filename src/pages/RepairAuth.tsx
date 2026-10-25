@@ -20,11 +20,17 @@ export default function RepairAuth() {
     
     try {
       addLog("Testando conexão com a API da VPS...");
-      const health = await fetch('https://agenciapulse.tech/api/health').catch(() => ({ ok: false }));
+      const health = await fetch('https://agenciapulse.tech/api/health').catch(() => ({ ok: false, status: 0 }));
       
       if (!health.ok) {
-        addLog("ERRO: API da VPS não respondeu (502 Bad Gateway?).");
-        addLog("Tente reiniciar o serviço na VPS via SSH antes de prosseguir.");
+        if (health.status === 503) {
+          // A API respondeu, mas o banco de dados não
+          addLog("ERRO: a API está no ar, mas o banco de dados não respondeu (503).");
+          addLog("Verifique o PostgreSQL na VPS via SSH antes de prosseguir.");
+        } else {
+          addLog("ERRO: API da VPS não respondeu (502 Bad Gateway?).");
+          addLog("Tente reiniciar o serviço na VPS via SSH antes de prosseguir.");
+        }
         setStatus('error');
         return;
       }

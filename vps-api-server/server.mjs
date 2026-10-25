@@ -97,27 +97,43 @@ app.get('/api/diagnostics/pente-fino', async (req, res) => {
   }
 });
 
-app.get('/api/health', async (req, res) => {
-
-  let dbStatus = 'ok';
-  let dbError = null;
-  
+/** SELECT 1 com tempo limite curto, para o health check nunca ficar travado. */
+async function checkDatabaseHealth(timeoutMs = 3000) {
+  let timer;
   try {
-    const result = await pool.query('SELECT 1 as health');
-    if (!result.rows.length) dbStatus = 'error';
+    const result = await Promise.race([
+      pool.query('SELECT 1 as health'),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`timeout de ${timeoutMs} ms no SELECT 1`)), timeoutMs);
+      }),
+    ]);
+    return result?.rows?.length ? { status: 'ok', error: null } : { status: 'error', error: 'SELECT 1 sem linhas' };
   } catch (err) {
-    dbStatus = 'error';
-    dbError = err.message;
+    return { status: 'error', error: err?.message || String(err) };
+  } finally {
+    clearTimeout(timer);
   }
+}
 
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(), 
+// Público (Nginx, update_vps.sh, monitor): só o estado. 503 quando o banco
+// não responde, para o monitor e o deploy perceberem. Detalhes em /api/admin/health.
+app.get('/api/health', async (req, res) => {
+  const db = await checkDatabaseHealth();
+  const ok = db.status === 'ok';
+  res.status(ok ? 200 : 503).json({
+    status: ok ? 'ok' : 'degraded',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get('/api/admin/health', async (req, res) => {
+  if (!(await requireAdminRoute(req, res))) return;
+  const db = await checkDatabaseHealth();
+  res.status(db.status === 'ok' ? 200 : 503).json({
+    status: db.status === 'ok' ? 'ok' : 'degraded',
+    timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    database: {
-      status: dbStatus,
-      error: dbError
-    },
+    database: db,
     env: {
       has_jwt_secret: !!process.env.JWT_SECRET,
       has_db_url: !!process.env.DATABASE_URL,
@@ -10652,7 +10668,6 @@ app.delete('/api/discount-campaigns/:id', async (req, res) => {
 });
 
 // ─── Health check ───────────────────────────────────────────
-app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
 const TV_DAY_MS = 24 * 60 * 60 * 1000;
 

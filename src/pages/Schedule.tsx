@@ -20,7 +20,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Plus, ChevronLeft, ChevronRight, Check, XCircle, AlertTriangle, FileText, Undo2, CalendarDays, Columns3, Pencil, Sparkles, RefreshCw, MessageSquare, Play, Square, Star, Link, ThumbsDown, MessageCircle, Trash2, Video, MapPin, Calendar } from 'lucide-react';
-import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, getDay } from 'date-fns';
+import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isSameMonth, isSameDay, getDay, differenceInCalendarWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import UserAvatar from '@/components/UserAvatar';
@@ -139,6 +139,7 @@ export default function Schedule() {
   const [filterVideomaker, setFilterVideomaker] = useState('all');
   const [filterCity, setFilterCity] = useState<string>('all');
   const [weekOffset, setWeekOffset] = useState(0);
+  const [scheduleView, setScheduleView] = useState<'calendar' | 'kanban'>('calendar');
   const [showEndo, setShowEndo] = useState(true);
   const [showEvents, setShowEvents] = useState(true);
   const [showBackup, setShowBackup] = useState(false);
@@ -1503,7 +1504,7 @@ export default function Schedule() {
       {/* Capacity widget */}
       <AgencyCapacityWidget clients={clients} users={users} recordings={recordings} settings={settings} compact />
 
-      <Tabs defaultValue="calendar" className="w-full">
+      <Tabs value={scheduleView} onValueChange={v => setScheduleView(v as 'calendar' | 'kanban')} className="w-full">
         <TabsList>
           <TabsTrigger value="calendar" className="gap-1.5"><CalendarDays size={14} /> Calendário</TabsTrigger>
           <TabsTrigger value="kanban" className="gap-1.5"><Columns3 size={14} /> Kanban</TabsTrigger>
@@ -1592,8 +1593,10 @@ export default function Schedule() {
 
           {/* Calendar grid */}
           <div className="grid grid-cols-7 gap-1">
-             {calendarDays.map(day => {
+             {calendarDays.map((day, dayIndex) => {
               const dateStr = format(day, 'yyyy-MM-dd');
+              // Nas colunas da direita a caixa de ações abre para a esquerda (não sai da tela)
+              const actionsAlignRight = dayIndex % 7 >= 4;
               const isCurrentMonth = isSameMonth(day, currentMonth);
               const isToday = isSameDay(day, today);
               const dayEvents = getEventsForDay(day);
@@ -1614,19 +1617,24 @@ export default function Schedule() {
                       return (
                       <div
                         key={evt.id}
-                        className={`rounded px-1 py-0.5 text-[10px] truncate cursor-pointer group relative ${active ? 'ring-1 ring-primary animate-pulse' : ''}`}
+                        // tabIndex: no celular/tablet o toque foca o card e abre as ações (group-focus-within)
+                        tabIndex={0}
+                        className={`rounded px-1 py-0.5 text-[10px] cursor-pointer group relative focus:outline-none focus-visible:ring-1 focus-visible:ring-primary ${active ? 'ring-1 ring-primary animate-pulse' : ''}`}
                         style={{ backgroundColor: `hsl(${evt.color} / 0.15)`, borderLeft: `2px solid hsl(${evt.color})` }}
                       >
-                        {evt.type === 'endomarketing' && <Sparkles size={7} className="inline mr-0.5" style={{ color: `hsl(${ENDO_COLOR})` }} />}
-                        {evt.type === 'event' && <MapPin size={7} className="inline mr-0.5 text-orange-500" />}
-                        <span className="font-medium">{evt.clientName}</span>
-                        <span className="text-muted-foreground ml-1">{evt.startTime}</span>
-                        {active && <span className="inline ml-0.5 text-primary font-bold">●</span>}
-                        {evt.type === 'recording' && evt.recording?.status === 'concluida' && <Check size={8} className="inline ml-0.5 text-success" />}
-                        {evt.type === 'recording' && evt.recording?.status === 'cancelada' && <XCircle size={8} className="inline ml-0.5 text-destructive" />}
+                        {/* O corte do texto fica aqui dentro: no card, o overflow escondia a caixa de ações */}
+                        <div className="truncate">
+                          {evt.type === 'endomarketing' && <Sparkles size={7} className="inline mr-0.5" style={{ color: `hsl(${ENDO_COLOR})` }} />}
+                          {evt.type === 'event' && <MapPin size={7} className="inline mr-0.5 text-orange-500" />}
+                          <span className="font-medium">{evt.clientName}</span>
+                          <span className="text-muted-foreground ml-1">{evt.startTime}</span>
+                          {active && <span className="inline ml-0.5 text-primary font-bold">●</span>}
+                          {evt.type === 'recording' && evt.recording?.status === 'concluida' && <Check size={8} className="inline ml-0.5 text-success" />}
+                          {evt.type === 'recording' && evt.recording?.status === 'cancelada' && <XCircle size={8} className="inline ml-0.5 text-destructive" />}
+                        </div>
 
                         {/* Hover tooltip */}
-                        <div className="absolute left-0 top-full mt-0.5 hidden group-hover:flex flex-col gap-1 bg-card rounded-lg p-2 shadow-lg border border-border z-20 min-w-[140px]">
+                        <div className={`absolute ${actionsAlignRight ? 'right-0' : 'left-0'} top-full mt-0.5 hidden group-hover:flex group-focus-within:flex flex-col gap-1 bg-card rounded-lg p-2 shadow-lg border border-border z-20 min-w-[140px]`}>
                           {evt.type === 'event' && evt.eventRecording ? (
                             <>
                               <div className="flex items-center gap-1">
@@ -1685,7 +1693,18 @@ export default function Schedule() {
                       );
                     })}
                     {dayEvents.length > 4 && (
-                      <p className="text-[9px] text-muted-foreground text-center">+{dayEvents.length - 4} mais</p>
+                      // Abre o Kanban na semana do dia, que lista todas as gravações sem corte
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWeekOffset(differenceInCalendarWeeks(day, new Date(), { weekStartsOn: 1 }));
+                          setScheduleView('kanban');
+                        }}
+                        className="w-full text-[9px] text-muted-foreground text-center hover:text-primary hover:underline"
+                        title="Ver todas no Kanban da semana"
+                      >
+                        +{dayEvents.length - 4} mais
+                      </button>
                     )}
                   </div>
                 </div>
@@ -1789,7 +1808,7 @@ export default function Schedule() {
                         )}
 
                         {evt.type === 'event' && evt.eventRecording && (
-                          <div className="grid grid-cols-2 gap-1 pt-1.5 border-t border-border/50 hidden group-hover:grid transition-all">
+                          <div className="grid grid-cols-2 gap-1 pt-1.5 border-t border-border/50 hidden group-hover:grid group-focus-within:grid [@media(hover:none)]:grid transition-all">
                             <button onClick={() => openEditEvent(evt.eventRecording!)} className="text-[10px] py-1.5 rounded-md bg-muted/60 text-muted-foreground hover:bg-muted transition-colors flex items-center justify-center gap-1">
                               <Pencil size={10} /> Editar
                             </button>
@@ -1805,7 +1824,7 @@ export default function Schedule() {
                         )}
 
                         {evt.type === 'recording' && evt.recording && (
-                          <div className="grid grid-cols-2 gap-1 pt-1.5 border-t border-border/50 hidden group-hover:grid transition-all">
+                          <div className="grid grid-cols-2 gap-1 pt-1.5 border-t border-border/50 hidden group-hover:grid group-focus-within:grid [@media(hover:none)]:grid transition-all">
                             <button onClick={() => openEditRecording(evt.recording!)} className="text-[10px] py-1.5 rounded-md bg-muted/60 text-muted-foreground hover:bg-muted transition-colors flex items-center justify-center gap-1">
                               <Pencil size={10} /> Editar
                             </button>

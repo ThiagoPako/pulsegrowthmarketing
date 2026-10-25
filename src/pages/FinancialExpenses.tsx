@@ -21,6 +21,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import ExpenseFormDialog from '@/components/financial/ExpenseFormDialog';
 import { supabase } from '@/lib/vpsDb';
+import { useApp } from '@/contexts/AppContext';
 
 /* ── Rocket Pay Animation ── */
 function SalaryRocketOverlay({ name, onComplete }: { name: string; onComplete: () => void }) {
@@ -230,6 +231,7 @@ const ROLE_LABELS: Record<string, string> = {
 export default function FinancialExpenses() {
   const navigate = useNavigate();
   const { expenses, categories, addExpense, updateExpense, deleteExpense, addCategory, refetch } = useFinancialData();
+  const { users } = useApp();
   const [open, setOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -429,10 +431,15 @@ export default function FinancialExpenses() {
     };
     const bonusOk = await addExpense(bonusExpenseData);
 
-    // 3. Save bonus record for tracking
+    // 3. Save bonus record for tracking (banner de parabéns do colaborador)
+    const memberKey = (memberName || '').trim().toLowerCase();
+    const member = users.find(u =>
+      [u.displayName, u.name].some(n => (n || '').trim().toLowerCase() === memberKey)
+    ) || users.find(u => (u.name || '').trim().toLowerCase() === (bonusExpense.responsible || '').trim().toLowerCase());
     const { error } = await supabase.from('salary_bonuses').insert({
       expense_id: bonusExpense.id,
-      user_name: memberName,
+      user_id: member?.id || null,
+      user_name: member?.name || memberName,
       user_role: memberRole,
       bonus_amount: bonusVal,
       reference_month: selectedMonth,
@@ -440,6 +447,7 @@ export default function FinancialExpenses() {
 
     if (error) {
       console.error('[FinancialExpenses] bonus insert error:', error);
+      toast.warning('O bônus foi lançado como despesa, mas o registro do bônus (aviso ao colaborador) não foi salvo');
     }
 
     if (bonusOk) {
@@ -451,7 +459,7 @@ export default function FinancialExpenses() {
     setBonusDialogOpen(false);
     setBonusExpense(null);
     setBonusAmount('');
-  }, [bonusExpense, bonusAmount, updateExpense, addExpense, selectedMonth]);
+  }, [bonusExpense, bonusAmount, updateExpense, addExpense, selectedMonth, users]);
 
   const handleRevertSalary = useCallback(async (expense: Expense) => {
     const desc = expense.description.replace(/ - PAGO$/, '');

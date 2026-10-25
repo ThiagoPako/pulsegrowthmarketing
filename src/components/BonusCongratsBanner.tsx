@@ -8,6 +8,7 @@ import { format } from 'date-fns';
 
 interface SalaryBonus {
   id: string;
+  user_id?: string | null;
   user_name: string;
   bonus_amount: number;
   reference_month: string;
@@ -22,22 +23,30 @@ export default function BonusCongratsBanner() {
   const currentMonth = format(new Date(), 'yyyy-MM');
 
   useEffect(() => {
-    if (!currentUser?.name) return;
+    if (!currentUser?.id && !currentUser?.name) return;
 
     const fetchBonuses = async () => {
       const { data } = await supabase
         .from('salary_bonuses')
         .select('*')
-        .eq('reference_month', currentMonth)
-        .eq('user_name', currentUser.name);
+        .eq('reference_month', currentMonth);
 
-      if (data && data.length > 0) {
-        setBonuses(data as SalaryBonus[]);
+      // Pelo id do usuário (bônus novos) ou pelo nome (bônus antigos, que guardavam
+      // o nome da descrição do salário — às vezes o nome de exibição)
+      const names = [currentUser.name, currentUser.displayName]
+        .map(n => (n || '').trim().toLowerCase())
+        .filter(Boolean);
+      const mine = ((data as SalaryBonus[]) || []).filter(b =>
+        (b.user_id && b.user_id === currentUser.id) ||
+        (!b.user_id && names.includes((b.user_name || '').trim().toLowerCase()))
+      );
+      if (mine.length > 0) {
+        setBonuses(mine);
       }
     };
 
     fetchBonuses();
-  }, [currentUser?.name, currentMonth]);
+  }, [currentUser?.id, currentUser?.name, currentUser?.displayName, currentMonth]);
 
   // Load dismissed from sessionStorage
   useEffect(() => {

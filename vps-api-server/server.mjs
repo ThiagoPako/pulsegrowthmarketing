@@ -964,6 +964,36 @@ ensureRecurringRevenuesTables().catch((error) => {
   console.error('Failed to ensure recurring revenues tables:', error);
 });
 
+// ─── Bônus de salário (registro do "Pagar + Bônus" e banner de parabéns) ───
+// A tabela só existia no Supabase antigo: na VPS o insert falhava em silêncio.
+let salaryBonusesPromise = null;
+async function ensureSalaryBonusesTable() {
+  if (!salaryBonusesPromise) {
+    salaryBonusesPromise = pool.query(`
+      CREATE TABLE IF NOT EXISTS salary_bonuses (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        expense_id UUID NOT NULL,
+        user_name TEXT NOT NULL DEFAULT '',
+        user_role TEXT NOT NULL DEFAULT '',
+        bonus_amount NUMERIC NOT NULL DEFAULT 0,
+        reference_month TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      ALTER TABLE salary_bonuses ADD COLUMN IF NOT EXISTS user_id UUID;
+      ALTER TABLE salary_bonuses ADD COLUMN IF NOT EXISTS city TEXT;
+      CREATE INDEX IF NOT EXISTS idx_salary_bonuses_month ON salary_bonuses (reference_month);
+    `).catch((error) => {
+      salaryBonusesPromise = null;
+      throw error;
+    });
+  }
+  return salaryBonusesPromise;
+}
+
+ensureSalaryBonusesTable().catch((error) => {
+  console.error('Failed to ensure salary bonuses table:', error);
+});
+
 // ─── Campanhas: garante tabelas e o vínculo de roteiro/tarefas com o slot ───
 // Sem a coluna campaign_slot_id o roteiro criado pela campanha falha ao salvar
 // e não aparece no módulo Roteiros.
@@ -7876,6 +7906,7 @@ const ALLOWED_TABLES = [
   'story_editing_sessions','script_requests','manual_video_tasks','plan_promotions',
   'client_professionals','client_units','client_collaborators','short_links','client_bio_links','client_bio_buttons',
   'warehouse_items','warehouse_movements','structure_investments','recurring_revenues',
+  'salary_bonuses',
 
 
 
@@ -7890,6 +7921,7 @@ const TABLES_WITH_CITY = new Set([
   'content_tasks','task_history','task_comments',
   'design_tasks','design_task_history','delivery_records',
   'revenues','expenses','financial_contracts','financial_activity_log','recurring_revenues',
+  'salary_bonuses',
   'financial_chat_messages','cash_reserve_movements','billing_messages',
   'social_media_deliveries','social_accounts','integration_logs',
   'automation_flows','automation_logs','api_integrations','api_integration_logs',
@@ -8201,6 +8233,12 @@ app.post('/api/db/query', async (req, res) => {
 
     if (safeTable === 'short_links' || safeTable === 'short_link_clicks') {
       await ensureShortLinksTables();
+    }
+
+    if (safeTable === 'salary_bonuses') {
+      await ensureSalaryBonusesTable().catch((error) => {
+        console.warn('Could not ensure salary bonuses table:', error?.message || error);
+      });
     }
 
     if (safeTable === 'recurring_revenues' || safeTable === 'revenues') {

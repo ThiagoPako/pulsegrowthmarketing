@@ -10,15 +10,31 @@ import { HeartPulse, TrendingUp, TrendingDown, DollarSign, Percent, Wallet, File
 import FinancialQuickNav from '@/components/financial/FinancialQuickNav';
 import { motion } from 'framer-motion';
 import { exportReportPDF } from '@/lib/pdfExport';
+import { useApp } from '@/contexts/AppContext';
 
 type PeriodPreset = 'current' | 'previous' | 'quarter' | 'year' | 'custom';
 
-const OWNER_KEYWORDS = ['thiago', 'victor'];
+// Chave de comparação de nomes: minúsculas, sem acento e só letras/números
+const personKey = (value?: string | null) => (value || '')
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9]/g, '');
+
+// "Salário - Victor Oliveira (Editor) - PAGO" → "Victor Oliveira"
+const salaryPersonName = (e: { description?: string; responsible?: string }) => {
+  const cleaned = (e.description || '').replace(/\s+-\s+pago\s*$/i, '').trim();
+  const match = cleaned.match(/^sal[aá]rio\s*-\s*(.+?)(?:\s*\([^)]+\))?$/i);
+  return (match?.[1] || e.responsible || '').trim();
+};
+
+const WITHDRAWAL_TEXT = /retirada|pr[oó][- ]?labore|s[oó]cio/i;
 
 const fmt = (n: number) => `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function FinancialEmpresaSaude() {
   const { revenues, expenses, categories, loading } = useFinancialData();
+  const { users } = useApp();
   const [periodType, setPeriodType] = useState<PeriodPreset>('current');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -41,9 +57,41 @@ export default function FinancialEmpresaSaude() {
     };
   }, [periodType, customStart, customEnd]);
 
-  const isOwnerExpense = (e: { description?: string; responsible?: string }) => {
-    const hay = `${e.description || ''} ${e.responsible || ''}`.toLowerCase();
-    return OWNER_KEYWORDS.some(k => hay.includes(k));
+  // Retirada de sócio: categoria Pró-labore, ou lançamento no nome de um sócio
+  // (usuário admin, pelo nome completo). Antes era qualquer texto com "thiago" ou
+  // "victor", o que tirava dos custos o salário de funcionários com o mesmo nome.
+  const prolaboreCategoryId = useMemo(
+    () => categories.find(c => /pr[oó][- ]?labore/i.test(c.name || ''))?.id || null,
+    [categories]
+  );
+  const salaryCategoryId = useMemo(
+    () => categories.find(c => (c.name || '').toLowerCase() === 'salários')?.id || null,
+    [categories]
+  );
+  const socioKeys = useMemo(() => {
+    const full = new Set<string>();
+    const first = new Set<string>();
+    users.filter(u => u.role === 'admin').forEach(u => {
+      [u.displayName, u.name].forEach(v => {
+        const k = personKey(v);
+        if (k.length >= 3) full.add(k);
+        const f = personKey((v || '').trim().split(/\s+/)[0]);
+        if (f.length >= 4) first.add(f);
+      });
+    });
+    return { full, first };
+  }, [users]);
+
+  const isOwnerExpense = (e: { description?: string; responsible?: string; category_id?: string }) => {
+    if (prolaboreCategoryId && e.category_id === prolaboreCategoryId) return true;
+    // Salário só conta como retirada quando é de um sócio (nome completo, nunca só o primeiro nome)
+    if (salaryCategoryId && e.category_id === salaryCategoryId) {
+      return socioKeys.full.has(personKey(salaryPersonName(e))) || socioKeys.full.has(personKey(e.responsible));
+    }
+    // Demais categorias: só quando o texto indica retirada e cita um sócio
+    if (!WITHDRAWAL_TEXT.test(e.description || '')) return false;
+    const hay = personKey(`${e.description || ''} ${e.responsible || ''}`);
+    return [...socioKeys.full, ...socioKeys.first].some(k => hay.includes(k));
   };
 
   const catById = useMemo(() => Object.fromEntries(categories.map(c => [c.id, c.name])), [categories]);
@@ -78,7 +126,8 @@ export default function FinancialEmpresaSaude() {
       .sort((a, b) => b.total - a.total);
 
     return { totalRevenue, totalCompanyExpense, totalOwnerExpense, profit, margin, byCategory, companyExpenses, ownerExpenses };
-  }, [revenues, expenses, dateRange, catById]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revenues, expenses, dateRange, catById, prolaboreCategoryId, salaryCategoryId, socioKeys]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -92,7 +141,7 @@ export default function FinancialEmpresaSaude() {
             </div>
             <div>
               <h1 className="text-2xl font-bold">Empresa Saúde</h1>
-              <p className="text-sm text-muted-foreground">Faturamento, custos operacionais e margem de lucro (excluindo retiradas dos sócios Thiago e Victor).</p>
+              <p className="text-sm text-muted-foreground">Faturamento, custos operacionais e margem de lucro (excluindo pró-labore e retiradas dos sócios).</p>
             </div>
           </div>
         </motion.div>
@@ -278,7 +327,7 @@ export default function FinancialEmpresaSaude() {
                   <CardTitle className="text-sm text-muted-foreground">Retiradas dos Sócios (excluídas do cálculo)</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-xs text-muted-foreground mb-2">Estas despesas contêm "Thiago" ou "Victor" e são consideradas retiradas dos sócios, não custos operacionais.</p>
+                  <p className="text-xs text-muted-foreground mb-2">Pró-labore e lançamentos de retirada no nome dos sócios (usuários admin) não entram como custos operacionais.</p>
                   <Table>
                     <TableHeader>
                       <TableRow>

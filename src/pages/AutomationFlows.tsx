@@ -17,6 +17,20 @@ import {
   Workflow, ChevronDown, GripVertical, X, Copy, BarChart3, Eye
 } from 'lucide-react';
 
+// Nenhum código do servidor lê automation_flows ainda: os fluxos são só rascunho (não dá para ativar)
+const FLOWS_RUNNER_AVAILABLE = false;
+
+function FlowsDraftNotice() {
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm">
+      <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
+      <p className="text-foreground">
+        Os fluxos ainda não são executados pelo sistema. Você pode montar e salvar, mas nada é disparado (nem mensagens de WhatsApp).
+      </p>
+    </div>
+  );
+}
+
 // ─── Node Types ───
 type NodeType = 'trigger' | 'condition' | 'action' | 'delay' | 'loop' | 'notification';
 
@@ -534,7 +548,10 @@ export default function AutomationFlows() {
   };
 
   const deleteFlow = async (id: string) => {
-    await supabase.from('automation_flows').delete().eq('id', id);
+    const flow = flows.find(f => f.id === id);
+    if (!window.confirm(`Excluir o fluxo "${flow?.name || 'sem nome'}"? Não dá para desfazer.`)) return;
+    const { error } = await supabase.from('automation_flows').delete().eq('id', id);
+    if (error) { toast.error(`Erro ao excluir: ${error.message}`); return; }
     setFlows(prev => prev.filter(f => f.id !== id));
     if (editingFlow?.id === id) { setEditingFlow(null); setShowEditor(false); }
     toast.success('Fluxo excluído');
@@ -542,7 +559,13 @@ export default function AutomationFlows() {
 
   const toggleFlowActive = async (flow: AutomationFlow) => {
     const newActive = !flow.is_active;
-    await supabase.from('automation_flows').update({ is_active: newActive, updated_at: new Date().toISOString() } as any).eq('id', flow.id);
+    // ainda não existe quem execute os fluxos: ativar daria a impressão de que algo vai rodar
+    if (newActive && !FLOWS_RUNNER_AVAILABLE) {
+      toast.info('Os fluxos ainda não são executados pelo sistema. Por enquanto eles ficam só como rascunho.');
+      return;
+    }
+    const { error } = await supabase.from('automation_flows').update({ is_active: newActive, updated_at: new Date().toISOString() } as any).eq('id', flow.id);
+    if (error) { toast.error(`Erro ao ${newActive ? 'ativar' : 'desativar'}: ${error.message}`); return; }
     setFlows(prev => prev.map(f => f.id === flow.id ? { ...f, is_active: newActive } : f));
     if (editingFlow?.id === flow.id) setEditingFlow({ ...editingFlow, is_active: newActive });
     toast.success(newActive ? 'Fluxo ativado!' : 'Fluxo desativado');
@@ -620,6 +643,7 @@ export default function AutomationFlows() {
             <Plus className="h-4 w-4" /> Novo Fluxo
           </Button>
         </div>
+        {!FLOWS_RUNNER_AVAILABLE && <FlowsDraftNotice />}
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -692,7 +716,7 @@ export default function AutomationFlows() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Switch checked={flow.is_active} onCheckedChange={() => toggleFlowActive(flow)} />
+                    <Switch checked={flow.is_active} disabled={!FLOWS_RUNNER_AVAILABLE && !flow.is_active} onCheckedChange={() => toggleFlowActive(flow)} />
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => loadLogs(flow.id)}>
                       <BarChart3 className="h-4 w-4" />
                     </Button>
@@ -794,6 +818,7 @@ export default function AutomationFlows() {
         <div className="flex items-center gap-2">
           <Switch
             checked={editingFlow?.is_active || false}
+            disabled={!FLOWS_RUNNER_AVAILABLE && !editingFlow?.is_active}
             onCheckedChange={() => editingFlow && toggleFlowActive(editingFlow)}
           />
           <Button onClick={saveFlow} className="gap-2">
@@ -801,6 +826,8 @@ export default function AutomationFlows() {
           </Button>
         </div>
       </div>
+
+      {!FLOWS_RUNNER_AVAILABLE && <FlowsDraftNotice />}
 
       {/* Node palette */}
       <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-xl border">

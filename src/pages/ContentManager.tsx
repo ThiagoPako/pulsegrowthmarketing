@@ -80,13 +80,30 @@ function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDel
   const [hovering, setHovering] = useState(false);
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [generatedThumb, setGeneratedThumb] = useState<string | null>(null);
+  const tileRef = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
 
   const isVideo = !!(content.file_url?.match(/\.(mp4|mov|webm|avi)(\?|$)/i) ||
     ['reel', 'institucional', 'anuncio'].includes(content.content_type));
 
-  // Generate thumbnail on mount for videos without one
+  // Só gera a miniatura quando o tile aparece na tela (antes eram até 100 vídeos de uma vez)
   useEffect(() => {
-    if (!isVideo || content.thumbnail_url || !content.file_url) return;
+    if (inView || !isVideo || content.thumbnail_url || !content.file_url) return;
+    const el = tileRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') { setInView(true); return; }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setInView(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: '200px' });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [inView, isVideo, content.thumbnail_url, content.file_url]);
+
+  // Generate thumbnail for videos without one (once the tile is visible)
+  useEffect(() => {
+    if (!inView || !isVideo || content.thumbnail_url || !content.file_url) return;
     const vid = document.createElement('video');
     vid.crossOrigin = 'anonymous';
     vid.preload = 'metadata';
@@ -112,7 +129,7 @@ function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDel
     };
     vid.onerror = () => {};
     return () => { vid.src = ''; };
-  }, [content.file_url, content.thumbnail_url, isVideo]);
+  }, [inView, content.file_url, content.thumbnail_url, isVideo]);
 
   // 6-second loop logic
   useEffect(() => {
@@ -160,6 +177,7 @@ function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDel
 
   return (
     <div
+      ref={tileRef}
       className="relative aspect-square bg-muted rounded-xl overflow-hidden cursor-pointer group border border-border/50 hover:border-primary/30 transition-all duration-200 hover:shadow-md"
       onMouseEnter={startPreview}
       onMouseLeave={stopPreview}
@@ -264,13 +282,16 @@ export default function ContentManager() {
   const [playingContent, setPlayingContent] = useState<ContentRow | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
-  useEffect(() => { loadData(); }, []);
+  // Recarrega ao trocar o cliente: o filtro vai para a consulta (antes filtrava só entre os 100 últimos da agência)
+  useEffect(() => { loadData(); }, [filterClient]);
 
   const loadData = async () => {
     setLoading(true);
+    const contentsBase = supabase.from('client_portal_contents').select('*');
+    const contentsQuery = filterClient !== 'all' ? contentsBase.eq('client_id', filterClient) : contentsBase;
     const [clientsRes, contentsRes] = await Promise.all([
       supabase.from('clients').select('id, company_name').order('company_name'),
-      supabase.from('client_portal_contents').select('*').order('created_at', { ascending: false }).limit(100),
+      contentsQuery.order('created_at', { ascending: false }).limit(filterClient !== 'all' ? 300 : 100),
     ]);
 
     const clientList = (clientsRes.data || []) as ClientOption[];

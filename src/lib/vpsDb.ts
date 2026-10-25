@@ -466,6 +466,10 @@ class ChannelBuilder {
   private _name: string;
   private _callbacks: Array<{ event: string; filter: any; callback: (payload: any) => void }> = [];
   private _socket: WebSocket | null = null;
+  // Fechado pela tela (unsubscribe/removeChannel): o onclose não reconecta mais.
+  private _closedByUser = false;
+  private _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private _retries = 0;
 
   constructor(name: string) {
     this._name = name;
@@ -476,20 +480,54 @@ class ChannelBuilder {
     return this;
   }
 
+  /**
+   * O servidor manda { type: 'broadcast', event: 'crm:new_client', ... }. Quem
+   * escuta guarda { event: 'broadcast', filter: { event: 'crm:new_client' } }, como
+   * no Supabase: o nome do evento fica no filtro (antes comparava 'broadcast' com
+   * 'crm:new_client' e nunca disparava).
+   */
+  private _matches(c: { event: string; filter: any }, payload: any): boolean {
+    if (c.event === '*') return true;
+    if (c.event === 'broadcast') {
+      if (payload.type !== 'broadcast') return false;
+      const wanted = c.filter?.event;
+      return !wanted || wanted === '*' || wanted === payload.event;
+    }
+    if (c.event === 'postgres_changes') {
+      if (payload.type !== 'postgres_changes') return false;
+      const table = c.filter?.table;
+      return !table || table === payload.table;
+    }
+    return c.event === payload.event;
+  }
+
   subscribe(): this {
+    this._closedByUser = false;
+    this._connect();
+    return this;
+  }
+
+  private _connect() {
+    if (this._closedByUser || this._socket) return;
     const token = localStorage.getItem(TOKEN_KEY);
-    if (!token) return this;
+    if (!token) return;
+
+    // O servidor não emite 'postgres_changes' (só broadcast): canal só com esse tipo
+    // não abre socket (essas telas atualizam pelo polling delas).
+    if (this._callbacks.length > 0 && this._callbacks.every(c => c.event === 'postgres_changes')) return;
 
     // Connect to VPS WebSocket for realtime updates
     // WS URL structure matches the API base
     const wsUrl = VPS_API_BASE.replace('http', 'ws') + '/realtime';
     
     try {
-      this._socket = new WebSocket(wsUrl);
+      const socket = new WebSocket(wsUrl);
+      this._socket = socket;
 
-      this._socket.onopen = () => {
-        if (this._socket?.readyState === WebSocket.OPEN) {
-          this._socket.send(JSON.stringify({
+      socket.onopen = () => {
+        this._retries = 0;
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({
             type: 'subscribe',
             channel: this._name,
             token: token,
@@ -498,15 +536,12 @@ class ChannelBuilder {
         }
       };
 
-      this._socket.onmessage = (event) => {
+      socket.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data);
           if (payload.type === 'broadcast' || payload.type === 'postgres_changes') {
             this._callbacks.forEach(c => {
-              // Simple event matching
-              if (c.event === '*' || c.event === payload.event) {
-                c.callback(payload);
-              }
+              if (this._matches(c, payload)) c.callback(payload);
             });
           }
         } catch (e) {
@@ -514,20 +549,33 @@ class ChannelBuilder {
         }
       };
 
-      this._socket.onclose = () => {
-        // Simple reconnect after 5s
-        setTimeout(() => this.subscribe(), 5000);
+      socket.onclose = () => {
+        if (this._socket === socket) this._socket = null;
+        if (this._closedByUser) return;
+        // Reconecta com espera crescente (5 s, 10 s, 20 s... até 60 s).
+        const delay = Math.min(60_000, 5_000 * 2 ** Math.min(this._retries, 4));
+        this._retries += 1;
+        if (this._reconnectTimer) clearTimeout(this._reconnectTimer);
+        this._reconnectTimer = setTimeout(() => {
+          this._reconnectTimer = null;
+          this._connect();
+        }, delay);
       };
     } catch (e) {
       console.error('[realtime] Connection error:', e);
     }
-    return this;
   }
   
   unsubscribe() {
+    this._closedByUser = true;
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
     if (this._socket) {
-      this._socket.close();
+      const socket = this._socket;
       this._socket = null;
+      try { socket.close(); } catch { /* ignore */ }
     }
   }
   send(payload: { type?: string; event: string; payload?: any }): 'ok' | 'queued' | 'error' {
@@ -601,7 +649,10 @@ export const supabase = {
     return new ChannelBuilder(name);
   },
 
-  removeChannel(_channel: any): void {},
+  // Fecha o socket do canal e cancela a reconexão (antes não fazia nada e o canal vazava).
+  removeChannel(channel: any): void {
+    try { channel?.unsubscribe?.(); } catch { /* ignore */ }
+  },
 
   // Functions namespace — replaces supabase.functions.invoke
   functions: {

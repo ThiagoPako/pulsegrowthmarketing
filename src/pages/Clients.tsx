@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import WhatsAppGroupPicker from '@/components/whatsapp/WhatsAppGroupPicker';
 import { useApp } from '@/contexts/AppContext';
 import { generateClientCardPdf } from '@/lib/clientCardPdf';
@@ -128,7 +129,11 @@ export default function Clients() {
   const [sendWaMsg, setSendWaMsg] = useState('');
   const [sendWaLoading, setSendWaLoading] = useState(false);
   const [artDbClient, setArtDbClient] = useState<Client | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  // A busca do topo abre /clientes?busca=...: aplica também quando a tela já estava aberta.
+  const [searchParams] = useSearchParams();
+  const buscaParam = searchParams.get('busca') || '';
+  const [searchTerm, setSearchTerm] = useState(buscaParam);
+  useEffect(() => { if (buscaParam) setSearchTerm(buscaParam); }, [buscaParam]);
   const [generatingChecklistFor, setGeneratingChecklistFor] = useState<string | null>(null);
   const [checklistClient, setChecklistClient] = useState<Client | null>(null);
   const [transferClient, setTransferClient] = useState<Client | null>(null);
@@ -696,7 +701,8 @@ export default function Clients() {
           logoUrl: logoUrl || undefined,
         } as Client;
 
-        await updateClient(updatedClient);
+        // A API recusou: o aviso já apareceu e a tela não mostra como salvo.
+        if (!(await updateClient(updatedClient))) return;
 
         const clientMetaUpdate = await supabase.from('clients').update({
           is_admin_client: isAdminClient,

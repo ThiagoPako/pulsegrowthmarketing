@@ -109,6 +109,8 @@ function startPolling() {
   _pollTimer = setInterval(() => {
     // If WS is connected, skip REST poll
     if (_ws && _ws.readyState === WebSocket.OPEN) return;
+    // Aba escondida não precisa da lista; ao voltar, o próximo ciclo atualiza.
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
     void pollPresenceRest();
   }, 5_000);
 }

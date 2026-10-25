@@ -255,9 +255,9 @@ export default function CompanySettings() {
     setForm({ ...form, workDays: days });
   };
 
-  const handleSave = () => {
-    updateSettings(form);
-    toast.success('Configurações salvas');
+  const handleSave = async () => {
+    // Só confirma quando a API gravou (o erro já aparece como aviso).
+    if (await updateSettings(form)) toast.success('Configurações salvas');
   };
 
   const handleAddHoliday = async () => {

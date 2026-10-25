@@ -792,7 +792,7 @@ export default function RecordingControl() {
               title: kindLabel,
               message: `${clientLabel} • ${format(new Date(wizard.date + 'T12:00:00'), "dd/MM", { locale: ptBR })} às ${wizard.time}${wizard.scriptId && !isStory ? ' • roteiro anexado' : ''}`,
               type: 'info',
-              link: '/videomaker',
+              link: '/videomakers',
             });
           } catch {}
 

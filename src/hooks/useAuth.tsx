@@ -1,5 +1,7 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { supabase } from '@/lib/vpsDb';
+import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 
 async function logLoginEntry(userId: string) {
   try {
@@ -98,8 +100,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<{ access_token: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  const refreshVpsSession = useCallback(async (token: string): Promise<VpsAuthPayload | null> => {
+  // `rejected` = o servidor respondeu e recusou o token (401/403). Sem rede ou com a
+  // API fora do ar (5xx) não é recusa: o token continua guardado.
+  const refreshVpsSession = useCallback(async (token: string): Promise<{ payload: VpsAuthPayload | null; rejected: boolean }> => {
     try {
       const response = await fetch(`${VPS_API_BASE}/auth/refresh`, {
         method: 'POST',
@@ -111,17 +116,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       const payload = await response.json().catch(() => null) as VpsAuthPayload | null;
-      if (!response.ok || !payload?.token) return null;
+      if (!response.ok || !payload?.token) {
+        return { payload: null, rejected: response.status === 401 || response.status === 403 };
+      }
 
       localStorage.setItem(TOKEN_KEY, payload.token);
-      return payload;
+      return { payload, rejected: false };
     } catch (error) {
       console.warn('refreshVpsSession failed:', error);
-      return null;
+      return { payload: null, rejected: false };
     }
   }, []);
 
-  const fetchProfile = useCallback(async (userId: string) => {
+  // prefetchedAuth: resposta do /auth/me que quem chamou já tem (abertura do app),
+  // para não pedir o mesmo /auth/me duas vezes seguidas.
+  const fetchProfile = useCallback(async (userId: string, prefetchedAuth?: Partial<Profile> | null) => {
     const hasVpsToken = typeof window !== 'undefined' && !!localStorage.getItem(TOKEN_KEY);
     const token = typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
 
@@ -130,8 +139,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    let authProfile: Partial<Profile> | null = null;
-    if (token) {
+    let authProfile: Partial<Profile> | null = prefetchedAuth || null;
+    if (token && !authProfile) {
       try {
         const response = await fetch(`${VPS_API_BASE}/auth/me`, {
           headers: {
@@ -148,19 +157,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Funções adicionais (colaborador com 2+ funções, ex.: videomaker + editor)
+    // Funções adicionais (colaborador com 2+ funções, ex.: videomaker + editor).
+    // O /auth/me já junta user_roles de todos os ids ligados; só consulta a tabela
+    // quando ele não respondeu.
     let extraRoles: AppRole[] = Array.isArray(authProfile?.roles) ? authProfile.roles : [];
-    try {
-      const { data: rolesData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId);
-      extraRoles = Array.from(new Set<AppRole>([
-        ...extraRoles,
-        ...((rolesData || []) as Array<{ role: AppRole }>).map(r => r.role).filter(Boolean),
-      ]));
-    } catch (error) {
-      console.warn('fetchProfile user_roles failed:', error);
+    if (!Array.isArray(authProfile?.roles)) {
+      try {
+        const { data: rolesData } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userId);
+        extraRoles = Array.from(new Set<AppRole>([
+          ...extraRoles,
+          ...((rolesData || []) as Array<{ role: AppRole }>).map(r => r.role).filter(Boolean),
+        ]));
+      } catch (error) {
+        console.warn('fetchProfile user_roles failed:', error);
+      }
     }
 
     const mergeRoles = (primary: AppRole): AppRole[] =>
@@ -211,48 +224,84 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const token = localStorage.getItem(TOKEN_KEY);
     if (token) {
       let cancelled = false;
+      let retryTimer: number | undefined;
+      const RETRY_TOAST_ID = 'pulse-session-restore';
 
-      async function restoreVpsSession() {
+      const dropSession = () => {
+        localStorage.removeItem(TOKEN_KEY);
+        setUser(null);
+        setProfile(null);
+        setSession(null);
+      };
+
+      // Só desloga quando o servidor recusa o token. Sem rede, 502 durante o
+      // reinício da API ou banco oscilando (5xx): mantém o token, segue carregando
+      // e tenta de novo com espera crescente (até 30 s).
+      async function restoreVpsSession(attempt = 0) {
+        let keepLoading = false;
         try {
-          const response = await fetch(`${VPS_API_BASE}/auth/me`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'x-pulse-city': getActiveCityHeader(),
-            },
-          });
+          let response: Response | null = null;
+          try {
+            response = await fetch(`${VPS_API_BASE}/auth/me`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'x-pulse-city': getActiveCityHeader(),
+              },
+            });
+          } catch (networkError) {
+            console.warn('restoreVpsSession: /auth/me unreachable:', networkError);
+          }
 
           let activeToken = token;
-          let data: VpsAuthPayload | VpsAuthUser | null = response.ok
+          let data: VpsAuthPayload | VpsAuthUser | null = response?.ok
             ? await response.json().catch(() => null)
             : null;
+          // Resposta do próprio /auth/me: o fetchProfile reaproveita em vez de pedir de novo.
+          let authMePayload: Partial<Profile> | null = data ? (data as Partial<Profile>) : null;
 
-          if (!response.ok || !data) {
-            const refreshed = await refreshVpsSession(token);
-            if (!refreshed?.token) throw new Error('Session expired');
+          if (!response?.ok || !data) {
+            authMePayload = null;
+            const { payload: refreshed, rejected } = await refreshVpsSession(token);
+            if (cancelled) return;
+            if (!refreshed?.token) {
+              if (rejected) {
+                toast.dismiss(RETRY_TOAST_ID);
+                dropSession();
+                return;
+              }
+              keepLoading = true;
+              const delay = Math.min(30_000, 2_000 * 2 ** attempt);
+              toast.loading('Servidor indisponível, tentando reconectar…', { id: RETRY_TOAST_ID });
+              retryTimer = window.setTimeout(() => { restoreVpsSession(attempt + 1); }, delay);
+              return;
+            }
             activeToken = refreshed.token;
             data = refreshed;
           }
 
           if (cancelled) return;
+          toast.dismiss(RETRY_TOAST_ID);
           const userData = 'user' in data && data.user ? data.user : data;
           if (!userData?.id || !userData?.email) throw new Error('Invalid auth payload');
           const u = { id: userData.id, email: userData.email };
           setUser(u);
           setSession({ access_token: activeToken });
-          fetchProfile(u.id);
+          fetchProfile(u.id, authMePayload);
         } catch {
           if (cancelled) return;
-          localStorage.removeItem(TOKEN_KEY);
-          setUser(null);
-          setProfile(null);
-          setSession(null);
+          toast.dismiss(RETRY_TOAST_ID);
+          dropSession();
         } finally {
-          if (!cancelled) setLoading(false);
+          if (!cancelled && !keepLoading) setLoading(false);
         }
       }
 
       restoreVpsSession();
-      return () => { cancelled = true; };
+      return () => {
+        cancelled = true;
+        if (retryTimer) window.clearTimeout(retryTimer);
+        toast.dismiss(RETRY_TOAST_ID);
+      };
     } else {
       setUser(null);
       setProfile(null);
@@ -331,6 +380,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     localStorage.removeItem(TOKEN_KEY);
+    // Cache do react-query (permissões, listas) não pode passar para a próxima conta.
+    queryClient.clear();
     setUser(null);
     setProfile(null);
     setSession(null);

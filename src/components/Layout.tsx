@@ -202,10 +202,31 @@ const navCategories: NavCategory[] = [
 
 ];
 
+/**
+ * Áreas que o menu mostra só para admin (financeiro, agentes, propostas...): a rota
+ * também barra quem não é admin, em vez de só esconder o link. Vale o item do menu
+ * mais específico que casa com o caminho (exato ou prefixo, ex. /financeiro/receitas).
+ * As demais telas seguem abertas como antes: há atalhos legítimos entre papéis
+ * (ex.: o painel do editor abre /roteiros).
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function isAdminOnlyPath(pathname: string): boolean {
+  let match: { path: string; roles: string[] } | null = null;
+  for (const cat of navCategories) {
+    for (const item of cat.items) {
+      if (pathname !== item.path && !pathname.startsWith(item.path + '/')) continue;
+      if (!match || item.path.length > match.path.length) match = item;
+    }
+  }
+  return !!match && match.roles.length === 1 && match.roles[0] === 'admin';
+}
+
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { currentUser } = useApp();
+  const { currentUser, clients } = useApp();
   const { signOut } = useAuth();
   const navigate = useNavigate();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const location = useLocation();
   const [sidebarPinned, setSidebarPinned] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -277,6 +298,36 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       }),
     }))
     .filter(cat => cat.items.length > 0);
+
+  // Busca do topo (antes o campo não fazia nada): telas do menu que a pessoa enxerga
+  // e, para quem tem a tela de Clientes, os clientes da cidade ativa.
+  const normalizeSearch = (value: string) =>
+    value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const searchQuery = normalizeSearch(searchTerm);
+  const visibleNavItems = filteredCategories
+    .flatMap(cat => cat.items)
+    .filter((item, idx, all) => all.findIndex(other => other.path === item.path) === idx);
+  const canSearchClients = visibleNavItems.some(item => item.path === '/clientes');
+  const searchResults = searchQuery
+    ? [
+        ...(canSearchClients
+          ? clients
+              .filter(c => normalizeSearch(c.companyName || '').includes(searchQuery))
+              .slice(0, 6)
+              .map(c => ({ key: `c-${c.id}`, label: c.companyName, hint: 'Cliente', path: `/clientes?busca=${encodeURIComponent(c.companyName)}` }))
+          : []),
+        ...visibleNavItems
+          .filter(item => normalizeSearch(item.label).includes(searchQuery))
+          .slice(0, 6)
+          .map(item => ({ key: `p-${item.path}`, label: item.label, hint: 'Tela', path: item.path })),
+      ]
+    : [];
+
+  const openSearchResult = (path: string) => {
+    setSearchTerm('');
+    setSearchOpen(false);
+    navigate(path);
+  };
 
   const handleLogout = async () => {
     setMobileMenuOpen(false);
@@ -686,7 +737,41 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex-1 flex items-center gap-3 max-w-xl min-w-0">
             <div className="relative flex-1 min-w-0">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder={isMobile ? "Buscar..." : "Buscar clientes, gravações..."} className="pl-9 bg-secondary border-0 h-9 text-sm" />
+              <Input
+                value={searchTerm}
+                onChange={e => { setSearchTerm(e.target.value); setSearchOpen(true); }}
+                onFocus={() => setSearchOpen(true)}
+                onBlur={() => setSearchOpen(false)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && searchResults[0]) {
+                    e.preventDefault();
+                    openSearchResult(searchResults[0].path);
+                  } else if (e.key === 'Escape') {
+                    setSearchTerm('');
+                    setSearchOpen(false);
+                  }
+                }}
+                placeholder={isMobile ? "Buscar..." : canSearchClients ? "Buscar clientes e telas..." : "Buscar telas..."}
+                className="pl-9 bg-secondary border-0 h-9 text-sm"
+              />
+              {searchOpen && searchQuery && (
+                <div className="absolute left-0 right-0 top-full mt-1 z-[60] rounded-xl border border-border bg-popover shadow-lg overflow-hidden">
+                  {searchResults.length === 0 ? (
+                    <p className="px-3 py-2.5 text-sm text-muted-foreground">Nada encontrado</p>
+                  ) : searchResults.map(result => (
+                    <button
+                      key={result.key}
+                      type="button"
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => openSearchResult(result.path)}
+                      className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-secondary"
+                    >
+                      <span className="truncate text-foreground">{result.label}</span>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">{result.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

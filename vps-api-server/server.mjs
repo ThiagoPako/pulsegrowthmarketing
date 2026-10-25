@@ -1883,6 +1883,10 @@ function parseWeeklyGoal(value, fallback = 0) {
 
 // ─── JWT Config ─────────────────────────────────────────────
 const JWT_SECRET = process.env.JWT_SECRET || 'CHANGE_ME_IN_PRODUCTION';
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'CHANGE_ME_IN_PRODUCTION') {
+  // Não derruba a API (trocaria todos os tokens de uma vez), mas deixa claro no log do PM2.
+  console.error('[Auth-Config] JWT_SECRET ausente ou com o valor padrão: qualquer pessoa consegue forjar tokens. Defina JWT_SECRET no .env da VPS.');
+}
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30d';
 const JWT_REFRESH_GRACE_SECONDS = Number(process.env.JWT_REFRESH_GRACE_SECONDS || 60 * 60 * 24 * 14);
 
@@ -1940,28 +1944,41 @@ async function verifyUser(req) {
       throw new Error('Unauthorized');
     }
 
+    // Token de escopo (ex.: vídeo do treinamento) usa o mesmo segredo, mas não é sessão.
+    if (decoded.scope) throw new Error('Unauthorized');
+
+    let profileLookupFailed = false;
     const profile = await getAuthProfileById(decoded.sub).catch(err => {
       console.error("[Auth-DB-Error] Failed to fetch profile from DB:", { sub: decoded.sub, error: err.message });
+      profileLookupFailed = true;
       return null;
     });
 
-    if (!profile) {
-      console.warn("[Auth-ProfileNotFound] User ID not found in profiles table, using token claims:", { sub: decoded.sub });
+    // Erro de banco: não autentica pelo que vem no token, mas também não derruba
+    // a sessão (503, o front não desloga).
+    if (profileLookupFailed) {
+      throw Object.assign(new Error('Autenticação indisponível no momento'), { statusCode: 503 });
     }
 
-    const role = profile
-      ? await getUserPrimaryRole(profile.id, profile.role || decoded.role || 'editor')
-      : (decoded.role || 'editor');
+    // Perfil apagado (excluído pela Equipe): o token deixa de valer na hora,
+    // em vez de seguir com o papel gravado nele por até 30 dias.
+    if (!profile) {
+      console.warn("[Auth-ProfileNotFound] User ID not found in profiles/auth_users, token refused:", { sub: decoded.sub });
+      throw new Error('Unauthorized');
+    }
+
+    const role = await getUserPrimaryRole(profile.id, profile.role || 'editor');
 
     return {
       user: {
-        id: profile?.id || decoded.sub,
-        email: profile?.email || decoded.email,
+        id: profile.id || decoded.sub,
+        email: profile.email || decoded.email,
         role,
       },
       userClient: getUserClient(authHeader),
     };
   } catch (error) {
+    if (error?.statusCode === 503) throw error;
     const errorDetail = {
       message: error.message,
       name: error.name,
@@ -1985,7 +2002,32 @@ async function verifyUser(req) {
   }
 }
 
+// Memo por objeto de usuário: o verifyUser cria um por requisição, e isAdminUser,
+// resolveActiveCity e as regras do /api/db/query pediam os mesmos ids ligados e o
+// mesmo papel várias vezes (cerca de 9 consultas só para autenticar). Validade
+// curta para não atrasar revogação caso algum objeto viva mais que a requisição.
+const AUTH_MEMO_TTL_MS = 5_000;
+const linkedUserIdsMemo = new WeakMap();
+const adminUserMemo = new WeakMap();
+
+function readAuthMemo(memo, user) {
+  if (!user || typeof user !== 'object') return null;
+  const hit = memo.get(user);
+  return hit && Date.now() - hit.at < AUTH_MEMO_TTL_MS ? hit.promise : null;
+}
+
+function writeAuthMemo(memo, user, promise) {
+  if (user && typeof user === 'object') memo.set(user, { at: Date.now(), promise });
+  return promise;
+}
+
 async function getLinkedUserIds(user) {
+  const cached = readAuthMemo(linkedUserIdsMemo, user);
+  if (cached) return [...(await cached)];
+  return [...(await writeAuthMemo(linkedUserIdsMemo, user, loadLinkedUserIds(user)))];
+}
+
+async function loadLinkedUserIds(user) {
   const directId = user?.id ? String(user.id) : '';
   const email = user?.email ? String(user.email).trim().toLowerCase() : '';
   const ids = new Set(directId ? [directId] : []);
@@ -2035,6 +2077,12 @@ async function getLinkedUserIds(user) {
 async function isAdminUser(user) {
   if (!user) return false;
   if (user.role === 'admin' || user.role === 'social_media') return true;
+  const cached = readAuthMemo(adminUserMemo, user);
+  if (cached) return cached;
+  return writeAuthMemo(adminUserMemo, user, loadIsAdminUser(user));
+}
+
+async function loadIsAdminUser(user) {
   try {
     await ensureAuthSupportTables();
     const linkedIds = await getLinkedUserIds(user);
@@ -2063,6 +2111,63 @@ async function userHasAssignedRole(user, role) {
   } catch (error) {
     console.error('Role lookup failed:', error?.message || error);
     return false;
+  }
+}
+
+/** Admin "de verdade" (sem social_media), o mesmo critério do isStrictAdmin dos agentes. */
+async function isStrictAdminUser(user) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  return userHasAssignedRole(user, 'admin');
+}
+
+// Papéis que só um admin pode conceder ou tirar (e cujas contas só um admin mexe).
+const PRIVILEGED_USER_ROLES = new Set(['admin', 'social_media', 'socio_gestor']);
+
+/** Papéis da conta alvo: o do perfil e os de user_roles (pelos ids ligados por e-mail). */
+async function getTargetUserRoles(userId) {
+  const id = String(userId || '').trim();
+  if (!id) return [];
+  await ensureAuthSupportTables();
+  const { rows: profileRows } = await pool.query(
+    'SELECT email, role::text AS role FROM profiles WHERE id::text = $1 LIMIT 1',
+    [id]
+  );
+  const linkedIds = await getLinkedUserIds({ id, email: profileRows[0]?.email || '' });
+  const { rows } = await pool.query(
+    'SELECT role::text AS role FROM user_roles WHERE user_id::text = ANY($1::text[])',
+    [linkedIds.length ? linkedIds : [id]]
+  );
+  return [...new Set([profileRows[0]?.role, ...rows.map((row) => row.role)].filter(Boolean))];
+}
+
+/**
+ * Senha, exclusão e criação de conta com papel admin, social_media ou socio_gestor
+ * ficam só com admin (social_media passa no verifyAdmin, mas não pode tomar a
+ * conta do dono nem criar outro admin).
+ */
+async function assertCanManageUserAccount(actor, { targetUserId = null, requestedRole = null } = {}) {
+  if (await isStrictAdminUser(actor)) return;
+  const forbidden = () => Object.assign(
+    new Error('Só um administrador pode criar ou alterar contas admin, social_media ou socio_gestor.'),
+    { statusCode: 403 }
+  );
+  if (requestedRole && PRIVILEGED_USER_ROLES.has(String(requestedRole))) throw forbidden();
+  if (targetUserId && String(targetUserId) !== String(actor?.id || '')) {
+    const roles = await getTargetUserRoles(targetUserId);
+    if (roles.some((role) => PRIVILEGED_USER_ROLES.has(role))) throw forbidden();
+  }
+}
+
+// Valores aceitos pelo enum app_role (o schema base tem 8; o resto entrou por migração).
+// null quando não dá para ler (banco antigo com role TEXT): aí não valida.
+async function getValidAppRoles() {
+  try {
+    const { rows } = await pool.query('SELECT unnest(enum_range(NULL::app_role))::text AS role');
+    return new Set(rows.map((row) => row.role));
+  } catch (error) {
+    console.warn('Could not read app_role values:', error?.message || error);
+    return null;
   }
 }
 
@@ -2188,6 +2293,8 @@ async function ensureProfilesMonthlySalaryColumn() {
  }
 
 
+// Sem perfil nem user_roles o papel fica NULL (vira 'editor' no getUserPrimaryRole):
+// antes caía como 'admin', e um login antigo que sobrou no auth_users entrava como admin.
 async function getLocalAuthUserByEmail(email) {
   const normalizedEmail = email.toLowerCase().trim();
 
@@ -2219,7 +2326,7 @@ async function getLocalAuthUserByEmail(email) {
          COALESCE(${profileId}, au.id) AS id,
          COALESCE(${profileName}, split_part(au.email, '@', 1)) AS name,
          au.email,
-         COALESCE(${profileRole}, ${userRole}, 'admin') AS role,
+         COALESCE(${profileRole}, ${userRole}) AS role,
          ${profileAvatar} AS avatar_url,
          ${profileDisplayName} AS display_name,
          ${profileJobTitle} AS job_title,
@@ -2242,7 +2349,7 @@ async function getLocalAuthUserByEmail(email) {
            id,
            split_part(email, '@', 1) AS name,
            email,
-           'admin'::text AS role,
+           NULL::text AS role,
            NULL::text AS avatar_url,
            split_part(email, '@', 1) AS display_name,
            NULL::text AS job_title,
@@ -2293,7 +2400,7 @@ async function getLocalAuthUserById(userId) {
          COALESCE(${profileId}, au.id) AS id,
          COALESCE(${profileName}, split_part(au.email, '@', 1)) AS name,
          COALESCE(${profileEmail}, au.email) AS email,
-         COALESCE(${profileRole}, ${userRole}, 'admin') AS role,
+         COALESCE(${profileRole}, ${userRole}) AS role,
          ${profileAvatar} AS avatar_url,
          ${profileDisplayName} AS display_name,
          ${profileJobTitle} AS job_title,
@@ -2317,7 +2424,7 @@ async function getLocalAuthUserById(userId) {
            id,
            split_part(email, '@', 1) AS name,
            email,
-           'admin'::text AS role,
+           NULL::text AS role,
            NULL::text AS avatar_url,
            split_part(email, '@', 1) AS display_name,
            NULL::text AS job_title,
@@ -2515,7 +2622,7 @@ async function getAuthProfileById(userId) {
         `SELECT id,
                 split_part(email, '@', 1) AS name,
                 email,
-                'admin'::text AS role,
+                NULL::text AS role,
                 NULL::text AS avatar_url,
                 split_part(email, '@', 1) AS display_name,
                 NULL::text AS job_title,
@@ -2674,7 +2781,9 @@ async function verifyStoredPassword(rawPassword, ...passwordHashes) {
       const saltedSha256 = crypto.createHash('sha256').update(rawPassword + 'pulse_portal_salt_2026').digest('hex');
       if (/^[a-f0-9]{64}$/i.test(passwordHash) && passwordHash.toLowerCase() === saltedSha256) return true;
 
-      if (!passwordHash.startsWith('$2') && passwordHash === rawPassword) return true;
+      // Texto puro só quando o valor guardado não tem cara de hash: mandar o
+      // próprio SHA-256 em hex como senha não pode passar.
+      if (!passwordHash.startsWith('$2') && !/^[a-f0-9]{64}$/i.test(passwordHash) && passwordHash === rawPassword) return true;
     } catch (error) {
       console.error('Password hash verification failed:', error?.message || error);
     }
@@ -2707,6 +2816,65 @@ async function authenticateWithLegacyAuth() {
   return null;
 }
 
+// ─── Limite de tentativas (login e auto-cadastro) ───────────
+// A API fica atrás do nginx: o IP de quem conectou vem no X-Real-IP ou no último
+// item do X-Forwarded-For (o nginx acrescenta no fim; o começo pode vir do cliente).
+function getClientIp(req) {
+  const realIp = String(req.headers['x-real-ip'] || '').trim();
+  if (realIp) return realIp;
+  const forwarded = String(req.headers['x-forwarded-for'] || '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return forwarded[forwarded.length - 1] || req.socket?.remoteAddress || 'unknown';
+}
+
+function isLoopbackIp(ip) {
+  return !ip || ip === 'unknown' || ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+}
+
+const authAttemptBuckets = new Map();
+const AUTH_ATTEMPT_WINDOW_MS = 15 * 60_000;
+
+function authAttemptCount(key) {
+  const bucket = authAttemptBuckets.get(key);
+  if (!bucket || Date.now() > bucket.reset) return 0;
+  return bucket.count;
+}
+
+function registerAuthAttempt(key, windowMs = AUTH_ATTEMPT_WINDOW_MS) {
+  const now = Date.now();
+  const bucket = authAttemptBuckets.get(key);
+  if (!bucket || now > bucket.reset) {
+    authAttemptBuckets.set(key, { count: 1, reset: now + windowMs });
+    return 1;
+  }
+  bucket.count += 1;
+  return bucket.count;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, bucket] of authAttemptBuckets) {
+    if (now > bucket.reset) authAttemptBuckets.delete(key);
+  }
+}, 5 * 60_000).unref?.();
+
+// Só as falhas contam. E-mail + IP trava rápido; o e-mail sozinho tem teto maior
+// (o IP pode faltar ou ser o mesmo para o estúdio inteiro); o IP sozinho só conta
+// quando é o IP real do cliente.
+const LOGIN_FAILURE_LIMITS = { emailIp: 10, email: 50, ip: 100 };
+
+function loginAttemptKeys(req, normalizedEmail) {
+  const ip = getClientIp(req);
+  const keys = {
+    emailIp: `login:${normalizedEmail}:${ip}`,
+    email: `login-email:${normalizedEmail}`,
+  };
+  if (!isLoopbackIp(ip)) keys.ip = `login-ip:${ip}`;
+  return keys;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // AUTH ROUTES
 // ═══════════════════════════════════════════════════════════════
@@ -2718,8 +2886,16 @@ app.post('/api/auth/login', async (req, res) => {
     if (!email || !password) return res.status(400).json({ error: 'Email e senha são obrigatórios' });
 
     const normalizedEmail = String(email).toLowerCase().trim();
+
+    const attemptKeys = loginAttemptKeys(req, normalizedEmail);
+    const blockedBy = Object.entries(attemptKeys).find(([kind, key]) => authAttemptCount(key) >= LOGIN_FAILURE_LIMITS[kind]);
+    if (blockedBy) {
+      const minutes = Math.max(1, Math.ceil(((authAttemptBuckets.get(blockedBy[1])?.reset || Date.now()) - Date.now()) / 60_000));
+      return res.status(429).json({ error: `Muitas tentativas de login. Tente de novo em ${minutes} min.` });
+    }
+
     let profile = await getAuthProfileByEmail(normalizedEmail);
-    
+
     // Fallback: Se não encontrou no join profiles+auth_users, tenta direto na auth_users por email
     if (!profile) {
       profile = await getLocalAuthUserByEmail(normalizedEmail);
@@ -2749,7 +2925,12 @@ app.post('/api/auth/login', async (req, res) => {
       }
     }
 
-    if (!profile || !valid) return res.status(401).json({ error: 'Email ou senha inválidos' });
+    if (!profile || !valid) {
+      for (const key of Object.values(attemptKeys)) registerAuthAttempt(key);
+      return res.status(401).json({ error: 'Email ou senha inválidos' });
+    }
+    authAttemptBuckets.delete(attemptKeys.emailIp);
+    authAttemptBuckets.delete(attemptKeys.email);
 
     await upgradePasswordHashIfNeeded(profile, password);
 
@@ -2791,11 +2972,12 @@ app.post('/api/auth/refresh', async (req, res) => {
 
     const currentToken = authHeader.replace('Bearer ', '');
     const { decoded } = decodeTokenForRefresh(currentToken);
+    if (!decoded?.sub || decoded.scope) return res.status(401).json({ error: 'Sessão expirada. Faça login novamente.' });
     const profile = await getAuthProfileById(decoded.sub);
 
     if (!profile) return res.status(401).json({ error: 'Perfil não encontrado' });
 
-    const role = await getUserPrimaryRole(profile.id, profile.role || decoded.role || 'editor');
+    const role = await getUserPrimaryRole(profile.id, profile.role || 'editor');
     const token = signToken({ sub: profile.id, email: profile.email, role });
 
     res.json({
@@ -2810,7 +2992,13 @@ app.post('/api/auth/refresh', async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(401).json({ error: 'Sessão expirada. Faça login novamente.' });
+    // 401 só quando o token é inválido ou venceu além da carência; erro de banco
+    // vira 503 para o front não apagar a sessão numa oscilação.
+    if (['JsonWebTokenError', 'TokenExpiredError', 'NotBeforeError'].includes(error?.name)) {
+      return res.status(401).json({ error: 'Sessão expirada. Faça login novamente.' });
+    }
+    console.error('Refresh error:', error?.message || error);
+    res.status(503).json({ error: 'Servidor indisponível. Tente de novo.' });
   }
 });
 
@@ -2890,7 +3078,9 @@ app.get('/api/auth/me', async (req, res) => {
       monthly_salary: profile.monthly_salary || 0,
     });
   } catch (error) {
-    res.status(401).json({ error: 'Não autenticado' });
+    if (error?.message === 'Unauthorized') return res.status(401).json({ error: 'Não autenticado' });
+    console.error('Auth me error:', error?.message || error);
+    res.status(503).json({ error: 'Servidor indisponível. Tente de novo.' });
   }
 });
 
@@ -2933,13 +3123,25 @@ app.post('/api/auth/change-password', async (req, res) => {
     const { user } = await verifyUser(req);
     const { currentPassword, newPassword } = req.body;
     if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: 'Nova senha deve ter pelo menos 6 caracteres' });
+    // Sem a senha atual, quem pegasse um token trocaria a senha e trancaria a pessoa fora.
+    if (!currentPassword) return res.status(400).json({ error: 'Informe a senha atual' });
+
+    const attemptKey = `change-password:${user.id}`;
+    if (authAttemptCount(attemptKey) >= 10) {
+      return res.status(429).json({ error: 'Muitas tentativas. Tente de novo em alguns minutos.' });
+    }
 
     const profile = await getAuthProfileById(user.id);
     if (!profile) return res.status(404).json({ error: 'Perfil não encontrado' });
 
-    if (profile.password_hash && currentPassword) {
-      const valid = await verifyStoredPassword(currentPassword, profile.password_hash, profile.auth_password_hash, profile.profile_password_hash);
-      if (!valid) return res.status(401).json({ error: 'Senha atual incorreta' });
+    const storedHashes = [profile.password_hash, profile.auth_password_hash, profile.profile_password_hash].filter(Boolean);
+    if (storedHashes.length === 0) {
+      return res.status(400).json({ error: 'Conta sem senha cadastrada: peça a redefinição a um administrador' });
+    }
+    const valid = await verifyStoredPassword(currentPassword, ...storedHashes);
+    if (!valid) {
+      registerAuthAttempt(attemptKey);
+      return res.status(401).json({ error: 'Senha atual incorreta' });
     }
 
     await storeUserPassword(user.id, newPassword);
@@ -2947,23 +3149,24 @@ app.post('/api/auth/change-password', async (req, res) => {
     res.json({ success: true, message: 'Senha alterada com sucesso' });
   } catch (error) {
     console.error('Change password error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error?.message === 'Unauthorized' ? 401 : (error?.statusCode || 500)).json({ error: error.message });
   }
 });
 
 // ─── Admin: Set password for a team member ──────────────────
 app.post('/api/auth/set-password', async (req, res) => {
   try {
-    await verifyAdmin(req);
+    const { user: actor } = await verifyAdmin(req);
     const { userId, password } = req.body;
     if (!userId || !password || password.length < 6) return res.status(400).json({ error: 'userId e senha (min 6 chars) obrigatórios' });
+    await assertCanManageUserAccount(actor, { targetUserId: userId });
 
     await storeUserPassword(userId, password);
 
     res.json({ success: true, message: 'Senha definida com sucesso' });
   } catch (error) {
     console.error('Set password error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message });
   }
 });
 
@@ -3029,8 +3232,20 @@ app.post('/api/auth/create-user', async (req, res) => {
   try {
     const { name, email, password, role, cities, primaryCity, isSelfRegister } = req.body;
 
-    if (!isSelfRegister) {
-      await verifyAdmin(req);
+    if (isSelfRegister) {
+      // Cadastro público da Academy: limite por IP (contas criadas por hora).
+      const ip = getClientIp(req);
+      if (registerAuthAttempt(`self-register:${ip}`, 60 * 60_000) > 10) {
+        return res.status(429).json({ error: 'Muitos cadastros feitos daqui. Tente de novo mais tarde.' });
+      }
+    } else {
+      const { user: actor } = await verifyAdmin(req);
+      const requestedRole = role || 'editor';
+      const validRoles = await getValidAppRoles();
+      if (validRoles && !validRoles.has(String(requestedRole))) {
+        return res.status(400).json({ error: `Função inválida: "${String(requestedRole).slice(0, 40)}"` });
+      }
+      await assertCanManageUserAccount(actor, { requestedRole });
     }
 
     if (!name || !email || !password) return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
@@ -3069,28 +3284,32 @@ app.post('/api/auth/create-user', async (req, res) => {
       [id, userRole]
     );
 
-    const saved = await saveUserCities(id, cities && cities.length ? cities : ['minacu'], primaryCity);
+    // No auto-cadastro a cidade não vem do pedido: fica a padrão, e o admin libera outra na Equipe.
+    const saved = isSelfRegister
+      ? await saveUserCities(id, ['minacu'], 'minacu')
+      : await saveUserCities(id, cities && cities.length ? cities : ['minacu'], primaryCity);
 
     res.json({ success: true, user: { id, name, email: normalizedEmail, role: userRole, cities: saved.cities, primary_city: saved.primary } });
   } catch (error) {
     console.error('Create user error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message });
   }
 });
 
 // ─── Admin: Reset password ──────────────────────────────────
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
-    await verifyAdmin(req);
+    const { user: actor } = await verifyAdmin(req);
     const { userId, newPassword } = req.body;
     if (!userId || !newPassword || newPassword.length < 6) return res.status(400).json({ error: 'userId e nova senha (min 6 chars) obrigatórios' });
+    await assertCanManageUserAccount(actor, { targetUserId: userId });
 
     await storeUserPassword(userId, newPassword);
 
     res.json({ success: true, message: 'Senha redefinida com sucesso' });
   } catch (error) {
     console.error('Reset password error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message });
   }
 });
 
@@ -3981,6 +4200,8 @@ app.all('/api/client-briefing', async (req, res) => {
       );
       const client = rows[0];
       if (!client) return res.status(404).json({ error: 'Client not found' });
+      // Link público (só o id do cliente): o formulário volta sem as senhas; o POST mantém as salvas.
+      client.briefing_data = withoutBriefingSecrets(client.briefing_data);
 
       let briefingCompleted = false;
       try {
@@ -4028,7 +4249,7 @@ app.all('/api/client-briefing', async (req, res) => {
       } catch (_) { /* tabela pode não existir ainda */ }
 
       // Reforça que clientId/_completed dentro do payload batem com a URL + versão
-      const incoming = (briefing_data && typeof briefing_data === 'object') ? briefing_data : {};
+      const incoming = mergeBriefingSecrets((briefing_data && typeof briefing_data === 'object') ? briefing_data : {}, prevObj);
       // Preserva o tipo do briefing entre reenvios (padrão x provedor de internet)
       const briefingType = incoming._type || prevObj?._type || 'padrao';
 
@@ -4122,7 +4343,7 @@ app.all('/api/client-briefing', async (req, res) => {
 // ── BRIEFING VERSIONS (admin/social_media) ──
 app.get('/api/briefing-versions', async (req, res) => {
   try {
-    await verifyUser(req);
+    const { user } = await verifyUser(req);
     const { clientId } = req.query;
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!clientId || !UUID_RE.test(String(clientId))) {
@@ -4135,6 +4356,7 @@ app.get('/api/briefing-versions', async (req, res) => {
        ORDER BY version DESC`,
       [clientId]
     );
+    if (!(await isTeamManagerUser(user))) stripBriefingSecretsFromRows(rows, ['briefing_versions']);
     return res.json({ versions: rows });
   } catch (err) {
     console.error('briefing-versions error:', err);
@@ -6453,7 +6675,7 @@ async function runScheduledPost(post) {
     // Avisa a equipe de social media que a postagem falhou
     await pool.query(
       `INSERT INTO notifications (user_id, title, message, type, link)
-       SELECT ur.user_id, '⚠️ Postagem automática falhou', $1, 'error', '/social-media'
+       SELECT ur.user_id, '⚠️ Postagem automática falhou', $1, 'error', '/entregas-social'
        FROM user_roles ur WHERE ur.role IN ('admin','social_media')`,
       [`Cliente ${post.client_id}: ${errors[0]}`.slice(0, 500)]
     ).catch(() => {});
@@ -7267,28 +7489,56 @@ app.post('/api/reset-password', async (req, res) => {
     const { user, admin } = await verifyAdmin(req);
     const { userId, newPassword } = req.body;
     if (!userId || !newPassword || newPassword.length < 6) return res.status(400).json({ error: 'userId and newPassword (min 6 chars) required' });
+    await assertCanManageUserAccount(user, { targetUserId: userId });
     await storeUserPassword(userId, newPassword);
     res.json({ success: true });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(e.statusCode || 500).json({ error: e.message });
   }
 });
 
 // ─── 13. Delete User ────────────────────────────────────────
 app.post('/api/delete-user', async (req, res) => {
   try {
-    const { user, admin } = await verifyAdmin(req);
+    const { user } = await verifyAdmin(req);
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: 'Missing userId' });
     if (userId === user.id) return res.status(400).json({ error: 'Cannot delete yourself' });
-    await admin.from('partners').delete().eq('user_id', userId);
-    await admin.from('user_roles').delete().eq('user_id', userId);
-    await admin.from('notifications').delete().eq('user_id', userId);
-    await admin.from('profiles').delete().eq('id', userId);
-    await pool.query('DELETE FROM auth_users WHERE id::text = $1', [String(userId)]).catch(() => null);
+    await assertCanManageUserAccount(user, { targetUserId: userId });
+
+    // Ids ligados (perfil + auth_users com o mesmo e-mail) calculados ANTES de apagar:
+    // em instalações antigas o auth_users tem outro id e sobrava um login sem perfil.
+    await ensureAuthSupportTables();
+    const targetId = String(userId);
+    const { rows: profileRows } = await pool.query('SELECT email FROM profiles WHERE id::text = $1 LIMIT 1', [targetId]);
+    const targetEmail = String(profileRows[0]?.email || '').trim().toLowerCase();
+    const linkedIds = await getLinkedUserIds({ id: targetId, email: targetEmail });
+    if (linkedIds.includes(String(user.id))) return res.status(400).json({ error: 'Cannot delete yourself' });
+
+    // Tudo numa transação: se o perfil não puder sair (ex.: gravações ligadas), nada é apagado.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const table of ['partners', 'user_roles', 'user_permissions', 'user_cities', 'notifications']) {
+        const { rows: [{ exists }] } = await client.query('SELECT to_regclass($1) IS NOT NULL AS exists', [`public.${table}`]);
+        if (exists) await client.query(`DELETE FROM ${table} WHERE user_id::text = ANY($1::text[])`, [linkedIds]);
+      }
+      await client.query('DELETE FROM profiles WHERE id::text = $1', [targetId]);
+      if (targetEmail) {
+        await client.query('DELETE FROM auth_users WHERE id::text = ANY($1::text[]) OR lower(email) = $2', [linkedIds, targetEmail]);
+      } else {
+        await client.query('DELETE FROM auth_users WHERE id::text = ANY($1::text[])', [linkedIds]);
+      }
+      await client.query('COMMIT');
+    } catch (deleteError) {
+      await client.query('ROLLBACK').catch(() => null);
+      throw deleteError;
+    } finally {
+      client.release();
+    }
     res.json({ success: true });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(err.statusCode || 400).json({ error: err.message });
   }
 });
 
@@ -7308,6 +7558,8 @@ app.all('/api/client-onboarding', async (req, res) => {
       );
       const client = clients[0];
       if (!client) return res.status(404).json({ error: 'Client not found' });
+      // Link público: sem as senhas do briefing (o POST mantém as já salvas).
+      client.briefing_data = withoutBriefingSecrets(client.briefing_data);
 
       const { rows: videomakers } = await pool.query(
         `SELECT id, name, display_name, avatar_url, bio, job_title FROM profiles WHERE role = 'videomaker'`
@@ -7362,8 +7614,10 @@ app.all('/api/client-onboarding', async (req, res) => {
     let paramIdx = 18;
     let extraSets = '';
     if (briefing_data && Object.keys(briefing_data).length > 0) {
+      // O GET não devolve as senhas: campo vazio mantém a que já estava salva.
+      const { rows: [prevBriefing] } = await pool.query('SELECT briefing_data FROM clients WHERE id = $1', [clientId]);
       extraSets += `, briefing_data = $${paramIdx}`;
-      vals.push(JSON.stringify(briefing_data));
+      vals.push(JSON.stringify(mergeBriefingSecrets(briefing_data, prevBriefing?.briefing_data)));
       paramIdx++;
       if (briefing_data.instagram_login) {
         extraSets += `, client_login = $${paramIdx}`;
@@ -7824,7 +8078,9 @@ const ALLOWED_TABLES = [
 // ═══════════════════════════════════════════════════════════════
 // MULTI-CITY ENFORCEMENT
 // ═══════════════════════════════════════════════════════════════
-// Tabelas que devem ser filtradas pela cidade ativa do usuário
+// Tabelas que devem ser filtradas pela cidade ativa do usuário.
+// notifications fica de fora: o aviso é da pessoa (filtrado por user_id) e os
+// avisos do servidor gravam a cidade padrão, então sumiam para quem está em Uruaçu.
 const TABLES_WITH_CITY = new Set([
   'clients','recordings','kanban_tasks','scripts','active_recordings',
   'content_tasks','task_history','task_comments',
@@ -7843,9 +8099,9 @@ const TABLES_WITH_CITY = new Set([
   'recording_wait_logs','portal_videos','portal_video_views','scheduled_posts',
   'commercial_proposals','proposal_comments','event_recordings',
   'client_testimonials','proposal_checklist_items',
-  'fieldwork_activities','goals','notifications',
+  'fieldwork_activities','goals',
   'company_settings','whatsapp_config','payment_config',
-  'crm_leads','crm_notes','goals','notifications',
+  'crm_leads','crm_notes',
   'plans',
   'story_editing_sessions','script_requests','manual_video_tasks','client_bio_links','client_bio_buttons',
 ]);
@@ -7915,9 +8171,9 @@ function cityScopeCondition(columnName = 'city', placeholder) {
 async function resolveActiveCity(req, userId, userObj = null) {
   const requested = normalizeCityValue(req.headers['x-pulse-city']);
   const requestedValid = requested && ALLOWED_CITIES.has(requested) ? requested : null;
-  const linkedUserIds = await getLinkedUserIds(userObj || { id: userId });
 
   // Admins podem acessar qualquer cidade sem precisar de registro em user_cities
+  // (conferido antes dos ids ligados, que o admin não usa)
   try {
     if (userObj && await isAdminUser(userObj)) {
       return assertValidCity(requestedValid || 'minacu');
@@ -7927,19 +8183,26 @@ async function resolveActiveCity(req, userId, userObj = null) {
     /* segue fluxo normal */
   }
 
+  const linkedUserIds = await getLinkedUserIds(userObj || { id: userId });
   try {
     const { rows } = await pool.query(
       'SELECT city, is_primary FROM user_cities WHERE user_id::text = ANY($1::text[])',
       [linkedUserIds.length ? linkedUserIds : [String(userId)]]
     );
-    if (rows.length === 0) return assertValidCity(requestedValid || 'minacu');
+    // Sem registro em user_cities: só Minaçu, igual ao /api/me/cities (antes valia
+    // qualquer cidade mandada no cabeçalho).
+    if (rows.length === 0) return 'minacu';
     const allowed = rows.map(r => normalizeCityValue(r.city)).filter(Boolean);
     if (requestedValid && allowed.includes(requestedValid)) return requestedValid;
     const primary = normalizeCityValue(rows.find(r => r.is_primary)?.city);
     return assertValidCity(primary || allowed[0]);
   } catch (e) {
     if (e && e.statusCode === 400) throw e;
-    return assertValidCity(requestedValid || 'minacu');
+    // Banco sem a tabela user_cities: ninguém tem registro, vale a cidade padrão.
+    if (e?.code === '42P01') return 'minacu';
+    // Outra falha: não aceita o cabeçalho às cegas (gravaria na cidade errada).
+    console.error('resolveActiveCity: falha ao ler user_cities:', e?.message || e);
+    throw Object.assign(new Error('Não foi possível conferir a cidade agora. Tente de novo.'), { statusCode: 503 });
   }
 }
 
@@ -7969,37 +8232,437 @@ function sanitizeOrderColumn(column, fallbackTable) {
   return `${fallbackTable}.${sanitizeIdentifier(raw)}`;
 }
 
-function qualifyBaseSelectClause(selectClause, baseTable, joins = []) {
-  const raw = String(selectClause || '*').trim();
-  if (!raw || raw === '*') return `${baseTable}.*`;
+function dbQueryError(message, statusCode = 400) {
+  const err = new Error(message);
+  err.statusCode = statusCode;
+  return err;
+}
 
-  const joinTables = new Set(
-    (Array.isArray(joins) ? joins : [])
-      .map((join) => sanitizeIdentifier(join?.table || ''))
-      .filter(Boolean)
-  );
+// Colunas que nunca saem pelo /api/db/query (hash de senha da equipe e do portal).
+const DB_QUERY_HIDDEN_COLUMNS = {
+  profiles: ['password_hash', 'profile_password_hash', 'auth_password_hash'],
+  clients: ['client_password_hash'],
+};
 
-  return raw
-    .split(',')
-    .map((part) => part.trim())
-    .filter(Boolean)
+// Colunas que só quem gerencia a equipe enxerga (a pessoa sempre vê a própria linha).
+const DB_QUERY_MANAGER_COLUMNS = {
+  profiles: ['monthly_salary'],
+};
+
+// Senhas de Instagram/Facebook que o cliente digita no briefing e no onboarding
+// (ficam dentro de briefing_data). Só quem gerencia (admin, social_media,
+// gestor_projetos) recebe; o resto da equipe e as rotas públicas (o link do
+// briefing abre só com o id do cliente) recebem o briefing sem elas.
+const BRIEFING_SECRET_KEYS = ['instagramPassword', 'facebookPassword', 'instagram_password', 'facebook_password'];
+const BRIEFING_DATA_TABLES = new Set(['clients', 'onboarding_tasks', 'briefing_versions']);
+
+function parseBriefingObject(value) {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    try { value = JSON.parse(value); } catch { return null; }
+  }
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+}
+
+/** briefing_data sem as senhas (mesmo formato de entrada: objeto ou texto JSON). */
+function withoutBriefingSecrets(value) {
+  const obj = parseBriefingObject(value);
+  if (!obj || !BRIEFING_SECRET_KEYS.some((key) => key in obj)) return value;
+  const copy = { ...obj };
+  for (const key of BRIEFING_SECRET_KEYS) delete copy[key];
+  return typeof value === 'string' ? JSON.stringify(copy) : copy;
+}
+
+/**
+ * Reenvio do formulário: como o GET público não devolve mais as senhas, o campo
+ * volta vazio. Vazio ou ausente mantém a senha que já estava salva.
+ */
+function mergeBriefingSecrets(incoming, previous) {
+  const prevObj = parseBriefingObject(previous);
+  if (!incoming || typeof incoming !== 'object' || !prevObj) return incoming;
+  const merged = { ...incoming };
+  for (const key of BRIEFING_SECRET_KEYS) {
+    const value = merged[key];
+    const isEmpty = value === undefined || value === null || (typeof value === 'string' && value.trim() === '');
+    if (isEmpty && prevObj[key]) merged[key] = prevObj[key];
+  }
+  return merged;
+}
+
+/** Tira as senhas do briefing_data das linhas (base e joins: `clients_briefing_data`). */
+function stripBriefingSecretsFromRows(rows, tables = ['clients']) {
+  const columns = ['briefing_data', ...tables.filter((table) => BRIEFING_DATA_TABLES.has(table)).map((table) => `${table}_briefing_data`)];
+  for (const row of Array.isArray(rows) ? rows : [rows]) {
+    if (!row || typeof row !== 'object') continue;
+    for (const column of columns) {
+      if (row[column]) row[column] = withoutBriefingSecrets(row[column]);
+    }
+  }
+  return rows;
+}
+
+/** Linhas de clients para a equipe: nunca o hash do portal; senhas do briefing só para quem gerencia. */
+async function sanitizeClientRowsForUser(rows, user) {
+  for (const row of Array.isArray(rows) ? rows : [rows]) {
+    if (row && typeof row === 'object') delete row.client_password_hash;
+  }
+  if (!(await isTeamManagerUser(user))) stripBriefingSecretsFromRows(rows);
+  return rows;
+}
+
+/**
+ * Lista fechada para o campo `select` do /api/db/query.
+ * Aceita só o que o src/lib/vpsDb.ts (_parseSelect) gera: `*`, `col`,
+ * `col as alias`, `tabela.*` e `tabela.col as alias`, onde `tabela` é a base
+ * ou um join já aceito. Qualquer outra coisa (parênteses, aspas, `;`, `--`,
+ * subconsulta, função) volta 400 — antes o texto ia cru para o SQL.
+ */
+function buildSafeSelectClause(selectClause, baseTable, joinTables = []) {
+  const raw = selectClause === undefined || selectClause === null ? '*' : selectClause;
+  if (typeof raw !== 'string') throw dbQueryError('Campo "select" inválido.');
+  const allowedTables = new Set([baseTable, ...joinTables]);
+  const parts = raw.split(',').map((part) => part.trim()).filter(Boolean);
+  if (parts.length === 0) return `${baseTable}.*`;
+
+  return parts
     .map((part) => {
-      if (part === '*') return `${baseTable}.*`;
-      if (part.includes('.') || part.includes('(') || part.includes(')')) return part;
-
-      const aliasMatch = part.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s+as\s+([a-zA-Z_][a-zA-Z0-9_]*)$/i);
-      if (aliasMatch) {
-        const column = sanitizeIdentifier(aliasMatch[1]);
-        const alias = sanitizeIdentifier(aliasMatch[2]);
-        if (joinTables.has(column)) return part;
-        return `${baseTable}.${column} AS ${alias}`;
+      const match = part.match(/^(?:([a-z_][a-z0-9_]*)\.)?([a-z_][a-z0-9_]*|\*)(?:\s+as\s+([a-z_][a-z0-9_]*))?$/i);
+      if (!match) throw dbQueryError(`Item inválido no select: "${part.slice(0, 60)}"`);
+      const [, prefix, column, alias] = match;
+      const tableName = prefix || baseTable;
+      if (!allowedTables.has(tableName)) throw dbQueryError(`Tabela "${tableName}" não faz parte da consulta.`);
+      if (column === '*') {
+        if (alias) throw dbQueryError('Alias não é aceito em "*".');
+        return `${tableName}.*`;
       }
-
-      const safeColumn = sanitizeIdentifier(part);
-      return safeColumn ? `${baseTable}.${safeColumn}` : part;
+      // A limpeza da resposta é pelo nome da coluna: coluna protegida não pode ganhar outro nome.
+      const protectedColumns = [
+        ...(DB_QUERY_HIDDEN_COLUMNS[tableName] || []),
+        ...(DB_QUERY_MANAGER_COLUMNS[tableName] || []),
+      ];
+      if (alias && alias.toLowerCase() !== column.toLowerCase() && protectedColumns.includes(column.toLowerCase())) {
+        throw dbQueryError(`A coluna "${column}" não pode ser renomeada.`);
+      }
+      return alias ? `${tableName}.${column} AS ${alias}` : `${tableName}.${column}`;
     })
     .join(', ');
 }
+
+/**
+ * Tira da resposta do /api/db/query as colunas sensíveis das tabelas envolvidas
+ * (base + joins). `ownIds` libera as colunas de gestor na própria linha de profiles.
+ */
+function stripDbQueryColumns(rows, tables, { canSeeManagerColumns = false, ownIds = [] } = {}) {
+  const hidden = new Set();
+  const managerOnly = new Set();
+  for (const table of tables) {
+    for (const column of DB_QUERY_HIDDEN_COLUMNS[table] || []) hidden.add(column);
+    if (!canSeeManagerColumns) {
+      for (const column of DB_QUERY_MANAGER_COLUMNS[table] || []) managerOnly.add(column);
+    }
+  }
+  if (hidden.size === 0 && managerOnly.size === 0) return rows;
+  const own = new Set((ownIds || []).map(String));
+  const isProfilesBase = tables[0] === 'profiles';
+  for (const row of Array.isArray(rows) ? rows : [rows]) {
+    if (!row || typeof row !== 'object') continue;
+    for (const column of hidden) delete row[column];
+    if (managerOnly.size > 0 && !(isProfilesBase && own.has(String(row.id)))) {
+      for (const column of managerOnly) delete row[column];
+    }
+  }
+  return rows;
+}
+
+/**
+ * Monta o WHERE do /api/db/query a partir dos filtros do vpsDb (eq, neq, gt, gte,
+ * lt, lte, like, ilike, is, in, contains, not, or). Usado por select, update e
+ * delete — antes o update só entendia eq/in e descartava o resto em silêncio
+ * (o `.is('assigned_to', null)` do "pegar vídeo" sumia). Operador desconhecido
+ * volta 400. Os placeholders seguem `params`, que pode já ter os valores do SET.
+ */
+function buildDbQueryWhere(filters, safeTable, params) {
+  const whereClauses = [];
+  if (filters === undefined || filters === null) return whereClauses;
+  if (!Array.isArray(filters)) throw dbQueryError('Filtros inválidos.');
+  const protectedColumns = new Set([
+    ...(DB_QUERY_HIDDEN_COLUMNS[safeTable] || []),
+    ...(DB_QUERY_MANAGER_COLUMNS[safeTable] || []),
+  ]);
+  const qualify = (rawColumn) => {
+    const col = sanitizeIdentifier(String(rawColumn || ''));
+    if (!col) throw dbQueryError('Filtro sem coluna.');
+    if (protectedColumns.has(col.toLowerCase())) throw dbQueryError(`Não é possível filtrar por "${col}".`);
+    return `${safeTable}.${col}`;
+  };
+  const param = (value) => {
+    params.push(value);
+    return `$${params.length}`;
+  };
+
+  for (const f of filters) {
+    if (!f || typeof f !== 'object') throw dbQueryError('Filtro inválido.');
+    switch (f.op) {
+      case 'eq': whereClauses.push(`${qualify(f.column)} = ${param(f.value)}`); break;
+      case 'neq': whereClauses.push(`${qualify(f.column)} != ${param(f.value)}`); break;
+      case 'gt': whereClauses.push(`${qualify(f.column)} > ${param(f.value)}`); break;
+      case 'gte': whereClauses.push(`${qualify(f.column)} >= ${param(f.value)}`); break;
+      case 'lt': whereClauses.push(`${qualify(f.column)} < ${param(f.value)}`); break;
+      case 'lte': whereClauses.push(`${qualify(f.column)} <= ${param(f.value)}`); break;
+      case 'like': whereClauses.push(`${qualify(f.column)} LIKE ${param(f.value)}`); break;
+      case 'ilike': whereClauses.push(`${qualify(f.column)} ILIKE ${param(f.value)}`); break;
+      case 'is': whereClauses.push(`${qualify(f.column)} IS ${f.value === null ? 'NULL' : 'NOT NULL'}`); break;
+      case 'in': whereClauses.push(`${qualify(f.column)} = ANY(${param(f.value)})`); break;
+      case 'contains': whereClauses.push(`${qualify(f.column)} @> ${param(f.value)}`); break;
+      case 'or': {
+        const orClauses = [];
+        for (const part of splitOrFilterParts(f.value)) {
+          const [rawColumn, rawOp, ...rawValueParts] = part.split('.');
+          const orColumn = sanitizeIdentifier(rawColumn || '');
+          const orOp = String(rawOp || '').trim();
+          const rawValue = rawValueParts.join('.');
+          if (!orColumn || !orOp) continue;
+
+          switch (orOp) {
+            case 'eq': orClauses.push(`${qualify(orColumn)} = ${param(rawValue)}`); break;
+            case 'neq': orClauses.push(`${qualify(orColumn)} != ${param(rawValue)}`); break;
+            case 'gt': orClauses.push(`${qualify(orColumn)} > ${param(rawValue)}`); break;
+            case 'gte': orClauses.push(`${qualify(orColumn)} >= ${param(rawValue)}`); break;
+            case 'lt': orClauses.push(`${qualify(orColumn)} < ${param(rawValue)}`); break;
+            case 'lte': orClauses.push(`${qualify(orColumn)} <= ${param(rawValue)}`); break;
+            case 'like': orClauses.push(`${qualify(orColumn)} LIKE ${param(rawValue)}`); break;
+            case 'ilike': orClauses.push(`${qualify(orColumn)} ILIKE ${param(rawValue)}`); break;
+            case 'is': orClauses.push(`${qualify(orColumn)} IS ${rawValue === 'null' ? 'NULL' : 'NOT NULL'}`); break;
+            case 'in': orClauses.push(`${qualify(orColumn)} = ANY(${param(parseFilterArray(rawValue))})`); break;
+          }
+        }
+        if (orClauses.length > 0) whereClauses.push(`(${orClauses.join(' OR ')})`);
+        break;
+      }
+      case 'not': {
+        const nestedOp = f.value?.op;
+        const nestedValue = f.value?.value;
+        if (nestedOp === 'is') {
+          whereClauses.push(`${qualify(f.column)} IS ${nestedValue === null ? 'NOT NULL' : 'NULL'}`);
+        } else if (nestedOp === 'in') {
+          whereClauses.push(`NOT (${qualify(f.column)} = ANY(${param(parseFilterArray(nestedValue))}))`);
+        } else {
+          whereClauses.push(`${qualify(f.column)} != ${param(nestedValue)}`);
+        }
+        break;
+      }
+      default:
+        throw dbQueryError(`Operador de filtro desconhecido: "${String(f.op).slice(0, 20)}"`);
+    }
+  }
+  return whereClauses;
+}
+
+/** Quem gerencia a equipe (mesmo critério do verifyTeamManager). */
+async function isTeamManagerUser(user) {
+  if (await isAdminUser(user)) return true;
+  return userHasAssignedRole(user, 'gestor_projetos');
+}
+
+async function getDbQueryStripOptions(user, tables) {
+  if (!tables.some((table) => DB_QUERY_MANAGER_COLUMNS[table])) return {};
+  const canSeeManagerColumns = await isTeamManagerUser(user);
+  const ownIds = canSeeManagerColumns ? [] : await getLinkedUserIds(user);
+  return { canSeeManagerColumns, ownIds };
+}
+
+// Papéis que só um admin pode conceder ou tirar.
+const DB_QUERY_PRIVILEGED_ROLES = PRIVILEGED_USER_ROLES;
+
+// Papéis do endomarketing: o contrato de parceiro lança a despesa (useEndomarketing.createEndoExpense).
+const DB_QUERY_ENDO_ROLES = ['endomarketing', 'parceiro'];
+
+// Regras por tabela do /api/db/query (antes a única barreira era ALLOWED_TABLES).
+// 'admin' = isAdminUser (admin ou social_media); 'team' = quem gerencia a equipe
+// (admin, social_media ou gestor_projetos, como o verifyTeamManager); uma lista
+// = quem gerencia a equipe ou tem um desses papéis. Os papéis saíram das telas
+// que usam cada tabela (menu do Layout): financeiro só admin, Metas/Clientes/
+// Relatórios/Contratos admin, social_media e gestor_projetos.
+// Sem regra, qualquer pessoa logada lê e grava, como antes.
+const DB_QUERY_TABLE_RULES = {
+  user_roles: { write: 'team' },        // Equipe (Team.tsx) troca funções
+  user_permissions: { write: 'team' },  // Equipe → permissões de módulo
+  login_logs: { read: 'admin', write: 'admin' }, // insert do próprio login é liberado abaixo
+  payment_config: { read: 'team', write: 'admin' }, // Financeiro → configurações (chave PIX da cobrança)
+  whatsapp_config: { read: 'team', write: 'team' }, // o front usa /api/whatsapp/config
+  whatsapp_messages: { read: 'team', write: 'team' }, // telefones e valores de cobrança
+  api_integrations: { write: 'admin' }, // Financeiro → APIs e Configurações → integrações
+  api_integration_logs: { read: 'admin', write: 'admin' },
+  plans: { write: 'admin' },
+  commercial_proposals: { write: 'admin' },
+  plan_promotions: { write: 'admin' },
+  client_testimonials: { write: 'admin' },
+  revenues: { read: 'team', write: 'team' },
+  recurring_revenues: { read: 'team', write: 'team' },
+  financial_contracts: { read: 'team', write: 'team' },
+  financial_activity_log: { read: 'team', write: 'team' },
+  financial_chat_messages: { read: 'team', write: 'team' },
+  cash_reserve_movements: { read: 'team', write: 'team' },
+  billing_messages: { read: 'team', write: 'team' },
+  structure_investments: { read: 'team', write: 'team' },
+  expenses: { read: DB_QUERY_ENDO_ROLES, write: DB_QUERY_ENDO_ROLES },
+  expense_categories: { read: DB_QUERY_ENDO_ROLES, write: DB_QUERY_ENDO_ROLES },
+};
+
+// Tabelas de papel e perfil: upsert (ninguém usa no front) só para admin, porque
+// o ON CONFLICT DO UPDATE passaria por cima das regras de update abaixo.
+const DB_QUERY_STRICT_UPSERT_TABLES = new Set(['user_roles', 'profiles', 'user_permissions']);
+
+/** Tem algum dos papéis (principal ou em user_roles, pelos ids ligados). */
+async function userHasAnyAssignedRole(user, roles) {
+  if (!user || !Array.isArray(roles) || roles.length === 0) return false;
+  if (roles.includes(user.role)) return true;
+  try {
+    await ensureAuthSupportTables();
+    const linkedIds = await getLinkedUserIds(user);
+    if (linkedIds.length === 0) return false;
+    const { rows } = await pool.query(
+      'SELECT 1 FROM user_roles WHERE user_id::text = ANY($1::text[]) AND role::text = ANY($2::text[]) LIMIT 1',
+      [linkedIds, roles]
+    );
+    return rows.length > 0;
+  } catch (error) {
+    console.error('Role lookup failed:', error?.message || error);
+    return false;
+  }
+}
+
+async function dbQueryLevelAllows(user, level) {
+  if (!level) return true;
+  if (level === 'admin') return isAdminUser(user);
+  if (await isTeamManagerUser(user)) return true;
+  return Array.isArray(level) ? userHasAnyAssignedRole(user, level) : false;
+}
+
+/** Chaves de uma linha como o insert/update vão gravar (sanitizeIdentifier) e em minúsculas. */
+function dbQueryRowKeys(item) {
+  if (!item || typeof item !== 'object') return [];
+  return Object.keys(item).map((key) => sanitizeIdentifier(String(key)).toLowerCase());
+}
+
+/** Valor de uma coluna procurando pela chave já limpa (evita "ro-le" virar "role" depois da checagem). */
+function dbQueryRowValue(item, column) {
+  if (!item || typeof item !== 'object') return undefined;
+  const entry = Object.entries(item).find(([key]) => sanitizeIdentifier(String(key)).toLowerCase() === column);
+  return entry ? entry[1] : undefined;
+}
+
+// Chaves de api_integrations.config que quem não é admin pode ler (o resto são segredos).
+const API_INTEGRATION_PUBLIC_CONFIG_KEYS = new Set(['ai_model', 'ai_provider', 'api_key_set']);
+
+function sanitizeApiIntegrationRows(rows) {
+  for (const row of Array.isArray(rows) ? rows : [rows]) {
+    if (!row || typeof row !== 'object' || !row.config || typeof row.config !== 'object') continue;
+    row.config = Object.fromEntries(
+      Object.entries(row.config).filter(([key]) => API_INTEGRATION_PUBLIC_CONFIG_KEYS.has(key))
+    );
+  }
+  return rows;
+}
+
+async function selectRolesForDbQueryFilters(table, filters) {
+  const params = [];
+  const whereClauses = buildDbQueryWhere(filters, table, params);
+  if (whereClauses.length === 0) return [];
+  const { rows } = await pool.query(
+    `SELECT ${table}.role::text AS role FROM ${table} WHERE ${whereClauses.join(' AND ')}`,
+    params
+  );
+  return rows.map((row) => row.role).filter(Boolean);
+}
+
+/**
+ * Aplica as regras por papel do /api/db/query. Lança erro 403 quando o papel não
+ * permite. Devolve { data, filters } a usar: em profiles, quem não gerencia a
+ * equipe só altera a própria linha; em login_logs, o insert vai sempre com o
+ * próprio user_id.
+ */
+async function enforceDbQueryRules({ safeTable, operation, data, filters, user, select, joins }) {
+  if (operation === 'rpc') return { data, filters };
+  const isWrite = operation !== 'select';
+  const forbidden = (message) => dbQueryError(message || 'Sem permissão para esta operação.', 403);
+
+  if (safeTable === 'login_logs' && operation === 'insert') {
+    const items = (Array.isArray(data) ? data : [data]).map((item) => ({
+      ...Object.fromEntries(Object.entries(item || {}).filter(([key]) => sanitizeIdentifier(String(key)).toLowerCase() !== 'user_id')),
+      user_id: user.id,
+    }));
+    return { data: Array.isArray(data) ? items : items[0], filters };
+  }
+
+  const rule = DB_QUERY_TABLE_RULES[safeTable];
+  const level = rule ? (isWrite ? rule.write : rule.read) : null;
+  if (level && !(await dbQueryLevelAllows(user, level))) throw forbidden();
+
+  if (operation === 'select') {
+    // Join também lê a outra tabela: vale a regra de leitura dela.
+    for (const join of Array.isArray(joins) ? joins : []) {
+      const joinTable = sanitizeIdentifier(String(join?.table || ''));
+      if (!joinTable || !ALLOWED_TABLES.includes(joinTable)) continue;
+      const joinLevel = joinTable === 'api_integrations' ? 'admin' : DB_QUERY_TABLE_RULES[joinTable]?.read;
+      if (joinLevel && !(await dbQueryLevelAllows(user, joinLevel))) throw forbidden();
+    }
+    // A limpeza de api_integrations.config é pelo nome da coluna: sem alias para quem não é admin.
+    if (safeTable === 'api_integrations' && /\sas\s/i.test(String(select || '')) && !(await isAdminUser(user))) {
+      throw forbidden();
+    }
+  }
+
+  if (operation === 'upsert' && DB_QUERY_STRICT_UPSERT_TABLES.has(safeTable) && !(await isStrictAdminUser(user))) {
+    throw forbidden();
+  }
+
+  if (safeTable === 'user_roles' && isWrite && !(await isStrictAdminUser(user))) {
+    const items = Array.isArray(data) ? data : [data];
+    const grantsPrivileged = (operation === 'insert' || operation === 'upsert' || operation === 'update')
+      && items.some((item) => DB_QUERY_PRIVILEGED_ROLES.has(String(dbQueryRowValue(item, 'role') ?? '')));
+    const touchesPrivileged = (operation === 'update' || operation === 'delete')
+      && (await selectRolesForDbQueryFilters('user_roles', filters)).some((role) => DB_QUERY_PRIVILEGED_ROLES.has(role));
+    if (grantsPrivileged || touchesPrivileged) {
+      throw forbidden('Só um administrador pode dar ou tirar as funções admin, social_media e socio_gestor.');
+    }
+  }
+
+  if (safeTable === 'profiles' && isWrite) {
+    const isTeam = await isTeamManagerUser(user);
+    if (operation !== 'update') {
+      // Ninguém cria nem apaga perfil pelo front (usa /api/auth/create-user e /api/delete-user).
+      if (!(await isStrictAdminUser(user))) throw forbidden();
+      return { data, filters };
+    }
+    const keys = dbQueryRowKeys(data);
+    const blocked = ['id', 'password_hash', 'profile_password_hash', 'auth_password_hash'];
+    if (!(await isStrictAdminUser(user))) blocked.push('email');
+    if (!isTeam) blocked.push('role', 'monthly_salary');
+    const blockedKey = keys.find((key) => blocked.includes(key));
+    if (blockedKey) throw forbidden(`Sem permissão para alterar "${blockedKey}" do perfil.`);
+
+    if (!isTeam) {
+      // Quem não gerencia a equipe só altera o próprio perfil.
+      const ownIds = await getLinkedUserIds(user);
+      return { data, filters: [...(Array.isArray(filters) ? filters : []), { column: 'id', op: 'in', value: ownIds.length ? ownIds : [String(user.id)] }] };
+    }
+
+    if (keys.includes('role') && !(await isStrictAdminUser(user))) {
+      const currentRoles = await selectRolesForDbQueryFilters('profiles', filters);
+      if (DB_QUERY_PRIVILEGED_ROLES.has(String(dbQueryRowValue(data, 'role') ?? '')) || currentRoles.some((role) => DB_QUERY_PRIVILEGED_ROLES.has(role))) {
+        throw forbidden('Só um administrador pode dar ou tirar as funções admin, social_media e socio_gestor.');
+      }
+    }
+  }
+
+  return { data, filters };
+}
+
+// Funções do banco que o front chama por supabase.rpc(). Qualquer outra é recusada.
+const DB_QUERY_ALLOWED_RPC = new Set([
+  'notify_role', 'notify_user', 'increment_promotion_redemption', 'cleanup_old_portal_videos',
+]);
 
 function isCrmLeadManagementPayload(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
@@ -8080,7 +8743,8 @@ async function validateCrmStageTransition({ leadId, nextStatus, payload, user })
 app.post('/api/db/query', async (req, res) => {
   try {
     const { user } = await verifyUser(req);
-    const { table, operation, data, filters, select, order, limit: queryLimit, single, joins, onConflict } = req.body;
+    const { table, operation, select, order, limit: queryLimit, single, joins, onConflict } = req.body;
+    let { data, filters } = req.body;
 
     const safeTable = sanitizeIdentifier(table);
     if (!ALLOWED_TABLES.includes(safeTable)) {
@@ -8162,6 +8826,9 @@ app.post('/api/db/query', async (req, res) => {
     const scopeCity = TABLES_WITH_CITY.has(safeTable) && await tableHasCityColumn(safeTable);
     const activeCity = scopeCity ? await resolveActiveCity(req, user.id, user) : null;
 
+    // Regras por papel (user_roles, profiles, configurações...). Pode restringir os filtros.
+    ({ data, filters } = await enforceDbQueryRules({ safeTable, operation, data, filters, user, select, joins }));
+
     let result;
 
 
@@ -8170,19 +8837,20 @@ app.post('/api/db/query', async (req, res) => {
         if (safeTable === 'crm_leads') {
           await ensureCrmLeadsColumns();
         }
-        const selectClause = joins && Array.isArray(joins)
-          ? qualifyBaseSelectClause(select || '*', safeTable, joins)
-          : (select || '*');
+        // Só entram joins de tabela liberada; o select só pode citar a base e esses joins.
+        const acceptedJoins = (Array.isArray(joins) ? joins : [])
+          .filter((join) => join && ALLOWED_TABLES.includes(sanitizeIdentifier(String(join.table || ''))));
+        const joinTables = acceptedJoins.map((join) => sanitizeIdentifier(String(join.table)));
+        const selectClause = buildSafeSelectClause(select, safeTable, joinTables);
         let query = `SELECT ${selectClause} FROM ${safeTable}`;
 
         const params = [];
         let paramIdx = 1;
 
         // Handle joins
-        if (joins && Array.isArray(joins)) {
-          for (const join of joins) {
-            const joinTable = sanitizeIdentifier(join.table);
-            if (!ALLOWED_TABLES.includes(joinTable)) continue;
+        if (acceptedJoins.length > 0) {
+          for (const join of acceptedJoins) {
+            const joinTable = sanitizeIdentifier(String(join.table));
             const joinType = join.type === 'inner' ? 'INNER JOIN' : 'LEFT JOIN';
 
             // Support structured join (leftTable.leftColumn = rightTable.rightColumn)
@@ -8203,106 +8871,10 @@ app.post('/api/db/query', async (req, res) => {
           }
         }
 
-        // Handle filters
-        if (filters && Array.isArray(filters)) {
-          const whereClauses = [];
-          for (const f of filters) {
-            const col = sanitizeIdentifier(f.column);
-            switch (f.op) {
-              case 'eq': whereClauses.push(`${safeTable}.${col} = $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'neq': whereClauses.push(`${safeTable}.${col} != $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'gt': whereClauses.push(`${safeTable}.${col} > $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'gte': whereClauses.push(`${safeTable}.${col} >= $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'lt': whereClauses.push(`${safeTable}.${col} < $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'lte': whereClauses.push(`${safeTable}.${col} <= $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'like': whereClauses.push(`${safeTable}.${col} LIKE $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'ilike': whereClauses.push(`${safeTable}.${col} ILIKE $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'is': whereClauses.push(`${safeTable}.${col} IS ${f.value === null ? 'NULL' : 'NOT NULL'}`); break;
-              case 'in': whereClauses.push(`${safeTable}.${col} = ANY($${paramIdx})`); params.push(f.value); paramIdx++; break;
-              case 'contains': whereClauses.push(`${safeTable}.${col} @> $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'or': {
-                const orClauses = [];
-                for (const part of splitOrFilterParts(f.value)) {
-                  const [rawColumn, rawOp, ...rawValueParts] = part.split('.');
-                  const orColumn = sanitizeIdentifier(rawColumn || '');
-                  const orOp = String(rawOp || '').trim();
-                  const rawValue = rawValueParts.join('.');
-                  if (!orColumn || !orOp) continue;
-
-                  switch (orOp) {
-                    case 'eq':
-                      orClauses.push(`${safeTable}.${orColumn} = $${paramIdx}`);
-                      params.push(rawValue);
-                      paramIdx++;
-                      break;
-                    case 'neq':
-                      orClauses.push(`${safeTable}.${orColumn} != $${paramIdx}`);
-                      params.push(rawValue);
-                      paramIdx++;
-                      break;
-                    case 'gt':
-                      orClauses.push(`${safeTable}.${orColumn} > $${paramIdx}`);
-                      params.push(rawValue);
-                      paramIdx++;
-                      break;
-                    case 'gte':
-                      orClauses.push(`${safeTable}.${orColumn} >= $${paramIdx}`);
-                      params.push(rawValue);
-                      paramIdx++;
-                      break;
-                    case 'lt':
-                      orClauses.push(`${safeTable}.${orColumn} < $${paramIdx}`);
-                      params.push(rawValue);
-                      paramIdx++;
-                      break;
-                    case 'lte':
-                      orClauses.push(`${safeTable}.${orColumn} <= $${paramIdx}`);
-                      params.push(rawValue);
-                      paramIdx++;
-                      break;
-                    case 'like':
-                      orClauses.push(`${safeTable}.${orColumn} LIKE $${paramIdx}`);
-                      params.push(rawValue);
-                      paramIdx++;
-                      break;
-                    case 'ilike':
-                      orClauses.push(`${safeTable}.${orColumn} ILIKE $${paramIdx}`);
-                      params.push(rawValue);
-                      paramIdx++;
-                      break;
-                    case 'is':
-                      orClauses.push(`${safeTable}.${orColumn} IS ${rawValue === 'null' ? 'NULL' : 'NOT NULL'}`);
-                      break;
-                    case 'in':
-                      orClauses.push(`${safeTable}.${orColumn} = ANY($${paramIdx})`);
-                      params.push(parseFilterArray(rawValue));
-                      paramIdx++;
-                      break;
-                  }
-                }
-                if (orClauses.length > 0) whereClauses.push(`(${orClauses.join(' OR ')})`);
-                break;
-              }
-              case 'not': {
-                const nestedOp = f.value?.op;
-                const nestedValue = f.value?.value;
-                if (nestedOp === 'is') {
-                  whereClauses.push(`${safeTable}.${col} IS ${nestedValue === null ? 'NOT NULL' : 'NULL'}`);
-                } else if (nestedOp === 'in') {
-                  whereClauses.push(`NOT (${safeTable}.${col} = ANY($${paramIdx}))`);
-                  params.push(parseFilterArray(nestedValue));
-                  paramIdx++;
-                } else {
-                  whereClauses.push(`${safeTable}.${col} != $${paramIdx}`);
-                  params.push(nestedValue);
-                  paramIdx++;
-                }
-                break;
-              }
-            }
-          }
-          if (whereClauses.length > 0) query += ` WHERE ${whereClauses.join(' AND ')}`;
-        }
+        // Handle filters (mesmo montador do update e do delete)
+        const whereClauses = buildDbQueryWhere(filters, safeTable, params);
+        if (whereClauses.length > 0) query += ` WHERE ${whereClauses.join(' AND ')}`;
+        paramIdx = params.length + 1;
 
         // Multi-city: força filtro de cidade no SELECT
         if (scopeCity) {
@@ -8315,14 +8887,27 @@ app.post('/api/db/query', async (req, res) => {
         // Handle order
         if (order) {
           const orderParts = Array.isArray(order) ? order : [order];
-          const orderClauses = orderParts.map(o => `${sanitizeOrderColumn(o.column, safeTable)} ${o.ascending === false ? 'DESC' : 'ASC'}`);
+          const orderClauses = orderParts.map(o => {
+            const orderColumn = sanitizeOrderColumn(o?.column, safeTable);
+            const [orderTable, orderName] = orderColumn.split('.');
+            const blocked = [...(DB_QUERY_HIDDEN_COLUMNS[orderTable] || []), ...(DB_QUERY_MANAGER_COLUMNS[orderTable] || [])];
+            if (blocked.includes(String(orderName || '').toLowerCase())) throw dbQueryError(`Não é possível ordenar por "${orderName}".`);
+            return `${orderColumn} ${o?.ascending === false ? 'DESC' : 'ASC'}`;
+          });
           query += ` ORDER BY ${orderClauses.join(', ')}`;
         }
 
         // Handle limit
         if (queryLimit) query += ` LIMIT ${parseInt(queryLimit)}`;
 
-        const { rows } = await pool.query(query, params);
+        // Protocolo estendido: impede comandos empilhados mesmo quando não há parâmetros.
+        const { rows } = await pool.query({ text: query, values: params, queryMode: 'extended' });
+        const selectTables = [safeTable, ...joinTables];
+        stripDbQueryColumns(rows, selectTables, await getDbQueryStripOptions(user, selectTables));
+        if (safeTable === 'api_integrations' && !(await isAdminUser(user))) sanitizeApiIntegrationRows(rows);
+        if (selectTables.some((table) => BRIEFING_DATA_TABLES.has(table)) && !(await isTeamManagerUser(user))) {
+          stripBriefingSecretsFromRows(rows, selectTables);
+        }
         result = { data: single ? (rows[0] || null) : rows, error: null };
         break;
       }
@@ -8463,12 +9048,22 @@ app.post('/api/db/query', async (req, res) => {
             ? updateKeys.map((key) => `${key} = EXCLUDED.${key}`).join(', ')
             : `${conflictColumns[0] || keys[0]} = EXCLUDED.${conflictColumns[0] || keys[0]}`;
 
+          // Multi-city: o DO UPDATE só alcança linha da cidade ativa (ou sem cidade), como
+          // o update e o delete. Antes um id de outra cidade era sobrescrito e mudava de praça.
+          const upsertParams = scopeCity ? [...values, activeCity] : values;
+          const cityGuard = scopeCity
+            ? ` WHERE ${cityVisibilityExpression(`${safeTable}.city`, `$${values.length + 1}`)}`
+            : '';
+
           const { rows } = await pool.query(
             `INSERT INTO ${safeTable} (${keys.join(', ')}) VALUES (${placeholders.join(', ')})
-             ON CONFLICT (${(conflictColumns.length ? conflictColumns : ['id']).join(', ')}) DO UPDATE SET ${updateSet}
+             ON CONFLICT (${(conflictColumns.length ? conflictColumns : ['id']).join(', ')}) DO UPDATE SET ${updateSet}${cityGuard}
              RETURNING *`,
-            values
+            upsertParams
           );
+          if (rows.length === 0) {
+            throw dbQueryError('Esse registro é de outra cidade e não foi alterado.', 409);
+          }
           allResults.push(rows[0]);
         }
 
@@ -8525,21 +9120,36 @@ app.post('/api/db/query', async (req, res) => {
         const keys = entries.map(([key]) => key);
         const jsonColumns = await getTableJsonColumns(safeTable);
         const values = entries.map(([key, value]) => serializeValueForColumn(key, value, jsonColumns));
+
+        // CRM: o aviso de contrato/reunião sai só quando o status muda (antes saía em
+        // qualquer edição de um lead já fechado ou em reunião, até ao mudar observação).
+        let crmPreviousStatus = null;
+        if (safeTable === 'crm_leads' && (scopedData?.status === 'contracted' || scopedData?.status === 'meeting')) {
+          const prevParams = [];
+          const prevWhere = buildDbQueryWhere(filters, safeTable, prevParams);
+          if (prevWhere.length > 0) {
+            const { rows: prevRows } = await pool.query(
+              `SELECT id::text AS id, status::text AS status FROM crm_leads WHERE ${prevWhere.join(' AND ')}`,
+              prevParams
+            ).catch(() => ({ rows: [] }));
+            crmPreviousStatus = new Map(prevRows.map((row) => [row.id, row.status]));
+          }
+        }
+
         let paramIdx = 1;
         const setClauses = keys.map(k => `${k} = $${paramIdx++}`);
 
         let query = `UPDATE ${safeTable} SET ${setClauses.join(', ')}`;
         const params = [...values];
 
-        if (filters && Array.isArray(filters)) {
-          const whereClauses = [];
-          for (const f of filters) {
-            const col = sanitizeIdentifier(f.column);
-            if (f.op === 'eq') { whereClauses.push(`${col} = $${paramIdx}`); params.push(f.value); paramIdx++; }
-            else if (f.op === 'in') { whereClauses.push(`${col} = ANY($${paramIdx})`); params.push(f.value); paramIdx++; }
-          }
-          if (whereClauses.length > 0) query += ` WHERE ${whereClauses.join(' AND ')}`;
+        // Todos os filtros valem (antes só eq/in). Sem filtro do cliente, recusa:
+        // o filtro de cidade sozinho viraria um UPDATE na cidade inteira.
+        const whereClauses = buildDbQueryWhere(filters, safeTable, params);
+        if (whereClauses.length === 0) {
+          return res.status(400).json({ data: null, error: { message: 'Atualização sem filtro recusada.' } });
         }
+        query += ` WHERE ${whereClauses.join(' AND ')}`;
+        paramIdx = params.length + 1;
         // Multi-city: impede UPDATE cruzado
         if (scopeCity) {
           query += (query.includes(' WHERE ') ? ' AND ' : ' WHERE ') + `${cityVisibilityExpression('city', `$${paramIdx}`)}`;
@@ -8550,9 +9160,10 @@ app.post('/api/db/query', async (req, res) => {
 
         const { rows } = await pool.query(query, params);
         
-        // Broadcaster: Notificações globais de status de lead
-        if (safeTable === 'crm_leads' && rows.length > 0) {
+        // Broadcaster: Notificações globais de status de lead (só na mudança de status)
+        if (safeTable === 'crm_leads' && rows.length > 0 && crmPreviousStatus) {
           for (const lead of rows) {
+            if (crmPreviousStatus.get(String(lead.id)) === lead.status) continue;
             if (lead.status === 'contracted') {
               broadcastToAll({
                 type: 'broadcast',
@@ -8587,24 +9198,15 @@ app.post('/api/db/query', async (req, res) => {
 
         let query = `DELETE FROM ${safeTable}`;
         const params = [];
-        let paramIdx = 1;
 
-        if (filters && Array.isArray(filters)) {
-          const whereClauses = [];
-          for (const f of filters) {
-            const col = sanitizeIdentifier(f.column);
-            switch (f.op) {
-              case 'eq': whereClauses.push(`${col} = $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'neq': whereClauses.push(`${col} != $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'gt': whereClauses.push(`${col} > $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'gte': whereClauses.push(`${col} >= $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'lt': whereClauses.push(`${col} < $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'lte': whereClauses.push(`${col} <= $${paramIdx}`); params.push(f.value); paramIdx++; break;
-              case 'in': whereClauses.push(`${col} = ANY($${paramIdx})`); params.push(f.value); paramIdx++; break;
-            }
-          }
-          if (whereClauses.length > 0) query += ` WHERE ${whereClauses.join(' AND ')}`;
+        // Mesmo montador do select (antes is/not/or eram ignorados e apagavam a mais).
+        // Sem filtro do cliente, recusa: o filtro de cidade sozinho apagaria a cidade inteira.
+        const whereClauses = buildDbQueryWhere(filters, safeTable, params);
+        if (whereClauses.length === 0) {
+          return res.status(400).json({ data: null, error: { message: 'Exclusão sem filtro recusada.' } });
         }
+        query += ` WHERE ${whereClauses.join(' AND ')}`;
+        let paramIdx = params.length + 1;
         // Multi-city: impede DELETE cruzado
         if (scopeCity) {
           query += (query.includes(' WHERE ') ? ' AND ' : ' WHERE ') + `${cityVisibilityExpression('city', `$${paramIdx}`)}`;
@@ -8619,8 +9221,11 @@ app.post('/api/db/query', async (req, res) => {
       }
 
       case 'rpc': {
-        // Call a database function
-        const funcName = sanitizeIdentifier(data.function_name);
+        // Call a database function (só as da lista fechada)
+        const funcName = sanitizeIdentifier(String(data?.function_name || ''));
+        if (!DB_QUERY_ALLOWED_RPC.has(funcName)) {
+          return res.status(403).json({ error: `Função "${funcName}" não é permitida` });
+        }
         const args = data.args || {};
         const argKeys = Object.keys(args);
         const argValues = Object.values(args);
@@ -8637,10 +9242,20 @@ app.post('/api/db/query', async (req, res) => {
         return res.status(400).json({ error: `Unknown operation: ${operation}` });
     }
 
+    // RETURNING * de insert/update/upsert/delete também não devolve colunas sensíveis
+    if (operation !== 'select' && operation !== 'rpc' && result?.data) {
+      stripDbQueryColumns(result.data, [safeTable], await getDbQueryStripOptions(user, [safeTable]));
+      if (BRIEFING_DATA_TABLES.has(safeTable) && !(await isTeamManagerUser(user))) {
+        stripBriefingSecretsFromRows(result.data, [safeTable]);
+      }
+    }
+
     res.json(result);
   } catch (e) {
     console.error('DB query error:', e);
-    const status = e?.statusCode === 400 ? 400 : 500;
+    const status = [400, 403, 409, 503].includes(e?.statusCode)
+      ? e.statusCode
+      : e?.message === 'Unauthorized' ? 401 : 500;
     res.status(status).json({ data: null, error: { message: e.message } });
   }
 });
@@ -8773,7 +9388,9 @@ app.get('/api/design-tasks/fast', async (req, res) => {
       } : null,
     }));
 
-    res.set('Cache-Control', 'private, max-age=10');
+    // A cidade vai só no cabeçalho x-pulse-city (a URL é a mesma): sem cache no
+    // navegador, senão a troca de cidade (ou criar/excluir card) recebia a lista antiga.
+    res.set('Cache-Control', 'no-store');
     res.json(data);
   } catch (e) {
     console.error('GET /api/design-tasks/fast error:', e);
@@ -8784,17 +9401,17 @@ app.get('/api/design-tasks/fast', async (req, res) => {
 // ─── Clients ────────────────────────────────────────────────
 app.get('/api/clients', async (req, res) => {
   try {
-    const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
+    const { user, activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
     const { rows } = scopeCity
       ? await pool.query(`SELECT * FROM clients WHERE ${cityVisibilityExpression('city', '$1')} ORDER BY company_name`, [activeCity])
       : await pool.query('SELECT * FROM clients ORDER BY company_name');
-    res.json(rows);
+    res.json(await sanitizeClientRowsForUser(rows, user));
   } catch (e) { res.status(e.message === 'Unauthorized' ? 401 : 500).json({ error: e.message }); }
 });
 
 app.post('/api/clients', async (req, res) => {
   try {
-    const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
+    const { user, activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
     // Garante colunas NUMERIC antes de gravar metas fracionadas do plano especial
     await ensureClientFractionalGoalColumns().catch(() => {});
     await ensureClientExperienceColumns().catch(() => {});
@@ -8837,7 +9454,7 @@ app.post('/api/clients', async (req, res) => {
       );
       created = upd.rows[0] || created;
     }
-    res.json(created);
+    res.json(await sanitizeClientRowsForUser(created, user));
   } catch (e) {
     console.error('POST /api/clients error:', e);
     // 23505 = violação de índice único (ex.: client_login repetido)
@@ -8989,7 +9606,7 @@ app.get('/api/clients/:id/transfer-preview', async (req, res) => {
 app.put('/api/clients/:id', async (req, res) => {
 
   try {
-    const { activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
+    const { user, activeCity, scopeCity } = await getScopedCityContext(req, 'clients');
     const { id } = req.params;
     const c = req.body;
     
@@ -9112,7 +9729,7 @@ app.put('/api/clients/:id', async (req, res) => {
         ).catch(() => {});
       }
 
-      res.json(rows[0]);
+      res.json(await sanitizeClientRowsForUser(rows[0], user));
 
     } catch (e) {
       await client.query('ROLLBACK');
@@ -12054,6 +12671,16 @@ wss.on('connection', (ws) => {
         // we keep it simple for now as it's a internal local network VPS.
         ws.subscribedChannels = ws.subscribedChannels || new Set();
         ws.subscribedChannels.add(data.channel);
+        return;
+      }
+      // channel.send() do front (ex.: Copy avisa 'copy_task_change'): repassa a quem
+      // assina o mesmo canal. Eventos 'crm:*' só saem do servidor (broadcastToAll).
+      if (data.type === 'broadcast' && typeof data.channel === 'string' && typeof data.event === 'string' && !data.event.startsWith('crm:')) {
+        const payload = JSON.stringify({ type: 'broadcast', channel: data.channel, event: data.event, payload: data.payload ?? null });
+        for (const client of wssClients) {
+          if (client === ws || client.readyState !== 1 || !client.subscribedChannels?.has(data.channel)) continue;
+          try { client.send(payload); } catch { /* ignore */ }
+        }
       }
     } catch (e) {}
   });

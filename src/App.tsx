@@ -6,7 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import { AppProvider, useApp } from "@/contexts/AppContext";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { CityProvider } from "@/contexts/CityContext";
-import Layout from "@/components/Layout";
+import Layout, { isAdminOnlyPath } from "@/components/Layout";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Login from "@/pages/Login";
 import PrivacyPolicy from "@/pages/legal/PrivacyPolicy";
@@ -214,6 +214,11 @@ function ProtectedRoute({
     return <Navigate to={META_REVIEWER_HOME} replace />;
   }
 
+  // Área só de admin no menu (financeiro, agentes...): digitar o endereço não abre a tela.
+  if (currentUser && !roles.includes('admin') && isAdminOnlyPath(location.pathname)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   if (noLayout) return <>{children}</>;
   return <Layout>{children}</Layout>;
 }
@@ -302,6 +307,11 @@ function AppRoutes() {
         <Route path="/briefing-provedor/:clientId" element={<ClientBriefingProvider />} />
         {/* a Central de WhatsApp agora fica em Configurações → WhatsApp */}
         <Route path="/whatsapp" element={<Navigate to="/configuracoes?aba=whatsapp" replace />} />
+        {/* endereços antigos gravados em notificações já salvas */}
+        <Route path="/editor" element={<Navigate to="/edicao" replace />} />
+        <Route path="/videomaker" element={<Navigate to="/videomakers" replace />} />
+        <Route path="/social-media" element={<Navigate to="/entregas-social" replace />} />
+        <Route path="/content-kanban" element={<Navigate to="/conteudo" replace />} />
         <Route path="/financeiro" element={<ProtectedRoute><FinancialDashboard /></ProtectedRoute>} />
         <Route path="/financeiro/contratos" element={<ProtectedRoute><FinancialContracts /></ProtectedRoute>} />
         <Route path="/financeiro/receitas" element={<ProtectedRoute><FinancialRevenues /></ProtectedRoute>} />

@@ -90,19 +90,18 @@ export function useUserPermissions(userId?: string) {
 export function useMyPermissions() {
   const { profile } = useAuth();
   const query = useQuery({
-    queryKey: ['my-permissions'],
+    // Com o id na chave, outra conta no mesmo navegador não herda as permissões em cache.
+    queryKey: ['my-permissions', profile?.id],
+    enabled: !!profile?.id,
     queryFn: async () => {
-      const { data } = await supabase.auth.getUser();
-      const user = data?.user;
-      if (!user?.id) return { modules: [] as string[], role: '' };
-
-      // Use role directly from /auth/me (already joined with user_roles) — avoids profile/role mismatch
-      const authRole = (user as any).role || '';
+      // O perfil já veio do /auth/me (papel principal do servidor): não chama o /auth/me de novo.
+      if (!profile?.id) return { modules: [] as string[], role: '' };
+      const authRole = profile.role || '';
 
       const permRes = await supabase
         .from('user_permissions')
         .select('module')
-        .eq('user_id', user.id);
+        .eq('user_id', profile.id);
 
       return {
         modules: (permRes.data || []).map((d: any) => d.module as string),

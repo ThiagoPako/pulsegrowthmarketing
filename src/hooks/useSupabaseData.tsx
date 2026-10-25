@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { useCity } from '@/contexts/CityContext';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
+import { toast } from 'sonner';
 import type { Client, Recording, KanbanTask, Script, CompanySettings, DayOfWeek, ActiveRecording, ContentType, RecordingType, RecordingStatus, ConfirmationStatus, KanbanColumn, ScriptVideoType, ScriptPriority, ScriptContentFormat } from '@/types';
 
 // ── Mappers: DB row ↔ App type ──
@@ -135,6 +136,16 @@ function clientToRow(c: Client) {
           }))
       : [],
   };
+}
+
+// Polling de 2 min: quando o servidor devolve o mesmo conteúdo, mantém a referência
+// anterior (o React não redesenha as telas que usam useApp() à toa).
+function keepIfEqual<T>(prev: T, next: T): T {
+  try {
+    return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+  } catch {
+    return next;
+  }
 }
 
 function normalizeDate(d: string): string {
@@ -305,6 +316,17 @@ const defaultSettings: CompanySettings = {
 };
 
 
+/**
+ * Erro de uma gravação na API: avisa e devolve false. Quem chama não aplica a
+ * mudança na tela (antes a tela mostrava salvo e o polling trazia o valor antigo).
+ */
+function reportSaveError(label: string, error: unknown): false {
+  console.error(`${label} error:`, error);
+  const message = (error as { message?: string } | null)?.message;
+  toast.error(`Não foi possível salvar${message ? `: ${message}` : '. Tente de novo.'}`);
+  return false;
+}
+
 export function useSupabaseData() {
   const [clients, setClients] = useState<Client[]>([]);
   const [recordings, setRecordings] = useState<Recording[]>([]);
@@ -318,13 +340,17 @@ export function useSupabaseData() {
   // Dedupe: evita disparar o mesmo bootstrap várias vezes (montagens simultâneas/efeitos duplicados).
   const inFlight = useRef<Promise<void> | null>(null);
   const lastFetchAt = useRef(0);
+  // Geração da carga: troca de cidade (ou logout) no meio da carga descarta a anterior,
+  // senão os dados da cidade antiga ficavam na tela com o rótulo da nova.
+  const fetchGen = useRef(0);
   const MIN_INTERVAL_MS = 10_000;
   const { activeCity, isLoading: cityLoading } = useCity();
 
   // Wait for auth token before fetching
   const hasToken = !!localStorage.getItem('pulse_jwt');
 
-  const runFetchAll = useCallback(async () => {
+  const runFetchAll = useCallback(async (gen: number) => {
+    const isStale = () => gen !== fetchGen.current;
     const token = localStorage.getItem('pulse_jwt');
     if (cityLoading) return;
     if (!token) { setLoading(false); return; }
@@ -335,17 +361,22 @@ export function useSupabaseData() {
       invokeVpsFunction('clients', { method: 'GET' }),
       invokeVpsFunction('company-settings', { method: 'GET' }),
     ]);
+    if (isStale()) return;
 
     if (setRes.data && !setRes.error) {
       const settingsData = Array.isArray(setRes.data) ? setRes.data[0] : setRes.data;
       if (settingsData) {
-        setSettings(rowToSettings(settingsData));
+        const nextSettings = rowToSettings(settingsData);
+        setSettings(prev => keepIfEqual(prev, nextSettings));
         setSettingsId(settingsData.id);
       }
     }
 
     const hasClients = !cRes.error && Array.isArray(cRes.data);
-    if (hasClients) setClients((cRes.data as any[]).map(rowToClient));
+    if (hasClients) {
+      const nextClients = (cRes.data as any[]).map(rowToClient);
+      setClients(prev => keepIfEqual(prev, nextClients));
+    }
     setLoading(false);
     hasFetched.current = true;
 
@@ -356,6 +387,7 @@ export function useSupabaseData() {
       invokeVpsFunction('scripts', { method: 'GET' }),
       invokeVpsFunction('active-recordings', { method: 'GET' }),
     ]);
+    if (isStale()) return;
     const hasClientsPayload = hasClients;
     const allClientRows: any[] = hasClientsPayload ? (cRes.data as any[]) : [];
 
@@ -371,40 +403,62 @@ export function useSupabaseData() {
       const allRecordings = (Array.isArray(rRes.data) ? rRes.data : []).map(rowToRecording);
       // Filter out recordings for canceled clients unless they are not 'agendada' (keep history).
       // Preserve avulso/story sessions (no clientId, or type 'avulso') which are internal agency slots.
-      setRecordings(
-        shouldFilterByActiveClients
-          ? allRecordings.filter(r =>
-              !r.clientId ||
-              r.type === 'avulso' ||
-              activeClientIds.has(r.clientId) ||
-              r.status !== 'agendada'
-            )
-          : allRecordings
-      );
+      const nextRecordings = shouldFilterByActiveClients
+        ? allRecordings.filter(r =>
+            !r.clientId ||
+            r.type === 'avulso' ||
+            activeClientIds.has(r.clientId) ||
+            r.status !== 'agendada'
+          )
+        : allRecordings;
+      setRecordings(prev => keepIfEqual(prev, nextRecordings));
     }
     if (tRes.data && !tRes.error) {
       const allTasks = (Array.isArray(tRes.data) ? tRes.data : []).map(rowToTask);
-      setTasks(shouldFilterByActiveClients ? allTasks.filter(t => !t.clientId || activeClientIds.has(t.clientId)) : allTasks);
+      const nextTasks = shouldFilterByActiveClients ? allTasks.filter(t => !t.clientId || activeClientIds.has(t.clientId)) : allTasks;
+      setTasks(prev => keepIfEqual(prev, nextTasks));
     }
     if (sRes.data && !sRes.error) {
       const allScripts = (Array.isArray(sRes.data) ? sRes.data : []).map(rowToScript);
-      setScripts(shouldFilterByActiveClients ? allScripts.filter(s => !s.clientId || activeClientIds.has(s.clientId)) : allScripts);
+      const nextScripts = shouldFilterByActiveClients ? allScripts.filter(s => !s.clientId || activeClientIds.has(s.clientId)) : allScripts;
+      setScripts(prev => keepIfEqual(prev, nextScripts));
     }
 
-    if (arRes.data && !arRes.error) setActiveRecordings((Array.isArray(arRes.data) ? arRes.data : []).map(rowToActiveRecording));
+    if (arRes.data && !arRes.error) {
+      const nextActive = (Array.isArray(arRes.data) ? arRes.data : []).map(rowToActiveRecording);
+      setActiveRecordings(prev => keepIfEqual(prev, nextActive));
+    }
   }, [cityLoading]);
 
   // Wrapper com dedupe + intervalo mínimo — evita rajadas de bootstrap concorrentes.
+  // Sem force reaproveita a carga em andamento; com force (troca de cidade, polling)
+  // começa outra, e a anterior é descartada quando terminar.
   const fetchAll = useCallback(async (options?: { force?: boolean }) => {
-    if (inFlight.current) return inFlight.current;
+    if (inFlight.current && !options?.force) return inFlight.current;
     if (!options?.force && hasFetched.current && Date.now() - lastFetchAt.current < MIN_INTERVAL_MS) return;
-    const promise = runFetchAll().finally(() => {
-      inFlight.current = null;
+    const gen = ++fetchGen.current;
+    const promise: Promise<void> = runFetchAll(gen).finally(() => {
+      if (inFlight.current === promise) inFlight.current = null;
       lastFetchAt.current = Date.now();
     });
     inFlight.current = promise;
     return promise;
   }, [runFetchAll]);
+
+  // Zera os dados (logout na mesma aba): o próximo usuário não vê nada do anterior.
+  const resetData = useCallback(() => {
+    fetchGen.current += 1;
+    inFlight.current = null;
+    setClients([]);
+    setRecordings([]);
+    setTasks([]);
+    setScripts([]);
+    setActiveRecordings([]);
+    setSettings(defaultSettings);
+    setSettingsId('');
+    setLoading(false);
+    hasFetched.current = false;
+  }, []);
 
 
   // ── Initial fetch — only when token exists ──
@@ -424,19 +478,13 @@ export function useSupabaseData() {
           setTimeout(() => fetchAll(), 100);
         } else {
           // Token was removed (logout) — clear data
-          setClients([]);
-          setRecordings([]);
-          setTasks([]);
-          setScripts([]);
-          setActiveRecordings([]);
-          setLoading(false);
-          hasFetched.current = false;
+          resetData();
         }
       }
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [fetchAll]);
+  }, [fetchAll, resetData]);
 
   // ── Re-fetch after login in same tab (storage event doesn't fire for same-tab changes) ──
   useEffect(() => {
@@ -522,10 +570,12 @@ export function useSupabaseData() {
   }, [clients]);
 
 
-  const updateClient = useCallback(async (client: Client) => {
+  const updateClient = useCallback(async (client: Client): Promise<boolean> => {
     const { id, ...rest } = clientToRow(client);
-    await invokeVpsFunction(`clients/${id}`, { body: rest, method: 'PUT' });
+    const { error } = await invokeVpsFunction(`clients/${id}`, { body: rest, method: 'PUT' });
+    if (error) return reportSaveError('updateClient', error);
     setClients(prev => prev.map(c => c.id === client.id ? client : c));
+    return true;
   }, []);
 
   const deleteClient = useCallback(async (id: string): Promise<boolean> => {
@@ -545,9 +595,11 @@ export function useSupabaseData() {
   }, []);
 
   // ── Recording CRUD ──
-  const cancelRecording = useCallback(async (id: string) => {
-    await invokeVpsFunction(`recordings/${id}`, { body: { status: 'cancelada' }, method: 'PUT' });
+  const cancelRecording = useCallback(async (id: string): Promise<boolean> => {
+    const { error } = await invokeVpsFunction(`recordings/${id}`, { body: { status: 'cancelada' }, method: 'PUT' });
+    if (error) return reportSaveError('cancelRecording', error);
     setRecordings(prev => prev.map(r => r.id === id ? { ...r, status: 'cancelada' as const } : r));
+    return true;
   }, []);
 
   // ── Recording CRUD ──
@@ -590,10 +642,12 @@ export function useSupabaseData() {
   }, [recordings, settings, cancelRecording]);
 
 
-  const updateRecording = useCallback(async (recording: Recording) => {
+  const updateRecording = useCallback(async (recording: Recording): Promise<boolean> => {
     const { id, ...rest } = recordingToRow(recording);
-    await invokeVpsFunction(`recordings/${id}`, { body: rest, method: 'PUT' });
+    const { error } = await invokeVpsFunction(`recordings/${id}`, { body: rest, method: 'PUT' });
+    if (error) return reportSaveError('updateRecording', error);
     setRecordings(prev => prev.map(r => r.id === recording.id ? recording : r));
+    return true;
   }, []);
 
 
@@ -621,26 +675,34 @@ export function useSupabaseData() {
   }, []);
 
   // ── Task CRUD ──
-  const addTask = useCallback(async (task: KanbanTask) => {
-    await invokeVpsFunction('kanban-tasks', { body: taskToRow(task) });
+  const addTask = useCallback(async (task: KanbanTask): Promise<boolean> => {
+    const { error } = await invokeVpsFunction('kanban-tasks', { body: taskToRow(task) });
+    if (error) return reportSaveError('addTask', error);
     setTasks(prev => [...prev, task]);
+    return true;
   }, []);
 
-  const updateTask = useCallback(async (task: KanbanTask) => {
+  const updateTask = useCallback(async (task: KanbanTask): Promise<boolean> => {
     const { id, ...rest } = taskToRow(task);
-    await invokeVpsFunction(`kanban-tasks/${id}`, { body: rest, method: 'PUT' });
+    const { error } = await invokeVpsFunction(`kanban-tasks/${id}`, { body: rest, method: 'PUT' });
+    if (error) return reportSaveError('updateTask', error);
     setTasks(prev => prev.map(t => t.id === task.id ? task : t));
+    return true;
   }, []);
 
-  const deleteTask = useCallback(async (id: string) => {
-    await invokeVpsFunction(`kanban-tasks/${id}`, { method: 'DELETE' });
+  const deleteTask = useCallback(async (id: string): Promise<boolean> => {
+    const { error } = await invokeVpsFunction(`kanban-tasks/${id}`, { method: 'DELETE' });
+    if (error) return reportSaveError('deleteTask', error);
     setTasks(prev => prev.filter(t => t.id !== id));
+    return true;
   }, []);
 
   // ── Script CRUD ──
-  const addScript = useCallback(async (script: Script) => {
-    await invokeVpsFunction('scripts', { body: scriptToRow(script) });
+  const addScript = useCallback(async (script: Script): Promise<boolean> => {
+    const { error } = await invokeVpsFunction('scripts', { body: scriptToRow(script) });
+    if (error) return reportSaveError('addScript', error);
     setScripts(prev => [...prev, script]);
+    return true;
   }, []);
 
   const updateScript = useCallback(async (script: Script) => {
@@ -650,15 +712,17 @@ export function useSupabaseData() {
     setScripts(prev => prev.map(s => s.id === script.id ? script : s));
   }, []);
 
-  const deleteScript = useCallback(async (id: string) => {
-    await invokeVpsFunction(`scripts/${id}`, { method: 'DELETE' });
+  const deleteScript = useCallback(async (id: string): Promise<boolean> => {
+    const { error } = await invokeVpsFunction(`scripts/${id}`, { method: 'DELETE' });
+    if (error) return reportSaveError('deleteScript', error);
     setScripts(prev => prev.filter(s => s.id !== id));
+    return true;
   }, []);
 
   // ── Settings ──
-  const updateSettings = useCallback(async (s: CompanySettings) => {
+  const updateSettings = useCallback(async (s: CompanySettings): Promise<boolean> => {
     if (settingsId) {
-      await invokeVpsFunction(`company-settings/${settingsId}`, {
+      const { error } = await invokeVpsFunction(`company-settings/${settingsId}`, {
         body: {
           shift_a_start: s.shiftAStart,
           shift_a_end: s.shiftAEnd,
@@ -677,13 +741,15 @@ export function useSupabaseData() {
         },
         method: 'PUT',
       });
+      if (error) return reportSaveError('updateSettings', error);
     }
     setSettings(s);
+    return true;
   }, [settingsId]);
 
   // ── Active recordings ──
-  const startActiveRecording = useCallback(async (rec: ActiveRecording) => {
-    await invokeVpsFunction('active-recordings', {
+  const startActiveRecording = useCallback(async (rec: ActiveRecording): Promise<boolean> => {
+    const { error } = await invokeVpsFunction('active-recordings', {
       body: {
         recording_id: rec.recordingId,
         videomaker_id: rec.videomarkerId,
@@ -692,14 +758,18 @@ export function useSupabaseData() {
         planned_script_ids: rec.plannedScriptIds || [],
       },
     });
+    if (error) return reportSaveError('startActiveRecording', error);
     setActiveRecordings(prev => [...prev.filter(a => a.recordingId !== rec.recordingId), rec]);
+    return true;
   }, []);
 
-  const stopActiveRecording = useCallback(async (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]) => {
-    await invokeVpsFunction(`active-recordings/${recordingId}/stop`, {
+  const stopActiveRecording = useCallback(async (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]): Promise<boolean> => {
+    const { error } = await invokeVpsFunction(`active-recordings/${recordingId}/stop`, {
       body: { deliveryOverrides, completedScriptIds },
     });
+    if (error) return reportSaveError('stopActiveRecording', error);
     setActiveRecordings(prev => prev.filter(a => a.recordingId !== recordingId));
+    return true;
   }, []);
 
   return {
@@ -711,5 +781,6 @@ export function useSupabaseData() {
     addScript, updateScript, deleteScript,
     updateSettings, startActiveRecording, stopActiveRecording,
     refetch: fetchAll,
+    resetData,
   };
 }

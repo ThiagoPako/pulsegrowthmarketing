@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useCallback, useState, useEffect } from 'react'; // refreshed
+import React, { createContext, useContext, useCallback, useState, useEffect, useRef } from 'react'; // refreshed
 import { getDay } from 'date-fns';
 
 import { useAuth, type Profile } from '@/hooks/useAuth';
@@ -29,7 +29,7 @@ interface AppContextType {
   updateUser: (user: User) => void;
   deleteUser: (id: string) => void;
   addClient: (client: Client) => Promise<boolean>;
-  updateClient: (client: Client) => Promise<void>;
+  updateClient: (client: Client) => Promise<boolean>;
   deleteClient: (id: string) => Promise<boolean>;
   addRecording: (recording: Recording, options?: { skipClientDayCheck?: boolean }) => Promise<boolean>;
   updateRecording: (recording: Recording) => void;
@@ -49,12 +49,12 @@ interface AppContextType {
   addTask: (task: KanbanTask) => void;
   updateTask: (task: KanbanTask) => void;
   deleteTask: (id: string) => void;
-  addScript: (script: Script) => Promise<void>;
+  addScript: (script: Script) => Promise<boolean>;
   updateScript: (script: Script) => void;
   deleteScript: (id: string) => void;
-  updateSettings: (settings: CompanySettings) => void;
+  updateSettings: (settings: CompanySettings) => Promise<boolean>;
   startActiveRecording: (rec: ActiveRecording) => void;
-  stopActiveRecording: (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]) => void;
+  stopActiveRecording: (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]) => Promise<boolean>;
   hasConflict: (videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType, clientId?: string, options?: { skipClientDayCheck?: boolean }) => { hasConflict: boolean; message?: string };
   isWithinWorkHours: (day: DayOfWeek, startTime: string) => boolean;
 
@@ -94,10 +94,11 @@ const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { profile, signOut, loading: authLoading, user } = useAuth();
-  const { activeCity, isLoading: cityLoading } = useCity();
+  const { isLoading: cityLoading } = useCity();
   const data = useSupabaseData();
 
-  const [myRoles, setMyRoles] = useState<UserRole[]>([]);
+  // profile.roles já traz as funções de user_roles (o /auth/me junta todas): não
+  // precisa buscar user_roles de novo aqui.
   const baseCurrentUser = profile ? profileToUser(profile) : null;
   const currentUser = baseCurrentUser
     ? {
@@ -105,18 +106,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         roles: Array.from(new Set([
           baseCurrentUser.role,
           ...(baseCurrentUser.roles || []),
-          ...myRoles,
         ])),
       }
     : null;
-
-  useEffect(() => {
-    if (!profile?.id) { setMyRoles([]); return; }
-    (async () => {
-      const { data } = await supabase.from('user_roles').select('role').eq('user_id', profile.id);
-      if (data) setMyRoles((data as Array<{ role: UserRole }>).map(r => r.role));
-    })();
-  }, [profile?.id]);
 
   // Heartbeat for virtual office presence
   usePresenceHeartbeat(user?.id ?? profile?.id);
@@ -136,7 +128,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             duration: 10000,
             action: {
               label: 'Ver CRM',
-              onClick: () => window.location.hash = '/crm'
+              // BrowserRouter: o hash não muda de tela; troca o endereço e avisa o roteador.
+              onClick: () => {
+                window.history.pushState({}, '', '/crm');
+                window.dispatchEvent(new PopStateEvent('popstate'));
+              }
             }
           });
         });
@@ -197,9 +193,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
     }));
 
-  }, [cityLoading, activeCity]);
+    // profiles e user_roles não têm cidade: trocar de cidade não precisa recarregar a equipe.
+  }, [cityLoading]);
 
-  useEffect(() => { fetchUsers(); }, [fetchUsers, profile]);
+  // Recarrega a equipe quando muda quem está logado ou o que aparece dele na lista
+  // (nome, foto, cargo), não a cada novo objeto de perfil (ex.: trocar o tamanho da fonte).
+  useEffect(() => { fetchUsers(); }, [fetchUsers, profile?.id, profile?.name, profile?.display_name, profile?.avatar_url, profile?.job_title]);
+
+  // Logout na mesma aba (o evento 'storage' só chega nas outras abas): zera o que foi
+  // carregado para a próxima conta não ver clientes, agenda e equipe da anterior.
+  const hadUserRef = useRef(false);
+  const { resetData } = data;
+  useEffect(() => {
+    if (user) { hadUserRef.current = true; return; }
+    if (!hadUserRef.current) return;
+    hadUserRef.current = false;
+    resetData();
+    setUsers([]);
+  }, [user, resetData]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -219,7 +230,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return await data.addClient(client);
   }, [data]);
 
-  const updateClient = useCallback(async (client: Client) => { await data.updateClient(client); }, [data]);
+  const updateClient = useCallback((client: Client) => data.updateClient(client), [data]);
 
   const deleteClient = useCallback(async (id: string): Promise<boolean> => {
     return await data.deleteClient(id);
@@ -234,7 +245,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const FIXED_SLOTS = ['08:30', '10:30', '14:30', '16:30'];
   const LOWER_PRIORITY_TYPES_FOR_FIXED = new Set<RecordingType>(['extra', 'backup', 'secundaria']);
 
-  const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType, clientId?: string, options?: { skipClientDayCheck?: boolean }) => {
+  // `recs`: lista a usar no lugar de data.recordings (ex.: logo após cancelar, quando o
+  // estado deste render ainda tem a gravação como agendada).
+  const hasConflict = useCallback((videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType, clientId?: string, options?: { skipClientDayCheck?: boolean }, recs?: Recording[]) => {
+    const sourceRecs = recs || data.recordings;
     const newStart = timeToMinutes(startTime);
     const duration = data.settings.recordingDuration || 90;
     const newEnd = newStart + duration;
@@ -242,7 +256,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // 1. Check if client already has a recording on this day (unless full-shift or explicitly skipped)
     if (clientId && !options?.skipClientDayCheck) {
       const client = data.clients.find(c => c.id === clientId);
-      const clientDayRecs = data.recordings.filter(r => r.clientId === clientId && r.date === date && r.status !== 'cancelada' && r.id !== excludeId);
+      const clientDayRecs = sourceRecs.filter(r => r.clientId === clientId && r.date === date && r.status !== 'cancelada' && r.id !== excludeId);
       
       if (client) {
         if (client.fullShiftRecording) {
@@ -259,7 +273,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     // 2. Check videomaker availability
-    const conflict = data.recordings.find(r => {
+    const conflict = sourceRecs.find(r => {
       if (r.id === excludeId || r.status === 'cancelada') return false;
       if (r.videomakerId !== videomakerId || r.date !== date) return false;
 
@@ -465,7 +479,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return { deleted, created: fixedRecs.length };
   }, [data, users]);
 
-  const autoFillVacanciesForDate = useCallback(async (date: string): Promise<number> => {
+  const autoFillVacanciesForDate = useCallback(async (date: string, recs?: Recording[]): Promise<number> => {
     const todayStr = new Date().toISOString().split('T')[0];
     const dateObj = new Date(date + 'T12:00:00');
     const dayName = DATE_TO_DAY[getDay(dateObj)];
@@ -484,7 +498,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (extraClients.length === 0) return 0;
 
     let createdCount = 0;
-    const currentRecs = [...data.recordings];
+    const currentRecs = [...(recs || data.recordings)];
     const allVmIds = users.filter(u => u.role === 'videomaker').map(u => u.id);
 
     // Distribution among videomakers: iterate slots first, then videomakers
@@ -500,7 +514,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (vmDayRecsCount >= 4) continue;
 
         // Check if slot is available for this VM
-        if (!hasConflict(vmId, date, slot).hasConflict) {
+        // currentRecs inclui os extras criados neste laço: eles também ocupam o horário.
+        if (!hasConflict(vmId, date, slot, undefined, undefined, undefined, undefined, currentRecs).hasConflict) {
           // Find an eligible client who isn't already recording on this day
           const eligibleClient = extraClients.find(c => 
             !currentRecs.some(r => r.clientId === c.id && r.date === date && r.status !== 'cancelada')
@@ -648,9 +663,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateRecording = useCallback((recording: Recording) => { data.updateRecording(recording); }, [data]);
   const cancelRecording = useCallback(async (id: string) => { 
     const rec = data.recordings.find(r => r.id === id);
-    await data.cancelRecording(id); 
-    if (data.settings.autoFillVacancies && rec) {
-      autoFillVacanciesForDate(rec.date);
+    const cancelled = await data.cancelRecording(id);
+    if (cancelled && data.settings.autoFillVacancies && rec) {
+      // A lista deste render ainda tem a gravação como agendada: passa já com o cancelamento,
+      // senão a vaga liberada nunca é preenchida.
+      const updated = data.recordings.map(r => r.id === id ? { ...r, status: 'cancelada' as const } : r);
+      autoFillVacanciesForDate(rec.date, updated);
     }
   }, [data, autoFillVacanciesForDate]);
 
@@ -661,9 +679,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const addScript = useCallback(async (script: Script) => { return data.addScript(script); }, [data]);
   const updateScript = useCallback((script: Script) => { data.updateScript(script); }, [data]);
   const deleteScript = useCallback((id: string) => { data.deleteScript(id); }, [data]);
-  const updateSettings = useCallback((s: CompanySettings) => { data.updateSettings(s); }, [data]);
+  // Devolvem false quando a API recusa (o hook já avisa): quem chama só mostra sucesso com true.
+  const updateSettings = useCallback((s: CompanySettings) => data.updateSettings(s), [data]);
   const startActiveRecording = useCallback(async (rec: ActiveRecording) => { await data.startActiveRecording(rec); }, [data]);
-  const stopActiveRecording = useCallback((recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]) => { data.stopActiveRecording(recordingId, deliveryOverrides, completedScriptIds); }, [data]);
+  const stopActiveRecording = useCallback((recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]) => data.stopActiveRecording(recordingId, deliveryOverrides, completedScriptIds), [data]);
 
   const getSuggestionsForCancellation = useCallback((recording: Recording) => {
     return data.clients.filter(c => {

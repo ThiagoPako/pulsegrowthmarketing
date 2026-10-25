@@ -545,7 +545,7 @@ export default function Dashboard() {
               title: `Cobrança — ${config.label}`,
               message: `A tarefa "${task.title}" (${client?.companyName || 'cliente'}) está em ${config.label} há ${elapsedLabel}. Atualize o status.`,
               type: 'warning',
-              link: '/editor',
+              link: '/edicao',
             });
             const { toast } = await import('@/hooks/use-toast');
             toast({ title: 'Notificação enviada', description: `Cobrança enviada para ${editor?.name || 'editor'}` });

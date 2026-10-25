@@ -3273,14 +3273,23 @@ async function callAi(ai, model, messages, options = {}) {
 // conexão que tem a função dela (ver vps-api-server/whatsapp/). `config` e `db` ficam por compatibilidade.
 const PORTAL_BASE_URL = 'https://agenciapulse.tech/portal';
 
-async function sendWhatsAppDirect(config, number, message, db, clientId, triggerType, purpose) {
+async function sendWhatsAppDirect(config, number, message, db, clientId, triggerType, purpose, { expiresAt } = {}) {
   try {
-    const queued = await enqueueWhatsApp(pool, { to: number, body: message, clientId, triggerType, purpose });
+    const queued = await enqueueWhatsApp(pool, { to: number, body: message, clientId, triggerType, purpose, expiresAt });
     return { ok: true, queued: true, id: queued.id };
   } catch (e) {
     console.error('sendWhatsAppDirect error:', e);
     return { ok: false, error: e.message };
   }
+}
+
+// data + hora de um compromisso no fuso de Brasília (sem horário de verão) → Date; sem data válida = null
+function brasiliaDateTime(date, time) {
+  const day = String(date || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const hour = /^\d{2}:\d{2}/.test(String(time || '')) ? String(time).slice(0, 5) : '23:59';
+  const at = new Date(`${day}T${hour}:00-03:00`);
+  return Number.isNaN(at.getTime()) ? null : at;
 }
 
 function applyTemplate(template, vars) {
@@ -7708,7 +7717,9 @@ async function runConfirmationCron() {
       await admin.from('whatsapp_confirmations').insert({ recording_id: recording.id, client_id: client.id, phone_number: phoneNumber, type: 'confirmation', status: 'pending', sent_at: new Date().toISOString() });
       await admin.from('recordings').update({ confirmation_status: 'aguardando' }).eq('id', recording.id);
       // no grupo do cliente (se tiver); a resposta 1/2 vale no grupo ou no privado
-      const result = await sendWhatsAppDirect(config, clientTarget(client, 'agenda'), message, admin, client.id, 'auto_confirmation', 'agenda');
+      // depois da hora da gravação a confirmação não faz mais sentido (número fora do ar até lá: não sai)
+      const result = await sendWhatsAppDirect(config, clientTarget(client, 'agenda'), message, admin, client.id, 'auto_confirmation', 'agenda',
+        { expiresAt: brasiliaDateTime(recording.date, recording.start_time) });
       if (result.ok) sentCount++;
     }
     return { ok: true, sent: sentCount, total: recordings.length };
@@ -14220,7 +14231,7 @@ setInterval(async () => {
     const tomorrowStr = tomorrow.toISOString().slice(0, 10);
 
     const { rows: pendingReminders } = await pool.query(
-      `SELECT id, name, phone, meeting_time, company 
+      `SELECT id, name, phone, meeting_date, meeting_time, company 
        FROM crm_leads 
        WHERE status = 'meeting' 
          AND meeting_date = $1 
@@ -14236,7 +14247,8 @@ setInterval(async () => {
     for (const lead of pendingReminders) {
       const message = `Olá ${lead.name}, aqui é da Agência Pulse! Passando para confirmar nossa reunião de amanhã às ${lead.meeting_time?.slice(0, 5)}. Podemos confirmar?`;
       // pela fila do WhatsApp próprio (conexão com a função "crm")
-      await enqueueWhatsApp(pool, { to: lead.phone, body: message, triggerType: 'crm_reminder', purpose: 'crm' });
+      await enqueueWhatsApp(pool, { to: lead.phone, body: message, triggerType: 'crm_reminder', purpose: 'crm',
+        expiresAt: brasiliaDateTime(lead.meeting_date, lead.meeting_time) });
       await pool.query(`UPDATE crm_leads SET reminder_sent_24h = TRUE WHERE id = $1`, [lead.id]);
     }
   } catch (err) {

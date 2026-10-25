@@ -103,6 +103,8 @@ export function ensureWhatsAppSchema(pool) {
         )
       `);
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_wa_outbox_fila ON wa_outbox (status, next_try_at)`);
+      // mensagem com hora marcada (confirmação de gravação, lembrete de reunião) não sai depois do compromisso
+      await pool.query(`ALTER TABLE wa_outbox ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`);
       await pool.query(`
         CREATE TABLE IF NOT EXISTS wa_inbound (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -211,11 +213,18 @@ async function historyHasCity(pool) {
   return historyCity;
 }
 
+// prazo da mensagem na fila (Date ou texto ISO); inválido ou ausente = só o limite geral de 48 h
+function validExpiry(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 /**
  * Coloca uma mensagem na fila. O processo do WhatsApp envia pela conexão que tem a função `purpose`
  * (ou pela "geral"), com intervalo entre mensagens. Também registra no histórico (whatsapp_messages).
  */
-export async function enqueueWhatsApp(pool, { to, body, purpose, triggerType, clientId, sentBy, mediaUrl, mediaName, connectionId }) {
+export async function enqueueWhatsApp(pool, { to, body, purpose, triggerType, clientId, sentBy, mediaUrl, mediaName, connectionId, expiresAt }) {
   await ensureWhatsAppSchema(pool);
   const target = String(to || '').trim();
   if (!target) throw new Error('Número de destino vazio');
@@ -236,10 +245,10 @@ export async function enqueueWhatsApp(pool, { to, body, purpose, triggerType, cl
     return { rows: [] };
   });
   const { rows } = await pool.query(
-    `INSERT INTO wa_outbox (purpose, connection_id, to_number, body, media_url, media_name, client_id, trigger_type, sent_by, log_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+    `INSERT INTO wa_outbox (purpose, connection_id, to_number, body, media_url, media_name, client_id, trigger_type, sent_by, log_id, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
     [finalPurpose, connectionId || null, target, body || '', mediaUrl || null, mediaName || null, clientId || null,
-      triggerType || 'manual', sentBy || null, logRows[0]?.id || null]
+      triggerType || 'manual', sentBy || null, logRows[0]?.id || null, validExpiry(expiresAt)]
   );
   return { id: rows[0].id, purpose: finalPurpose };
 }

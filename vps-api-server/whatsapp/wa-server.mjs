@@ -62,6 +62,8 @@ const SEND_GAP_MIN_MS = Number(process.env.WA_SEND_GAP_MIN_MS) || 4000; // inter
 const SEND_GAP_MAX_MS = Number(process.env.WA_SEND_GAP_MAX_MS) || 9000;
 const MAX_ATTEMPTS = 5;
 const QUEUE_TTL_H = 48; // mensagem que não saiu em 48 h (sem conexão para a função) não vale mais
+// erros do convite de grupo que não mudam tentando de novo (convite inválido, revogado, sem permissão)
+const GROUP_INVITE_PERMANENT = new Set([400, 401, 403, 404, 406, 410]);
 const QR_TIMEOUT_MS = 3 * 60 * 1000;
 const MEDIA_MAX_BYTES = 32 * 1024 * 1024;
 const VIDEO_MAX_BYTES = 100 * 1024 * 1024; // vídeo vai por streaming (não carrega o arquivo inteiro na memória)
@@ -670,7 +672,7 @@ async function resolveGroupJid(to, conn) {
   const raw = String(to || '').trim();
   if (raw.endsWith('@g.us')) return raw;
   const invite = raw.match(/chat\.whatsapp\.com\/(?:invite\/)?([A-Za-z0-9]+)/i);
-  if (!invite) throw new Error(raw);
+  if (!invite) throw Object.assign(new Error(raw), { permanent: true });
   const cacheKey = `grupo:${invite[1]}`;
   const { rows } = await pool.query('SELECT jid FROM wa_jid_cache WHERE number = $1', [cacheKey]);
   if (rows[0]?.jid) return rows[0].jid;
@@ -686,18 +688,26 @@ async function resolveGroupJid(to, conn) {
 async function dispatch() {
   // mensagens presas em "enviando" (processo reiniciou no meio) voltam para a fila
   await pool.query(`UPDATE wa_outbox SET status = 'fila' WHERE status = 'enviando' AND next_try_at < now() - interval '5 minutes'`);
-  // velhas demais: não envia mais
+  // velhas demais (ou com hora marcada que já passou): não envia mais
   const { rows: expired } = await pool.query(
-    `UPDATE wa_outbox SET status = 'falhou', error = 'Expirou na fila (${QUEUE_TTL_H} h sem conexão conectada com esta função)'
-      WHERE status = 'fila' AND created_at < now() - interval '${QUEUE_TTL_H} hours' RETURNING id, log_id`
+    `UPDATE wa_outbox SET status = 'falhou', error = CASE
+         WHEN expires_at IS NOT NULL AND expires_at < created_at + interval '${QUEUE_TTL_H} hours'
+           THEN 'Expirou na fila (passou o horário do compromisso sem um número conectado para enviar)'
+         ELSE 'Expirou na fila (${QUEUE_TTL_H} h sem um número conectado que pudesse enviar)' END
+      WHERE status = 'fila' AND LEAST(expires_at, created_at + interval '${QUEUE_TTL_H} hours') < now() RETURNING id, log_id`
   );
   for (const r of expired) {
     if (r.log_id) await pool.query(`UPDATE whatsapp_messages SET status = 'failed' WHERE id = $1`, [r.log_id]).catch(() => {});
   }
 
   const all = [...connections.values()];
-  const ready = all.filter((c) => c.state === 'conectada' && c.sock && !c.busy && Date.now() >= c.nextSendAt);
+  const connected = all.filter((c) => c.state === 'conectada' && c.sock);
+  const ready = connected.filter((c) => !c.busy && Date.now() >= c.nextSendAt);
   if (!ready.length) return;
+  // nenhum número conectado consegue mandar esta linha: tenta de novo daqui a pouco, sem travar as mais novas da fila
+  const postpone = (row) => pool.query(
+    `UPDATE wa_outbox SET next_try_at = now() + interval '2 minutes' WHERE id = $1 AND status = 'fila'`, [row.id]
+  );
   const { rows } = await pool.query(
     `SELECT * FROM wa_outbox WHERE status = 'fila' AND next_try_at <= now() ORDER BY created_at LIMIT 50`
   );
@@ -711,7 +721,17 @@ async function dispatch() {
       try {
         groupJid = await resolveGroupJid(row.to_number, free[0]);
       } catch (error) {
-        await finish(row, { status: 'falhou', error: `Grupo inválido: ${error.message}` }, 'failed', { purpose: row.purpose, error: error.message });
+        // convite inválido ou revogado é definitivo; timeout, conexão caindo ou limite do WhatsApp tenta de novo
+        const code = error?.output?.statusCode;
+        const permanent = error.permanent || GROUP_INVITE_PERMANENT.has(code)
+          || /not-authorized|item-not-found|not-acceptable|\bgone\b/i.test(String(error?.message || ''));
+        const attempts = (row.attempts || 0) + 1;
+        if (permanent || attempts >= MAX_ATTEMPTS) {
+          await finish(row, { status: 'falhou', attempts, error: `Grupo inválido: ${error.message}` }, 'failed', { purpose: row.purpose, error: error.message });
+        } else {
+          await finish(row, { attempts, error: `Convite do grupo: ${error.message}`, next_try_at: new Date(Date.now() + 30_000 * attempts) }, null);
+          log(free[0].name, 'convite do grupo (tenta de novo):', error.message);
+        }
         continue;
       }
       const { rows: members } = await pool.query('SELECT connection_id FROM wa_groups WHERE jid = $1', [groupJid]);
@@ -721,14 +741,28 @@ async function dispatch() {
           'failed', { purpose: row.purpose, error: 'fora_do_grupo', group: groupJid });
         continue;
       }
-      const inGroup = free.filter((c) => memberIds.has(c.id));
-      conn = inGroup.find((c) => c.purposes.includes(row.purpose)) || inGroup.find((c) => c.purposes.includes('geral')) || null;
-      if (!conn) continue; // quem está no grupo está ocupado ou desconectado: espera
+      // a função é vista entre TODOS os números conectados que estão no grupo, não só os livres agora: se o número
+      // certo só está ocupado, espera por ele. Se nenhum deles tem a função (nem "geral"), vai por qualquer um que está
+      // no grupo, em vez de esperar 48 h por um número que não está lá.
+      const inGroup = connected.filter((c) => memberIds.has(c.id));
+      if (!inGroup.length) { // quem está no grupo está desconectado: espera (até o prazo da fila)
+        await postpone(row);
+        continue;
+      }
+      const own = inGroup.filter((c) => c.purposes.includes(row.purpose));
+      const general = inGroup.filter((c) => c.purposes.includes('geral'));
+      const candidates = (own.length ? own : general.length ? general : inGroup).filter((c) => free.includes(c));
+      conn = candidates.length ? candidates.reduce((a, b) => (a.nextSendAt <= b.nextSendAt ? a : b)) : null;
+      if (!conn) continue; // o número certo está ocupado: espera
       row._jid = groupJid;
     } else {
       // sem conexão para a função (nem "geral"): espera na fila — sai quando alguém conectar um número com a função,
-      // ou falha ao completar 48 h (ver QUEUE_TTL_H)
+      // ou falha no prazo (48 h, ou a hora do compromisso; ver QUEUE_TTL_H)
       conn = pickConnection(row, free);
+      if (!conn && !pickConnection(row, connected)) {
+        await postpone(row);
+        continue;
+      }
     }
     if (!conn) continue;
     const { rowCount } = await pool.query(

@@ -21,7 +21,7 @@ import PortalTutorial from '@/components/portal/PortalTutorial';
 import PortalRecordingCalendar from '@/components/portal/PortalRecordingCalendar';
 import PortalPanfletagem from '@/components/portal/PortalPanfletagem';
 import PortalDesigner from '@/components/portal/PortalDesigner';
-import { syncPortalApproval, syncPortalAdjustment, syncPortalComment } from '@/lib/portalSync';
+import { syncPortalComment } from '@/lib/portalSync';
 import PortalWelcomeOverlay from '@/components/portal/PortalWelcomeOverlay';
 import { PortalVideoButtons } from '@/components/portal/PortalWelcomeOverlay';
 import PortalDiscountClub from '@/components/portal/PortalDiscountClub';
@@ -111,6 +111,8 @@ export default function ClientPortal() {
   const [loading, setLoading] = useState(true);
   const [adjustmentNote, setAdjustmentNote] = useState('');
   const [showAdjustment, setShowAdjustment] = useState(false);
+  // Envio em andamento (aprovar / pedir ajuste / comentar): trava o botão e o Enter
+  const [sendingAction, setSendingAction] = useState<null | 'approve' | 'adjustment' | 'comment'>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -305,19 +307,26 @@ export default function ClientPortal() {
     };
   }, [selectedContent?.id, selectedContent?.file_url, selectedContent?.content_type, videoQuality]);
 
+  // O servidor já move o Kanban e avisa a equipe junto com a aprovação/ajuste.
   const handleApprove = async () => {
-    if (!selectedContent || !client) return;
-    await portalAction({ action: 'approve', content_id: selectedContent.id, client_id: client.id });
+    if (!selectedContent || !client || sendingAction) return;
+    setSendingAction('approve');
+    const result = await portalAction({ action: 'approve', content_id: selectedContent.id, client_id: client.id });
+    setSendingAction(null);
+    if (result?.error) {
+      toast.error(`Não foi possível aprovar: ${result.error}`);
+      return;
+    }
     setContents(prev => prev.map(c => c.id === selectedContent.id ? { ...c, status: 'aprovado', approved_at: new Date().toISOString() } : c));
     setSelectedContent(prev => prev ? { ...prev, status: 'aprovado' } : null);
-    toast.success('Conteúdo aprovado com sucesso!');
-    syncPortalApproval(selectedContent.id, client.id, selectedContent.title).catch(console.error);
+    toast.success(isTeamMember ? 'Conteúdo aprovado em nome do cliente' : 'Conteúdo aprovado com sucesso!');
   };
 
   const handleRequestAdjustment = async () => {
-    if (!selectedContent || !adjustmentNote.trim() || !client) return;
+    if (!selectedContent || !adjustmentNote.trim() || !client || sendingAction) return;
     const author = getCommentAuthor();
-    await portalAction({
+    setSendingAction('adjustment');
+    const result = await portalAction({
       action: 'request_adjustment',
       content_id: selectedContent.id,
       client_id: client.id,
@@ -326,27 +335,37 @@ export default function ClientPortal() {
       author_id: author.id,
       message: adjustmentNote,
     });
+    setSendingAction(null);
+    if (result?.error) {
+      toast.error(`Não foi possível enviar o ajuste: ${result.error}`);
+      return;
+    }
     setContents(prev => prev.map(c => c.id === selectedContent.id ? { ...c, status: 'ajuste_solicitado' } : c));
     setSelectedContent(prev => prev ? { ...prev, status: 'ajuste_solicitado' } : null);
     setShowAdjustment(false);
     setAdjustmentNote('');
     loadComments(selectedContent.id);
     toast.success('Ajuste solicitado com sucesso!');
-    syncPortalAdjustment(selectedContent.id, client.id, selectedContent.title, adjustmentNote).catch(console.error);
   };
 
   const handleSendComment = async () => {
-    if (!selectedContent || !newComment.trim() || !client) return;
+    if (!selectedContent || !newComment.trim() || !client || sendingAction) return;
     const author = getCommentAuthor();
-    await portalAction({
+    const commentText = newComment;
+    setSendingAction('comment');
+    const result = await portalAction({
       action: 'add_comment',
       content_id: selectedContent.id,
       author_name: author.name,
       author_type: author.type,
       author_id: author.id,
-      message: newComment,
+      message: commentText,
     });
-    const commentText = newComment;
+    setSendingAction(null);
+    if (result?.error) {
+      toast.error(`Comentário não enviado: ${result.error}`);
+      return;
+    }
     setNewComment('');
     loadComments(selectedContent.id);
     setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 200);
@@ -507,6 +526,7 @@ export default function ClientPortal() {
       {/* Welcome / News video overlay */}
       <PortalWelcomeOverlay
         clientId={client.id}
+        isTeamMember={isTeamMember}
         onVideosLoaded={(data) => setPortalVideoState({ hasNews: data.hasNews, hasWelcome: data.hasWelcome, isNewClient: data.isNewClient })}
       />
       {/* ── HEADER ── */}
@@ -639,6 +659,7 @@ export default function ClientPortal() {
             <PortalNotifications
               clientId={client.id}
               clientColor={clientColor}
+              isTeamMember={isTeamMember}
               onSelectContent={(contentId) => {
                 const found = contents.find(c => c.id === contentId);
                 if (found) {
@@ -915,7 +936,7 @@ export default function ClientPortal() {
         ) : activeTab === 'entregas' ? (
           <motion.div key="entregas" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="max-w-[800px] mx-auto px-4 sm:px-8 py-8 pb-20">
             <h2 className="text-lg font-semibold text-white mb-4">📋 Checklist de Entregas</h2>
-            <ProposalChecklist clientId={client.id} editable={false} />
+            <ProposalChecklist clientId={client.id} editable={false} viaPortal />
           </motion.div>
         ) : activeTab === 'rendimento' ? (
           <motion.div key="rendimento" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
@@ -1225,14 +1246,20 @@ export default function ClientPortal() {
                   </div>
                 </div>
 
-                {/* Actions */}
-                {selectedContent.status !== 'aprovado' && (
+                {/* Actions — em revisão interna o vídeo ainda não foi liberado: sem aprovar/ajuste */}
+                {selectedContent.status === 'revisao_interna' && (
+                  <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white/60 text-sm">
+                    Em revisão interna: o cliente ainda não vê este conteúdo. Libere pelo Kanban.
+                  </div>
+                )}
+                {selectedContent.status !== 'aprovado' && selectedContent.status !== 'revisao_interna' && (
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={handleApprove}
-                      className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full font-semibold text-sm bg-emerald-500 hover:bg-emerald-400 text-white transition-all hover:scale-105 active:scale-95"
+                      disabled={!!sendingAction}
+                      className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full font-semibold text-sm bg-emerald-500 hover:bg-emerald-400 text-white transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
                     >
-                      <Check size={16} /> Aprovar conteúdo
+                      {sendingAction === 'approve' ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} {isTeamMember ? 'Aprovar em nome do cliente' : 'Aprovar conteúdo'}
                     </button>
                     <button
                       onClick={() => setShowAdjustment(!showAdjustment)}
@@ -1285,7 +1312,7 @@ export default function ClientPortal() {
                         <div className="flex justify-end">
                           <button
                             onClick={handleRequestAdjustment}
-                            disabled={!adjustmentNote.trim()}
+                            disabled={!adjustmentNote.trim() || !!sendingAction}
                             className="px-5 py-2 rounded-full text-sm font-semibold disabled:opacity-30 text-white transition-all hover:scale-105"
                             style={{ background: `hsl(${clientColor})` }}
                           >
@@ -1352,14 +1379,14 @@ export default function ClientPortal() {
                     <input
                       value={newComment}
                       onChange={e => setNewComment(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSendComment()}
+                      onKeyDown={e => e.key === 'Enter' && !e.shiftKey && !sendingAction && handleSendComment()}
                       placeholder="Escreva um comentário..."
                       className="flex-1 bg-white/[0.06] border border-white/[0.08] rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-1 transition-all"
                       style={{ '--tw-ring-color': `hsl(${clientColor})` } as any}
                     />
                     <button
                       onClick={handleSendComment}
-                      disabled={!newComment.trim()}
+                      disabled={!newComment.trim() || !!sendingAction}
                       className="p-2.5 rounded-full disabled:opacity-20 text-white transition-all hover:scale-105"
                       style={{ background: `hsl(${clientColor})` }}
                     >

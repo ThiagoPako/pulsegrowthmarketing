@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/vpsDb';
+import { portalAction } from '@/lib/portalApi';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -20,13 +21,22 @@ interface ProposalChecklistProps {
   clientId: string;
   editable?: boolean;
   compact?: boolean;
+  /** Dentro do portal do cliente: lê pela rota do portal (o cliente não tem o JWT do /api/db). */
+  viaPortal?: boolean;
 }
 
-export default function ProposalChecklist({ clientId, editable = true, compact = false }: ProposalChecklistProps) {
+export default function ProposalChecklist({ clientId, editable = true, compact = false, viaPortal = false }: ProposalChecklistProps) {
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (viaPortal) {
+      portalAction({ action: 'get_proposal_checklist', client_id: clientId }).then((result) => {
+        if (Array.isArray(result?.items)) setItems(result.items as ChecklistItem[]);
+        setLoading(false);
+      });
+      return;
+    }
     supabase
       .from('proposal_checklist_items')
       .select('*')
@@ -36,7 +46,7 @@ export default function ProposalChecklist({ clientId, editable = true, compact =
         if (data) setItems(data as ChecklistItem[]);
         setLoading(false);
       });
-  }, [clientId]);
+  }, [clientId, viaPortal]);
 
   const toggleItem = async (item: ChecklistItem) => {
     if (!editable) return;

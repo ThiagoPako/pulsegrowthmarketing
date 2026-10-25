@@ -23,9 +23,11 @@ interface Props {
   onSelectContent?: (contentId: string) => void;
   onOpenScript?: (scriptId: string) => void;
   onNavigateTab?: (tab: string) => void;
+  /** Equipe olhando o portal: abre as notificações sem marcá-las como lidas pelo cliente. */
+  isTeamMember?: boolean;
 }
 
-export default function PortalNotifications({ clientId, clientColor, onSelectContent, onOpenScript, onNavigateTab }: Props) {
+export default function PortalNotifications({ clientId, clientColor, onSelectContent, onOpenScript, onNavigateTab, isTeamMember = false }: Props) {
   const [notifications, setNotifications] = useState<PortalNotification[]>([]);
   const [open, setOpen] = useState(false);
 
@@ -36,16 +38,24 @@ export default function PortalNotifications({ clientId, clientColor, onSelectCon
 
   useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
 
-  // Poll for new notifications every 10s for near real-time feel
+  // Poll for new notifications every 30s (pausa com a aba oculta; volta ao reabrir)
   useEffect(() => {
-    const interval = setInterval(fetchNotifications, 10000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      fetchNotifications();
+    }, 30000);
+    const onVisible = () => { if (!document.hidden) fetchNotifications(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [fetchNotifications]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const handleClick = async (n: PortalNotification) => {
-    if (!n.read) {
+    if (!n.read && !isTeamMember) {
       setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x));
       await portalAction({ action: 'mark_notification_read', notification_id: n.id });
     }
@@ -61,7 +71,7 @@ export default function PortalNotifications({ clientId, clientColor, onSelectCon
 
   const markAllRead = async () => {
     const unread = notifications.filter(n => !n.read).map(n => n.id);
-    if (unread.length === 0) return;
+    if (unread.length === 0 || isTeamMember) return;
     await portalAction({ action: 'mark_notification_read', notification_ids: unread });
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
@@ -108,7 +118,7 @@ export default function PortalNotifications({ clientId, clientColor, onSelectCon
               <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] shrink-0">
                 <h3 className="text-sm font-semibold">Notificações</h3>
                 <div className="flex items-center gap-2">
-                  {unreadCount > 0 && (
+                  {unreadCount > 0 && !isTeamMember && (
                     <button onClick={markAllRead} className="text-[10px] text-white/40 hover:text-white/70 transition-colors">
                       Marcar todas como lidas
                     </button>

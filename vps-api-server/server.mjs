@@ -274,6 +274,9 @@ const CLIENT_PORTAL_BASE_FIELDS = [
   'niche',
   'whatsapp',
   'city',
+  // aba 'Entregas' (sem_contrato) e boas-vindas de cliente novo (< 30 dias)
+  'client_type',
+  'created_at',
 ].join(', ');
 
 let clientsArtRequestsLimitColumnPromise;
@@ -3920,6 +3923,54 @@ async function insertPortalTeamNotifications(city, userIds, title, message, type
   }
 }
 
+// ── Aprovação e ajuste do portal → Kanban (content_tasks) ──
+// Antes o navegador chamava sync_approval/sync_adjustment depois do approve: se a aba
+// fechasse ou a rede caísse no meio, o Kanban não se mexia. Agora vai junto, no servidor.
+// teamUser: alguém da equipe aprovando/pedindo ajuste em nome do cliente (fica registrado).
+async function insertPortalTaskHistory(taskId, action, details, userId) {
+  try {
+    await pool.query(`INSERT INTO task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, $4)`, [taskId, action, details, userId || null]);
+  } catch (err) {
+    if (!userId) throw err;
+    // user_id que não bate com o cadastro: registra sem ele
+    await pool.query(`INSERT INTO task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, NULL)`, [taskId, action, details]);
+  }
+}
+
+async function syncPortalApprovalToKanban(content, teamUser = null) {
+  const { rows: [task] } = await pool.query(
+    `SELECT id FROM content_tasks WHERE client_id = $1 AND title = $2 AND kanban_column IN ('envio', 'agendamentos') ORDER BY created_at DESC LIMIT 1`,
+    [content.client_id, content.title]
+  );
+  if (task) {
+    await pool.query(`UPDATE content_tasks SET kanban_column = 'agendamentos', approved_at = NOW(), updated_at = NOW() WHERE id = $1`, [task.id]);
+    await insertPortalTaskHistory(task.id, teamUser ? '✅ Aprovado pela equipe em nome do cliente (Pulse Club)' : '✅ Aprovado pelo cliente via Pulse Club', null, teamUser?.id);
+  }
+  await notifyPortalTeam(content.client_id, ['admin', 'social_media'],
+    teamUser ? '✅ Conteúdo aprovado pela equipe' : '✅ Conteúdo aprovado pelo cliente',
+    teamUser ? `"${content.title}" foi aprovado pela equipe em nome do cliente no Pulse Club` : `"${content.title}" foi aprovado no Pulse Club`,
+    'approval', '/conteudo');
+}
+
+async function syncPortalAdjustmentToKanban(content, note, teamUser = null) {
+  const { rows: [task] } = await pool.query(
+    `SELECT id, assigned_to FROM content_tasks WHERE client_id = $1 AND title = $2 AND kanban_column IN ('envio', 'agendamentos') ORDER BY created_at DESC LIMIT 1`,
+    [content.client_id, content.title]
+  );
+  const shortNote = String(note || '').substring(0, 80);
+  if (task) {
+    await pool.query(`UPDATE content_tasks SET kanban_column = 'alteracao', adjustment_notes = $1, updated_at = NOW() WHERE id = $2`, [note, task.id]);
+    await insertPortalTaskHistory(task.id, teamUser ? '🔧 Ajuste solicitado pela equipe no Pulse Club' : '🔧 Ajuste solicitado pelo cliente via Pulse Club', note, teamUser?.id);
+    if (task.assigned_to) {
+      await insertPortalTeamNotifications(await getPortalClientCity(content.client_id), [task.assigned_to],
+        teamUser ? '🔧 Ajuste solicitado pela equipe' : '🔧 Ajuste solicitado pelo cliente',
+        `"${content.title}" precisa de ajustes: ${shortNote}`, 'adjustment', '/edicao/kanban');
+    }
+  }
+  await notifyPortalTeam(content.client_id, ['admin', 'social_media'], '🔧 Ajuste solicitado no Pulse Club',
+    `${teamUser ? 'Equipe' : 'Cliente'} solicitou ajuste em "${content.title}": ${shortNote}`, 'adjustment', '/entregas-social');
+}
+
 /** Cidade a gravar numa linha nova do cliente (recordings): null = deixa o DEFAULT/trigger. */
 async function portalInsertCity(tableName, clientCity) {
   return clientCity && await tableHasCityColumn(tableName) ? clientCity : null;
@@ -4030,8 +4081,10 @@ app.post('/api/client-portal-auth', async (req, res) => {
       if (!caller && rejectPortalCallWithoutSession(res, 'client-portal-auth', action)) return;
       const contentsClientId = effectiveClientId(caller, client_id);
       if (!contentsClientId) return res.status(400).json({ error: 'client_id required' });
+      // 'revisao_interna' (vídeo ainda não liberado) só vai para a equipe.
       const { rows } = await pool.query(
-        `SELECT * FROM client_portal_contents WHERE client_id = $1 ORDER BY created_at DESC`, [contentsClientId]
+        `SELECT * FROM client_portal_contents WHERE client_id = $1 AND ($2::boolean OR status <> 'revisao_interna') ORDER BY created_at DESC`,
+        [contentsClientId, caller?.kind === 'team']
       );
       return res.json({ contents: rows || [] });
     }
@@ -4316,12 +4369,24 @@ app.post('/api/portal-actions', async (req, res) => {
       return res.json({ client: rows[0] });
     }
 
+    // ── Checklist de entregas (aba 'Entregas' do cliente sem contrato): só leitura ──
+    if (action === 'get_proposal_checklist') {
+      if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      const { rows } = await pool.query(
+        `SELECT id, client_id, title, description, is_completed, completed_at, sort_order
+           FROM proposal_checklist_items WHERE client_id = $1 ORDER BY sort_order ASC`,
+        [client_id]
+      ).catch((err) => (err?.code === '42P01' ? { rows: [] } : Promise.reject(err)));
+      return res.json({ items: rows });
+    }
+
     // ── Get portal contents ──
     if (action === 'get_contents') {
       if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      // 'revisao_interna' (vídeo ainda não liberado) só vai para a equipe.
       const { rows } = await pool.query(
-        'SELECT * FROM client_portal_contents WHERE client_id = $1 ORDER BY created_at DESC',
-        [client_id]
+        `SELECT * FROM client_portal_contents WHERE client_id = $1 AND ($2::boolean OR status <> 'revisao_interna') ORDER BY created_at DESC`,
+        [client_id, isTeamCaller]
       );
       return res.json({ contents: rows });
     }
@@ -4361,6 +4426,8 @@ app.post('/api/portal-actions', async (req, res) => {
 
     // ── Mark notification read ──
     if (action === 'mark_notification_read') {
+      // Equipe olhando o portal não marca como lida a notificação do cliente
+      if (isTeamCaller) return res.json({ success: true, skipped: 'team' });
       const { notification_id, notification_ids } = req.body;
       if (notification_id) {
         await pool.query('UPDATE client_portal_notifications SET read = true WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)', [notification_id, scopeClientId]);
@@ -4413,22 +4480,32 @@ app.post('/api/portal-actions', async (req, res) => {
     // ── Get content tasks (for calendar) ──
     if (action === 'get_content_tasks') {
       if (!client_id) return res.status(400).json({ error: 'client_id required' });
+      // Agenda: janela de 12 meses (a tela navega entre meses sem buscar de novo) e teto
+      // de linhas. Tarefa entra se qualquer data de evento cair na janela.
       const { rows: tasks } = await pool.query(
         `SELECT id, title, content_type, kanban_column, scheduled_recording_date, scheduled_recording_time,
                 editing_started_at, editing_deadline, approval_sent_at, approved_at, adjustment_notes,
                 recording_id, script_id, drive_link, updated_at, created_at
-         FROM content_tasks WHERE client_id = $1`,
+         FROM content_tasks
+         WHERE client_id = $1
+           AND GREATEST(updated_at, created_at, approved_at, approval_sent_at, editing_deadline::timestamptz, scheduled_recording_date::timestamptz) >= NOW() - INTERVAL '12 months'
+         ORDER BY updated_at DESC
+         LIMIT 1000`,
         [client_id]
       );
-      // Get task history
+      // Get task history (o cliente não recebe os detalhes internos: notas, links de upload, pausas)
       const taskIds = tasks.map(t => t.id);
       let history = [];
       if (taskIds.length > 0) {
         const { rows } = await pool.query(
-          'SELECT id, task_id, action, details, created_at FROM task_history WHERE task_id = ANY($1) ORDER BY created_at ASC',
-          [taskIds]
+          `SELECT id, task_id, action, CASE WHEN $2::boolean THEN details ELSE NULL END AS details, created_at
+             FROM task_history
+            WHERE task_id = ANY($1) AND created_at >= NOW() - INTERVAL '12 months'
+            ORDER BY created_at DESC
+            LIMIT 3000`,
+          [taskIds, isTeamCaller]
         );
-        history = rows;
+        history = rows.reverse();
       }
       return res.json({ tasks, history });
     }
@@ -4438,7 +4515,10 @@ app.post('/api/portal-actions', async (req, res) => {
       if (!client_id) return res.status(400).json({ error: 'client_id required' });
       const { rows } = await pool.query(
         `SELECT id, title, content_type, status, delivered_at, posted_at, scheduled_time, platform
-         FROM social_media_deliveries WHERE client_id = $1`,
+         FROM social_media_deliveries
+         WHERE client_id = $1 AND COALESCE(posted_at, delivered_at) >= (CURRENT_DATE - INTERVAL '12 months')
+         ORDER BY COALESCE(posted_at, delivered_at) DESC
+         LIMIT 1000`,
         [client_id]
       );
       return res.json({ deliveries: rows });
@@ -4510,8 +4590,9 @@ app.post('/api/portal-actions', async (req, res) => {
       if (!content_id || !message) return res.status(400).json({ error: 'content_id and message required' });
       const { rowCount: commentAdded } = await pool.query(
         `INSERT INTO client_portal_comments (content_id, author_name, author_type, author_id, message)
-         SELECT id, $2, $3, $4, $5 FROM client_portal_contents WHERE id = $1 AND ($6::uuid IS NULL OR client_id = $6::uuid)`,
-        [content_id, author_name || 'Cliente', author_type || 'client', author_id || null, message, scopeClientId]
+         SELECT id, $2, $3, $4, $5 FROM client_portal_contents
+          WHERE id = $1 AND ($6::uuid IS NULL OR client_id = $6::uuid) AND ($7::boolean OR status <> 'revisao_interna')`,
+        [content_id, author_name || 'Cliente', author_type || 'client', author_id || null, message, scopeClientId, isTeamCaller]
       );
       if (!commentAdded) return res.status(404).json({ error: 'Conteúdo não encontrado' });
       return res.json({ success: true });
@@ -4519,25 +4600,48 @@ app.post('/api/portal-actions', async (req, res) => {
 
     if (action === 'approve') {
       if (!content_id) return res.status(400).json({ error: 'content_id required' });
-      const { rowCount: approvedRows } = await pool.query(
-        `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW() WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)`,
+      // Idempotente (clique duplo não aprova nem avisa duas vezes) e nunca em 'revisao_interna':
+      // o vídeo ainda não foi liberado para o cliente. O Kanban se mexe aqui mesmo.
+      const { rows: [approvedContent] } = await pool.query(
+        `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW()
+          WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) AND status NOT IN ('aprovado', 'revisao_interna')
+          RETURNING id, client_id, title`,
         [content_id, scopeClientId]
       );
-      if (!approvedRows) return res.status(404).json({ error: 'Conteúdo não encontrado' });
+      if (!approvedContent) {
+        const { rows: [currentContent] } = await pool.query(
+          'SELECT status FROM client_portal_contents WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)',
+          [content_id, scopeClientId]
+        );
+        if (!currentContent || (currentContent.status === 'revisao_interna' && !isTeamCaller)) return res.status(404).json({ error: 'Conteúdo não encontrado' });
+        if (currentContent.status === 'aprovado') return res.json({ success: true, already_approved: true });
+        return res.status(409).json({ error: 'Este conteúdo ainda está em revisão interna' });
+      }
+      await syncPortalApprovalToKanban(approvedContent, isTeamCaller ? caller.user : null);
       return res.json({ success: true });
     }
 
     if (action === 'request_adjustment') {
       if (!content_id || !message) return res.status(400).json({ error: 'content_id and message required' });
-      const { rowCount: adjustedRows } = await pool.query(
-        `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW() WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)`,
+      const { rows: [adjustedContent] } = await pool.query(
+        `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW()
+          WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) AND status <> 'revisao_interna'
+          RETURNING id, client_id, title`,
         [content_id, scopeClientId]
       );
-      if (!adjustedRows) return res.status(404).json({ error: 'Conteúdo não encontrado' });
+      if (!adjustedContent) {
+        const { rows: [currentContent] } = await pool.query(
+          'SELECT status FROM client_portal_contents WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)',
+          [content_id, scopeClientId]
+        );
+        if (!currentContent || !isTeamCaller) return res.status(404).json({ error: 'Conteúdo não encontrado' });
+        return res.status(409).json({ error: 'Este conteúdo ainda está em revisão interna' });
+      }
       await pool.query(
         `INSERT INTO client_portal_comments (content_id, author_name, author_type, author_id, message) VALUES ($1, $2, $3, $4, $5)`,
         [content_id, author_name || 'Cliente', author_type || 'client', author_id || null, `🔧 Ajuste solicitado: ${message}`]
       );
+      await syncPortalAdjustmentToKanban(adjustedContent, message, isTeamCaller ? caller.user : null);
       return res.json({ success: true });
     }
 
@@ -4545,8 +4649,8 @@ app.post('/api/portal-actions', async (req, res) => {
     if (action === 'get_content_by_id') {
       if (!content_id) return res.status(400).json({ error: 'content_id required' });
       const { rows: [content] } = await pool.query(
-        'SELECT * FROM client_portal_contents WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)',
-        [content_id, scopeClientId]
+        `SELECT * FROM client_portal_contents WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) AND ($3::boolean OR status <> 'revisao_interna')`,
+        [content_id, scopeClientId, isTeamCaller]
       );
       if (!content) return res.status(404).json({ error: 'Content not found' });
       return res.json({ content });
@@ -4588,6 +4692,8 @@ app.post('/api/portal-actions', async (req, res) => {
     if (action === 'mark_video_viewed') {
       const { video_id } = req.body;
       if (!client_id || !video_id) return res.status(400).json({ error: 'client_id and video_id required' });
+      // Vídeo de boas-vindas/novidades visto pela equipe não conta como visto pelo cliente
+      if (isTeamCaller) return res.json({ success: true, skipped: 'team' });
       await pool.query('INSERT INTO portal_video_views (video_id, client_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [video_id, client_id]);
       return res.json({ success: true });
     }
@@ -4647,43 +4753,11 @@ app.post('/api/portal-actions', async (req, res) => {
       return res.json({ success: true });
     }
 
-    // ── Sync: Approval ──
-    if (action === 'sync_approval') {
-      const { content_title } = req.body;
-      if (!client_id) return res.status(400).json({ error: 'client_id required' });
-      // Find matching content_task
-      const { rows: [task] } = await pool.query(
-        `SELECT id, assigned_to, script_id FROM content_tasks WHERE client_id = $1 AND title = $2 AND kanban_column IN ('envio', 'revisao', 'agendamentos') ORDER BY created_at DESC LIMIT 1`,
-        [client_id, content_title]
-      );
-      if (task) {
-        await pool.query(`UPDATE content_tasks SET kanban_column = 'agendamentos', approved_at = NOW(), updated_at = NOW() WHERE id = $1`, [task.id]);
-        await pool.query(`INSERT INTO task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, $4)`,
-          [task.id, '✅ Aprovado pelo cliente via Pulse Club', null, null]);
-      }
-      // Notify social_media and admin
-      await notifyPortalTeam(client_id, ['admin', 'social_media'], '✅ Conteúdo aprovado pelo cliente', `"${content_title}" foi aprovado no Pulse Club`, 'approval', '/conteudo');
-      return res.json({ success: true });
-    }
-
-    // ── Sync: Adjustment ──
-    if (action === 'sync_adjustment') {
-      const { content_title, adjustment_note } = req.body;
-      if (!client_id) return res.status(400).json({ error: 'client_id required' });
-      const { rows: [task] } = await pool.query(
-        `SELECT id, assigned_to FROM content_tasks WHERE client_id = $1 AND title = $2 AND kanban_column IN ('envio', 'revisao', 'agendamentos') ORDER BY created_at DESC LIMIT 1`,
-        [client_id, content_title]
-      );
-      if (task) {
-        await pool.query(`UPDATE content_tasks SET kanban_column = 'alteracao', adjustment_notes = $1, updated_at = NOW() WHERE id = $2`, [adjustment_note, task.id]);
-        await pool.query(`INSERT INTO task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, $4)`,
-          [task.id, '🔧 Ajuste solicitado pelo cliente via Pulse Club', adjustment_note, null]);
-        if (task.assigned_to) {
-          await insertPortalTeamNotifications(await getPortalClientCity(client_id), [task.assigned_to], '🔧 Ajuste solicitado pelo cliente', `"${content_title}" precisa de ajustes: ${(adjustment_note || '').substring(0, 80)}`, 'adjustment', '/edicao/kanban');
-        }
-      }
-      await notifyPortalTeam(client_id, ['admin', 'social_media'], '🔧 Ajuste solicitado no Pulse Club', `Cliente solicitou ajuste em "${content_title}": ${(adjustment_note || '').substring(0, 80)}`, 'adjustment', '/entregas-social');
-      return res.json({ success: true });
+    // ── Sync: Approval / Adjustment (legado) ──
+    // O approve e o request_adjustment já movem o Kanban e avisam a equipe no servidor.
+    // Ficam respondendo sucesso para abas antigas do portal não repetirem tudo em dobro.
+    if (action === 'sync_approval' || action === 'sync_adjustment') {
+      return res.json({ success: true, legacy: true });
     }
 
     // ── Sync: Comment notification ──

@@ -121,6 +121,9 @@ export function ensureWhatsAppSchema(pool) {
       `);
       await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_wa_inbound_msg ON wa_inbound (connection_id, wa_id)`);
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_wa_inbound_pendente ON wa_inbound (handled_at) WHERE handled_at IS NULL`);
+      // resposta só vira "tratada" depois de tratar; claimed_at/attempts permitem tentar de novo após uma falha
+      await pool.query(`ALTER TABLE wa_inbound ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ`);
+      await pool.query(`ALTER TABLE wa_inbound ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0`);
       await pool.query(`
         CREATE TABLE IF NOT EXISTS wa_jid_cache (
           number TEXT PRIMARY KEY,

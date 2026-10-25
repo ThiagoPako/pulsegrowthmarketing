@@ -622,19 +622,25 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
   });
 
   // ── Respostas recebidas (ex.: 1/2 da confirmação de gravação) ──
+  const INBOUND_MAX_ATTEMPTS = 3;
   let handling = false;
   setInterval(async () => {
     if (handling) return;
     handling = true;
     try {
       await ensureWhatsAppSchema(pool);
+      // reserva o lote (claimed_at) e só marca handled_at depois de tratar cada mensagem: um restart ou uma falha
+      // do banco no meio não perde o "1" do cliente. Reservada há 5 min sem conclusão volta a ser tratada (até 3 vezes).
       const { rows } = await pool.query(
-        `UPDATE wa_inbound SET handled_at = now()
-          WHERE id IN (SELECT id FROM wa_inbound WHERE handled_at IS NULL ORDER BY received_at LIMIT 20)
-          RETURNING id, phone, text, group_jid, push_name`
+        `UPDATE wa_inbound SET claimed_at = now(), attempts = attempts + 1
+          WHERE id IN (SELECT id FROM wa_inbound
+                        WHERE handled_at IS NULL AND (claimed_at IS NULL OR claimed_at < now() - interval '5 minutes')
+                        ORDER BY received_at LIMIT 20)
+          RETURNING id, phone, text, group_jid, push_name, attempts`
       );
       for (const row of rows) {
         let result;
+        let failed = false;
         try {
           const msg = { groupJid: row.group_jid, phone: row.phone, pushName: row.push_name, text: row.text };
           // 1º confirmação de gravação (1/2); senão, no grupo: pedido de ajuda; no privado: aprovação de vídeo
@@ -643,9 +649,14 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
             result = row.group_jid ? await handleGroupHelp(msg) : row.phone ? await handlePrivateApproval(msg) : { skipped: 'sem_telefone' };
           }
         } catch (error) {
-          result = { error: error.message };
+          failed = true;
+          result = { error: error.message, tentativa: row.attempts };
         }
-        await pool.query('UPDATE wa_inbound SET result = $2 WHERE id = $1', [row.id, JSON.stringify(result).slice(0, 500)]);
+        const done = !failed || row.attempts >= INBOUND_MAX_ATTEMPTS;
+        await pool.query(
+          `UPDATE wa_inbound SET result = $2${done ? ', handled_at = now()' : ''} WHERE id = $1`,
+          [row.id, JSON.stringify(result).slice(0, 500)]
+        );
       }
     } catch (error) {
       console.error('[whatsapp] respostas:', error.message);

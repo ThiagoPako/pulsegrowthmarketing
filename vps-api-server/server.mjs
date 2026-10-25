@@ -9528,6 +9528,67 @@ app.delete('/api/scripts/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── Configurações da landing page (Pixel da Meta) ──────────
+// A tabela só existia no Supabase antigo e não está liberada no /api/db/query, então o Pixel nunca era salvo.
+// Leitura pública só das seções da própria landing (a página é anônima); gravação só do admin. O Pixel vai
+// dentro de um <script> da landing, por isso só aceita números.
+const LANDING_PUBLIC_SECTIONS = ['facebook_pixel', 'quem_somos'];
+let landingSettingsReady = null;
+function ensureLandingSettingsTable() {
+  if (!landingSettingsReady) {
+    landingSettingsReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS landing_page_settings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        section TEXT NOT NULL UNIQUE,
+        video_url TEXT,
+        title TEXT,
+        description TEXT,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `).catch((error) => {
+      landingSettingsReady = null;
+      throw error;
+    });
+  }
+  return landingSettingsReady;
+}
+
+app.get('/api/public/landing-settings', async (req, res) => {
+  try {
+    const section = String(req.query.section || '');
+    if (!LANDING_PUBLIC_SECTIONS.includes(section)) return res.status(400).json({ error: 'Seção inválida' });
+    await ensureLandingSettingsTable();
+    const { rows } = await pool.query(
+      'SELECT section, video_url, title, description, updated_at FROM landing_page_settings WHERE section = $1 LIMIT 1', [section]
+    );
+    res.json(rows[0] || null);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/landing-settings/facebook-pixel', async (req, res) => {
+  try {
+    await verifyAdmin(req);
+  } catch (e) {
+    return res.status(e.message === 'Admin access required' ? 403 : 401).json({ error: e.message });
+  }
+  try {
+    const pixelId = String(req.body?.pixelId ?? '').trim();
+    if (pixelId && !/^\d{5,20}$/.test(pixelId)) {
+      return res.status(400).json({ error: 'O Pixel ID tem só números (ex.: 123456789012345)' });
+    }
+    await ensureLandingSettingsTable();
+    const { rows: updated } = await pool.query(
+      `UPDATE landing_page_settings SET title = $1, updated_at = now() WHERE section = 'facebook_pixel' RETURNING section, title`,
+      [pixelId || null]
+    );
+    if (updated.length) return res.json(updated[0]);
+    const { rows } = await pool.query(
+      `INSERT INTO landing_page_settings (section, title) VALUES ('facebook_pixel', $1) RETURNING section, title`, [pixelId || null]
+    );
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Company Settings ───────────────────────────────────────
 app.get('/api/company-settings', async (req, res) => {
   try {

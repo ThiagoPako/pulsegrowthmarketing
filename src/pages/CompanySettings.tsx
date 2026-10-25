@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { Clock, CalendarClock, AlertTriangle, Trash2, Rocket, RotateCcw, CalendarOff, Plus, Send, Loader2, DollarSign, MessageSquare, Plug, Bot, MonitorPlay, Factory, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/vpsDb';
-import { supabase as supabaseCloud } from '@/lib/vpsDb';
+import { getLandingPixelId, isValidPixelId, saveLandingPixelId } from '@/services/landingSettings';
 import { ASSISTANT_KEY } from '@/components/ProductionAssistant';
 import { getHolidays, createHoliday, deleteHoliday, sendHolidayNotifications, holidayNextOccurrence, holidayNotifiedFor, getWhatsAppConfig, updateWhatsAppConfig, type Holiday } from '@/services/whatsappService';
 import PortalBulkDelete from '@/components/portal/PortalBulkDelete';
@@ -200,14 +200,9 @@ export default function CompanySettings() {
   useEffect(() => { loadHolidays(); }, [loadHolidays]);
 
   useEffect(() => {
-    supabaseCloud
-      .from('landing_page_settings')
-      .select('title')
-      .eq('section', 'facebook_pixel')
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.title) setPixelId(data.title);
-      });
+    getLandingPixelId().then((id) => {
+      if (id) setPixelId(id);
+    });
   }, []);
 
   const [moduleConfirmText, setModuleConfirmText] = useState<Record<string, string>>({});
@@ -778,26 +773,14 @@ export default function CompanySettings() {
           variant="outline"
           size="sm"
           onClick={async () => {
-            try {
-              const { data: existing } = await supabaseCloud
-                .from('landing_page_settings')
-                .select('id')
-                .eq('section', 'facebook_pixel')
-                .maybeSingle();
-              if (existing) {
-                await supabaseCloud
-                  .from('landing_page_settings')
-                  .update({ title: pixelId || null, updated_at: new Date().toISOString() })
-                  .eq('id', existing.id);
-              } else {
-                await supabaseCloud
-                  .from('landing_page_settings')
-                  .insert({ section: 'facebook_pixel', title: pixelId || null });
-              }
-              toast.success('Pixel salvo com sucesso!');
-            } catch {
-              toast.error('Erro ao salvar pixel');
+            const value = pixelId.trim();
+            if (value && !isValidPixelId(value)) {
+              toast.error('O Pixel ID tem só números (ex.: 123456789012345)');
+              return;
             }
+            const { error } = await saveLandingPixelId(value);
+            if (error) toast.error(`Erro ao salvar pixel: ${error}`);
+            else toast.success(value ? 'Pixel salvo com sucesso!' : 'Pixel removido');
           }}
           className="gap-2"
         >

@@ -9923,8 +9923,46 @@ app.post('/api/fix-content-task', async (req, res) => {
 // ─── CLUBE DE DESCONTOS ─────────────────────────────────────
 
 // Helper: generate random 6-digit code
+const COUPON_CODE_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const MAX_CAMPAIGN_COUPONS = 5000;
+
 function generateCouponCode() {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
+  // crypto.randomInt: sempre 6 caracteres (o Math.random às vezes gerava menos)
+  let code = '';
+  for (let i = 0; i < 6; i += 1) code += COUPON_CODE_CHARS[crypto.randomInt(COUPON_CODE_CHARS.length)];
+  return code;
+}
+
+/**
+ * Insere `count` cupons novos na campanha em lote. O código é único no banco
+ * inteiro: colisões são descartadas e completadas na rodada seguinte.
+ */
+async function insertCampaignCoupons(db, campaignId, count) {
+  let inserted = 0;
+  for (let round = 0; round < 5 && inserted < count; round += 1) {
+    const codes = new Set();
+    while (codes.size < count - inserted) codes.add(generateCouponCode());
+    const { rowCount } = await db.query(
+      `INSERT INTO discount_coupons (campaign_id, code)
+       SELECT $1, unnest($2::text[])
+       ON CONFLICT (code) DO NOTHING`,
+      [campaignId, [...codes]]
+    );
+    inserted += rowCount || 0;
+  }
+  if (inserted < count) throw new Error('Não foi possível gerar todos os cupons. Tente novamente.');
+  return inserted;
+}
+
+function discountAuthErrorStatus(error) {
+  return error?.message === 'Admin access required' ? 403 : 401;
+}
+
+/** Telefone de quem pegou cupom sem login da equipe: só os 4 últimos dígitos. */
+function maskClaimPhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return phone || null;
+  return `•••• ${digits.slice(-4)}`;
 }
 
 // List all clients with active discount campaigns (public)
@@ -10099,9 +10137,15 @@ app.post('/api/discount-verify', async (req, res) => {
 });
 
 // Get discount stats for portal
+// Equipe (admin/social_media, com Bearer) vê tudo; sem login (portal do cliente)
+// o telefone de quem pegou o cupom sai mascarado — o client_id é público.
 app.get('/api/discount-stats/:clientId', async (req, res) => {
   try {
     const { clientId } = req.params;
+    let isTeamAdmin = false;
+    if (req.headers.authorization?.startsWith('Bearer ')) {
+      isTeamAdmin = await verifyAdmin(req).then(() => true).catch(() => false);
+    }
     const { rows: campaigns } = await pool.query(
       `SELECT * FROM discount_campaigns WHERE client_id = $1 ORDER BY created_at DESC`,
       [clientId]
@@ -10129,7 +10173,9 @@ app.get('/api/discount-stats/:clientId', async (req, res) => {
 
     res.json({
       campaigns,
-      coupons,
+      coupons: isTeamAdmin
+        ? coupons
+        : coupons.map((c) => ({ ...c, claimed_by_phone: maskClaimPhone(c.claimed_by_phone) })),
       stats: {
         total_coupons_issued: coupons.length,
         total_claimed: coupons.filter(c => c.status === 'claimed').length,
@@ -10147,29 +10193,43 @@ app.get('/api/discount-stats/:clientId', async (req, res) => {
 
 // Admin: create campaign with coupons
 app.post('/api/discount-campaigns', async (req, res) => {
+  let user;
   try {
-    const { client_id, title, description, discount_type, discount_value, min_purchase_value, total_coupons, expires_at, created_by } = req.body;
-    if (!client_id || !title || !total_coupons) {
+    ({ user } = await verifyAdmin(req));
+  } catch (authError) {
+    return res.status(discountAuthErrorStatus(authError)).json({ error: authError.message || 'Unauthorized' });
+  }
+
+  try {
+    const { client_id, description, discount_type, discount_value, min_purchase_value, expires_at } = req.body;
+    const title = String(req.body?.title || '').trim();
+    const total_coupons = Number(req.body?.total_coupons);
+    if (!client_id || !title || !req.body?.total_coupons) {
       return res.status(400).json({ error: 'client_id, title e total_coupons são obrigatórios' });
     }
-
-    const { rows: [campaign] } = await pool.query(
-      `INSERT INTO discount_campaigns (client_id, title, description, discount_type, discount_value, min_purchase_value, total_coupons, expires_at, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [client_id, title, description || '', discount_type || 'percentage', discount_value || 0, min_purchase_value || 0, total_coupons, expires_at || null, created_by || null]
-    );
-
-    // Generate coupons
-    const codes = new Set();
-    while (codes.size < total_coupons) {
-      codes.add(generateCouponCode());
+    if (!Number.isInteger(total_coupons) || total_coupons < 1 || total_coupons > MAX_CAMPAIGN_COUPONS) {
+      return res.status(400).json({ error: `total_coupons deve ser um número inteiro entre 1 e ${MAX_CAMPAIGN_COUPONS}` });
     }
+    if (title.length > 120) return res.status(400).json({ error: 'Título muito longo (máximo de 120 caracteres)' });
+    if (String(description || '').length > 1000) return res.status(400).json({ error: 'Descrição muito longa (máximo de 1000 caracteres)' });
 
-    for (const code of codes) {
-      await pool.query(
-        `INSERT INTO discount_coupons (campaign_id, code) VALUES ($1, $2)`,
-        [campaign.id, code]
-      );
+    // Campanha e cupons juntos: se a geração falhar, nada fica pela metade.
+    const db = await pool.connect();
+    let campaign;
+    try {
+      await db.query('BEGIN');
+      ({ rows: [campaign] } = await db.query(
+        `INSERT INTO discount_campaigns (client_id, title, description, discount_type, discount_value, min_purchase_value, total_coupons, expires_at, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+        [client_id, title, description || '', discount_type || 'percentage', discount_value || 0, min_purchase_value || 0, total_coupons, expires_at || null, user?.id || null]
+      ));
+      await insertCampaignCoupons(db, campaign.id, total_coupons);
+      await db.query('COMMIT');
+    } catch (txError) {
+      await db.query('ROLLBACK').catch(() => {});
+      throw txError;
+    } finally {
+      db.release();
     }
 
     // Notify existing coupon holders from this client that new coupons are available
@@ -10203,18 +10263,106 @@ app.post('/api/discount-campaigns', async (req, res) => {
   }
 });
 
-// Admin: toggle campaign active status
+// Admin: editar campanha (título, desconto, validade...) ou ativar/desativar
 app.patch('/api/discount-campaigns/:id', async (req, res) => {
   try {
+    await verifyAdmin(req);
+  } catch (authError) {
+    return res.status(discountAuthErrorStatus(authError)).json({ error: authError.message || 'Unauthorized' });
+  }
+
+  const db = await pool.connect();
+  try {
     const { id } = req.params;
-    const { is_active } = req.body;
-    const { rows: [updated] } = await pool.query(
-      `UPDATE discount_campaigns SET is_active = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
-      [id, is_active]
-    );
+    const body = req.body || {};
+
+    // Só atualiza os campos enviados (antes o PATCH só lia is_active e a edição
+    // gravava is_active = NULL, falhando sem salvar nada).
+    const sets = [];
+    const params = [id];
+    const setField = (column, value) => {
+      params.push(value);
+      sets.push(`${column} = $${params.length}`);
+    };
+    if (body.title !== undefined) {
+      const title = String(body.title || '').trim();
+      if (!title) return res.status(400).json({ error: 'Título obrigatório' });
+      if (title.length > 120) return res.status(400).json({ error: 'Título muito longo (máximo de 120 caracteres)' });
+      setField('title', title);
+    }
+    if (body.description !== undefined) {
+      if (String(body.description || '').length > 1000) return res.status(400).json({ error: 'Descrição muito longa (máximo de 1000 caracteres)' });
+      setField('description', body.description || '');
+    }
+    if (body.discount_type !== undefined) setField('discount_type', body.discount_type || 'percentage');
+    if (body.discount_value !== undefined) setField('discount_value', Number(body.discount_value) || 0);
+    if (body.min_purchase_value !== undefined) setField('min_purchase_value', Number(body.min_purchase_value) || 0);
+    // expires_at pode ser limpo de propósito (null = sem validade)
+    if (body.expires_at !== undefined) setField('expires_at', body.expires_at || null);
+    if (body.is_active !== undefined && body.is_active !== null) setField('is_active', Boolean(body.is_active));
+
+    let targetTotal = null;
+    if (body.total_coupons !== undefined && body.total_coupons !== null && body.total_coupons !== '') {
+      targetTotal = Number(body.total_coupons);
+      if (!Number.isInteger(targetTotal) || targetTotal < 1 || targetTotal > MAX_CAMPAIGN_COUPONS) {
+        return res.status(400).json({ error: `total_coupons deve ser um número inteiro entre 1 e ${MAX_CAMPAIGN_COUPONS}` });
+      }
+    }
+
+    await db.query('BEGIN');
+    const { rows: [current] } = await db.query('SELECT id FROM discount_campaigns WHERE id = $1 FOR UPDATE', [id]);
+    if (!current) {
+      await db.query('ROLLBACK');
+      return res.status(404).json({ error: 'Campanha não encontrada' });
+    }
+
+    if (targetTotal !== null) {
+      const { rows: [counts] } = await db.query(
+        `SELECT COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE status = 'available')::int AS available
+           FROM discount_coupons WHERE campaign_id = $1`,
+        [id]
+      );
+      const used = counts.total - counts.available;
+      if (targetTotal < used) {
+        await db.query('ROLLBACK');
+        return res.status(400).json({ error: `Esta campanha já tem ${used} cupons resgatados; o total não pode ficar abaixo disso.` });
+      }
+      if (targetTotal > counts.total) {
+        await insertCampaignCoupons(db, id, targetTotal - counts.total);
+      } else if (targetTotal < counts.total) {
+        // Reduzir: tira só cupons ainda disponíveis (nunca os já resgatados)
+        await db.query(
+          `DELETE FROM discount_coupons
+            WHERE id IN (
+              SELECT id FROM discount_coupons
+               WHERE campaign_id = $1 AND status = 'available'
+               ORDER BY created_at DESC
+               LIMIT $2
+            )`,
+          [id, counts.total - targetTotal]
+        );
+      }
+      setField('total_coupons', targetTotal);
+    }
+
+    let updated = null;
+    if (sets.length > 0) {
+      ({ rows: [updated] } = await db.query(
+        `UPDATE discount_campaigns SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $1 RETURNING *`,
+        params
+      ));
+    } else {
+      ({ rows: [updated] } = await db.query('SELECT * FROM discount_campaigns WHERE id = $1', [id]));
+    }
+    await db.query('COMMIT');
     res.json({ campaign: updated });
   } catch (e) {
+    await db.query('ROLLBACK').catch(() => {});
+    console.error('PATCH /api/discount-campaigns/:id error:', e);
     res.status(500).json({ error: e.message });
+  } finally {
+    db.release();
   }
 });
 

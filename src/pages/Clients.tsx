@@ -696,7 +696,8 @@ export default function Clients() {
           logoUrl: logoUrl || undefined,
         } as Client;
 
-        await updateClient(updatedClient);
+        // A API recusou: o aviso já apareceu e a tela não mostra como salvo.
+        if (!(await updateClient(updatedClient))) return;
 
         const clientMetaUpdate = await supabase.from('clients').update({
           is_admin_client: isAdminClient,

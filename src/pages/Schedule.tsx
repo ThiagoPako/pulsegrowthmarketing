@@ -709,9 +709,11 @@ export default function Schedule() {
     if (isRecordingActive(rec.id)) {
       // Endomarketing recordings: simplified finalization (no scripts, no Drive)
       if (rec.type === 'endomarketing') {
-        stopActiveRecording(rec.id, { videos_recorded: 1 });
-        updateRecording({ ...rec, status: 'concluida' });
-        toast.success(`Gravação endomarketing finalizada — ${getClientName(rec.clientId)}`);
+        stopActiveRecording(rec.id, { videos_recorded: 1 }).then((stopped) => {
+          if (!stopped) return; // a API recusou: a gravação segue em andamento (o aviso já apareceu)
+          updateRecording({ ...rec, status: 'concluida' });
+          toast.success(`Gravação endomarketing finalizada — ${getClientName(rec.clientId)}`);
+        });
         return;
       }
       setFinishRecordingState(rec);
@@ -847,13 +849,15 @@ export default function Schedule() {
       else extrasCount++;
     }
     const totalVideos = allRecordedArray.length;
-    stopActiveRecording(finishRecording.id, {
+    const stopped = await stopActiveRecording(finishRecording.id, {
       reels_produced: reelsCount,
       creatives_produced: creativesCount,
       stories_produced: storiesCount,
       extras_produced: extrasCount,
       videos_recorded: Math.max(totalVideos, 1),
     }, allRecordedArray);
+    // A API recusou: não marca como concluída nem cria as tarefas (o aviso já apareceu).
+    if (!stopped) return;
     updateRecording({ ...finishRecording, status: 'concluida' });
 
     const editingDeadline = new Date();

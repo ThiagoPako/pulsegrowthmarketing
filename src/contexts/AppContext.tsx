@@ -29,7 +29,7 @@ interface AppContextType {
   updateUser: (user: User) => void;
   deleteUser: (id: string) => void;
   addClient: (client: Client) => Promise<boolean>;
-  updateClient: (client: Client) => Promise<void>;
+  updateClient: (client: Client) => Promise<boolean>;
   deleteClient: (id: string) => Promise<boolean>;
   addRecording: (recording: Recording, options?: { skipClientDayCheck?: boolean }) => Promise<boolean>;
   updateRecording: (recording: Recording) => void;
@@ -49,12 +49,12 @@ interface AppContextType {
   addTask: (task: KanbanTask) => void;
   updateTask: (task: KanbanTask) => void;
   deleteTask: (id: string) => void;
-  addScript: (script: Script) => Promise<void>;
+  addScript: (script: Script) => Promise<boolean>;
   updateScript: (script: Script) => void;
   deleteScript: (id: string) => void;
-  updateSettings: (settings: CompanySettings) => void;
+  updateSettings: (settings: CompanySettings) => Promise<boolean>;
   startActiveRecording: (rec: ActiveRecording) => void;
-  stopActiveRecording: (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]) => void;
+  stopActiveRecording: (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]) => Promise<boolean>;
   hasConflict: (videomakerId: string, date: string, startTime: string, excludeId?: string, newType?: RecordingType, clientId?: string, options?: { skipClientDayCheck?: boolean }) => { hasConflict: boolean; message?: string };
   isWithinWorkHours: (day: DayOfWeek, startTime: string) => boolean;
 
@@ -234,7 +234,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return await data.addClient(client);
   }, [data]);
 
-  const updateClient = useCallback(async (client: Client) => { await data.updateClient(client); }, [data]);
+  const updateClient = useCallback((client: Client) => data.updateClient(client), [data]);
 
   const deleteClient = useCallback(async (id: string): Promise<boolean> => {
     return await data.deleteClient(id);
@@ -676,9 +676,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const addScript = useCallback(async (script: Script) => { return data.addScript(script); }, [data]);
   const updateScript = useCallback((script: Script) => { data.updateScript(script); }, [data]);
   const deleteScript = useCallback((id: string) => { data.deleteScript(id); }, [data]);
-  const updateSettings = useCallback((s: CompanySettings) => { data.updateSettings(s); }, [data]);
+  // Devolvem false quando a API recusa (o hook já avisa): quem chama só mostra sucesso com true.
+  const updateSettings = useCallback((s: CompanySettings) => data.updateSettings(s), [data]);
   const startActiveRecording = useCallback(async (rec: ActiveRecording) => { await data.startActiveRecording(rec); }, [data]);
-  const stopActiveRecording = useCallback((recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]) => { data.stopActiveRecording(recordingId, deliveryOverrides, completedScriptIds); }, [data]);
+  const stopActiveRecording = useCallback((recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[]) => data.stopActiveRecording(recordingId, deliveryOverrides, completedScriptIds), [data]);
 
   const getSuggestionsForCancellation = useCallback((recording: Recording) => {
     return data.clients.filter(c => {

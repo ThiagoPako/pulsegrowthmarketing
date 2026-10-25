@@ -680,10 +680,11 @@ export default function VideomakerDashboard() {
   };
 
   // ── Finish recording flow ──
-  const handleFinishRecording = (rec: Recording) => {
+  const handleFinishRecording = async (rec: Recording) => {
     // Endomarketing recordings: simplified finalization (no scripts, no Drive)
+    // Se a API recusar o stop, a gravação segue em andamento (o aviso já apareceu).
     if (rec.type === 'endomarketing') {
-      stopActiveRecording(rec.id, { videos_recorded: 1 });
+      if (!(await stopActiveRecording(rec.id, { videos_recorded: 1 }))) return;
       updateRecording({ ...rec, status: 'concluida' });
       setLocalActiveRecordingId(null);
       toast.success(`Gravação endomarketing finalizada — ${getClientName(rec.clientId, rec)}`);
@@ -692,7 +693,7 @@ export default function VideomakerDashboard() {
       return;
     }
     // Stop active recording and set status to "organizando_material"
-    stopActiveRecording(rec.id);
+    if (!(await stopActiveRecording(rec.id))) return;
     updateRecording({ ...rec, status: 'organizando_material' as RecordingStatus });
     setLocalActiveRecordingId(null);
     toast.success(`Gravação finalizada — organizando material`);

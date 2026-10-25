@@ -7952,7 +7952,9 @@ const ALLOWED_TABLES = [
 // ═══════════════════════════════════════════════════════════════
 // MULTI-CITY ENFORCEMENT
 // ═══════════════════════════════════════════════════════════════
-// Tabelas que devem ser filtradas pela cidade ativa do usuário
+// Tabelas que devem ser filtradas pela cidade ativa do usuário.
+// notifications fica de fora: o aviso é da pessoa (filtrado por user_id) e os
+// avisos do servidor gravam a cidade padrão, então sumiam para quem está em Uruaçu.
 const TABLES_WITH_CITY = new Set([
   'clients','recordings','kanban_tasks','scripts','active_recordings',
   'content_tasks','task_history','task_comments',
@@ -7971,9 +7973,9 @@ const TABLES_WITH_CITY = new Set([
   'recording_wait_logs','portal_videos','portal_video_views','scheduled_posts',
   'commercial_proposals','proposal_comments','event_recordings',
   'client_testimonials','proposal_checklist_items',
-  'fieldwork_activities','goals','notifications',
+  'fieldwork_activities','goals',
   'company_settings','whatsapp_config','payment_config',
-  'crm_leads','crm_notes','goals','notifications',
+  'crm_leads','crm_notes',
   'plans',
   'story_editing_sessions','script_requests','manual_video_tasks','client_bio_links','client_bio_buttons',
 ]);

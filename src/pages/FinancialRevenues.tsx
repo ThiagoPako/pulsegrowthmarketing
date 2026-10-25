@@ -174,10 +174,13 @@ export default function FinancialRevenues() {
   }), [filtered, filters, clients]);
 
   // Auto-generate revenues when month has none and data is loaded (only from April 2026)
+  // Só o mês atual: olhar um mês futuro (ou passado) não cria receitas no banco —
+  // para esses, o botão de gerar continua disponível.
   const autoGenRef = useRef<string | null>(null);
   useEffect(() => {
     if (loading || autoGenRef.current === selectedMonth) return;
     if (selectedMonth < '2026-04') return;
+    if (selectedMonth !== format(new Date(), 'yyyy-MM')) return;
     if (filtered.length === 0 && clients.length > 0 && contracts.length > 0) {
       autoGenRef.current = selectedMonth;
       generateMonthlyRevenues(selectedMonth).then(({ inserted }) => {

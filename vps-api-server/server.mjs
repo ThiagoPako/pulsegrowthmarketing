@@ -2646,14 +2646,36 @@ async function getTargetUserRoles(userId) {
  */
 async function assertCanManageUserAccount(actor, { targetUserId = null, requestedRole = null } = {}) {
   if (await isStrictAdminUser(actor)) return;
+  // Gestor de projetos (sem admin/social_media) também não cria nem mexe em outro gestor
+  const isManagerOnly = !(await isAdminUser(actor));
+  const blockedRoles = isManagerOnly ? new Set([...PRIVILEGED_USER_ROLES, 'gestor_projetos']) : PRIVILEGED_USER_ROLES;
   const forbidden = () => Object.assign(
-    new Error('Só um administrador pode criar ou alterar contas admin, social_media ou socio_gestor.'),
+    new Error(isManagerOnly
+      ? 'Só um administrador pode criar ou alterar contas admin, social_media, socio_gestor ou gestor_projetos.'
+      : 'Só um administrador pode criar ou alterar contas admin, social_media ou socio_gestor.'),
     { statusCode: 403 }
   );
-  if (requestedRole && PRIVILEGED_USER_ROLES.has(String(requestedRole))) throw forbidden();
+  if (requestedRole && blockedRoles.has(String(requestedRole))) throw forbidden();
   if (targetUserId && String(targetUserId) !== String(actor?.id || '')) {
     const roles = await getTargetUserRoles(targetUserId);
-    if (roles.some((role) => PRIVILEGED_USER_ROLES.has(role))) throw forbidden();
+    if (roles.some((role) => blockedRoles.has(role))) throw forbidden();
+  }
+}
+
+/**
+ * Criar, redefinir senha e excluir conta pela Equipe: admin, social_media ou
+ * gestor_projetos (o mesmo conjunto que a tela libera). Junto com o
+ * assertCanManageUserAccount, que impede o gestor de criar ou tomar conta privilegiada.
+ */
+async function verifyAccountManager(req) {
+  try {
+    return await verifyTeamManager(req);
+  } catch (error) {
+    if (error?.message === 'Admin access required') {
+      throw Object.assign(new Error('Só a gestão da equipe (admin, social media ou gestor de projetos) pode fazer isso.'), { statusCode: 403 });
+    }
+    if (!error?.statusCode) error.statusCode = 401;
+    throw error;
   }
 }
 
@@ -3862,7 +3884,7 @@ app.post('/api/auth/create-user', async (req, res) => {
         return res.status(429).json({ error: 'Muitos cadastros feitos daqui. Tente de novo mais tarde.' });
       }
     } else {
-      const { user: actor } = await verifyAdmin(req);
+      const { user: actor } = await verifyAccountManager(req);
       const requestedRole = role || 'editor';
       const validRoles = await getValidAppRoles();
       if (validRoles && !validRoles.has(String(requestedRole))) {
@@ -3922,7 +3944,7 @@ app.post('/api/auth/create-user', async (req, res) => {
 // ─── Admin: Reset password ──────────────────────────────────
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
-    const { user: actor } = await verifyAdmin(req);
+    const { user: actor } = await verifyAccountManager(req);
     const { userId, newPassword } = req.body;
     if (!userId || !newPassword || newPassword.length < 6) return res.status(400).json({ error: 'userId e nova senha (min 6 chars) obrigatórios' });
     await assertCanManageUserAccount(actor, { targetUserId: userId });
@@ -9867,10 +9889,10 @@ app.post('/api/reset-password', async (req, res) => {
 // ─── 13. Delete User ────────────────────────────────────────
 app.post('/api/delete-user', async (req, res) => {
   try {
-    const { user } = await verifyAdmin(req);
+    const { user } = await verifyAccountManager(req);
     const { userId } = req.body;
-    if (!userId) return res.status(400).json({ error: 'Missing userId' });
-    if (userId === user.id) return res.status(400).json({ error: 'Cannot delete yourself' });
+    if (!userId) return res.status(400).json({ error: 'Informe o usuário a excluir.' });
+    if (userId === user.id) return res.status(400).json({ error: 'Você não pode excluir a si mesmo.' });
     await assertCanManageUserAccount(user, { targetUserId: userId });
 
     // Ids ligados (perfil + auth_users com o mesmo e-mail) calculados ANTES de apagar:
@@ -9880,7 +9902,7 @@ app.post('/api/delete-user', async (req, res) => {
     const { rows: profileRows } = await pool.query('SELECT email FROM profiles WHERE id::text = $1 LIMIT 1', [targetId]);
     const targetEmail = String(profileRows[0]?.email || '').trim().toLowerCase();
     const linkedIds = await getLinkedUserIds({ id: targetId, email: targetEmail });
-    if (linkedIds.includes(String(user.id))) return res.status(400).json({ error: 'Cannot delete yourself' });
+    if (linkedIds.includes(String(user.id))) return res.status(400).json({ error: 'Você não pode excluir a si mesmo.' });
 
     // Tudo numa transação: se o perfil não puder sair (ex.: gravações ligadas), nada é apagado.
     const client = await pool.connect();

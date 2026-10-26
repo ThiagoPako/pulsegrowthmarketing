@@ -346,7 +346,7 @@ export default function Team() {
     if (!confirm(`Tem certeza que deseja excluir ${member.displayName || member.name}? Esta ação é irreversível.`)) return;
     try {
       const { data, error } = await supabase.functions.invoke('delete-user', { body: { userId: member.id } });
-      if (error) throw error;
+      if (error) throw new Error(typeof error === 'string' ? error : error.message || 'Erro ao excluir membro');
       if (data?.error) throw new Error(data.error);
       toast.success(`${member.displayName || member.name} removido com sucesso`);
       fetchMembers();

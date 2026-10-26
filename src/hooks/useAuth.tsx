@@ -140,6 +140,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // O perfil completo (font_scale e demais colunas) não depende do /auth/me: sai junto com ele.
+    const profilePromise = Promise.resolve(
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+    );
+
     let authProfile: Partial<Profile> | null = prefetchedAuth || null;
     if (token && !authProfile) {
       try {
@@ -181,11 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       Array.from(new Set<AppRole>([primary, ...extraRoles]));
 
     // Try VPS first
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
+    const { data, error } = await profilePromise;
     if (data && !error) {
       const primary = (authProfile?.role as AppRole) || (data as Profile).role;
       setProfile({

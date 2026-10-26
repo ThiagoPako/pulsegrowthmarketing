@@ -49,6 +49,8 @@ const REMINDER_ROLES = ['admin', 'social_media'];
 const GENERATOR_LOCK = 742_100_31; // pg_try_advisory_lock: uma instância gera por vez
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MATERIAL_COLUMN = { conteudo: 'content_task_id', arte: 'design_task_id', portal: 'portal_content_id' };
+// Marca da data cancelada com "só este" (a exceção que "este e os próximos" leva para a regra nova)
+const ONLY_THIS_CANCELLED = 'Cancelado: só esta data.';
 
 const isUuid = (v) => typeof v === 'string' && UUID_RE.test(v);
 const envNumber = (name, fallback) => {
@@ -379,16 +381,72 @@ export function registerStoryRoutes(app, deps) {
     return { series, post };
   }
 
-  /** Pendentes da série (a partir de um horário) saem; publicadas e em publicação não mudam. */
-  async function cancelPending(db, seriesId, fromSlot, reason) {
+  /**
+   * Pendentes da série a partir de um horário saem; publicadas e em publicação não mudam. O corte vale pelo
+   * horário original (series_slot_at) e também pela data que o calendário mostra (scheduled_at): uma data
+   * arrastada para depois do corte sai junto, e nada que a pessoa vê depois do corte continua agendado.
+   */
+  async function cancelPending(db, seriesId, fromSlot, reason, { except = [] } = {}) {
     const { rows } = await db.query(
       `UPDATE scheduled_posts SET status = 'cancelado', last_error = $3, updated_at = now()
         WHERE story_series_id = $1 AND status IN ('agendado', 'erro')
-          AND ($2::timestamptz IS NULL OR series_slot_at >= $2::timestamptz)
+          AND ($2::timestamptz IS NULL OR series_slot_at >= $2::timestamptz OR scheduled_at >= $2::timestamptz)
+          AND NOT (id = ANY($4::uuid[]))
         RETURNING id`,
-      [seriesId, fromSlot, reason]
+      [seriesId, fromSlot, reason, except]
     );
     return rows.length;
+  }
+
+  /**
+   * "Este e os próximos": as exceções feitas com "só este" a partir do corte (data cancelada, mudada de modo, de
+   * link, de rede, de hora ou arrastada) passam para a regra nova no mesmo dia, antes de ela gerar as datas.
+   * A data cancelada continua cancelada; a mudada guarda o que mudou (a hora nova da regra só entra quando a
+   * data não tinha hora própria). Dia que não existe na regra nova: a exceção fica na antiga (e sai junto).
+   * Devolve os ids que passaram para a regra nova.
+   */
+  async function carryExceptions(db, oldSeries, next, rule, cutoffIso) {
+    const { rows } = await db.query(
+      `SELECT id, status, scheduled_at, series_slot_at FROM scheduled_posts
+        WHERE story_series_id = $1 AND series_slot_at >= $2::timestamptz
+          AND ((status = 'cancelado' AND last_error = $3)
+               OR (status IN ('agendado', 'erro') AND (scheduled_at <> series_slot_at
+                   OR story_mode IS DISTINCT FROM $4 OR story_link IS DISTINCT FROM $5
+                   OR story_link_text IS DISTINCT FROM $6 OR platform IS DISTINCT FROM $7)))
+        ORDER BY series_slot_at
+        FOR UPDATE`,
+      [oldSeries.id, cutoffIso, ONLY_THIS_CANCELLED, oldSeries.story_mode, oldSeries.story_link,
+        oldSeries.story_link_text, oldSeries.platform]
+    );
+    const carried = [];
+    for (const row of rows) {
+      const day = brtParts(row.series_slot_at)?.date;
+      const dayStart = day ? Date.parse(brtToIso(day, '00:00')) : NaN;
+      if (!Number.isFinite(dayStart)) continue;
+      const [occ] = listOccurrences(rule, { fromMs: dayStart, toMs: dayStart + DAY_MS - 1, limit: 1 });
+      if (!occ || Date.parse(occ.at) < Date.now() + 60_000) continue;
+      const ownTime = isoOf(row.scheduled_at) !== isoOf(row.series_slot_at);
+      await db.query(
+        `UPDATE scheduled_posts
+            SET story_series_id = $2, series_slot_at = $3::timestamptz,
+                scheduled_at = CASE WHEN $4 THEN scheduled_at ELSE $3::timestamptz END, updated_at = now()
+          WHERE id = $1`,
+        [row.id, next.id, occ.at, ownTime]
+      );
+      carried.push(row.id);
+    }
+    return carried;
+  }
+
+  /**
+   * Antes de encerrar uma série a partir de uma data além do que já foi gerado (data prevista), grava as datas
+   * que ficam antes do corte: senão elas sumiriam sem aviso. Sem conseguir gravar (conta desconectada…), recusa.
+   */
+  async function materializeBefore(db, series, cutoffIso) {
+    const generated = series.generated_until ? Date.parse(series.generated_until) : 0;
+    const cutoffMs = Date.parse(cutoffIso);
+    if (!(cutoffMs > generated)) return 0;
+    return materialize(db, series, { toMs: cutoffMs - 1, strict: true });
   }
 
   /** Sem repetição ativa e sem nenhum post pendente ou publicado: o material volta para "não agendados". */
@@ -417,15 +475,16 @@ export function registerStoryRoutes(app, deps) {
   }
 
   /**
-   * Grava as ocorrências que faltam até a janela (30 dias). A linha da série precisa estar travada (FOR UPDATE).
-   * Devolve quantas entraram; nada no passado e nada repetido (chave única série + horário).
+   * Grava as ocorrências que faltam até a janela (30 dias) ou até toMs. A linha da série precisa estar travada
+   * (FOR UPDATE). Devolve quantas entraram; nada no passado e nada repetido (chave única série + horário).
+   * strict: a falha na conferência (conta, mídia) volta como erro em vez de ficar só anotada na série.
    */
-  async function materialize(db, series, { now = Date.now() } = {}) {
+  async function materialize(db, series, { now = Date.now(), toMs = null, strict = false } = {}) {
     if (series.status !== 'ativa') return 0;
     const rule = rowRule(series);
-    const windowEnd = now + WINDOW_DAYS * DAY_MS;
+    const windowEnd = Number.isFinite(toMs) ? toMs : now + WINDOW_DAYS * DAY_MS;
     const slots = listOccurrences(rule, { fromMs: now + 60_000, toMs: windowEnd });
-    if (!slots.length && !nextOccurrence(rule, now + 60_000)) {
+    if (!slots.length && !Number.isFinite(toMs) && !nextOccurrence(rule, now + 60_000)) {
       await endSeries(db, series, 'encerrada', 'A repetição chegou ao fim.');
       return 0;
     }
@@ -443,7 +502,7 @@ export function registerStoryRoutes(app, deps) {
           storyLink: series.story_link, storyLinkText: series.story_link_text, at: fresh[0].at,
         });
       } catch (error) {
-        if (error?.statusCode !== 400) throw error;
+        if (error?.statusCode !== 400 || strict) throw error;
         // conta desconectada, mídia trocada…: guarda o motivo e tenta de novo na próxima volta
         await db.query(`UPDATE story_series SET last_error = $2, updated_at = now() WHERE id = $1`, [series.id, clip(error.message, 500)]);
         return 0;
@@ -917,11 +976,15 @@ export function registerStoryRoutes(app, deps) {
         if (!first) throw httpError(400, 'Essa repetição não tem nenhuma data futura.', { code: 'no_future' });
         const prepared = await validateStory({ clientId: client.id, mediaUrl: series.media_url, ...fields, at: first.at });
 
-        const replaced = await cancelPending(db, series.id, fromSlot, 'Substituído: a repetição mudou.');
-        await db.query(
-          `UPDATE story_series SET status = 'encerrada', end_reason = $2, ended_at = now(), updated_at = now() WHERE id = $1`,
-          [series.id, `Mudou a partir de ${formatBrt(occurrence.date, occurrence.time)}`]
-        );
+        // Corte da regra antiga: o mais cedo entre a data aberta e o início da regra nova (o "A partir de" pode
+        // vir antes), nunca antes de agora. Assim as duas regras nunca ficam agendadas no mesmo dia.
+        const startIso = brtToIso(rule.start_date, '00:00');
+        let cutoffMs = Math.min(Date.parse(fromSlot), startIso ? Date.parse(startIso) : Infinity);
+        cutoffMs = Math.max(cutoffMs, Date.now());
+        const cutoff = new Date(cutoffMs).toISOString();
+        // Data prevista (além do que já foi gerado): grava antes as datas que ficam antes do corte
+        await materializeBefore(db, series, cutoff);
+
         const { rows: [next] } = await db.query(
           `INSERT INTO story_series
              (client_id, material_kind, material_id, delivery_id, title, thumb_url, platform, media_url, story_mode,
@@ -934,8 +997,15 @@ export function registerStoryRoutes(app, deps) {
             rule.kind, rule.interval_days, rule.weekdays, rule.time, rule.start_date, rule.end_kind, rule.end_date,
             rule.max_count, series.id, user?.id || null]
         );
+        // "Só este" feito antes (data cancelada, mudada para lembrete, arrastada) segue valendo na regra nova
+        const carried = await carryExceptions(db, series, next, rule, cutoff);
+        const replaced = await cancelPending(db, series.id, cutoff, 'Substituído: a repetição mudou.', { except: carried });
+        await db.query(
+          `UPDATE story_series SET status = 'encerrada', end_reason = $2, ended_at = now(), updated_at = now() WHERE id = $1`,
+          [series.id, `Mudou a partir de ${formatBrt(occurrence.date, occurrence.time)}`]
+        );
         const created = await materialize(db, next);
-        return { series: seriesView(next), occurrences: created, replaced };
+        return { series: seriesView(next), occurrences: created, replaced, kept: carried.length };
       });
       res.json({ success: true, ...result });
     } catch (error) {
@@ -953,6 +1023,8 @@ export function registerStoryRoutes(app, deps) {
       const result = await withTransaction(async (db) => {
         const series = await lockSeries(db, req.params.seriesId, client.id);
         if (series.status !== 'ativa') throw httpError(409, 'Esta repetição já terminou: cancele só esta data.', { code: 'series_ended' });
+        // Cancelar a partir de uma data prevista: as datas antes dela (ainda não geradas) continuam valendo
+        if (fromSlot) await materializeBefore(db, series, fromSlot);
         const cancelled = await cancelPending(db, series.id, fromSlot, 'Cancelado: repetição removida.');
         await db.query(
           `UPDATE story_series SET status = 'cancelada', end_reason = $2, ended_at = now(), updated_at = now() WHERE id = $1`,
@@ -1011,8 +1083,8 @@ export function registerStoryRoutes(app, deps) {
         if (post.status === 'publicando') throw httpError(409, 'Este post está sendo publicado agora.', { code: 'publishing' });
         if (!['agendado', 'erro'].includes(post.status)) throw httpError(409, 'Esta data já foi publicada ou cancelada.', { code: 'not_scheduled' });
         await db.query(
-          `UPDATE scheduled_posts SET status = 'cancelado', last_error = 'Cancelado: só esta data.', updated_at = now() WHERE id = $1`,
-          [post.id]
+          `UPDATE scheduled_posts SET status = 'cancelado', last_error = $2, updated_at = now() WHERE id = $1`,
+          [post.id, ONLY_THIS_CANCELLED]
         );
         // Repetição que não tem mais nenhuma data: termina (e o material volta, se nada saiu)
         if (series.status === 'ativa' && !nextOccurrence(rowRule(series), Date.now() + 60_000)) {

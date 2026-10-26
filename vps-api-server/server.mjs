@@ -4562,6 +4562,12 @@ async function insertPortalTaskHistory(taskId, action, details, userId) {
 }
 
 async function syncPortalApprovalToKanban(content, teamUser = null) {
+  // Arte enviada pelo detalhe da tarefa de design: quem anda é o card de design (/designer).
+  const designTask = await findPortalContentDesignTask(content);
+  if (designTask) {
+    const result = await approveDesignTaskFromPortal(designTask.id, content.client_id, teamUser);
+    if (result.status === 'ok' || result.status === 'already') return;
+  }
   const { rows: [task] } = await pool.query(
     `SELECT id FROM content_tasks WHERE client_id = $1 AND title = $2 AND kanban_column IN ('envio', 'agendamentos') ORDER BY created_at DESC LIMIT 1`,
     [content.client_id, content.title]
@@ -4577,6 +4583,12 @@ async function syncPortalApprovalToKanban(content, teamUser = null) {
 }
 
 async function syncPortalAdjustmentToKanban(content, note, teamUser = null) {
+  // Arte enviada pelo detalhe da tarefa de design: o card de design vai para Ajustes e a designer é avisada.
+  const designTask = await findPortalContentDesignTask(content);
+  if (designTask) {
+    const result = await requestDesignAdjustmentFromPortal(designTask.id, content.client_id, note, teamUser);
+    if (result.status === 'ok' || result.status === 'already') return;
+  }
   const { rows: [task] } = await pool.query(
     `SELECT id, assigned_to FROM content_tasks WHERE client_id = $1 AND title = $2 AND kanban_column IN ('envio', 'agendamentos') ORDER BY created_at DESC LIMIT 1`,
     [content.client_id, content.title]
@@ -4607,6 +4619,125 @@ async function insertDesignTaskHistoryFromPortal(taskId, action, details = null)
     return;
   }
   await pool.query(`INSERT INTO design_task_history (task_id, action, details) VALUES ($1, $2, $3)`, [taskId, action, details]);
+}
+
+// ── Arte (design_tasks) aprovada ou com ajuste pedido no portal ──
+// Usado pela aba Designer do portal (approve_design_task / request_design_adjustment) e pela
+// biblioteca de conteúdos (approve / request_adjustment de um conteúdo "Arte: ..." ligado ao
+// card). Só mexe em arte aguardando o cliente; o clique repetido não grava nem avisa de novo.
+// Devolve { status: 'ok' | 'already' | 'not_found' | 'conflict' }.
+
+// Vínculo do conteúdo do portal com o card de design (gravado pelo "Enviar via WhatsApp").
+let portalContentDesignLinkPromise = null;
+function ensurePortalContentDesignLink() {
+  if (!portalContentDesignLinkPromise) {
+    portalContentDesignLinkPromise = pool.query(`
+      ALTER TABLE client_portal_contents ADD COLUMN IF NOT EXISTS design_task_id UUID;
+      CREATE INDEX IF NOT EXISTS idx_client_portal_contents_design_task
+        ON client_portal_contents (design_task_id) WHERE design_task_id IS NOT NULL;
+    `).catch((error) => {
+      portalContentDesignLinkPromise = null;
+      throw error;
+    });
+  }
+  return portalContentDesignLinkPromise;
+}
+
+ensurePortalContentDesignLink().catch((error) => {
+  console.error('Failed to ensure client_portal_contents.design_task_id:', error?.message || error);
+});
+
+async function portalContentsHaveDesignLink() {
+  const columns = await getExistingColumns('client_portal_contents').catch(() => null);
+  return !!columns?.has('design_task_id');
+}
+
+/** Card de design de um conteúdo do portal: pelo vínculo ou, no legado, pelo título exato "Arte: <título>". */
+async function findPortalContentDesignTask(content) {
+  if (!content?.id || !content.client_id) return null;
+  if (await portalContentsHaveDesignLink()) {
+    const { rows: [linked] } = await pool.query(
+      'SELECT design_task_id FROM client_portal_contents WHERE id = $1 AND design_task_id IS NOT NULL',
+      [content.id]
+    );
+    if (linked) return { id: linked.design_task_id };
+  }
+  const title = String(content.title || '');
+  if (!title.startsWith('Arte: ')) return null;
+  const { rows: [legacy] } = await pool.query(
+    `SELECT id FROM design_tasks
+      WHERE client_id = $1 AND title = $2 AND kanban_column = 'enviar_cliente'
+      ORDER BY updated_at DESC LIMIT 1`,
+    [content.client_id, title.slice('Arte: '.length)]
+  );
+  return legacy || null;
+}
+
+/** Conteúdos do portal ligados ao card acompanham a decisão (senão a biblioteca seguia 'pendente'). */
+async function syncLinkedPortalArtContents(taskId, status) {
+  try {
+    if (!(await portalContentsHaveDesignLink())) return;
+    if (status === 'aprovado') {
+      await pool.query(
+        `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW()
+          WHERE design_task_id = $1 AND status NOT IN ('aprovado', 'revisao_interna')`,
+        [taskId]
+      );
+    } else {
+      await pool.query(
+        `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW()
+          WHERE design_task_id = $1 AND status = 'pendente'`,
+        [taskId]
+      );
+    }
+  } catch (err) {
+    console.error('[portal-actions] falha ao atualizar a arte na biblioteca do portal', taskId, err?.message || err);
+  }
+}
+
+async function getPortalDesignTaskState(taskId, scopeClientId) {
+  const { rows: [current] } = await pool.query(
+    'SELECT kanban_column FROM design_tasks WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)', [taskId, scopeClientId]
+  );
+  return current || null;
+}
+
+async function approveDesignTaskFromPortal(taskId, scopeClientId, teamUser = null) {
+  const { rows: [approved] } = await pool.query(
+    `UPDATE design_tasks SET kanban_column = 'aprovado', client_approved_at = NOW(), completed_at = NOW(), updated_at = NOW()
+      WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) AND kanban_column = 'enviar_cliente'
+      RETURNING title, client_id`,
+    [taskId, scopeClientId]
+  );
+  if (!approved) {
+    const current = await getPortalDesignTaskState(taskId, scopeClientId);
+    if (!current) return { status: 'not_found' };
+    return { status: current.kanban_column === 'aprovado' ? 'already' : 'conflict' };
+  }
+  await insertDesignTaskHistoryFromPortal(taskId, teamUser ? '✅ Aprovado pela equipe em nome do cliente (Pulse Club)' : '✅ Aprovado pelo cliente via Pulse Club');
+  await syncLinkedPortalArtContents(taskId, 'aprovado');
+  // Notify designers
+  await notifyPortalTeam(approved.client_id, ['admin', 'fotografo', 'designer'], '✅ Arte aprovada pelo cliente', `"${approved.title || 'Arte'}" foi aprovada no Pulse Club`, 'design', '/designer');
+  return { status: 'ok' };
+}
+
+async function requestDesignAdjustmentFromPortal(taskId, scopeClientId, note, teamUser = null) {
+  const { rows: [adjusted] } = await pool.query(
+    `UPDATE design_tasks SET kanban_column = 'ajustes', observations = $1, updated_at = NOW()
+      WHERE id = $2 AND ($3::uuid IS NULL OR client_id = $3::uuid) AND kanban_column = 'enviar_cliente'
+      RETURNING title, client_id`,
+    [note, taskId, scopeClientId]
+  );
+  if (!adjusted) {
+    const current = await getPortalDesignTaskState(taskId, scopeClientId);
+    if (!current) return { status: 'not_found' };
+    return { status: current.kanban_column === 'ajustes' ? 'already' : 'conflict' };
+  }
+  await insertDesignTaskHistoryFromPortal(taskId, teamUser ? '🔧 Ajuste solicitado pela equipe no Pulse Club' : '🔧 Ajuste solicitado pelo cliente via Pulse Club', note);
+  await syncLinkedPortalArtContents(taskId, 'ajuste_solicitado');
+  // Notify designers
+  await notifyPortalTeam(adjusted.client_id, ['admin', 'fotografo', 'designer'], '🔧 Ajuste solicitado na arte', `${teamUser ? 'Equipe' : 'Cliente'} pediu ajuste em "${adjusted.title || 'Arte'}": ${(note || '').substring(0, 80)}`, 'design', '/designer');
+  return { status: 'ok' };
 }
 
 // Ensure client_portal_users table exists (multi-user per company)
@@ -5515,23 +5646,10 @@ app.post('/api/portal-actions', async (req, res) => {
       const { task_id } = req.body;
       if (!task_id) return res.status(400).json({ error: 'task_id required' });
       // Só arte aguardando o cliente; clique repetido não grava nem avisa de novo
-      const { rowCount: designApproved } = await pool.query(
-        `UPDATE design_tasks SET kanban_column = 'aprovado', client_approved_at = NOW(), completed_at = NOW(), updated_at = NOW()
-          WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) AND kanban_column = 'enviar_cliente'`,
-        [task_id, scopeClientId]
-      );
-      if (!designApproved) {
-        const { rows: [currentDesign] } = await pool.query(
-          'SELECT kanban_column FROM design_tasks WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)', [task_id, scopeClientId]
-        );
-        if (!currentDesign) return res.status(404).json({ error: 'Arte não encontrada' });
-        if (currentDesign.kanban_column === 'aprovado') return res.json({ success: true, already_approved: true });
-        return res.status(409).json({ error: 'Esta arte não está aguardando aprovação' });
-      }
-      await insertDesignTaskHistoryFromPortal(task_id, '✅ Aprovado pelo cliente via Pulse Club');
-      // Notify designers
-      const { rows: [taskInfo] } = await pool.query('SELECT title, client_id FROM design_tasks WHERE id = $1', [task_id]);
-      await notifyPortalTeam(taskInfo?.client_id || client_id, ['admin', 'fotografo', 'designer'], '✅ Arte aprovada pelo cliente', `"${taskInfo?.title || 'Arte'}" foi aprovada no Pulse Club`, 'design', '/designer');
+      const result = await approveDesignTaskFromPortal(task_id, scopeClientId);
+      if (result.status === 'not_found') return res.status(404).json({ error: 'Arte não encontrada' });
+      if (result.status === 'already') return res.json({ success: true, already_approved: true });
+      if (result.status === 'conflict') return res.status(409).json({ error: 'Esta arte não está aguardando aprovação' });
       return res.json({ success: true });
     }
 
@@ -5540,23 +5658,10 @@ app.post('/api/portal-actions', async (req, res) => {
       const { task_id, note } = req.body;
       if (!task_id || !note) return res.status(400).json({ error: 'task_id and note required' });
       // Só arte aguardando o cliente; pedido repetido (já em ajustes) não grava nem avisa de novo
-      const { rowCount: designAdjusted } = await pool.query(
-        `UPDATE design_tasks SET kanban_column = 'ajustes', observations = $1, updated_at = NOW()
-          WHERE id = $2 AND ($3::uuid IS NULL OR client_id = $3::uuid) AND kanban_column = 'enviar_cliente'`,
-        [note, task_id, scopeClientId]
-      );
-      if (!designAdjusted) {
-        const { rows: [currentDesign] } = await pool.query(
-          'SELECT kanban_column FROM design_tasks WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)', [task_id, scopeClientId]
-        );
-        if (!currentDesign) return res.status(404).json({ error: 'Arte não encontrada' });
-        if (currentDesign.kanban_column === 'ajustes') return res.json({ success: true, already_requested: true });
-        return res.status(409).json({ error: 'Esta arte não está aguardando aprovação' });
-      }
-      await insertDesignTaskHistoryFromPortal(task_id, '🔧 Ajuste solicitado pelo cliente via Pulse Club', note);
-      // Notify designers
-      const { rows: [taskInfo] } = await pool.query('SELECT title, assigned_to, client_id FROM design_tasks WHERE id = $1', [task_id]);
-      await notifyPortalTeam(taskInfo?.client_id || client_id, ['admin', 'fotografo', 'designer'], '🔧 Ajuste solicitado na arte', `Cliente pediu ajuste em "${taskInfo?.title || 'Arte'}": ${(note || '').substring(0, 80)}`, 'design', '/designer');
+      const result = await requestDesignAdjustmentFromPortal(task_id, scopeClientId, note);
+      if (result.status === 'not_found') return res.status(404).json({ error: 'Arte não encontrada' });
+      if (result.status === 'already') return res.json({ success: true, already_requested: true });
+      if (result.status === 'conflict') return res.status(409).json({ error: 'Esta arte não está aguardando aprovação' });
       return res.json({ success: true });
     }
 

@@ -317,6 +317,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           season_month: now.getMonth() + 1,
           season_year: now.getFullYear(),
           uploaded_by: user?.id,
+          // Vínculo com o card: a aprovação/ajuste pela biblioteca do portal anda este card
+          design_task_id: task.id,
         } as any).select('id').single();
         portalContentId = (portalContent as any)?.id || null;
         
@@ -371,17 +373,28 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
     await updateTask.mutateAsync({ id: task.id, kanban_column: 'aprovado', client_approved_at: new Date().toISOString(), completed_at: new Date().toISOString(), ...timerStopFields() } as any);
     await addHistory.mutateAsync({ task_id: task.id, action: 'Aprovado pelo cliente', user_id: user?.id });
 
-    // Update portal content status to approved
+    // Update portal content status to approved: pelo vínculo com o card e, no legado (enviado
+    // antes do vínculo), pelo título exato "Arte: <título>" — o ilike pegava "Post Promo 2" no lugar de "Post Promo".
     if (task.client_id) {
-      const { data: portalContents } = await supabase
+      const approvedAt = new Date().toISOString();
+      const { data: linked, error: linkedError } = await supabase
         .from('client_portal_contents')
-        .select('id')
+        .update({ status: 'aprovado', approved_at: approvedAt } as any)
         .eq('client_id', task.client_id)
-        .ilike('title', `%${task.title}%`)
-        .eq('status', 'pendente')
-        .limit(1);
-      if (portalContents && portalContents.length > 0) {
-        await supabase.from('client_portal_contents').update({ status: 'aprovado', approved_at: new Date().toISOString() }).eq('id', portalContents[0].id);
+        .eq('design_task_id', task.id)
+        .eq('status', 'pendente');
+      if (linkedError || !Array.isArray(linked) || linked.length === 0) {
+        const { data: portalContents } = await supabase
+          .from('client_portal_contents')
+          .select('id')
+          .eq('client_id', task.client_id)
+          .eq('title', `Arte: ${task.title}`)
+          .eq('status', 'pendente')
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (portalContents && portalContents.length > 0) {
+          await supabase.from('client_portal_contents').update({ status: 'aprovado', approved_at: approvedAt }).eq('id', portalContents[0].id);
+        }
       }
     }
 

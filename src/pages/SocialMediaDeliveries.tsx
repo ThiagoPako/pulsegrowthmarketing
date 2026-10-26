@@ -27,10 +27,11 @@ import PostingCalendar from '@/components/social/PostingCalendar';
 import OnboardingTracker from '@/components/social/OnboardingTracker';
 import SocialMediaKanban from '@/components/social/SocialMediaKanban';
 import ClientStatusBadge, { getClientStatus } from '@/components/social/ClientStatusBadge';
-import { Loader2 } from 'lucide-react';
+import { BellRing, Loader2 } from 'lucide-react';
+import { brtToIso } from '@/lib/postingSchedule';
 import AutoPostScheduleForm, { type AutoPostFormValue } from '@/components/social/AutoPostScheduleForm';
 import AutoPostQueue from '@/components/social/AutoPostQueue';
-import { createScheduledPost, suggestPublishType, cancelLinkedScheduledPosts, fetchScheduledPosts, type ScheduledPost } from '@/services/socialPostsApi';
+import { createScheduledPost, suggestPublishType, cancelLinkedScheduledPosts, fetchScheduledPosts, moveStoryReminder, storyManagedBySchedule, type ScheduledPost } from '@/services/socialPostsApi';
 import type { AutoPostInfo } from '@/components/social/SocialMediaKanban';
 
 interface SocialDelivery {
@@ -173,6 +174,8 @@ export default function SocialMediaDeliveries() {
   const [schedTime, setSchedTime] = useState('');
   const [schedPlatform, setSchedPlatform] = useState('');
   const [schedSaving, setSchedSaving] = useState(false);
+  // Story em "Lembrete com link" (Agendamentos): o Reagendar daqui muda só a data e a hora, com o mesmo link
+  const [reminderPost, setReminderPost] = useState<ScheduledPost | null>(null);
   const [autoPost, setAutoPost] = useState<AutoPostFormValue>({
     enabled: false, platform: 'instagram', publishType: 'reels', mediaUrl: '', caption: '',
   });
@@ -412,6 +415,7 @@ export default function SocialMediaDeliveries() {
   };
 
   const openSchedule = async (d: SocialDelivery) => {
+    setReminderPost(null);
     setSchedulingItem(d);
     setSchedDate(d.posted_at || '');
     setSchedTime(d.scheduled_time || '');
@@ -431,6 +435,18 @@ export default function SocialMediaDeliveries() {
         const existing = (await fetchScheduledPosts({ delivery_ids: [d.id] }))
           .find(p => p.delivery_id === d.id && (p.status === 'agendado' || p.status === 'erro'));
         if (existing) {
+          // Story do Agendamentos: a repetição muda por lá; o lembrete remarca aqui mantendo o modo e o link
+          const managed = storyManagedBySchedule(existing);
+          if (managed === 'serie') {
+            setScheduleDialogOpen(false);
+            setSchedulingItem(null);
+            toast.info('Esta entrega tem stories em repetição: mude pelo Agendamentos.');
+            return;
+          }
+          if (managed === 'lembrete') {
+            setReminderPost(existing);
+            return;
+          }
           setAutoPost({
             enabled: true,
             platform: existing.platform,
@@ -453,6 +469,11 @@ export default function SocialMediaDeliveries() {
 
   const handleSchedule = async () => {
     if (!schedulingItem || !schedDate) { toast.error('Selecione a data de postagem'); return; }
+    const reminderAt = reminderPost ? brtToIso(schedDate, schedTime) : null;
+    if (reminderPost) {
+      if (!reminderAt) { toast.error('Informe o horário do lembrete'); return; }
+      if (Date.parse(reminderAt) < Date.now() - 60_000) { toast.error('O horário já passou. Escolha um horário futuro.'); return; }
+    }
 
     // Validação da postagem automática antes de gravar qualquer coisa
     if (autoPost.enabled) {
@@ -466,9 +487,8 @@ export default function SocialMediaDeliveries() {
 
     setSchedSaving(true);
     try {
-    const platformLabel = autoPost.enabled
-      ? (autoPost.platform === 'both' ? 'Instagram, Facebook' : autoPost.platform === 'instagram' ? 'Instagram' : 'Facebook')
-      : 'Instagram, Facebook';
+    const target = reminderPost ? reminderPost.platform : autoPost.enabled ? autoPost.platform : 'both';
+    const platformLabel = target === 'both' ? 'Instagram, Facebook' : target === 'instagram' ? 'Instagram' : 'Facebook';
     const { error } = await supabase.from('social_media_deliveries').update({
       posted_at: schedDate, scheduled_time: schedTime || null,
       platform: platformLabel, status: 'agendado',
@@ -476,7 +496,19 @@ export default function SocialMediaDeliveries() {
     } as any).eq('id', schedulingItem.id);
     if (error) { reportSaveError('schedule', error); return; }
 
-    if (!autoPost.enabled) {
+    if (reminderPost && reminderAt) {
+      try {
+        await moveStoryReminder(reminderPost.id, reminderAt);
+      } catch (err) {
+        const prev = schedulingItem as SocialDelivery & { caption?: string | null };
+        await supabase.from('social_media_deliveries').update({
+          posted_at: prev.posted_at, scheduled_time: prev.scheduled_time, platform: prev.platform, status: prev.status,
+        } as any).eq('id', prev.id);
+        toast.error(err instanceof Error ? err.message : 'Não foi possível remarcar o lembrete');
+        fetchData();
+        return;
+      }
+    } else if (!autoPost.enabled) {
       // Reagendado sem postagem automática: o post automático antigo (outro horário) não pode sair
       await cancelLinkedScheduledPosts({ deliveryId: schedulingItem.id, reason: 'reagendado sem postagem automática' });
     } else {
@@ -542,7 +574,7 @@ export default function SocialMediaDeliveries() {
       message: `Seu conteúdo "${schedulingItem.title}" foi agendado para ${schedDate.split('-').reverse().join('/')}${schedTime ? ` às ${schedTime}` : ''}.`,
       type: 'info',
     } as any);
-    toast.success(autoPost.enabled ? 'Postagem automática agendada! O sistema publica sozinho no horário.' : 'Conteúdo agendado para postagem');
+    toast.success(reminderPost ? 'Lembrete remarcado' : autoPost.enabled ? 'Postagem automática agendada! O sistema publica sozinho no horário.' : 'Conteúdo agendado para postagem');
     setScheduleDialogOpen(false); setSchedulingItem(null); fetchData();
     } finally {
       setSchedSaving(false);
@@ -1025,7 +1057,7 @@ export default function SocialMediaDeliveries() {
         // A lista vem do horário mais novo para o mais antigo: fica o post mais recente de cada entrega
         posts.forEach(p => {
           if (!p.delivery_id || p.status === 'cancelado' || map[p.delivery_id]) return;
-          map[p.delivery_id] = { status: p.status, last_error: p.last_error };
+          map[p.delivery_id] = { status: p.status, last_error: p.last_error, mode: storyManagedBySchedule(p) };
         });
         setAutoPostByDelivery(map);
       })
@@ -1756,20 +1788,30 @@ export default function SocialMediaDeliveries() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Data da postagem *</Label><Input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)} /></div>
-                <div><Label>Horário {autoPost.enabled ? '*' : '(opcional)'}</Label><Input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)} /></div>
+                <div><Label>Horário {autoPost.enabled || reminderPost ? '*' : '(opcional)'}</Label><Input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)} /></div>
               </div>
-              <AutoPostScheduleForm
-                clientId={schedulingItem.client_id}
-                value={autoPost}
-                onChange={setAutoPost}
-              />
+              {reminderPost ? (
+                <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+                  <BellRing size={14} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="font-semibold text-foreground">Lembrete com link</p>
+                    <p className="break-all text-muted-foreground">{reminderPost.story_link_text || 'Clique aqui'} · {reminderPost.story_link || '—'}</p>
+                  </div>
+                </div>
+              ) : (
+                <AutoPostScheduleForm
+                  clientId={schedulingItem.client_id}
+                  value={autoPost}
+                  onChange={setAutoPost}
+                />
+              )}
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setScheduleDialogOpen(false)} disabled={schedSaving}>Cancelar</Button>
             <Button onClick={handleSchedule} className="gap-1.5" disabled={schedSaving}>
-              {schedSaving ? <Loader2 size={14} className="animate-spin" /> : autoPost.enabled ? <Zap size={14} /> : <CalendarCheck size={14} />}
-              {autoPost.enabled ? 'Agendar postagem automática' : 'Confirmar'}
+              {schedSaving ? <Loader2 size={14} className="animate-spin" /> : reminderPost ? <BellRing size={14} /> : autoPost.enabled ? <Zap size={14} /> : <CalendarCheck size={14} />}
+              {reminderPost ? 'Remarcar lembrete' : autoPost.enabled ? 'Agendar postagem automática' : 'Confirmar'}
             </Button>
           </DialogFooter>
         </DialogContent>

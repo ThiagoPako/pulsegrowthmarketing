@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import {
   Film, Palette, Image, Megaphone, CheckCircle2, Clock, CalendarClock,
   Send, Zap, Eye, MessageSquare, AlertTriangle, ExternalLink, Link2,
-  Scissors, Flame, Rocket, Sparkles, ChevronLeft, ChevronRight, Download, Trash2
+  Scissors, Flame, Rocket, Sparkles, ChevronLeft, ChevronRight, Download, Trash2, BellRing, Repeat2
 } from 'lucide-react';
 import DeadlineBadge from '@/components/DeadlineBadge';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -82,6 +82,8 @@ interface SocialDelivery {
 export interface AutoPostInfo {
   status: string;
   last_error: string | null;
+  /** Story do Agendamentos: 'lembrete' (a equipe posta pelo app com o link) ou 'serie' (repetição) */
+  mode?: 'lembrete' | 'serie' | null;
 }
 
 interface KanbanColumn {
@@ -642,9 +644,14 @@ function DeliveryCard({
                 <AlertTriangle size={9} /> Postagem automática falhou
               </Badge>
             )}
-            {columnId === 'agendado' && (autoPost?.status === 'agendado' || autoPost?.status === 'publicando') && (
+            {columnId === 'agendado' && autoPost?.status === 'agendado' && autoPost.mode === 'lembrete' && (
+              <Badge variant="outline" className="text-[9px] px-1.5 py-0 gap-1 border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                <BellRing size={9} /> Lembrete
+              </Badge>
+            )}
+            {columnId === 'agendado' && autoPost?.mode !== 'lembrete' && (autoPost?.status === 'agendado' || autoPost?.status === 'publicando') && (
               <Badge variant="outline" className="text-[9px] px-1.5 py-0 gap-1 text-primary border-primary/30">
-                <Zap size={9} /> {autoPost.status === 'publicando' ? 'Publicando…' : 'Automática'}
+                {autoPost.mode === 'serie' ? <Repeat2 size={9} /> : <Zap size={9} />} {autoPost.status === 'publicando' ? 'Publicando…' : 'Automática'}
               </Badge>
             )}
           </div>

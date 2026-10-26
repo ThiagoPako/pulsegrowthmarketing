@@ -10197,6 +10197,25 @@ app.post('/api/social-posts', async (req, res) => {
     const { user } = await verifySocialManager(req);
     await ensureSocialPostsSchema();
     const { delivery_id, content_task_id } = req.body || {};
+    // Story com lembrete ou em repetição (Agendamentos): trocar por um post automático daqui perderia o link
+    // e o lembrete. Muda pelo Agendamentos, onde a pessoa escolhe o modo.
+    if (delivery_id) {
+      const { rows: [story] } = await pool.query(
+        `SELECT story_mode, story_series_id FROM scheduled_posts
+          WHERE delivery_id::text = $1 AND status IN ('agendado','erro')
+            AND (story_mode = 'lembrete' OR story_series_id IS NOT NULL)
+          LIMIT 1`,
+        [String(delivery_id)]
+      );
+      if (story) {
+        return res.status(409).json({
+          error: story.story_series_id
+            ? 'Esta entrega tem stories em repetição: mude pelo Agendamentos.'
+            : 'Este story é um lembrete com link: remarque pelo Agendamentos.',
+          code: 'story_managed',
+        });
+      }
+    }
     const post = await prepareScheduledPost(req.body || {});
 
     // Evita duplicar a mesma entrega na fila (o post com erro também sai, senão "Publicar agora" nele duplicaria)
@@ -10247,13 +10266,24 @@ app.post('/api/social-posts/cancel-linked', async (req, res) => {
     if (isUuid(delivery_id)) { params.push(delivery_id); conds.push(`delivery_id = $${params.length}`); }
     if (isUuid(content_task_id)) { params.push(content_task_id); conds.push(`content_task_id = $${params.length}`); }
     if (!conds.length) return res.status(400).json({ error: 'delivery_id ou content_task_id é obrigatório' });
+    // Repetição de stories ligada (storySeries.mjs): continua se o material segue valendo (o "Postado" manual
+    // marca só a data vencida) ou acaba e avisa quem criou se a entrega/o card saiu do aprovado. As datas das
+    // repetições que continuam ficam fora deste cancelamento. Se a conferência falhar, cancela tudo, como antes.
+    const series = await scheduling?.stories?.onLinkedCancel({
+      deliveryId: isUuid(delivery_id) ? delivery_id : null,
+      contentTaskId: isUuid(content_task_id) ? content_task_id : null,
+      user,
+    }).catch((error) => {
+      console.error('[stories] cancelamento ligado:', error?.message || error);
+      return null;
+    });
     params.push(`Cancelado: ${String(reason || 'o card saiu de Agendado').slice(0, 200)}.`);
     const { rowCount } = await pool.query(
       `UPDATE scheduled_posts SET status='cancelado', last_error=$${params.length}, updated_at=now()
-        WHERE status IN ('agendado','erro') AND (${conds.join(' OR ')})`,
+        WHERE status IN ('agendado','erro') AND (${conds.join(' OR ')})${series ? ' AND story_series_id IS NULL' : ''}`,
       params
     );
-    res.json({ success: true, cancelled: rowCount });
+    res.json({ success: true, cancelled: rowCount, series: series || null });
   } catch (error) {
     res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
   }

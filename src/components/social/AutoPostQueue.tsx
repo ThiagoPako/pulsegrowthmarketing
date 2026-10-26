@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, RefreshCw, Send, XCircle, Zap, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Loader2, RefreshCw, Send, XCircle, Zap, AlertTriangle, ExternalLink, BellRing } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   fetchScheduledPosts,
@@ -14,6 +14,7 @@ import {
   publishScheduledPostNow,
   PublishDeferredError,
   SCHEDULED_POST_STATUS_LABELS,
+  storyManagedBySchedule,
   type ScheduledPost,
   type ScheduledPostStatus,
 } from '@/services/socialPostsApi';
@@ -111,6 +112,11 @@ export function AutoPostQueue({ className }: AutoPostQueueProps) {
             <div className="flex-1 min-w-0 space-y-1">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline" className={cn('text-[11px]', STATUS_STYLES[p.status])}>{SCHEDULED_POST_STATUS_LABELS[p.status]}</Badge>
+                {storyManagedBySchedule(p) === 'lembrete' && (
+                  <Badge variant="outline" className="gap-1 text-[11px] border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                    <BellRing size={10} /> Lembrete
+                  </Badge>
+                )}
                 <span className="font-medium text-sm truncate">{p.client_name || 'Cliente'}</span>
                 <span className="text-xs text-muted-foreground">{PLATFORM_LABEL[p.platform]} · {p.publish_type}</span>
               </div>
@@ -129,9 +135,11 @@ export function AutoPostQueue({ className }: AutoPostQueueProps) {
             </div>
             {(p.status === 'agendado' || p.status === 'erro') && (
               <div className="flex gap-2 shrink-0">
-                <Button size="sm" variant="outline" className="h-8 gap-1.5" disabled={busyId === p.id} onClick={() => handlePublishNow(p.id)}>
-                  {busyId === p.id ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Publicar agora
-                </Button>
+                {storyManagedBySchedule(p) !== 'lembrete' && (
+                  <Button size="sm" variant="outline" className="h-8 gap-1.5" disabled={busyId === p.id} onClick={() => handlePublishNow(p.id)}>
+                    {busyId === p.id ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Publicar agora
+                  </Button>
+                )}
                 <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-destructive" disabled={busyId === p.id} onClick={() => handleCancel(p.id)}>
                   <XCircle size={13} /> Cancelar
                 </Button>

@@ -44,6 +44,10 @@ export interface ScheduledPost {
   media_items?: PostMediaItem[] | null;
   story_link?: string | null;
   story_link_text?: string | null;
+  /** Story do Agendamentos: 'lembrete' = a equipe posta pelo app com o link (nunca sai sozinho) */
+  story_mode?: 'auto' | 'lembrete' | null;
+  /** Data de uma repetição de stories (Agendamentos) */
+  story_series_id?: string | null;
   caption: string | null;
   scheduled_at: string;
   status: ScheduledPostStatus;
@@ -75,6 +79,23 @@ export const SCHEDULED_POST_STATUS_LABELS: Record<ScheduledPostStatus, string> =
   erro: 'Erro',
   cancelado: 'Cancelado',
 };
+
+/**
+ * Story que o Agendamentos cuida: 'lembrete' (lembrete com link) ou 'serie' (repetição). Nas telas do Social
+ * ele não vira postagem automática: o lembrete aparece como "Lembrete" e a repetição muda pelo Agendamentos.
+ */
+export function storyManagedBySchedule(post: Pick<ScheduledPost, 'story_mode' | 'story_series_id'> | null | undefined): 'lembrete' | 'serie' | null {
+  if (!post) return null;
+  if (post.story_series_id) return 'serie';
+  if (post.story_mode === 'lembrete') return 'lembrete';
+  return null;
+}
+
+/** Remarca um lembrete avulso (mesmo modo e mesmo link), pela Entregas Social. */
+export async function moveStoryReminder(postId: string, scheduledAt: string): Promise<void> {
+  const { error } = await invokeVpsFunction(`story-reminders/${postId}/reschedule`, { body: { scheduled_at: scheduledAt } });
+  if (error) throw new Error(error.message || 'Não foi possível remarcar o lembrete');
+}
 
 export async function fetchConnectedAccounts(clientId: string): Promise<ConnectedSocialAccount[]> {
   const { data, error } = await invokeVpsFunction(`social-posts/accounts/${clientId}`, { method: 'GET' });

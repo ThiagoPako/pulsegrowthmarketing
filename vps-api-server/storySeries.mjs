@@ -580,6 +580,83 @@ export function registerStoryRoutes(app, deps) {
     return created;
   }
 
+  /**
+   * Outra tela (Entregas Social, Kanban de Conteúdo) cancelou as postagens pendentes de uma entrega ou de um card
+   * (/api/social-posts/cancel-linked), já com a entrega e o card mudados. A repetição de stories ligada a eles:
+   * - continua se o material segue valendo para a repetição (entrega agendada ou postada, card arquivado). O
+   *   "Postado" manual marca só a data que já venceu e esperava o "Postado" (o lembrete); as próximas seguem;
+   * - acaba se a entrega ou o card saiu do aprovado (alteração, volta de coluna, entrega fora de Agendado,
+   *   exclusão): as datas pendentes saem e quem criou a repetição é avisado.
+   * Devolve { kept, ended } (ids das séries). Quem chamou deixa de fora do cancelamento as datas das que continuam.
+   */
+  async function onLinkedCancel({ deliveryId = null, contentTaskId = null, user = null } = {}) {
+    await ready();
+    deliveryId = isUuid(deliveryId) ? deliveryId : null;
+    contentTaskId = isUuid(contentTaskId) ? contentTaskId : null;
+    if (!deliveryId && !contentTaskId) return { kept: [], ended: [] };
+    const { rows: list } = await pool.query(
+      `SELECT * FROM story_series
+        WHERE status = 'ativa'
+          AND (($1::uuid IS NOT NULL AND delivery_id = $1::uuid)
+               OR ($2::uuid IS NOT NULL AND material_kind = 'conteudo' AND material_id = $2::uuid))`,
+      [deliveryId, contentTaskId]
+    );
+    // Lembrete avulso (fora de repetição) de uma entrega marcada como postada: fica "Postado", não cancelado
+    await pool.query(
+      `UPDATE scheduled_posts sp
+          SET status = 'publicado', published_at = now(), manual_posted_by = $3, last_error = NULL,
+              result = $4::jsonb, updated_at = now()
+         FROM social_media_deliveries d
+        WHERE d.id = sp.delivery_id AND d.status = 'postado'
+          AND sp.story_mode = 'lembrete' AND sp.story_series_id IS NULL AND sp.status = 'agendado'
+          AND (($1::uuid IS NOT NULL AND sp.delivery_id = $1::uuid) OR ($2::uuid IS NOT NULL AND sp.content_task_id = $2::uuid))`,
+      [deliveryId, contentTaskId, user?.id || null, JSON.stringify([{ manual: true, via: 'entrega postada' }])]
+    );
+    const kept = [];
+    const ended = [];
+    for (const peek of list) {
+      const problem = await materialProblem(peek);
+      const outcome = await withTransaction(async (db) => {
+        const { rows: [series] } = await db.query(`SELECT * FROM story_series WHERE id = $1 FOR UPDATE`, [peek.id]);
+        if (!series || series.status !== 'ativa') return null;
+        if (problem) {
+          await cancelPending(db, series.id, null, `Cancelado: ${problem}.`);
+          await endSeries(db, series, 'cancelada', problem, user);
+          return { ended: series };
+        }
+        const { rows: [delivery] } = series.delivery_id
+          ? await db.query(`SELECT status FROM social_media_deliveries WHERE id = $1`, [series.delivery_id])
+          : { rows: [] };
+        if (delivery?.status === 'postado') {
+          await db.query(
+            `UPDATE scheduled_posts
+                SET status = 'publicado', published_at = now(), manual_posted_by = $2, last_error = NULL,
+                    result = $3::jsonb, updated_at = now()
+              WHERE id = (SELECT id FROM scheduled_posts
+                           WHERE story_series_id = $1 AND status = 'agendado' AND scheduled_at <= now()
+                           ORDER BY scheduled_at DESC LIMIT 1 FOR UPDATE)`,
+            [series.id, user?.id || null, JSON.stringify([{ manual: true, via: 'entrega postada' }])]
+          );
+        }
+        return { kept: series };
+      });
+      if (outcome?.kept) kept.push(String(outcome.kept.id));
+      if (outcome?.ended) {
+        ended.push(String(outcome.ended.id));
+        if (outcome.ended.created_by) {
+          const client = await clientRow(outcome.ended.client_id);
+          await notifyUser(outcome.ended.created_by, {
+            title: 'Repetição de stories encerrada',
+            message: `${client?.company_name || 'Cliente'}: "${outcome.ended.title || 'Story'}" saiu da repetição porque ${problem}.`,
+            link: `/agendamentos?cliente=${outcome.ended.client_id}`,
+            city: clientCityValue(client),
+          });
+        }
+      }
+    }
+    return { kept, ended };
+  }
+
   let generating = false;
   /** Todas as séries ativas (uma instância por vez; a chave única segura mesmo assim). */
   async function generateAll({ now = Date.now() } = {}) {
@@ -883,6 +960,38 @@ export function registerStoryRoutes(app, deps) {
     }
   });
 
+  // Remarcar um lembrete avulso pela Entregas Social: muda só a data e a hora, com o mesmo modo e o mesmo link
+  app.post('/api/story-reminders/:postId/reschedule', async (req, res) => {
+    try {
+      const { user } = await verifyUser(req);
+      await ready();
+      if (!isUuid(req.params.postId)) throw httpError(404, 'Lembrete não encontrado');
+      const whenMs = Date.parse(String(req.body?.scheduled_at || ''));
+      if (!Number.isFinite(whenMs)) throw httpError(400, 'Escolha a data e a hora');
+      if (whenMs < Date.now() - 60_000) throw httpError(400, 'O horário escolhido já passou. Escolha um horário futuro.', { code: 'past_auto' });
+      const post = await withTransaction(async (db) => {
+        const { rows: [row] } = await db.query(
+          `SELECT * FROM scheduled_posts WHERE id = $1 AND story_mode = 'lembrete' FOR UPDATE`,
+          [req.params.postId]
+        );
+        if (!row) throw httpError(404, 'Lembrete não encontrado');
+        await assertReminderAccess(user, row.client_id);
+        if (row.story_series_id) throw httpError(409, 'Este story faz parte de uma repetição: mude pelo Agendamentos.', { code: 'series_post' });
+        if (!['agendado', 'erro'].includes(row.status)) throw httpError(409, 'Este lembrete já foi postado ou cancelado.', { code: 'not_scheduled' });
+        const { rows: [moved] } = await db.query(
+          `UPDATE scheduled_posts
+              SET scheduled_at = $2, status = 'agendado', reminder_sent_at = NULL, reminder_followup_at = NULL, updated_at = now()
+            WHERE id = $1 RETURNING id, scheduled_at, story_mode, story_link, story_link_text`,
+          [row.id, new Date(whenMs).toISOString()]
+        );
+        return moved;
+      });
+      res.json({ success: true, post: { ...post, scheduled_at: isoOf(post.scheduled_at) } });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
   // ── Repetição: criar ──
   app.post('/api/scheduling/stories/series', async (req, res) => {
     try {
@@ -1117,5 +1226,5 @@ export function registerStoryRoutes(app, deps) {
     }).catch((error) => logger.error('[stories] esquema não criado:', error?.message || error));
   }
 
-  return { ready, linkDefaults, generateAll, generateOne, processReminders, seriesView };
+  return { ready, linkDefaults, generateAll, generateOne, processReminders, seriesView, onLinkedCancel };
 }

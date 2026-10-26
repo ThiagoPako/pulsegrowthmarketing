@@ -7380,6 +7380,8 @@ function warmPortal480pCache(sourcePath, cachedFile) {
     '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-threads', '1',
     '-c:a', 'aac', '-b:a', '96k',
     '-movflags', '+faststart',
+    // O arquivo temporário termina em .tmp: sem -f o ffmpeg não escolhe o formato e falhava sempre
+    '-f', 'mp4',
     '-y', tempFile,
   ], { timeout: 600000 }))
     .then(() => {
@@ -11081,6 +11083,11 @@ const DB_QUERY_TABLE_RULES = {
   // bônus de salário (Financeiro → Salários); o banner do colaborador usa /api/me/salary-bonuses
   salary_bonuses: { read: 'team', write: 'team' },
   expense_categories: { read: DB_QUERY_ENDO_ROLES, write: DB_QUERY_ENDO_ROLES },
+  // Pulse Academy: trilhas, módulos e aulas só o admin cria e altera (o caminho do vídeo
+  // decide qual arquivo o stream entrega). O progresso (user_training_progress) segue aberto.
+  training_tracks: { write: 'admin' },
+  training_modules: { write: 'admin' },
+  training_lessons: { write: 'admin' },
 };
 
 // Artes: excluir um card (e o histórico dele) é de admin/social_media, como no detalhe da
@@ -15227,6 +15234,7 @@ app.post('/api/quick-chat', async (req, res) => {
 //   1. nginx denies /uploads/training-videos/* (returns 403)
 //   2. /api/training/sign requires a valid logged-in user JWT
 //   3. /api/training/stream requires a short-lived (10 min) signed token bound to lessonId + user
+//      (own secret: it is never a session token)
 //   4. Stream response forces inline disposition, no-store cache, range support
 const TRAINING_VIDEO_ROOT = process.env.TRAINING_VIDEO_ROOT || '/var/www/html/uploads/training-videos';
 const TRAINING_VIDEO_ROOTS = Array.from(new Set([
@@ -15240,42 +15248,119 @@ const TRAINING_VIDEO_ROOTS = Array.from(new Set([
   path.resolve('/var/www/uploads'),
   path.resolve('/var/www/html/uploads'),
 ]));
-const TRAINING_STREAM_TTL = 60 * 10; // 10 min
+const TRAINING_STREAM_TTL = 60 * 10; // 10 min (o player pede outro token quando vence)
+// Segredo próprio do token do vídeo. Assinado com o JWT_SECRET ele valia como login da
+// equipe (verifyUser, /api/auth/refresh, WebSockets) para quem pegasse a URL da aula.
+const TRAINING_STREAM_SECRET = String(process.env.TRAINING_STREAM_SECRET || '').trim()
+  || crypto.createHmac('sha256', String(JWT_SECRET)).update('pulse:training-stream').digest('hex');
+// Só vídeo sai pelo stream (antes qualquer arquivo com o mesmo nome, até o .env).
+const TRAINING_VIDEO_EXTENSIONS = new Set(['.mp4', '.m4v', '.mov', '.qt', '.webm', '.mkv', '.avi', '.mpg', '.mpeg', '.3gp', '.ogv', '.wmv']);
+// Busca por nome (vídeo antigo com caminho errado no banco): só nas pastas de upload,
+// nunca em /var/www ou /var/www/html (onde ficam o código e o .env).
+const TRAINING_FALLBACK_SEARCH_ROOTS = Array.from(new Set([
+  path.resolve('/var/www/html/uploads'),
+  path.resolve('/var/www/uploads'),
+]));
+const TRAINING_FALLBACK_MISS_MS = 60_000;
+const TRAINING_FALLBACK_HIT_MS = 10 * 60_000;
+const trainingFallbackMisses = new Map(); // nome do arquivo -> quando não achou
+const trainingFallbackHits = new Map();   // nome do arquivo -> { abs, at }
+const trainingRootRealpaths = new Map();
+// Prévia 480p de .mov que falhou: não relança o ffmpeg a cada abertura da aula
+const TRAINING_TRANSCODE_RETRY_MS = 6 * 60 * 60_000;
+const trainingTranscodeFailures = new Map();
 
 function getTrainingStreamContentType(filePathOrUrl = '') {
   return getPortalMediaContentType(filePathOrUrl);
 }
 
-async function ensureTrainingPlayableSource(sourcePath, lessonId) {
-  const ext = path.extname(sourcePath || '').toLowerCase();
-  if (ext !== '.mov') return { filePath: sourcePath, contentType: getTrainingStreamContentType(sourcePath) };
-
-  const cacheKey = crypto.createHash('md5').update(`${lessonId}:${sourcePath}`).digest('hex');
-  const cachedFile = path.join(TRANSCODE_CACHE_DIR, `training_${cacheKey}.mp4`);
-
-  if (fs.existsSync(cachedFile)) {
-    return { filePath: cachedFile, contentType: 'video/mp4' };
-  }
-
-  // Kick off transcode in the background — do NOT block the player. Most .mov files
-  // from iPhone/macOS are H.264/AAC and browsers will play them when served as
-  // video/mp4 with byte-range support. Next play will hit the cached MP4.
-  warmPortal480pCache(sourcePath, cachedFile).catch((error) => {
-    console.error('[training] background transcode error:', error?.message || error);
-  });
-
-  return { filePath: sourcePath, contentType: 'video/mp4' };
+function isTrainingVideoName(fileName) {
+  const base = path.basename(String(fileName || ''));
+  return Boolean(base) && !base.startsWith('.') && TRAINING_VIDEO_EXTENSIONS.has(path.extname(base).toLowerCase());
 }
 
-function resolveTrainingFile(videoPathOrUrl) {
+async function statTrainingFile(abs) {
+  try {
+    const stat = await fs.promises.stat(abs);
+    return stat.isFile() ? stat : null;
+  } catch {
+    return null;
+  }
+}
+
+async function realTrainingRoot(root) {
+  if (trainingRootRealpaths.has(root)) return trainingRootRealpaths.get(root);
+  const real = await fs.promises.realpath(root).catch(() => null);
+  if (real) trainingRootRealpaths.set(root, real);
+  return real;
+}
+
+/** O arquivo (seguindo links) é vídeo e fica dentro de uma pasta de vídeo/upload conhecida. */
+async function isInsideTrainingRoots(abs) {
+  const real = await fs.promises.realpath(abs).catch(() => null);
+  if (!real || !isTrainingVideoName(real)) return false;
+  for (const root of [...TRAINING_VIDEO_ROOTS, ...TRAINING_FALLBACK_SEARCH_ROOTS]) {
+    const realRoot = await realTrainingRoot(root);
+    if (realRoot && real.startsWith(realRoot + path.sep)) return true;
+  }
+  return false;
+}
+
+async function searchTrainingFileByName(base) {
+  const hit = trainingFallbackHits.get(base);
+  if (hit && Date.now() - hit.at < TRAINING_FALLBACK_HIT_MS && await statTrainingFile(hit.abs)) return hit.abs;
+  const missAt = trainingFallbackMisses.get(base);
+  if (missAt && Date.now() - missAt < TRAINING_FALLBACK_MISS_MS) return null;
+
+  let found = null;
+  for (const r of TRAINING_FALLBACK_SEARCH_ROOTS) {
+    if (found) break;
+    const stack = [r];
+    let steps = 0;
+    while (stack.length && steps < 5000 && !found) {
+      const cur = stack.pop();
+      steps++;
+      let entries;
+      try { entries = await fs.promises.readdir(cur, { withFileTypes: true }); } catch { continue; }
+      for (const e of entries) {
+        if (e.name.startsWith('.')) continue;
+        const full = path.join(cur, e.name);
+        if (e.isDirectory()) {
+          if (e.name !== 'node_modules') stack.push(full);
+        } else if (e.isFile() && e.name === base) {
+          found = full;
+          break;
+        }
+      }
+    }
+  }
+
+  if (found && await isInsideTrainingRoots(found)) {
+    trainingFallbackHits.set(base, { abs: found, at: Date.now() });
+    if (trainingFallbackHits.size > 500) trainingFallbackHits.delete(trainingFallbackHits.keys().next().value);
+    console.warn('[training] vídeo achado só pela busca por nome; vale corrigir o caminho da aula:', base, '->', found);
+    return found;
+  }
+  trainingFallbackMisses.set(base, Date.now());
+  if (trainingFallbackMisses.size > 500) trainingFallbackMisses.delete(trainingFallbackMisses.keys().next().value);
+  return null;
+}
+
+/** Caminho absoluto do vídeo da aula (só vídeo, só dentro das pastas de upload) ou null. */
+async function resolveTrainingFile(videoPathOrUrl) {
   if (!videoPathOrUrl) return null;
   let rel = String(videoPathOrUrl).trim();
   rel = rel.replace(/^https?:\/\/[^/]+/, '');
-  rel = decodeURIComponent(rel.split('?')[0].split('#')[0] || '');
+  try {
+    rel = decodeURIComponent(rel.split('?')[0].split('#')[0] || '');
+  } catch {
+    return null;
+  }
   rel = rel.replace(/^\/+/, '');
-  if (rel.includes('..') || rel.includes('\0')) return null;
+  if (rel.includes('..') || rel.includes('\0') || rel.includes('\\')) return null;
 
   const base = path.basename(rel);
+  if (!isTrainingVideoName(base)) return null;
   const relativeCandidates = Array.from(new Set([
     rel,
     rel.replace(/^uploads\/training-videos\//, ''),
@@ -15290,42 +15375,42 @@ function resolveTrainingFile(videoPathOrUrl) {
   for (const root of TRAINING_VIDEO_ROOTS) {
     for (const candidate of relativeCandidates) {
       const abs = path.resolve(root, candidate);
-      if (!abs.startsWith(root)) continue;
-      if (fs.existsSync(abs) && fs.statSync(abs).isFile()) return abs;
+      if (!abs.startsWith(root + path.sep)) continue;
+      if (await statTrainingFile(abs) && await isInsideTrainingRoots(abs)) return abs;
     }
   }
 
-  // Last-resort: recursive search by basename in known upload roots
-  const searchRoots = [
-    '/var/www/html/uploads',
-    '/var/www/uploads',
-    '/var/www/html',
-    '/var/www',
-  ];
-  for (const r of searchRoots) {
-    try {
-      if (!fs.existsSync(r)) continue;
-      const stack = [r];
-      let steps = 0;
-      while (stack.length && steps < 5000) {
-        const cur = stack.pop();
-        steps++;
-        let entries;
-        try { entries = fs.readdirSync(cur, { withFileTypes: true }); } catch { continue; }
-        for (const e of entries) {
-          const full = path.join(cur, e.name);
-          if (e.isDirectory()) {
-            if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
-            stack.push(full);
-          } else if (e.isFile() && e.name === base) {
-            return full;
-          }
-        }
-      }
-    } catch { /* ignore */ }
-  }
+  return searchTrainingFileByName(base);
+}
 
-  return null;
+function trainingCacheFile(sourcePath, lessonId) {
+  const cacheKey = crypto.createHash('md5').update(`${lessonId}:${sourcePath}`).digest('hex');
+  return path.join(TRANSCODE_CACHE_DIR, `training_${cacheKey}.mp4`);
+}
+
+/**
+ * Versão do arquivo que o token vai servir, decidida na assinatura e fixa durante
+ * a reprodução: antes o .mov trocava pela prévia MP4 no meio do vídeo (outros bytes
+ * e outro tamanho -> 416 ou vídeo corrompido). 'cache' = prévia 480p já pronta.
+ */
+async function chooseTrainingVariant(sourcePath, lessonId) {
+  if (path.extname(sourcePath || '').toLowerCase() !== '.mov') return 'orig';
+  const cachedFile = trainingCacheFile(sourcePath, lessonId);
+  if (await statTrainingFile(cachedFile)) return 'cache';
+
+  const failedAt = trainingTranscodeFailures.get(cachedFile);
+  if (!failedAt || Date.now() - failedAt > TRAINING_TRANSCODE_RETRY_MS) {
+    // Converte em segundo plano para a próxima vez; esta reprodução segue no original.
+    // Most .mov files from iPhone/macOS are H.264/AAC and browsers play them as video/mp4.
+    warmPortal480pCache(sourcePath, cachedFile)
+      .then(() => { trainingTranscodeFailures.delete(cachedFile); })
+      .catch((error) => {
+        // Fila cheia não é falha do arquivo: tenta de novo na próxima abertura
+        if (!/fila de transcodifica/i.test(error?.message || '')) trainingTranscodeFailures.set(cachedFile, Date.now());
+        console.error('[training] background transcode error:', error?.message || error);
+      });
+  }
+  return 'orig';
 }
 
 function getTrainingAuthTokenFromHeader(req) {
@@ -15381,12 +15466,12 @@ app.get('/api/training/verify', async (req, res) => {
       return res.json({ ok: true, external: true });
     }
 
-    const abs = resolveTrainingFile(src);
-    if (!abs || !fs.existsSync(abs)) {
+    const abs = await resolveTrainingFile(src);
+    const stat = abs ? await statTrainingFile(abs) : null;
+    if (!abs || !stat) {
       return res.status(404).json({ ok: false, error: 'file not found on disk' });
     }
-    const stat = fs.statSync(abs);
-    if (!stat.isFile() || stat.size === 0) {
+    if (stat.size === 0) {
       return res.status(404).json({ ok: false, error: 'invalid file' });
     }
     if (stat.size < 1024) {
@@ -15401,7 +15486,6 @@ app.get('/api/training/verify', async (req, res) => {
     res.json({
       ok: true,
       size: stat.size,
-      path: abs,
       durationSec: probe.durationSec ?? null,
       hasVideoStream: probe.hasVideoStream ?? null,
       probed: !probe.skipped,
@@ -15434,20 +15518,20 @@ app.get('/api/training/sign', async (req, res) => {
     }
 
     // Gate em disco: sem arquivo valido -> sem token. Evita o player abrir e dar erro.
-    const absCheck = resolveTrainingFile(src);
-    if (!absCheck || !fs.existsSync(absCheck)) {
+    const absCheck = await resolveTrainingFile(src);
+    if (!absCheck) {
       console.warn('[training/sign] arquivo nao encontrado', { lessonId, src });
       return res.status(404).json({ error: 'video file not available yet', code: 'NOT_ON_DISK' });
     }
-    let stat;
-    try { stat = fs.statSync(absCheck); } catch { stat = null; }
-    if (!stat || !stat.isFile() || stat.size < 1024) {
+    const stat = await statTrainingFile(absCheck);
+    if (!stat || stat.size < 1024) {
       return res.status(409).json({ error: 'video is still being written', code: 'INCOMPLETE', size: stat?.size || 0 });
     }
 
+    const variant = await chooseTrainingVariant(absCheck, lessonId);
     const token = jwt.sign(
-      { lessonId, sub: user.id, scope: 'training-stream' },
-      JWT_SECRET,
+      { lessonId, sub: user.id, scope: 'training-stream', v: variant },
+      TRAINING_STREAM_SECRET,
       { expiresIn: TRAINING_STREAM_TTL },
     );
     res.json({ url: `/api/training/stream/${lessonId}?token=${token}`, size: stat.size });
@@ -15465,7 +15549,7 @@ app.get('/api/training/stream/:lessonId', async (req, res) => {
     if (!token) return res.status(401).end();
     let decoded;
     try {
-      decoded = jwt.verify(token, JWT_SECRET);
+      decoded = jwt.verify(token, TRAINING_STREAM_SECRET);
     } catch {
       return res.status(401).end();
     }
@@ -15478,11 +15562,15 @@ app.get('/api/training/stream/:lessonId', async (req, res) => {
       [lessonId],
     );
     if (!rows.length) return res.status(404).end();
-    const rawFilePath = resolveTrainingFile(rows[0].video_path || rows[0].video_url);
-    if (!rawFilePath || !fs.existsSync(rawFilePath)) return res.status(404).end();
-    const { filePath, contentType } = await ensureTrainingPlayableSource(rawFilePath, lessonId);
+    const sourcePath = await resolveTrainingFile(rows[0].video_path || rows[0].video_url);
+    if (!sourcePath) return res.status(404).end();
+    // Mesma versão do arquivo durante todo o token (ver chooseTrainingVariant)
+    const isMov = path.extname(sourcePath).toLowerCase() === '.mov';
+    const filePath = isMov && decoded.v === 'cache' ? trainingCacheFile(sourcePath, lessonId) : sourcePath;
+    const contentType = isMov ? 'video/mp4' : getTrainingStreamContentType(sourcePath);
 
-    const stat = fs.statSync(filePath);
+    const stat = await statTrainingFile(filePath);
+    if (!stat) return res.status(404).end();
     const total = stat.size;
     const range = req.headers.range;
 
@@ -15504,8 +15592,9 @@ app.get('/api/training/stream/:lessonId', async (req, res) => {
         return res.end();
       }
       const start = parseInt(match[1], 10);
-      const end = match[2] ? parseInt(match[2], 10) : Math.min(start + 1024 * 1024 - 1, total - 1);
-      if (start >= total || end >= total) {
+      // Fim além do arquivo é cortado no último byte (RFC 7233), não vira 416
+      const end = Math.min(match[2] ? parseInt(match[2], 10) : start + 1024 * 1024 - 1, total - 1);
+      if (start >= total || end < start) {
         res.writeHead(416, { ...baseHeaders, 'Content-Range': `bytes */${total}` });
         return res.end();
       }
@@ -16291,7 +16380,7 @@ async function authenticateSocketToken(token) {
   if (!token || typeof token !== 'string') return null;
   try {
     const decoded = verifyToken(token);
-    if (!decoded?.sub) return null;
+    if (!decoded?.sub || decoded.scope) return null; // token de escopo não é sessão
     const user = { id: String(decoded.sub), email: decoded.email || null };
     return { user, ids: await presenceIdsForUser(user) };
   } catch {

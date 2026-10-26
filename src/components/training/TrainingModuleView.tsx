@@ -60,9 +60,17 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const modalFileInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // Link do vídeo vale 10 min: quando vence (ou cai a rede) o player pede outro e
+  // continua do mesmo ponto, em vez de travar a aula.
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const wasPlayingRef = useRef(false);
+  const resumeRef = useRef<{ lessonId: string; time: number; play: boolean } | null>(null);
+  const renewRef = useRef<{ lessonId: string; windowStart: number; count: number; busy: boolean }>({ lessonId: '', windowStart: 0, count: 0, busy: false });
   const { profile, session } = useAuth();
   const isAdmin = profile?.role === 'admin';
   const currentVideoSource = currentVideo?.video_url || currentVideo?.video_path || '';
+  const currentVideoIdRef = useRef<string | undefined>(undefined);
+  currentVideoIdRef.current = currentVideo?.id;
   const isExternalVideo = /youtube|vimeo/i.test(currentVideoSource);
 
   const getTrainingAuthToken = () => {
@@ -140,10 +148,28 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
     }
   }, [selectedTrack, forceUpdate]);
 
+  /** URL assinada do vídeo da aula ({ url } ou { error }). */
+  const signLessonVideo = async (lessonId: string): Promise<{ url?: string; error?: string }> => {
+    const token = getTrainingAuthToken();
+    const res = await fetch(
+      `https://agenciapulse.tech/api/training/sign?lessonId=${encodeURIComponent(lessonId)}`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.url) {
+      const reason = data?.error || `HTTP ${res.status}`;
+      console.error('[training/sign] failed:', reason, data);
+      return { error: reason };
+    }
+    return { url: data.url.startsWith('http') ? data.url : `https://agenciapulse.tech${data.url}` };
+  };
+
   // Fetch short-lived signed URL whenever the selected video changes
   useEffect(() => {
     let cancelled = false;
     setSignedVideoUrl(null);
+    resumeRef.current = null;
+    wasPlayingRef.current = false;
     if (!currentVideo?.id || !currentVideoSource) return;
     // External providers (YouTube/Vimeo) keep using iframe
     if (isExternalVideo) return;
@@ -151,20 +177,12 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
     (async () => {
       try {
         setVideoLoading(true);
-        const token = getTrainingAuthToken();
-        const res = await fetch(
-          `https://agenciapulse.tech/api/training/sign?lessonId=${encodeURIComponent(currentVideo.id)}`,
-          { headers: token ? { Authorization: `Bearer ${token}` } : {} },
-        );
-        const data = await res.json().catch(() => ({}));
+        const { url, error } = await signLessonVideo(currentVideo.id);
         if (cancelled) return;
-        if (!res.ok || !data?.url) {
-          const reason = data?.error || `HTTP ${res.status}`;
-          console.error('[training/sign] failed:', reason, data);
-          toast.error(`Não foi possível liberar o vídeo: ${reason}`);
+        if (!url) {
+          toast.error(`Não foi possível liberar o vídeo: ${error}`);
           return;
         }
-        const url = data.url.startsWith('http') ? data.url : `https://agenciapulse.tech${data.url}`;
         setSignedVideoUrl(url);
       } catch {
         if (!cancelled) toast.error('Falha ao carregar vídeo protegido.');
@@ -175,6 +193,47 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
 
     return () => { cancelled = true; };
   }, [currentVideo?.id, currentVideoSource, isExternalVideo, session?.access_token]);
+
+  // Erro no meio da aula (link vencido depois de 10 min, pausa longa, queda de rede):
+  // pede um link novo e retoma do mesmo ponto. No máximo 3 tentativas por minuto.
+  const handleVideoError = async () => {
+    const lessonId = currentVideo?.id;
+    const video = videoRef.current;
+    if (!lessonId || !video) return;
+    const renew = renewRef.current;
+    if (renew.busy) return;
+    const now = Date.now();
+    if (renew.lessonId !== lessonId || now - renew.windowStart > 60_000) {
+      renewRef.current = { lessonId, windowStart: now, count: 0, busy: false };
+    }
+    if (renewRef.current.count >= 3) {
+      toast.error('O vídeo parou de carregar. Volte ao catálogo e abra a aula de novo.');
+      return;
+    }
+    renewRef.current.count += 1;
+    renewRef.current.busy = true;
+    const time = video.currentTime || resumeRef.current?.time || 0;
+    try {
+      const { url } = await signLessonVideo(lessonId);
+      if (!url || currentVideoIdRef.current !== lessonId) return;
+      resumeRef.current = { lessonId, time, play: wasPlayingRef.current };
+      setSignedVideoUrl(url);
+    } catch {
+      /* a próxima falha tenta de novo */
+    } finally {
+      renewRef.current.busy = false;
+    }
+  };
+
+  // Depois de trocar o link: volta para o ponto em que estava (e continua tocando)
+  const handleVideoLoadedMetadata = () => {
+    const video = videoRef.current;
+    const resume = resumeRef.current;
+    if (!video || !resume || resume.lessonId !== currentVideo?.id) return;
+    resumeRef.current = null;
+    if (resume.time > 0) video.currentTime = resume.time;
+    if (resume.play) video.play().catch(() => { /* navegador pode exigir um clique */ });
+  };
 
   const loadTracks = async () => {
     try {
@@ -578,8 +637,14 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                     />
                   ) : signedVideoUrl ? (
                     <video
+                      ref={videoRef}
                       src={signedVideoUrl}
                       className="w-full h-full bg-black"
+                      onError={() => { void handleVideoError(); }}
+                      onLoadedMetadata={handleVideoLoadedMetadata}
+                      onPlay={() => { wasPlayingRef.current = true; }}
+                      onPause={() => { if (!videoRef.current?.error) wasPlayingRef.current = false; }}
+                      onEnded={() => { wasPlayingRef.current = false; }}
                       controls
                       crossOrigin="use-credentials"
                       controlsList="nodownload noremoteplayback noplaybackrate"

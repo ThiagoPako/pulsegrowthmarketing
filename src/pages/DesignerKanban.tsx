@@ -440,6 +440,11 @@ export default function DesignerKanban() {
     if (isStarting) {
       if (!task.started_at) extraFields.started_at = new Date().toISOString();
       if (!task.assigned_to && user?.id) extraFields.assigned_to = user.id;
+      // Card reservado para um agente de IA (que não está nele agora): quem iniciou assume, senão a arte
+      // ficaria em Executando no nome do agente sem ninguém fazendo.
+      if (task.assigned_to && agentIds.has(task.assigned_to) && !isDesignAgentWorking(task) && user?.id) {
+        extraFields.assigned_to = user.id;
+      }
       // Cronômetro já rodando (ex.: vindo de Ajustes) segue a mesma sessão.
       if (!(task.timer_running && task.timer_started_at)) {
         extraFields.timer_running = true;
@@ -461,6 +466,11 @@ export default function DesignerKanban() {
         return;
       }
       extraFields.due_date = null;
+    }
+    // Análise IA é para entregas (de agente): sem arte não há o que revisar
+    if (isChangingColumn && targetColumn === 'analise_ia' && !task.attachment_url && !(task as any).mockup_url && getTaskArtUrls(task).length === 0) {
+      toast.error('Anexe a arte antes de mandar para a Análise IA');
+      return;
     }
 
     if (isChangingColumn && targetColumn === 'aprovado') {
@@ -556,7 +566,7 @@ export default function DesignerKanban() {
     } catch (err: any) {
       toast.error(err.message || 'Erro ao mover tarefa');
     }
-  }, [tasks, user, updateTask, addHistory, tasksByColumn, sortMode, queryClient, activeCity, designAgents]);
+  }, [tasks, user, updateTask, addHistory, tasksByColumn, sortMode, queryClient, activeCity, designAgents, agentIds]);
   const moveTaskRef = useRef(moveTask);
   moveTaskRef.current = moveTask;
 

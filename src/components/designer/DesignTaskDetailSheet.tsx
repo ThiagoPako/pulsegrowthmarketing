@@ -224,7 +224,9 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const handleStartTask = async () => {
     const now = new Date().toISOString();
     // O card continua com o responsável dele; sem responsável, fica com quem iniciou.
-    const owner = task.assigned_to || user?.id || null;
+    // Reservado para um agente de IA que não está nele: quem iniciou assume.
+    const reservedForIdleAgent = !!task.assigned_to && agentIds.has(task.assigned_to) && !agentWorking;
+    const owner = (reservedForIdleAgent ? user?.id : task.assigned_to) || user?.id || null;
     // Uma tarefa ativa por pessoa (como no Kanban): pausa as outras em execução do mesmo responsável.
     const conflicting = getConflictingExecutingTasks(tasksQuery.data || [], task.id, owner);
     for (const other of conflicting) {

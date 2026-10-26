@@ -406,6 +406,18 @@ export async function syncContentTaskColumnChange(
 }
 
 /**
+ * Filtro .or() do "pegar card" (Marcar como Meu / Iniciar): o UPDATE só passa se o card
+ * estiver livre ou já for do próprio colaborador (o perfil pode ter vários ids).
+ * Use com .select('id'): nenhuma linha de volta = outra pessoa ou um agente pegou antes.
+ */
+export function claimGuardFilter(identityIds: Array<string | null | undefined>): string {
+  const ids = Array.from(new Set(identityIds.filter((id): id is string => !!id)));
+  return ids.length > 0
+    ? `assigned_to.is.null,assigned_to.in.(${ids.join(',')})`
+    : 'assigned_to.is.null';
+}
+
+/**
  * Build SyncContext from a content_task row and optional client data.
  */
 export function buildSyncContext(

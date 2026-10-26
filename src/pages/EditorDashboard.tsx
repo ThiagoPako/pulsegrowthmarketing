@@ -23,7 +23,7 @@ import DeadlineBadge from '@/components/DeadlineBadge';
 import { highlightQuotes } from '@/lib/highlightQuotes';
 import { format, differenceInHours, isPast, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
+import { syncContentTaskColumnChange, buildSyncContext, claimGuardFilter } from '@/lib/contentTaskSync';
 import { uploadFileToVps, deleteFileFromVps } from '@/services/vpsApi';
 import { EDITOR_SCORE, EDITOR_APPROVED_COLUMNS, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate } from '@/lib/scoringSystem';
 import { useCity } from '@/contexts/CityContext';
@@ -366,14 +366,27 @@ export default function EditorDashboard() {
   }, [queueTasks, filterClient, filterType, searchQuery, getTaskDisplayMeta]);
 
   /* ─── Actions ──────────────────────────────────────────── */
+   // Ids do colaborador (o perfil pode ter ids antigos ligados) para a guarda do "pegar card".
+   const myIdentityIds = useMemo(
+     () => (profile?.identity_ids?.length ? profile.identity_ids : [user?.id]),
+     [profile?.identity_ids, user?.id]
+   );
+
    const handleClaimTask = async (task: EditorTask) => {
      if (!user) return;
-     const { error } = await supabase.from('content_tasks').update({
+     // Atômico: só marca se o card ainda estiver livre (ou já for meu). Antes dois editores,
+     // ou um editor e um agente, pegavam o mesmo vídeo e o segundo sobrescrevia o primeiro.
+     const { data: claimed, error } = await supabase.from('content_tasks').update({
        assigned_to: user.id,
        edited_by: user.id,
        updated_at: new Date().toISOString(),
-     } as any).eq('id', task.id);
+     } as any).eq('id', task.id).or(claimGuardFilter(myIdentityIds)).select('id');
      if (error) { toast.error('Erro ao marcar tarefa'); return; }
+     if (!claimed || (Array.isArray(claimed) && claimed.length === 0)) {
+       toast.error('🚫 Este vídeo já foi pego por outra pessoa!');
+       fetchTasks();
+       return;
+     }
      const editorName = users.find(u => u.id === user.id)?.name || 'Você';
      await supabase.from('task_history').insert({ task_id: task.id, user_id: user.id, action: `Tarefa reivindicada por ${editorName}` });
      toast.success('🚩 Tarefa marcada como sua!');
@@ -396,13 +409,20 @@ export default function EditorDashboard() {
    const handleStartEditing = async (task: EditorTask) => {
      if (!user) return;
      const isAlteration = task.kanban_column === 'alteracao';
-     const { error } = await supabase.from('content_tasks').update({
+     // Mesma guarda do "Marcar como Meu": não toma o card de outro editor nem de um agente
+     // que acabou de pegá-lo (a tela só atualiza a cada 15 s).
+     const { data: started, error } = await supabase.from('content_tasks').update({
        assigned_to: user.id,
        edited_by: user.id,
        editing_started_at: new Date().toISOString(),
        updated_at: new Date().toISOString(),
-     } as any).eq('id', task.id);
+     } as any).eq('id', task.id).or(claimGuardFilter(myIdentityIds)).select('id');
      if (error) { toast.error(`Erro ao iniciar ${isAlteration ? 'alteração' : 'edição'}`); return; }
+     if (!started || (Array.isArray(started) && started.length === 0)) {
+       toast.error('🚫 Este vídeo já foi pego por outra pessoa!');
+       fetchTasks();
+       return;
+     }
      await supabase.from('task_history').insert({ task_id: task.id, user_id: user.id, action: isAlteration ? 'Alteração iniciada' : 'Edição iniciada' });
      toast.success(isAlteration ? 'Alteração iniciada!' : 'Edição iniciada!');
      const updated = { ...task, assigned_to: user.id, edited_by: user.id, editing_started_at: new Date().toISOString() };

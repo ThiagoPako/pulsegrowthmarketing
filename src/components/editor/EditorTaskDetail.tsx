@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import { highlightQuotes } from '@/lib/highlightQuotes';
-import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
+import { syncContentTaskColumnChange, buildSyncContext, claimGuardFilter } from '@/lib/contentTaskSync';
 import { uploadFileToVps } from '@/services/vpsApi';
 import type { EditorTask } from '@/pages/EditorDashboard';
 import { getDeadlineStatus, getTypeConfig } from '@/pages/EditorDashboard';
@@ -197,7 +197,7 @@ function makeDefaultSlots(): OptSlot[] {
 
 export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }: Props) {
   const { clients, scripts, users } = useApp();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [comments, setComments] = useState<Comment[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [newComment, setNewComment] = useState('');
@@ -382,12 +382,21 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   const startEditing = async () => {
     if (!user) return;
     setSaving(true);
-    await supabase.from('content_tasks').update({
+    // Atômico: só inicia se o card estiver livre ou já for meu (não toma o de outro editor/agente).
+    const myIds = profile?.identity_ids?.length ? profile.identity_ids : [user.id];
+    const { data: started, error } = await supabase.from('content_tasks').update({
       assigned_to: user.id,
       edited_by: user.id,
       editing_started_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
-    }).eq('id', task.id);
+    }).eq('id', task.id).or(claimGuardFilter(myIds)).select('id');
+    if (error) { toast.error('Erro ao iniciar a edição'); setSaving(false); return; }
+    if (!started || (Array.isArray(started) && started.length === 0)) {
+      toast.error('🚫 Este vídeo já foi pego por outra pessoa!');
+      onRefresh();
+      setSaving(false);
+      return;
+    }
     await logAction('Edição iniciada');
     toast.success('Edição iniciada! Timer rodando.');
     onRefresh();

@@ -1492,6 +1492,13 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
   });
 
   // ── Entrega ───────────────────────────────────────────────
+  // Extensão final decidida pelo servidor, nunca a do nome original: um "x.html" declarado como
+  // video/mp4 passava no filtro e ia para /uploads como .html (rodando no domínio do sistema).
+  function safeVideoExt(file) {
+    const original = String(file.originalname || '').toLowerCase();
+    return /\.mov$/.test(original) || file.mimetype === 'video/quicktime' ? '.mov' : '.mp4';
+  }
+
   const deliverUpload = multer({
     storage: multer.diskStorage({
       destination(req, _file, cb) {
@@ -1503,7 +1510,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         }
       },
       filename(_req, file, cb) {
-        const ext = path.extname(file.originalname || '').toLowerCase().replace(/[^.a-z0-9]/g, '');
+        const ext = file.fieldname === 'plan' ? '.json' : safeVideoExt(file);
         cb(null, `${Date.now()}_${crypto.randomBytes(6).toString('hex')}${ext}`);
       },
     }),
@@ -1636,8 +1643,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         try { fs.mkdirSync(req.agentUploadDir, { recursive: true }); cb(null, req.agentUploadDir); } catch (error) { cb(error); }
       },
       filename(_req, file, cb) {
-        const ext = path.extname(file.originalname || '').toLowerCase().replace(/[^.a-z0-9]/g, '');
-        cb(null, `${Date.now()}_${crypto.randomBytes(6).toString('hex')}${ext}`);
+        cb(null, `${Date.now()}_${crypto.randomBytes(6).toString('hex')}${safeVideoExt(file)}`);
       },
     }),
     limits: { fileSize: 2 * 1024 * 1024 * 1024, files: 30 },

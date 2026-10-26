@@ -1,5 +1,6 @@
 import { Pencil } from 'lucide-react';
 import { agentWorkState, formatSince, type AgentCardFields } from '@/lib/agentCardStatus';
+import { usePulsePlusKnown } from '@/hooks/usePulsePlus';
 
 /**
  * Selo em destaque enquanto um agente de IA está com o card (do `pulse pegar` até o `entregar` ou
@@ -17,8 +18,10 @@ interface Props {
 }
 
 export default function AgentWorkBadge({ task, users, agentIds }: Props) {
+  const pulsePlus = usePulsePlusKnown();
   const work = agentWorkState(task, { agentIds });
-  if (!work) return null;
+  // agente com o card: só quem tem Pulse Plus vê (para o resto o card mostra o responsável, como qualquer card)
+  if (!pulsePlus || !work) return null;
   const name = (users.find((u) => u.id === task.assigned_to)?.name || 'Agente').trim().split(/\s+/)[0];
   const isFix = work.column === 'alteracao';
 

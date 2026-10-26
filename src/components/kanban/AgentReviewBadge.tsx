@@ -1,4 +1,5 @@
 import { agentReviewOf, type AgentCardFields } from '@/lib/agentCardStatus';
+import { usePulsePlusKnown } from '@/hooks/usePulsePlus';
 
 /**
  * Parecer da Análise (`pre_revisao`): mostra se o revisor IA (Uriel) já deu o parecer — "✅ ok" ou
@@ -12,7 +13,9 @@ interface Props {
 }
 
 export default function AgentReviewBadge({ task, users }: Props) {
-  if (task.kanban_column !== 'pre_revisao') return null;
+  const pulsePlus = usePulsePlusKnown();
+  // parecer do agente: só quem tem Pulse Plus vê
+  if (!pulsePlus || task.kanban_column !== 'pre_revisao') return null;
   const review = agentReviewOf(task);
   if (!review) {
     return (

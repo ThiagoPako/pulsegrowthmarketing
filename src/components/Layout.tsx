@@ -66,7 +66,7 @@ const navCategories: NavCategory[] = [
     items: [
       { path: '/conexoes-sociais', label: 'Conexões Sociais', icon: Plug, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },
       { path: '/estudio-postagem', label: 'Estúdio de Postagem', icon: Images, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },
-      { path: '/agendamentos', label: 'Agendamentos', icon: CalendarClock, roles: ['admin'], module: 'agendamentos' },
+      { path: '/agendamentos', label: 'Agendamentos', icon: CalendarClock, roles: ['admin'], module: 'pulse_plus' },
       { path: '/desempenho-social', label: 'Desempenho Social', icon: TrendingUp, roles: ['admin', 'social_media', 'gestor_projetos', 'revisor_meta'] },
     ],
   },
@@ -96,7 +96,7 @@ const navCategories: NavCategory[] = [
     items: [
       { path: '/edicao', label: 'Edição', icon: Scissors, roles: ['admin', 'editor', 'social_media', 'videomaker', 'gestor_projetos'] },
       { path: '/edicao/kanban', label: 'Kanban Edição', icon: Kanban, roles: ['admin', 'editor', 'social_media', 'videomaker', 'gestor_projetos'] },
-      { path: '/agentes', label: 'Agentes', icon: Cpu, roles: ['admin'] },
+      { path: '/agentes', label: 'Agentes', icon: Cpu, roles: ['admin'], module: 'pulse_plus' },
       { path: '/videomakers', label: 'Videomakers', icon: Video, roles: ['admin', 'videomaker', 'social_media', 'gestor_projetos'] },
     ],
   },

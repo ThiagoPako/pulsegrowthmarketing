@@ -6,6 +6,7 @@
  * - "Pré-análise" na coluna (chave `analise_ia`) em que o revisor de artes confere a entrega.
  */
 import { ScanSearch } from 'lucide-react';
+import { usePulsePlusKnown } from '@/hooks/usePulsePlus';
 
 interface Props {
   task: {
@@ -37,6 +38,9 @@ export function isDesignAgentWorking(task: Props['task']): boolean {
 }
 
 export default function DesignAgentBadge({ task, agents, className = '' }: Props) {
+  const pulsePlus = usePulsePlusKnown();
+  // selo de agente: só quem tem Pulse Plus vê
+  if (!pulsePlus) return null;
   if (task.kanban_column === 'analise_ia') {
     return (
       <div className={`flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-fuchsia-600 to-violet-600 ${className}`}>

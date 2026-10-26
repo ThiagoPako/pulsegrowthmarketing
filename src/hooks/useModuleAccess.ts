@@ -4,7 +4,7 @@ import { fetchModuleAccess } from '@/services/schedulingApi';
 
 /**
  * Módulos ocultos liberados por lista no servidor (tabela module_access), além do papel.
- * Hoje: 'agendamentos'. Sem resposta do servidor, nada é liberado.
+ * Hoje: 'pulse_plus' (agentes e Agendamentos; ver usePulsePlus). Sem resposta do servidor, nada é liberado.
  */
 export function useModuleAccess() {
   const { user } = useAuth();

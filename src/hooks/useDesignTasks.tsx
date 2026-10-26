@@ -3,6 +3,7 @@ import { supabase, vpsAuthedFetch } from '@/lib/vpsDb';
 import { useCity } from '@/contexts/CityContext';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { toast } from 'sonner';
+import { usePulsePlus } from '@/hooks/usePulsePlus';
 
 // 'analise_ia': entrega de agente de IA conferida pelo revisor de artes antes da equipe (agentDesignRoutes.mjs)
 export type DesignTaskColumn = 'nova_tarefa' | 'executando' | 'fila_baixa_prioridade' | 'analise_ia' | 'em_analise' | 'enviar_cliente' | 'aprovado' | 'ajustes' | 'postado';
@@ -200,11 +201,16 @@ export interface DesignAgentInfo {
   avatar_url: string | null;
 }
 
-/** Agentes com chave ativa (designers, revisor de artes, chefe). Falha = lista vazia (o Kanban segue igual). */
+/**
+ * Agentes com chave ativa (designers, revisor de artes, chefe). Falha = lista vazia (o Kanban segue igual).
+ * Só com Pulse Plus (o servidor responde 403 para o resto): sem o acesso, lista vazia sem consultar.
+ */
 export function useDesignAgents() {
+  const pulsePlus = usePulsePlus();
   return useQuery({
-    queryKey: ['design-agents'],
+    queryKey: ['design-agents', pulsePlus],
     queryFn: async (): Promise<DesignAgentInfo[]> => {
+      if (!pulsePlus) return [];
       try {
         const response = await vpsAuthedFetch('/design-agents');
         if (!response.ok) return [];

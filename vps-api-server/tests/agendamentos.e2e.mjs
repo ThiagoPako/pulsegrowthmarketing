@@ -42,7 +42,7 @@ const ids = {
   // histórico do portal sem vínculo (antes de 25/10): não pode voltar como "não agendado"
   taskMay: '00000000-0000-0000-0000-00000000a626', portalMay: '00000000-0000-0000-0000-00000000a642',
   portalOld: '00000000-0000-0000-0000-00000000a643', portalSolo: '00000000-0000-0000-0000-00000000a644',
-  portalA: '00000000-0000-0000-0000-00000000a645',
+  portalA: '00000000-0000-0000-0000-00000000a645', design3: '00000000-0000-0000-0000-00000000a633',
 };
 const CLIENTS = [ids.cliMin, ids.cliNoAcc, ids.cliUru];
 const PEOPLE = [ids.thiago, ids.other, ids.social];
@@ -123,8 +123,9 @@ async function fixtures() {
   await pool.query(
     `INSERT INTO design_tasks (id, client_id, title, format_type, kanban_column, attachment_url, client_approved_at) VALUES
        ($1, $3, 'Arte Promo', 'feed', 'aprovado', $4, now() - interval '1 day'),
-       ($2, $3, 'Panfleto impresso', 'midia_fisica', 'aprovado', $5, now())`,
-    [ids.design, ids.design2, ids.cliMin, MEDIA('arte.png'), MEDIA('panfleto.png')]
+       ($2, $3, 'Panfleto impresso', 'midia_fisica', 'aprovado', $5, now()),
+       ($6, $3, 'Arte Troca', 'feed', 'aprovado', $7, now() - interval '1 day')`,
+    [ids.design, ids.design2, ids.cliMin, MEDIA('arte.png'), MEDIA('panfleto.png'), ids.design3, MEDIA('troca.png')]
   );
   await pool.query(
     `INSERT INTO client_portal_contents (id, client_id, title, content_type, file_url, status, approved_at, season_month, season_year)
@@ -241,7 +242,7 @@ try {
   assert.ok(!names.includes(ids.cliUru), 'cliente de Uruaçu fora da lista de Minaçu');
   const cli = r.json.clients.find((c) => c.id === ids.cliMin);
   assert.equal(cli.accounts.instagram, 1);
-  assert.equal(cli.pending, 4, 'vídeo A + arte + 2 conteúdos avulsos recentes do portal (o panfleto e o histórico não contam)');
+  assert.equal(cli.pending, 5, 'vídeo A + 2 artes + 2 conteúdos avulsos recentes do portal (o panfleto e o histórico não contam)');
   r = await api('GET', '/scheduling/clients', null, { city: 'uruacu' });
   assert.ok(r.json.clients.some((c) => c.id === ids.cliUru) && !r.json.clients.some((c) => c.id === ids.cliMin));
   r = await materials(ids.cliMin, { city: 'uruacu' });
@@ -425,6 +426,25 @@ try {
   assert.ok(r.json.scheduled.some((i) => i.key.startsWith(`arte:${ids.design}:cancelado`) && i.state === 'cancelado'), 'selo de cancelado no dia');
   ok('arte: agendar cria o post com a imagem; cancelar tira da fila e volta para não agendados');
 
+  // ── Arte trocada depois de agendada: o post (cópia da URL antiga) sai e ela volta para não agendados ──
+  r = await api('POST', '/scheduling/schedule', {
+    client_id: ids.cliMin, kind: 'arte', id: ids.design3, date: dayA, time: '16:00',
+    mode: 'auto', platform: 'instagram', publish_type: 'feed', caption: 'Troca',
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const postTroca = await row(`SELECT id, media_url FROM scheduled_posts WHERE design_task_id = $1 AND status = 'agendado'`, [ids.design3]);
+  assert.equal(postTroca.media_url, MEDIA('troca.png'));
+  await pool.query(`UPDATE design_tasks SET observations = 'só texto' WHERE id = $1`, [ids.design3]);
+  assert.equal((await row(`SELECT status FROM scheduled_posts WHERE id = $1`, [postTroca.id])).status, 'agendado', 'mexer em outro campo não cancela');
+  await pool.query(`UPDATE design_tasks SET attachment_url = $2 WHERE id = $1`, [ids.design3, MEDIA('troca-v2.png')]);
+  const trocado = await row(`SELECT status, last_error FROM scheduled_posts WHERE id = $1`, [postTroca.id]);
+  assert.equal(trocado.status, 'cancelado');
+  assert.equal(trocado.last_error, 'Cancelado: a arte foi trocada depois do agendamento. Agende de novo.');
+  assert.equal((await row(`SELECT posting_at FROM design_tasks WHERE id = $1`, [ids.design3])).posting_at, null);
+  r = await materials(ids.cliMin);
+  assert.ok(r.json.unscheduled.some((i) => i.key === `arte:${ids.design3}` && i.media_url === MEDIA('troca-v2.png')));
+  ok('arte trocada depois de agendada: post cancelado e a arte volta para não agendados com a imagem nova');
+
   // ── Cancelar vídeo ──
   const postA = await row(`SELECT id FROM scheduled_posts WHERE content_task_id = $1 AND status = 'agendado'`, [ids.taskA]);
   r = await api('POST', '/scheduling/cancel', { client_id: ids.cliMin, kind: 'conteudo', id: ids.taskA });
@@ -489,6 +509,12 @@ try {
      VALUES ($1, $2, 'instagram', 'feed', $3, '', now() - interval '1 minute') RETURNING id`,
     [ids.cliMin, ids.design, MEDIA('arte.png')]
   );
+  // Reforço no robô: post vencido com a URL antiga de uma arte que continua em Aprovado
+  const { rows: [dueTroca] } = await pool.query(
+    `INSERT INTO scheduled_posts (client_id, design_task_id, platform, publish_type, media_url, caption, scheduled_at)
+     VALUES ($1, $2, 'instagram', 'feed', $3, '', now() - interval '1 minute') RETURNING id`,
+    [ids.cliMin, ids.design3, MEDIA('troca.png')]
+  );
   const robotDone = await waitFor(async () => {
     const p = await row(`SELECT status, last_error FROM scheduled_posts WHERE id = $1`, [due.id]);
     return p.status !== 'agendado' ? p : null;
@@ -499,7 +525,14 @@ try {
   assert.equal(cancelledA.status, 'cancelado');
   assert.equal(cancelledA.attempts, 0);
   assert.equal(cancelledA.published_at, null);
-  ok('o robô não publica o cancelado e cancela o post da arte que saiu de Aprovado');
+  const robotTroca = await waitFor(async () => {
+    const p = await row(`SELECT status, last_error FROM scheduled_posts WHERE id = $1`, [dueTroca.id]);
+    return p.status !== 'agendado' ? p : null;
+  }, 'robô passar pelo post da arte trocada', 40_000);
+  assert.equal(robotTroca.status, 'cancelado');
+  assert.match(robotTroca.last_error, /arte foi trocada depois do agendamento/);
+  await pool.query(`UPDATE design_tasks SET posting_at = NULL WHERE id = $1`, [ids.design3]);
+  ok('o robô não publica o cancelado e cancela o post da arte que saiu de Aprovado ou foi trocada');
 
   // Arte que sai de Aprovado com post pendente: o gatilho cancela na hora
   await pool.query(`UPDATE design_tasks SET kanban_column = 'aprovado' WHERE id = $1`, [ids.design]);

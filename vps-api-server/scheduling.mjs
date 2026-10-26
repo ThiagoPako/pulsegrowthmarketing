@@ -568,7 +568,8 @@ export function registerSchedulingRoutes(app, deps) {
       END
       $fn$;
 
-      -- Arte que sai de Aprovado (ajuste, volta de coluna): a data e o post pendente deixam de valer
+      -- Arte que sai de Aprovado (ajuste, volta de coluna): a data e o post pendente deixam de valer.
+      -- Arte trocada depois de agendada (o post guarda a cópia das URLs): o post sai e ela volta a não agendada.
       CREATE OR REPLACE FUNCTION pulse_design_task_posting_at() RETURNS trigger
       LANGUAGE plpgsql AS $fn$
       BEGIN
@@ -580,6 +581,18 @@ export function registerSchedulingRoutes(app, deps) {
             UPDATE scheduled_posts
                SET status = 'cancelado', last_error = 'Cancelado: a arte saiu de Aprovado.', updated_at = now()
              WHERE design_task_id = NEW.id AND status IN ('agendado', 'erro');
+          ELSIF OLD.kanban_column = 'aprovado' AND NEW.kanban_column = 'aprovado'
+             AND (NEW.attachment_url IS DISTINCT FROM OLD.attachment_url
+                  OR NEW.attachment_urls::text IS DISTINCT FROM OLD.attachment_urls::text
+                  OR NEW.mockup_url IS DISTINCT FROM OLD.mockup_url) THEN
+            UPDATE scheduled_posts
+               SET status = 'cancelado',
+                   last_error = 'Cancelado: a arte foi trocada depois do agendamento. Agende de novo.',
+                   updated_at = now()
+             WHERE design_task_id = NEW.id AND status IN ('agendado', 'erro');
+            IF FOUND AND NEW.posting_at IS NOT DISTINCT FROM OLD.posting_at THEN
+              NEW.posting_at := NULL;
+            END IF;
           END IF;
         EXCEPTION WHEN OTHERS THEN
           RAISE WARNING 'pulse_design_task_posting_at: %', SQLERRM;

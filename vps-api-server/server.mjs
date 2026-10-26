@@ -8624,6 +8624,18 @@ const DELIVERY_STATUS_LABELS = {
   entregue: 'Agendar', agendado: 'Agendado', postado: 'Postado',
 };
 
+/** URL comparável da mídia: sem domínio (o post guarda https://…/uploads/x.png; a arte pode ter /uploads/x.png). */
+function comparableMediaUrl(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  try {
+    const u = new URL(raw, 'https://agenciapulse.tech');
+    return decodeURIComponent(u.pathname + u.search).replace(/\/+$/, '');
+  } catch {
+    return raw;
+  }
+}
+
 /**
  * Confere, logo antes de publicar, se a entrega e o card ainda pedem esta postagem.
  * Vale para qualquer tela (kanban social, kanban de conteúdo, tráfego, agentes) e
@@ -8650,11 +8662,23 @@ async function getAutoPostCancelReason(post) {
   }
   // Arte e conteúdo avulso do portal agendados pelo módulo de Agendamentos (scheduling.mjs)
   if (post.design_task_id) {
-    const { rows } = await pool.query('SELECT kanban_column FROM design_tasks WHERE id = $1', [post.design_task_id]);
+    const { rows } = await pool.query(
+      `SELECT kanban_column, attachment_url, mockup_url, COALESCE(to_jsonb(attachment_urls), '[]'::jsonb) AS attachment_urls
+         FROM design_tasks WHERE id = $1`,
+      [post.design_task_id]
+    );
     if (!rows.length) return 'a arte foi excluída';
     // 'postado' aqui só pode ser marcação manual (o robô move depois de publicar): sair de novo duplicaria.
     if (rows[0].kanban_column === 'postado') return 'a arte já foi marcada como postada';
     if (rows[0].kanban_column !== 'aprovado') return `a arte saiu de Aprovado (está em "${rows[0].kanban_column}")`;
+    // O post guarda a cópia das URLs: se a arte foi trocada, publicaria a versão antiga.
+    const listed = Array.isArray(rows[0].attachment_urls) ? rows[0].attachment_urls : [];
+    const current = new Set([...listed.map((u) => (typeof u === 'string' ? u : u?.url)), rows[0].attachment_url, rows[0].mockup_url]
+      .map(comparableMediaUrl).filter(Boolean));
+    const postUrls = postMediaList(post).map((item) => comparableMediaUrl(item.url)).filter(Boolean);
+    if (postUrls.length && !postUrls.some((u) => current.has(u))) {
+      return 'a arte foi trocada depois do agendamento. Agende de novo';
+    }
   }
   if (post.portal_content_id) {
     const { rows } = await pool.query('SELECT status FROM client_portal_contents WHERE id = $1', [post.portal_content_id]);

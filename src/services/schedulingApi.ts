@@ -49,6 +49,8 @@ export interface ScheduleInput {
   caption?: string;
   story_link?: string | null;
   story_link_text?: string | null;
+  /** Story: 'auto' = postar sozinho; 'lembrete' = avisa a equipe, que posta pelo app com o link */
+  story_mode?: 'auto' | 'lembrete';
   media_url?: string | null;
   media_items?: string[];
   allow_past?: boolean;

@@ -17,6 +17,7 @@ import { useDesignTasks, useDesignAgents, DESIGN_COLUMNS, DesignTask, DesignTask
 import { useQuery } from '@tanstack/react-query';
 import { vpsAuthedFetch } from '@/lib/vpsDb';
 import DesignAgentBadge, { isDesignAgentWorking } from '@/components/designer/DesignAgentBadge';
+import { usePulsePlus } from '@/hooks/usePulsePlus';
 import DesignFormatPicker from '@/components/designer/DesignFormatPicker';
 import DesignCopyFields from '@/components/designer/DesignCopyFields';
 import DesignReferenceUploader from '@/components/designer/DesignReferenceUploader';
@@ -84,10 +85,13 @@ interface AgentReview {
 
 export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Props) {
   const { tasksQuery, updateTask, addHistory, historyQuery, deleteTask } = useDesignTasks();
-  const { currentUser, clients } = useApp();
+  const { currentUser, clients, users } = useApp();
+  // Sem Pulse Plus: sem selo, etapa e pareceres de agente; o agente aparece como qualquer membro
+  const pulsePlus = usePulsePlus();
   const { data: designAgents = [] } = useDesignAgents();
   const agentIds = new Set(designAgents.map(a => a.user_id));
-  const agentName = (id?: string | null) => (designAgents.find(a => a.user_id === id)?.name || '').trim();
+  const agentName = (id?: string | null) =>
+    (designAgents.find(a => a.user_id === id)?.name || (id ? users.find(u => u.id === id)?.name : '') || '').trim();
   const fullClient = clients.find(c => c.id === task.client_id);
   const clientDrive = {
     geral: (fullClient?.driveLink || task.clients?.drive_link || '').trim(),
@@ -97,20 +101,20 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const formatInfo = describeDesignFormat(task.dimensions, task.format_type);
   const copyBrief = normalizeCopyBrief(task.copy_brief);
   const briefMissing = getDesignBriefMissing(task);
-  const agentWorking = isDesignAgentWorking(task);
+  const agentWorking = pulsePlus && isDesignAgentWorking(task);
   const madeByAgent = (!!task.designed_by && agentIds.has(task.designed_by)) || task.kanban_column === 'analise_ia';
-  // Pareceres da Análise IA (revisor de artes) e entregas dos agentes
+  // Pareceres da Análise IA (revisor de artes) e entregas dos agentes: só com Pulse Plus
   const reviewsQuery = useQuery({
-    queryKey: ['design-agent-reviews', task.id, task.version, task.kanban_column],
+    queryKey: ['design-agent-reviews', task.id, task.version, task.kanban_column, pulsePlus],
     queryFn: async (): Promise<{ reviews: AgentReview[] }> => {
       const response = await vpsAuthedFetch(`/design-tasks/${task.id}/agent-reviews`);
       if (!response.ok) return { reviews: [] };
       return response.json();
     },
-    enabled: open && (madeByAgent || task.kanban_column === 'ajustes'),
+    enabled: open && pulsePlus && (madeByAgent || task.kanban_column === 'ajustes'),
     staleTime: 30_000,
   });
-  const agentReviews = reviewsQuery.data?.reviews || [];
+  const agentReviews = pulsePlus ? reviewsQuery.data?.reviews || [] : [];
   // Edição do brief (formato, copy, materiais)
   const [editingBrief, setEditingBrief] = useState(false);
   const [briefDims, setBriefDims] = useState<DesignDimensions | null>(null);
@@ -923,8 +927,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                     )
                   )}
 
-                  {/* Agente de IA trabalhando / Análise IA */}
-                  {(task.agent_step || task.kanban_column === 'analise_ia') && (
+                  {/* Agente de IA trabalhando / Análise IA (só com Pulse Plus) */}
+                  {pulsePlus && (task.agent_step || task.kanban_column === 'analise_ia') && (
                     <div className="rounded-lg overflow-hidden border border-border">
                       <DesignAgentBadge task={task} agents={designAgents} />
                     </div>

@@ -6,7 +6,8 @@ import AdjustmentRequestDialog from '@/components/kanban/AdjustmentRequestDialog
 import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/ConfirmActionDialog';
 import KanbanColumnJumpBar, { kanbanColumnDomId } from '@/components/kanban/KanbanColumnJumpBar';
 import { useAgentIds } from '@/hooks/useAgentIds';
-import { agentReviewOf, agentWorkState, matchesOwnerFilter, OWNER_FILTER_OPTIONS, type OwnerFilter } from '@/lib/agentCardStatus';
+import { agentReviewOf, agentWorkState, matchesOwnerFilter, ownerFilterOptions, type OwnerFilter } from '@/lib/agentCardStatus';
+import { usePulsePlus } from '@/hooks/usePulsePlus';
 import {
   ANALYSIS_FORBIDDEN_MSG, EDITING_NEEDS_FOOTAGE_MSG, SEND_TO_CLIENT_FORBIDDEN_MSG,
   canReleaseAnalysis, isContentManager, missingFootageForEditing,
@@ -268,6 +269,8 @@ export default function ContentKanban() {
   const [filterOwner, setFilterOwner] = useState<OwnerFilter>('all');
   const [sortMode, setSortMode] = useState<SortMode>('recent');
   const agentIds = useAgentIds();
+  // Sem Pulse Plus: nada que marque card ou pessoa como agente (selos, filtros, parecer)
+  const pulsePlus = usePulsePlus();
   // Confirmação de ação que não dá para desfazer pela tela (enviar ao cliente)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
 
@@ -1115,7 +1118,7 @@ export default function ContentKanban() {
   const handleReleaseAnalysis = (task: ContentTask) => {
     const review = agentReviewOf(task);
     void handleMoveToColumn(task, 'revisao',
-      `Liberado da Análise por ${profile?.name || 'equipe'}${review ? ` (parecer: ${review.verdict})` : ' (sem parecer)'}`);
+      `Liberado da Análise por ${profile?.name || 'equipe'}${review ? ` (parecer: ${review.verdict})` : pulsePlus ? ' (sem parecer)' : ''}`);
   };
 
   // Card com agente dando sinal (menos de 30 min): não se move pela tela. Parado, pode (destravar).
@@ -1298,7 +1301,7 @@ export default function ContentKanban() {
               <SelectValue placeholder="Responsável" />
             </SelectTrigger>
             <SelectContent>
-              {OWNER_FILTER_OPTIONS.map(o => (
+              {ownerFilterOptions(pulsePlus).map(o => (
                 <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
               ))}
             </SelectContent>

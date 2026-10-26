@@ -9,6 +9,7 @@ import AgentReviewBadge from '@/components/kanban/AgentReviewBadge';
 import AgentReadinessBadge from '@/components/kanban/AgentReadinessBadge';
 import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/ConfirmActionDialog';
 import { useAgentIds } from '@/hooks/useAgentIds';
+import { usePulsePlus } from '@/hooks/usePulsePlus';
 import { agentWorkState, type AgentCardFields } from '@/lib/agentCardStatus';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -226,6 +227,8 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   const [celebrationPoints, setCelebrationPoints] = useState(0);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const agentIds = useAgentIds();
+  // Sem Pulse Plus: sem os blocos de agente (quem está com o card, parecer, fila dos agentes)
+  const pulsePlus = usePulsePlus();
   // Mandar ao cliente (Revisão → Enviado) é da gestão: admin, social media e gestor de projetos
   const canApprove = isContentManager(profile);
   const agentBusy = !!agentWorkState(task as AgentCardFields, { agentIds });
@@ -790,12 +793,16 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
               </Badge>
             </div>
 
-            {/* Agente de IA com o card, parecer da Análise e prontidão para a fila dos agentes */}
-            <div className="rounded-lg overflow-hidden empty:hidden">
-              <AgentWorkBadge task={task as AgentCardFields} users={users} agentIds={agentIds} />
-              <AgentReviewBadge task={task as AgentCardFields} users={users} />
-            </div>
-            <AgentReadinessBadge task={task as AgentCardFields} agentIds={agentIds} detailed />
+            {/* Agente de IA com o card, parecer da Análise e prontidão para a fila dos agentes (só com Pulse Plus) */}
+            {pulsePlus && (
+              <>
+                <div className="rounded-lg overflow-hidden empty:hidden">
+                  <AgentWorkBadge task={task as AgentCardFields} users={users} agentIds={agentIds} />
+                  <AgentReviewBadge task={task as AgentCardFields} users={users} />
+                </div>
+                <AgentReadinessBadge task={task as AgentCardFields} agentIds={agentIds} detailed />
+              </>
+            )}
 
             {/* ─── EDITING TIMER HERO ─────────────────────────── */}
             {isEditing && task.editing_started_at && task.kanban_column === 'edicao' && (

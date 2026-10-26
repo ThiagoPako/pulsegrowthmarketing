@@ -180,6 +180,19 @@ export const OWNER_FILTER_OPTIONS: { value: OwnerFilter; label: string }[] = [
   { value: 'ia_parada', label: '⏸ Parados sem sinal' },
 ];
 
+/**
+ * Opções do filtro "Responsável" para quem está vendo. Sem Pulse Plus não há opção que marque card ou
+ * pessoa como agente: só todos, com responsável e sem responsável (o agente conta como qualquer membro).
+ */
+export function ownerFilterOptions(pulsePlus: boolean): { value: OwnerFilter; label: string }[] {
+  if (pulsePlus) return OWNER_FILTER_OPTIONS;
+  return [
+    { value: 'all', label: 'Todos os responsáveis' },
+    { value: 'equipe', label: '👤 Com responsável' },
+    { value: 'livre', label: '⏳ Sem responsável' },
+  ];
+}
+
 export function matchesOwnerFilter(
   task: AgentCardFields,
   filter: OwnerFilter,

@@ -29,6 +29,7 @@ import AgentWorkBadge from '@/components/kanban/AgentWorkBadge';
 import AgentReviewBadge from '@/components/kanban/AgentReviewBadge';
 import AgentReadinessBadge from '@/components/kanban/AgentReadinessBadge';
 import { useAgentIds } from '@/hooks/useAgentIds';
+import { usePulsePlus } from '@/hooks/usePulsePlus';
 import { agentReviewOf, agentWorkState } from '@/lib/agentCardStatus';
 import {
   ANALYSIS_FORBIDDEN_MSG, EDITING_NEEDS_FOOTAGE_MSG, SEND_TO_CLIENT_FORBIDDEN_MSG,
@@ -692,6 +693,8 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
   const [history, setHistory] = useState<TaskHistory[]>([]);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
   const agentIds = useAgentIds();
+  // Sem Pulse Plus: sem os blocos de agente (quem está com o card, parecer, fila dos agentes)
+  const pulsePlus = usePulsePlus();
 
   // Adjustment dialog state
   const [showAdjustmentForm, setShowAdjustmentForm] = useState(false);
@@ -1267,7 +1270,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     // Liberar da Análise fica registrado com o parecer (o mesmo que a chefe grava pelo `pulse mover`)
     const review = agentReviewOf(task);
     await syncTask(targetColumn, undefined, task.kanban_column === 'pre_revisao' && targetColumn === 'revisao'
-      ? `Liberado da Análise por ${profile?.name || 'equipe'}${review ? ` (parecer: ${review.verdict})` : ' (sem parecer)'}`
+      ? `Liberado da Análise por ${profile?.name || 'equipe'}${review ? ` (parecer: ${review.verdict})` : pulsePlus ? ' (sem parecer)' : ''}`
       : null);
     const label = KANBAN_COLUMNS.find(c => c.id === targetColumn)?.label;
     toast.success(`Movido para ${label}`);
@@ -1585,12 +1588,16 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                 {task.kanban_column === 'alteracao' && !task.immediate_alteration && renderDeadline(task.alteration_deadline, 'Prazo de Alteração')}
                 {task.kanban_column === 'envio' && renderDeadline(task.approval_deadline, 'Prazo de Aprovação')}
 
-                {/* Agentes de IA: quem está com o card, parecer da Análise e prontidão para a fila */}
-                <div className="rounded-lg overflow-hidden empty:hidden">
-                  <AgentWorkBadge task={task} users={users} agentIds={agentIds} />
-                  <AgentReviewBadge task={task} users={users} />
-                </div>
-                <AgentReadinessBadge task={task} agentIds={agentIds} detailed />
+                {/* Agentes de IA (só com Pulse Plus): quem está com o card, parecer da Análise e prontidão para a fila */}
+                {pulsePlus && (
+                  <>
+                    <div className="rounded-lg overflow-hidden empty:hidden">
+                      <AgentWorkBadge task={task} users={users} agentIds={agentIds} />
+                      <AgentReviewBadge task={task} users={users} />
+                    </div>
+                    <AgentReadinessBadge task={task} agentIds={agentIds} detailed />
+                  </>
+                )}
 
                 {editorUser && (
                   <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-teal-500/5 border border-teal-500/20">
@@ -1862,7 +1869,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                         {task.kanban_column === 'pre_revisao' && !canLiberate && (
                           <div className="p-3 rounded-lg bg-muted/50 border border-border">
                             <p className="text-xs text-muted-foreground text-center">
-                              🔍 Aguardando o parecer e a liberação da chefe
+                              {pulsePlus ? '🔍 Aguardando o parecer e a liberação da chefe' : '🔍 Aguardando a liberação da Análise'}
                             </p>
                           </div>
                         )}

@@ -17,6 +17,7 @@ import { useAuth, profileOwnsUserId } from '@/hooks/useAuth';
 import { editingControlMoveError, isContentManager } from '@/lib/contentKanbanRules';
 import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/ConfirmActionDialog';
 import { useAgentIds } from '@/hooks/useAgentIds';
+import { usePulsePlusKnown } from '@/hooks/usePulsePlus';
 import { agentWorkState, formatSince } from '@/lib/agentCardStatus';
 
 interface EditingTask {
@@ -537,7 +538,9 @@ function EditingTaskCard({
 }) {
   const colInfo = COLUMN_COLORS[task.kanban_column] || COLUMN_COLORS.edicao;
   const isAlteration = task.kanban_column === 'alteracao';
-  const work = agentWorkState(task);
+  // etapa do agente: só quem tem Pulse Plus vê (o servidor já manda nula para o resto)
+  const pulsePlus = usePulsePlusKnown();
+  const work = pulsePlus ? agentWorkState(task) : null;
 
   // Calculate time in current state
   const timeLabel = task.editing_started_at

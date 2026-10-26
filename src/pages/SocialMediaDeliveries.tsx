@@ -21,7 +21,7 @@ import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
 import { sendWhatsAppMessage, getWhatsAppConfig } from '@/services/whatsappService';
 import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isToday, isPast, parseISO } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isToday, isPast, parseISO, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import PostingCalendar from '@/components/social/PostingCalendar';
 import OnboardingTracker from '@/components/social/OnboardingTracker';
@@ -200,13 +200,21 @@ export default function SocialMediaDeliveries() {
   const [mainTab, setMainTab] = useState<'clientes' | 'calendario'>('clientes');
 
   const fetchData = useCallback(async () => {
-    const [dRes, pRes, cRes, tRes, oRes, ctRes] = await Promise.all([
-      supabase.from('social_media_deliveries').select('*').order('delivered_at', { ascending: false }),
+    // Entregas: todas as abertas (qualquer data) e as postadas desde o início do mês anterior
+    // (meta do mês, déficit do mês anterior e coluna Postado). Antes vinha a tabela inteira a
+    // cada clique; o calendário busca sozinho os meses mais antigos.
+    const historySince = format(startOfMonth(subMonths(new Date(), 1)), 'yyyy-MM-dd');
+    const [dRes, pRes, cRes, oRes, ctRes] = await Promise.all([
+      supabase.from('social_media_deliveries').select('*')
+        .or(`status.neq.postado,delivered_at.gte.${historySince},posted_at.gte.${historySince}`)
+        .order('delivered_at', { ascending: false }),
       supabase.from('plans').select('id, name, reels_qty, creatives_qty, stories_qty, arts_qty'),
       supabase.from('clients').select('id, plan_id'),
-      supabase.from('content_tasks').select('id, review_deadline, alteration_deadline, approval_deadline, immediate_alteration'),
       supabase.from('onboarding_tasks').select('client_id, status'),
-      supabase.from('content_tasks').select('id, client_id, review_deadline, alteration_deadline, approval_deadline, kanban_column').in('kanban_column', ['edicao', 'revisao', 'alteracao', 'envio']),
+      // Prazos só dos cards ativos (os badges aparecem em Revisão, Alteração e Enviado)
+      supabase.from('content_tasks')
+        .select('id, client_id, review_deadline, alteration_deadline, approval_deadline, kanban_column, immediate_alteration, approval_sent_at, editing_started_at')
+        .in('kanban_column', ['edicao', 'revisao', 'alteracao', 'envio']),
     ]);
     if (dRes.data) setDeliveries(dRes.data as SocialDelivery[]);
     if (pRes.data) setPlans(pRes.data as Plan[]);
@@ -215,9 +223,9 @@ export default function SocialMediaDeliveries() {
       (cRes.data as any[]).forEach(c => { map[c.id] = c.plan_id; });
       setClientPlans(map);
     }
-    if (tRes.data) {
+    if (ctRes.data) {
       const dlMap: Record<string, any> = {};
-      (tRes.data as any[]).forEach(t => { dlMap[t.id] = t; });
+      (ctRes.data as any[]).forEach(t => { dlMap[t.id] = t; });
       setTaskDeadlines(dlMap);
     }
     if (oRes.data) {
@@ -1717,7 +1725,7 @@ export default function SocialMediaDeliveries() {
         </TabsContent>
 
         <TabsContent value="calendario" className="mt-4">
-          <PostingCalendar deliveries={deliveries} clients={clients} />
+          <PostingCalendar deliveries={deliveries} clients={clients} loadedSince={format(startOfMonth(subMonths(new Date(), 1)), 'yyyy-MM-dd')} />
         </TabsContent>
       </Tabs>
       {/* Dialogs also available from main view */}

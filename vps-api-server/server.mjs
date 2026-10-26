@@ -26,6 +26,7 @@ import { createPgClient } from './pgClient.mjs';
 import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
 import { registerSchedulingRoutes } from './scheduling.mjs';
+import { createPulsePlus } from './pulsePlus.mjs';
 import { registerWhatsAppRoutes } from './whatsapp/routes.mjs';
 import { registerAssistant } from './assistant/index.mjs';
 import { recordPortalAccess } from './assistant/temperature.mjs';
@@ -11792,6 +11793,8 @@ app.post('/api/db/query', async (req, res) => {
 
     // Regras por papel (user_roles, profiles, configurações...). Pode restringir os filtros.
     ({ data, filters } = await enforceDbQueryRules({ safeTable, operation, data, filters, user, select, joins }));
+    // Pulse Plus: colunas internas dos agentes (pulsePlus.mjs)
+    ({ data, filters } = await pulsePlus.beforeDbQuery({ safeTable, operation, data, filters, select, order, joins, user, buildWhere: buildDbQueryWhere }));
 
     let result;
 
@@ -11868,6 +11871,7 @@ app.post('/api/db/query', async (req, res) => {
         const { rows } = await pool.query({ text: query, values: params, queryMode: 'extended' });
         const selectTables = [safeTable, ...joinTables];
         stripDbQueryColumns(rows, selectTables, await getDbQueryStripOptions(user, selectTables));
+        await pulsePlus.afterDbQuery(rows, selectTables, user);
         if (safeTable === 'api_integrations' && !(await isAdminUser(user))) sanitizeApiIntegrationRows(rows);
         if (selectTables.some((table) => BRIEFING_DATA_TABLES.has(table)) && !(await isTeamManagerUser(user))) {
           stripBriefingSecretsFromRows(rows, selectTables);
@@ -12241,6 +12245,7 @@ app.post('/api/db/query', async (req, res) => {
     // RETURNING * de insert/update/upsert/delete também não devolve colunas sensíveis
     if (operation !== 'select' && operation !== 'rpc' && result?.data) {
       stripDbQueryColumns(result.data, [safeTable], await getDbQueryStripOptions(user, [safeTable]));
+      await pulsePlus.afterDbQuery(result.data, [safeTable], user);
       if (BRIEFING_DATA_TABLES.has(safeTable) && !(await isTeamManagerUser(user))) {
         stripBriefingSecretsFromRows(result.data, [safeTable]);
       }
@@ -12280,7 +12285,7 @@ function parseDesignChecklist(value) {
 // dinamicamente e ficou pesado para a primeira renderização dos cards.
 app.get('/api/design-tasks/fast', async (req, res) => {
   try {
-    const { activeCity, scopeCity } = await getScopedCityContext(req, 'design_tasks');
+    const { user, activeCity, scopeCity } = await getScopedCityContext(req, 'design_tasks');
     const limit = Math.min(Math.max(parseInt(String(req.query.limit || '600'), 10) || 600, 50), 1000);
     const postadoDays = Math.min(Math.max(parseInt(String(req.query.postado_days || '21'), 10) || 21, 1), 120);
     const postadoSince = new Date(Date.now() - postadoDays * 24 * 60 * 60 * 1000).toISOString();
@@ -12424,6 +12429,9 @@ app.get('/api/design-tasks/fast', async (req, res) => {
         avatar_url: row.profiles_avatar_url,
       } : null,
     }));
+
+    // Pulse Plus: etapa e sinal de vida do agente saem nulos para quem não tem o acesso
+    await pulsePlus.forUser(user, data, ['design_tasks']);
 
     // A cidade vai só no cabeçalho x-pulse-city (a URL é a mesma): sem cache no
     // navegador, senão a troca de cidade (ou criar/excluir card) recebia a lista antiga.
@@ -14213,7 +14221,7 @@ app.post('/api/fix-content-task', async (req, res) => {
           [drive_link, task.id]
         );
       }
-      return res.json({ status: 'updated', task: { ...task, drive_link: drive_link || task.drive_link } });
+      return res.json({ status: 'updated', task: await pulsePlus.forUser(user, { ...task, drive_link: drive_link || task.drive_link }, ['content_tasks']) });
     }
 
     // No existing task — create one from script/recording data
@@ -19903,8 +19911,14 @@ app.post('/api/public/client-database/:token/media', async (req, res) => {
   }
 });
 
+// ─── Pulse Plus (pulsePlus.mjs): configurações e informações dos agentes só para quem está na lista ──
+// A trava fica antes das rotas dos agentes, do PULSE e dos Agendamentos (registradas abaixo).
+const pulsePlus = createPulsePlus({ pool, verifyUser, getLinkedUserIds, isStrictAdmin: isStrictAdminUser });
+app.use(pulsePlus.guard);
+pulsePlus.registerRoutes(app);
+
 // ─── Agentes de edição (chaves próprias, fila, entrega) ─────
-registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, verifyTeamManager, handleWhatsAppReply, runBillingAutomation, runConfirmationCron });
+registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, verifyTeamManager, handleWhatsAppReply, runBillingAutomation, runConfirmationCron, hasPulsePlus: pulsePlus.hasPulsePlus });
 
 const agentApi = registerAgentRoutes(app, {
   pool,
@@ -19946,11 +19960,12 @@ registerAgentDesignRoutes(app, {
   }),
 });
 
-// ─── Agendamentos (calendário de postagem por cliente; acesso pela lista module_access) ──
-registerSchedulingRoutes(app, {
+// ─── Agendamentos (calendário de postagem por cliente; acesso: Pulse Plus) ──
+const scheduling = registerSchedulingRoutes(app, {
   pool,
   verifyUser,
   getLinkedUserIds,
+  hasPulsePlus: pulsePlus.hasPulsePlus,
   resolveActiveCity,
   cityVisibilityExpression,
   ensureSocialPostsSchema,
@@ -19965,6 +19980,8 @@ registerSchedulingRoutes(app, {
     tableJsonColumnsPromiseCache.delete(table);
   }),
 });
+// semente do Pulse Plus depois do esquema dos Agendamentos (mesma tabela module_access; copia a lista de lá)
+pulsePlus.start({ after: () => scheduling.ready() });
 
 // ─── Start ──────────────────────────────────────────────────
 

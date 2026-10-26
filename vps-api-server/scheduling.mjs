@@ -4,12 +4,11 @@
 // cria o post automático (scheduled_posts, mesmas regras do Estúdio via prepareScheduledPost);
 // sem conta, grava só a data. Arrastar no calendário troca a data e mantém a hora.
 //
-// Acesso: lista module_access (module, user_id), só pelo banco. Na subida, se a lista do
-// módulo estiver vazia, entram os perfis admin cujo nome começa com "Thiago".
-// Incluir alguém:  INSERT INTO module_access (module, user_id, created_by)
-//                  VALUES ('agendamentos', '<id do perfil>', 'manual');
+// Acesso: Pulse Plus (pulsePlus.mjs, module_access com module = 'pulse_plus'), marcado na tela Equipe por
+// um admin com Pulse Plus. A lista antiga 'agendamentos' continua semeada (é dela que o Pulse Plus copiou
+// as primeiras pessoas), mas não libera mais o módulo.
 //
-// Rotas (login + lista de acesso + cidade ativa):
+// Rotas (login + Pulse Plus + cidade ativa):
 //   GET  /api/me/module-access                         módulos liberados para quem está logado
 //   GET  /api/scheduling/clients                       clientes da cidade com contadores
 //   GET  /api/scheduling/clients/:id/materials?from=&to=   agendados no período e não agendados
@@ -395,7 +394,7 @@ export function registerSchedulingRoutes(app, deps) {
   const {
     pool, verifyUser, getLinkedUserIds, resolveActiveCity, cityVisibilityExpression,
     ensureSocialPostsSchema, getConnectedAccounts, sanitizeAccount, duplicatedPlatformAccounts,
-    prepareScheduledPost, onSchemaChange, publicAppUrl, logger = console,
+    prepareScheduledPost, onSchemaChange, publicAppUrl, logger = console, hasPulsePlus,
   } = deps;
   const historyHasCity = { task_history: false, design_task_history: false };
 
@@ -630,8 +629,11 @@ export function registerSchedulingRoutes(app, deps) {
 
   async function requireModule(req) {
     const { user } = await verifyUser(req);
-    const modules = await userModules(user);
-    if (!modules.includes(SCHEDULING_MODULE)) throw httpError(403, 'Sem acesso a este módulo');
+    // Pulse Plus libera o módulo; sem a função (testes antigos), vale a lista 'agendamentos'
+    const allowed = typeof hasPulsePlus === 'function'
+      ? await hasPulsePlus(user)
+      : (await userModules(user)).includes(SCHEDULING_MODULE);
+    if (!allowed) throw httpError(403, 'Sem acesso a este módulo');
     const city = await resolveActiveCity(req, user.id, user);
     return { user, city };
   }

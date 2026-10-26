@@ -14,6 +14,9 @@
 //   PATCH  /api/whatsapp/config      (admin, social media, gestor de projetos) { integration_active, auto_*, msg_* }
 //          A configuração é uma só para as duas cidades: é a mesma linha que o servidor usa nos envios.
 //   GET    /api/whatsapp/groups      (gestão) grupos em que os números conectados estão — para o cadastro do cliente
+//
+// Pulse Plus (pulsePlus.mjs): a função "assistente" e a conexão só do PULSE só aparecem (e só se mexem) para quem
+// tem o acesso. Para o resto, a conexão do PULSE não existe na lista e a função some das outras conexões.
 //   POST   /api/whatsapp/holidays/:id/notify  (gestão) "Avisar" de um feriado: avisa os clientes das duas cidades
 //          com gravação agendada na próxima ocorrência e marca a ocorrência como avisada
 //
@@ -35,7 +38,11 @@ function brazilNow() {
   return { day: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour) };
 }
 
-export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, verifyTeamManager, handleWhatsAppReply, runBillingAutomation, runConfirmationCron }) {
+const ASSISTANT_PURPOSE = 'assistente';
+const isAssistantOnly = (c) => Array.isArray(c?.purposes) && c.purposes.length > 0 && c.purposes.every((p) => p === ASSISTANT_PURPOSE);
+const PURPOSES_WITHOUT_ASSISTANT = Object.fromEntries(Object.entries(WA_PURPOSES).filter(([key]) => key !== ASSISTANT_PURPOSE));
+
+export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, verifyTeamManager, handleWhatsAppReply, runBillingAutomation, runConfirmationCron, hasPulsePlus }) {
   ensureWhatsAppSchema(pool).catch((error) => console.error('[whatsapp] esquema:', error.message));
 
   const fail = (res, error) => {
@@ -48,15 +55,19 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
     await ensureWhatsAppSchema(pool);
     return ctx;
   };
-  const cleanPurposes = (list) => {
+  // sem a função (testes antigos), todo admin vê o PULSE como antes
+  const seesAssistant = async (user) => (typeof hasPulsePlus === 'function' ? hasPulsePlus(user) : true);
+  const cleanPurposes = (list, allowed = WA_PURPOSES) => {
     const out = [...new Set((Array.isArray(list) ? list : []).map(String))];
-    const bad = out.filter((p) => !WA_PURPOSES[p]);
+    const bad = out.filter((p) => !allowed[p]);
     if (bad.length) throw Object.assign(new Error(`Função desconhecida: ${bad.join(', ')}`), { status: 400 });
     return out;
   };
-  const one = async (id) => {
+  const one = async (id, user = null) => {
     const { rows } = await pool.query('SELECT * FROM wa_connections WHERE id = $1', [id]);
-    if (!rows.length) throw Object.assign(new Error('Conexão não encontrada'), { status: 404 });
+    if (!rows.length || (user && isAssistantOnly(rows[0]) && !(await seesAssistant(user)))) {
+      throw Object.assign(new Error('Conexão não encontrada'), { status: 404 });
+    }
     return rows[0];
   };
   const publicConn = (c) => ({
@@ -68,8 +79,11 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
 
   app.get('/api/whatsapp/connections', async (req, res) => {
     try {
-      await admin(req);
-      const { rows } = await pool.query('SELECT * FROM wa_connections ORDER BY created_at');
+      const { user } = await admin(req);
+      const plus = await seesAssistant(user);
+      const { rows: all } = await pool.query('SELECT * FROM wa_connections ORDER BY created_at');
+      const rows = plus ? all : all.filter((c) => !isAssistantOnly(c))
+        .map((c) => ({ ...c, purposes: (c.purposes || []).filter((p) => p !== ASSISTANT_PURPOSE) }));
       const { rows: queue } = await pool.query(
         `SELECT purpose,
                 COUNT(*) FILTER (WHERE status IN ('fila', 'enviando')) AS waiting,
@@ -79,7 +93,12 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
       );
       const { rows: engine } = await pool.query(`SELECT seen_at FROM wa_engine WHERE id = 1`);
       const engineAlive = !!engine[0]?.seen_at && Date.now() - new Date(engine[0].seen_at).getTime() < 60_000;
-      res.json({ connections: rows.map(publicConn), purposes: WA_PURPOSES, queue, engine_alive: engineAlive });
+      res.json({
+        connections: rows.map(publicConn),
+        purposes: plus ? WA_PURPOSES : PURPOSES_WITHOUT_ASSISTANT,
+        queue: plus ? queue : queue.filter((q) => q.purpose !== ASSISTANT_PURPOSE),
+        engine_alive: engineAlive,
+      });
     } catch (error) {
       fail(res, error);
     }
@@ -90,7 +109,7 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
       const { user } = await admin(req);
       const name = String(req.body?.name || '').trim().slice(0, 60);
       if (!name) return res.status(400).json({ error: 'Dê um nome à conexão (ex.: Aprovações)' });
-      const purposes = cleanPurposes(req.body?.purposes);
+      const purposes = cleanPurposes(req.body?.purposes, (await seesAssistant(user)) ? WA_PURPOSES : PURPOSES_WITHOUT_ASSISTANT);
       const { rows } = await pool.query(
         `INSERT INTO wa_connections (name, purposes, created_by) VALUES ($1, $2, $3) RETURNING *`,
         [name, purposes, user.id]
@@ -103,16 +122,24 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
 
   app.patch('/api/whatsapp/connections/:id', async (req, res) => {
     try {
-      await admin(req);
-      const current = await one(req.params.id);
+      const { user } = await admin(req);
+      const current = await one(req.params.id, user);
       const name = req.body?.name !== undefined ? String(req.body.name).trim().slice(0, 60) : current.name;
       if (!name) return res.status(400).json({ error: 'Nome vazio' });
-      const purposes = req.body?.purposes !== undefined ? cleanPurposes(req.body.purposes) : current.purposes;
+      const plus = await seesAssistant(user);
+      let purposes = req.body?.purposes !== undefined
+        ? cleanPurposes(req.body.purposes, plus ? WA_PURPOSES : PURPOSES_WITHOUT_ASSISTANT)
+        : current.purposes;
+      // quem não vê a função "assistente" não a tira sem querer da conexão
+      if (!plus && (current.purposes || []).includes(ASSISTANT_PURPOSE) && !purposes.includes(ASSISTANT_PURPOSE)) {
+        purposes = [...purposes, ASSISTANT_PURPOSE];
+      }
       const { rows } = await pool.query(
         `UPDATE wa_connections SET name = $2, purposes = $3, updated_at = now() WHERE id = $1 RETURNING *`,
         [current.id, name, purposes]
       );
-      res.json({ connection: publicConn(rows[0]) });
+      const saved = rows[0];
+      res.json({ connection: publicConn(plus ? saved : { ...saved, purposes: (saved.purposes || []).filter((p) => p !== ASSISTANT_PURPOSE) }) });
     } catch (error) {
       fail(res, error);
     }
@@ -120,8 +147,8 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
 
   app.post('/api/whatsapp/connections/:id/connect', async (req, res) => {
     try {
-      await admin(req);
-      const current = await one(req.params.id);
+      const { user } = await admin(req);
+      const current = await one(req.params.id, user);
       const pairPhone = String(req.body?.pair_phone || '').replace(/\D/g, '') || null;
       if (pairPhone && pairPhone.length < 12) {
         return res.status(400).json({ error: 'Número com DDI e DDD, ex.: 5562999998888' });
@@ -140,8 +167,8 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
 
   app.post('/api/whatsapp/connections/:id/disconnect', async (req, res) => {
     try {
-      await admin(req);
-      const current = await one(req.params.id);
+      const { user } = await admin(req);
+      const current = await one(req.params.id, user);
       await pool.query(`UPDATE wa_connections SET desired = 'desligada', updated_at = now() WHERE id = $1`, [current.id]);
       res.json({ ok: true });
     } catch (error) {
@@ -151,8 +178,8 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
 
   app.post('/api/whatsapp/connections/:id/logout', async (req, res) => {
     try {
-      await admin(req);
-      const current = await one(req.params.id);
+      const { user } = await admin(req);
+      const current = await one(req.params.id, user);
       await pool.query(`UPDATE wa_connections SET command = 'sair', desired = 'desligada', updated_at = now() WHERE id = $1`, [current.id]);
       res.json({ ok: true });
     } catch (error) {
@@ -162,8 +189,8 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
 
   app.delete('/api/whatsapp/connections/:id', async (req, res) => {
     try {
-      await admin(req);
-      const current = await one(req.params.id);
+      const { user } = await admin(req);
+      const current = await one(req.params.id, user);
       // o processo do WhatsApp vê que a conexão sumiu, sai do WhatsApp e apaga a sessão
       await pool.query('DELETE FROM wa_connections WHERE id = $1', [current.id]);
       await pool.query(`UPDATE wa_outbox SET connection_id = NULL WHERE connection_id = $1 AND status = 'fila'`, [current.id]);
@@ -176,7 +203,7 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
   app.post('/api/whatsapp/connections/:id/test', async (req, res) => {
     try {
       const { user } = await admin(req);
-      const current = await one(req.params.id);
+      const current = await one(req.params.id, user);
       const number = String(req.body?.number || '').trim();
       if (!number) return res.status(400).json({ error: 'Informe o número de teste' });
       const message = String(req.body?.message || `Teste da conexão "${current.name}" do sistema Pulse ✅`).slice(0, 2000);
@@ -191,7 +218,8 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
 
   app.get('/api/whatsapp/queue', async (req, res) => {
     try {
-      await admin(req);
+      const { user } = await admin(req);
+      const plus = await seesAssistant(user);
       const limit = Math.min(200, Number(req.query.limit) || 50);
       const status = req.query.status ? String(req.query.status) : null;
       const { rows } = await pool.query(
@@ -199,10 +227,12 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
                 left(o.body, 160) AS preview, c.name AS connection_name
            FROM wa_outbox o LEFT JOIN wa_connections c ON c.id = o.connection_id
           WHERE ($1::text IS NULL OR o.status = $1)
+            AND ($3::boolean OR o.purpose IS DISTINCT FROM 'assistente')
           ORDER BY o.created_at DESC LIMIT $2`,
-        [status, limit]
+        [status, limit, plus]
       );
-      res.json({ items: rows });
+      // envio que um número autorizado pediu ao PULSE: para quem não tem Pulse Plus, é um envio avulso
+      res.json({ items: plus ? rows : rows.map((r) => (r.trigger_type === 'assistente' ? { ...r, trigger_type: 'manual' } : r)) });
     } catch (error) {
       fail(res, error);
     }
@@ -681,12 +711,18 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
 
   app.get('/api/whatsapp/groups', async (req, res) => {
     try {
-      await verifyTeamManager(req);
+      const { user } = await verifyTeamManager(req);
       await ensureWhatsAppSchema(pool);
+      const plus = await seesAssistant(user);
+      // sem Pulse Plus, o nome da conexão só do PULSE não aparece (o grupo continua na lista)
       const { rows } = await pool.query(
-        `SELECT g.jid, max(g.subject) AS subject, max(g.size) AS size, array_agg(DISTINCT c.name) AS connections
+        `SELECT g.jid, max(g.subject) AS subject, max(g.size) AS size,
+                coalesce(array_agg(DISTINCT c.name) FILTER (
+                  WHERE $1::boolean OR NOT (c.purposes <@ ARRAY['assistente']::text[] AND cardinality(c.purposes) > 0)
+                ), ARRAY[]::text[]) AS connections
            FROM wa_groups g JOIN wa_connections c ON c.id = g.connection_id
-          GROUP BY g.jid ORDER BY lower(max(g.subject))`
+          GROUP BY g.jid ORDER BY lower(max(g.subject))`,
+        [plus]
       );
       res.json({ groups: rows });
     } catch (error) {

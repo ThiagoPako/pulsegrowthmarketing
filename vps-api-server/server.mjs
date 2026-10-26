@@ -6939,6 +6939,7 @@ function socialAuthErrorStatus(error) {
 
 /** Status das rotas sociais que também têm erros internos: 401 sem login, 403 sem o papel, 500 o resto. */
 function socialRouteErrorStatus(error) {
+  if (error?.statusCode === 400) return 400;
   if (error?.message === 'Unauthorized') return 401;
   if (error?.message === 'Admin access required') return 403;
   return 500;
@@ -8420,7 +8421,41 @@ async function fetchFacebookInsights(account, since, until) {
 }
 
 /** Busca (com cache) as métricas do cliente no período. */
+const INSIGHTS_MAX_RANGE_DAYS = 93;
+
+/**
+ * Período das métricas: datas reais, início ≤ fim, até 93 dias (cabe qualquer mês e o
+ * atalho de 90 dias do portal) e fim até um mês à frente (o modo mensal manda o último
+ * dia do mês). Sem limite, um período de anos virava milhares de chamadas à Meta e
+ * gastava o limite de chamadas do perfil, o mesmo da postagem automática.
+ * Devolve a mensagem do problema ou null.
+ */
+function insightsPeriodError(since, until) {
+  const parse = (value) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+    if (!m) return null;
+    const time = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    const d = new Date(time);
+    // Date.UTC joga ano < 100 para 19xx e aceita 31/02: só vale a data que volta igual
+    if (d.getUTCFullYear() !== Number(m[1]) || d.getUTCMonth() !== Number(m[2]) - 1 || d.getUTCDate() !== Number(m[3])) return null;
+    return time;
+  };
+  const start = parse(since);
+  const end = parse(until);
+  if (start === null || end === null) return 'Período inválido (use datas reais no formato AAAA-MM-DD).';
+  if (start > end) return 'A data inicial é depois da final.';
+  if ((end - start) / 86400000 + 1 > INSIGHTS_MAX_RANGE_DAYS) return 'Escolha um período de até 3 meses.';
+  if (end > Date.now() + 32 * 86400000) return 'A data final está muito no futuro.';
+  return null;
+}
+
+// Busca sem cache já em andamento (mesmo cliente e período): quem pedir de novo espera a
+// mesma resposta em vez de repetir todas as chamadas à Meta.
+const INSIGHTS_IN_FLIGHT = new Map();
+
 async function getClientInsights(clientId, since, until, { maxAgeMinutes = 180 } = {}) {
+  const periodError = insightsPeriodError(since, until);
+  if (periodError) throw Object.assign(new Error(periodError), { statusCode: 400 });
   await ensureSocialInsightsSchema();
   const { rows: cached } = await pool.query(
     `SELECT data, fetched_at FROM social_insights_snapshots
@@ -8430,6 +8465,14 @@ async function getClientInsights(clientId, since, until, { maxAgeMinutes = 180 }
   const fresh = cached[0] && (Date.now() - new Date(cached[0].fetched_at).getTime()) < maxAgeMinutes * 60000;
   if (fresh) return { ...cached[0].data, cached: true, fetched_at: cached[0].fetched_at };
 
+  const key = `${clientId}:${since}:${until}`;
+  if (INSIGHTS_IN_FLIGHT.has(key)) return INSIGHTS_IN_FLIGHT.get(key);
+  const pending = fetchAndCacheClientInsights(clientId, since, until, cached).finally(() => INSIGHTS_IN_FLIGHT.delete(key));
+  INSIGHTS_IN_FLIGHT.set(key, pending);
+  return pending;
+}
+
+async function fetchAndCacheClientInsights(clientId, since, until, cached) {
   const { rows: accounts } = await pool.query(
     `SELECT * FROM social_accounts WHERE client_id = $1 AND platform IN ('instagram', 'facebook') AND status = 'connected'`,
     [clientId]

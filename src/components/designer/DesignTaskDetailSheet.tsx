@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { sendWhatsAppMessage, sendWhatsAppMediaMessage } from '@/services/whatsappService';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -690,7 +691,6 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                         </DropdownMenu>
                       )
                     )}
-                return (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="Mais ações">
@@ -785,9 +785,9 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                           )}
                         </div>
                       </div>
-                      <a href={`/clients`} className="text-primary hover:text-primary/80">
+                      <Link to="/clientes" className="text-primary hover:text-primary/80" title="Abrir Clientes">
                         <ExternalLink size={14} />
-                      </a>
+                      </Link>
                     </div>
                   </div>
 

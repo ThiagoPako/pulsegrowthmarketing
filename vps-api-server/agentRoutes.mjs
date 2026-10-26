@@ -31,8 +31,10 @@
 //
 // Rotas do agente (cabeçalho "Authorization: Agent <chave>"):
 //   GET  /api/agent/me
-//   GET  /api/agent/queue               fila de edição (alterações primeiro)
-//   POST /api/agent/tasks/:id/claim     assume o card (atômico)
+//   GET  /api/agent/queue               fila de edição (alterações primeiro), com readiness (o que falta para pegar)
+//   GET  /api/agent/tasks/:id           card completo: readiness, parecer, histórico de ajustes, versões, histórico
+//   POST /api/agent/tasks/:id/review    (revisor, chefe) { verdict: ok|ajustes, notes } parecer da Análise no card
+//   POST /api/agent/tasks/:id/claim     assume o card (atômico); devolve também o histórico de ajustes
 //   POST /api/agent/tasks/:id/heartbeat { step }   sinal de vida + etapa atual
 //   POST /api/agent/tasks/:id/release   { reason } devolve o card para a fila
 //   POST /api/agent/tasks/:id/deliver   multipart: video (mp4), plan (json, opcional), notes
@@ -126,6 +128,11 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS agent_heartbeat_at TIMESTAMPTZ`);
         // usado pela divisão de pacotes (otimização e stories) em cards filhos; não existia em produção
         await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS parent_task_id UUID`);
+        // parecer do revisor IA na Análise (POST /api/agent/tasks/:id/review); a entrega nova apaga
+        await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS agent_review_verdict TEXT`);
+        await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS agent_review_notes TEXT`);
+        await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS agent_review_by UUID`);
+        await pool.query(`ALTER TABLE content_tasks ADD COLUMN IF NOT EXISTS agent_review_at TIMESTAMPTZ`);
         await pool.query(`CREATE INDEX IF NOT EXISTS idx_edit_versions_task ON edit_versions(task_id, version DESC)`).catch(() => {});
         // atividade geral (chefe, revisão, editor entre cards): online enquanto o status for recente
         await pool.query(`
@@ -1010,10 +1017,54 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
     t.adjustment_notes, t.script_alteration_notes, t.immediate_alteration, t.editing_priority,
     t.editing_deadline, t.alteration_deadline, t.assigned_to, t.edited_by, t.edited_video_link,
     t.editing_started_at, t.agent_step, t.agent_heartbeat_at, t.position, t.created_at,
+    t.script_id, t.script_alteration_type,
+    t.agent_review_verdict, t.agent_review_notes, t.agent_review_at,
     c.company_name AS client_name, c.niche AS client_niche, c.drive_link AS client_drive_link,
     c.drive_identidade_visual AS client_identity_link,
     s.title AS script_title, s.content AS script_content, s.video_type AS script_video_type,
     (SELECT COALESCE(MAX(v.version), 0) FROM edit_versions v WHERE v.task_id = t.id) AS last_version`;
+
+  // ── Prontidão do card para um agente pegar ──
+  // Mesmas regras de src/lib/agentCardStatus.ts (agentReadiness), que mostra o selo "Pronto p/ IA"
+  // no Kanban: brutos (drive_link) e cliente são obrigatórios (o `pulse pegar` recusa sem eles), o
+  // tipo precisa ser editável por agente e a alteração precisa do texto do ajuste; roteiro
+  // (reels/criativo) e prazo são recomendados. Mude os dois lados juntos.
+  const AGENT_EDITABLE_TYPES = new Set(['reels', 'story', 'criativo']);
+  function agentReadiness(t) {
+    const missing = [];
+    const type = t.content_type || '';
+    if (!String(t.drive_link || '').trim()) missing.push({ key: 'brutos', label: 'link dos brutos (Drive)', blocking: true });
+    if (!t.client_id) missing.push({ key: 'cliente', label: 'cliente cadastrado', blocking: true });
+    if (!AGENT_EDITABLE_TYPES.has(type)) {
+      missing.push({ key: 'tipo', label: type ? `tipo (${type} não é editado por agente)` : 'tipo do conteúdo', blocking: true });
+    }
+    if (t.kanban_column === 'alteracao' && !String(t.adjustment_notes || '').trim()) {
+      missing.push({ key: 'ajustes', label: 'o que mudar (ajustes)', blocking: true });
+    }
+    if ((type === 'reels' || type === 'criativo') && !t.script_id) missing.push({ key: 'roteiro', label: 'roteiro', blocking: false });
+    const hasDeadline = t.kanban_column === 'alteracao' ? !!t.alteration_deadline || !!t.immediate_alteration : !!t.editing_deadline;
+    if (!hasDeadline) missing.push({ key: 'prazo', label: 'prazo', blocking: false });
+    return { ready: missing.length === 0, blocked: missing.some((m) => m.blocking), missing };
+  }
+
+  // Histórico de ajustes do card: pedidos da equipe, da chefe e do cliente e os pareceres da Análise
+  // (task_history). O adjustment_notes do card guarda só o último pedido.
+  async function loadAdjustments(taskId, currentNotes) {
+    const { rows } = await pool.query(
+      `SELECT h.created_at, h.action, h.details, p.name AS by_name
+         FROM task_history h LEFT JOIN profiles p ON p.id = h.user_id
+        WHERE h.task_id = $1 AND COALESCE(h.details, '') <> ''
+          AND (h.action = 'Solicitado Alteração' OR h.action ILIKE '%ajuste solicitado%' OR h.action = 'Parecer da Análise')
+        ORDER BY h.created_at ASC`,
+      [taskId]
+    );
+    const list = rows.map((r) => ({ at: r.created_at, by: r.by_name ? r.by_name.trim() : null, origin: r.action, notes: r.details }));
+    const current = String(currentNotes || '').trim();
+    if (current && !list.some((a) => String(a.notes).includes(current))) {
+      list.push({ at: null, by: null, origin: 'Ajuste atual do card', notes: current });
+    }
+    return list;
+  }
 
   app.get('/api/agent/queue', async (req, res) => {
     try {
@@ -1042,7 +1093,12 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
                    t.created_at ASC`,
         [agent.userId]
       );
-      res.json({ agent: { id: agent.userId, name: agent.name, role: agent.role }, pause: await pauseStateFor(agent.userId), tasks: rows });
+      // readiness: o que falta para pegar (o mesmo selo "Pronto p/ IA" do Kanban)
+      res.json({
+        agent: { id: agent.userId, name: agent.name, role: agent.role },
+        pause: await pauseStateFor(agent.userId),
+        tasks: rows.map((t) => ({ ...t, readiness: agentReadiness(t) })),
+      });
     } catch (error) {
       sendError(res, error);
     }
@@ -1085,7 +1141,8 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           WHERE t.id = $1`,
         [rows[0].id]
       );
-      res.json({ task: full[0] });
+      // Na alteração o agente precisa de todos os pedidos, não só o último
+      res.json({ task: { ...full[0], adjustments: await loadAdjustments(full[0].id, full[0].adjustment_notes) } });
     } catch (error) {
       sendError(res, error);
     }
@@ -1185,6 +1242,9 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         `SELECT t.id, t.title, t.kanban_column, t.content_type, t.assigned_to, t.edited_by, t.edited_video_link,
                 t.adjustment_notes, t.drive_link, t.editing_deadline, t.review_deadline, t.alteration_deadline,
                 t.updated_at, t.description, t.content_type, t.script_alteration_notes,
+                t.script_alteration_type, t.immediate_alteration, t.editing_priority, t.agent_step, t.agent_heartbeat_at,
+                t.agent_review_verdict, t.agent_review_notes, t.agent_review_at,
+                c.drive_link AS client_drive_link, c.drive_identidade_visual AS client_identity_link,
                 c.company_name AS client_name, pe.name AS edited_by_name, pa.name AS assigned_to_name,
                 s.title AS script_title, s.content AS script_content,
                 (SELECT COALESCE(MAX(v.version), 0) FROM edit_versions v WHERE v.task_id = t.id) AS last_version
@@ -1241,6 +1301,11 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       if (task.kanban_column === column && notes == null) throw Object.assign(new Error('O card já está nessa coluna'), { status: 409 });
       if (column === 'revisao' && !task.edited_video_link) {
         throw Object.assign(new Error('Não dá para mandar para revisão sem vídeo editado no card'), { status: 409 });
+      }
+      // Para entrar em Edição só os brutos são obrigatórios (decisão do dono, 26/10/2026): o card
+      // entra livre na fila (assigned_to = NULL logo abaixo), para humanos e agentes pegarem
+      if (column === 'edicao' && task.kanban_column !== 'edicao' && !String(task.drive_link || '').trim()) {
+        throw Object.assign(new Error('Para entrar em Edição o card precisa do link dos brutos (drive_link)'), { status: 409 });
       }
       if (column === 'alteracao' && !notes && !task.adjustment_notes) {
         throw Object.assign(new Error('Informe os ajustes pedidos (adjustment_notes) ao mandar para alteração'), { status: 400 });
@@ -1498,6 +1563,88 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
     }
   });
 
+  // Parecer do revisor IA na Análise: fica no card (selo "✅/⚠ Parecer IA" no Kanban) e no histórico.
+  // { verdict: 'ok' | 'ajustes', notes } — no 'ajustes', notes é obrigatório (mm:ss + o que mudar).
+  // Não move o card: quem libera ou devolve continua sendo a chefe (`pulse mover`).
+  app.post('/api/agent/tasks/:id/review', async (req, res) => {
+    try {
+      const agent = await verifyAgent(req);
+      if (!['revisor', 'chefe'].includes(agent.role)) return res.status(403).json({ error: 'Só a revisão e a chefe dão parecer' });
+      const verdict = String(req.body?.verdict || '').trim().toLowerCase();
+      const notes = String(req.body?.notes || '').trim().slice(0, 4000);
+      if (!['ok', 'ajustes'].includes(verdict)) return res.status(400).json({ error: 'verdict deve ser "ok" ou "ajustes"' });
+      if (verdict === 'ajustes' && !notes) return res.status(400).json({ error: 'Diga o que mudar (notes), com o tempo do vídeo (mm:ss)' });
+      const { rows } = await pool.query(
+        `SELECT id, title, kanban_column FROM content_tasks WHERE id::text = $1 OR id::text LIKE $1 || '%' LIMIT 2`,
+        [String(req.params.id).trim()]
+      );
+      if (rows.length !== 1) return res.status(rows.length ? 400 : 404).json({ error: rows.length ? 'Mais de um card com esse começo de id' : 'Card não encontrado' });
+      const task = rows[0];
+      if (!['pre_revisao', 'revisao'].includes(task.kanban_column)) {
+        return res.status(409).json({ error: `O card está em "${task.kanban_column}": parecer só na Análise ou na Revisão` });
+      }
+      await pool.query(
+        `UPDATE content_tasks SET agent_review_verdict = $2, agent_review_notes = $3, agent_review_by = $4, agent_review_at = now()
+          WHERE id = $1`,
+        [task.id, verdict, notes || null, agent.userId]
+      );
+      await logHistory(task.id, agent.userId, 'Parecer da Análise', `${verdict === 'ok' ? '✅ ok' : '⚠ ajustes'}${notes ? `: ${notes}` : ''}`);
+      res.json({ ok: true, task: { id: task.id, title: task.title, column: task.kanban_column }, verdict });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // Card completo (o `pulse ver` deveria usar esta rota): campos da fila, prontidão, parecer,
+  // histórico de ajustes, versões entregues e as últimas movimentações. Editor: card livre na
+  // Edição ou que é/foi dele; chefe e revisão: qualquer card. O id só aceita hexadecimal e hífen:
+  // assim a rota não captura outros GET em /api/agent/tasks/<nome> que venham a ser criados.
+  app.get('/api/agent/tasks/:id([0-9a-fA-F-]+)', async (req, res) => {
+    try {
+      const agent = await verifyAgent(req);
+      const id = String(req.params.id || '').trim();
+      if (id.length < 6) return res.status(400).json({ error: 'Informe o id do card (pelo menos 6 caracteres)' });
+      const { rows } = await pool.query(
+        `SELECT ${TASK_FIELDS}, t.review_deadline, t.approval_deadline, t.updated_at, t.agent_review_by,
+                pe.name AS edited_by_name, pa.name AS assigned_to_name, pr.name AS agent_review_by_name
+           FROM content_tasks t
+           LEFT JOIN clients c ON c.id = t.client_id
+           LEFT JOIN scripts s ON s.id = t.script_id
+           LEFT JOIN profiles pe ON pe.id = t.edited_by
+           LEFT JOIN profiles pa ON pa.id = t.assigned_to
+           LEFT JOIN profiles pr ON pr.id = t.agent_review_by
+          WHERE t.id::text = $1 OR t.id::text LIKE $1 || '%'
+          LIMIT 2`,
+        [id]
+      );
+      if (rows.length !== 1) return res.status(rows.length ? 400 : 404).json({ error: rows.length ? 'Mais de um card com esse começo de id' : 'Card não encontrado' });
+      const task = rows[0];
+      if (agent.role === 'editor') {
+        const own = task.assigned_to === agent.userId || task.edited_by === agent.userId;
+        const free = task.kanban_column === 'edicao' && !task.assigned_to;
+        if (!own && !free) return res.status(403).json({ error: 'Card de outro editor' });
+      }
+      const [adjustments, { rows: versions }, { rows: history }] = await Promise.all([
+        loadAdjustments(task.id, task.adjustment_notes),
+        pool.query(
+          `SELECT v.version, v.video_url, v.notes, v.created_at, (v.plan IS NOT NULL) AS has_plan, p.name AS by_name
+             FROM edit_versions v LEFT JOIN profiles p ON p.id = v.created_by
+            WHERE v.task_id = $1 ORDER BY v.version ASC`,
+          [task.id]
+        ),
+        pool.query(
+          `SELECT h.created_at, h.action, h.details, p.name AS by_name
+             FROM task_history h LEFT JOIN profiles p ON p.id = h.user_id
+            WHERE h.task_id = $1 ORDER BY h.created_at DESC LIMIT 30`,
+          [task.id]
+        ),
+      ]);
+      res.json({ task: { ...task, readiness: agentReadiness(task), adjustments, versions, history } });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
   // ── Entrega ───────────────────────────────────────────────
   // Extensão final decidida pelo servidor, nunca a do nome original: um "x.html" declarado como
   // video/mp4 passava no filtro e ia para /uploads como .html (rodando no domínio do sistema).
@@ -1617,6 +1764,8 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
               assigned_to = NULL,
               reviewing_by = NULL, reviewing_by_name = NULL, reviewing_at = NULL,
               editing_deadline = NULL, alteration_deadline = NULL, approval_deadline = NULL, review_deadline = NULL,
+              -- versão nova: o parecer anterior da Análise não vale mais
+              agent_review_verdict = NULL, agent_review_notes = NULL, agent_review_by = NULL, agent_review_at = NULL,
               agent_step = 'pré-revisão',
               agent_heartbeat_at = now(),
               updated_at = now()

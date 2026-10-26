@@ -1,5 +1,16 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import AgentFixBadge from '@/components/kanban/AgentFixBadge';
+import AgentWorkBadge from '@/components/kanban/AgentWorkBadge';
+import AgentReviewBadge from '@/components/kanban/AgentReviewBadge';
+import AgentReadinessBadge from '@/components/kanban/AgentReadinessBadge';
+import AdjustmentRequestDialog from '@/components/kanban/AdjustmentRequestDialog';
+import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/ConfirmActionDialog';
+import KanbanColumnJumpBar, { kanbanColumnDomId } from '@/components/kanban/KanbanColumnJumpBar';
+import { useAgentIds } from '@/hooks/useAgentIds';
+import { agentReviewOf, agentWorkState, matchesOwnerFilter, OWNER_FILTER_OPTIONS, type OwnerFilter } from '@/lib/agentCardStatus';
+import {
+  ANALYSIS_FORBIDDEN_MSG, EDITING_NEEDS_FOOTAGE_MSG, SEND_TO_CLIENT_FORBIDDEN_MSG,
+  canReleaseAnalysis, isContentManager, missingFootageForEditing,
+} from '@/lib/contentKanbanRules';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth, profileHasRole, profileOwnsUserId } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
@@ -40,8 +51,16 @@ const EDITOR_COLUMNS = [
   { id: 'pre_revisao', label: 'Análise', bg: '#9b59b6', icon: '🤖' },
   { id: 'revisao', label: 'Em Revisão', bg: '#1abc9c', icon: '👁' },
   { id: 'alteracao', label: 'Alteração', bg: '#f1c40f', icon: '✏️' },
-  { id: 'envio', label: 'Concluído', bg: '#2ecc71', icon: '✅' },
+  // Mesmo nome do Kanban de Conteúdo (antes "Concluído"): estar aqui é ter sido enviado ao cliente
+  { id: 'envio', label: 'Enviado p/ Cliente', bg: '#2ecc71', icon: '✅' },
 ] as const;
+
+const SEND_TO_CLIENT_DESCRIPTION = (
+  <>
+    <p>O vídeo fica visível no portal do cliente e ele recebe o aviso pelo WhatsApp.</p>
+    <p>Use quando a revisão já aprovou o vídeo. Não dá para desfazer o aviso.</p>
+  </>
+);
 
 import { Undo2 } from 'lucide-react';
 
@@ -68,9 +87,17 @@ interface EditorTask {
   immediate_alteration: boolean;
   adjustment_notes?: string | null;
   script_alteration_notes?: string | null;
+  editing_priority?: boolean;
   position: number;
   created_at: string;
   updated_at: string;
+  /** Agente de IA com o card e parecer da Análise (gravados pela API dos agentes). */
+  agent_step?: string | null;
+  agent_heartbeat_at?: string | null;
+  agent_review_verdict?: string | null;
+  agent_review_notes?: string | null;
+  agent_review_at?: string | null;
+  agent_review_by?: string | null;
 }
 
 function getDeadlineStatus(deadline: string | null) {
@@ -92,7 +119,7 @@ function getTypeConfig(type: string) {
   return CONTENT_TYPES.find(t => t.value === type) || CONTENT_TYPES[0];
 }
 
-function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink, onClaimTask, onUnclaimTask, onReturnFromReview, onOpenDetail, draggedId, onDragStart, currentUserIds, users }: {
+function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink, onClaimTask, onUnclaimTask, onReturnFromReview, onOpenDetail, draggedId, onDragStart, currentUserIds, users, agentIds }: {
   task: EditorTask; clients: any[]; onOpenScript: (id: string) => void;
   onSendToReview: (task: EditorTask) => void;
   onAddVideoLink: (task: EditorTask) => void;
@@ -103,6 +130,7 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
   draggedId: string | null; onDragStart: (e: React.DragEvent, task: EditorTask) => void;
   currentUserIds: string[];
   users: any[];
+  agentIds: ReadonlySet<string>;
 }) {
   const client = clients.find(c => c.id === task.client_id);
   const typeConfig = getTypeConfig(task.content_type);
@@ -115,6 +143,10 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
   const isMine = !!task.assigned_to && currentUserIds.includes(task.assigned_to);
   const wasEditedByMe = !!task.edited_by && currentUserIds.includes(task.edited_by);
   const isOptimize = task.content_type === 'otimizacao';
+  // Depois da entrega o responsável é zerado: o card mostra quem editou (antes ficava sem nome)
+  const isAfterDelivery = ['pre_revisao', 'revisao', 'envio'].includes(task.kanban_column);
+  const editor = isAfterDelivery && !task.assigned_to && task.edited_by ? users.find(u => u.id === task.edited_by) : null;
+  const agentBusy = !!agentWorkState(task, { agentIds });
 
   // Count filled optimization slots (parsed from description marker)
   const optSlotCount = (() => {
@@ -129,7 +161,8 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
   })();
 
   return (
-    <div draggable onDragStart={e => onDragStart(e, task)}
+    // Clique abre o detalhe (histórico, comentários, upload, pacote de stories) — antes só o de Otimização abria
+    <div draggable onDragStart={e => onDragStart(e, task)} onClick={() => onOpenDetail(task)}
       className={`group relative bg-card border rounded-lg cursor-grab active:cursor-grabbing transition-all hover:shadow-md ${
         draggedId === task.id ? 'opacity-40 scale-95' : ''
       } ${isOptimize
@@ -166,6 +199,11 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
               {deadlineStatus.label}
             </Badge>
           )}
+          {task.kanban_column === 'pre_revisao' && (
+            <Badge className="text-[9px] bg-purple-500/20 text-purple-600 dark:text-purple-300 border-purple-500/30 gap-0.5">
+              🤖 Análise
+            </Badge>
+          )}
           {task.kanban_column === 'revisao' && (
             <Badge className="text-[9px] bg-teal-500/20 text-teal-600 dark:text-teal-400 border-teal-500/30 gap-0.5">
               <Eye size={9} /> Em Revisão
@@ -173,11 +211,13 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
           )}
           {task.kanban_column === 'envio' && (
             <Badge className="text-[9px] bg-success/20 text-success border-success/30">
-              <Check size={9} className="mr-0.5" /> Concluído
+              <Check size={9} className="mr-0.5" /> Enviado
             </Badge>
           )}
         </div>
         <p className="text-sm font-semibold text-foreground leading-tight">{task.title}</p>
+        {/* Fila dos agentes: pronto para a IA ou o que falta */}
+        <AgentReadinessBadge task={task} agentIds={agentIds} />
 
         {/* Optimization rocket guide + open detail (with slots) + training link */}
         {isOptimize && (
@@ -238,31 +278,48 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
 
         {/* Script link */}
         {task.script_id && (
-          <button onClick={() => onOpenScript(task.script_id!)} className="flex items-center gap-1 text-[11px] text-primary hover:underline">
+          <button onClick={(e) => { e.stopPropagation(); onOpenScript(task.script_id!); }} className="flex items-center gap-1 text-[11px] text-primary hover:underline">
             <Eye size={11} /> Ver roteiro gravado
           </button>
         )}
 
         {/* Drive link (raw materials) */}
         {task.drive_link && (
-          <a href={task.drive_link} target="_blank" rel="noopener noreferrer"
+          <a href={task.drive_link} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
             className="flex items-center gap-1.5 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline bg-blue-50 dark:bg-blue-900/20 rounded-md px-2 py-1.5">
             <ExternalLink size={12} />📁 Abrir materiais no Drive
           </a>
         )}
 
-        {/* Edited video link */}
+        {/* Edited video link: na Análise o vídeo ainda não está no portal, abre o arquivo */}
         {hasVideoLink && (
-          <a href={task.client_id ? `/portal/${task.client_id}` : `/video-avulso/${task.id}`}
+          <a href={task.kanban_column === 'pre_revisao' ? task.edited_video_link! : (task.client_id ? `/portal/${task.client_id}` : `/video-avulso/${task.id}`)}
+            target={task.kanban_column === 'pre_revisao' ? '_blank' : undefined}
+            rel={task.kanban_column === 'pre_revisao' ? 'noopener noreferrer' : undefined}
+            onClick={(e) => e.stopPropagation()}
             className="flex items-center gap-1.5 text-[11px] font-medium text-green-600 dark:text-green-400 hover:underline bg-green-50 dark:bg-green-900/20 rounded-md px-2 py-1.5">
-            <Eye size={12} />🎬 Assistir no Portal
+            <Eye size={12} />🎬 {task.kanban_column === 'pre_revisao' ? 'Assistir o vídeo entregue' : 'Assistir no Portal'}
           </a>
         )}
 
-        {/* Agente corrigindo a alteração agora */}
+        {/* Agente de IA com o card (edição ou correção) e parecer da Análise */}
         <div className="-mx-3 overflow-hidden rounded-md">
-          <AgentFixBadge task={task as any} users={users} />
+          <AgentWorkBadge task={task} users={users} agentIds={agentIds} />
+          <AgentReviewBadge task={task} users={users} />
         </div>
+
+        {/* Quem editou (Análise, Revisão, Enviado) */}
+        {editor && (
+          <div className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 border bg-teal-500/5 border-teal-500/20">
+            <UserAvatar user={{ name: editor.name || 'Editor', avatarUrl: editor.avatarUrl }} size="sm" />
+            <div className="min-w-0">
+              <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-medium">
+                🎬 Editado por{agentIds.has(editor.id) ? ' · 🤖 IA' : ''}
+              </p>
+              <p className="text-xs font-bold text-foreground truncate">{editor.name || 'Editor'}</p>
+            </div>
+          </div>
+        )}
 
         {/* Deadlines per column */}
         {task.kanban_column === 'edicao' && task.editing_deadline && (
@@ -347,18 +404,19 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
           </Button>
         )}
         
-        {task.kanban_column === 'alteracao' && (
+        {/* Com um agente corrigindo, quem entrega é ele (pela fila) */}
+        {task.kanban_column === 'alteracao' && !agentBusy && (
           <div className="space-y-1.5 mt-1">
             {!hasVideoLink && (
-              <Button size="sm" variant="outline" className="w-full gap-1.5 h-7 text-xs border-dashed" 
+              <Button size="sm" variant="outline" className="w-full gap-1.5 h-7 text-xs border-dashed"
                 onClick={(e) => { e.stopPropagation(); onAddVideoLink(task); }}>
                 <Link2 size={11} /> 📎 Adicionar link do vídeo corrigido
               </Button>
             )}
-            <Button size="sm" className="w-full gap-1.5 h-7 text-xs" 
+            <Button size="sm" className="w-full gap-1.5 h-7 text-xs"
               disabled={!hasVideoLink}
               onClick={(e) => { e.stopPropagation(); onSendToReview(task); }}>
-              <Send size={11} /> Enviar para Aprovação
+              <Send size={11} /> Reenviar para Revisão
             </Button>
             {!hasVideoLink && (
               <p className="text-[9px] text-destructive text-center">⚠️ Adicione o link do vídeo antes de enviar</p>
@@ -402,8 +460,15 @@ export default function EditorKanban() {
   const [videoLinkValue, setVideoLinkValue] = useState('');
   const [sendToReviewAfterLink, setSendToReviewAfterLink] = useState(false);
 
-  // Optimization detail sheet
+  // Detalhe do card (todos os cards; antes só o de Otimização abria)
   const [detailTask, setDetailTask] = useState<EditorTask | null>(null);
+
+  // Filtro "Responsável" (agente de IA, equipe, prontos para a IA…) e ids dos agentes
+  const [filterOwner, setFilterOwner] = useState<OwnerFilter>('all');
+  const agentIds = useAgentIds();
+  // Confirmação (enviar ao cliente, liberar card, voltar da revisão) e pedido de ajuste ao arrastar
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [adjustmentTask, setAdjustmentTask] = useState<EditorTask | null>(null);
 
   const fetchTasks = useCallback(async () => {
     const { data } = await supabase.from('content_tasks').select('*')
@@ -441,12 +506,14 @@ export default function EditorKanban() {
 
   const { profile } = useAuth();
   const isEditorRole = profileHasRole(profile, 'editor', 'videomaker');
+  const isManager = isContentManager(profile);
   // Todos os videomakers têm a mesma visão completa da bancada (igual admin/editor multi-função)
   const hasFullBenchAccess = profileHasRole(profile, 'admin', 'gestor_projetos', 'videomaker');
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
       if (filterClient !== 'all' && t.client_id !== filterClient) return false;
+      if (filterOwner !== 'all' && !matchesOwnerFilter(t, filterOwner, agentIds)) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         const client = clients.find((c: any) => c.id === t.client_id);
@@ -467,7 +534,7 @@ export default function EditorKanban() {
       }
       return true;
     });
-  }, [tasks, filterClient, searchQuery, clients, isEditorRole, user, profile, hasFullBenchAccess]);
+  }, [tasks, filterClient, filterOwner, agentIds, searchQuery, clients, isEditorRole, user, profile, hasFullBenchAccess]);
 
   const sortedTasksByColumn = useMemo(() => {
     const map: Record<string, EditorTask[]> = {};
@@ -490,7 +557,7 @@ export default function EditorKanban() {
       edited_by: user.id,
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id).is('assigned_to', null).select('id');
-    if (error) { toast.error('Erro ao marcar tarefa'); return; }
+    if (error) { toast.error(`Não foi possível marcar a tarefa${error.message ? `: ${error.message}` : '. Tente de novo.'}`); return; }
     if (!data || (Array.isArray(data) && data.length === 0)) {
       toast.error('🚫 Este vídeo já foi pego por outra pessoa!');
       fetchTasks();
@@ -501,7 +568,19 @@ export default function EditorKanban() {
     fetchTasks();
   };
 
-  const handleUnclaimTask = async (task: EditorTask) => {
+  // Liberar o card: antes um clique na bandeira (aviso só no hover; no celular, nenhum) já soltava
+  const handleUnclaimTask = (task: EditorTask) => {
+    setConfirmAction({
+      title: 'Liberar este card?',
+      description: task.kanban_column === 'alteracao'
+        ? 'A alteração sai das suas mãos e o timer zera. Ela continua sendo sua (editor do vídeo) e volta para a sua fila.'
+        : 'O card volta para a fila de edição, livre para outro editor ou um agente de IA pegar.',
+      confirmLabel: 'Liberar card',
+      onConfirm: () => doUnclaimTask(task),
+    });
+  };
+
+  const doUnclaimTask = async (task: EditorTask) => {
     if (!user) return;
     const updateData: any = {
       assigned_to: null,
@@ -517,7 +596,7 @@ export default function EditorKanban() {
       updateData.edited_by = null;
     }
     const { error } = await supabase.from('content_tasks').update(updateData).eq('id', task.id);
-    if (error) { toast.error('Erro ao liberar tarefa'); return; }
+    if (error) { toast.error(`Não foi possível liberar o card${error.message ? `: ${error.message}` : '. Tente de novo.'}`); return; }
     toast.success('🏳️ Tarefa liberada para a fila!');
     fetchTasks();
   };
@@ -529,9 +608,15 @@ export default function EditorKanban() {
   };
 
   // ─── VALIDATION RULES ─────────────────────────────────────
+  // Decisões do dono (26/10/2026): a gestão (admin, social media, gestor de projetos) move qualquer
+  // card e manda ao cliente; editor e videomaker só nas colunas deles; outros papéis só visualizam.
   const validateTransition = (task: EditorTask, targetColumn: string): string | null => {
+    if (!isManager) {
+      if (targetColumn === 'envio') return SEND_TO_CLIENT_FORBIDDEN_MSG;
+      if (!isEditorRole) return 'Seu papel só visualiza este quadro: quem move os cards é a gestão.';
+    }
     // Editor role restrictions: can only interact with edicao and alteracao
-    if (isEditorRole) {
+    if (isEditorRole && !isManager) {
       // Editor can move: edicao→revisao, alteracao→revisao (sending finished work)
       // Editor CANNOT move: revisao→anywhere (that's for admin/social_media)
       // Editor CANNOT move: envio→anywhere
@@ -551,6 +636,14 @@ export default function EditorKanban() {
         return 'Editores só podem enviar para Revisão ou mover entre Edição e Alteração.';
       }
     }
+    // Análise: liberar para a revisão humana ou devolver é do admin e da social media (e da chefe IA)
+    if (task.kanban_column === 'pre_revisao' && targetColumn !== 'pre_revisao' && !canReleaseAnalysis(profile)) {
+      return ANALYSIS_FORBIDDEN_MSG;
+    }
+    // Para entrar em Edição só o link dos brutos é obrigatório; o card entra livre na fila
+    if (targetColumn === 'edicao' && task.kanban_column !== 'edicao' && missingFootageForEditing(task)) {
+      return EDITING_NEEDS_FOOTAGE_MSG;
+    }
     // Moving to revisao requires edited_video_link
     if (targetColumn === 'revisao' && !task.edited_video_link) {
       return 'Adicione o link do vídeo editado antes de enviar para revisão';
@@ -566,6 +659,16 @@ export default function EditorKanban() {
     e.preventDefault();
     setDragOverColumn(null);
     if (!draggedTask || draggedTask.kanban_column === targetColumn) { setDraggedTask(null); return; }
+
+    // Agente com sinal recente está renderizando: mover agora faz a entrega dele ser recusada.
+    // Parado (sem sinal há 30 min ou mais), pode mover para destravar.
+    const work = agentWorkState(draggedTask, { agentIds });
+    if (work?.state === 'working') {
+      const name = (users.find(u => u.id === draggedTask.assigned_to)?.name || 'Um agente').trim().split(/\s+/)[0];
+      toast.error(`🤖 ${name} está trabalhando neste card (${work.step}). Espere a entrega ou peça à chefe para liberar (pulse liberar).`);
+      setDraggedTask(null);
+      return;
+    }
 
     // Block editors/videomakers from moving a task already claimed by someone else
     if (isEditorRole && draggedTask.assigned_to && !profileOwnsUserId(profile, draggedTask.assigned_to)) {
@@ -589,28 +692,54 @@ export default function EditorKanban() {
       return;
     }
 
-    const updateData: any = { kanban_column: targetColumn, updated_at: new Date().toISOString() };
+    const task = draggedTask;
+    setDraggedTask(null);
+    // Alteração pede o que mudar (o editor, humano ou agente, só corrige o que estiver escrito)
+    if (targetColumn === 'alteracao') {
+      setAdjustmentTask(task);
+      return;
+    }
+    // "Enviado p/ Cliente" libera o vídeo no portal e o cliente recebe WhatsApp: confirma
+    if (targetColumn === 'envio') {
+      setConfirmAction({
+        title: 'Enviar ao cliente?',
+        description: SEND_TO_CLIENT_DESCRIPTION,
+        confirmLabel: 'Enviar ao cliente',
+        onConfirm: () => { void moveTask(task, 'envio'); },
+      });
+      return;
+    }
+    await moveTask(task, targetColumn);
+  };
+
+  const moveTask = async (task: EditorTask, targetColumn: string, extra: Record<string, any> = {}, historyDetails?: string) => {
+    const updateData: any = { kanban_column: targetColumn, ...extra, updated_at: new Date().toISOString() };
     // Auto-claim só para editor/videomaker levando o card para "Para Editar". Antes valia para
     // qualquer papel e destino: o admin que arrastava virava responsável e o card sumia da fila
     // dos editores e dos agentes.
-    const shouldAutoClaim = isEditorRole && targetColumn === 'edicao' && !draggedTask.assigned_to && !!user;
+    const shouldAutoClaim = isEditorRole && targetColumn === 'edicao' && !task.assigned_to && !!user;
     if (shouldAutoClaim) {
       updateData.assigned_to = user!.id;
     }
     // Quem leva o card para Edição e fica com ele começa a editar agora (timer). Sem dono, o
     // card entra na fila (o sync grava editing_started_at = null).
-    const startsEditing = targetColumn === 'edicao' && (shouldAutoClaim || profileOwnsUserId(profile, draggedTask.assigned_to));
-    if (startsEditing && !draggedTask.editing_started_at) {
+    const startsEditing = targetColumn === 'edicao' && (shouldAutoClaim || profileOwnsUserId(profile, task.assigned_to));
+    if (startsEditing && !task.editing_started_at) {
       updateData.editing_started_at = new Date().toISOString();
       if (user) updateData.edited_by = user.id;
     }
     // Always ensure edited_by is set when an editor interacts with a task
-    if (isEditorRole && !draggedTask.edited_by && user) {
+    if (isEditorRole && !task.edited_by && user) {
       updateData.edited_by = user.id;
     }
+    // Entrar em Edição sem alguém pegando agora: o card entra livre na fila (humanos e agentes pegam)
+    if (targetColumn === 'edicao' && !shouldAutoClaim && !startsEditing) {
+      updateData.assigned_to = null;
+      if (task.agent_step) { updateData.agent_step = null; updateData.agent_heartbeat_at = null; }
+    }
     // Guarda atômica: card que estava livre só muda se ainda estiver livre (ninguém pegou no meio)
-    const guardUnassigned = isEditorRole && !draggedTask.assigned_to;
-    let query = supabase.from('content_tasks').update(updateData).eq('id', draggedTask.id);
+    const guardUnassigned = isEditorRole && !task.assigned_to;
+    let query = supabase.from('content_tasks').update(updateData).eq('id', task.id);
     if (guardUnassigned) {
       // Only update if still unassigned — prevents two people claiming the same video
       query = (query as any).is('assigned_to', null);
@@ -619,31 +748,39 @@ export default function EditorKanban() {
     if (!error && (!updatedRows || updatedRows.length === 0)) {
       if (!guardUnassigned) {
         toast.error('Este card não está na cidade ativa (ou foi removido). Nada foi alterado.');
-        setDraggedTask(null);
         fetchTasks();
-        return;
+        return false;
       }
       toast.error('🚫 Este vídeo já foi pego por outra pessoa!');
-      setDraggedTask(null);
       fetchTasks();
-      return;
+      return false;
     }
     if (error) {
-      toast.error('Erro ao mover cartão');
-    } else {
-      // Use shared sync for ALL column changes
-      const client = clients.find(c => c.id === draggedTask.client_id);
-      const ctx = buildSyncContext(draggedTask as any, {
-        userId: user?.id,
-        clientName: client?.companyName,
-        clientWhatsapp: (client as any)?.whatsapp,
-        startEditing: startsEditing,
-      });
-      await syncContentTaskColumnChange(targetColumn, ctx);
-      toast.success(`Movido para ${EDITOR_COLUMNS.find(c => c.id === targetColumn)?.label}`);
-      fetchTasks();
+      toast.error(`Não foi possível mover o cartão${error.message ? `: ${error.message}` : '. Tente de novo.'}`);
+      return false;
     }
-    setDraggedTask(null);
+    // Use shared sync for ALL column changes
+    const client = clients.find(c => c.id === task.client_id);
+    const ctx = buildSyncContext({ ...task, ...extra } as any, {
+      userId: user?.id,
+      clientName: client?.companyName,
+      clientWhatsapp: (client as any)?.whatsapp,
+      startEditing: startsEditing,
+      historyDetails,
+    });
+    await syncContentTaskColumnChange(targetColumn, ctx);
+    toast.success(`Movido para ${EDITOR_COLUMNS.find(c => c.id === targetColumn)?.label}`);
+    fetchTasks();
+    return true;
+  };
+
+  // Pedido de ajuste ao arrastar para Alteração (o texto vai para o card e para o histórico)
+  const handleAdjustmentSubmit = async (notes: string, immediate: boolean) => {
+    if (!adjustmentTask) return false;
+    const fromAnalysis = adjustmentTask.kanban_column === 'pre_revisao';
+    return moveTask(adjustmentTask, 'alteracao',
+      { adjustment_notes: notes, immediate_alteration: immediate, assigned_to: null },
+      `${fromAnalysis ? 'Devolvido da Análise · ' : ''}Ajustes: ${notes}`);
   };
 
   // Keep createOrUpdateDelivery as fallback for video link save flow
@@ -680,7 +817,7 @@ export default function EditorKanban() {
       updateData.edited_by = user.id;
     }
     const { error } = await supabase.from('content_tasks').update(updateData).eq('id', task.id);
-    if (error) { toast.error('Erro ao enviar para revisão'); return; }
+    if (error) { toast.error(`Não foi possível enviar para a revisão${error.message ? `: ${error.message}` : '. Tente de novo.'}`); return; }
     
     // Use shared sync
     const client = clients.find(c => c.id === task.client_id);
@@ -694,8 +831,18 @@ export default function EditorKanban() {
     fetchTasks();
   };
 
-  // Ops! Volta aqui — editor returns task from review back to editing
-  const handleReturnFromReview = async (task: EditorTask) => {
+  // Ops! Volta aqui — editor returns task from review back to editing (com confirmação: a revisão
+  // pode estar olhando o vídeo, e a entrega do Social Media é apagada)
+  const handleReturnFromReview = (task: EditorTask) => {
+    setConfirmAction({
+      title: 'Tirar o vídeo da revisão?',
+      description: 'O card volta para Edição com você e o timer recomeça. A revisão deixa de ver este vídeo até você enviar de novo.',
+      confirmLabel: 'Voltar para edição',
+      onConfirm: () => doReturnFromReview(task),
+    });
+  };
+
+  const doReturnFromReview = async (task: EditorTask) => {
     if (!user) return;
     const { error } = await supabase.from('content_tasks').update({
       kanban_column: 'edicao',
@@ -709,7 +856,7 @@ export default function EditorKanban() {
       approval_sent_at: null,
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
-    if (error) { toast.error('Erro ao devolver tarefa'); return; }
+    if (error) { toast.error(`Não foi possível voltar o card para a edição${error.message ? `: ${error.message}` : '. Tente de novo.'}`); return; }
 
     // Remove social_media_deliveries record since task is back in editing
     await supabase.from('social_media_deliveries').delete().eq('content_task_id', task.id);
@@ -751,7 +898,7 @@ export default function EditorKanban() {
       updatePayload.edited_by = user.id;
     }
     const { error } = await supabase.from('content_tasks').update(updatePayload).eq('id', videoLinkTask.id);
-    if (error) { toast.error('Erro ao salvar link'); return; }
+    if (error) { toast.error(`Não foi possível salvar o link${error.message ? `: ${error.message}` : '. Tente de novo.'}`); return; }
 
     toast.success('Link do vídeo salvo!');
     setVideoLinkDialogOpen(false);
@@ -766,7 +913,16 @@ export default function EditorKanban() {
       if (!videoLinkTask.edited_by && user) {
         reviewUpdate.edited_by = user.id;
       }
-      await supabase.from('content_tasks').update(reviewUpdate).eq('id', videoLinkTask.id);
+      const { error: reviewError } = await supabase.from('content_tasks').update(reviewUpdate).eq('id', videoLinkTask.id);
+      if (reviewError) {
+        // O link ficou salvo; só o envio para a revisão falhou (antes seguia e avisava como enviado)
+        toast.error(`Link salvo, mas não foi possível enviar para a revisão: ${reviewError.message || 'tente de novo'}`);
+        setVideoLinkTask(null);
+        setVideoLinkValue('');
+        setSendToReviewAfterLink(false);
+        fetchTasks();
+        return;
+      }
       const client = clients.find(c => c.id === videoLinkTask.client_id);
       const ctx = buildSyncContext(updatedTask as any, {
         userId: user?.id,
@@ -811,20 +967,31 @@ export default function EditorKanban() {
           </h1>
           <p className="text-sm text-muted-foreground">Gerencie o fluxo de edição dos vídeos</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+          <div className="relative w-full sm:w-auto">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Pesquisar..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-8 h-8 w-40 text-sm" />
+            <Input placeholder="Pesquisar..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-8 h-8 w-full sm:w-40 text-sm" />
           </div>
           <Select value={filterClient} onValueChange={setFilterClient}>
-            <SelectTrigger className="h-8 w-36 text-sm"><SelectValue placeholder="Cliente" /></SelectTrigger>
+            <SelectTrigger className="h-8 flex-1 min-w-[130px] sm:flex-none sm:w-36 text-sm"><SelectValue placeholder="Cliente" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos Clientes</SelectItem>
               {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Select value={filterOwner} onValueChange={v => setFilterOwner(v as OwnerFilter)}>
+            <SelectTrigger className="h-8 flex-1 min-w-[160px] sm:flex-none sm:w-48 text-sm" title="Filtrar por quem está com o card">
+              <SelectValue placeholder="Responsável" />
+            </SelectTrigger>
+            <SelectContent>
+              {OWNER_FILTER_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
       </div>
+
+      {/* Celular: atalho para cada coluna */}
+      <KanbanColumnJumpBar columns={EDITOR_COLUMNS.map(c => ({ id: c.id, label: c.label, count: sortedTasksByColumn[c.id]?.length || 0 }))} />
 
       <div className="flex-1 overflow-x-auto">
         <div className="flex gap-3 h-full min-w-max pb-2">
@@ -832,8 +999,8 @@ export default function EditorKanban() {
             const colTasks = sortedTasksByColumn[col.id] || [];
             const isDragOver = dragOverColumn === col.id;
             return (
-              <div key={col.id}
-                className={`flex flex-col w-[300px] shrink-0 rounded-xl transition-colors ${isDragOver ? 'ring-2 ring-primary/40 bg-accent/30' : 'bg-muted/20'}`}
+              <div key={col.id} id={kanbanColumnDomId(col.id)}
+                className={`flex flex-col w-[85vw] max-w-[300px] sm:w-[300px] shrink-0 rounded-xl transition-colors ${isDragOver ? 'ring-2 ring-primary/40 bg-accent/30' : 'bg-muted/20'}`}
                 onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverColumn(col.id); }}
                 onDragLeave={() => setDragOverColumn(null)}
                 onDrop={e => handleDrop(e, col.id)}>
@@ -850,13 +1017,15 @@ export default function EditorKanban() {
                         onClaimTask={handleClaimTask} onUnclaimTask={handleUnclaimTask} onReturnFromReview={handleReturnFromReview}
                         onOpenDetail={setDetailTask}
                         currentUserIds={profile?.identity_ids?.length ? profile.identity_ids : (user?.id ? [user.id] : [])} users={users}
+                        agentIds={agentIds}
                         draggedId={draggedTask?.id || null} onDragStart={handleDragStart} />
                     ))}
                     {colTasks.length === 0 && (
                       <div className="text-center py-10 text-xs text-muted-foreground italic">
                         {col.id === 'edicao' ? 'Nenhum vídeo para editar' :
+                         col.id === 'pre_revisao' ? 'Nenhuma entrega de agente em análise' :
                          col.id === 'revisao' ? 'Nenhum vídeo em revisão' :
-                         col.id === 'alteracao' ? 'Nenhuma alteração pendente' : 'Nenhum vídeo concluído'}
+                         col.id === 'alteracao' ? 'Nenhuma alteração pendente' : 'Nenhum vídeo enviado ao cliente'}
                       </div>
                     )}
                   </div>
@@ -928,15 +1097,31 @@ export default function EditorKanban() {
         </DialogContent>
       </Dialog>
 
-      {/* Optimization detail sheet with slots */}
+      {/* Detalhe do card (slots de otimização, pacote de stories, upload, histórico, comentários).
+          Usa a versão atual do card na lista: depois de uma ação o detalhe não fica com dados velhos. */}
       {detailTask && (
         <EditorTaskDetail
-          task={detailTask as unknown as EditorTaskFull}
+          task={(tasks.find(t => t.id === detailTask.id) || detailTask) as unknown as EditorTaskFull}
           open={!!detailTask}
           onOpenChange={(o) => { if (!o) setDetailTask(null); }}
           onRefresh={fetchTasks}
         />
       )}
+
+      {/* Arrastar para Alteração: pede o que mudar */}
+      <AdjustmentRequestDialog
+        open={!!adjustmentTask}
+        title={adjustmentTask?.kanban_column === 'pre_revisao' ? 'Devolver da Análise para Alteração' : 'Solicitar Ajustes'}
+        taskTitle={adjustmentTask?.title}
+        initialNotes={(() => {
+          const review = adjustmentTask ? agentReviewOf(adjustmentTask) : null;
+          return review?.verdict === 'ajustes' ? review.notes || '' : '';
+        })()}
+        onOpenChange={(o) => { if (!o) setAdjustmentTask(null); }}
+        onSubmit={handleAdjustmentSubmit}
+      />
+
+      <ConfirmActionDialog action={confirmAction} onClose={() => setConfirmAction(null)} />
     </div>
   );
 }

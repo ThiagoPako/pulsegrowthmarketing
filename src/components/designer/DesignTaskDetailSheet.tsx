@@ -13,7 +13,18 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn, stopTimerFields, hasOpenTimer, getConflictingExecutingTasks, formatDueDate } from '@/hooks/useDesignTasks';
+import { useDesignTasks, useDesignAgents, DESIGN_COLUMNS, DesignTask, DesignTaskColumn, stopTimerFields, hasOpenTimer, getConflictingExecutingTasks, formatDueDate } from '@/hooks/useDesignTasks';
+import { useQuery } from '@tanstack/react-query';
+import { vpsAuthedFetch } from '@/lib/vpsDb';
+import DesignAgentBadge, { isDesignAgentWorking } from '@/components/designer/DesignAgentBadge';
+import DesignFormatPicker from '@/components/designer/DesignFormatPicker';
+import DesignCopyFields from '@/components/designer/DesignCopyFields';
+import DesignReferenceUploader from '@/components/designer/DesignReferenceUploader';
+import {
+  COPY_MAIN_FIELDS, COPY_REQUIRED_FIELDS, DesignCopyBrief, DesignDimensions, assembleCopyText, describeDesignFormat,
+  describeMissingForForm, dimensionsFromPreset, formatTypeForDimensions, getDesignBriefMissing, isCopyBriefEmpty,
+  normalizeCopyBrief, parseJsonField,
+} from '@/lib/designBrief';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
@@ -23,7 +34,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History,
   Upload, Image, FileText, Palette, Info, User, Calendar, ArrowRight, X,
-  ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip, ZoomIn, Loader2, Trash2, Pencil, Download, FileDown, MoreVertical
+  ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip, ZoomIn, Loader2, Trash2, Pencil, Download, FileDown, MoreVertical,
+  FolderOpen, AlertTriangle, Bot, Layers
 } from 'lucide-react';
 import { downloadSingleArt, downloadArtsAsPdf } from '@/lib/designerDownload';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -58,9 +70,58 @@ function getTaskCategory(task: DesignTask): 'identidade_visual' | 'reformulacao'
   return 'normal';
 }
 
+interface AgentReview {
+  id: string;
+  version: number | null;
+  verdict: 'aprovado' | 'ajustes';
+  notes: string | null;
+  created_at: string;
+  reviewer: string;
+  designer: string;
+  errors: { category: string; label: string; description: string }[];
+}
+
 export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Props) {
   const { tasksQuery, updateTask, addHistory, historyQuery, deleteTask } = useDesignTasks();
-  const { currentUser } = useApp();
+  const { currentUser, clients } = useApp();
+  const { data: designAgents = [] } = useDesignAgents();
+  const agentIds = new Set(designAgents.map(a => a.user_id));
+  const agentName = (id?: string | null) => (designAgents.find(a => a.user_id === id)?.name || '').trim();
+  const fullClient = clients.find(c => c.id === task.client_id);
+  const clientDrive = {
+    geral: (fullClient?.driveLink || task.clients?.drive_link || '').trim(),
+    fotos: (fullClient?.driveFotos || '').trim(),
+    identidade: (fullClient?.driveIdentidadeVisual || '').trim(),
+  };
+  const formatInfo = describeDesignFormat(task.dimensions, task.format_type);
+  const copyBrief = normalizeCopyBrief(task.copy_brief);
+  const briefMissing = getDesignBriefMissing(task);
+  const agentWorking = isDesignAgentWorking(task);
+  const madeByAgent = (!!task.designed_by && agentIds.has(task.designed_by)) || task.kanban_column === 'analise_ia';
+  // Pareceres da Análise IA (revisor de artes) e entregas dos agentes
+  const reviewsQuery = useQuery({
+    queryKey: ['design-agent-reviews', task.id, task.version, task.kanban_column],
+    queryFn: async (): Promise<{ reviews: AgentReview[] }> => {
+      const response = await vpsAuthedFetch(`/design-tasks/${task.id}/agent-reviews`);
+      if (!response.ok) return { reviews: [] };
+      return response.json();
+    },
+    enabled: open && (madeByAgent || task.kanban_column === 'ajustes'),
+    staleTime: 30_000,
+  });
+  const agentReviews = reviewsQuery.data?.reviews || [];
+  // Edição do brief (formato, copy, materiais)
+  const [editingBrief, setEditingBrief] = useState(false);
+  const [briefDims, setBriefDims] = useState<DesignDimensions | null>(null);
+  const [briefCopy, setBriefCopy] = useState<DesignCopyBrief>({});
+  const [briefMaterials, setBriefMaterials] = useState('');
+  const [savingBrief, setSavingBrief] = useState(false);
+  const startEditBrief = () => {
+    setBriefDims(parseJsonField<DesignDimensions>(task.dimensions) || (formatInfo ? dimensionsFromPreset(formatInfo.preset) : null));
+    setBriefCopy(copyBrief);
+    setBriefMaterials(task.materials_link || '');
+    setEditingBrief(true);
+  };
   const { user } = useAuth();
   const [observations, setObservations] = useState(task.observations || '');
   const [attachmentUrl, setAttachmentUrl] = useState(task.attachment_url || '');
@@ -89,8 +150,6 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [dueDate, setDueDate] = useState(task.due_date || '');
   const [editingDueDate, setEditingDueDate] = useState(false);
   const [editingRefs, setEditingRefs] = useState(false);
-  const [newRefLink, setNewRefLink] = useState('');
-  const [uploadingRefImage, setUploadingRefImage] = useState(false);
   const prevColumnRef = useRef(task.kanban_column);
 
   // Animate rocket flyby when column changes
@@ -194,6 +253,42 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
     await updateTask.mutateAsync({ id: task.id, kanban_column: 'em_analise', attachment_url: finalAttachment, editable_file_url: editableFileUrl, observations, due_date: null, ...timerStopFields() } as any);
     await addHistory.mutateAsync({ task_id: task.id, action: 'Enviado para análise', attachment_url: finalAttachment, user_id: user?.id });
     toast.success('Enviado para análise!');
+  };
+
+  const handleReleaseFromAiReview = async () => {
+    await moveToColumn('em_analise', { due_date: null, agent_step: null, agent_heartbeat_at: null } as any);
+    toast.success('Arte liberada para a revisão da equipe');
+  };
+
+  const handleSaveBrief = async () => {
+    if (!briefDims || !describeDesignFormat(briefDims)) { toast.error('Escolha o formato e preencha a medida'); return; }
+    const copy = normalizeCopyBrief(briefCopy);
+    if (briefMaterials.trim() && !/^https?:\/\//i.test(briefMaterials.trim())) { toast.error('O link dos materiais precisa começar com https://'); return; }
+    setSavingBrief(true);
+    try {
+      const structured = !isCopyBriefEmpty(copy);
+      await updateTask.mutateAsync({
+        id: task.id,
+        dimensions: briefDims,
+        format_type: formatTypeForDimensions(briefDims),
+        copy_brief: structured ? copy : null,
+        // copy antiga (só texto) continua quando ninguém preencheu os campos
+        ...(structured ? { copy_text: assembleCopyText(copy) } : {}),
+        materials_link: briefMaterials.trim() || null,
+      } as any);
+      await addHistory.mutateAsync({ task_id: task.id, action: 'Brief editado', details: describeDesignFormat(briefDims)?.label, user_id: user?.id });
+      setEditingBrief(false);
+      toast.success('Brief atualizado');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao salvar o brief');
+    } finally {
+      setSavingBrief(false);
+    }
+  };
+
+  const saveReferences = async (patch: { reference_images?: string[]; references_links?: string[] }, action: string) => {
+    await updateTask.mutateAsync({ id: task.id, ...patch } as any);
+    await addHistory.mutateAsync({ task_id: task.id, action, user_id: user?.id });
   };
 
   const handleApprove = async () => {
@@ -540,9 +635,15 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
     if ((task.kanban_column === 'executando' || task.kanban_column === 'ajustes') && isDesigner) {
       actions.push({ key: 'em_analise', label: 'ENVIAR P/ ANÁLISE', color: 'hsl(262 83% 58%)', icon: Send, onClick: handleSendForReview });
     }
+    if (task.kanban_column === 'analise_ia' && isSocialMedia) {
+      // A equipe pode passar na frente do revisor de artes (IA): libera ou pede ajustes ao mesmo designer
+      actions.push({ key: 'em_analise', label: 'LIBERAR P/ REVISÃO', color: 'hsl(262 83% 58%)', icon: Eye, onClick: handleReleaseFromAiReview });
+      actions.push({ key: 'ajustes', label: 'PEDIR AJUSTES', color: 'hsl(0 72% 51%)', icon: RotateCcw, onClick: () => setShowAdjustmentForm(true) });
+    }
     if (task.kanban_column === 'em_analise' && isSocialMedia) {
       actions.push({ key: 'enviar_cliente', label: 'APROVAR ARTE', color: 'hsl(142 71% 45%)', icon: CheckCircle, onClick: handleApprove });
-      actions.push({ key: 'ajustes', label: 'ENVIAR PARA REVISÃO', color: 'hsl(0 72% 51%)', icon: RotateCcw, onClick: () => setShowAdjustmentForm(true) });
+      // antes "ENVIAR PARA REVISÃO": o botão pede ajustes ao designer
+      actions.push({ key: 'ajustes', label: 'PEDIR AJUSTES', color: 'hsl(0 72% 51%)', icon: RotateCcw, onClick: () => setShowAdjustmentForm(true) });
     }
     if (task.kanban_column === 'enviar_cliente' && isSocialMedia) {
       actions.push({ key: 'enviar_cliente', label: 'ENVIAR VIA WHATSAPP', color: 'hsl(142 71% 45%)', icon: Send, onClick: handleSendToClient });
@@ -792,6 +893,137 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                     </div>
                   </div>
 
+                  {/* Pasta do Drive do cliente: a IA (e a designer) busca identidade, logos e fotos aqui */}
+                  {task.client_id && (
+                    clientDrive.geral ? (
+                      <div className="rounded-lg border border-border p-3 space-y-1.5">
+                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                          <FolderOpen size={10} /> Drive do cliente
+                        </Label>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                          <a href={clientDrive.geral} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1"><FolderOpen size={11} /> Pasta geral</a>
+                          {clientDrive.identidade && <a href={clientDrive.identidade} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1"><Palette size={11} /> Identidade visual</a>}
+                          {clientDrive.fotos && <a href={clientDrive.fotos} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1"><Image size={11} /> Fotos</a>}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-amber-400/50 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2">
+                        <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                        <span>O cliente não tem a pasta do Drive cadastrada (identidade, logos e fotos). Preencha em <Link to="/clientes" className="underline font-medium">Clientes</Link>.</span>
+                      </div>
+                    )
+                  )}
+
+                  {/* Agente de IA trabalhando / Análise IA */}
+                  {(task.agent_step || task.kanban_column === 'analise_ia') && (
+                    <div className="rounded-lg overflow-hidden border border-border">
+                      <DesignAgentBadge task={task} agents={designAgents} />
+                    </div>
+                  )}
+
+                  {/* Brief: formato, copy estruturada e materiais */}
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                        <Layers size={10} /> Brief da arte
+                      </Label>
+                      <div className="flex items-center gap-1.5">
+                        {briefMissing.length === 0
+                          ? <Badge variant="outline" className="text-[10px] border-emerald-400/60 text-emerald-600">Brief completo</Badge>
+                          : <Badge variant="outline" className="text-[10px] border-amber-400/60 text-amber-600">Brief incompleto</Badge>}
+                        {(isSocialMedia || isDesigner) && !editingBrief && (
+                          <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]" onClick={startEditBrief}>
+                            <Pencil size={10} className="mr-1" /> Editar
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    {editingBrief ? (
+                      <div className="space-y-3">
+                        <DesignFormatPicker value={briefDims} onChange={setBriefDims} />
+                        <DesignCopyFields value={briefCopy} onChange={setBriefCopy} />
+                        <div className="space-y-1">
+                          <Label className="text-xs">Link do Drive com os materiais desta arte</Label>
+                          <Input value={briefMaterials} onChange={e => setBriefMaterials(e.target.value)} placeholder="https://drive.google.com/drive/folders/..." className="text-xs h-8" />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" className="h-8 text-xs" onClick={handleSaveBrief} disabled={savingBrief}>{savingBrief ? 'Salvando…' : 'Salvar brief'}</Button>
+                          <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setEditingBrief(false)}>Cancelar</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase">Formato</p>
+                          {formatInfo ? (
+                            <p className="text-sm font-semibold">
+                              {formatInfo.label}
+                              {formatInfo.print && formatInfo.pixelsWithBleed && (
+                                <span className="block text-[11px] font-normal text-muted-foreground">Impressão: exportar PDF com {formatInfo.pixelsWithBleed.width}×{formatInfo.pixelsWithBleed.height} px (com sangria)</span>
+                              )}
+                            </p>
+                          ) : <p className="text-sm text-amber-600">Medida não informada</p>}
+                        </div>
+                        {!isCopyBriefEmpty(copyBrief) && (
+                          <div className="space-y-1.5">
+                            {COPY_MAIN_FIELDS.filter(f => copyBrief[f.key]).map(f => (
+                              <div key={f.key}>
+                                <p className="text-[10px] text-muted-foreground uppercase">{f.label}</p>
+                                <p className="text-sm whitespace-pre-line">{copyBrief[f.key]}</p>
+                              </div>
+                            ))}
+                            {COPY_REQUIRED_FIELDS.some(f => copyBrief[f.key]) && (
+                              <div>
+                                <p className="text-[10px] text-muted-foreground uppercase">Informações obrigatórias</p>
+                                <ul className="text-sm space-y-0.5">
+                                  {COPY_REQUIRED_FIELDS.filter(f => copyBrief[f.key]).map(f => (
+                                    <li key={f.key}><span className="text-muted-foreground">{f.label}:</span> {copyBrief[f.key]}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase">Materiais desta arte</p>
+                          {task.materials_link
+                            ? <a href={task.materials_link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1 break-all"><FolderOpen size={11} className="shrink-0" /> {task.materials_link}</a>
+                            : <p className="text-xs text-muted-foreground">Sem pasta própria (usar a pasta do cliente)</p>}
+                        </div>
+                        {briefMissing.length > 0 && (
+                          <ul className="text-[11px] text-amber-700 dark:text-amber-300 list-disc list-inside">
+                            {describeMissingForForm(briefMissing).map(m => <li key={m}>{m}</li>)}
+                          </ul>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Pareceres da Análise IA (revisor de artes) */}
+                  {agentReviews.length > 0 && (
+                    <div className="rounded-lg border border-fuchsia-400/40 bg-fuchsia-50/40 dark:bg-fuchsia-950/10 p-3 space-y-2">
+                      <Label className="text-[10px] text-fuchsia-700 dark:text-fuchsia-300 uppercase tracking-wider flex items-center gap-1.5 font-semibold">
+                        <Bot size={11} /> Análise IA ({agentReviews.length} parecer{agentReviews.length > 1 ? 'es' : ''})
+                      </Label>
+                      {agentReviews.map(r => (
+                        <div key={r.id} className="rounded-md border border-border bg-background/60 p-2.5 space-y-1">
+                          <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                            <Badge className={`text-[10px] ${r.verdict === 'aprovado' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
+                              {r.verdict === 'aprovado' ? '✅ Aprovada' : '🔧 Ajustes'}{r.version ? ` · v${r.version}` : ''}
+                            </Badge>
+                            <span className="text-muted-foreground">{r.reviewer || 'Revisor'} · {new Date(r.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                          </div>
+                          {r.notes && <p className="text-xs whitespace-pre-wrap">{r.notes}</p>}
+                          {r.errors.length > 0 && (
+                            <ul className="text-xs space-y-0.5">
+                              {r.errors.map((e, i) => <li key={i}><span className="font-medium text-muted-foreground">[{e.label}]</span> {e.description}</li>)}
+                            </ul>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {/* Histórico de Ajustes Solicitados */}
                   {(() => {
                     const adjustments = (history.data || []).filter((h: any) => h.action === 'Ajustes solicitados');
@@ -853,8 +1085,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                     <p className="text-sm font-medium mt-1">{task.title}</p>
                   </div>
 
-                  {/* Copy */}
-                   {(task.copy_text || isSocialMedia) && (
+                  {/* Copy (texto livre; tarefas novas usam os campos do brief acima) */}
+                   {isCopyBriefEmpty(copyBrief) && (task.copy_text || isSocialMedia) && (
                     <div className="rounded-lg border border-accent bg-accent/20 p-3">
                       <Label className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1 justify-between">
                         <span className="flex items-center gap-1"><Palette size={10} /> Copy</span>
@@ -904,199 +1136,45 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                     </details>
                   )}
 
-                  {/* References with image preview */}
-                  {task.references_links?.length > 0 && (
-                    <div className="rounded-lg border border-border p-3">
-                      <Label className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-2">
-                        <Link2 size={10} /> Referências
+                  {/* Referências: arquivos (imagem, PDF, vídeo) e links; o designer arquiva no Drive do cliente */}
+                  <div className="rounded-lg border border-border p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                        <Link2 size={10} /> Referências ({(task.reference_images?.length || 0) + (task.references_links?.length || 0)})
                       </Label>
-                      <div className="space-y-2">
-                        {task.references_links.map((link, i) => {
-                          const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(link);
-                          return (
-                            <div key={i}>
-                              <a href={link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1.5 hover:underline break-all">
-                                <ExternalLink size={11} className="shrink-0" /> {link}
-                              </a>
-                              {isImage && (
-                                <button onClick={() => setPreviewImage(link)} className="mt-1 relative group rounded-lg overflow-hidden border border-border w-full max-h-32 hover:ring-2 hover:ring-primary/50 transition-all">
-                                  <img src={link} alt={`Ref ${i + 1}`} className="w-full max-h-32 object-contain bg-muted/30" />
-                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                                    <ZoomIn size={16} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                  </div>
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Reference images */}
-                  {task.reference_images?.length > 0 && (
-                    <div className="rounded-lg border border-border p-3">
-                      <Label className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Imagens de Referência</Label>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {task.reference_images.map((img, i) => {
-                          const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(img);
-                          return isImage ? (
-                            <button key={i} onClick={() => setPreviewImage(img)} className="relative group rounded-lg overflow-hidden border border-border w-20 h-20 hover:ring-2 hover:ring-primary/50 transition-all">
-                              <img src={img} alt={`Ref ${i + 1}`} className="w-full h-full object-cover" />
-                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-                                <ZoomIn size={16} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                              </div>
-                            </button>
-                          ) : (
-                            <a key={i} href={img} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
-                              <Image size={11} /> Ref {i + 1}
-                            </a>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Editor de referências - permite Social Media adicionar links e imagens depois */}
-                  {isSocialMedia && (
-                    <div className="rounded-lg border border-dashed border-primary/40 bg-primary/5 p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                          <Link2 size={10} /> Adicionar referências
-                        </Label>
-                        {!editingRefs && (
-                          <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]" onClick={() => setEditingRefs(true)}>
-                            <Pencil size={10} className="mr-1" /> Editar
-                          </Button>
-                        )}
-                      </div>
-                      {editingRefs ? (
-                        <div className="space-y-2">
-                          {/* Add link */}
-                          <div className="flex gap-1.5">
-                            <Input
-                              value={newRefLink}
-                              onChange={e => setNewRefLink(e.target.value)}
-                              placeholder="https://link de referência..."
-                              className="text-xs h-8"
-                              onKeyDown={async e => {
-                                if (e.key === 'Enter' && newRefLink.trim()) {
-                                  e.preventDefault();
-                                  const link = newRefLink.trim();
-                                  const updated = [...(task.references_links || []), link];
-                                  await updateTask.mutateAsync({ id: task.id, references_links: updated } as any);
-                                  await addHistory.mutateAsync({ task_id: task.id, action: 'Link de referência adicionado', details: link, user_id: user?.id });
-                                  setNewRefLink('');
-                                  toast.success('Link adicionado');
-                                }
-                              }}
-                            />
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="h-8 text-xs shrink-0"
-                              onClick={async () => {
-                                if (!newRefLink.trim()) return;
-                                const link = newRefLink.trim();
-                                const updated = [...(task.references_links || []), link];
-                                await updateTask.mutateAsync({ id: task.id, references_links: updated } as any);
-                                await addHistory.mutateAsync({ task_id: task.id, action: 'Link de referência adicionado', details: link, user_id: user?.id });
-                                setNewRefLink('');
-                                toast.success('Link adicionado');
-                              }}
-                            >
-                              + Link
-                            </Button>
-                          </div>
-
-                          {/* Upload images/files */}
-                          <label className={`flex items-center justify-center gap-1.5 h-8 rounded-md border border-dashed border-border cursor-pointer text-[11px] hover:bg-muted/40 transition-colors ${uploadingRefImage ? 'opacity-60 pointer-events-none' : ''}`}>
-                            {uploadingRefImage ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                            <span>{uploadingRefImage ? 'Enviando...' : 'Anexar imagens ou arquivos (até 10MB)'}</span>
-                            <input
-                              type="file"
-                              accept="*/*"
-                              multiple
-                              className="hidden"
-                              onChange={async e => {
-                                const files = Array.from(e.target.files || []);
-                                e.target.value = '';
-                                if (!files.length) return;
-                                setUploadingRefImage(true);
-                                try {
-                                  const uploaded: string[] = [];
-                                  for (const file of files) {
-                                    if (file.size > 10 * 1024 * 1024) { toast.error(`${file.name}: máximo 10MB`); continue; }
-                                    const url = await uploadFileToVps(file, 'design-files');
-                                    if (url) uploaded.push(url);
-                                  }
-                                  if (uploaded.length > 0) {
-                                    const updated = [...(task.reference_images || []), ...uploaded];
-                                    await updateTask.mutateAsync({ id: task.id, reference_images: updated } as any);
-                                    await addHistory.mutateAsync({ task_id: task.id, action: `${uploaded.length} referência(s) anexada(s)`, user_id: user?.id });
-                                    toast.success(`${uploaded.length} arquivo(s) anexado(s)`);
-                                  }
-                                } catch (err: any) {
-                                  toast.error(err.message || 'Erro ao enviar');
-                                } finally {
-                                  setUploadingRefImage(false);
-                                }
-                              }}
-                            />
-                          </label>
-
-                          {/* List current items with remove */}
-                          {(task.references_links?.length > 0 || task.reference_images?.length > 0) && (
-                            <div className="space-y-1 pt-1 border-t border-border/40">
-                              {task.references_links?.map((link, i) => (
-                                <div key={`l-${i}`} className="flex items-center gap-1.5 text-[11px] bg-background/60 rounded px-2 py-1 border border-border">
-                                  <Link2 size={10} className="shrink-0 text-muted-foreground" />
-                                  <a href={link} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-primary hover:underline">{link}</a>
-                                  <button
-                                    type="button"
-                                    onClick={async () => {
-                                      const updated = (task.references_links || []).filter((_, idx) => idx !== i);
-                                      await updateTask.mutateAsync({ id: task.id, references_links: updated } as any);
-                                      toast.success('Link removido');
-                                    }}
-                                    className="text-muted-foreground hover:text-destructive shrink-0"
-                                  >
-                                    <X size={11} />
-                                  </button>
-                                </div>
-                              ))}
-                              {task.reference_images?.map((img, i) => (
-                                <div key={`i-${i}`} className="flex items-center gap-1.5 text-[11px] bg-background/60 rounded px-2 py-1 border border-border">
-                                  <Image size={10} className="shrink-0 text-muted-foreground" />
-                                  <a href={img} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-primary hover:underline">{img.split('/').pop()}</a>
-                                  <button
-                                    type="button"
-                                    onClick={async () => {
-                                      const updated = (task.reference_images || []).filter((_, idx) => idx !== i);
-                                      await updateTask.mutateAsync({ id: task.id, reference_images: updated } as any);
-                                      toast.success('Imagem removida');
-                                    }}
-                                    className="text-muted-foreground hover:text-destructive shrink-0"
-                                  >
-                                    <X size={11} />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          <Button size="sm" variant="ghost" className="w-full h-7 text-[11px]" onClick={() => setEditingRefs(false)}>
-                            Concluir edição
-                          </Button>
-                        </div>
-                      ) : (
-                        <p className="text-[11px] text-muted-foreground">
-                          Clique em "Editar" para adicionar mais links ou imagens de referência.
-                        </p>
+                      {(isSocialMedia || isDesigner) && (
+                        <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]" onClick={() => setEditingRefs(v => !v)}>
+                          {editingRefs ? 'Concluir' : <><Pencil size={10} className="mr-1" /> Adicionar</>}
+                        </Button>
                       )}
                     </div>
-                  )}
+                    {(task.reference_images?.length || 0) + (task.references_links?.length || 0) === 0 && !editingRefs ? (
+                      <p className="text-[11px] text-muted-foreground">Sem referências. {isSocialMedia || isDesigner ? 'Clique em "Adicionar" para enviar arquivos ou links.' : ''}</p>
+                    ) : (
+                      <DesignReferenceUploader
+                        files={task.reference_images || []}
+                        onFilesChange={(files) => {
+                          const added = files.length > (task.reference_images?.length || 0);
+                          void saveReferences({ reference_images: files }, added ? `${files.length - (task.reference_images?.length || 0)} referência(s) anexada(s)` : 'Referência removida');
+                        }}
+                        links={task.references_links || []}
+                        onLinksChange={(links) => {
+                          const added = links.length > (task.references_links?.length || 0);
+                          void saveReferences({ references_links: links }, added ? 'Link de referência adicionado' : 'Link de referência removido');
+                        }}
+                        folder={`design-refs/${task.client_id || 'avulso'}/${task.id}`}
+                        disabled={!editingRefs}
+                      />
+                    )}
+                    {task.references_drive_link ? (
+                      <a href={task.references_drive_link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-md bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-300/50 px-2 py-1.5 text-[11px] text-emerald-700 dark:text-emerald-300 hover:underline">
+                        <FolderOpen size={12} className="shrink-0" />
+                        Referências guardadas no Drive do cliente{task.references_archived_at ? ` em ${new Date(task.references_archived_at).toLocaleDateString('pt-BR')}` : ''}
+                      </a>
+                    ) : (task.reference_images?.length || 0) + (task.references_links?.length || 0) > 0 ? (
+                      <p className="text-[10px] text-muted-foreground">Ainda não guardadas no Drive do cliente (o designer arquiva depois de baixar e entender).</p>
+                    ) : null}
+                  </div>
 
 
 
@@ -1323,12 +1401,25 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                           {task.kanban_column === 'em_analise' && 'Aguardando revisão interna'}
                           {task.kanban_column === 'enviar_cliente' && 'Pronto para enviar ao cliente'}
                           {task.kanban_column === 'aprovado' && 'Finalizado e aprovado'}
-                          {task.kanban_column === 'ajustes' && 'Correções pendentes'}
+                          {task.kanban_column === 'ajustes' && 'Correções pendentes — volta para quem fez a arte'}
+                          {task.kanban_column === 'analise_ia' && 'Arte de agente de IA: o revisor de artes confere antes da equipe'}
+                          {task.kanban_column === 'fila_baixa_prioridade' && 'Pausada para priorizar outra demanda'}
+                          {task.kanban_column === 'postado' && 'Publicada'}
                         </motion.p>
                       </div>
                     </div>
                   </motion.div>
                 </AnimatePresence>
+
+                {agentWorking && (
+                  <div className="rounded-lg border border-violet-400/50 bg-violet-50 dark:bg-violet-950/20 p-3 text-xs text-violet-800 dark:text-violet-200 flex items-start gap-2">
+                    <Bot size={14} className="shrink-0 mt-0.5" />
+                    <span>
+                      <b>{agentName(task.assigned_to) || 'Um agente de IA'}</b> está com esta arte agora (etapa: {task.agent_step === 'iniciado' ? 'começando' : task.agent_step}).
+                      Evite mexer até ele entregar; se travou, a chefe libera ou passa para outro.
+                    </span>
+                  </div>
+                )}
 
                 {/* CTA for nova_tarefa - rocket launch button */}
                 {task.kanban_column === 'nova_tarefa' && isDesigner && (
@@ -1782,7 +1873,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                 {showAdjustmentForm && (
                   <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
                     <Label className="text-xs font-semibold text-destructive flex items-center gap-1.5">
-                      <RotateCcw size={12} /> Enviar para Revisão do Designer
+                      <RotateCcw size={12} /> Pedir ajustes ao designer
                     </Label>
                     <p className="text-[11px] text-muted-foreground -mt-1">
                       Descreva claramente o que precisa ser alterado. O designer receberá estas observações.
@@ -1906,7 +1997,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-lg border border-border p-3">
                     <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Formato</Label>
-                    <p className="text-sm font-semibold mt-1">{FORMAT_LABELS[task.format_type] || task.format_type}</p>
+                    <p className="text-sm font-semibold mt-1">{formatInfo?.label || FORMAT_LABELS[task.format_type] || task.format_type}</p>
                   </div>
                   <div className="rounded-lg border border-border p-3">
                     <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Prioridade</Label>
@@ -1979,8 +2070,12 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                       <User size={13} /> <span>Responsável</span>
                     </div>
                     <div className="rounded-md px-3 py-1.5 text-xs font-medium text-center text-white" style={{ backgroundColor: `hsl(${currentCol?.color})` }}>
-                      {task.profiles?.display_name || task.profiles?.name || 'Não atribuído'}
+                      {task.profiles?.display_name || task.profiles?.name || agentName(task.assigned_to) || 'Não atribuído'}
+                      {task.assigned_to && agentIds.has(task.assigned_to) && ' · IA'}
                     </div>
+                    {task.designed_by && task.designed_by !== task.assigned_to && (
+                      <p className="text-[10px] text-muted-foreground text-center">Arte feita por {agentName(task.designed_by) || 'outro designer'}{agentIds.has(task.designed_by) ? ' (IA)' : ''}</p>
+                    )}
                   </div>
 
                   {/* Data */}
@@ -1998,8 +2093,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <FileText size={13} /> <span>Formato</span>
                     </div>
-                    <Badge variant="outline" className="w-full justify-center text-xs py-1">
-                      {FORMAT_LABELS[task.format_type] || task.format_type}
+                    <Badge variant="outline" className="w-full justify-center text-xs py-1 text-center whitespace-normal">
+                      {formatInfo?.short || FORMAT_LABELS[task.format_type] || task.format_type}
                     </Badge>
                   </div>
 

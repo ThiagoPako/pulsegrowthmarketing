@@ -18,13 +18,26 @@ export default function GestorWorkingToggle() {
   const [loading, setLoading] = useState(false);
   const [now, setNow] = useState(Date.now());
 
+  const userId = currentUser?.id;
+  const isGestor = currentUser?.role === 'gestor_projetos';
+  // Só quem vê o botão (gestor de projetos) consulta o expediente.
   const load = useCallback(async () => {
-    if (!currentUser) return;
-    const { data } = await supabase.from('profiles').select('working_since').eq('id', currentUser.id).maybeSingle() as any;
+    if (!userId || !isGestor) return;
+    const { data } = await supabase.from('profiles').select('working_since').eq('id', userId).maybeSingle() as any;
     setWorkingSince(data?.working_since ?? null);
-  }, [currentUser]);
+  }, [userId, isGestor]);
 
   useEffect(() => { void load(); }, [load]);
+  // O expediente também é relido no ritmo da recarga dos dados do sistema (2 min, com a aba
+  // visível), como acontecia antes quando cada recarga recriava o currentUser.
+  useEffect(() => {
+    if (!isGestor) return;
+    const iv = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      void load();
+    }, 120_000);
+    return () => clearInterval(iv);
+  }, [isGestor, load]);
   useEffect(() => {
     const iv = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(iv);

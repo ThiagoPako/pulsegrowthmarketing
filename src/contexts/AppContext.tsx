@@ -130,16 +130,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // profile.roles já traz as funções de user_roles (o /auth/me junta todas): não
   // precisa buscar user_roles de novo aqui.
-  const baseCurrentUser = profile ? profileToUser(profile) : null;
-  const currentUser = baseCurrentUser
-    ? {
-        ...baseCurrentUser,
-        roles: Array.from(new Set([
-          baseCurrentUser.role,
-          ...(baseCurrentUser.roles || []),
-        ])),
-      }
-    : null;
+  // Mesmo objeto enquanto o perfil não muda: efeitos que dependem de currentUser (escritório
+  // virtual, expediente do gestor) não refazem consultas a cada render do provider.
+  const currentUser = useMemo(() => {
+    const baseCurrentUser = profile ? profileToUser(profile) : null;
+    return baseCurrentUser
+      ? {
+          ...baseCurrentUser,
+          roles: Array.from(new Set([
+            baseCurrentUser.role,
+            ...(baseCurrentUser.roles || []),
+          ])),
+        }
+      : null;
+  }, [profile]);
 
   // Heartbeat for virtual office presence
   usePresenceHeartbeat(user?.id ?? profile?.id);

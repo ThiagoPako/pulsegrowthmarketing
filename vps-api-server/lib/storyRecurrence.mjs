@@ -90,7 +90,7 @@ export function ruleFromRow(row) {
     kind: row.rule_kind,
     interval_days: row.interval_days ?? null,
     weekdays: Array.isArray(row.weekdays) ? row.weekdays.map(Number) : null,
-    time: row.time,
+    time: row.time ?? row.post_time, // a coluna de story_series chama post_time
     start_date: dateKey(row.start_date),
     end_kind: row.end_kind || 'never',
     end_date: dateKey(row.end_date),
@@ -108,12 +108,12 @@ function dayMatches(rule, day) {
  * index conta desde o início da série (o fim "por número de vezes" vale sobre a série toda).
  * Devolve [{ index, date, time, at }] com at em ISO (UTC).
  */
-export function listOccurrences(rule, { fromMs = -Infinity, toMs } = {}) {
+export function listOccurrences(rule, { fromMs = -Infinity, toMs, limit = Infinity } = {}) {
   if (!Number.isFinite(toMs)) throw new Error('toMs obrigatório');
   const out = [];
   let index = 0;
   let day = rule.start_date;
-  for (let scanned = 0; scanned < MAX_SCAN_DAYS; scanned++, day = addDaysKey(day, 1)) {
+  for (let scanned = 0; scanned < MAX_SCAN_DAYS && out.length < limit; scanned++, day = addDaysKey(day, 1)) {
     if (rule.end_kind === 'date' && day > rule.end_date) break;
     if (rule.end_kind === 'count' && index >= rule.max_count) break;
     if (!dayMatches(rule, day)) continue;
@@ -124,6 +124,11 @@ export function listOccurrences(rule, { fromMs = -Infinity, toMs } = {}) {
     index++;
   }
   return out;
+}
+
+/** Primeira ocorrência depois de fromMs (em até dez anos) ou null: a série acabou. */
+export function nextOccurrence(rule, fromMs) {
+  return listOccurrences(rule, { fromMs, toMs: fromMs + MAX_SCAN_DAYS * 86_400_000, limit: 1 })[0] || null;
 }
 
 /** A ocorrência de número index (0, 1, …) ou null. */

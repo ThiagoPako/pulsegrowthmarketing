@@ -14,6 +14,7 @@ export const PERMISSIONS = {
   criar_cards: 'Criar card de conteúdo/vídeo ou de design',
   alertas_grupos: 'Receber os avisos de demanda detectada nos grupos',
   alertas_satisfacao: 'Receber os avisos de cliente insatisfeito (temperatura do cliente)',
+  lembretes_stories: 'Receber os lembretes de story para postar com link (Agendamentos)',
   consultar_producao: 'Ver andamento de cards e agenda',
 };
 

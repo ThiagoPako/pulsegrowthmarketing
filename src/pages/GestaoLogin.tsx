@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Crown, Loader2 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, profileHasRole } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
 export default function GestaoLogin() {
@@ -12,7 +12,7 @@ export default function GestaoLogin() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!loading && user && (profile?.role === 'socio_gestor' || profile?.role === 'admin')) {
+    if (!loading && user && profileHasRole(profile, 'socio_gestor', 'admin')) {
       navigate('/gestao', { replace: true });
     }
   }, [loading, user, profile, navigate]);

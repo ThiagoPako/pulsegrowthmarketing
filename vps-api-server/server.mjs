@@ -16502,17 +16502,12 @@ async function ensureGestaoTables() {
 }
 ensureGestaoTables().catch(() => {});
 
+// Painel dos sócios: admin ou socio_gestor (principal ou em user_roles), como a tela
+// (RequireSocioGestor). O isAdminUser também aceita social_media, que não é sócio.
 async function isSocioGestor(user) {
   if (!user) return false;
-  if (await isAdminUser(user)) return true;
-  try {
-    const linkedIds = await getLinkedUserIds(user);
-    const { rows } = await pool.query(
-      "SELECT 1 FROM user_roles WHERE user_id::text = ANY($1::text[]) AND role = 'socio_gestor' LIMIT 1",
-      [linkedIds]
-    );
-    return rows.length > 0;
-  } catch { return false; }
+  if (await isStrictAdminUser(user)) return true;
+  return userHasAssignedRole(user, 'socio_gestor');
 }
 
 async function requireSocioGestor(req) {
@@ -16568,13 +16563,79 @@ app.put('/api/gestao/unit-costs', async (req, res) => {
 });
 
 // Aggregated summary ----------------------------------------------
+// Erro de SQL aparece no log: antes uma coluna errada virava R$ 0 em silêncio.
+function logGestaoQueryError(error, sql) {
+  console.warn('[gestao] consulta falhou:', error?.message || error, '|', String(sql).replace(/\s+/g, ' ').slice(0, 200));
+}
 async function safeCount(sql, params) {
   try { const { rows } = await pool.query(sql, params); return Number(rows[0]?.n || 0); }
-  catch { return 0; }
+  catch (error) { logGestaoQueryError(error, sql); return 0; }
 }
 async function safeSum(sql, params) {
   try { const { rows } = await pool.query(sql, params); return Number(rows[0]?.total || 0); }
-  catch { return 0; }
+  catch (error) { logGestaoQueryError(error, sql); return 0; }
+}
+
+/** Números de Uruaçu no mês: os mesmos no resumo e no fechamento (antes eram dois SQL copiados). */
+async function loadGestaoUruacuMonth(start, end) {
+  const { rows: costRows } = await pool.query('SELECT content_type, unit_cost FROM city_transfer_costs');
+  const unitCost = Object.fromEntries(costRows.map(r => [r.content_type, Number(r.unit_cost)]));
+
+  // Content counts for Uruaçu (per city column on tables)
+  const counts = {
+    reels: await safeCount(
+      `SELECT COUNT(*)::int AS n FROM content_tasks WHERE city='uruacu' AND content_type='reels' AND created_at >= $1 AND created_at < $2`,
+      [start, end]
+    ),
+    story: await safeCount(
+      `SELECT COUNT(*)::int AS n FROM content_tasks WHERE city='uruacu' AND content_type='story' AND created_at >= $1 AND created_at < $2`,
+      [start, end]
+    ),
+    arte: await safeCount(
+      `SELECT COUNT(*)::int AS n FROM design_tasks WHERE city='uruacu' AND created_at >= $1 AND created_at < $2`,
+      [start, end]
+    ),
+    roteiro: await safeCount(
+      `SELECT COUNT(*)::int AS n FROM scripts WHERE city='uruacu' AND created_at >= $1 AND created_at < $2`,
+      [start, end]
+    ),
+    social_media: await safeCount(
+      `SELECT COUNT(*)::int AS n FROM social_media_deliveries WHERE city='uruacu' AND created_at >= $1 AND created_at < $2`,
+      [start, end]
+    ),
+  };
+
+  const transferBreakdown = Object.entries(counts).map(([type, qty]) => ({
+    content_type: type,
+    qty,
+    unit_cost: unitCost[type] || 0,
+    total: (unitCost[type] || 0) * qty,
+  }));
+  const transferTotal = transferBreakdown.reduce((s, r) => s + r.total, 0);
+
+  // Uruaçu revenue (received / to-receive in month)
+  const revenue = await safeSum(
+    `SELECT COALESCE(SUM(amount), 0) AS total FROM revenues WHERE city='uruacu' AND reference_month >= $1 AND reference_month < $2`,
+    [start, end]
+  );
+  // A coluna da data da despesa é "date" (não existe expense_date)
+  const expenses = await safeSum(
+    `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE city='uruacu' AND "date" >= $1::date AND "date" < $2::date`,
+    [start, end]
+  );
+  // Salaries Uruaçu: sum monthly_salary of profiles whose primary user_cities city = 'uruacu'
+  const salaries = await safeSum(
+    `SELECT COALESCE(SUM(p.monthly_salary), 0) AS total
+       FROM profiles p
+       JOIN user_cities uc ON uc.user_id = p.id AND uc.is_primary = true
+      WHERE uc.city = 'uruacu'`,
+    []
+  );
+
+  return {
+    unitCost, counts, transferBreakdown, transferTotal, revenue, expenses, salaries,
+    netMargin: revenue - salaries - expenses - transferTotal,
+  };
 }
 
 app.get('/api/gestao/summary', async (req, res) => {
@@ -16583,60 +16644,10 @@ app.get('/api/gestao/summary', async (req, res) => {
     await requireSocioGestor(req);
     const { month, start, end } = monthBounds(String(req.query.month || ''));
 
-    const { rows: costRows } = await pool.query('SELECT content_type, unit_cost FROM city_transfer_costs');
-    const unitCost = Object.fromEntries(costRows.map(r => [r.content_type, Number(r.unit_cost)]));
-
-    // Content counts for Uruaçu (per city column on tables)
-    const counts = {
-      reels: await safeCount(
-        `SELECT COUNT(*)::int AS n FROM content_tasks WHERE city='uruacu' AND content_type='reels' AND created_at >= $1 AND created_at < $2`,
-        [start, end]
-      ),
-      story: await safeCount(
-        `SELECT COUNT(*)::int AS n FROM content_tasks WHERE city='uruacu' AND content_type='story' AND created_at >= $1 AND created_at < $2`,
-        [start, end]
-      ),
-      arte: await safeCount(
-        `SELECT COUNT(*)::int AS n FROM design_tasks WHERE city='uruacu' AND created_at >= $1 AND created_at < $2`,
-        [start, end]
-      ),
-      roteiro: await safeCount(
-        `SELECT COUNT(*)::int AS n FROM scripts WHERE city='uruacu' AND created_at >= $1 AND created_at < $2`,
-        [start, end]
-      ),
-      social_media: await safeCount(
-        `SELECT COUNT(*)::int AS n FROM social_media_deliveries WHERE city='uruacu' AND created_at >= $1 AND created_at < $2`,
-        [start, end]
-      ),
-    };
-
-    const transferBreakdown = Object.entries(counts).map(([type, qty]) => ({
-      content_type: type,
-      qty,
-      unit_cost: unitCost[type] || 0,
-      total: (unitCost[type] || 0) * qty,
-    }));
-    const transferTotal = transferBreakdown.reduce((s, r) => s + r.total, 0);
-
-    // Uruaçu revenue (received / to-receive in month)
-    const revenueUruacu = await safeSum(
-      `SELECT COALESCE(SUM(amount), 0) AS total FROM revenues WHERE city='uruacu' AND reference_month >= $1 AND reference_month < $2`,
-      [start, end]
-    );
-    const expensesUruacu = await safeSum(
-      `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE city='uruacu' AND expense_date >= $1 AND expense_date < $2`,
-      [start, end]
-    );
-    // Salaries Uruaçu: sum monthly_salary of profiles whose primary user_cities city = 'uruacu'
-    const salariesUruacu = await safeSum(
-      `SELECT COALESCE(SUM(p.monthly_salary), 0) AS total
-         FROM profiles p
-         JOIN user_cities uc ON uc.user_id = p.id AND uc.is_primary = true
-        WHERE uc.city = 'uruacu'`,
-      []
-    );
-
-    const netMargin = revenueUruacu - salariesUruacu - expensesUruacu - transferTotal;
+    const {
+      unitCost, transferBreakdown, transferTotal,
+      revenue: revenueUruacu, expenses: expensesUruacu, salaries: salariesUruacu, netMargin,
+    } = await loadGestaoUruacuMonth(start, end);
 
     // Active contracts Uruaçu
     const contractsUruacu = await safeCount(
@@ -16665,19 +16676,19 @@ app.get('/api/gestao/summary', async (req, res) => {
       };
     });
 
-    // Per Uruaçu client breakdown
+    // Per Uruaçu client breakdown (o nome do cliente é company_name; clients não tem "name")
     const { rows: uruClients } = await pool.query(
-      `SELECT c.id, c.name, c.plan_id, p.name AS plan_name, p.price AS plan_price,
+      `SELECT c.id, c.company_name AS name, c.plan_id, p.name AS plan_name, p.price AS plan_price,
               (SELECT COUNT(*)::int FROM content_tasks ct WHERE ct.client_id = c.id AND ct.content_type='reels' AND ct.created_at >= $1 AND ct.created_at < $2) AS reels,
               (SELECT COUNT(*)::int FROM content_tasks ct WHERE ct.client_id = c.id AND ct.content_type='story' AND ct.created_at >= $1 AND ct.created_at < $2) AS stories,
               (SELECT COUNT(*)::int FROM design_tasks dt WHERE dt.client_id = c.id AND dt.created_at >= $1 AND dt.created_at < $2) AS artes,
               (SELECT COUNT(*)::int FROM scripts s WHERE s.client_id = c.id AND s.created_at >= $1 AND s.created_at < $2) AS roteiros
          FROM clients c
          LEFT JOIN plans p ON p.id = c.plan_id
-        WHERE c.city='uruacu' AND COALESCE(c.status,'ativo')='ativo'
-        ORDER BY c.name`,
+        WHERE c.city='uruacu' AND COALESCE(c.status,'ativo')='ativo' AND COALESCE(c.is_admin_client, false) = false
+        ORDER BY c.company_name`,
       [start, end]
-    ).catch(() => ({ rows: [] }));
+    ).catch((error) => { console.warn('[gestao] clientes de Uruaçu:', error?.message || error); return { rows: [] }; });
 
     const clientsBreakdown = uruClients.map(c => {
       const cost =
@@ -17097,26 +17108,23 @@ app.post('/api/gestao/close-month', async (req, res) => {
   try {
     await ensureGestaoTables();
     const user = await requireSocioGestor(req);
-    const { month } = req.body || {};
+    const { month, overwrite } = req.body || {};
     const monthStr = /^\d{4}-\d{2}$/.test(String(month || '')) ? String(month) : new Date().toISOString().slice(0, 7);
 
-    // Fetch summary internally by calling logic (simpler: recompute inline via GET handler is heavy)
-    // For simplicity, we snapshot using same query patterns.
+    // Mês já fechado: só refaz o snapshot com a confirmação da tela (overwrite: true).
+    const { rows: closedRows } = await pool.query(
+      `SELECT closed_at FROM monthly_closings WHERE month = $1 AND city = 'uruacu' LIMIT 1`,
+      [monthStr]
+    );
+    if (closedRows.length > 0 && overwrite !== true) {
+      return res.status(409).json({ error: 'Este mês já foi fechado.', already_closed: true, closed_at: closedRows[0].closed_at });
+    }
+
+    // Mesmo cálculo do resumo (/api/gestao/summary)
     const b = monthBounds(monthStr);
-    const { rows: costRows } = await pool.query('SELECT content_type, unit_cost FROM city_transfer_costs');
-    const unitCost = Object.fromEntries(costRows.map(r => [r.content_type, Number(r.unit_cost)]));
-    const cnt = {
-      reels: await safeCount(`SELECT COUNT(*)::int AS n FROM content_tasks WHERE city='uruacu' AND content_type='reels' AND created_at >= $1 AND created_at < $2`, [b.start, b.end]),
-      story: await safeCount(`SELECT COUNT(*)::int AS n FROM content_tasks WHERE city='uruacu' AND content_type='story' AND created_at >= $1 AND created_at < $2`, [b.start, b.end]),
-      arte: await safeCount(`SELECT COUNT(*)::int AS n FROM design_tasks WHERE city='uruacu' AND created_at >= $1 AND created_at < $2`, [b.start, b.end]),
-      roteiro: await safeCount(`SELECT COUNT(*)::int AS n FROM scripts WHERE city='uruacu' AND created_at >= $1 AND created_at < $2`, [b.start, b.end]),
-      social_media: await safeCount(`SELECT COUNT(*)::int AS n FROM social_media_deliveries WHERE city='uruacu' AND created_at >= $1 AND created_at < $2`, [b.start, b.end]),
-    };
-    const transferOut = Object.entries(cnt).reduce((s, [k, v]) => s + v * (unitCost[k] || 0), 0);
-    const revenue = await safeSum(`SELECT COALESCE(SUM(amount),0) AS total FROM revenues WHERE city='uruacu' AND reference_month >= $1 AND reference_month < $2`, [b.start, b.end]);
-    const expenses = await safeSum(`SELECT COALESCE(SUM(amount),0) AS total FROM expenses WHERE city='uruacu' AND expense_date >= $1 AND expense_date < $2`, [b.start, b.end]);
-    const salaries = await safeSum(`SELECT COALESCE(SUM(p.monthly_salary),0) AS total FROM profiles p JOIN user_cities uc ON uc.user_id = p.id AND uc.is_primary=true WHERE uc.city='uruacu'`, []);
-    const net = revenue - salaries - expenses - transferOut;
+    const {
+      counts: cnt, transferTotal: transferOut, revenue, expenses, salaries, netMargin: net,
+    } = await loadGestaoUruacuMonth(b.start, b.end);
 
     await pool.query(
       `INSERT INTO monthly_closings (month, city, revenue, salaries, expenses, transfer_out, transfer_in, net_margin, content_counts, closed_by)

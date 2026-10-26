@@ -27,7 +27,16 @@ export default function GestaoDashboard() {
     if (!confirm(`Fechar o mês ${month}? Um snapshot será salvo no histórico.`)) return;
     setClosing(true);
     try {
-      const r = await gestaoApi.closeMonth(month);
+      let r;
+      try {
+        r = await gestaoApi.closeMonth(month);
+      } catch (e: any) {
+        if (e?.status !== 409) throw e;
+        // Mês já fechado: o snapshot antigo só é trocado com confirmação
+        const when = e.data?.closed_at ? new Date(e.data.closed_at).toLocaleDateString('pt-BR') : '';
+        if (!confirm(`O mês ${month} já foi fechado${when ? ` em ${when}` : ''}. Substituir o fechamento pelos números de agora?`)) return;
+        r = await gestaoApi.closeMonth(month, true);
+      }
       toast.success(`Mês fechado. Repasse: ${BRL(r.transferOut)}`);
       load();
     } catch (e: any) { toast.error(e.message); }
@@ -39,13 +48,13 @@ export default function GestaoDashboard() {
 
   return (
     <GestaoLayout>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div>
           <div className="text-[11px] tracking-[0.2em] uppercase text-amber-400/80 mb-1">Painel Executivo</div>
           <h1 className="text-3xl font-bold">Gestão de Ativos</h1>
           <p className="text-sm text-slate-400 mt-1">Custos, margens e repasses inter-cidades</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input
             type="month" value={month} onChange={e => setMonth(e.target.value)}
             className="h-10 px-3 rounded-lg bg-[#12161c] border border-white/10 text-sm"
@@ -101,7 +110,7 @@ export default function GestaoDashboard() {
 
           {/* Clientes Uruaçu */}
           <Section title="Clientes Uruaçu — Consumo no Mês">
-            <div className="bg-[#12161c] border border-white/5 rounded-xl overflow-hidden">
+            <div className="bg-[#12161c] border border-white/5 rounded-xl overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-black/40 text-[10px] uppercase tracking-widest text-slate-400">
                   <tr>

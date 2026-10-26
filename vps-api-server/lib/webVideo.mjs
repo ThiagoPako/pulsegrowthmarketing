@@ -11,6 +11,9 @@
 // do 480p do portal), nice 19 + ionice idle, 1 ou 2 threads, tempo máximo, sem repetir o que falhou.
 // O arquivo é gravado num temporário (<raiz>/.web-tmp) e renomeado só no fim: quem abre a .web.mp4
 // sempre pega o arquivo completo.
+//
+// A fila também leva a versão Instagram (<nome>.ig.mp4, lib/instagramVideo.mjs), com prioridade própria:
+// uma conversão por vez entre as duas.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -20,6 +23,8 @@ import { spawn } from 'node:child_process';
 
 export const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.m4v', '.webm', '.mkv', '.avi', '.3gp']);
 export const WEB_SUFFIX = '.web.mp4';
+/** Versão no formato que a Meta pede para publicar (lib/instagramVideo.mjs). */
+export const IG_SUFFIX = '.ig.mp4';
 export const WEB_TMP_DIR = '.web-tmp';
 /** Acima disso (ou HEVC, ou sem faststart, ou fora de .mp4) o original ganha versão leve. */
 export const LIGHT_MAX_BPS = 8_000_000;
@@ -33,10 +38,22 @@ export function isWebVariantName(name) {
   return String(name || '').toLowerCase().endsWith(WEB_SUFFIX);
 }
 
-/** Vídeo original que pode ganhar versão leve (nunca a própria .web.mp4). */
+export function isIgVariantName(name) {
+  return String(name || '').toLowerCase().endsWith(IG_SUFFIX);
+}
+
+/** Cópia gerada ao lado do original (.web.mp4 ou .ig.mp4): nunca é citada no banco. */
+export function isDerivedVariantName(name) {
+  return isWebVariantName(name) || isIgVariantName(name);
+}
+
+/**
+ * Vídeo original que pode ganhar versão leve ou versão Instagram (nunca uma cópia já gerada:
+ * a .ig.mp4 não vira vídeo novo na fila da versão leve, nem a .web.mp4 na da versão Instagram).
+ */
 export function isConvertibleVideoName(name) {
   const base = path.basename(String(name || ''));
-  if (!base || isWebVariantName(base)) return false;
+  if (!base || isDerivedVariantName(base)) return false;
   return VIDEO_EXTENSIONS.has(path.extname(base).toLowerCase());
 }
 
@@ -52,6 +69,18 @@ export function webVariantPath(filePath) {
   return name ? path.join(path.dirname(String(filePath)), name) : null;
 }
 
+/** 1729_ab12.mov → 1729_ab12.ig.mp4 (null quando não é vídeo original). */
+export function igVariantName(name) {
+  const base = path.basename(String(name || ''));
+  if (!isConvertibleVideoName(base)) return null;
+  return `${base.slice(0, base.length - path.extname(base).length)}${IG_SUFFIX}`;
+}
+
+export function igVariantPath(filePath) {
+  const name = igVariantName(filePath);
+  return name ? path.join(path.dirname(String(filePath)), name) : null;
+}
+
 /** Nomes possíveis do original de uma .web.mp4 (o mesmo nome com cada extensão de vídeo). */
 export function originalNamesForWebVariant(name) {
   const base = path.basename(String(name || ''));
@@ -61,18 +90,35 @@ export function originalNamesForWebVariant(name) {
   return [...VIDEO_EXTENSIONS].map((ext) => `${stem}${ext}`);
 }
 
-/**
- * URL pública da versão leve, no mesmo formato da URL recebida (completa ou /uploads/...).
- * Só troca o último trecho do caminho; query e âncora não seguem.
- */
-export function webVariantUrl(url) {
+/** Nomes possíveis do original de uma cópia gerada (.web.mp4 ou .ig.mp4). */
+export function originalNamesForVariant(name) {
+  const base = path.basename(String(name || ''));
+  const suffix = isWebVariantName(base) ? WEB_SUFFIX : isIgVariantName(base) ? IG_SUFFIX : null;
+  if (!suffix) return [];
+  const stem = base.slice(0, base.length - suffix.length);
+  if (!stem) return [];
+  return [...VIDEO_EXTENSIONS].map((ext) => `${stem}${ext}`);
+}
+
+/** Troca só o último trecho do caminho da URL (completa ou /uploads/...); query e âncora não seguem. */
+function variantUrl(url, nameFor) {
   const raw = String(url || '').trim();
   const match = /^([^?#]*\/)([^/?#]+)(?:[?#].*)?$/.exec(raw);
   if (!match) return null;
   let decoded;
   try { decoded = decodeURIComponent(match[2]); } catch { return null; }
-  const name = webVariantName(decoded);
+  const name = nameFor(decoded);
   return name ? `${match[1]}${encodeURIComponent(name)}` : null;
+}
+
+/** URL pública da versão leve, no mesmo formato da URL recebida (completa ou /uploads/...). */
+export function webVariantUrl(url) {
+  return variantUrl(url, webVariantName);
+}
+
+/** URL pública da versão Instagram, no mesmo formato da URL recebida (completa ou /uploads/...). */
+export function igVariantUrl(url) {
+  return variantUrl(url, igVariantName);
 }
 
 // ── Validação do caminho (mesma regra do /api/portal-media-proxy) ──
@@ -234,7 +280,7 @@ export function decideWebVariant(probe, { ext = '', faststart = null } = {}) {
   return { action: 'transcode', reason: `${v.codec || 'codec?'} ${v.pixFmt || ''} ${mbps}`.replace(/\s+/g, ' ').trim() };
 }
 
-function isHdr(video) {
+export function isHdr(video) {
   return video?.colorTransfer === 'smpte2084' || video?.colorTransfer === 'arib-std-b67';
 }
 
@@ -242,7 +288,7 @@ function isHdr(video) {
 // vertical 1080x1920 fica igual, 2160x3840 vira 1080x1920, 3840x2160 vira 1920x1080.
 export const SCALE_FILTER = "scale=w='if(lte(iw,ih),min(1080,trunc(iw/2)*2),-2)':h='if(lte(iw,ih),-2,min(1080,trunc(ih/2)*2))'";
 // HDR (iPhone HLG/Dolby Vision, PQ) em 8 bits sem conversão fica lavado: tonemap quando o ffmpeg tem zscale.
-const HDR_TO_SDR = 'zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p';
+export const HDR_TO_SDR = 'zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p';
 
 /** Argumentos do ffmpeg (sem o nice/ionice). */
 export function buildFfmpegArgs({ src, dest, action, threads = 1, probe = null, hasZscale = false }) {
@@ -270,7 +316,7 @@ export function buildFfmpegArgs({ src, dest, action, threads = 1, probe = null, 
 
 // ── Execução ──────────────────────────────────────────────────
 
-function findExecutable(name) {
+export function findExecutable(name) {
   for (const dir of String(process.env.PATH || '').split(path.delimiter)) {
     if (!dir) continue;
     const candidate = path.join(dir, name);
@@ -283,12 +329,12 @@ function findExecutable(name) {
 }
 
 /** ffmpeg/ffprobe ausente ou sem permissão para subir: não é falha do vídeo, tenta de novo depois. */
-function toolUnavailable(error) {
+export function toolUnavailable(error) {
   return String(error?.syscall || '').startsWith('spawn') || error?.exitCode === 126 || error?.exitCode === 127
     || /spawn \S+ (ENOENT|EACCES)/.test(String(error?.message || ''));
 }
 
-function runProcess(cmd, args, { timeoutMs }) {
+export function runProcess(cmd, args, { timeoutMs }) {
   return new Promise((resolve, reject) => {
     let child;
     try {
@@ -349,8 +395,15 @@ function readSettings(env) {
   };
 }
 
-// Prioridade na fila: quem está assistindo agora > upload novo > vídeos antigos (tarefa de fundo).
-const PRIORITY = { watching: 0, upload: 1, backfill: 2 };
+// Prioridade na fila (menor sai primeiro). A fila é uma só para a versão leve e a versão Instagram:
+// - urgent: post na hora de sair sem a versão Instagram pronta;
+// - watching: alguém assistindo agora;
+// - instagramSoon: post das próximas horas;
+// - upload: upload novo;
+// - instagram: post agendado para os próximos 2 dias;
+// - backfill: vídeos antigos (tarefa de fundo).
+export const QUEUE_PRIORITY = { urgent: -1, watching: 0, instagramSoon: 0.5, upload: 1, instagram: 1.5, backfill: 2 };
+const PRIORITY = QUEUE_PRIORITY;
 
 // Colunas com vídeo para assistir (a tarefa de fundo lê só as linhas dos últimos dias).
 const BACKFILL_SOURCES = [
@@ -372,6 +425,7 @@ export function createWebVideo({ pool, uploadRoots, runSlot = (task) => task(), 
   const settings = readSettings(env);
   const roots = () => (typeof uploadRoots === 'function' ? uploadRoots() : uploadRoots || []).filter(Boolean);
   const queue = [];
+  // chaves dos itens na fila: 'web:<caminho>' (versão leve) ou 'ig:<caminho>' (versão Instagram)
   const queued = new Set();
   let seq = 0;
   let running = null;
@@ -473,23 +527,39 @@ export function createWebVideo({ pool, uploadRoots, runSlot = (task) => task(), 
     if (webExists(localPath)) return false;
     const key = fileKey(localPath);
     if (!key || failed.has(key) || settled.has(key)) return false;
-    const priority = PRIORITY[reason] ?? PRIORITY.upload;
-    if (running?.localPath === localPath) return false;
-    if (queued.has(localPath)) {
-      // quem está assistindo passa na frente do que já estava na fila
-      const item = queue.find((q) => q.localPath === localPath);
-      if (item && priority < item.priority) item.priority = priority;
-      return false;
+    const state = enqueueTask({ ...found, key: `web:${localPath}`, priority: PRIORITY[reason] ?? PRIORITY.upload, reason });
+    if (state !== 'queued') return false;
+    if (reason !== 'backfill') log(`na fila: ${relative} (${reason === 'watching' ? 'assistindo' : 'upload'})`);
+    return true;
+  }
+
+  /**
+   * Fila comum: item { key, localPath, relative, root, priority, reason, run? }. Sem run é a versão
+   * leve; com run, quem pôs o item (versão Instagram) converte. Devolve 'queued' (entrou), 'waiting'
+   * (já estava; sobe de prioridade se a nova for maior), 'running' ou 'full'.
+   */
+  function enqueueTask(item) {
+    if (running?.key === item.key) return 'running';
+    if (queued.has(item.key)) {
+      // quem está assistindo (ou o post na hora de sair) passa na frente do que já estava na fila
+      const existing = queue.find((q) => q.key === item.key);
+      if (existing && item.priority < existing.priority) existing.priority = item.priority;
+      return 'waiting';
     }
     if (queue.length >= settings.maxQueue) {
-      warn(`fila cheia (${queue.length}): ${relative} fica para a próxima passada`);
-      return false;
+      warn(`fila cheia (${queue.length}): ${item.relative} fica para a próxima passada`);
+      return 'full';
     }
-    queue.push({ ...found, priority, reason, seq: ++seq });
-    queued.add(localPath);
-    if (reason !== 'backfill') log(`na fila: ${relative} (${reason === 'watching' ? 'assistindo' : 'upload'})`);
+    queue.push({ ...item, seq: ++seq });
+    queued.add(item.key);
     schedulePump(0);
-    return true;
+    return 'queued';
+  }
+
+  /** 'running', 'waiting' ou null. */
+  function taskState(key) {
+    if (running?.key === key) return 'running';
+    return queued.has(key) ? 'waiting' : null;
   }
 
   function takeNext() {
@@ -523,11 +593,11 @@ export function createWebVideo({ pool, uploadRoots, runSlot = (task) => task(), 
     running = item;
     let ranFfmpeg = false;
     try {
-      ranFfmpeg = await processItem(item);
+      ranFfmpeg = typeof item.run === 'function' ? await item.run(item) : await processItem(item);
     } catch (error) {
       warn(`erro inesperado em ${item.relative}: ${error?.message || error}`);
     } finally {
-      queued.delete(item.localPath);
+      queued.delete(item.key);
       running = null;
       if (item.reason === 'backfill' && ranFfmpeg) log(`faltam ${remainingBackfill()} vídeo(s) antigo(s)`);
       if (queue.length) schedulePump(ranFfmpeg ? settings.pauseMs : 0);
@@ -745,19 +815,27 @@ export function createWebVideo({ pool, uploadRoots, runSlot = (task) => task(), 
     return { url: original, variant: 'original' };
   }
 
-  /** Apaga a .web.mp4 de um original (limpezas). Devolve os bytes liberados. */
-  function removeWebVariantOf(localPath) {
-    const web = webVariantPath(localPath);
-    if (!web) return 0;
+  function removeFile(file) {
+    if (!file) return 0;
     try {
-      if (!fs.existsSync(web)) return 0;
-      const size = fs.statSync(web).size;
-      fs.unlinkSync(web);
+      if (!fs.existsSync(file)) return 0;
+      const size = fs.statSync(file).size;
+      fs.unlinkSync(file);
       return size;
     } catch (error) {
-      warn(`não apagou ${web}: ${error?.message || error}`);
+      warn(`não apagou ${file}: ${error?.message || error}`);
       return 0;
     }
+  }
+
+  /** Apaga a .web.mp4 de um original. Devolve os bytes liberados. */
+  function removeWebVariantOf(localPath) {
+    return removeFile(webVariantPath(localPath));
+  }
+
+  /** Apaga as cópias geradas de um original (.web.mp4 e .ig.mp4) nas limpezas. Devolve os bytes liberados. */
+  function removeVariantsOf(localPath) {
+    return removeFile(webVariantPath(localPath)) + removeFile(igVariantPath(localPath));
   }
 
   /**
@@ -832,7 +910,15 @@ export function createWebVideo({ pool, uploadRoots, runSlot = (task) => task(), 
     start,
     playbackFor,
     removeWebVariantOf,
+    removeVariantsOf,
     registerRoutes,
+    enqueueTask,
+    taskState,
+    // o que a versão Instagram reaproveita: fila global de ffmpeg, nice/ionice, espaço em disco, zscale
+    infra: {
+      settings, roots, runSlot, lowPriority, diskHasRoom, hasZscale,
+      resetTools: () => { if (tools) tools.hasZscale = null; },
+    },
     status: () => ({ running: running?.relative || null, queued: queue.length, backfill: remainingBackfill(), failed: failed.size }),
   };
 }

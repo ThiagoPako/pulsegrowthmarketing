@@ -425,9 +425,18 @@ export default function EditorKanban() {
   useEffect(() => {
     if (cityLoading) return;
     void fetchTasks();
-    // Poll every 15s for near real-time updates (VPS has no websocket channels)
-    const interval = setInterval(fetchTasks, 15000);
-    return () => clearInterval(interval);
+    // Poll every 15s for near real-time updates (VPS has no websocket channels).
+    // Com a aba escondida não consulta; atualiza quando a aba volta a ficar visível.
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      fetchTasks();
+    }, 15000);
+    const onVisibility = () => { if (document.visibilityState === 'visible') fetchTasks(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [activeCity, cityLoading, fetchTasks]);
 
   const { profile } = useAuth();

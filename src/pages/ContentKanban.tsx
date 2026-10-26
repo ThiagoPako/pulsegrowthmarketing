@@ -268,7 +268,14 @@ export default function ContentKanban() {
     const response = await vpsAuthedFetch('/db/query', {
       method: 'POST',
       headers: { 'x-pulse-city': city },
-      body: JSON.stringify({ table: 'content_tasks', operation: 'select', select: '*' }),
+      // Arquivados não aparecem no Kanban: o filtro fica no servidor (antes vinha a tabela
+      // inteira a cada 15 s e o descarte era só na tela)
+      body: JSON.stringify({
+        table: 'content_tasks',
+        operation: 'select',
+        select: '*',
+        filters: [{ column: '_or', op: 'or', value: 'kanban_column.neq.arquivado,kanban_column.is.null' }],
+      }),
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
@@ -359,9 +366,18 @@ export default function ContentKanban() {
 
   useEffect(() => {
     fetchTasks();
-    // Poll every 15s for near real-time updates (VPS has no websocket channels)
-    const interval = setInterval(fetchTasks, 15000);
-    return () => clearInterval(interval);
+    // Poll every 15s for near real-time updates (VPS has no websocket channels).
+    // Com a aba escondida não consulta; atualiza na hora em que a aba volta a ficar visível.
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      fetchTasks();
+    }, 15000);
+    const onVisibility = () => { if (document.visibilityState === 'visible') fetchTasks(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [fetchTasks]);
 
   // Deep-link highlight: open detail sheet of mentioned card and scroll to it.

@@ -244,8 +244,23 @@ export default function EditorDashboard() {
   }, [clients, recordings]);
 
   const fetchTasks = useCallback(async () => {
-    const { data } = await supabase.from('content_tasks').select('*')
-      .in('kanban_column', ['edicao', 'revisao', 'alteracao', 'envio', 'agendamentos', 'acompanhamento', 'arquivado']);
+    // Arquivados só a partir do início da semana ou do mês (o que vier antes): é o que a
+    // pontuação usa (data de referência approved_at/approval_sent_at/updated_at, todas <=
+    // updated_at). Antes vinha todo o histórico de arquivados a cada 15 s.
+    const nowRef = new Date();
+    const weekRef = startOfWeek(nowRef, { weekStartsOn: 1 });
+    const monthRef = startOfMonth(nowRef);
+    const archivedSince = (weekRef < monthRef ? weekRef : monthRef).toISOString();
+    const [activeRes, archivedRes] = await Promise.all([
+      supabase.from('content_tasks').select('*')
+        .in('kanban_column', ['edicao', 'revisao', 'alteracao', 'envio', 'agendamentos', 'acompanhamento']),
+      supabase.from('content_tasks').select('*')
+        .eq('kanban_column', 'arquivado').gte('updated_at', archivedSince),
+    ]);
+    // Se uma das duas falhar, mantém a lista anterior (não some com cards nem pontos)
+    const data = activeRes.error || archivedRes.error
+      ? null
+      : [...(activeRes.data || []), ...(archivedRes.data || [])];
     
     if (data) {
       // Sort client-side to be resilient to missing 'position' column
@@ -271,8 +286,17 @@ export default function EditorDashboard() {
   // Polling every 15s for sync (realtime channel is a no-op with VPS client)
   useEffect(() => {
     if (cityLoading) return;
-    const interval = setInterval(fetchTasks, 15000);
-    return () => clearInterval(interval);
+    // Com a aba escondida não consulta; atualiza quando a aba volta a ficar visível
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      fetchTasks();
+    }, 15000);
+    const onVisibility = () => { if (document.visibilityState === 'visible') fetchTasks(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [fetchTasks, cityLoading]);
 
   // Fetch script when active task changes

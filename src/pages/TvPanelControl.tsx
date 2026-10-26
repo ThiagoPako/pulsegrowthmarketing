@@ -58,25 +58,27 @@ export default function TvPanelControl() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const wrap = async (key: string, fn: () => Promise<any>, msg: string) => {
+  // true quando o servidor gravou; na falha mostra o motivo (antes sempre dizia "enviado")
+  const wrap = async (key: string, fn: () => Promise<any>, msg: string): Promise<boolean> => {
     setBusy(key);
-    try { await fn(); toast.success(msg); }
-    catch { toast.error('Falha ao executar comando'); }
+    try { await fn(); toast.success(msg); return true; }
+    catch (e: any) { toast.error(e?.message ? `Falha ao executar comando: ${e.message}` : 'Falha ao executar comando'); return false; }
     finally { setBusy(null); }
   };
 
   const handleSavePlaylist = () =>
     wrap('playlist', async () => { await savePlaylistAndBroadcast(draftUrl); setRadioUrl(draftUrl); }, 'Playlist atualizada em todas as TVs!');
 
-  const handleVisibility = (key: VisibilityKey, value: boolean) => {
+  const handleVisibility = async (key: VisibilityKey, value: boolean) => {
     setVisibility(prev => ({ ...prev, [key]: value }));
-    wrap(key, () => saveVisibility(key, value), `${VISIBILITY_CONFIG[key].label}: ${value ? 'visível' : 'oculto'}`);
+    const ok = await wrap(key, () => saveVisibility(key, value), `${VISIBILITY_CONFIG[key].label}: ${value ? 'visível' : 'oculto'}`);
+    if (!ok) setVisibility(prev => ({ ...prev, [key]: !value }));
   };
 
-  const handleAlert = () => {
+  const handleAlert = async () => {
     if (!alertMessage.trim()) { toast.error('Digite uma mensagem'); return; }
-    wrap('alert', () => broadcastAlert(alertMessage.trim(), alertDuration * 1000, alertTone), 'Mensagem enviada para todas as TVs!');
-    setAlertMessage('');
+    const ok = await wrap('alert', () => broadcastAlert(alertMessage.trim(), alertDuration * 1000, alertTone), 'Mensagem enviada para todas as TVs!');
+    if (ok) setAlertMessage('');
   };
 
   const extractYoutubeId = (url: string) => url.match(/(?:list=|playlist\?list=)([a-zA-Z0-9_-]+)/)?.[1] || null;

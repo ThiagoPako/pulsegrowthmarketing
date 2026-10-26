@@ -8,6 +8,7 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isWithinInter
 import { Badge } from '@/components/ui/badge';
 import UserAvatar from '@/components/UserAvatar';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { userRoleList } from '@/lib/userRoles';
 import { VM_SCORE, PARCEIRO_SCORE, calcWaitPoints, dedupeDeliveryRecords, getDesignTaskReferenceDate, getDesignerScoreBreakdown, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate, getScriptReferenceDate, getSocialDeliveryReferenceDate, getSocialMediaScoreBreakdown, getSocialTaskReferenceDate, sumDeliveryProduction } from '@/lib/scoringSystem';
 
 interface MemberPerformance {
@@ -65,9 +66,13 @@ export default function TeamPerformanceWidget() {
     const monthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
     Promise.all([
       supabase.from('delivery_records').select('*').gte('date', monthStart).lte('date', monthEnd),
-      supabase.from('content_tasks').select('*'),
+      // Só o que pode cair no mês (alguma das datas usadas na pontuação a partir do dia 1);
+      // o filtro exato do mês continua abaixo. Antes vinham as duas tabelas inteiras.
+      supabase.from('content_tasks').select('*')
+        .or(`updated_at.gte.${monthStart},approved_at.gte.${monthStart},approval_sent_at.gte.${monthStart},created_at.gte.${monthStart}`),
       supabase.from('design_tasks').select('*').gte('updated_at', monthStart).lte('updated_at', monthEnd + 'T23:59:59'),
-      supabase.from('social_media_deliveries').select('*'),
+      supabase.from('social_media_deliveries').select('*')
+        .or(`posted_at.gte.${monthStart},delivered_at.gte.${monthStart},created_at.gte.${monthStart},updated_at.gte.${monthStart}`),
       supabase.from('endomarketing_partner_tasks').select('*').gte('date', monthStart).lte('date', monthEnd),
       supabase.from('recording_wait_logs').select('*').gte('created_at', monthStart).lte('created_at', monthEnd + 'T23:59:59'),
     ]).then(([dr, ct, dt, smd, pt, wl]) => {
@@ -93,12 +98,14 @@ export default function TeamPerformanceWidget() {
       return !!key && key >= monthStart && key <= monthEnd;
     };
 
-    for (const user of teamUsers) {
+    // Uma linha por função de cada pessoa, dentro do grupo da função (videomaker + editor
+    // aparece em Videomakers e em Editores, cada um com a produção daquela função).
+    for (const user of teamUsers) for (const role of userRoleList(user)) {
       let score = 0;
       let maxScore = 100;
       const metrics: { label: string; value: number }[] = [];
 
-      if (user.role === 'videomaker') {
+      if (role === 'videomaker') {
         const vmDeliveries = dedupeDeliveryRecords(deliveryRecords.filter(r => r.videomaker_id === user.id));
         const produced = sumDeliveryProduction(vmDeliveries);
         const { reels, creatives, stories, extras, arts } = produced;
@@ -129,7 +136,7 @@ export default function TeamPerformanceWidget() {
         );
         maxScore = Math.max(score, 200);
 
-      } else if (user.role === 'editor') {
+      } else if (role === 'editor') {
         const editorTasks = contentTasks.filter(
           t => getEditorTaskOwnerId(t) === user.id && isInCurrentMonth(getEditorTaskReferenceDate(t)),
         );
@@ -144,7 +151,7 @@ export default function TeamPerformanceWidget() {
         );
         maxScore = Math.max(score, 150);
 
-      } else if (user.role === 'designer' || user.role === 'fotografo') {
+      } else if (role === 'designer' || role === 'fotografo') {
         // Designer/Fotógrafo: criação visual exige conceito, execução e revisões
         const dTasks = designTasks.filter(
           t => t.assigned_to === user.id && isInCurrentMonth(getDesignTaskReferenceDate(t)),
@@ -160,7 +167,7 @@ export default function TeamPerformanceWidget() {
         maxScore = Math.max(score, 120);
 
 
-      } else if (user.role === 'social_media') {
+      } else if (role === 'social_media') {
         const scopedTasks = contentTasks.filter(t => isInCurrentMonth(getSocialTaskReferenceDate(t)));
         const scopedDeliveries = smDeliveries.filter(d => isInCurrentMonth(getSocialDeliveryReferenceDate(d)));
         const scopedScripts = scripts.filter(s => isInCurrentMonth(getScriptReferenceDate(s)));
@@ -175,7 +182,7 @@ export default function TeamPerformanceWidget() {
         );
         maxScore = Math.max(score, 120);
 
-      } else if (user.role === 'parceiro') {
+      } else if (role === 'parceiro') {
         const pTasks = partnerTasks.filter(t => t.partner_id === user.id);
         const completedTasks = pTasks.filter(t => t.status === 'concluido' || t.status === 'completed' || !!t.completed_at);
         const completed = completedTasks.length;
@@ -195,7 +202,7 @@ export default function TeamPerformanceWidget() {
       }
 
       members.push({
-        id: user.id, name: user.name, role: user.role,
+        id: user.id, name: user.name, role,
         avatarUrl: user.avatarUrl, score, maxScore, metrics,
       });
     }
@@ -233,7 +240,7 @@ export default function TeamPerformanceWidget() {
           <Trophy size={16} className="text-primary" />
           Desempenho por Função — {capitalMonth}
         </h3>
-        <Badge variant="outline" className="text-[9px]">{teamMembers.length} membros</Badge>
+        <Badge variant="outline" className="text-[9px]">{new Set(teamMembers.map(m => m.id)).size} membros</Badge>
       </div>
 
       {/* Category cards */}

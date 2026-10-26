@@ -20,6 +20,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import jsPDF from 'jspdf';
 import pulseHeaderImg from '@/assets/pulse_header.png';
 import { VM_SCORE, EDITOR_SCORE, calcVmDeliveryScore, calcWaitPoints, dedupeDeliveryRecords, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate } from '@/lib/scoringSystem';
+import { userHasRole } from '@/lib/userRoles';
 
 interface DeliveryRecord {
   id: string;
@@ -74,8 +75,9 @@ export default function InternalReports() {
   const [selectedVm, setSelectedVm] = useState('all');
   const [waitLogs, setWaitLogs] = useState<any[]>([]);
 
-  const videomakers = useMemo(() => users.filter(u => u.role === 'videomaker'), [users]);
-  const editors = useMemo(() => users.filter(u => u.role === 'editor'), [users]);
+  // Função principal ou adicional: quem é videomaker e editor aparece nos dois rankings
+  const videomakers = useMemo(() => users.filter(u => userHasRole(u, 'videomaker')), [users]);
+  const editors = useMemo(() => users.filter(u => userHasRole(u, 'editor')), [users]);
 
   const [editorTasks, setEditorTasks] = useState<EditorTask[]>([]);
   const [storySessions, setStorySessions] = useState<any[]>([]);

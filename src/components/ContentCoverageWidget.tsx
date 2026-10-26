@@ -25,10 +25,13 @@ export default function ContentCoverageWidget() {
     let mounted = true;
     (async () => {
       try {
+        // Mesmo critério do gerador do Copy: pendente é tarefa em Ideias ainda sem roteiro
+        // (as colunas em_producao/em_revisao não existem; tarefa com roteiro já conta no estoque)
         const { data } = await supabase
           .from('content_tasks')
           .select('client_id, content_type')
-          .in('kanban_column', ['ideias', 'em_producao', 'em_revisao']);
+          .eq('kanban_column', 'ideias')
+          .is('script_id', null);
         if (mounted) setTasks((data as any) || []);
       } finally {
         if (mounted) setLoading(false);
@@ -37,7 +40,8 @@ export default function ContentCoverageWidget() {
     return () => { mounted = false; };
   }, []);
 
-  const activeClients = useMemo(() => clients.filter(c => (c as any).status !== 'inactive'), [clients]);
+  // Sem cancelados (o status do sistema é 'cancelado', não 'inactive') e sem o cliente interno
+  const activeClients = useMemo(() => clients.filter(c => (c as any).status !== 'cancelado' && !c.isAdminClient), [clients]);
 
   const coverage = useMemo(() => {
     return FORMATS.map(f => {

@@ -14555,7 +14555,8 @@ function buildTvSeasonalSlides(clients = [], referenceDate = new Date()) {
 
 async function loadSeasonalClients(clientIds = []) {
   const params = [];
-  const conditions = ["niche IS NOT NULL", "btrim(niche) <> ''"];
+  // Cliente cancelado não entra (a TV chama sem ids); status vazio conta como ativo, como no front
+  const conditions = ["niche IS NOT NULL", "btrim(niche) <> ''", "COALESCE(status, 'ativo') <> 'cancelado'"];
 
   if (Array.isArray(clientIds) && clientIds.length > 0) {
     params.push(clientIds);
@@ -14583,8 +14584,9 @@ async function fetchSystemSeasonalAlerts({ clientIds = [], fallbackClients = nul
 }
 
 // ─── TV Dashboard endpoint ──────────────────────────────────
-app.get('/api/tv-dashboard', async (req, res) => {
-  if (!(await tvAccessAllowed(req))) return res.status(401).json({ error: 'Unauthorized' });
+// Monta o painel da TV. Lança erro quando o banco não responde (a rota devolve 500 e a
+// TV mantém os últimos dados com o selo OFF, em vez de apagar tudo com "LIVE").
+async function loadTvDashboardPayload() {
   let stage = 'init';
   try {
     const safeQuery = async (label, sql, params = []) => {
@@ -14599,9 +14601,9 @@ app.get('/api/tv-dashboard', async (req, res) => {
 
     stage = 'profiles';
 
-    // 1. Get all team profiles
-    const profiles = await safeQuery('profiles', `
-      SELECT p.id, p.name, p.role, p.avatar_url, p.monthly_salary
+    // 1. Get all team profiles (base do painel: se falhar, o banco está fora)
+    const { rows: profiles } = await pool.query(`
+      SELECT p.id, p.name, p.role, p.avatar_url
       FROM profiles p
       WHERE p.role IS NOT NULL
       ORDER BY p.name
@@ -14648,7 +14650,13 @@ app.get('/api/tv-dashboard', async (req, res) => {
 
     // Content tasks
     for (const t of contentTasks) {
-      const userId = t?.edited_by || t?.assigned_to || t?.reviewing_by;
+      // Dono da atividade pela coluna: em revisão é quem revisa (o editor que entregou
+      // continua em edited_by, mas não está mais no card); em edição/alteração é o editor.
+      // Alteração ainda na fila (sem "Iniciar Alteração") não é trabalho de ninguém.
+      if (t?.kanban_column === 'alteracao' && !t?.editing_started_at) continue;
+      const userId = t?.kanban_column === 'revisao'
+        ? t?.reviewing_by
+        : (t?.assigned_to || t?.edited_by);
       if (!userId) continue;
 
       let activity = 'editing';
@@ -14659,13 +14667,6 @@ app.get('/api/tv-dashboard', async (req, res) => {
         if (t?.reviewing_at) {
           const reviewedAt = new Date(t.reviewing_at).getTime();
           timeOnTask = Number.isFinite(reviewedAt) ? Math.floor((Date.now() - reviewedAt) / 1000) : 0;
-        }
-      } else if (t?.kanban_column === 'alteracao') {
-        activity = 'editing';
-        if (t?.editing_started_at && !t?.editing_paused_at) {
-          const startedAt = new Date(t.editing_started_at).getTime();
-          const elapsed = Number.isFinite(startedAt) ? Math.floor((Date.now() - startedAt) / 1000) : 0;
-          timeOnTask = elapsed - (t?.editing_paused_seconds || 0);
         }
       } else {
         if (t?.editing_started_at && !t?.editing_paused_at) {
@@ -14978,9 +14979,15 @@ app.get('/api/tv-dashboard', async (req, res) => {
     }
 
     stage = 'seasonal_slides';
-    const seasonalClients = await loadSeasonalClients();
-    const seasonalAlerts = await fetchSystemSeasonalAlerts({ fallbackClients: seasonalClients });
-    const seasonalSlides = buildTvSeasonalSlidesFromAlerts(seasonalAlerts);
+    // Opcional como as outras seções: falha aqui não derruba o painel inteiro
+    let seasonalSlides = [];
+    try {
+      const seasonalClients = await loadSeasonalClients();
+      const seasonalAlerts = await fetchSystemSeasonalAlerts({ fallbackClients: seasonalClients });
+      seasonalSlides = buildTvSeasonalSlidesFromAlerts(seasonalAlerts);
+    } catch (error) {
+      console.warn('[tv-dashboard] Failed to load seasonal slides:', error?.message || error);
+    }
 
     // Build list of recording IDs that are actively being recorded
     const activeRecordingIds = (activeRecs || []).map(r => r?.recording_id).filter(Boolean);
@@ -15042,10 +15049,119 @@ app.get('/api/tv-dashboard', async (req, res) => {
       console.warn('[tv-dashboard] Failed to load copy_active_sessions:', error?.message || error);
     }
 
-    res.json({ members, todaySchedule, editingPipeline, designPipeline, todayPosts, weekPosts, seasonalSlides, activeRecordingIds, storyEditingSessions, copyActiveSessions, updatedAt: new Date().toISOString() });
+    return { members, todaySchedule, editingPipeline, designPipeline, todayPosts, weekPosts, seasonalSlides, activeRecordingIds, storyEditingSessions, copyActiveSessions, updatedAt: new Date().toISOString() };
   } catch (err) {
     console.error('[tv-dashboard] Error at stage:', stage, err);
-    res.json({ members: [], todaySchedule: [], editingPipeline: [], designPipeline: [], todayPosts: [], weekPosts: [], seasonalSlides: [], activeRecordingIds: [], updatedAt: new Date().toISOString(), error: 'fallback' });
+    throw err;
+  }
+}
+
+// Cada TV pede o painel a cada 10 s: a mesma resposta serve todas as TVs por alguns
+// segundos (e pedidos simultâneos dividem uma consulta só). TTL curto para os
+// cronômetros não atrasarem. O "Atualizar" da TV manda ?_= e pula o cache.
+const TV_DASHBOARD_CACHE_MS = 5000;
+let tvDashboardCache = null;
+let tvDashboardPending = null;
+function loadTvDashboardShared() {
+  if (!tvDashboardPending) {
+    tvDashboardPending = loadTvDashboardPayload()
+      .then((payload) => { tvDashboardCache = { at: Date.now(), payload }; return payload; })
+      .finally(() => { tvDashboardPending = null; });
+  }
+  return tvDashboardPending;
+}
+
+app.get('/api/tv-dashboard', async (req, res) => {
+  if (!(await tvAccessAllowed(req))) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const force = req.query?._ !== undefined;
+    if (!force && tvDashboardCache && Date.now() - tvDashboardCache.at < TV_DASHBOARD_CACHE_MS) {
+      return res.json(tvDashboardCache.payload);
+    }
+    res.json(await loadTvDashboardShared());
+  } catch {
+    res.status(500).json({ error: 'Não foi possível carregar o painel da TV.' });
+  }
+});
+
+// ─── Controle remoto da TV (tabela tv_settings) ─────────────
+// O /painel-tv grava (só admin) e as TVs leem a cada poucos segundos (com o tv_token
+// quando TV_ACCESS_TOKEN existe). Antes o front chamava /api/data/tv_settings, que
+// não existe: nada chegava às TVs e o painel dizia "enviado".
+const TV_SETTING_KEYS = new Set([
+  'remote_command', 'youtube_playlist_url',
+  'show_radio', 'show_schedule', 'show_pipeline', 'show_banners', 'show_team', 'show_posts',
+]);
+let tvSettingsTableReady = null;
+function ensureTvSettingsTable() {
+  if (!tvSettingsTableReady) {
+    // Mesmo formato da tabela que já existe na VPS (sem chave única: a gravação faz update e depois insert)
+    tvSettingsTableReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS tv_settings (
+        key text,
+        value text,
+        updated_at timestamptz DEFAULT now(),
+        city text
+      )
+    `).catch((error) => { tvSettingsTableReady = null; throw error; });
+  }
+  return tvSettingsTableReady;
+}
+
+app.get('/api/tv/settings', async (req, res) => {
+  if (!(await tvAccessAllowed(req))) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    await ensureTvSettingsTable();
+    // Linha repetida da mesma chave: vale a mais recente
+    const { rows } = await pool.query(
+      `SELECT DISTINCT ON (key) key, value FROM tv_settings
+        WHERE key = ANY($1::text[])
+        ORDER BY key, updated_at DESC NULLS LAST`,
+      [[...TV_SETTING_KEYS]]
+    );
+    const settings = {};
+    for (const row of rows) settings[row.key] = row.value ?? '';
+    res.json({ settings });
+  } catch (error) {
+    console.error('[tv/settings] leitura:', error?.message || error);
+    res.status(500).json({ error: 'Não foi possível ler as configurações da TV.' });
+  }
+});
+
+app.put('/api/tv/settings/:key', async (req, res) => {
+  let user;
+  try {
+    ({ user } = await verifyUser(req));
+  } catch {
+    return res.status(401).json({ error: 'Sessão expirada. Faça login novamente.' });
+  }
+  // O Painel TV é só de admin (menu e rota)
+  if (!(await isStrictAdminUser(user))) return res.status(403).json({ error: 'Só o administrador comanda a TV.' });
+  const key = String(req.params.key || '');
+  if (!TV_SETTING_KEYS.has(key)) return res.status(400).json({ error: 'Configuração da TV desconhecida.' });
+  const value = req.body?.value;
+  if (typeof value !== 'string' || value.length > 4000) {
+    return res.status(400).json({ error: 'Valor inválido para a TV.' });
+  }
+  let db;
+  try {
+    await ensureTvSettingsTable();
+    db = await pool.connect();
+    await db.query('BEGIN');
+    // Trava por chave: dois admins salvando juntos não criam linha repetida
+    await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`tv_settings:${key}`]);
+    const updated = await db.query('UPDATE tv_settings SET value = $2, updated_at = now() WHERE key = $1', [key, value]);
+    if (updated.rowCount === 0) {
+      await db.query('INSERT INTO tv_settings (key, value, updated_at) VALUES ($1, $2, now())', [key, value]);
+    }
+    await db.query('COMMIT');
+    res.json({ ok: true, key, value });
+  } catch (error) {
+    if (db) await db.query('ROLLBACK').catch(() => {});
+    console.error('[tv/settings] gravação:', error?.message || error);
+    res.status(500).json({ error: 'Não foi possível salvar na TV.' });
+  } finally {
+    db?.release();
   }
 });
 
@@ -16504,17 +16620,12 @@ async function ensureGestaoTables() {
 }
 ensureGestaoTables().catch(() => {});
 
+// Painel dos sócios: admin ou socio_gestor (principal ou em user_roles), como a tela
+// (RequireSocioGestor). O isAdminUser também aceita social_media, que não é sócio.
 async function isSocioGestor(user) {
   if (!user) return false;
-  if (await isAdminUser(user)) return true;
-  try {
-    const linkedIds = await getLinkedUserIds(user);
-    const { rows } = await pool.query(
-      "SELECT 1 FROM user_roles WHERE user_id::text = ANY($1::text[]) AND role = 'socio_gestor' LIMIT 1",
-      [linkedIds]
-    );
-    return rows.length > 0;
-  } catch { return false; }
+  if (await isStrictAdminUser(user)) return true;
+  return userHasAssignedRole(user, 'socio_gestor');
 }
 
 async function requireSocioGestor(req) {
@@ -16570,13 +16681,79 @@ app.put('/api/gestao/unit-costs', async (req, res) => {
 });
 
 // Aggregated summary ----------------------------------------------
+// Erro de SQL aparece no log: antes uma coluna errada virava R$ 0 em silêncio.
+function logGestaoQueryError(error, sql) {
+  console.warn('[gestao] consulta falhou:', error?.message || error, '|', String(sql).replace(/\s+/g, ' ').slice(0, 200));
+}
 async function safeCount(sql, params) {
   try { const { rows } = await pool.query(sql, params); return Number(rows[0]?.n || 0); }
-  catch { return 0; }
+  catch (error) { logGestaoQueryError(error, sql); return 0; }
 }
 async function safeSum(sql, params) {
   try { const { rows } = await pool.query(sql, params); return Number(rows[0]?.total || 0); }
-  catch { return 0; }
+  catch (error) { logGestaoQueryError(error, sql); return 0; }
+}
+
+/** Números de Uruaçu no mês: os mesmos no resumo e no fechamento (antes eram dois SQL copiados). */
+async function loadGestaoUruacuMonth(start, end) {
+  const { rows: costRows } = await pool.query('SELECT content_type, unit_cost FROM city_transfer_costs');
+  const unitCost = Object.fromEntries(costRows.map(r => [r.content_type, Number(r.unit_cost)]));
+
+  // Content counts for Uruaçu (per city column on tables)
+  const counts = {
+    reels: await safeCount(
+      `SELECT COUNT(*)::int AS n FROM content_tasks WHERE city='uruacu' AND content_type='reels' AND created_at >= $1 AND created_at < $2`,
+      [start, end]
+    ),
+    story: await safeCount(
+      `SELECT COUNT(*)::int AS n FROM content_tasks WHERE city='uruacu' AND content_type='story' AND created_at >= $1 AND created_at < $2`,
+      [start, end]
+    ),
+    arte: await safeCount(
+      `SELECT COUNT(*)::int AS n FROM design_tasks WHERE city='uruacu' AND created_at >= $1 AND created_at < $2`,
+      [start, end]
+    ),
+    roteiro: await safeCount(
+      `SELECT COUNT(*)::int AS n FROM scripts WHERE city='uruacu' AND created_at >= $1 AND created_at < $2`,
+      [start, end]
+    ),
+    social_media: await safeCount(
+      `SELECT COUNT(*)::int AS n FROM social_media_deliveries WHERE city='uruacu' AND created_at >= $1 AND created_at < $2`,
+      [start, end]
+    ),
+  };
+
+  const transferBreakdown = Object.entries(counts).map(([type, qty]) => ({
+    content_type: type,
+    qty,
+    unit_cost: unitCost[type] || 0,
+    total: (unitCost[type] || 0) * qty,
+  }));
+  const transferTotal = transferBreakdown.reduce((s, r) => s + r.total, 0);
+
+  // Uruaçu revenue (received / to-receive in month)
+  const revenue = await safeSum(
+    `SELECT COALESCE(SUM(amount), 0) AS total FROM revenues WHERE city='uruacu' AND reference_month >= $1 AND reference_month < $2`,
+    [start, end]
+  );
+  // A coluna da data da despesa é "date" (não existe expense_date)
+  const expenses = await safeSum(
+    `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE city='uruacu' AND "date" >= $1::date AND "date" < $2::date`,
+    [start, end]
+  );
+  // Salaries Uruaçu: sum monthly_salary of profiles whose primary user_cities city = 'uruacu'
+  const salaries = await safeSum(
+    `SELECT COALESCE(SUM(p.monthly_salary), 0) AS total
+       FROM profiles p
+       JOIN user_cities uc ON uc.user_id = p.id AND uc.is_primary = true
+      WHERE uc.city = 'uruacu'`,
+    []
+  );
+
+  return {
+    unitCost, counts, transferBreakdown, transferTotal, revenue, expenses, salaries,
+    netMargin: revenue - salaries - expenses - transferTotal,
+  };
 }
 
 app.get('/api/gestao/summary', async (req, res) => {
@@ -16585,60 +16762,10 @@ app.get('/api/gestao/summary', async (req, res) => {
     await requireSocioGestor(req);
     const { month, start, end } = monthBounds(String(req.query.month || ''));
 
-    const { rows: costRows } = await pool.query('SELECT content_type, unit_cost FROM city_transfer_costs');
-    const unitCost = Object.fromEntries(costRows.map(r => [r.content_type, Number(r.unit_cost)]));
-
-    // Content counts for Uruaçu (per city column on tables)
-    const counts = {
-      reels: await safeCount(
-        `SELECT COUNT(*)::int AS n FROM content_tasks WHERE city='uruacu' AND content_type='reels' AND created_at >= $1 AND created_at < $2`,
-        [start, end]
-      ),
-      story: await safeCount(
-        `SELECT COUNT(*)::int AS n FROM content_tasks WHERE city='uruacu' AND content_type='story' AND created_at >= $1 AND created_at < $2`,
-        [start, end]
-      ),
-      arte: await safeCount(
-        `SELECT COUNT(*)::int AS n FROM design_tasks WHERE city='uruacu' AND created_at >= $1 AND created_at < $2`,
-        [start, end]
-      ),
-      roteiro: await safeCount(
-        `SELECT COUNT(*)::int AS n FROM scripts WHERE city='uruacu' AND created_at >= $1 AND created_at < $2`,
-        [start, end]
-      ),
-      social_media: await safeCount(
-        `SELECT COUNT(*)::int AS n FROM social_media_deliveries WHERE city='uruacu' AND created_at >= $1 AND created_at < $2`,
-        [start, end]
-      ),
-    };
-
-    const transferBreakdown = Object.entries(counts).map(([type, qty]) => ({
-      content_type: type,
-      qty,
-      unit_cost: unitCost[type] || 0,
-      total: (unitCost[type] || 0) * qty,
-    }));
-    const transferTotal = transferBreakdown.reduce((s, r) => s + r.total, 0);
-
-    // Uruaçu revenue (received / to-receive in month)
-    const revenueUruacu = await safeSum(
-      `SELECT COALESCE(SUM(amount), 0) AS total FROM revenues WHERE city='uruacu' AND reference_month >= $1 AND reference_month < $2`,
-      [start, end]
-    );
-    const expensesUruacu = await safeSum(
-      `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE city='uruacu' AND expense_date >= $1 AND expense_date < $2`,
-      [start, end]
-    );
-    // Salaries Uruaçu: sum monthly_salary of profiles whose primary user_cities city = 'uruacu'
-    const salariesUruacu = await safeSum(
-      `SELECT COALESCE(SUM(p.monthly_salary), 0) AS total
-         FROM profiles p
-         JOIN user_cities uc ON uc.user_id = p.id AND uc.is_primary = true
-        WHERE uc.city = 'uruacu'`,
-      []
-    );
-
-    const netMargin = revenueUruacu - salariesUruacu - expensesUruacu - transferTotal;
+    const {
+      unitCost, transferBreakdown, transferTotal,
+      revenue: revenueUruacu, expenses: expensesUruacu, salaries: salariesUruacu, netMargin,
+    } = await loadGestaoUruacuMonth(start, end);
 
     // Active contracts Uruaçu
     const contractsUruacu = await safeCount(
@@ -16667,19 +16794,19 @@ app.get('/api/gestao/summary', async (req, res) => {
       };
     });
 
-    // Per Uruaçu client breakdown
+    // Per Uruaçu client breakdown (o nome do cliente é company_name; clients não tem "name")
     const { rows: uruClients } = await pool.query(
-      `SELECT c.id, c.name, c.plan_id, p.name AS plan_name, p.price AS plan_price,
+      `SELECT c.id, c.company_name AS name, c.plan_id, p.name AS plan_name, p.price AS plan_price,
               (SELECT COUNT(*)::int FROM content_tasks ct WHERE ct.client_id = c.id AND ct.content_type='reels' AND ct.created_at >= $1 AND ct.created_at < $2) AS reels,
               (SELECT COUNT(*)::int FROM content_tasks ct WHERE ct.client_id = c.id AND ct.content_type='story' AND ct.created_at >= $1 AND ct.created_at < $2) AS stories,
               (SELECT COUNT(*)::int FROM design_tasks dt WHERE dt.client_id = c.id AND dt.created_at >= $1 AND dt.created_at < $2) AS artes,
               (SELECT COUNT(*)::int FROM scripts s WHERE s.client_id = c.id AND s.created_at >= $1 AND s.created_at < $2) AS roteiros
          FROM clients c
          LEFT JOIN plans p ON p.id = c.plan_id
-        WHERE c.city='uruacu' AND COALESCE(c.status,'ativo')='ativo'
-        ORDER BY c.name`,
+        WHERE c.city='uruacu' AND COALESCE(c.status,'ativo')='ativo' AND COALESCE(c.is_admin_client, false) = false
+        ORDER BY c.company_name`,
       [start, end]
-    ).catch(() => ({ rows: [] }));
+    ).catch((error) => { console.warn('[gestao] clientes de Uruaçu:', error?.message || error); return { rows: [] }; });
 
     const clientsBreakdown = uruClients.map(c => {
       const cost =
@@ -17099,26 +17226,23 @@ app.post('/api/gestao/close-month', async (req, res) => {
   try {
     await ensureGestaoTables();
     const user = await requireSocioGestor(req);
-    const { month } = req.body || {};
+    const { month, overwrite } = req.body || {};
     const monthStr = /^\d{4}-\d{2}$/.test(String(month || '')) ? String(month) : new Date().toISOString().slice(0, 7);
 
-    // Fetch summary internally by calling logic (simpler: recompute inline via GET handler is heavy)
-    // For simplicity, we snapshot using same query patterns.
+    // Mês já fechado: só refaz o snapshot com a confirmação da tela (overwrite: true).
+    const { rows: closedRows } = await pool.query(
+      `SELECT closed_at FROM monthly_closings WHERE month = $1 AND city = 'uruacu' LIMIT 1`,
+      [monthStr]
+    );
+    if (closedRows.length > 0 && overwrite !== true) {
+      return res.status(409).json({ error: 'Este mês já foi fechado.', already_closed: true, closed_at: closedRows[0].closed_at });
+    }
+
+    // Mesmo cálculo do resumo (/api/gestao/summary)
     const b = monthBounds(monthStr);
-    const { rows: costRows } = await pool.query('SELECT content_type, unit_cost FROM city_transfer_costs');
-    const unitCost = Object.fromEntries(costRows.map(r => [r.content_type, Number(r.unit_cost)]));
-    const cnt = {
-      reels: await safeCount(`SELECT COUNT(*)::int AS n FROM content_tasks WHERE city='uruacu' AND content_type='reels' AND created_at >= $1 AND created_at < $2`, [b.start, b.end]),
-      story: await safeCount(`SELECT COUNT(*)::int AS n FROM content_tasks WHERE city='uruacu' AND content_type='story' AND created_at >= $1 AND created_at < $2`, [b.start, b.end]),
-      arte: await safeCount(`SELECT COUNT(*)::int AS n FROM design_tasks WHERE city='uruacu' AND created_at >= $1 AND created_at < $2`, [b.start, b.end]),
-      roteiro: await safeCount(`SELECT COUNT(*)::int AS n FROM scripts WHERE city='uruacu' AND created_at >= $1 AND created_at < $2`, [b.start, b.end]),
-      social_media: await safeCount(`SELECT COUNT(*)::int AS n FROM social_media_deliveries WHERE city='uruacu' AND created_at >= $1 AND created_at < $2`, [b.start, b.end]),
-    };
-    const transferOut = Object.entries(cnt).reduce((s, [k, v]) => s + v * (unitCost[k] || 0), 0);
-    const revenue = await safeSum(`SELECT COALESCE(SUM(amount),0) AS total FROM revenues WHERE city='uruacu' AND reference_month >= $1 AND reference_month < $2`, [b.start, b.end]);
-    const expenses = await safeSum(`SELECT COALESCE(SUM(amount),0) AS total FROM expenses WHERE city='uruacu' AND expense_date >= $1 AND expense_date < $2`, [b.start, b.end]);
-    const salaries = await safeSum(`SELECT COALESCE(SUM(p.monthly_salary),0) AS total FROM profiles p JOIN user_cities uc ON uc.user_id = p.id AND uc.is_primary=true WHERE uc.city='uruacu'`, []);
-    const net = revenue - salaries - expenses - transferOut;
+    const {
+      counts: cnt, transferTotal: transferOut, revenue, expenses, salaries, netMargin: net,
+    } = await loadGestaoUruacuMonth(b.start, b.end);
 
     await pool.query(
       `INSERT INTO monthly_closings (month, city, revenue, salaries, expenses, transfer_out, transfer_in, net_margin, content_counts, closed_by)

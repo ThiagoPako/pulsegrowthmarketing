@@ -12,7 +12,10 @@ async function req(path: string, init: RequestInit = {}) {
     },
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+  if (!res.ok) {
+    // status e corpo vão junto: o fechamento usa o 409 (mês já fechado) para pedir confirmação
+    throw Object.assign(new Error(data?.error || `HTTP ${res.status}`), { status: res.status, data });
+  }
   return data;
 }
 
@@ -45,7 +48,7 @@ export const gestaoApi = {
   getCosts: () => req('/gestao/unit-costs') as Promise<{ costs: { content_type: string; unit_cost: number }[] }>,
   saveCosts: (costs: { content_type: string; unit_cost: number }[]) =>
     req('/gestao/unit-costs', { method: 'PUT', body: JSON.stringify({ costs }) }),
-  closeMonth: (month: string) =>
-    req('/gestao/close-month', { method: 'POST', body: JSON.stringify({ month }) }),
+  closeMonth: (month: string, overwrite = false) =>
+    req('/gestao/close-month', { method: 'POST', body: JSON.stringify({ month, overwrite }) }),
   history: () => req('/gestao/history') as Promise<{ closings: any[] }>,
 };

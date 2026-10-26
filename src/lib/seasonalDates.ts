@@ -61,14 +61,29 @@ interface CachedAlerts {
   alerts: AISeasonalAlert[];
 }
 
-export function getCachedAlerts(): AISeasonalAlert[] | null {
+/**
+ * Chave do cache por cidade ativa e lista de clientes: antes era uma só, e ao trocar
+ * de cidade o card mostrava por até 6 h os clientes da outra cidade.
+ */
+function seasonalCacheKey(clientIds?: string[]): string {
+  let city = 'geral';
+  try { city = String((window as any).__PULSE_ACTIVE_CITY__ || 'geral'); } catch { /* sem window */ }
+  const ids = Array.isArray(clientIds) && clientIds.length ? [...clientIds].sort().join(',') : 'todos';
+  // Hash curto dos ids (djb2) para a chave não crescer com a carteira
+  let hash = 5381;
+  for (let i = 0; i < ids.length; i++) hash = ((hash << 5) + hash + ids.charCodeAt(i)) | 0;
+  return `${SEASONAL_CACHE_KEY}:${city}:${(hash >>> 0).toString(36)}`;
+}
+
+export function getCachedAlerts(clientIds?: string[]): AISeasonalAlert[] | null {
   if (typeof window === 'undefined') return null;
+  const key = seasonalCacheKey(clientIds);
   try {
-    const raw = localStorage.getItem(SEASONAL_CACHE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     const cached: CachedAlerts = JSON.parse(raw);
     if (Date.now() - cached.timestamp > CACHE_TTL_MS) {
-      localStorage.removeItem(SEASONAL_CACHE_KEY);
+      localStorage.removeItem(key);
       return null;
     }
     return cached.alerts;
@@ -77,11 +92,11 @@ export function getCachedAlerts(): AISeasonalAlert[] | null {
   }
 }
 
-export function setCachedAlerts(alerts: AISeasonalAlert[]) {
+export function setCachedAlerts(alerts: AISeasonalAlert[], clientIds?: string[]) {
   if (typeof window === 'undefined' || alerts.length === 0) return;
   try {
     const cached: CachedAlerts = { timestamp: Date.now(), alerts };
-    localStorage.setItem(SEASONAL_CACHE_KEY, JSON.stringify(cached));
+    localStorage.setItem(seasonalCacheKey(clientIds), JSON.stringify(cached));
   } catch { /* ignore quota errors */ }
 }
 
@@ -91,8 +106,8 @@ export function setCachedAlerts(alerts: AISeasonalAlert[]) {
 export async function fetchAISeasonalAlerts(
   clientIds?: string[]
 ): Promise<AISeasonalAlert[]> {
-  // Check cache first
-  const cached = getCachedAlerts();
+  // Check cache first (da mesma cidade e dos mesmos clientes)
+  const cached = getCachedAlerts(clientIds);
   if (cached) return cached;
 
   try {
@@ -104,7 +119,7 @@ export async function fetchAISeasonalAlerts(
       return [];
     }
     const alerts = data.alerts || [];
-    setCachedAlerts(alerts);
+    setCachedAlerts(alerts, clientIds);
     return alerts;
   } catch (err) {
     console.error('Seasonal alerts error:', err);
@@ -117,7 +132,14 @@ export async function fetchAISeasonalAlerts(
  */
 export function clearSeasonalCache() {
   if (typeof window === 'undefined') return;
-  localStorage.removeItem(SEASONAL_CACHE_KEY);
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key === SEASONAL_CACHE_KEY || key.startsWith(`${SEASONAL_CACHE_KEY}:`))) keys.push(key);
+    }
+    keys.forEach(key => localStorage.removeItem(key));
+  } catch { /* storage bloqueado */ }
 }
 
 // Legacy compatibility functions - now return empty since AI handles everything

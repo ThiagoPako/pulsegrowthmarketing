@@ -1,6 +1,7 @@
 // Sistema de controle remoto da TV operacional
-// Usa a tabela tv_settings (chave 'remote_command') como canal de comandos.
-// O TvDashboard faz polling a cada 2s e executa comandos novos (id maior que último).
+// Usa a tabela tv_settings (chave 'remote_command') como canal de comandos, pela rota
+// /api/tv/settings: o /painel-tv grava (só admin) e o TvDashboard lê a cada 2,5 s e
+// executa comandos novos (id maior que o último).
 
 const VPS = 'https://agenciapulse.tech/api';
 
@@ -34,23 +35,28 @@ export const VISIBILITY_KEYS = [
 
 export type VisibilityKey = typeof VISIBILITY_KEYS[number];
 
+// Chave da TV (/tv?tv_token=...) e login da equipe guardado no navegador: os mesmos do /api/tv-dashboard.
+function tvToken(): string {
+  try { return new URLSearchParams(window.location.search).get('tv_token') || ''; } catch { return ''; }
+}
+
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  let token: string | null = null;
+  try { token = localStorage.getItem('pulse_jwt'); } catch { /* storage bloqueado */ }
+  return token ? { ...extra, Authorization: `Bearer ${token}` } : extra;
+}
+
+// Lança erro quando o servidor não gravou: o painel mostra a falha em vez de "enviado".
 async function upsertSetting(key: string, value: string) {
-  const body = { value, updated_at: new Date().toISOString() };
-  // Try patch first, fallback to insert
-  const patch = await fetch(`${VPS}/data/tv_settings?key=eq.${key}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+  const res = await fetch(`${VPS}/tv/settings/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ value }),
   });
-  if (patch.ok) {
-    const text = await patch.text();
-    if (text && text !== '[]') return;
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || `Falha ao salvar na TV (HTTP ${res.status})`);
   }
-  await fetch(`${VPS}/data/tv_settings`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ key, ...body }),
-  });
 }
 
 export async function sendTvCommand(action: TvRemoteAction, payload?: Record<string, any>) {
@@ -70,29 +76,41 @@ export async function sendTvCommand(action: TvRemoteAction, payload?: Record<str
   return cmd;
 }
 
-export async function fetchTvSettings(): Promise<Record<string, string>> {
-  try {
-    const res = await fetch(`${VPS}/data/tv_settings`);
-    if (!res.ok) return {};
-    const rows: { key: string; value: string }[] = await res.json();
-    const out: Record<string, string> = {};
-    for (const r of rows) out[r.key] = r.value;
-    return out;
-  } catch {
-    return {};
-  }
+export interface TvRemoteState {
+  settings: Record<string, string>;
+  command: TvRemoteCommand | null;
 }
 
-export async function fetchLatestCommand(): Promise<TvRemoteCommand | null> {
+/** Configurações e último comando numa leitura só. null quando a API não respondeu. */
+export async function fetchTvRemoteState(): Promise<TvRemoteState | null> {
   try {
-    const res = await fetch(`${VPS}/data/tv_settings?key=eq.remote_command`);
+    const token = tvToken();
+    const url = token ? `${VPS}/tv/settings?tv_token=${encodeURIComponent(token)}` : `${VPS}/tv/settings`;
+    const res = await fetch(url, { headers: authHeaders() });
     if (!res.ok) return null;
-    const rows: { value: string }[] = await res.json();
-    if (!rows.length) return null;
-    return JSON.parse(rows[0].value) as TvRemoteCommand;
+    const data = await res.json();
+    const settings: Record<string, string> = data?.settings && typeof data.settings === 'object' ? data.settings : {};
+    let command: TvRemoteCommand | null = null;
+    if (settings.remote_command) {
+      try { command = JSON.parse(settings.remote_command) as TvRemoteCommand; } catch { command = null; }
+    }
+    return { settings, command };
   } catch {
     return null;
   }
+}
+
+export async function fetchTvSettings(): Promise<Record<string, string>> {
+  return (await fetchTvRemoteState())?.settings || {};
+}
+
+export async function fetchLatestCommand(): Promise<TvRemoteCommand | null> {
+  return (await fetchTvRemoteState())?.command || null;
+}
+
+/** Playlist salva pela própria TV: só grava para todas quando quem abriu a TV é admin. */
+export async function saveTvPlaylist(url: string) {
+  await upsertSetting('youtube_playlist_url', url);
 }
 
 export async function saveVisibility(key: VisibilityKey, visible: boolean) {

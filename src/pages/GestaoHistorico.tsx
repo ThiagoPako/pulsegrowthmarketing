@@ -6,6 +6,11 @@ import { toast } from 'sonner';
 
 const BRL = (n: number) => Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 });
 
+// O fechamento grava Minaçu só com o repasse recebido de Uruaçu (receita, salários e
+// despesas de Minaçu não são calculados aqui): mostra "—" em vez de R$ 0.
+const isTransferOnlyRow = (r: any) =>
+  r.city === 'minacu' && !Number(r.revenue) && !Number(r.salaries) && !Number(r.expenses) && !Number(r.transfer_out);
+
 export default function GestaoHistorico() {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,7 +33,7 @@ export default function GestaoHistorico() {
       {loading ? (
         <div className="flex items-center justify-center h-40 text-slate-400"><Loader2 className="animate-spin" /></div>
       ) : (
-        <div className="bg-[#12161c] border border-white/5 rounded-2xl overflow-hidden">
+        <div className="bg-[#12161c] border border-white/5 rounded-2xl overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-black/40 text-[10px] uppercase tracking-widest text-slate-400">
               <tr>
@@ -43,24 +48,34 @@ export default function GestaoHistorico() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r, i) => (
+              {rows.map((r, i) => {
+                const transferOnly = isTransferOnlyRow(r);
+                return (
                 <tr key={i} className="border-t border-white/5">
                   <td className="p-3 font-medium">{r.month}</td>
                   <td className="p-3 capitalize">{r.city}</td>
-                  <td className="p-3 text-right">{BRL(r.revenue)}</td>
-                  <td className="p-3 text-right">{BRL(r.salaries)}</td>
-                  <td className="p-3 text-right">{BRL(r.expenses)}</td>
+                  <td className="p-3 text-right">{transferOnly ? '—' : BRL(r.revenue)}</td>
+                  <td className="p-3 text-right">{transferOnly ? '—' : BRL(r.salaries)}</td>
+                  <td className="p-3 text-right">{transferOnly ? '—' : BRL(r.expenses)}</td>
                   <td className="p-3 text-right text-amber-300">{BRL(r.transfer_out)}</td>
                   <td className="p-3 text-right text-emerald-300">{BRL(r.transfer_in)}</td>
-                  <td className={`p-3 text-right font-semibold ${Number(r.net_margin) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{BRL(r.net_margin)}</td>
+                  {transferOnly ? (
+                    <td className="p-3 text-right text-slate-500" title="Minaçu: só o repasse recebido de Uruaçu">—</td>
+                  ) : (
+                    <td className={`p-3 text-right font-semibold ${Number(r.net_margin) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{BRL(r.net_margin)}</td>
+                  )}
                 </tr>
-              ))}
+                );
+              })}
               {rows.length === 0 && (
                 <tr><td colSpan={8} className="p-6 text-center text-slate-500">Nenhum fechamento registrado ainda</td></tr>
               )}
             </tbody>
           </table>
         </div>
+      )}
+      {!loading && rows.some(isTransferOnlyRow) && (
+        <p className="text-[11px] text-slate-500 mt-3">Minaçu aparece só com o repasse recebido de Uruaçu; a receita e os custos de Minaçu não entram neste fechamento.</p>
       )}
     </GestaoLayout>
   );

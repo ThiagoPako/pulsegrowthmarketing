@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, profileHasRole } from '@/hooks/useAuth';
 
 export default function RequireSocioGestor({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth();
@@ -13,8 +13,8 @@ export default function RequireSocioGestor({ children }: { children: React.React
     );
   }
   if (!user) return <Navigate to="/gestao/login" replace state={{ from: location }} />;
-  const role = profile?.role;
-  const allowed = role === 'socio_gestor' || role === 'admin';
+  // Função principal ou adicional (user_roles), como o servidor (isSocioGestor)
+  const allowed = profileHasRole(profile, 'socio_gestor', 'admin');
   if (!allowed) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-6">

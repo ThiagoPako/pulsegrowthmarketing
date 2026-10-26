@@ -218,6 +218,8 @@ function cachedAuthLookup(cache, key, load, keep = () => true) {
   const drop = () => { if (cache.get(key) === entry) cache.delete(key); };
   entry.promise = Promise.resolve().then(load);
   entry.promise.then((value) => { if (!keep(value)) drop(); }, drop);
+  // Uma entrada por usuário; o teto só evita crescer sem limite se algo mudar no futuro.
+  if (cache.size >= 1000) cache.clear();
   cache.set(key, entry);
   return entry.promise;
 }

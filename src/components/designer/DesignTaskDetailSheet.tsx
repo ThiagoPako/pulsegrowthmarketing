@@ -299,6 +299,56 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
 
 
+  /**
+   * Upload de artes no modo de edição (Executando/Ajustes). Em Ajustes, arte única é trocada
+   * pela corrigida; num carrossel (2+ artes) só troca todas com confirmação — senão adiciona,
+   * e a troca de uma arte só é pelo "Substituir" de cada uma. Antes qualquer upload em Ajustes
+   * apagava os outros slides.
+   */
+  const handleUploadArts = async (files: File[]) => {
+    if (!files.length) return;
+    const isAjustes = task.kanban_column === 'ajustes';
+    let replaceAll = isAjustes && attachmentUrls.length <= 1;
+    if (isAjustes && attachmentUrls.length > 1) {
+      replaceAll = window.confirm(
+        `Este card tem ${attachmentUrls.length} artes. Substituir TODAS pela(s) ${files.length} nova(s)?\n\n` +
+        'OK = substituir todas · Cancelar = adicionar às existentes (para trocar só uma, use "Substituir" na arte).'
+      );
+    }
+    const removedUrls = replaceAll ? attachmentUrls.filter(Boolean) : [];
+    setUploadingArt(true);
+    try {
+      const newUrls = replaceAll ? [] : [...attachmentUrls];
+
+      for (const file of files) {
+        const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
+        newUrls.push(publicUrl);
+        await addHistory.mutateAsync({
+          task_id: task.id,
+          action: replaceAll ? 'Arte corrigida enviada (substituiu anterior)' : 'Arte enviada por upload',
+          details: file.name,
+          attachment_url: publicUrl,
+          user_id: user?.id
+        });
+      }
+
+      setAttachmentUrls(newUrls);
+      const primary = newUrls[0] || attachmentUrl;
+      await updateTask.mutateAsync({ id: task.id, attachment_urls: newUrls, attachment_url: primary } as any);
+      if (removedUrls.length > 0) {
+        // Guarda os links das artes trocadas para poder recuperar
+        await addHistory.mutateAsync({
+          task_id: task.id,
+          action: `${removedUrls.length} arte(s) anterior(es) substituída(s)`,
+          details: removedUrls.join('\n'),
+          user_id: user?.id,
+        });
+      }
+      toast.success(replaceAll ? 'Arte anterior substituída pela nova arte corrigida! 🎉' : `${files.length} arte(s) enviada(s) com sucesso! 🎉`);
+    } catch (err: any) { toast.error(err.message || 'Erro ao enviar arquivo'); }
+    finally { setUploadingArt(false); }
+  };
+
   const handleSendToClient = async () => {
     const fileUrl = attachmentUrl || task.attachment_url;
     let portalContentId: string | null = null;
@@ -1320,13 +1370,31 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                                           const updated = attachmentUrls.filter((_, i) => i !== idx);
                                           setAttachmentUrls(updated);
                                           await updateTask.mutateAsync({ id: task.id, attachment_urls: updated, attachment_url: updated[0] || null } as any);
-                                          await addHistory.mutateAsync({ task_id: task.id, action: `Arte ${idx + 1} removida`, user_id: user?.id });
+                                          await addHistory.mutateAsync({ task_id: task.id, action: `Arte ${idx + 1} removida`, details: url, user_id: user?.id });
                                           toast.success('Arte removida');
                                         }}
                                         className="absolute top-1 right-1 w-5 h-5 rounded-full bg-destructive/90 text-white flex items-center justify-center opacity-0 group-hover/art:opacity-100 transition-opacity"
+                                        title="Remover esta arte"
                                       >
                                         <X size={10} />
                                       </button>
+                                      {/* Troca só esta arte (ex.: ajuste em um slide do carrossel) */}
+                                      <label
+                                        className="absolute top-1 left-1 w-5 h-5 rounded-full bg-background/90 text-foreground flex items-center justify-center opacity-0 group-hover/art:opacity-100 transition-opacity cursor-pointer"
+                                        title="Substituir esta arte"
+                                      >
+                                        <input
+                                          type="file"
+                                          accept="image/*,.pdf,.ai,.psd,.svg,.eps"
+                                          className="hidden"
+                                          onChange={e => {
+                                            const f = e.target.files?.[0];
+                                            if (f) handleReplaceArt(idx, f);
+                                            e.currentTarget.value = '';
+                                          }}
+                                        />
+                                        <RotateCcw size={10} />
+                                      </label>
                                     </div>
                                   );
                                 })}
@@ -1350,59 +1418,13 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                             onDrop={async (e) => {
                               e.preventDefault();
                               e.currentTarget.classList.remove('border-violet-500', 'bg-violet-100/50');
-                              const files = Array.from(e.dataTransfer.files);
-                              if (!files.length) return;
-                              setUploadingArt(true);
-                              try {
-                                // Se estiver na coluna de ajustes, substitui a arte anterior pela nova
-                                const isAjustes = task.kanban_column === 'ajustes';
-                                const newUrls = isAjustes ? [] : [...attachmentUrls];
-                                
-                                for (const file of files) {
-                                  const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
-                                  newUrls.push(publicUrl);
-                                  await addHistory.mutateAsync({ 
-                                    task_id: task.id, 
-                                    action: isAjustes ? 'Arte corrigida enviada (substituiu anterior)' : 'Arte enviada por upload', 
-                                    details: file.name, 
-                                    user_id: user?.id 
-                                  });
-                                }
-                                
-                                setAttachmentUrls(newUrls);
-                                const primary = newUrls[0] || attachmentUrl;
-                                await updateTask.mutateAsync({ id: task.id, attachment_urls: newUrls, attachment_url: primary } as any);
-                                toast.success(isAjustes ? 'Arte anterior substituída pela nova arte corrigida! 🎉' : `${files.length} arte(s) enviada(s) com sucesso! 🎉`);
-                              } catch (err: any) { toast.error(err.message || 'Erro ao enviar arquivo'); }
-                              finally { setUploadingArt(false); }
+                              await handleUploadArts(Array.from(e.dataTransfer.files));
                             }}
                           >
                             <input type="file" accept="image/*,.pdf,.ai,.psd,.svg,.eps" multiple className="hidden" onChange={async (e) => {
                               const files = Array.from(e.target.files || []);
-                              if (!files.length) return;
-                              setUploadingArt(true);
-                              try {
-                                // Se estiver na coluna de ajustes, substitui a arte anterior pela nova
-                                const isAjustes = task.kanban_column === 'ajustes';
-                                const newUrls = isAjustes ? [] : [...attachmentUrls];
-                                
-                                for (const file of files) {
-                                  const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
-                                  newUrls.push(publicUrl);
-                                  await addHistory.mutateAsync({ 
-                                    task_id: task.id, 
-                                    action: isAjustes ? 'Arte corrigida enviada (substituiu anterior)' : 'Arte enviada por upload', 
-                                    details: file.name, 
-                                    user_id: user?.id 
-                                  });
-                                }
-                                
-                                setAttachmentUrls(newUrls);
-                                const primary = newUrls[0] || attachmentUrl;
-                                await updateTask.mutateAsync({ id: task.id, attachment_urls: newUrls, attachment_url: primary } as any);
-                                toast.success(isAjustes ? 'Arte anterior substituída pela nova arte corrigida! 🎉' : `${files.length} arte(s) enviada(s) com sucesso! 🎉`);
-                              } catch (err: any) { toast.error(err.message || 'Erro ao enviar arquivo'); }
-                              finally { setUploadingArt(false); }
+                              e.target.value = '';
+                              await handleUploadArts(files);
                             }} />
                             {uploadingArt ? (
                               <div className="flex flex-col items-center gap-2">

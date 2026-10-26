@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { portalAction } from '@/lib/portalApi';
+import { resolvePlayback } from '@/lib/playbackUrl';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Volume2, VolumeX, Sparkles, Loader2, Rocket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -102,9 +103,15 @@ export default function PortalWelcomeOverlay({ clientId, onVideosLoaded, isTeamM
     checkForVideos();
   }, [clientId]);
 
+  // Versão leve quando existe (direto do nginx); senão o 480p do proxy, como antes. Decidido uma vez por vídeo.
   useEffect(() => {
     if (!video) { setResolvedUrl(null); return; }
-    setResolvedUrl(resolveVideoUrl(video.video_url));
+    let cancelled = false;
+    setResolvedUrl(null);
+    resolvePlayback(video.video_url).then((playback) => {
+      if (!cancelled) setResolvedUrl(playback.variant === 'web' ? playback.url : resolveVideoUrl(video.video_url));
+    });
+    return () => { cancelled = true; };
   }, [video]);
 
   const checkForVideos = async () => {

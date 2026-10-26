@@ -25,6 +25,8 @@ import { useUserPermissions, AVAILABLE_MODULES } from '@/hooks/useUserPermission
 import BirthdayCountdown from '@/components/BirthdayCountdown';
 import TeamMemberStats from '@/components/TeamMemberStats';
 import { CITY_LABELS, useCity, type CityCode } from '@/contexts/CityContext';
+import { usePulsePlus } from '@/hooks/usePulsePlus';
+import PulsePlusAccessSwitch, { useTeamPulsePlus } from '@/components/team/PulsePlusAccessSwitch';
 
 const ALL_CITIES: CityCode[] = ['minacu', 'uruacu'];
 const VPS_API_BASE = 'https://agenciapulse.tech/api';
@@ -133,6 +135,12 @@ export default function Team() {
   const { permissionsQuery, setPermissions } = useUserPermissions(permTarget?.id);
 
   const [statsTarget, setStatsTarget] = useState<TeamMember | null>(null);
+
+  // Acesso Pulse Plus: o interruptor (e a palavra) só aparecem para quem é admin e tem Pulse Plus
+  const pulsePlus = usePulsePlus();
+  const isAdminRole = currentUser?.role === 'admin' || currentUser?.roles?.includes('admin') === true;
+  const canGrantPulsePlus = isAdminRole && pulsePlus;
+  const { data: pulsePlusMembers } = useTeamPulsePlus(canGrantPulsePlus);
 
   const fetchMembers = async () => {
     const [{ data }, rolesRes] = await Promise.all([
@@ -780,6 +788,9 @@ export default function Team() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
+                  {canGrantPulsePlus && pulsePlusMembers && (
+                    <PulsePlusAccessSwitch userId={u.id} name={u.displayName || u.name} members={pulsePlusMembers} />
+                  )}
                   {canManageTeam && u.id !== currentUser?.id ? (
                     <Select value={u.role} onValueChange={v => handleChangeRole(u, v as UserRole)}>
                       <SelectTrigger className="h-7 w-auto min-w-[130px] text-xs">

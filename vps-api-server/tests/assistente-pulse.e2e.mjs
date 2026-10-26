@@ -177,6 +177,9 @@ for (let i = 0; i < 60; i++) {
 await waitFor(async () => (await pool.query(`SELECT to_regclass('assistant_numbers') AS t, to_regclass('agent_keys') AS k`)).rows[0].k
   && (await pool.query(`SELECT to_regclass('assistant_numbers') AS t`)).rows[0].t, 'tabelas do assistente');
 await fixtures();
+// A tela do PULSE agora é do Pulse Plus (pulsePlus.mjs): o admin do teste entra na lista
+await waitFor(async () => (await pool.query(`SELECT to_regclass('module_access') AS t`)).rows[0].t, 'lista de acesso');
+await pool.query(`INSERT INTO module_access (module, user_id, created_by) VALUES ('pulse_plus', $1, 'teste') ON CONFLICT DO NOTHING`, [ids.admin]);
 await pool.query(`DELETE FROM assistant_numbers`);
 await pool.query(`DELETE FROM assistant_pending_actions`);
 await pool.query(`DELETE FROM assistant_conversations`);

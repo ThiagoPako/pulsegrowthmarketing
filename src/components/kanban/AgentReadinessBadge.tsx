@@ -1,4 +1,5 @@
 import { agentReadiness, type AgentCardFields } from '@/lib/agentCardStatus';
+import { usePulsePlusKnown } from '@/hooks/usePulsePlus';
 
 /**
  * "Pronto p/ fila": aparece só no card que está esperando na fila dos agentes (Edição livre ou
@@ -14,8 +15,10 @@ interface Props {
 }
 
 export default function AgentReadinessBadge({ task, agentIds, detailed }: Props) {
+  const pulsePlus = usePulsePlusKnown();
   const readiness = agentReadiness(task, { agentIds });
-  if (!readiness.inQueue) return null;
+  // fila dos agentes: só quem tem Pulse Plus vê
+  if (!pulsePlus || !readiness.inQueue) return null;
 
   if (detailed) {
     return (

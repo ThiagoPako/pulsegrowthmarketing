@@ -304,14 +304,14 @@ function AppRoutes() {
         <Route path="/conexoes-sociais" element={<ProtectedRoute><SocialConnections /></ProtectedRoute>} />
         <Route path="/conectar-social/:token" element={<SocialConnectInvite />} />
         <Route path="/estudio-postagem" element={<ProtectedRoute><PostStudio /></ProtectedRoute>} />
-        <Route path="/agendamentos" element={<ProtectedRoute><RequireModuleAccess module="agendamentos"><Scheduling /></RequireModuleAccess></ProtectedRoute>} />
+        <Route path="/agendamentos" element={<ProtectedRoute><RequireModuleAccess module="pulse_plus"><Scheduling /></RequireModuleAccess></ProtectedRoute>} />
 
 
         <Route path="/desempenho-social" element={<ProtectedRoute><SocialInsights /></ProtectedRoute>} />
         <Route path="/conteudo" element={<ProtectedRoute><ContentKanban /></ProtectedRoute>} />
         <Route path="/edicao" element={<ProtectedRoute><EditorDashboard /></ProtectedRoute>} />
         <Route path="/edicao/kanban" element={<ProtectedRoute><EditorKanban /></ProtectedRoute>} />
-        <Route path="/agentes" element={<ProtectedRoute><AgentsPanel /></ProtectedRoute>} />
+        <Route path="/agentes" element={<ProtectedRoute><RequireModuleAccess module="pulse_plus"><AgentsPanel /></RequireModuleAccess></ProtectedRoute>} />
         <Route path="/videomakers" element={<ProtectedRoute><VideomakerDashboard /></ProtectedRoute>} />
         <Route path="/designer" element={<ProtectedRoute><DesignerKanban /></ProtectedRoute>} />
         <Route path="/designer/relatorios" element={<ProtectedRoute><DesignerReports /></ProtectedRoute>} />

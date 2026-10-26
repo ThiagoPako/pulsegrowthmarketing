@@ -21,6 +21,7 @@ import PortalBulkDelete from '@/components/portal/PortalBulkDelete';
 import MetaIntegrationCard from '@/components/settings/MetaIntegrationCard';
 import AgentKeysCard from '@/components/settings/AgentKeysCard';
 import AgentMachinesCard from '@/components/settings/AgentMachinesCard';
+import { usePulsePlus } from '@/hooks/usePulsePlus';
 import WhatsAppDashboard from '@/pages/WhatsAppDashboard';
 import { useMyPermissions } from '@/hooks/useUserPermissions';
 import { format, parseISO, addDays, isSameDay, startOfWeek, endOfWeek, differenceInCalendarDays } from 'date-fns';
@@ -183,7 +184,10 @@ export default function CompanySettings() {
   const userRoles: string[] = currentUser?.roles?.length ? currentUser.roles : currentUser?.role ? [currentUser.role] : [];
   const hasRole = (...roles: string[]) => roles.some((r) => userRoles.includes(r));
   // mesmas regras do menu: papel + módulo liberado para a pessoa (Equipe → permissões)
+  // Agentes (chaves e computadores): só admin com Pulse Plus; sem o acesso a aba nem aparece
+  const pulsePlus = usePulsePlus();
   const canSeeTab = (key: SettingsTab) => {
+    if (key === 'agentes') return isAdmin && pulsePlus;
     if (isAdmin) return true;
     if (key === 'whatsapp') return hasRole('social_media', 'gestor_projetos') && hasModuleAccess('/whatsapp');
     if (key === 'agenda' || key === 'producao' || key === 'integracoes') return hasRole('social_media') && hasModuleAccess('/configuracoes');
@@ -779,7 +783,7 @@ export default function CompanySettings() {
             </div>
           )}
 
-          {activeTab === 'agentes' && (
+          {activeTab === 'agentes' && pulsePlus && (
             <div className="max-w-2xl space-y-6">
               <AgentKeysCard />
               <AgentMachinesCard />

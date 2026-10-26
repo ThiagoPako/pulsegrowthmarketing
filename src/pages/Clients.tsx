@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import WhatsAppGroupPicker from '@/components/whatsapp/WhatsAppGroupPicker';
 import { useApp } from '@/contexts/AppContext';
+import { usePulsePlus } from '@/hooks/usePulsePlus';
 import { useCity, CITY_LABELS, type CityCode } from '@/contexts/CityContext';
 import { generateClientCardPdf } from '@/lib/clientCardPdf';
 import { generateBriefingPdf } from '@/lib/briefingPdf';
@@ -106,6 +107,8 @@ const STEP_LABELS_SEM_CONTRATO = [
 
 export default function Clients() {
   const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient, regenerateScheduleForClient, currentUser, refetchData } = useApp();
+  // texto que cita os agentes: só para quem tem Pulse Plus
+  const pulsePlus = usePulsePlus();
   const { createOnboardingForClient } = useOnboarding();
   const isDesignerOnly = currentUser?.role === 'designer' || currentUser?.role === 'fotografo';
   // selo de temperatura no card (só a gestão recebe os dados; para os outros não aparece)
@@ -1311,7 +1314,9 @@ export default function Clients() {
           </Label>
           <Input value={form.driveLink || ''} onChange={e => setForm({ ...form, driveLink: e.target.value })} placeholder="https://drive.google.com/drive/folders/..." />
           <p className="text-[11px] text-muted-foreground">
-            Obrigatória. A equipe de design e os agentes buscam nesta pasta a identidade visual, os logos e as fotos do cliente.
+            {pulsePlus
+              ? 'Obrigatória. A equipe de design e os agentes buscam nesta pasta a identidade visual, os logos e as fotos do cliente.'
+              : 'Obrigatória. A equipe de design busca nesta pasta a identidade visual, os logos e as fotos do cliente.'}
             Use a pasta principal do cliente no Drive da Pulse.
           </p>
         </div>

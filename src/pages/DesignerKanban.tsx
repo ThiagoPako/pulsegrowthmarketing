@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/vpsDb';
 import { useDesignTasks, useDesignAgents, isAgentDesignTask, DESIGN_COLUMNS, DesignTask, DesignTaskColumn, stopTimerFields, hasOpenTimer, getConflictingExecutingTasks, parseDueDate, formatDueDate, getTaskArtUrls, collectArtDownloadItems } from '@/hooks/useDesignTasks';
 import DesignAgentBadge, { isDesignAgentWorking } from '@/components/designer/DesignAgentBadge';
+import { usePulsePlus } from '@/hooks/usePulsePlus';
 import { describeDesignFormat, getDesignBriefMissing, normalizeCopyBrief, describeMissingForForm } from '@/lib/designBrief';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
@@ -218,6 +219,9 @@ export default function DesignerKanban() {
   const { tasksQuery, updateTask, addHistory, deleteTask } = useDesignTasks();
   const { data: designAgents = [] } = useDesignAgents();
   const agentIds = useMemo(() => new Set(designAgents.map(a => a.user_id)), [designAgents]);
+  // Sem Pulse Plus: sem selo, filtro "Com agente" e aviso de agente (o agente aparece como qualquer membro)
+  const pulsePlus = usePulsePlus();
+  const isAgentTask = useCallback((t: DesignTask) => pulsePlus && isAgentDesignTask(t, agentIds), [pulsePlus, agentIds]);
   const { currentUser, clients } = useApp();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -289,7 +293,7 @@ export default function DesignerKanban() {
 
   const clientsWithoutDrive = useMemo(() => new Set(clients.filter(c => !(c.driveLink || '').trim()).map(c => c.id)), [clients]);
 
-  const hasDateFilters = !!(createdFrom || createdTo || dueFrom || dueTo || overdueOnly || aiOnly || incompleteOnly);
+  const hasDateFilters = !!(createdFrom || createdTo || dueFrom || dueTo || overdueOnly || (pulsePlus && aiOnly) || incompleteOnly);
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
@@ -305,11 +309,11 @@ export default function DesignerKanban() {
       if (dueTo && due > dueTo) return false;
       // Somente atrasadas
       if (overdueOnly && !isDesignTaskOverdue(t)) return false;
-      if (aiOnly && !isAgentDesignTask(t, agentIds)) return false;
+      if (pulsePlus && aiOnly && !isAgentTask(t)) return false;
       if (incompleteOnly && (['aprovado', 'postado'].includes(t.kanban_column) || getDesignBriefMissing(t).length === 0)) return false;
       return true;
     });
-  }, [tasks, filterClient, createdFrom, createdTo, dueFrom, dueTo, overdueOnly, aiOnly, incompleteOnly, agentIds]);
+  }, [tasks, filterClient, createdFrom, createdTo, dueFrom, dueTo, overdueOnly, aiOnly, incompleteOnly, pulsePlus, isAgentTask]);
 
   const clearDateFilters = () => {
     setCreatedFrom('');
@@ -377,7 +381,7 @@ export default function DesignerKanban() {
 
     if (!isChangingColumn && !isChangingPosition) return;
     // Agente de IA trabalhando na arte agora: confirmar antes de tirar dele
-    if (isChangingColumn && isDesignAgentWorking(task)) {
+    if (isChangingColumn && pulsePlus && isDesignAgentWorking(task)) {
       const agent = designAgents.find(a => a.user_id === task.assigned_to)?.name || 'Um designer';
       if (!window.confirm(`${agent} está trabalhando nesta arte agora (${task.agent_step}). Mover mesmo assim? A entrega dele será recusada.`)) return;
     }
@@ -567,7 +571,7 @@ export default function DesignerKanban() {
     } catch (err: any) {
       toast.error(err.message || 'Erro ao mover tarefa');
     }
-  }, [tasks, user, updateTask, addHistory, tasksByColumn, sortMode, queryClient, activeCity, designAgents, agentIds]);
+  }, [tasks, user, updateTask, addHistory, tasksByColumn, sortMode, queryClient, activeCity, designAgents, agentIds, pulsePlus]);
   const moveTaskRef = useRef(moveTask);
   moveTaskRef.current = moveTask;
 
@@ -747,15 +751,17 @@ export default function DesignerKanban() {
         <Button size="sm" variant="outline" className="h-8 gap-1 text-xs sm:hidden" onClick={() => setShowFilters(v => !v)}>
           <Filter size={13} /> {showFilters ? 'Esconder filtros' : 'Filtros e ordem'}
         </Button>
-        <Button
-          size="sm"
-          variant={aiOnly ? 'default' : 'outline'}
-          className={`h-8 gap-1 text-xs ${aiOnly ? 'bg-fuchsia-600 hover:bg-fuchsia-700 text-white' : ''}`}
-          onClick={() => setAiOnly(v => !v)}
-          title="Artes com agente: fazendo, feitas por eles ou na Pré-análise"
-        >
-          <UserCog size={13} /> Com agente
-        </Button>
+        {pulsePlus && (
+          <Button
+            size="sm"
+            variant={aiOnly ? 'default' : 'outline'}
+            className={`h-8 gap-1 text-xs ${aiOnly ? 'bg-fuchsia-600 hover:bg-fuchsia-700 text-white' : ''}`}
+            onClick={() => setAiOnly(v => !v)}
+            title="Artes com agente: fazendo, feitas por eles ou na Pré-análise"
+          >
+            <UserCog size={13} /> Com agente
+          </Button>
+        )}
         <Button
           size="sm"
           variant={incompleteOnly ? 'default' : 'outline'}
@@ -971,7 +977,7 @@ export default function DesignerKanban() {
                           }}
                           canDelete={canDelete}
                           agents={designAgents}
-                          isAgentTask={isAgentDesignTask(task, agentIds)}
+                          isAgentTask={isAgentTask(task)}
                           clientWithoutDrive={!!task.client_id && clientsWithoutDrive.has(task.client_id)}
                           onMove={(target) => moveTask(task.id, target)}
                           onQuickStart={(col.key === 'nova_tarefa' || col.key === 'fila_baixa_prioridade') && !(task.assigned_to && agentIds.has(task.assigned_to)) ? () => handleQuickStart(task) : undefined}
@@ -1033,7 +1039,7 @@ export default function DesignerKanban() {
                   <td className="p-3 font-medium">{task.title}</td>
                   <td className="p-3">
                     <Badge variant="outline" className="text-[10px]">{taskFormatLabel(task)}</Badge>
-                    {isAgentDesignTask(task, agentIds) && <Badge className="ml-1 text-[10px] bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300">Agente</Badge>}
+                    {isAgentTask(task) && <Badge className="ml-1 text-[10px] bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300">Agente</Badge>}
                   </td>
                   <td className="p-3"><Badge className={`text-[10px] ${PRIORITY_CONFIG[task.priority]?.color}`}>{PRIORITY_CONFIG[task.priority]?.label}</Badge></td>
                   <td className="p-3"><Badge variant="secondary" className="text-[10px]">{DESIGN_COLUMNS.find(c => c.key === task.kanban_column)?.label}</Badge></td>

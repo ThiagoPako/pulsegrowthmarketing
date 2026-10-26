@@ -33,6 +33,7 @@ import { EDITOR_SCORE, EDITOR_APPROVED_COLUMNS, getEditorScoreBreakdown, getEdit
 import { useCity } from '@/contexts/CityContext';
 import AgentWorkBadge from '@/components/kanban/AgentWorkBadge';
 import { useAgentIds } from '@/hooks/useAgentIds';
+import { usePulsePlus } from '@/hooks/usePulsePlus';
 import { agentWorkState, formatSince } from '@/lib/agentCardStatus';
 
 const CONTENT_TYPES = [
@@ -251,6 +252,8 @@ export default function EditorDashboard() {
    const storyFileRef = useRef<HTMLInputElement>(null);
    // Agentes de IA: o card que um agente pegou aparece com o selo e não abre a bancada dele
    const agentIds = useAgentIds();
+   // Sem Pulse Plus: nenhuma etapa ou selo de agente (o servidor já manda a etapa nula)
+   const pulsePlus = usePulsePlus();
 
   const getTaskDisplayMeta = useCallback((task: EditorTask) => {
     const client = clients.find((c: any) => c.id === task.client_id);
@@ -1135,7 +1138,7 @@ export default function EditorDashboard() {
               const cfg = getTypeConfig(task.content_type);
               // Card pego por agente de IA: com sinal recente não abre a bancada (ele está renderizando);
               // parado (sem sinal), dá para abrir e devolver à fila
-              const work = agentWorkState(task, { agentIds });
+              const work = pulsePlus ? agentWorkState(task, { agentIds }) : null;
               const agentName = work ? (users.find(u => u.id === task.assigned_to)?.name || 'Agente').trim().split(/\s+/)[0] : '';
               return (
                 <motion.div key={task.id} whileTap={{ scale: 0.97 }}

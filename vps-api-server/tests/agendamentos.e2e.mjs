@@ -156,7 +156,8 @@ async function fixtures() {
 }
 
 // ── Sobe o servidor ────────────────────────────────────────────
-await pool.query(`DELETE FROM module_access WHERE module = 'agendamentos'`).catch(() => {});
+// O módulo agora é liberado pelo Pulse Plus (pulsePlus.mjs), semeado a partir da lista dos Agendamentos
+await pool.query(`DELETE FROM module_access WHERE module IN ('agendamentos', 'pulse_plus')`).catch(() => {});
 await fixtures().catch(async (error) => {
   // banco novo: as colunas posting_at ainda não existem (o servidor cria na subida)
   if (error?.code !== '42703') throw error;
@@ -182,6 +183,7 @@ for (let i = 0; i < 60; i++) {
   if (i === 59) throw new Error(`servidor não subiu:\n${serverLog.slice(-3000)}`);
 }
 await waitFor(async () => serverLog.includes('[agendamentos]'), 'semente da lista de acesso');
+await waitFor(async () => serverLog.includes('[pulse-plus]'), 'semente do Pulse Plus');
 await fixtures();
 
 const token = (id, email, role) => jwt.sign({ sub: id, email, role }, SECRET, { expiresIn: '1h' });
@@ -219,10 +221,12 @@ try {
   const seeded = (await pool.query(`SELECT user_id FROM module_access WHERE module = 'agendamentos'`)).rows.map((r) => r.user_id);
   assert.ok(seeded.includes(ids.thiago), 'Thiago na lista');
   assert.ok(!seeded.includes(ids.other), 'outro admin fora da lista');
-  ok('semente: só o admin "Thiago" entrou na lista (e o log diz quem)');
+  const plus = (await pool.query(`SELECT user_id FROM module_access WHERE module = 'pulse_plus'`)).rows.map((r) => r.user_id);
+  assert.deepEqual(plus, [ids.thiago], 'Pulse Plus copiado da lista dos Agendamentos');
+  ok('semente: só o admin "Thiago" entrou na lista (e no Pulse Plus, que libera o módulo; o log diz quem)');
 
   let r = await api('GET', '/me/module-access');
-  assert.deepEqual(r.json.modules, ['agendamentos']);
+  assert.deepEqual(r.json.modules, ['agendamentos', 'pulse_plus']);
   r = await api('GET', '/me/module-access', null, { auth: otherToken });
   assert.equal(r.status, 200);
   assert.deepEqual(r.json.modules, []);

@@ -17,6 +17,7 @@ import {
 import { ROOMS, shouldBeInCoffeeRoom, type OfficeMember } from './virtual-office/types';
 import PixelRoom from './virtual-office/PixelRoom';
 import QuickChatDialog from './virtual-office/QuickChatDialog';
+import { usePulsePlus } from '@/hooks/usePulsePlus';
 
 // Mesma janela do servidor (ONLINE_PRESENCE_MS): o sinal de presença sai a cada 30 s
 // (60 s com a aba escondida). Com 30 s aqui a pessoa piscava offline/online o dia todo.
@@ -25,6 +26,13 @@ const ONLINE_MS = 120_000;
 const REJOIN_SILENT_MS = 5 * 60_000;
 // Atividades (gravação, edição, artes) e agentes: a cada 30 s com a aba visível
 const ACTIVITY_REFRESH_MS = 30_000;
+
+type AgentOfficeState = {
+  hidden: Set<string>;
+  working: Record<string, { column: string | null; step: string | null; roles: string }>;
+  ids: Set<string>;
+};
+const NO_AGENT_OFFICE: AgentOfficeState = { hidden: new Set(), working: {}, ids: new Set() };
 
 function normalizeMsg(p: unknown): QuickMessage | null {
   if (!p || typeof p !== 'object') return null;
@@ -49,8 +57,11 @@ export default function VirtualOffice() {
   const [chatTarget, setChatTarget] = useState<OfficeMember | null>(null);
   const [now, setNow] = useState(Date.now());
   const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
-  // Agentes de edição: a equipe não os vê; admin os vê online só enquanto executam uma tarefa.
-  const [agentOffice, setAgentOffice] = useState<{ hidden: Set<string>; working: Record<string, { column: string | null; step: string | null; roles: string }>; ids: Set<string> }>({ hidden: new Set(), working: {}, ids: new Set() });
+  // Agentes: com Pulse Plus, aparecem online só enquanto executam uma tarefa; sem o acesso, como qualquer membro.
+  const pulsePlus = usePulsePlus();
+  const pulsePlusRef = useRef(pulsePlus);
+  pulsePlusRef.current = pulsePlus;
+  const [agentOffice, setAgentOffice] = useState<AgentOfficeState>(NO_AGENT_OFFICE);
   const membersRef = useRef<OfficeMember[]>([]);
   const chatRef = useRef<OfficeMember | null>(null);
   const prevOnlineRef = useRef<Set<string>>(new Set());
@@ -75,6 +86,31 @@ export default function VirtualOffice() {
         avatarUrl: p.avatar_url, isOnline: false, gender,
       };
     }));
+  }, []);
+
+  // Agentes online enquanto executam uma tarefa: só com Pulse Plus. Sem o acesso, nada é pedido (a rota
+  // responde 403) e o agente aparece como qualquer membro, sem marca nenhuma.
+  const fetchAgentOffice = useCallback(async () => {
+    if (!pulsePlusRef.current) {
+      setAgentOffice(NO_AGENT_OFFICE);
+      return;
+    }
+    try {
+      const response = await vpsAuthedFetch('/agents/office');
+      if (!pulsePlusRef.current || !response.ok) return;
+      const body = await response.json();
+      const working: Record<string, { column: string | null; step: string | null; roles: string }> = {};
+      (body.agents || []).forEach((a: { user_id: string; working: boolean; column: string | null; step: string | null; roles?: string }) => {
+        if (a.working) working[a.user_id] = { column: a.column, step: a.step, roles: a.roles || 'editor' };
+      });
+      setAgentOffice({
+        hidden: new Set<string>(body.hidden || []),
+        working,
+        ids: new Set<string>((body.agents || []).map((a: { user_id: string }) => a.user_id)),
+      });
+    } catch {
+      // sem a rota (ou offline), o escritório segue como antes
+    }
   }, []);
 
   const fetchActivities = useCallback(async () => {
@@ -122,25 +158,11 @@ export default function VirtualOffice() {
     });
     dt?.forEach((t: any) => { if (t.assigned_to && !act[t.assigned_to]) act[t.assigned_to] = 'designing'; });
     setActivities(act);
+    void fetchAgentOffice();
+  }, [fetchAgentOffice]);
 
-    try {
-      const response = await vpsAuthedFetch('/agents/office');
-      if (response.ok) {
-        const body = await response.json();
-        const working: Record<string, { column: string | null; step: string | null; roles: string }> = {};
-        (body.agents || []).forEach((a: { user_id: string; working: boolean; column: string | null; step: string | null; roles?: string }) => {
-          if (a.working) working[a.user_id] = { column: a.column, step: a.step, roles: a.roles || 'editor' };
-        });
-        setAgentOffice({
-          hidden: new Set<string>(body.hidden || []),
-          working,
-          ids: new Set<string>((body.agents || []).map((a: { user_id: string }) => a.user_id)),
-        });
-      }
-    } catch {
-      // sem a rota (ou offline), o escritório segue como antes
-    }
-  }, []);
+  // Pulse Plus chegou (ou saiu) depois de abrir o escritório: refaz só a parte dos agentes
+  useEffect(() => { void fetchAgentOffice(); }, [pulsePlus, fetchAgentOffice]);
 
   const syncPresence = useCallback(() => {
     const state = getPresenceState();

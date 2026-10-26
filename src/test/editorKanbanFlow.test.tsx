@@ -30,7 +30,17 @@ const { CLIENT, BEA, ADMIN, TASKS } = vi.hoisted(() => {
   return { CLIENT, BEA, ADMIN, TASKS };
 });
 
+// Pulse Plus (lista do servidor): o primeiro teste é de quem tem o acesso; o último, de quem não tem
+const PLUS = vi.hoisted(() => ({ value: true }));
+vi.mock('@/hooks/usePulsePlus', () => ({
+  PULSE_PLUS_MODULE: 'pulse_plus',
+  usePulsePlus: () => PLUS.value,
+  usePulsePlusKnown: () => PLUS.value,
+}));
+
 vi.mock('@/lib/vpsDb', () => {
+  // como o servidor: sem Pulse Plus, as colunas internas dos agentes saem nulas
+  const strip = (t: Record<string, unknown>) => Object.fromEntries(Object.entries(t).map(([k, v]) => [k, k.startsWith('agent_') ? null : v]));
   const builder = (table: string) => {
     let write = false;
     const b: any = {};
@@ -39,7 +49,7 @@ vi.mock('@/lib/vpsDb', () => {
     }
     for (const m of ['update', 'insert', 'delete']) b[m] = vi.fn(() => { write = true; return b; });
     b.then = (resolve: any, reject: any) => Promise.resolve({
-      data: write ? [{ id: 'x' }] : table === 'content_tasks' ? TASKS : [],
+      data: write ? [{ id: 'x' }] : table === 'content_tasks' ? (PLUS.value ? TASKS : TASKS.map(strip)) : [],
       error: null,
     }).then(resolve, reject);
     return b;
@@ -107,5 +117,22 @@ describe('Kanban de Edição — consistência e agentes', () => {
     fireEvent.click(approve);
     const dialog = await screen.findByRole('alertdialog');
     expect(within(dialog).getByText('Aprovar e enviar ao cliente?')).toBeInTheDocument();
+  }, 30_000);
+
+  it('sem Pulse Plus: sem selo nem texto de agente; o card mostra o responsável como qualquer outro', async () => {
+    PLUS.value = false;
+    try {
+      render(<MemoryRouter><EditorKanban /></MemoryRouter>);
+      await screen.findByText('Na analise', undefined, { timeout: 10_000 });
+      expect(screen.queryByText(/Editando ·/)).toBeNull();
+      expect(screen.queryByText(/aguardando parecer/)).toBeNull();
+      expect(screen.queryByText(/Pronto p\/ fila/)).toBeNull();
+      expect(screen.getAllByText(/Beatriz/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/Editado por/).length).toBeGreaterThanOrEqual(2);
+      // ("Beatriz Agente" e "Com agente" são o nome e o título dados pelo teste)
+      expect((document.body.textContent || '').replace(/Beatriz Agente|Com agente/g, '')).not.toMatch(/agente|Agente|\bIA\b|🤖/);
+    } finally {
+      PLUS.value = true;
+    }
   }, 30_000);
 });

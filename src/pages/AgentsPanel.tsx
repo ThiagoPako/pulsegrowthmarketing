@@ -152,7 +152,8 @@ export default function AgentsPanel() {
     }
     setBusy(`foto-${agent.user_id}`);
     try {
-      const url = await uploadFileToVps(file, { folder: `avatars/agentes/${agent.user_id}`, retries: 2 });
+      // mesma pasta da foto trocada pela Equipe: o endereço da foto não marca o membro como agente
+      const url = await uploadFileToVps(file, { folder: `avatars/${agent.user_id}`, retries: 2 });
       const response = await vpsAuthedFetch(`/agents/${agent.user_id}/avatar`, {
         method: 'POST',
         body: JSON.stringify({ avatar_url: url }),

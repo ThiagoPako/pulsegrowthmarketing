@@ -18,6 +18,7 @@ import {
 import { format, parseISO } from 'date-fns';
 import WhatsAppConnections from '@/components/whatsapp/WhatsAppConnections';
 import AssistantPulse from '@/components/whatsapp/AssistantPulse';
+import { usePulsePlus } from '@/hooks/usePulsePlus';
 import { ptBR } from 'date-fns/locale';
 import {
   getWhatsAppConfig,
@@ -40,6 +41,9 @@ import {
 export default function WhatsAppDashboard({ embedded = false }: { embedded?: boolean }) {
   const { clients, recordings, users, currentUser } = useApp();
   const isAdmin = currentUser?.role === 'admin' || currentUser?.roles?.includes('admin') === true;
+  // Assistente PULSE (configuração e número): só admin com Pulse Plus
+  const pulsePlus = usePulsePlus();
+  const showPulse = isAdmin && pulsePlus;
 
   const [stats, setStats] = useState({ total: 0, sent: 0, failed: 0 });
   const [confirmationStats, setConfirmationStats] = useState({ pending: 0, confirmed: 0, cancelled: 0, backupInvites: 0 });
@@ -259,16 +263,16 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
       </div>
 
       <Tabs defaultValue={isAdmin ? 'config' : 'confirmations'}>
-        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-5' : 'grid-cols-3'}`}>
+        <TabsList className={`grid w-full ${showPulse ? 'grid-cols-5' : isAdmin ? 'grid-cols-4' : 'grid-cols-3'}`}>
           <TabsTrigger value="confirmations" className="gap-1"><ClipboardCheck size={14} /> Confirmações</TabsTrigger>
           <TabsTrigger value="history" className="gap-1"><History size={14} /> Histórico</TabsTrigger>
           <TabsTrigger value="templates" className="gap-1"><Pencil size={14} /> Mensagens</TabsTrigger>
           {isAdmin && <TabsTrigger value="config" className="gap-1"><Settings size={14} /> Conexões</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="pulse" className="gap-1"><MessagesSquare size={14} /> <span className="hidden sm:inline">Assistente</span> PULSE</TabsTrigger>}
+          {showPulse && <TabsTrigger value="pulse" className="gap-1"><MessagesSquare size={14} /> <span className="hidden sm:inline">Assistente</span> PULSE</TabsTrigger>}
         </TabsList>
 
-        {/* ── TAB: Assistente PULSE (só admin) ── */}
-        {isAdmin && (
+        {/* ── TAB: Assistente PULSE (só admin com Pulse Plus) ── */}
+        {showPulse && (
           <TabsContent value="pulse" className="space-y-4">
             <AssistantPulse />
           </TabsContent>

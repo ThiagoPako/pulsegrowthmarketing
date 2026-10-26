@@ -5,6 +5,14 @@ import DesignFormatPicker from '@/components/designer/DesignFormatPicker';
 import { dimensionsFromPreset } from '@/lib/designBrief';
 import { isAgentDesignTask } from '@/hooks/useDesignTasks';
 
+// Pulse Plus: o selo só aparece para quem tem o acesso (lista do servidor)
+const PLUS = vi.hoisted(() => ({ value: true }));
+vi.mock('@/hooks/usePulsePlus', () => ({
+  PULSE_PLUS_MODULE: 'pulse_plus',
+  usePulsePlus: () => PLUS.value,
+  usePulsePlusKnown: () => PLUS.value,
+}));
+
 const agents = [{ user_id: 'a1', name: 'Íris Designer' }];
 const now = new Date().toISOString();
 const old = new Date(Date.now() - 2 * 3600_000).toISOString();
@@ -37,6 +45,25 @@ describe('selo de agente no card de arte', () => {
     expect(isAgentDesignTask({ kanban_column: 'em_analise', designed_by: 'a1', assigned_to: null }, ids)).toBe(true);
     expect(isAgentDesignTask({ kanban_column: 'analise_ia', designed_by: null, assigned_to: null }, ids)).toBe(true);
     expect(isAgentDesignTask({ kanban_column: 'executando', designed_by: null, assigned_to: 'humana' }, ids)).toBe(false);
+  });
+});
+
+describe('selo de agente sem Pulse Plus', () => {
+  it('não aparece em nenhuma coluna', () => {
+    PLUS.value = false;
+    try {
+      for (const task of [
+        { kanban_column: 'executando', assigned_to: 'a1', agent_step: 'montando', agent_heartbeat_at: now },
+        { kanban_column: 'ajustes', assigned_to: 'a1', agent_step: 'corrigindo', agent_heartbeat_at: old },
+        { kanban_column: 'analise_ia', designed_by: 'a1' },
+      ]) {
+        const { container, unmount } = render(<DesignAgentBadge task={task} agents={agents} />);
+        expect(container).toBeEmptyDOMElement();
+        unmount();
+      }
+    } finally {
+      PLUS.value = true;
+    }
   });
 });
 

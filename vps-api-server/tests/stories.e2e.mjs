@@ -40,6 +40,11 @@ const ids = {
   taskAuto: '00000000-0000-0000-0000-00000000c821', taskLembrete: '00000000-0000-0000-0000-00000000c822',
   taskSerie: '00000000-0000-0000-0000-00000000c823', taskPast: '00000000-0000-0000-0000-00000000c824',
   design: '00000000-0000-0000-0000-00000000c831', portal: '00000000-0000-0000-0000-00000000c841',
+  // revisão: um card por caso (antes do corte, exceções, arrastada, data prevista, outras telas, lembrete avulso)
+  r2: '00000000-0000-0000-0000-00000000c862', r3: '00000000-0000-0000-0000-00000000c863',
+  r4: '00000000-0000-0000-0000-00000000c864', r4b: '00000000-0000-0000-0000-00000000c865',
+  r5: '00000000-0000-0000-0000-00000000c866', r5b: '00000000-0000-0000-0000-00000000c867',
+  r6: '00000000-0000-0000-0000-00000000c868', r7: '00000000-0000-0000-0000-00000000c869',
   number: '00000000-0000-0000-0000-00000000c851', numberUru: '00000000-0000-0000-0000-00000000c852',
 };
 const PEOPLE = [ids.plus, ids.admin, ids.social, ids.socialUru, ids.editor];
@@ -132,6 +137,14 @@ async function fixtures() {
        ($4, $5, 'Story começa antes', 'story', 'agendamentos', $10, now() - interval '1 day')`,
     [ids.taskAuto, ids.taskLembrete, ids.taskSerie, ids.taskPast, ids.cli, MEDIA('auto.mp4'), ids.cliNoAcc, MEDIA('lembrete.mp4'),
       MEDIA('serie.mp4'), MEDIA('antes.mp4')]
+  );
+  await pool.query(
+    `INSERT INTO content_tasks (id, client_id, title, content_type, kanban_column, edited_video_link, approved_at)
+     SELECT x.id::uuid, $1, x.title, 'story', 'agendamentos', $2, now() - interval '1 day'
+       FROM (VALUES ($3, 'Rev corte antes'), ($4, 'Rev exceções'), ($5, 'Rev arrastada cancelar'), ($6, 'Rev arrastada mudar'),
+                    ($7, 'Rev prevista cancelar'), ($8, 'Rev prevista mudar'), ($9, 'Rev outras telas'), ($10, 'Rev lembrete avulso'))
+            AS x(id, title)`,
+    [ids.cli, MEDIA('rev.mp4'), ids.r2, ids.r3, ids.r4, ids.r4b, ids.r5, ids.r5b, ids.r6, ids.r7]
   );
   await pool.query(
     `INSERT INTO design_tasks (id, client_id, title, format_type, kanban_column, attachment_url, client_approved_at)
@@ -604,6 +617,253 @@ try {
   const endNote = await row(`SELECT * FROM notifications WHERE user_id = $1 AND title = 'Repetição de stories encerrada'`, [ids.plus]);
   assert.match(endNote.message, /Story do portal/);
   ok('material que sai de aprovado: a repetição é encerrada, as datas pendentes saem e quem criou é avisado');
+
+  // ═══ Revisão independente: um caso por achado ═══
+  const dayOf = (v) => brtParts(v).date;
+  const bySlotDay = (list, d) => list.find((p) => dayOf(p.series_slot_at) === d);
+  const activeByDay = async (taskId) => {
+    const list = await rows(
+      `SELECT * FROM scheduled_posts WHERE content_task_id = $1 AND status IN ('agendado', 'erro') ORDER BY scheduled_at`,
+      [taskId]
+    );
+    const map = new Map();
+    for (const p of list) map.set(dayOf(p.scheduled_at), [...(map.get(dayOf(p.scheduled_at)) || []), p]);
+    return { list, map };
+  };
+  const daily = { kind: 'interval', interval_days: 1, end_kind: 'never' };
+  const createDaily = (taskId, startDay, time, extra = {}) => api('POST', '/scheduling/stories/series', {
+    client_id: ids.cli, kind: 'conteudo', id: taskId, date: startDay, time, platform: 'instagram', story_mode: 'auto',
+    repeat: daily, ...extra,
+  });
+  const CLIENT_LINK = 'https://agenciapulse.tech/r/clinica-stories-wa';
+
+  // ── 1. Segurança: o genérico não grava lembrete nem link perigoso; o lembrete confere o link de novo ──
+  const dbq = (as, body) => api('POST', '/db/query', body, { as });
+  const unsafeRow = {
+    client_id: ids.cli, platform: 'instagram', publish_type: 'stories', media_url: 'https://site-falso/video',
+    scheduled_at: new Date().toISOString(), story_mode: 'lembrete', story_link: 'javascript:alert(1)',
+  };
+  r = await dbq(auth.editor, { table: 'scheduled_posts', operation: 'insert', data: unsafeRow });
+  assert.equal(r.status, 403, 'editor não grava na fila pelo genérico');
+  r = await dbq(auth.plus, { table: 'scheduled_posts', operation: 'insert', data: unsafeRow });
+  assert.equal(r.status, 403, 'nem admin grava as colunas dos stories pelo genérico');
+  r = await dbq(auth.plus, {
+    table: 'scheduled_posts', operation: 'update', data: { story_link: 'javascript:alert(1)' },
+    filters: [{ column: 'id', op: 'eq', value: autoPost.id }],
+  });
+  assert.equal(r.status, 400, 'link que não é http(s) recusado');
+  assert.equal((await rows(`SELECT id FROM scheduled_posts WHERE media_url = 'https://site-falso/video'`)).length, 0);
+  r = await api('POST', '/scheduling/schedule', {
+    client_id: ids.cli, kind: 'conteudo', id: ids.r7, date: addDays(today, 2), time: '15:00', mode: 'auto',
+    platform: 'instagram', publish_type: 'stories', story_mode: 'lembrete', story_link: 'http://site-falso/x',
+  });
+  assert.equal(r.status, 400, 'lembrete só com link https');
+  r = await createDaily(ids.r2, addDays(today, 1), '08:00', { story_mode: 'lembrete', story_link: 'javascript:alert(1)' });
+  assert.equal(r.status, 400, 'repetição em lembrete só com link https');
+  // Linha gravada fora das rotas dos stories (antiga): o aviso, o WhatsApp e a página não levam o link perigoso
+  const { rows: [legacy] } = await pool.query(
+    `INSERT INTO scheduled_posts (client_id, platform, publish_type, media_url, scheduled_at, story_mode, story_link, story_link_text)
+     VALUES ($1, 'instagram', 'stories', 'javascript:alert(2)', now() - interval '1 minute', 'lembrete', 'javascript:alert(1)', 'Clique')
+     RETURNING id`,
+    [ids.cliNoAcc]
+  );
+  await waitFor(async () => (await row(`SELECT reminder_sent_at FROM scheduled_posts WHERE id = $1`, [legacy.id])).reminder_sent_at, 'lembrete da linha antiga');
+  await sleep(800);
+  const legacyNotes = await rows(`SELECT message FROM notifications WHERE link = $1`, [`/lembrete-story/${legacy.id}`]);
+  assert.ok(legacyNotes.length > 0);
+  assert.ok(legacyNotes.every((n) => !/javascript:/i.test(n.message)), 'sino sem o link perigoso');
+  const legacyWa = await rows(`SELECT body FROM wa_outbox WHERE body LIKE $1`, [`%/lembrete-story/${legacy.id}%`]);
+  assert.ok(legacyWa.length > 0 && legacyWa.every((w) => !/javascript:/i.test(w.body)), 'WhatsApp sem o link perigoso');
+  r = await api('GET', `/story-reminders/${legacy.id}`, null, { as: auth.social });
+  assert.equal(r.status, 200);
+  assert.doesNotMatch(JSON.stringify(r.json.reminder), /javascript:/i, 'página sem o link perigoso');
+  assert.equal(r.json.reminder.story_link, 'https://wa.me/5562988887777', 'no lugar dele, o link do cliente');
+  await pool.query(`UPDATE scheduled_posts SET status = 'cancelado' WHERE id = $1`, [legacy.id]);
+  ok('revisão 1: fila e colunas dos stories fechadas no genérico; link só https; lembrete confere o link de novo');
+
+  // ── 2. "A partir de" antes da data aberta: as duas regras nunca ficam no mesmo dia ──
+  r = await createDaily(ids.r2, addDays(today, 1), '08:00');
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const s2 = r.json.series.id;
+  const open2 = bySlotDay(await seriesPosts(s2), addDays(today, 5));
+  r = await api('POST', `/scheduling/stories/series/${s2}/update`, {
+    client_id: ids.cli, from_slot: iso(open2.series_slot_at), date: addDays(today, 2), time: '08:00',
+    platform: 'instagram', story_mode: 'auto', repeat: daily,
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const next2 = r.json.series.id;
+  let byDay = await activeByDay(ids.r2);
+  assert.ok([...byDay.map.values()].every((list) => list.length === 1), 'nenhum dia com dois posts agendados');
+  assert.equal(byDay.map.get(addDays(today, 1))?.[0].story_series_id, s2, 'antes do "A partir de" fica a regra antiga');
+  for (const d of [2, 3, 4, 5]) assert.equal(byDay.map.get(addDays(today, d))?.[0].story_series_id, next2, `dia +${d} só na regra nova`);
+  ok('revisão 2: "este e os próximos" com "A partir de" antes da data aberta não duplica posts');
+
+  // ── 3. "Este e os próximos" leva as exceções de "só este" (cancelada, lembrete, hora própria, arrastada) ──
+  r = await createDaily(ids.r3, addDays(today, 1), '09:00');
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const s3 = r.json.series.id;
+  let p3 = await seriesPosts(s3);
+  const [d3, d5, d6, d7, d9] = [3, 5, 6, 7, 9].map((n) => addDays(today, n));
+  r = await api('POST', `/scheduling/stories/occurrence/${bySlotDay(p3, d3).id}/cancel`, { client_id: ids.cli });
+  assert.equal(r.status, 200, 'feriado cancelado só nesta data');
+  r = await api('POST', `/scheduling/stories/occurrence/${bySlotDay(p3, d5).id}`, {
+    client_id: ids.cli, date: d5, time: '09:00', platform: 'instagram', story_mode: 'lembrete', story_link: CLIENT_LINK, story_link_text: 'Fale conosco',
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  r = await api('POST', `/scheduling/stories/occurrence/${bySlotDay(p3, d6).id}`, {
+    client_id: ids.cli, date: d6, time: '21:30', platform: 'instagram', story_mode: 'auto',
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  r = await api('POST', '/scheduling/reschedule', { client_id: ids.cli, kind: 'post', id: bySlotDay(p3, d7).id, date: d9 });
+  assert.equal(r.status, 200, 'data de +7 arrastada para +9');
+  r = await api('POST', `/scheduling/stories/series/${s3}/update`, {
+    client_id: ids.cli, from_slot: iso(bySlotDay(p3, addDays(today, 2)).series_slot_at), date: addDays(today, 2), time: '10:00',
+    platform: 'instagram', story_mode: 'auto', repeat: daily,
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(r.json.kept, 4, 'as quatro exceções passam para a regra nova');
+  const next3 = r.json.series.id;
+  byDay = await activeByDay(ids.r3);
+  assert.ok(!byDay.map.has(d3), 'o dia cancelado com "só este" não volta');
+  const cancelled3 = await rows(`SELECT * FROM scheduled_posts WHERE story_series_id = $1 AND status = 'cancelado'`, [next3]);
+  assert.deepEqual(cancelled3.map((p) => dayOf(p.series_slot_at)), [d3], 'a data cancelada segue cancelada na regra nova');
+  assert.equal(byDay.map.get(d5).length, 1);
+  const l5 = byDay.map.get(d5)[0];
+  assert.equal(l5.story_mode, 'lembrete', 'a data em lembrete continua em lembrete');
+  assert.equal(l5.story_link, CLIENT_LINK);
+  assert.equal(l5.story_link_text, 'Fale conosco');
+  assert.equal(brtParts(l5.scheduled_at).time, '10:00', 'sem hora própria, ela segue a hora nova');
+  assert.deepEqual(byDay.map.get(d6).map((p) => brtParts(p.scheduled_at).time), ['21:30'], 'a hora própria fica');
+  assert.ok(!byDay.map.has(d7), 'a data arrastada não volta para o dia original');
+  assert.deepEqual(byDay.map.get(d9).map((p) => brtParts(p.scheduled_at).time), ['09:00', '10:00'], 'a arrastada continua em +9, ao lado da data de +9');
+  assert.deepEqual(byDay.map.get(addDays(today, 4)).map((p) => brtParts(p.scheduled_at).time), ['10:00']);
+  ok('revisão 3: "este e os próximos" mantém data cancelada, lembrete, hora própria e data arrastada');
+
+  // ── 4. Data arrastada para depois do corte sai junto (cancelar e mudar) ──
+  r = await createDaily(ids.r4, addDays(today, 1), '07:00');
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const s4 = r.json.series.id;
+  let p4 = await seriesPosts(s4);
+  const early4 = bySlotDay(p4, addDays(today, 1));
+  r = await api('POST', '/scheduling/reschedule', { client_id: ids.cli, kind: 'post', id: early4.id, date: addDays(today, 8) });
+  assert.equal(r.status, 200);
+  const cut4 = bySlotDay(p4, addDays(today, 5));
+  r = await api('POST', `/scheduling/stories/series/${s4}/cancel`, { client_id: ids.cli, from_slot: iso(cut4.series_slot_at) });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal((await row(`SELECT status FROM scheduled_posts WHERE id = $1`, [early4.id])).status, 'cancelado', 'a arrastada para depois do corte sai');
+  byDay = await activeByDay(ids.r4);
+  assert.ok(byDay.list.every((p) => p.scheduled_at.getTime() < Date.parse(cut4.series_slot_at)), 'nada agendado depois do corte');
+  assert.deepEqual([...byDay.map.keys()], [2, 3, 4].map((n) => addDays(today, n)));
+  r = await createDaily(ids.r4b, addDays(today, 1), '07:00');
+  const s4b = r.json.series.id;
+  const p4b = await seriesPosts(s4b);
+  const early4b = bySlotDay(p4b, addDays(today, 1));
+  await api('POST', '/scheduling/reschedule', { client_id: ids.cli, kind: 'post', id: early4b.id, date: addDays(today, 8) });
+  r = await api('POST', `/scheduling/stories/series/${s4b}/update`, {
+    client_id: ids.cli, from_slot: iso(bySlotDay(p4b, addDays(today, 5)).series_slot_at), date: addDays(today, 5), time: '07:30',
+    platform: 'instagram', story_mode: 'auto', repeat: daily,
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal((await row(`SELECT status FROM scheduled_posts WHERE id = $1`, [early4b.id])).status, 'cancelado');
+  byDay = await activeByDay(ids.r4b);
+  assert.deepEqual(byDay.map.get(addDays(today, 8)).map((p) => brtParts(p.scheduled_at).time), ['07:30'], 'em +8 só a regra nova');
+  ok('revisão 4: data arrastada para depois do corte sai junto no "cancelar as próximas" e no "este e os próximos"');
+
+  // ── 5. Cancelar ou mudar a partir de uma data prevista grava antes as datas que ficam ──
+  const start5 = addDays(today, 25);
+  const rule5 = normalizeRule({ kind: 'interval', interval_days: 1, time: '08:00', start_date: start5 });
+  const virtual5 = brtToIso(addDays(today, 35), '08:00');
+  for (const [taskId, action] of [[ids.r5, 'cancel'], [ids.r5b, 'update']]) {
+    r = await createDaily(taskId, start5, '08:00');
+    assert.equal(r.status, 200, JSON.stringify(r.json));
+    const sid = r.json.series.id;
+    const generated = Date.parse((await row(`SELECT generated_until FROM story_series WHERE id = $1`, [sid])).generated_until);
+    assert.ok(Date.parse(virtual5) > generated, 'a data aberta é prevista (além do que foi gerado)');
+    r = action === 'cancel'
+      ? await api('POST', `/scheduling/stories/series/${sid}/cancel`, { client_id: ids.cli, from_slot: virtual5 })
+      : await api('POST', `/scheduling/stories/series/${sid}/update`, {
+        client_id: ids.cli, from_slot: virtual5, date: addDays(today, 35), time: '11:00', platform: 'instagram', story_mode: 'auto', repeat: daily,
+      });
+    assert.equal(r.status, 200, JSON.stringify(r.json));
+    const expected = listOccurrences(rule5, { fromMs: Date.now() + 60_000, toMs: Date.parse(virtual5) - 1 }).map((o) => o.at);
+    const kept = (await seriesPosts(sid)).filter((p) => p.status === 'agendado').map((p) => iso(p.series_slot_at));
+    assert.ok(expected.length >= 9);
+    assert.deepEqual(kept, expected, `${action}: as datas entre o que foi gerado e a data prevista continuam agendadas`);
+    assert.equal((await row(`SELECT status FROM story_series WHERE id = $1`, [sid])).status, action === 'cancel' ? 'cancelada' : 'encerrada');
+  }
+  ok('revisão 5: cancelar ou mudar a partir de uma data prevista não apaga as datas antes dela');
+
+  // ── 7. O Social não troca o lembrete por post automático; o Reagendar de lá mantém o lembrete ──
+  r = await api('POST', '/scheduling/schedule', {
+    client_id: ids.cli, kind: 'conteudo', id: ids.r7, date: addDays(today, 2), time: '15:00', mode: 'auto',
+    platform: 'instagram', publish_type: 'stories', story_mode: 'lembrete', story_link: CLIENT_LINK, story_link_text: 'Fale conosco',
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const lem7 = await row(`SELECT * FROM scheduled_posts WHERE content_task_id = $1 AND status = 'agendado'`, [ids.r7]);
+  const delivery7 = await row(`SELECT * FROM social_media_deliveries WHERE content_task_id = $1`, [ids.r7]);
+  r = await api('POST', '/social-posts', {
+    client_id: ids.cli, delivery_id: delivery7.id, content_task_id: ids.r7, platform: 'instagram', publish_type: 'stories',
+    media_url: MEDIA('rev.mp4'), scheduled_at: brtToIso(addDays(today, 3), '10:00'),
+  });
+  assert.equal(r.status, 409, 'o Social não troca o lembrete por post automático');
+  assert.equal(r.json.code, 'story_managed');
+  assert.equal((await row(`SELECT status, story_mode FROM scheduled_posts WHERE id = $1`, [lem7.id])).status, 'agendado');
+  r = await api('POST', `/story-reminders/${lem7.id}/reschedule`, { scheduled_at: brtToIso(addDays(today, 4), '16:00') }, { as: auth.editor });
+  assert.equal(r.status, 403);
+  r = await api('POST', `/story-reminders/${lem7.id}/reschedule`, { scheduled_at: brtToIso(addDays(today, 4), '16:00') }, { as: auth.social });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const moved7 = await row(`SELECT * FROM scheduled_posts WHERE id = $1`, [lem7.id]);
+  assert.equal(iso(moved7.scheduled_at), brtToIso(addDays(today, 4), '16:00'));
+  assert.equal(moved7.story_mode, 'lembrete', 'Reagendar mantém o lembrete');
+  assert.equal(moved7.story_link, CLIENT_LINK, 'e o link');
+  assert.equal((await rows(`SELECT id FROM scheduled_posts WHERE content_task_id = $1 AND status IN ('agendado', 'erro')`, [ids.r7])).length, 1);
+  // Postado na Entregas Social: o lembrete avulso fica "Postado", não cancelado
+  await pool.query(`UPDATE social_media_deliveries SET status = 'postado' WHERE id = $1`, [delivery7.id]);
+  r = await api('POST', '/social-posts/cancel-linked', { delivery_id: delivery7.id, reason: 'o conteúdo foi marcado como postado manualmente' }, { as: auth.social });
+  assert.equal(r.status, 200);
+  const posted7 = await row(`SELECT * FROM scheduled_posts WHERE id = $1`, [lem7.id]);
+  assert.equal(posted7.status, 'publicado');
+  assert.equal(posted7.manual_posted_by, ids.social);
+  ok('revisão 7: o Social não troca o lembrete por post automático, o Reagendar mantém lembrete e link, o Postado marca o lembrete');
+
+  // ── 6. Outras telas: Postado marca só a data vencida; volta do aprovado encerra a repetição e avisa ──
+  r = await api('POST', '/scheduling/stories/series', {
+    client_id: ids.cli, kind: 'conteudo', id: ids.r6, date: addDays(today, 1), time: '09:00', platform: 'instagram',
+    story_mode: 'lembrete', story_link: CLIENT_LINK, story_link_text: 'Agende sua consulta', repeat: daily,
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const s6 = r.json.series.id;
+  const p6 = await seriesPosts(s6);
+  const delivery6 = await row(`SELECT * FROM social_media_deliveries WHERE content_task_id = $1`, [ids.r6]);
+  r = await api('POST', '/social-posts', {
+    client_id: ids.cli, delivery_id: delivery6.id, platform: 'instagram', publish_type: 'stories',
+    media_url: MEDIA('rev.mp4'), scheduled_at: brtToIso(addDays(today, 3), '10:00'),
+  });
+  assert.equal(r.status, 409, 'entrega em repetição também não vira post automático pelo Social');
+  // a primeira data venceu e espera o "Postado"
+  await pool.query(`UPDATE scheduled_posts SET scheduled_at = now() - interval '10 minutes' WHERE id = $1`, [p6[0].id]);
+  await pool.query(`UPDATE social_media_deliveries SET status = 'postado' WHERE id = $1`, [delivery6.id]);
+  await pool.query(`UPDATE content_tasks SET kanban_column = 'arquivado' WHERE id = $1`, [ids.r6]);
+  r = await api('POST', '/social-posts/cancel-linked', { content_task_id: ids.r6, reason: 'o conteúdo foi marcado como postado/arquivado' }, { as: auth.social });
+  assert.equal(r.status, 200);
+  r = await api('POST', '/social-posts/cancel-linked', { delivery_id: delivery6.id, reason: 'o conteúdo foi marcado como postado manualmente' }, { as: auth.social });
+  assert.equal(r.status, 200);
+  assert.equal((await row(`SELECT status FROM story_series WHERE id = $1`, [s6])).status, 'ativa', 'Postado não encerra a repetição');
+  let after6 = await seriesPosts(s6);
+  assert.equal(after6[0].status, 'publicado', 'a data vencida fica postada');
+  assert.equal(after6[0].manual_posted_by, ids.social);
+  assert.ok(after6.slice(1).every((p) => p.status === 'agendado'), 'as próximas datas seguem agendadas');
+  // o card volta para a edição: a repetição acaba e quem criou é avisado
+  await pool.query(`UPDATE content_tasks SET kanban_column = 'edicao' WHERE id = $1`, [ids.r6]);
+  r = await api('POST', '/social-posts/cancel-linked', { content_task_id: ids.r6, reason: 'o card foi movido para "edicao"' }, { as: auth.social });
+  assert.equal(r.status, 200);
+  await waitFor(async () => (await row(`SELECT status FROM story_series WHERE id = $1`, [s6])).status === 'cancelada', 'repetição encerrada');
+  after6 = await seriesPosts(s6);
+  assert.equal(after6[0].status, 'publicado', 'a postada não muda');
+  assert.ok(after6.slice(1).every((p) => p.status === 'cancelado'), 'as pendentes saem');
+  const note6 = await row(`SELECT * FROM notifications WHERE user_id = $1 AND title = 'Repetição de stories encerrada' AND message LIKE '%Rev outras telas%'`, [ids.plus]);
+  assert.ok(note6, 'quem criou é avisado');
+  ok('revisão 6: Postado em outra tela marca só a data vencida e a repetição segue; volta do aprovado encerra e avisa');
 
   // ── O robô nunca publicou nenhum lembrete; o "Postar sozinho" vencido passou pelo robô ──
   await waitFor(async () => (await row(`SELECT attempts FROM scheduled_posts WHERE id = $1`, [autoPost.id])).attempts >= 1, 'robô pega o story automático', 40_000);

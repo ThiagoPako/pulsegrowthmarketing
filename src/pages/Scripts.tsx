@@ -39,6 +39,10 @@ const VIDEO_TYPES: ScriptVideoType[] = ['vendas', 'institucional', 'reconhecimen
 const CONTENT_FORMATS: ScriptContentFormat[] = ['reels', 'story', 'criativo'];
 const STABLE_SCRIPT_DRAFT_KEY = 'PULSE_STABLE_NO_AUTO_RELOAD_V1';
 
+// Título e nome do cliente entram no HTML do PDF (innerHTML): texto, nunca tag
+const escapePdfText = (value: string) => String(value ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
 type LinkedContentTask = { id: string; kanban_column: string; edited_video_link: string | null };
 const CONTENT_COLUMN_LABELS: Record<string, string> = {
   ideias: 'Ideias', captacao: 'Captação', edicao: 'Edição', revisao: 'Revisão',
@@ -728,9 +732,9 @@ export default function Scripts() {
         <section data-pdf-role="script">
           <div data-pdf-role="script-header" style="padding:${i === 0 ? '20' : '24'}px ${pagePadding}px 8px;">
             ${i > 0 ? '<div style="border-top:1px solid #ddd; margin:0 0 20px;"></div>' : ''}
-            <h1 style="font-size:22px; font-weight:700; color:#000; margin:0 0 4px; line-height:1.2;">${script.title}</h1>
+            <h1 style="font-size:22px; font-weight:700; color:#000; margin:0 0 4px; line-height:1.2;">${escapePdfText(script.title)}</h1>
             <p style="font-size:12px; color:#666; margin:0 0 12px; font-weight:500; text-transform:uppercase; letter-spacing:0.02em;">
-              ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
+              ${escapePdfText(client?.companyName || 'Cliente')} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
             </p>
           </div>
           <div data-pdf-role="script-body" style="font-size:${activeConfig.fontSize}px; line-height:${activeConfig.lineHeight}; text-align:left; word-break:break-word; overflow-wrap:break-word; max-width:100%; box-sizing:border-box; overflow:hidden; color:#222;">

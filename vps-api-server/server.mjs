@@ -12994,9 +12994,85 @@ app.delete('/api/clients/:id', async (req, res) => {
 });
 
 // ─── Recordings ─────────────────────────────────────────────
-// Índice da subconsulta do status efetivo (content_tasks por gravação). Idempotente, na subida.
-pool.query('CREATE INDEX IF NOT EXISTS idx_content_tasks_recording ON content_tasks(recording_id)')
-  .catch(e => console.warn('idx_content_tasks_recording:', e?.message || e));
+// ─── Índices de desempenho ──────────────────────────────────
+// Filtros usados toda hora: sino e menções por usuário (notifications), status efetivo das
+// gravações (content_tasks e delivery_records por recording_id) e comentários do card.
+// Criados na subida, 2 min depois (fora do caminho das requisições e depois dos ensure* que
+// alteram essas tabelas), um por vez e com CONCURRENTLY: leituras e gravações seguem
+// normalmente. Antes confere em pg_index se já existe um índice válido que começa pelas
+// mesmas colunas (ex.: o UNIQUE de delivery_records do dedupe). Sem ser dono da tabela, não
+// tenta: avisa uma vez no log com o comando para o dono rodar.
+const PERFORMANCE_INDEXES = [
+  { name: 'idx_notifications_user_created', table: 'notifications', columns: ['user_id', 'created_at'], definition: '(user_id, created_at DESC)' },
+  { name: 'idx_content_tasks_recording', table: 'content_tasks', columns: ['recording_id'], definition: '(recording_id)', before: () => ensureCampaignTables() },
+  { name: 'idx_delivery_records_recording', table: 'delivery_records', columns: ['recording_id'], definition: '(recording_id)' },
+  { name: 'idx_task_comments_task', table: 'task_comments', columns: ['task_id'], definition: '(task_id)' },
+];
+const PERFORMANCE_INDEX_DELAY_MS = Number(process.env.PERF_INDEX_DELAY_MS ?? 120_000);
+let performanceIndexesStarted = false;
+
+async function ensurePerformanceIndexes() {
+  if (performanceIndexesStarted) return;
+  performanceIndexesStarted = true;
+  const forOwner = [];
+  let client = null;
+  try {
+    client = await pool.connect();
+    // Não fica esperando atrás de DDL de outra sessão (nem segura a fila dela): desiste e tenta na próxima subida.
+    await client.query(`SET lock_timeout = '10s'`);
+    for (const index of PERFORMANCE_INDEXES) {
+      const statement = `CREATE INDEX CONCURRENTLY IF NOT EXISTS ${index.name} ON public.${index.table} ${index.definition}`;
+      try {
+        if (index.before) await index.before().catch(() => {});
+        const { rows: [table] } = await client.query(
+          `SELECT c.oid IS NOT NULL AS exists, pg_has_role(current_user, c.relowner, 'USAGE') AS can_own
+             FROM (SELECT to_regclass($1) AS oid) t LEFT JOIN pg_class c ON c.oid = t.oid`,
+          [`public.${index.table}`]
+        );
+        if (!table?.exists) continue;
+        const { rows: existing } = await client.query(
+          `SELECT ic.relname AS name, i.indisvalid AS valid, i.indpred IS NOT NULL AS partial,
+                  ARRAY(SELECT COALESCE(a.attname::text, '?')
+                          FROM unnest(i.indkey::int2[]) WITH ORDINALITY AS k(attnum, ord)
+                          LEFT JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
+                         ORDER BY k.ord) AS columns
+             FROM pg_index i JOIN pg_class ic ON ic.oid = i.indexrelid
+            WHERE i.indrelid = to_regclass($1)`,
+          [`public.${index.table}`]
+        );
+        const covered = existing.some((row) => row.valid && !row.partial
+          && index.columns.every((column, position) => row.columns[position] === column));
+        if (covered) continue;
+        if (!table.can_own) { forOwner.push(`${statement};`); continue; }
+        // Sobra de uma criação interrompida (CONCURRENTLY deixa o índice inválido): refaz.
+        if (existing.some((row) => row.name === index.name && !row.valid)) {
+          await client.query(`DROP INDEX CONCURRENTLY IF EXISTS public.${index.name}`);
+        }
+        const startedAt = Date.now();
+        await client.query(statement);
+        console.log(`[índices] ${index.name} criado em ${index.table} (${Date.now() - startedAt} ms).`);
+      } catch (error) {
+        if (isPgOwnershipError(error)) forOwner.push(`${statement};`);
+        else console.warn(`[índices] ${index.name} não foi criado agora (${error?.message || error}); tenta de novo na próxima subida.`);
+      }
+    }
+  } catch (error) {
+    console.warn('[índices] conferência dos índices de desempenho falhou:', error?.message || error);
+  } finally {
+    if (client) {
+      await client.query('RESET lock_timeout').catch(() => {});
+      client.release();
+    }
+  }
+  if (forOwner.length > 0) {
+    console.warn(`[índices] O usuário da API não é dono da tabela; estes índices não foram criados. Para criar, o dono roda: ${forOwner.join(' ')}`);
+  }
+}
+if (process.env.PERF_INDEXES !== 'off') {
+  setTimeout(() => {
+    ensurePerformanceIndexes().catch((error) => console.warn('[índices]', error?.message || error));
+  }, PERFORMANCE_INDEX_DELAY_MS).unref?.();
+}
 
 app.get('/api/recordings', async (req, res) => {
   try {

@@ -171,7 +171,7 @@ export async function sendToNumber(pool, number, body, { connectionId, mediaUrl,
   const connId = connectionId || (await assistantConnection(pool))?.id || null;
   return enqueueWhatsApp(pool, {
     to: number.phone, body: clip(body, 4000), purpose: 'assistente', triggerType: 'assistente',
-    connectionId: connId, mediaUrl, mediaName,
+    connectionId: connId, mediaUrl, mediaName, history: false, // conversa interna: fora do histórico geral
   });
 }
 

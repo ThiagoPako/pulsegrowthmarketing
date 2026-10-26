@@ -128,6 +128,7 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
     clube_cupom: 'Clube (cupom)',
     clube_campanha: 'Clube (campanha)',
     teste: 'Teste',
+    assistente: 'PULSE',
   };
 
   const confirmationStatusLabels: Record<string, { label: string; variant: 'default' | 'destructive' | 'outline' | 'secondary' }> = {

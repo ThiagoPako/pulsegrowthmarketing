@@ -250,7 +250,7 @@ function validExpiry(value) {
  * Coloca uma mensagem na fila. O processo do WhatsApp envia pela conexão que tem a função `purpose`
  * (ou pela "geral"), com intervalo entre mensagens. Também registra no histórico (whatsapp_messages).
  */
-export async function enqueueWhatsApp(pool, { to, body, purpose, triggerType, clientId, sentBy, mediaUrl, mediaName, connectionId, expiresAt }) {
+export async function enqueueWhatsApp(pool, { to, body, purpose, triggerType, clientId, sentBy, mediaUrl, mediaName, connectionId, expiresAt, history = true }) {
   await ensureWhatsAppSchema(pool);
   const target = String(to || '').trim();
   if (!target) throw new Error('Número de destino vazio');
@@ -259,7 +259,9 @@ export async function enqueueWhatsApp(pool, { to, body, purpose, triggerType, cl
   const logMessage = mediaUrl ? `${body || ''} [📎 ${mediaName || 'arquivo'}]` : body;
   // o histórico é separado por cidade: grava na cidade do cliente (sem cliente, fica na cidade padrão)
   const withCity = clientId && await historyHasCity(pool);
-  const { rows: logRows } = await pool.query(
+  // history: false = conversa interna (respostas do PULSE à equipe, que podem ter financeiro): fica fora do
+  // histórico geral do WhatsApp, que outros papéis veem; o registro dela é o log do assistente (só admin)
+  const { rows: logRows } = !history ? { rows: [] } : await pool.query(
     withCity
       ? `INSERT INTO whatsapp_messages (phone_number, message, status, api_response, client_id, trigger_type, sent_by, city)
          VALUES ($1, $2, 'fila', $3::jsonb, $4, $5, $6, COALESCE((SELECT city FROM clients WHERE id = $4), 'minacu')) RETURNING id`

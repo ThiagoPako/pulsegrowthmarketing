@@ -289,6 +289,7 @@ try {
   assert.match(res.last, /Recebido no mês: R\$ 1500/);
   assert.equal(res.replies[0].purpose, 'assistente');
   assert.equal(res.replies[0].connection_id, ids.pulseConn, 'responde pela conexão do PULSE');
+  assert.equal(res.replies[0].log_id, null, 'resposta interna (com financeiro) fora do histórico geral do WhatsApp');
   assert.equal((await pool.query(`SELECT count(*)::int AS n FROM assistant_pending_actions`)).rows[0].n, 0, 'consulta não pede confirmação');
   ok('consulta direta: Opus 5.5, esforço medium, sem temperature, strict, reserva, thinking devolvido intacto, resposta pela fila');
 
@@ -393,6 +394,7 @@ try {
   assert.equal(toGroup.purpose, 'geral');
   assert.equal(toGroup.client_id, ids.clinic);
   assert.match(toGroup.media_name, /\.pdf$/);
+  assert.ok(toGroup.log_id, 'envio ao cliente fica no histórico do WhatsApp');
   // falha de um pedido avisa quem pediu
   const { rows: [job2] } = await pool.query(`INSERT INTO agent_jobs (type, client_id, params, requested_by_number, requested_by_name)
       SELECT 'relatorio_mensal', $1, '{"month":"2026-09"}', id, 'Thiago' FROM assistant_numbers WHERE phone = $2 RETURNING id`, [ids.clinic, PHONES.thiago]);

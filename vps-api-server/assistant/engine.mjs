@@ -17,6 +17,9 @@ import { proposeAction, confirmQuestion, executeAction, cancelAction } from './a
 import { createTurn } from './tools.mjs';
 import { transcribe, removeAudio } from './transcribe.mjs';
 import { ensureAssistantSchema } from './schema.mjs';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { waPrivateDir } from '../whatsapp/shared.mjs';
 
 const AUDIO_FAIL = 'Não consegui ouvir o áudio, manda por escrito. 🙏';
 const HISTORY_TURNS = 12;
@@ -222,6 +225,23 @@ export function createEngine({ pool, claude, tools, intervalMs = 3000, rateLimit
     return runCommand(number, row, text, { fromAudio });
   }
 
+  // limpeza a cada 6 h: conversa curta (30 dias), log e ações (180 dias), áudios que ficaram para trás (1 dia)
+  let lastCleanup = 0;
+  async function housekeeping() {
+    if (Date.now() - lastCleanup < 6 * 3600_000) return;
+    lastCleanup = Date.now();
+    await pool.query(`DELETE FROM assistant_conversations WHERE created_at < now() - interval '30 days'`);
+    await pool.query(`DELETE FROM assistant_log WHERE created_at < now() - interval '180 days'`);
+    await pool.query(`DELETE FROM assistant_pending_actions WHERE created_at < now() - interval '180 days' AND status <> 'pendente'`);
+    const dir = path.join(waPrivateDir(), 'audio');
+    const files = await fs.readdir(dir).catch(() => []);
+    for (const name of files) {
+      const file = path.join(dir, name);
+      const stat = await fs.stat(file).catch(() => null);
+      if (stat && Date.now() - stat.mtimeMs > 24 * 3600_000) await fs.unlink(file).catch(() => {});
+    }
+  }
+
   let busy = false;
   async function tick() {
     if (busy) return;
@@ -258,6 +278,7 @@ export function createEngine({ pool, claude, tools, intervalMs = 3000, rateLimit
       }));
       // ações esperando que passaram do prazo
       await pool.query(`UPDATE assistant_pending_actions SET status = 'expirada', decided_at = now() WHERE status = 'pendente' AND expires_at <= now()`);
+      await housekeeping();
     } catch (error) {
       console.error('[assistente] ciclo:', error.message);
     } finally {

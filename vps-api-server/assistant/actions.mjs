@@ -284,6 +284,12 @@ export async function cancelAction(pool, actionId) {
   const { rows: [action] } = await pool.query(
     `UPDATE assistant_pending_actions SET status = 'cancelada', decided_at = now() WHERE id = $1 AND status = 'pendente' RETURNING *`, [actionId]
   );
-  if (action) await logEvent(pool, { numberId: action.number_id, kind: 'cancelado', tool: action.kind, text: action.summary });
+  if (action) {
+    await logEvent(pool, { numberId: action.number_id, kind: 'cancelado', tool: action.kind, text: action.summary });
+    // "não" à sugestão do aviso de demanda: a demanda fica como ignorada (se ninguém criou card para ela)
+    if (action.source === 'alerta' && isUuid(action.payload?.demanda_id)) {
+      await pool.query(`UPDATE assistant_demands SET status = 'ignorada', updated_at = now() WHERE id = $1 AND status = 'nova'`, [action.payload.demanda_id]).catch(() => {});
+    }
+  }
   return action;
 }

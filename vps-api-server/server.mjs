@@ -7614,10 +7614,124 @@ function sanitizeAccount(a) {
   };
 }
 
+// Colunas do kanban de conteúdo em que o card voltou para a produção: o post
+// agendado não vale mais (o vídeo vai mudar ou ainda não foi aprovado).
+const AUTOPOST_BLOCKING_CONTENT_COLUMNS = new Set(['ideias', 'captacao', 'edicao', 'pre_revisao', 'revisao', 'alteracao', 'envio']);
+const DELIVERY_STATUS_LABELS = {
+  revisao: 'Revisão', ajuste: 'Alteração', aprovacao_cliente: 'Enviado p/ cliente',
+  entregue: 'Agendar', agendado: 'Agendado', postado: 'Postado',
+};
+
+/**
+ * Confere, logo antes de publicar, se a entrega e o card ainda pedem esta postagem.
+ * Vale para qualquer tela (kanban social, kanban de conteúdo, tráfego, agentes) e
+ * para o card excluído. Devolve o motivo do cancelamento ou null quando pode publicar.
+ * 'postado' na entrega é aceito: abas antigas marcavam 'postado' no horário, antes do robô.
+ */
+async function getAutoPostCancelReason(post) {
+  let deliveryStatus = null;
+  if (post.delivery_id) {
+    const { rows } = await pool.query('SELECT status FROM social_media_deliveries WHERE id = $1', [post.delivery_id]);
+    if (!rows.length) return 'a entrega foi excluída do kanban social';
+    deliveryStatus = rows[0].status;
+    if (!['agendado', 'postado'].includes(deliveryStatus)) {
+      return `a entrega saiu de Agendado (está em "${DELIVERY_STATUS_LABELS[deliveryStatus] || deliveryStatus}")`;
+    }
+  }
+  if (post.content_task_id) {
+    const { rows } = await pool.query('SELECT kanban_column FROM content_tasks WHERE id = $1', [post.content_task_id]);
+    if (!rows.length) return 'o card de conteúdo foi excluído';
+    const column = rows[0].kanban_column;
+    if (AUTOPOST_BLOCKING_CONTENT_COLUMNS.has(column)) return `o card de conteúdo voltou para "${column}"`;
+    // "Postado!" manual (entrega postada e card arquivado): publicar agora duplicaria o post.
+    if (deliveryStatus === 'postado' && column === 'arquivado') return 'o conteúdo já foi marcado como postado manualmente';
+  }
+  return null;
+}
+
+/** Contas repetidas da mesma rede no cliente (ex.: várias Páginas): não dá para saber qual é a dele. */
+function duplicatedPlatformAccounts(accounts) {
+  const byPlatform = new Map();
+  for (const a of accounts) byPlatform.set(a.platform, [...(byPlatform.get(a.platform) || []), a]);
+  return [...byPlatform.entries()].filter(([, list]) => list.length > 1);
+}
+
+async function getClientDisplayName(clientId) {
+  try {
+    const { rows } = await pool.query('SELECT company_name FROM clients WHERE id = $1', [clientId]);
+    return rows[0]?.company_name || String(clientId);
+  } catch {
+    return String(clientId);
+  }
+}
+
+/** Aviso para quem cuida das redes sociais (admin e social_media). */
+async function notifySocialTeam(title, message) {
+  await pool.query(
+    `INSERT INTO notifications (user_id, title, message, type, link)
+     SELECT DISTINCT ur.user_id, $1, $2, 'error', '/entregas-social'
+     FROM user_roles ur WHERE ur.role IN ('admin','social_media')`,
+    [title, String(message).slice(0, 500)]
+  ).catch(() => {});
+}
+
+// Posts em andamento neste processo (robô e "Publicar agora"): a recuperação não mexe neles.
+const SOCIAL_POSTS_IN_FLIGHT = new Set();
+
 /** Executa um post da fila. Nunca lança — grava resultado/erro na linha. */
 async function runScheduledPost(post) {
+  SOCIAL_POSTS_IN_FLIGHT.add(String(post.id));
+  try {
+    await runScheduledPostNow(post);
+  } finally {
+    SOCIAL_POSTS_IN_FLIGHT.delete(String(post.id));
+  }
+}
+
+async function runScheduledPostNow(post) {
+  let cancelReason = null;
+  try {
+    cancelReason = await getAutoPostCancelReason(post);
+  } catch (err) {
+    // Sem conseguir conferir a entrega, não publica (ela pode ter voltado para alteração).
+    await pool.query(
+      `UPDATE scheduled_posts SET status='erro', last_error=$2, updated_at=now() WHERE id=$1`,
+      [post.id, `Não foi possível conferir a entrega antes de publicar: ${err.message}`.slice(0, 2000)]
+    );
+    return;
+  }
+  if (cancelReason) {
+    await pool.query(
+      `UPDATE scheduled_posts SET status='cancelado', last_error=$2, updated_at=now() WHERE id=$1`,
+      [post.id, `Cancelado antes de publicar: ${cancelReason}.`]
+    );
+    if (post.created_by) {
+      await pool.query(
+        `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, 'Postagem automática cancelada', $2, 'info', '/entregas-social')`,
+        [post.created_by, `${await getClientDisplayName(post.client_id)}: não publicado porque ${cancelReason}.`.slice(0, 500)]
+      ).catch(() => {});
+    }
+    return;
+  }
+
   const accounts = await getConnectedAccounts(post.client_id);
   const targets = accounts.filter(a => post.platform === 'both' ? true : a.platform === post.platform);
+  const duplicated = duplicatedPlatformAccounts(targets);
+  if (duplicated.length) {
+    // Conexão antiga gravou várias Páginas/perfis no mesmo cliente: publicar em todas
+    // espalharia o conteúdo em perfis de outros clientes. Não publica em nenhuma.
+    const detail = duplicated
+      .map(([platform, list]) => `${list.length} contas de ${platform} (${list.map(a => a.username || a.account_name).join(', ')})`)
+      .join(' e ');
+    const message = `Não publicado: o cliente tem ${detail}. Desconecte as que não são dele em Conexões Sociais e publique de novo.`;
+    await pool.query(
+      `UPDATE scheduled_posts SET status='erro', last_error=$2, attempts=attempts+1, updated_at=now() WHERE id=$1`,
+      [post.id, message]
+    );
+    await notifySocialTeam('⚠️ Postagem automática bloqueada', `${await getClientDisplayName(post.client_id)}: ${message}`);
+    return;
+  }
+
   const results = [];
   const errors = [];
   if (targets.length === 0) errors.push(`Nenhuma conta ${post.platform === 'both' ? '' : post.platform + ' '}conectada para este cliente.`);
@@ -7639,43 +7753,70 @@ async function runScheduledPost(post) {
   }
 
   const attempts = (post.attempts || 0) + 1;
-  if (errors.length === 0) {
+  const partial = errors.length > 0 && results.length > 0;
+  if (errors.length === 0 || partial) {
+    // Saiu em pelo menos uma rede: não tenta de novo (duplicaria onde já saiu) e a entrega vira postada.
     await pool.query(
-      `UPDATE scheduled_posts SET status='publicado', published_at=now(), result=$2, last_error=NULL, attempts=$3, updated_at=now() WHERE id=$1`,
-      [post.id, JSON.stringify(results), attempts]
+      `UPDATE scheduled_posts SET status='publicado', published_at=now(), result=$2, last_error=$4, attempts=$3, updated_at=now() WHERE id=$1`,
+      [post.id, JSON.stringify(results), attempts, partial ? errors.join(' | ').slice(0, 2000) : null]
     );
     if (post.delivery_id) {
       await pool.query(`UPDATE social_media_deliveries SET status='postado', posted_at=CURRENT_DATE, updated_at=now() WHERE id=$1`, [post.delivery_id]).catch(() => {});
     }
     if (post.content_task_id) {
-      await pool.query(`UPDATE content_tasks SET kanban_column='postado', updated_at=now() WHERE id=$1 AND kanban_column <> 'postado'`, [post.content_task_id]).catch(() => {});
+      // 'arquivado' é a coluna do conteúdo postado (igual ao botão "Postado!"); 'postado' não existe
+      // no kanban de conteúdo e fazia o card reaparecer na Zona de Ideias.
+      await pool.query(
+        `UPDATE content_tasks SET kanban_column='arquivado', updated_at=now()
+          WHERE id=$1 AND kanban_column IN ('agendamentos','acompanhamento','postado')`,
+        [post.content_task_id]
+      ).catch(() => {});
     }
     await pool.query(
       `INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1,'✅ Conteúdo publicado',$2,'success')`,
       [post.client_id, `Seu conteúdo foi publicado automaticamente${results[0]?.account ? ' em ' + results[0].account : ''}.`]
     ).catch(() => {});
+    if (partial) {
+      await notifySocialTeam(
+        '⚠️ Postagem automática incompleta',
+        `${await getClientDisplayName(post.client_id)}: publicado em ${results.map(r => r.platform).join(', ')}, mas falhou em ${errors.join(' | ')}`
+      );
+    }
     return;
   }
 
-  const partial = results.length > 0;
-  const retry = !partial && attempts < SOCIAL_POST_MAX_ATTEMPTS;
+  const retry = attempts < SOCIAL_POST_MAX_ATTEMPTS;
   await pool.query(
     `UPDATE scheduled_posts
        SET status=$2, attempts=$3, last_error=$4, result=$5,
            scheduled_at = CASE WHEN $2='agendado' THEN now() + interval '5 minutes' ELSE scheduled_at END,
-           published_at = CASE WHEN $6 THEN now() ELSE published_at END,
            updated_at=now()
      WHERE id=$1`,
-    [post.id, retry ? 'agendado' : (partial ? 'publicado' : 'erro'), attempts, errors.join(' | ').slice(0, 2000), JSON.stringify(results), partial]
+    [post.id, retry ? 'agendado' : 'erro', attempts, errors.join(' | ').slice(0, 2000), JSON.stringify(results)]
   );
-  if (!retry && !partial) {
-    // Avisa a equipe de social media que a postagem falhou
-    await pool.query(
-      `INSERT INTO notifications (user_id, title, message, type, link)
-       SELECT ur.user_id, '⚠️ Postagem automática falhou', $1, 'error', '/entregas-social'
-       FROM user_roles ur WHERE ur.role IN ('admin','social_media')`,
-      [`Cliente ${post.client_id}: ${errors[0]}`.slice(0, 500)]
-    ).catch(() => {});
+  if (!retry) {
+    // Avisa a equipe de social media que a postagem falhou (com o nome do cliente, não o id)
+    await notifySocialTeam('⚠️ Postagem automática falhou', `${await getClientDisplayName(post.client_id)}: ${errors[0]}`);
+  }
+}
+
+const STUCK_POST_MESSAGE = 'Publicação interrompida (o servidor reiniciou no meio). Confira o perfil antes de publicar de novo.';
+
+/**
+ * Post preso em 'publicando' porque a API reiniciou no meio da publicação: vira 'erro'
+ * com aviso (pode já ter saído na Meta), em vez de voltar sozinho para 'agendado'.
+ * Roda a cada ciclo do robô e ignora os posts que este processo ainda está publicando.
+ */
+async function recoverStuckScheduledPosts() {
+  const { rows } = await pool.query(
+    `UPDATE scheduled_posts SET status='erro', last_error=$2, updated_at=now()
+      WHERE status='publicando' AND updated_at < now() - interval '40 minutes'
+        AND NOT (id::text = ANY($1::text[]))
+      RETURNING id, client_id`,
+    [[...SOCIAL_POSTS_IN_FLIGHT], STUCK_POST_MESSAGE]
+  );
+  for (const post of rows) {
+    await notifySocialTeam('⚠️ Postagem automática interrompida', `${await getClientDisplayName(post.client_id)}: ${STUCK_POST_MESSAGE}`);
   }
 }
 
@@ -7685,6 +7826,11 @@ async function processDueScheduledPosts() {
   socialPostWorkerBusy = true;
   try {
     await ensureSocialPostsSchema();
+    try {
+      await recoverStuckScheduledPosts();
+    } catch (err) {
+      console.error('[social-posts] recuperação de posts travados falhou:', err.message);
+    }
     // Claim atômico: evita publicar duas vezes se houver mais de uma instância
     const { rows } = await pool.query(
       `UPDATE scheduled_posts SET status='publicando', updated_at=now()
@@ -7736,8 +7882,8 @@ async function refreshInstagramDirectTokens() {
 }
 setInterval(refreshInstagramDirectTokens, 24 * 60 * 60 * 1000);
 setTimeout(refreshInstagramDirectTokens, 30_000);
-// Recupera posts que ficaram travados em 'publicando' após um restart do PM2
-pool.query(`UPDATE scheduled_posts SET status='agendado' WHERE status='publicando' AND updated_at < now() - interval '15 minutes'`).catch(() => {});
+// Posts travados em 'publicando' depois de um restart do PM2: recoverStuckScheduledPosts,
+// a cada ciclo do robô (vão para 'erro' com aviso, sem republicar sozinhos).
 
 // Status de conexão do cliente (sem expor tokens)
 app.get('/api/social-posts/accounts/:clientId', async (req, res) => {
@@ -8299,11 +8445,17 @@ app.get('/api/social-posts', async (req, res) => {
   try {
     await verifyUser(req);
     await ensureSocialPostsSchema();
-    const { client_id, status, limit } = req.query;
+    const { client_id, status, limit, delivery_ids } = req.query;
     const params = [];
     const where = [];
     if (client_id) { params.push(client_id); where.push(`sp.client_id = $${params.length}`); }
     if (status && SOCIAL_POST_STATUSES.includes(String(status))) { params.push(status); where.push(`sp.status = $${params.length}`); }
+    // Posts de entregas específicas (o kanban social confere se a entrega agendada tem postagem automática)
+    if (delivery_ids) {
+      const ids = String(delivery_ids).split(',').map(s => s.trim()).filter(s => /^[0-9a-f-]{36}$/i.test(s)).slice(0, 300);
+      params.push(ids);
+      where.push(`sp.delivery_id::text = ANY($${params.length}::text[])`);
+    }
     params.push(Math.min(Number(limit) || 200, 500));
     const { rows } = await pool.query(
       `SELECT sp.*, c.company_name AS client_name
@@ -8348,16 +8500,24 @@ app.post('/api/social-posts', async (req, res) => {
 
     const when = new Date(scheduled_at);
     if (!scheduled_at || Number.isNaN(when.getTime())) return res.status(400).json({ error: 'scheduled_at inválido' });
+    // Data no passado publicaria na hora (o robô pega tudo que já venceu). Folga de 5 min para relógio atrasado.
+    if (when.getTime() < Date.now() - 5 * 60_000) return res.status(400).json({ error: 'O horário escolhido já passou. Escolha um horário futuro.' });
     if (caption.length > 2200) return res.status(400).json({ error: 'Legenda acima de 2200 caracteres (limite do Instagram)' });
 
     const accounts = await getConnectedAccounts(client_id);
     const needed = platform === 'both' ? ['instagram', 'facebook'] : [platform];
     const missing = needed.filter(p => !accounts.some(a => a.platform === p && a.access_token));
     if (missing.length) return res.status(400).json({ error: `Cliente sem conta conectada: ${missing.join(', ')}. Conecte em Clientes → editar → Redes Sociais.` });
+    // Várias contas da mesma rede: o robô não publicaria (não sabe qual é a do cliente). Avisa já no agendamento.
+    const duplicated = duplicatedPlatformAccounts(accounts.filter(a => needed.includes(a.platform)));
+    if (duplicated.length) {
+      const detail = duplicated.map(([p, list]) => `${list.length} contas de ${p} (${list.map(a => a.username || a.account_name).join(', ')})`).join(' e ');
+      return res.status(400).json({ error: `O cliente tem ${detail}. Desconecte as que não são dele em Conexões Sociais antes de agendar.` });
+    }
 
-    // Evita duplicar a mesma entrega na fila
+    // Evita duplicar a mesma entrega na fila (o post com erro também sai, senão "Publicar agora" nele duplicaria)
     if (delivery_id) {
-      await pool.query(`UPDATE scheduled_posts SET status='cancelado', updated_at=now() WHERE delivery_id=$1 AND status IN ('agendado')`, [delivery_id]);
+      await pool.query(`UPDATE scheduled_posts SET status='cancelado', updated_at=now() WHERE delivery_id=$1 AND status IN ('agendado','erro')`, [delivery_id]);
     }
     const { rows } = await pool.query(
       `INSERT INTO scheduled_posts (client_id, delivery_id, content_task_id, platform, publish_type, media_url, media_items, caption, scheduled_at, created_by, story_link, story_link_text)
@@ -8380,6 +8540,36 @@ app.post('/api/social-posts/:id/cancel', async (req, res) => {
     const { rowCount } = await pool.query(`UPDATE scheduled_posts SET status='cancelado', updated_at=now() WHERE id=$1 AND status IN ('agendado','erro')`, [req.params.id]);
     if (!rowCount) return res.status(400).json({ error: 'Só é possível cancelar posts agendados ou com erro' });
     res.json({ success: true });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+  }
+});
+
+/**
+ * Cancela os posts automáticos ainda pendentes de uma entrega e/ou de um card de conteúdo.
+ * O front chama quando o card sai de Agendado (alteração, volta de coluna, "Postado!" manual)
+ * ou é excluído. Quem move cards (editor, videomaker…) também chama, por isso vale para a
+ * equipe interna toda; o robô confere a entrega de novo antes de publicar.
+ */
+app.post('/api/social-posts/cancel-linked', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    if (!(await userHasAnyRole(user, INTERNAL_TEAM_ROLES))) return res.status(403).json({ error: 'Sem permissão' });
+    await ensureSocialPostsSchema();
+    const { delivery_id, content_task_id, reason } = req.body || {};
+    const isUuid = (v) => typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v);
+    const params = [];
+    const conds = [];
+    if (isUuid(delivery_id)) { params.push(delivery_id); conds.push(`delivery_id = $${params.length}`); }
+    if (isUuid(content_task_id)) { params.push(content_task_id); conds.push(`content_task_id = $${params.length}`); }
+    if (!conds.length) return res.status(400).json({ error: 'delivery_id ou content_task_id é obrigatório' });
+    params.push(`Cancelado: ${String(reason || 'o card saiu de Agendado').slice(0, 200)}.`);
+    const { rowCount } = await pool.query(
+      `UPDATE scheduled_posts SET status='cancelado', last_error=$${params.length}, updated_at=now()
+        WHERE status IN ('agendado','erro') AND (${conds.join(' OR ')})`,
+      params
+    );
+    res.json({ success: true, cancelled: rowCount });
   } catch (error) {
     res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
   }

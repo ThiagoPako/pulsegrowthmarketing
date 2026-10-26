@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/vpsDb';
 import { format, addDays, getDay } from 'date-fns';
 import { getWhatsAppConfig, sendWhatsAppMessage } from '@/services/whatsappService';
+import { cancelLinkedScheduledPosts } from '@/services/socialPostsApi';
 
 /**
  * Centralized sync logic for content_tasks column changes.
@@ -67,6 +68,17 @@ export async function syncContentTaskColumnChange(
   newColumn: string,
   ctx: SyncContext
 ) {
+  // Fora de Acompanhamento o card não está mais agendado: a postagem automática pendente
+  // dele é cancelada (alteração, volta de coluna ou "Postado!"/arquivado manual).
+  if (newColumn !== 'acompanhamento') {
+    await cancelLinkedScheduledPosts({
+      contentTaskId: ctx.taskId,
+      reason: newColumn === 'arquivado'
+        ? 'o conteúdo foi marcado como postado/arquivado'
+        : `o card foi movido para "${newColumn}"`,
+    });
+  }
+
   const updates: Record<string, any> = {
     reviewing_by: null,
     reviewing_by_name: null,

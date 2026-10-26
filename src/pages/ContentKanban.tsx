@@ -558,8 +558,8 @@ export default function ContentKanban() {
   // ─── FILTERED TASKS ────────────────────────────────────────
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
-      // Hide archived cards
-      if (t.kanban_column === 'arquivado') return false;
+      // Hide archived cards ('postado' = publicados pelo robô antes da correção; caíam na Zona de Ideias)
+      if (t.kanban_column === 'arquivado' || t.kanban_column === 'postado') return false;
       // Rule: approved criativos only appear in Traffic Management
       if (t.content_type === 'criativo' && t.approved_at) return false;
       if (filterClient !== 'all' && t.client_id !== filterClient) return false;

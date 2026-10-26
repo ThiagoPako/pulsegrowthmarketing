@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/vpsDb';
 import { deleteFileFromVps } from '@/services/vpsApi';
+import { cancelLinkedScheduledPosts } from '@/services/socialPostsApi';
 
 /**
  * Centralized cascading delete for content across all modules.
@@ -39,6 +40,9 @@ export async function deleteContentTask(taskId: string) {
   const title = task?.title;
   const recordingId = task?.recording_id;
   const editedVideoLink = task?.edited_video_link;
+
+  // 0. Postagem automática pendente do card não pode sair depois da exclusão
+  await cancelLinkedScheduledPosts({ contentTaskId: taskId, reason: 'o card de conteúdo foi excluído' });
 
   // 1. Delete task_history
   await supabase.from('task_history').delete().eq('task_id', taskId);
@@ -115,6 +119,9 @@ export async function deleteSocialDelivery(deliveryId: string) {
     .single();
 
   if (!delivery) return;
+
+  // Postagem automática pendente da entrega não pode sair depois da exclusão
+  await cancelLinkedScheduledPosts({ deliveryId, reason: 'a entrega foi excluída do kanban social' });
 
   await supabase.from('social_media_deliveries').delete().eq('id', deliveryId);
 }

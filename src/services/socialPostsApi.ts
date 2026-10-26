@@ -82,13 +82,34 @@ export async function fetchConnectedAccounts(clientId: string): Promise<Connecte
   return (data?.accounts ?? []) as ConnectedSocialAccount[];
 }
 
-export async function fetchScheduledPosts(params?: { client_id?: string; status?: ScheduledPostStatus }): Promise<ScheduledPost[]> {
+export async function fetchScheduledPosts(params?: { client_id?: string; status?: ScheduledPostStatus; delivery_ids?: string[] }): Promise<ScheduledPost[]> {
   const body: Record<string, string> = {};
   if (params?.client_id) body.client_id = params.client_id;
   if (params?.status) body.status = params.status;
+  if (params?.delivery_ids?.length) body.delivery_ids = params.delivery_ids.join(',');
   const { data, error } = await invokeVpsFunction('social-posts', { method: 'GET', body });
   if (error) throw new Error(error.message);
   return (data?.posts ?? []) as ScheduledPost[];
+}
+
+/**
+ * Cancela a postagem automática pendente de uma entrega e/ou card de conteúdo
+ * (o card saiu de Agendado ou foi excluído). Nunca lança: o robô confere de novo
+ * a entrega antes de publicar, então uma falha aqui não publica nada errado.
+ */
+export async function cancelLinkedScheduledPosts(params: { deliveryId?: string | null; contentTaskId?: string | null; reason?: string }): Promise<void> {
+  if (!params.deliveryId && !params.contentTaskId) return;
+  try {
+    await invokeVpsFunction('social-posts/cancel-linked', {
+      body: {
+        delivery_id: params.deliveryId || null,
+        content_task_id: params.contentTaskId || null,
+        reason: params.reason,
+      },
+    });
+  } catch (err) {
+    console.warn('Não foi possível cancelar a postagem automática:', err);
+  }
 }
 
 export async function createScheduledPost(input: CreateScheduledPostInput): Promise<ScheduledPost> {

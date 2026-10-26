@@ -46,7 +46,7 @@ interface Overview {
 const LOG_KINDS: Record<string, string> = {
   comando: 'Comando', acao: 'Ação feita', acao_proposta: 'Pediu confirmação', negado: 'Permissão negada', ignorado: 'Número não autorizado',
   erro: 'Erro', cancelado: 'Cancelado', expirado: 'Expirou', alerta: 'Aviso de demanda', limite: 'Limite por hora', desligado: 'PULSE desligado',
-  audio_falhou: 'Áudio não entendido', recusa: 'Recusado pelo assistente', relatorio_entregue: 'Relatório entregue', relatorio_falhou: 'Relatório falhou',
+  audio_falhou: 'Áudio não entendido', alerta_satisfacao: 'Aviso de cliente insatisfeito', recusa: 'Recusado pelo assistente', relatorio_entregue: 'Relatório entregue', relatorio_falhou: 'Relatório falhou',
 };
 const ACTION_STATUS: Record<string, string> = {
   pendente: 'Esperando o sim', executando: 'Executando', executada: 'Feita', cancelada: 'Cancelada', expirada: 'Expirou',

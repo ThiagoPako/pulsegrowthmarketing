@@ -13,6 +13,7 @@ export const PERMISSIONS = {
   enviar_cliente: 'Mandar mensagem ou arquivo ao cliente',
   criar_cards: 'Criar card de conteúdo/vídeo ou de design',
   alertas_grupos: 'Receber os avisos de demanda detectada nos grupos',
+  alertas_satisfacao: 'Receber os avisos de cliente insatisfeito (temperatura do cliente)',
   consultar_producao: 'Ver andamento de cards e agenda',
 };
 
@@ -137,6 +138,19 @@ export async function assistantConnection(pool) {
       ORDER BY (status = 'conectada') DESC, created_at LIMIT 1`
   );
   return rows[0] || null;
+}
+
+/**
+ * Telefones da equipe (números autorizados do PULSE, parceiros e as conexões da agência), com e sem 55/9º dígito.
+ * Mensagem de grupo vinda deles não é fala de cliente (monitor de grupos e temperatura do cliente).
+ */
+export async function teamPhoneSet(pool) {
+  const { rows } = await pool.query(
+    `SELECT phone FROM assistant_numbers
+      UNION ALL SELECT phone FROM partners WHERE phone IS NOT NULL AND phone <> ''
+      UNION ALL SELECT phone FROM wa_connections WHERE phone IS NOT NULL`
+  ).catch(() => ({ rows: [] }));
+  return new Set(rows.flatMap((r) => phoneVariants(r.phone)));
 }
 
 export async function findNumberByPhone(pool, phone) {

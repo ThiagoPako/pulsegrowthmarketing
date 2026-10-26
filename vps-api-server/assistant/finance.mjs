@@ -11,7 +11,7 @@
 import { cityExpr, roundMoney, brazilToday, monthRange } from './common.mjs';
 
 const PLACEHOLDER_CLIENT_ID = '00000000-0000-0000-0000-000000000000';
-const DELINQUENCY_START = '2026-04-01';
+export const DELINQUENCY_START = '2026-04-01';
 const RECEIVED = ['recebida', 'pago'];
 const OVERDUE = ['em_atraso', 'vencido'];
 

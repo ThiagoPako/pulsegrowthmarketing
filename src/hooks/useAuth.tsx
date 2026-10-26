@@ -76,7 +76,8 @@ interface AuthContextType {
   session: { access_token: string } | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, name: string, role: AppRole, isSelfRegister?: boolean, cities?: string[], primaryCity?: string) => Promise<{ error: string | null }>;
+  /** userId: id da conta criada (para gravar dados ligados a ela logo em seguida) */
+  signUp: (email: string, password: string, name: string, role: AppRole, isSelfRegister?: boolean, cities?: string[], primaryCity?: string) => Promise<{ error: string | null; userId?: string | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -372,7 +373,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) return { error: data.error || 'Erro ao cadastrar usuário' };
-      return { error: null };
+      return { error: null, userId: data?.user?.id ?? null };
     } catch {
       return { error: 'Erro de conexão com o servidor' };
     }

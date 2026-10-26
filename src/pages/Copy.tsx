@@ -203,6 +203,17 @@ function formatDuration(ms: number) {
   return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
+/** Cronômetro da sessão: o tique de 1 s redesenha só ele, não a página inteira. */
+function SessionTimer({ startedAt }: { startedAt: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [startedAt]);
+  return <>{formatDuration(now - startedAt)}</>;
+}
+
 export default function Copy() {
   const { user } = useAuth();
   const { clients, scripts, addScript, users } = useApp();
@@ -210,7 +221,6 @@ export default function Copy() {
   const [requests, setRequests] = useState<ScriptRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeSession, setActiveSession] = useState<ActiveCopySession | null>(null);
-  const [now, setNow] = useState(Date.now());
   const [finalizing, setFinalizing] = useState<{ task?: PendingTask; request?: ScriptRequest; batch?: PendingTask[] } | null>(null);
   const [batchForms, setBatchForms] = useState<{ title: string; content: string; caption: string }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -290,12 +300,6 @@ export default function Copy() {
       try { setActiveSession(JSON.parse(raw)); } catch { /* ignore */ }
     }
   }, [sessionKey]);
-
-  useEffect(() => {
-    if (!activeSession) return;
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [activeSession]);
 
   const loadAll = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -1061,12 +1065,13 @@ export default function Copy() {
 
 
 
-  const elapsedMs = activeSession ? now - activeSession.startedAt : 0;
 
   // ── UI Components (aesthetic: Pulse Academy — dark netflix-style) ──
   const highDemand = clientDemand.filter(d => d.score > 0).slice(0, 6);
 
-  const QueueRow = ({ item, index, dragHandleProps }: { item: QueueItem; index: number; dragHandleProps?: any }) => {
+  // Função de render, não componente: definida aqui dentro, cada render da página criava um
+  // componente novo e o React desmontava e remontava todas as linhas da fila.
+  const renderQueueRow = ({ item, index, dragHandleProps }: { item: QueueItem; index: number; dragHandleProps?: any }) => {
     const isReq = item.kind === 'request';
     const client = isReq ? clientById(item.req.client_id) : clientById(item.task.client_id);
     const title = isReq ? item.req.topic : item.task.title;
@@ -1251,7 +1256,7 @@ export default function Copy() {
                 <div className="flex items-center gap-4">
                   <div className="text-center">
                     <div className="text-4xl font-mono font-black text-white tabular-nums leading-none">
-                      {formatDuration(elapsedMs)}
+                      {activeSession ? <SessionTimer startedAt={activeSession.startedAt} /> : formatDuration(0)}
                     </div>
                     <div className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40 mt-1.5">Tempo</div>
                   </div>
@@ -1380,7 +1385,7 @@ export default function Copy() {
                                 return (
                                   <div className="space-y-2">
                                     {reqItems.map((item, idx) => (
-                                      <QueueRow key={`${item.kind}-${item.id}`} item={item} index={idx} />
+                                      <React.Fragment key={`${item.kind}-${item.id}`}>{renderQueueRow({ item, index: idx })}</React.Fragment>
                                     ))}
                                     {clientBoxes.length > 0 && (() => {
                                       const boxesDropId = `${gk}::${fmt}::boxes`;
@@ -1464,11 +1469,9 @@ export default function Copy() {
                                                                     </Button>
                                                                   )}
                                                                   {b.tasks.map((t, tIdx) => (
-                                                                    <QueueRow
-                                                                      key={`sb-row-${t.id}`}
-                                                                      item={{ kind: 'task', id: t.id, task: t, urgent: t.editing_priority } as QueueItem}
-                                                                      index={tIdx}
-                                                                    />
+                                                                    <React.Fragment key={`sb-row-${t.id}`}>
+                                                                      {renderQueueRow({ item: { kind: 'task', id: t.id, task: t, urgent: t.editing_priority } as QueueItem, index: tIdx })}
+                                                                    </React.Fragment>
                                                                   ))}
                                                                   {!isFull && (
                                                                     <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-fuchsia-200/50 px-1">
@@ -1530,7 +1533,7 @@ export default function Copy() {
                                                       cursor: snapshot.isDragging ? 'grabbing' : 'grab',
                                                     }}
                                                   >
-                                                    <QueueRow item={item} index={idx} dragHandleProps={prov.dragHandleProps} />
+                                                    {renderQueueRow({ item, index: idx, dragHandleProps: prov.dragHandleProps })}
                                                   </div>
                                                 )}
                                               </Draggable>
@@ -1610,11 +1613,9 @@ export default function Copy() {
                                                               {expanded && (
                                                                 <div className="mt-2 space-y-1.5 pl-1">
                                                                   {b.tasks.map((t, tIdx) => (
-                                                                    <QueueRow
-                                                                      key={`${fmt}-row-${t.id}`}
-                                                                      item={{ kind: 'task', id: t.id, task: t, urgent: t.editing_priority } as QueueItem}
-                                                                      index={tIdx}
-                                                                    />
+                                                                    <React.Fragment key={`${fmt}-row-${t.id}`}>
+                                                                      {renderQueueRow({ item: { kind: 'task', id: t.id, task: t, urgent: t.editing_priority } as QueueItem, index: tIdx })}
+                                                                    </React.Fragment>
                                                                   ))}
                                                                 </div>
                                                               )}
@@ -1923,7 +1924,7 @@ export default function Copy() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <PenLine size={18} /> Finalizar roteiro
-              <Badge variant="secondary" className="ml-auto font-mono">{formatDuration(elapsedMs)}</Badge>
+              <Badge variant="secondary" className="ml-auto font-mono">{activeSession ? <SessionTimer startedAt={activeSession.startedAt} /> : formatDuration(0)}</Badge>
             </DialogTitle>
           </DialogHeader>
           {finalizing?.batch ? (

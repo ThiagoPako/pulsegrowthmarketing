@@ -196,7 +196,7 @@ function normalizeWithMap(text) {
 export const normText = (text) => normalizeWithMap(text).out;
 
 /** Tira números de telefone (8+ dígitos, com ou sem separadores) de um texto que vai para a tela ou para o aviso. */
-export const maskPhones = (text) => String(text || '').replace(/\+?\d[\d\s().-]{6,}\d/g, (m) => (m.replace(/\D/g, '').length >= 8 ? '•••' : m));
+export const maskPhones = (text) => String(text || '').replace(/[+(]?\d[\d\s().-]{6,}\d/g, (m) => (m.replace(/\D/g, '').length >= 8 ? '•••' : m));
 
 const cleanLine = (text, max) => maskPhones(String(text || '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim()).slice(0, max);
 

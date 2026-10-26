@@ -25,6 +25,7 @@ const EndomarketingReports = lazy(() => import("@/pages/EndomarketingReports"));
 const EndomarketingCalendar = lazy(() => import("@/pages/EndomarketingCalendar"));
 const EndomarketingPartnerPanel = lazy(() => import("@/pages/EndomarketingPartnerPanel"));
 const Clients = lazy(() => import("@/pages/Clients"));
+const ClientTemperature = lazy(() => import("@/pages/ClientTemperature"));
 const Team = lazy(() => import("@/pages/Team"));
 const Schedule = lazy(() => import("@/pages/Schedule"));
 const Goals = lazy(() => import("@/pages/Goals"));
@@ -263,6 +264,7 @@ function AppRoutes() {
 
         <Route path="/agenda" element={<ProtectedRoute><Schedule /></ProtectedRoute>} />
         <Route path="/clientes" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
+        <Route path="/clientes/temperatura" element={<ProtectedRoute><ClientTemperature /></ProtectedRoute>} />
         <Route path="/banco-clientes" element={<ProtectedRoute><ClientDatabase /></ProtectedRoute>} />
         <Route path="/banco-publico/:token" element={<Suspense fallback={<PageLoader />}><PublicClientDatabase /></Suspense>} />
 

@@ -33,6 +33,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import ClientGoalRocket from '@/components/ClientGoalRocket';
 import { syncFinancialContract } from '@/lib/financialContracts';
 import ProposalChecklist from '@/components/ProposalChecklist';
+import ClientTemperatureBadge from '@/components/clients/ClientTemperatureBadge';
+import { useClientTemperatures } from '@/hooks/useClientTemperatures';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BRIEFING_FIELD_LABELS, formatBriefingValue, getBriefingFieldLabel } from '@/lib/briefingLabels';
@@ -106,6 +108,8 @@ export default function Clients() {
   const { clients, users, recordings, settings, addClient, updateClient, deleteClient, generateScheduleForClient, regenerateScheduleForClient, currentUser, refetchData } = useApp();
   const { createOnboardingForClient } = useOnboarding();
   const isDesignerOnly = currentUser?.role === 'designer' || currentUser?.role === 'fotografo';
+  // selo de temperatura no card (só a gestão recebe os dados; para os outros não aparece)
+  const { byClient: temperatureByClient } = useClientTemperatures();
   const { activeCity } = useCity();
   // Mesmo critério do servidor (isAdminUser) para excluir cliente: admin ou social media
   const canDeleteClients = ['admin', 'social_media'].some(role => currentUser?.role === role || currentUser?.roles?.includes(role as any));
@@ -2725,6 +2729,8 @@ export default function Clients() {
                     {(c as any).status === 'cancelado' && (
                       <Badge className="text-[10px] px-1.5 py-0.5 bg-destructive/20 text-destructive border-destructive/30">❌ Cancelado</Badge>
                     )}
+                    <ClientTemperatureBadge score={temperatureByClient[c.id]?.nota} compact className="text-[10px] px-1.5 py-0.5"
+                      to={`/clientes/temperatura?cliente=${c.id}`} />
                     {!(c.driveLink || '').trim() && (
                       <Badge
                         className="text-[10px] px-1.5 py-0.5 bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 cursor-pointer"

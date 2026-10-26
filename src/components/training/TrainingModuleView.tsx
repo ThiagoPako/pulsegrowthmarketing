@@ -58,6 +58,7 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   const [uploading, setUploading] = useState<string | null>(null);
   const [uploadModalLesson, setUploadModalLesson] = useState<Lesson | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [savingProgress, setSavingProgress] = useState(false);
   const modalFileInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   // Link do vídeo vale 10 min: quando vence (ou cai a rede) o player pede outro e
@@ -71,6 +72,8 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   const currentVideoSource = currentVideo?.video_url || currentVideo?.video_path || '';
   const currentVideoIdRef = useRef<string | undefined>(undefined);
   currentVideoIdRef.current = currentVideo?.id;
+  // Status da aula aberta vem da lista da trilha (a aula aberta pelo catálogo não traz status)
+  const currentVideoStatus = lessons.find(l => l.id === currentVideo?.id)?.status ?? currentVideo?.status;
   const isExternalVideo = /youtube|vimeo/i.test(currentVideoSource);
 
   const getTrainingAuthToken = () => {
@@ -298,9 +301,10 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
           .select('id, module_id, title, description, video_url, video_path, methodology_name, duration, display_order, content_markdown, thumbnail_url')
           .in('module_id', moduleIds)
           .order('display_order', { ascending: true }),
+        // A tabela da VPS não tem coluna status: aula concluída = linha com completed_at
         supabase
           .from('user_training_progress')
-          .select('lesson_id, status')
+          .select('lesson_id, completed_at')
           .eq('user_id', userId),
       ]);
 
@@ -319,7 +323,9 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
         console.warn('[Academy] progress error (ignorado):', progRes.value.error);
       }
 
-      const progressMap = new Map(progressData.map(p => [p.lesson_id, p.status]));
+      const progressMap = new Map<string, Lesson['status']>(
+        progressData.map(p => [p.lesson_id, p.completed_at ? 'completed' : 'in_progress']),
+      );
       setLessons(lessData.map((l: any) => ({ ...l, status: progressMap.get(l.id) || 'not_started' })));
     } catch (error: any) {
       console.error('Error loading track details:', error);
@@ -403,34 +409,51 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   };
 
   const updateProgress = async (lessonId: string, newStatus: 'not_started' | 'in_progress' | 'completed') => {
+    if (savingProgress) return;
+    setSavingProgress(true);
     try {
-      const { data: existing } = await supabase
-        .from('user_training_progress')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('lesson_id', lessonId)
-        .maybeSingle();
-
-      if (existing) {
-        await supabase
+      let error: any = null;
+      if (newStatus === 'completed') {
+        const { data: existing, error: readError } = await supabase
           .from('user_training_progress')
-          .update({ status: newStatus, completed_at: newStatus === 'completed' ? new Date().toISOString() : null } as any)
-          .eq('id', existing.id);
+          .select('id')
+          .eq('user_id', userId)
+          .eq('lesson_id', lessonId)
+          .limit(1);
+        error = readError;
+        const existingId = (existing as any[] | null)?.[0]?.id;
+        if (!error && existingId) {
+          ({ error } = await supabase
+            .from('user_training_progress')
+            .update({ completed_at: new Date().toISOString() } as any)
+            .eq('id', existingId));
+        } else if (!error) {
+          ({ error } = await supabase
+            .from('user_training_progress')
+            .insert({ user_id: userId, lesson_id: lessonId, completed_at: new Date().toISOString() } as any));
+        }
       } else {
-        await supabase
+        // Desmarcar: sem a linha a aula volta a contar como não concluída
+        ({ error } = await supabase
           .from('user_training_progress')
-          .insert({ 
-            user_id: userId, 
-            lesson_id: lessonId, 
-            status: newStatus,
-            completed_at: newStatus === 'completed' ? new Date().toISOString() : null
-          } as any);
+          .delete()
+          .eq('user_id', userId)
+          .eq('lesson_id', lessonId));
       }
-      
-      setLessons(lessons.map(l => l.id === lessonId ? { ...l, status: newStatus } : l));
-      if (newStatus === 'completed') toast.success('Aula concluída!');
+      if (error) {
+        toast.error('Não foi possível salvar o progresso: ' + (error.message || 'erro'));
+        return;
+      }
+
+      const savedStatus = newStatus === 'completed' ? 'completed' : 'not_started';
+      setLessons(prev => prev.map(l => l.id === lessonId ? { ...l, status: savedStatus } : l));
+      setCurrentVideo(prev => (prev && prev.id === lessonId ? { ...prev, status: savedStatus } : prev));
+      toast.success(savedStatus === 'completed' ? 'Aula concluída!' : 'Aula desmarcada');
     } catch (e) {
       console.error('Progress update error:', e);
+      toast.error('Não foi possível salvar o progresso.');
+    } finally {
+      setSavingProgress(false);
     }
   };
 
@@ -688,9 +711,9 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                   </div>
                 </div>
                 {currentVideo && (
-                  <Button size="sm" className={cn("rounded-full h-9 px-4 gap-1.5 font-black uppercase italic tracking-widest text-[10px] shrink-0", currentVideo.status === 'completed' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-white text-black hover:bg-zinc-200')} onClick={() => updateProgress(currentVideo.id, currentVideo.status === 'completed' ? 'in_progress' : 'completed')}>
-                    {currentVideo.status === 'completed' ? <CheckCircle2 size={14} /> : <Circle size={14} />}
-                    {currentVideo.status === 'completed' ? 'Concluído' : 'Marcar'}
+                  <Button size="sm" disabled={savingProgress} className={cn("rounded-full h-9 px-4 gap-1.5 font-black uppercase italic tracking-widest text-[10px] shrink-0", currentVideoStatus === 'completed' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-white text-black hover:bg-zinc-200')} onClick={() => updateProgress(currentVideo.id, currentVideoStatus === 'completed' ? 'not_started' : 'completed')}>
+                    {currentVideoStatus === 'completed' ? <CheckCircle2 size={14} /> : <Circle size={14} />}
+                    {currentVideoStatus === 'completed' ? 'Concluído' : 'Marcar'}
                   </Button>
                 )}
               </div>

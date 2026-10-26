@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
@@ -37,6 +38,13 @@ import { useAutoSave } from '@/hooks/useAutoSave';
 const VIDEO_TYPES: ScriptVideoType[] = ['vendas', 'institucional', 'reconhecimento', 'educacional', 'bastidores', 'depoimento', 'lancamento', 'evento'];
 const CONTENT_FORMATS: ScriptContentFormat[] = ['reels', 'story', 'criativo'];
 const STABLE_SCRIPT_DRAFT_KEY = 'PULSE_STABLE_NO_AUTO_RELOAD_V1';
+
+type LinkedContentTask = { id: string; kanban_column: string; edited_video_link: string | null };
+const CONTENT_COLUMN_LABELS: Record<string, string> = {
+  ideias: 'Ideias', captacao: 'Captação', edicao: 'Edição', revisao: 'Revisão',
+  alteracao: 'Alteração', envio: 'Enviado', agendamentos: 'Agendamentos',
+  acompanhamento: 'Acompanhamento', arquivado: 'Arquivado',
+};
 
 function RichEditor({ content, onChange }: { content: string; onChange: (html: string) => void }) {
   const editor = useEditor({
@@ -148,6 +156,8 @@ export default function Scripts() {
   const [filterEndo, setFilterEndo] = useState<'all' | 'video' | 'endo'>('all');
   const [showRecorded, setShowRecorded] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ script: Script; tasks: LinkedContentTask[] } | null>(null);
+  const [deletingScript, setDeletingScript] = useState(false);
   const [scriptAlerts, setScriptAlerts] = useState(() => {
     const stored = localStorage.getItem('pulse_script_alerts');
     return stored !== null ? stored === 'true' : true;
@@ -572,11 +582,45 @@ export default function Scripts() {
     setOpen(false);
   };
 
-  const handleDelete = async (id: string) => {
-    // Delete linked content_task first
-    await supabase.from('content_tasks').delete().eq('script_id', id);
-    deleteScript(id);
-    toast.success('Roteiro removido');
+  // Exclusão com confirmação. O card do Kanban ligado ao roteiro só é apagado se ainda
+  // estiver em "Ideias"; nas outras colunas (edição, aprovação...) ele fica e só perde o
+  // vínculo, para não sumir com o trabalho do editor (antes apagava sem perguntar).
+  const requestDelete = async (script: Script) => {
+    const { data, error } = await supabase
+      .from('content_tasks')
+      .select('id, kanban_column, edited_video_link')
+      .eq('script_id', script.id);
+    if (error) {
+      toast.error('Não foi possível conferir o card do Kanban deste roteiro. Tente de novo.');
+      return;
+    }
+    setDeleteTarget({ script, tasks: ((data as any[]) || []) as LinkedContentTask[] });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    const { script, tasks: linked } = deleteTarget;
+    setDeletingScript(true);
+    try {
+      // Roteiro primeiro: se a API recusar, o card fica como estava
+      if (!(await deleteScript(script.id))) return;
+      const ideaIds = linked.filter(t => t.kanban_column === 'ideias').map(t => t.id);
+      const keptIds = linked.filter(t => t.kanban_column !== 'ideias').map(t => t.id);
+      let cardError = false;
+      if (ideaIds.length > 0) {
+        const { error } = await supabase.from('content_tasks').delete().in('id', ideaIds);
+        if (error) cardError = true;
+      }
+      if (keptIds.length > 0) {
+        const { error } = await supabase.from('content_tasks').update({ script_id: null } as any).in('id', keptIds);
+        if (error) cardError = true;
+      }
+      if (cardError) toast.warning('Roteiro removido, mas o card do Kanban não foi atualizado. Confira no Kanban.');
+      else toast.success('Roteiro removido');
+      setDeleteTarget(null);
+    } finally {
+      setDeletingScript(false);
+    }
   };
 
   const toggleRecorded = (script: Script) => {
@@ -1413,7 +1457,7 @@ export default function Scripts() {
                   onClick={() => toggleRecorded(script)}>
                   <Check size={14} className={script.recorded ? 'text-success' : ''} />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 ml-auto" title="Excluir" onClick={() => handleDelete(script.id)}>
+                <Button variant="ghost" size="icon" className="h-7 w-7 ml-auto" title="Excluir" onClick={() => requestDelete(script)}>
                   <Trash2 size={14} />
                 </Button>
               </div>
@@ -1891,6 +1935,38 @@ export default function Scripts() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(v) => { if (!v && !deletingScript) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir roteiro?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>O roteiro <span className="font-medium text-foreground">{deleteTarget?.script.title || 'sem título'}</span> será apagado. Não dá para desfazer.</p>
+                {deleteTarget && deleteTarget.tasks.length === 0 && <p>Não há card ligado a ele no Kanban.</p>}
+                {deleteTarget?.tasks.filter(t => t.kanban_column === 'ideias').length ? (
+                  <p>O card em <strong>Ideias</strong> no Kanban também será removido.</p>
+                ) : null}
+                {deleteTarget?.tasks.filter(t => t.kanban_column !== 'ideias').map(t => (
+                  <p key={t.id}>
+                    O card em <strong>{CONTENT_COLUMN_LABELS[t.kanban_column] || t.kanban_column}</strong> continua no Kanban{t.edited_video_link ? ' (com o vídeo editado)' : ''}, só sem este roteiro de referência.
+                  </p>
+                ))}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingScript}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deletingScript}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => { e.preventDefault(); void confirmDelete(); }}
+            >
+              {deletingScript ? 'Excluindo...' : 'Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

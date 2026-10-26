@@ -12933,10 +12933,12 @@ app.put('/api/scripts/:id', async (req, res) => {
 app.delete('/api/scripts/:id', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'scripts');
-    await pool.query(
+    const { rowCount } = await pool.query(
       `DELETE FROM scripts WHERE id = $1${scopeCity ? ` AND ${cityVisibilityExpression('city', '$2')}` : ''}`,
       scopeCity ? [req.params.id, activeCity] : [req.params.id]
     );
+    // Nada apagado (outra cidade ou já removido): a tela não pode dizer que removeu
+    if (!rowCount) return res.status(404).json({ error: 'Roteiro não encontrado nesta cidade.' });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

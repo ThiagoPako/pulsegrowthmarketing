@@ -259,7 +259,9 @@ export function useDesignTasks() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('design_task_history')
-        .select('*, profiles:user_id(name, display_name, avatar_url)')
+        // Join pelo FK_MAP do vpsDb (design_task_history.user_id → profiles); a sintaxe
+        // "profiles:user_id(...)" virava SQL inválido e a aba Histórico nunca carregava.
+        .select('*, profiles(name, display_name, avatar_url)')
         .eq('task_id', taskId)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -333,7 +335,7 @@ export function useDesignTasks() {
       if (error) throw error;
     },
     onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: ['design-task-history', vars.task_id] });
+      queryClient.invalidateQueries({ queryKey: ['design-task-history', activeCity, vars.task_id] });
     },
   });
 

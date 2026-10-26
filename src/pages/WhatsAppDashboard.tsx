@@ -13,10 +13,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import {
   MessageSquare, Settings, History, Check, Key, Zap, Pencil, ClipboardCheck, Clock,
-  CheckCheck, Ban, Trash2,
+  CheckCheck, Ban, Trash2, Bot,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import WhatsAppConnections from '@/components/whatsapp/WhatsAppConnections';
+import AssistantPulse from '@/components/whatsapp/AssistantPulse';
 import { ptBR } from 'date-fns/locale';
 import {
   getWhatsAppConfig,
@@ -127,6 +128,7 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
     clube_cupom: 'Clube (cupom)',
     clube_campanha: 'Clube (campanha)',
     teste: 'Teste',
+    assistente: 'PULSE',
   };
 
   const confirmationStatusLabels: Record<string, { label: string; variant: 'default' | 'destructive' | 'outline' | 'secondary' }> = {
@@ -257,12 +259,20 @@ export default function WhatsAppDashboard({ embedded = false }: { embedded?: boo
       </div>
 
       <Tabs defaultValue={isAdmin ? 'config' : 'confirmations'}>
-        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-4' : 'grid-cols-3'}`}>
+        <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-5' : 'grid-cols-3'}`}>
           <TabsTrigger value="confirmations" className="gap-1"><ClipboardCheck size={14} /> Confirmações</TabsTrigger>
           <TabsTrigger value="history" className="gap-1"><History size={14} /> Histórico</TabsTrigger>
           <TabsTrigger value="templates" className="gap-1"><Pencil size={14} /> Mensagens</TabsTrigger>
           {isAdmin && <TabsTrigger value="config" className="gap-1"><Settings size={14} /> Conexões</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="pulse" className="gap-1"><Bot size={14} /> <span className="hidden sm:inline">Assistente</span> PULSE</TabsTrigger>}
         </TabsList>
+
+        {/* ── TAB: Assistente PULSE (só admin) ── */}
+        {isAdmin && (
+          <TabsContent value="pulse" className="space-y-4">
+            <AssistantPulse />
+          </TabsContent>
+        )}
 
         {/* ── TAB: Confirmações ── */}
         <TabsContent value="confirmations" className="space-y-4">

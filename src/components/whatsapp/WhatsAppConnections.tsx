@@ -9,7 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { AlertTriangle, Loader2, Pencil, Plug, PlugZap, Plus, QrCode, Send, Smartphone, Trash2, Unplug } from 'lucide-react';
+import { AlertTriangle, Bot, Loader2, Pencil, Plug, PlugZap, Plus, QrCode, Send, Smartphone, Trash2, Unplug } from 'lucide-react';
 
 interface Connection {
   id: string;
@@ -115,7 +115,8 @@ export default function WhatsAppConnections() {
 
   const openNew = () => {
     const used = new Set(connections.flatMap((c) => c.purposes));
-    setForm({ name: '', purposes: Object.keys(purposes).filter((p) => !used.has(p)) });
+    // "assistente" é o número do PULSE: nunca vem marcada sozinha numa conexão nova (tem botão próprio)
+    setForm({ name: '', purposes: Object.keys(purposes).filter((p) => !used.has(p) && p !== 'assistente') });
     setEdit({ mode: 'new' });
   };
   const openEdit = (connection: Connection) => {
@@ -186,6 +187,9 @@ export default function WhatsAppConnections() {
               <div key={c.id} className="rounded-lg border border-border p-3 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{c.name}</span>
+                  {c.purposes.includes('assistente') && (
+                    <Badge className="bg-primary/15 text-primary hover:bg-primary/15 border-primary/30"><Bot size={11} className="mr-1" />PULSE · assistente</Badge>
+                  )}
                   <Badge variant={status.tone}>{waiting && <Loader2 size={11} className="mr-1 animate-spin" />}{status.label}</Badge>
                   {c.phone && <span className="text-xs text-muted-foreground">{formatPhone(c.phone)}{c.push_name ? ` · ${c.push_name}` : ''}</span>}
                   <div className="ml-auto flex flex-wrap gap-1">
@@ -248,6 +252,11 @@ export default function WhatsAppConnections() {
                 )}
                 {c.last_error && !connected && (
                   <p className="text-xs text-destructive">{c.last_error}</p>
+                )}
+                {c.purposes.includes('assistente') && (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                    ⚠️ Número do Assistente PULSE (comandos da equipe): não adicione este número aos grupos dos clientes.
+                  </p>
                 )}
               </div>
             );

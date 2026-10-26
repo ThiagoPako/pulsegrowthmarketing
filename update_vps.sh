@@ -110,4 +110,12 @@ fi
 
 echo "OK: botão no bundle e versão pública atualizada ($BUILD_VERSION)."
 
+# Whisper (áudio do Assistente PULSE): só quando falta o binário ou o modelo, depois do site já no ar.
+# Tag fixa do whisper.cpp, build com cmake e modelo do HuggingFace conferido por SHA-256 (scripts/install-whisper.sh).
+# Falha (ou demora mais de 20 min) só gera aviso: o deploy segue e o PULSE pede o comando por escrito.
+if [ ! -x /opt/whisper.cpp/build/bin/whisper-cli ] || [ ! -f /opt/whisper.cpp/models/ggml-small-q5_1.bin ]; then
+  timeout 1200 bash /var/www/pulsegrowthmarketing/scripts/install-whisper.sh \
+    || echo "AVISO: Whisper não instalado agora; o PULSE responde 'manda por escrito' aos áudios até o próximo deploy"
+fi
+
 pm2 status

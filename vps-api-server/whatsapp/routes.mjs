@@ -708,6 +708,7 @@ export function registerWhatsAppRoutes(app, { pool, verifyAdmin, verifyUser, ver
         `UPDATE wa_inbound SET claimed_at = now(), attempts = attempts + 1
           WHERE id IN (SELECT id FROM wa_inbound
                         WHERE handled_at IS NULL AND (claimed_at IS NULL OR claimed_at < now() - interval '5 minutes')
+                          AND route IS DISTINCT FROM 'assistente' -- comando da equipe ao PULSE (assistant/engine.mjs)
                         ORDER BY received_at LIMIT 20)
           RETURNING id, phone, text, group_jid, push_name, attempts`
       );

@@ -24,6 +24,7 @@ import compression from 'compression';
 import { createPgClient } from './pgClient.mjs';
 import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerWhatsAppRoutes } from './whatsapp/routes.mjs';
+import { registerAssistant } from './assistant/index.mjs';
 import { enqueueWhatsApp, clientTarget, clientsForGroup } from './whatsapp/shared.mjs';
 import { createPortalSession, effectiveClientId, itemScopeClientId, pickBackupOption } from './lib/portalSession.mjs';
 import { cleanupOldEditVersions } from './lib/versionCleanup.mjs';
@@ -18941,6 +18942,18 @@ registerAgentRoutes(app, {
   verifyUser,
   isStrictAdmin: (user) => (user?.role === 'admin' ? true : userHasAssignedRole(user, 'admin')),
   publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL,
+});
+
+// ─── Assistente PULSE (comandos da equipe pelo WhatsApp) e pedidos para os agentes dos PCs ──
+registerAssistant(app, {
+  pool,
+  verifyAdmin,
+  isStrictAdmin: (user) => (user?.role === 'admin' ? true : userHasAssignedRole(user, 'admin')),
+  resolveAiConfig,
+  resolveAiModel,
+  uploadRoot: UPLOAD_ROOT,
+  publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL,
+  getClientInsights,
 });
 
 // ─── Start ──────────────────────────────────────────────────

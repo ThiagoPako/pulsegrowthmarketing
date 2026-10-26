@@ -454,31 +454,15 @@ export default function Scripts() {
         // Always go to edicao column
         kanbanColumn = 'edicao';
         
-        // Find least-busy editor
-        const { data: editors } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('role', 'editor');
-        
-        if (editors && editors.length > 0) {
-          let minTasks = Infinity;
-          let leastBusyEditor: string | null = null;
-          
-          for (const editor of editors) {
-            // Count active tasks for this editor
-            const { data: editorTasks } = await supabase
-              .from('content_tasks')
-              .select('id')
-              .eq('assigned_to', (editor as any).id)
-              .in('kanban_column', ['edicao', 'revisao', 'alteracao']);
-            
-            const count = editorTasks?.length || 0;
-            if (count < minTasks) {
-              minTasks = count;
-              leastBusyEditor = (editor as any).id;
-            }
-          }
-          assignedTo = leastBusyEditor;
+        // Editor menos ocupado que atende a cidade ativa (o servidor escolhe numa consulta só)
+        const { invokeVpsFunction } = await import('@/services/vpsEdgeFunctions');
+        const { data: pick, error: pickError } = await invokeVpsFunction('team/least-busy-editor', { method: 'GET' });
+        if (pickError) console.error('Escolha do editor falhou:', pickError);
+        assignedTo = pick?.editor_id || null;
+        if (!assignedTo) {
+          toast.warning(pickError
+            ? 'Não deu para escolher o editor agora: o card vai para Edição sem responsável.'
+            : 'Nenhum editor atende esta cidade: o card vai para Edição sem responsável.');
         }
       }
 

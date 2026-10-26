@@ -4039,6 +4039,35 @@ app.get('/api/team/city-members', async (req, res) => {
   }
 });
 
+// ─── Editor menos ocupado da cidade ativa ("direto para edição" dos Roteiros) ───
+// Antes a tela buscava todos os editores (sem cidade) e contava as tarefas só da cidade
+// ativa: o editor de Uruaçu tinha 0 em Minaçu e ganhava o card que não conseguia ver.
+// Papel editor no perfil ou em user_roles; carga = cards dele em edição/revisão/alteração.
+app.get('/api/team/least-busy-editor', async (req, res) => {
+  try {
+    await ensureUserCitiesTable();
+    const { user } = await verifyUser(req);
+    const city = await resolveActiveCity(req, user.id, user);
+    const { rows } = await pool.query(
+      `SELECT p.id::text AS id, COUNT(ct.id)::int AS active_tasks
+         FROM profiles p
+         LEFT JOIN content_tasks ct
+           ON ct.assigned_to::text = p.id::text
+          AND ct.kanban_column IN ('edicao', 'revisao', 'alteracao')
+        WHERE (p.role::text = 'editor'
+               OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id::text = p.id::text AND ur.role::text = 'editor'))
+          AND ${userServesCitySql('p.id', '$1')}
+        GROUP BY p.id
+        ORDER BY active_tasks ASC, random()
+        LIMIT 1`,
+      [city]
+    );
+    res.json({ city, editor_id: rows[0]?.id || null, active_tasks: rows[0]?.active_tasks ?? null });
+  } catch (error) {
+    res.status(error.statusCode || (error.message === 'Unauthorized' ? 401 : 500)).json({ error: error.message });
+  }
+});
+
 // ─── Admin: Atualizar cidades de um usuário ─────────────────
 app.post('/api/admin/user-cities', async (req, res) => {
   try {

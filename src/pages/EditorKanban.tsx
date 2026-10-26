@@ -494,10 +494,17 @@ export default function EditorKanban() {
     if (!user) return;
     const updateData: any = {
       assigned_to: null,
-      edited_by: null,
       editing_started_at: null,
       updated_at: new Date().toISOString(),
     };
+    // Em alteração o card continua do editor original (edited_by): só ele e os agentes dele
+    // enxergam a alteração. Zerar edited_by deixava o ajuste do cliente parado sem dono.
+    if (task.kanban_column === 'alteracao') {
+      updateData.editing_paused_at = null;
+      updateData.editing_paused_seconds = 0;
+    } else {
+      updateData.edited_by = null;
+    }
     const { error } = await supabase.from('content_tasks').update(updateData).eq('id', task.id);
     if (error) { toast.error('Erro ao liberar tarefa'); return; }
     toast.success('🏳️ Tarefa liberada para a fila!');

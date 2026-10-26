@@ -15882,6 +15882,15 @@ app.delete('/api/upload', express.json(), async (req, res) => {
         [publicPath]
       );
       if (rows.length > 0) return res.json({ success: true, removed: false, skipped: 'referenced' });
+      // Versões entregues pelos agentes (histórico de edição) também apontam para o arquivo.
+      // Sem a tabela (agentes nunca usados), o erro vira "sem referência".
+      const { rows: versionRows } = await pool.query(
+        `SELECT 1 FROM edit_versions
+          WHERE right(coalesce(video_url, ''), length($1)) = $1
+          LIMIT 1`,
+        [publicPath]
+      ).catch(() => ({ rows: [] }));
+      if (versionRows.length > 0) return res.json({ success: true, removed: false, skipped: 'referenced' });
     }
 
     let removed = 0;

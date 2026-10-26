@@ -8,6 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -218,6 +222,8 @@ export default function EditorDashboard() {
   const [uploadProgress, setUploadProgress] = useState('');
    const [saving, setSaving] = useState(false);
    const [oldVideoLink, setOldVideoLink] = useState<string | null>(null);
+   // Confirmação do "Devolver à Fila" (na edição ele remove o vídeo enviado)
+   const [confirmReturnTask, setConfirmReturnTask] = useState<EditorTask | null>(null);
    const fileInputRef = useRef<HTMLInputElement>(null);
    const isEditorRole = profileHasRole(profile, 'editor', 'videomaker');
 
@@ -395,9 +401,14 @@ export default function EditorDashboard() {
 
    const handleUnclaimTask = async (task: EditorTask) => {
      if (!user) return;
+     // Em alteração o card continua do editor original (edited_by): só ele e os agentes dele
+     // enxergam a alteração. Zerar edited_by deixava o ajuste do cliente parado sem dono.
+     const isAlteration = task.kanban_column === 'alteracao';
      const { error } = await supabase.from('content_tasks').update({
        assigned_to: null,
-       edited_by: null,
+       ...(isAlteration
+         ? { editing_started_at: null, editing_paused_at: null, editing_paused_seconds: 0 }
+         : { edited_by: null }),
        updated_at: new Date().toISOString(),
      } as any).eq('id', task.id);
      if (error) { toast.error('Erro ao liberar tarefa'); return; }
@@ -448,8 +459,13 @@ export default function EditorDashboard() {
      try {
        const folder = `content/${activeEditTask.client_id || 'avulso'}/${activeEditTask.id}`;
        const url = await uploadFileToVps(file, folder);
-       // Delete previous video if replacing
        const previousVideo = oldVideoLink || activeEditTask.edited_video_link;
+       // Grava o novo link primeiro: se falhar, o card continua com o vídeo anterior intacto.
+       const { error: linkError } = await supabase.from('content_tasks').update({
+         edited_video_link: url, edited_video_type: 'upload', edited_by: user?.id || activeEditTask.edited_by, updated_at: new Date().toISOString()
+       }).eq('id', activeEditTask.id);
+       if (linkError) throw new Error('O vídeo subiu, mas não foi salvo no card: ' + (linkError.message || 'tente de novo'));
+       // Só então remove o vídeo anterior (se ainda estiver no portal do cliente, o servidor mantém)
        if (previousVideo && previousVideo !== url && previousVideo.includes('agenciapulse.tech')) {
          try {
            // Só registra "removido" quando o servidor confirma; se o vídeo ainda está no portal, fica.
@@ -460,9 +476,6 @@ export default function EditorDashboard() {
          }
        }
        setOldVideoLink(null);
-        await supabase.from('content_tasks').update({
-          edited_video_link: url, edited_video_type: 'upload', edited_by: user?.id || activeEditTask.edited_by, updated_at: new Date().toISOString()
-        }).eq('id', activeEditTask.id);
        setVideoLink(url);
        await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo enviado via upload', details: url });
        toast.success('Vídeo enviado!');
@@ -480,8 +493,16 @@ export default function EditorDashboard() {
   const saveVideoLink = async () => {
     if (!videoLink.trim() || !activeEditTask) return;
     setSaving(true);
-    // Delete previous video if replacing
     const previousVideo = oldVideoLink || activeEditTask.edited_video_link;
+    // Grava o novo link primeiro: se falhar, o vídeo anterior não é apagado.
+    const { error: linkError } = await supabase.from('content_tasks').update({
+      edited_video_link: videoLink.trim(), edited_video_type: 'link', edited_by: user?.id || activeEditTask.edited_by, updated_at: new Date().toISOString()
+    }).eq('id', activeEditTask.id);
+    if (linkError) {
+      toast.error('Erro ao salvar o link: ' + (linkError.message || 'tente de novo'));
+      setSaving(false);
+      return;
+    }
     if (previousVideo && previousVideo !== videoLink.trim() && previousVideo.includes('agenciapulse.tech')) {
       try {
         const { removed } = await deleteFileFromVps(previousVideo, { keepIfReferenced: true });
@@ -491,9 +512,6 @@ export default function EditorDashboard() {
       }
     }
     setOldVideoLink(null);
-     await supabase.from('content_tasks').update({
-       edited_video_link: videoLink.trim(), edited_video_type: 'link', edited_by: user?.id || activeEditTask.edited_by, updated_at: new Date().toISOString()
-     }).eq('id', activeEditTask.id);
     toast.success('Link salvo!');
     setShowUpload(false);
     fetchTasks();
@@ -571,25 +589,31 @@ export default function EditorDashboard() {
     const targetTask = task || activeEditTask;
     if (!targetTask || !user) return;
     setSaving(true);
-    // Delete VPS file if editor uploaded one
-    if (targetTask.edited_video_link?.includes('agenciapulse.tech')) {
+    // Alteração: o vídeo é o que o cliente já viu no portal e o card é do editor original
+    // (edited_by). Só libera o card e zera o timer; o vídeo e o editor ficam.
+    const isAlteration = targetTask.kanban_column === 'alteracao';
+    const { error } = await supabase.from('content_tasks').update({
+      assigned_to: null,
+      ...(isAlteration ? {} : { edited_by: null, edited_video_link: null, edited_video_type: 'link' }),
+      editing_started_at: null,
+      editing_paused_at: null,
+      editing_paused_seconds: 0,
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', targetTask.id);
+    if (error) {
+      toast.error('Erro ao devolver para a fila: ' + (error.message || 'tente de novo'));
+      setSaving(false);
+      return;
+    }
+    // Só apaga o arquivo depois que o card soltou o link (e nunca o que ainda está no portal).
+    if (!isAlteration && targetTask.edited_video_link?.includes('agenciapulse.tech')) {
       try {
         await deleteFileFromVps(targetTask.edited_video_link, { keepIfReferenced: true });
       } catch (err) { console.warn('Erro ao remover vídeo:', err); }
     }
-    await supabase.from('content_tasks').update({
-      assigned_to: null,
-      edited_by: null,
-      editing_started_at: null,
-      editing_paused_at: null,
-      editing_paused_seconds: 0,
-      edited_video_link: null,
-      edited_video_type: 'link',
-      updated_at: new Date().toISOString(),
-    } as any).eq('id', targetTask.id);
     await supabase.from('task_history').insert({
       task_id: targetTask.id, user_id: user.id,
-      action: 'Devolvida para fila de edição',
+      action: isAlteration ? 'Alteração devolvida para a fila do editor' : 'Devolvida para fila de edição',
     });
     toast.success('📥 Tarefa devolvida para a fila!');
     if (activeEditTask?.id === targetTask.id) {
@@ -938,7 +962,7 @@ export default function EditorDashboard() {
                 <motion.div whileTap={{ scale: 0.93 }}>
                   <Button variant="outline" size="sm" className="gap-1.5 text-xs border-destructive/30 text-destructive hover:bg-destructive/10"
                     disabled={saving}
-                    onClick={() => handleReturnToQueue()}>
+                    onClick={() => setConfirmReturnTask(activeEditTask)}>
                     <ArrowRight size={14} className="rotate-180" /> Devolver à Fila
                   </Button>
                 </motion.div>
@@ -1086,7 +1110,7 @@ export default function EditorDashboard() {
                     </div>
                   )}
                   <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-destructive/60 hover:text-destructive hover:bg-destructive/10"
-                    onClick={(e) => { e.stopPropagation(); handleReturnToQueue(task); }}
+                    onClick={(e) => { e.stopPropagation(); setConfirmReturnTask(task); }}
                     title="Devolver à fila">
                     <ArrowRight size={12} className="rotate-180" />
                   </Button>
@@ -1261,6 +1285,34 @@ export default function EditorDashboard() {
           </div>
         </div>
       </div>
+
+      <AlertDialog open={!!confirmReturnTask} onOpenChange={(open) => { if (!open) setConfirmReturnTask(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Devolver à fila?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmReturnTask?.kanban_column === 'alteracao'
+                ? 'A alteração volta para a fila e o timer zera. O vídeo atual e o editor responsável continuam no card.'
+                : confirmReturnTask?.edited_video_link
+                  ? 'A tarefa volta para a fila de edição e o vídeo enviado é removido do card (o arquivo é apagado do servidor, a não ser que já esteja no portal do cliente).'
+                  : 'A tarefa volta para a fila de edição e o timer zera.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                const target = confirmReturnTask;
+                setConfirmReturnTask(null);
+                if (target) void handleReturnToQueue(target);
+              }}
+            >
+              Devolver à fila
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <style>{`
         @keyframes shimmer {

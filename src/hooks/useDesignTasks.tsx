@@ -1,20 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/vpsDb';
+import { supabase, vpsAuthedFetch } from '@/lib/vpsDb';
 import { useCity } from '@/contexts/CityContext';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { toast } from 'sonner';
 
-export type DesignTaskColumn = 'nova_tarefa' | 'executando' | 'fila_baixa_prioridade' | 'em_analise' | 'enviar_cliente' | 'aprovado' | 'ajustes' | 'postado';
+// 'analise_ia': entrega de agente de IA conferida pelo revisor de artes antes da equipe (agentDesignRoutes.mjs)
+export type DesignTaskColumn = 'nova_tarefa' | 'executando' | 'fila_baixa_prioridade' | 'analise_ia' | 'em_analise' | 'enviar_cliente' | 'aprovado' | 'ajustes' | 'postado';
 
-export const DESIGN_COLUMNS: { key: DesignTaskColumn; label: string; color: string }[] = [
-  { key: 'nova_tarefa', label: 'Nova Tarefa', color: '217 91% 60%' },
-  { key: 'executando', label: 'Executando', color: '45 93% 47%' },
-  { key: 'fila_baixa_prioridade', label: 'Fila Baixa Prioridade', color: '240 5% 55%' },
-  { key: 'ajustes', label: 'Ajustes Solicitados', color: '0 72% 51%' },
-  { key: 'em_analise', label: 'Em Análise', color: '262 83% 58%' },
-  { key: 'enviar_cliente', label: 'Enviar para Cliente', color: '187 85% 43%' },
-  { key: 'aprovado', label: 'Aprovadas — Artes para Agendar', color: '142 71% 45%' },
-  { key: 'postado', label: 'Artes Postadas', color: '280 65% 60%' },
+export const DESIGN_COLUMNS: { key: DesignTaskColumn; label: string; color: string; hint: string }[] = [
+  { key: 'nova_tarefa', label: 'Nova Tarefa', color: '217 91% 60%', hint: 'Fila: "Iniciar" começa o cronômetro. Agentes de IA pegam daqui.' },
+  { key: 'executando', label: 'Executando', color: '45 93% 47%', hint: 'Em produção. Anexe a arte e envie para análise.' },
+  { key: 'fila_baixa_prioridade', label: 'Fila Baixa Prioridade', color: '240 5% 55%', hint: 'Pausadas para priorizar outra. "Retomar" volta a executar.' },
+  { key: 'ajustes', label: 'Ajustes Solicitados', color: '0 72% 51%', hint: 'Correção pedida. Volta para quem fez a arte (pessoa ou agente).' },
+  { key: 'analise_ia', label: 'Análise IA', color: '292 70% 52%', hint: 'Arte de agente de IA esperando o revisor de artes. A equipe ainda não precisa olhar.' },
+  { key: 'em_analise', label: 'Em Análise (equipe)', color: '262 83% 58%', hint: 'Revisão da equipe: aprovar ou pedir ajustes.' },
+  { key: 'enviar_cliente', label: 'Enviar para Cliente', color: '187 85% 43%', hint: 'Aprovada pela equipe: enviar pelo WhatsApp/Portal e marcar a aprovação.' },
+  { key: 'aprovado', label: 'Aprovadas — Artes para Agendar', color: '142 71% 45%', hint: 'Aprovadas pelo cliente. Baixe, agende e mova para Postadas.' },
+  { key: 'postado', label: 'Artes Postadas', color: '280 65% 60%', hint: 'Publicadas (últimos 21 dias).' },
 ];
 
 export interface DesignTask {
@@ -50,7 +52,21 @@ export interface DesignTask {
   position: number;
   created_at: string;
   updated_at: string;
-  clients?: { company_name: string; color: string; logo_url: string | null; whatsapp: string; responsible_person: string };
+  /** copy estruturada (src/lib/designBrief.ts); copy_text continua com o texto montado */
+  copy_brief?: unknown;
+  /** formato/dimensão: { preset, width, height, unit, slides, dpi, bleed_mm } */
+  dimensions?: unknown;
+  /** pasta do Drive com os materiais desta arte */
+  materials_link?: string | null;
+  /** quem fez a arte entregue (ajuste volta para ele) */
+  designed_by?: string | null;
+  /** agente de IA trabalhando: etapa e último sinal de vida */
+  agent_step?: string | null;
+  agent_heartbeat_at?: string | null;
+  /** pasta "Referências/<data> <título>" no Drive do cliente, quando o designer arquivou */
+  references_drive_link?: string | null;
+  references_archived_at?: string | null;
+  clients?: { company_name: string; color: string; logo_url: string | null; whatsapp: string; responsible_person: string; drive_link?: string | null };
   profiles?: { name: string; display_name: string | null; avatar_url: string | null } | null;
 }
 
@@ -174,6 +190,41 @@ function writeLocalTasks(city: string, data: DesignTask[]) {
   } catch { /* quota exceeded — ignore */ }
 }
 
+// ── Agentes de IA (selo no card, filtro "IA") ──
+export interface DesignAgentInfo {
+  user_id: string;
+  role: string;
+  name: string;
+  avatar_url: string | null;
+}
+
+/** Agentes com chave ativa (designers, revisor de artes, chefe). Falha = lista vazia (o Kanban segue igual). */
+export function useDesignAgents() {
+  return useQuery({
+    queryKey: ['design-agents'],
+    queryFn: async (): Promise<DesignAgentInfo[]> => {
+      try {
+        const response = await vpsAuthedFetch('/design-agents');
+        if (!response.ok) return [];
+        const body = await response.json().catch(() => ({}));
+        return Array.isArray(body?.agents) ? body.agents : [];
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/** Arte feita (ou em produção) por agente de IA, ou esperando a Análise IA. */
+export function isAgentDesignTask(task: Pick<DesignTask, 'assigned_to' | 'designed_by' | 'kanban_column'>, agentIds: Set<string>): boolean {
+  return task.kanban_column === 'analise_ia'
+    || (!!task.designed_by && agentIds.has(task.designed_by))
+    || (!!task.assigned_to && agentIds.has(task.assigned_to));
+}
+
 export function useDesignTasks() {
   const queryClient = useQueryClient();
   const { activeCity, isLoading: cityLoading } = useCity();
@@ -191,7 +242,9 @@ export function useDesignTasks() {
     'priority','copy_text','attachment_url','attachment_urls','editable_file_url',
     'assigned_to','started_at','completed_at','sent_to_client_at','client_approved_at',
     'auto_approved','time_spent_seconds','timer_running','timer_started_at','version',
-    'mockup_url','due_date','position','created_at','updated_at','collaborator_id','checklist'
+    'mockup_url','due_date','position','created_at','updated_at','collaborator_id','checklist',
+    'copy_brief','dimensions','materials_link','designed_by','agent_step','agent_heartbeat_at',
+    'references_drive_link','references_archived_at'
   ].join(',');
 
   const tasksQuery = useQuery({
@@ -241,7 +294,7 @@ export function useDesignTasks() {
       let data = await tryQuery('join completo', () =>
         supabase
           .from('design_tasks')
-          .select(`${LIST_COLS}, clients(company_name, color, logo_url, whatsapp, responsible_person), profiles!design_tasks_assigned_to_fkey(name, display_name, avatar_url)`)
+          .select(`${LIST_COLS}, clients(company_name, color, logo_url, whatsapp, responsible_person, drive_link), profiles!design_tasks_assigned_to_fkey(name, display_name, avatar_url)`)
           .gte('created_at', recentSince)
           .order('created_at', { ascending: false })
           .limit(300)

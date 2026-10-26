@@ -99,12 +99,20 @@ export function buildProposalRevenueSchedule(proposal, startDate) {
     amounts = splitTotal(withDiscount(toNumber(sys.value)), sys.installments);
     label = `Sistema/Software - ${company}`;
   } else if (type === 'cronograma') {
+    // Mesmo total da página pública: valor único no modo 'total'; senão o total salvo
+    // ou a soma das entregas (propostas antigas sem totalValue).
     const crono = toObject(proposal?.system_data);
-    amounts = splitTotal(withDiscount(toNumber(crono.totalValue)), crono.installments);
+    const deliverablesSum = toArray(crono.deliverables)
+      .reduce((s, d) => s + toNumber(d?.unitPrice) * (toNumber(d?.quantity) || 1), 0);
+    const total = crono.pricingMode === 'total'
+      ? toNumber(crono.totalValue)
+      : (toNumber(crono.totalValue) || deliverablesSum);
+    amounts = splitTotal(withDiscount(total), crono.installments);
     label = `Cronograma - ${company}`;
   } else if (type === 'videos') {
     const vid = toObject(proposal?.system_data);
-    const total = toNumber(vid.totalValue) || (toNumber(vid.quantity) * toNumber(vid.unitPrice));
+    const extras = toArray(vid.extras).reduce((s, e) => s + toNumber(e?.value), 0);
+    const total = toNumber(vid.totalValue) || (toNumber(vid.quantity) * toNumber(vid.unitPrice) + extras);
     amounts = splitTotal(withDiscount(total), vid.installments);
     label = `Vídeos Avulsos - ${company}`;
   } else {

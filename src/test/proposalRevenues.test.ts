@@ -68,12 +68,21 @@ describe('buildProposalRevenueSchedule', () => {
     expect(sum(items)).toBe(1000);
   });
 
-  it('vídeos: usa quantidade x valor quando não há total salvo', () => {
+  it('vídeos: usa quantidade x valor + adicionais quando não há total salvo', () => {
     const items = buildProposalRevenueSchedule({
       proposal_type: 'videos',
-      system_data: { quantity: 10, unitPrice: 400, installments: 2 },
+      system_data: { quantity: 10, unitPrice: 400, installments: 2, extras: [{ name: 'Drone', value: 600 }] },
     }, '2026-05-01');
-    expect(items.map((i) => i.amount)).toEqual([2000, 2000]);
+    expect(items.map((i) => i.amount)).toEqual([2300, 2300]);
+  });
+
+  it('cronograma sem total salvo soma as entregas, com desconto', () => {
+    const items = buildProposalRevenueSchedule({
+      proposal_type: 'cronograma',
+      custom_discount: 10,
+      system_data: { installments: 2, deliverables: [{ unitPrice: 500, quantity: 2 }, { unitPrice: 1000 }] },
+    }, '2026-05-01');
+    expect(items.map((i) => i.amount)).toEqual([900, 900]);
   });
 
   it('sem valor: não gera nada', () => {

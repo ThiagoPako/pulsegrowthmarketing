@@ -12,7 +12,7 @@ WHISPER_REPO=https://github.com/ggml-org/whisper.cpp.git
 WHISPER_DIR=/opt/whisper.cpp
 MODEL_NAME=ggml-small-q5_1.bin
 MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$MODEL_NAME"
-MODEL_SHA256=49c8fb02b65e6049d5fa6c04f81f53b867b5ec9540406812c643f177317f779f
+MODEL_SHA256=ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb  # oid LFS do arquivo no HuggingFace
 MODEL_FILE="$WHISPER_DIR/models/$MODEL_NAME"
 BIN="$WHISPER_DIR/build/bin/whisper-cli"
 

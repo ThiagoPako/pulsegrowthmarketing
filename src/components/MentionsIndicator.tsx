@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/lib/vpsDb';
 import { useAuth } from '@/hooks/useAuth';
+import { subscribeMentions, refreshMentions } from '@/lib/mentionsFeed';
 import { AtSign, ArrowRight, CheckCheck, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
@@ -33,25 +34,15 @@ export default function MentionsIndicator() {
   const [mentions, setMentions] = useState<MentionItem[]>([]);
   const [open, setOpen] = useState(false);
 
+  // Mesma consulta do popup de menções (mentionsFeed), a cada 5 s.
   const fetchMentions = useCallback(async () => {
     if (!user?.id) return;
-    try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('id,title,message,link,created_at')
-        .eq('user_id', user.id)
-        .eq('type', 'mention')
-        .eq('read', false)
-        .order('created_at', { ascending: false })
-        .limit(20);
-      if (!error && data) setMentions(data as MentionItem[]);
-    } catch {}
+    await refreshMentions(user.id);
   }, [user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
-    fetchMentions();
-    const interval = setInterval(fetchMentions, 8000);
+    const unsubscribe = subscribeMentions(user.id, (rows) => setMentions(rows as MentionItem[]));
     // Listen for cross-component "mention read" events to refresh instantly
     const onMentionRead = (e: Event) => {
       const id = (e as CustomEvent).detail?.id as string | undefined;
@@ -63,7 +54,7 @@ export default function MentionsIndicator() {
     };
     window.addEventListener('mentions:read', onMentionRead);
     return () => {
-      clearInterval(interval);
+      unsubscribe();
       window.removeEventListener('mentions:read', onMentionRead);
     };
   }, [user?.id, fetchMentions]);

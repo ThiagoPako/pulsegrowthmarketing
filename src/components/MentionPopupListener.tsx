@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/lib/vpsDb';
 import { useAuth } from '@/hooks/useAuth';
+import { subscribeMentions, refreshMentions, type MentionRow } from '@/lib/mentionsFeed';
 import {
   Dialog,
   DialogContent,
@@ -38,17 +39,11 @@ export default function MentionPopupListener() {
 
     let cancelled = false;
 
-    const checkForMentions = async () => {
+    // Mesma consulta do indicador de menções (mentionsFeed): o popup olha as 5 mais novas.
+    const checkForMentions = (rows: MentionRow[]) => {
       try {
-        const { data, error } = await supabase
-          .from('notifications')
-          .select('id,title,message,link,type,read,created_at')
-          .eq('user_id', user.id)
-          .eq('type', 'mention')
-          .eq('read', false)
-          .order('created_at', { ascending: false })
-          .limit(5);
-        if (cancelled || error || !data || data.length === 0) return;
+        const data = rows.slice(0, 5);
+        if (cancelled || data.length === 0) return;
 
         // Pick the newest unseen mention created after session start
         const fresh = (data as any[]).find((n) => {
@@ -76,8 +71,7 @@ export default function MentionPopupListener() {
     };
 
     // Initial check + polling every 5s
-    checkForMentions();
-    const interval = setInterval(checkForMentions, 5000);
+    const unsubscribe = subscribeMentions(user.id, checkForMentions);
 
     // Also try realtime as bonus (works on Supabase, no-op on VPS)
     const channel = supabase
@@ -90,13 +84,13 @@ export default function MentionPopupListener() {
           table: 'notifications',
           filter: `user_id=eq.${user.id}`,
         },
-        () => checkForMentions()
+        () => { void refreshMentions(user.id); }
       )
       .subscribe();
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      unsubscribe();
       supabase.removeChannel(channel);
     };
   }, [user?.id]);

@@ -24,6 +24,7 @@ import {
   LayoutGrid, Square, Clapperboard, CircleDashed, FolderOpen, Link as LinkIcon, UploadCloud,
 } from 'lucide-react';
 import { PostMediaDropzone, type UploadedMedia } from '@/components/social/PostMediaDropzone';
+import PlaybackVideo from '@/components/media/PlaybackVideo';
 
 interface ClientConnection {
   id: string;
@@ -421,7 +422,7 @@ export default function PostStudio() {
                         <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">{i + 1}</span>
                         <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
                           {IS_VIDEO.test(item.url)
-                            ? <video src={item.url} className="h-full w-full object-cover" muted preload="metadata" />
+                            ? <PlaybackVideo src={item.url} className="h-full w-full object-cover" muted preload="metadata" />
                             : <img src={item.url} alt={`Mídia ${i + 1}`} className="h-full w-full object-cover" loading="lazy" />}
                         </div>
                         <Input

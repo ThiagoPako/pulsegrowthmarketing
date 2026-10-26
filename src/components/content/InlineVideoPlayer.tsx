@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { PlayCircle, ExternalLink, AlertCircle } from 'lucide-react';
+import { usePlaybackUrl } from '@/hooks/usePlaybackUrl';
 
 export interface InlineVideoPlayerProps {
   /** Link do vídeo editado (mp4 direto, Google Drive, YouTube, Vimeo...) */
@@ -48,6 +49,9 @@ function resolveUrl(rawUrl: string): Resolved {
 export default function InlineVideoPlayer({ url, className }: InlineVideoPlayerProps) {
   const [failed, setFailed] = useState(false);
   const resolved = useMemo(() => resolveUrl(url), [url]);
+  // Assistir: a versão leve quando existe ("Abrir" continua no original). Se ela falhar, o original.
+  const [leveFalhou, setLeveFalhou] = useState(false);
+  const playback = usePlaybackUrl(resolved.kind === 'file' ? resolved.src : null, { original: leveFalhou });
 
   return (
     <div className={className}>
@@ -72,16 +76,16 @@ export default function InlineVideoPlayer({ url, className }: InlineVideoPlayerP
       </div>
 
       <div className="relative w-full overflow-hidden rounded-xl border border-border bg-black/90 aspect-video">
-        {resolved.kind === 'file' && !failed && (
+        {resolved.kind === 'file' && !failed && playback.src && (
           <video
-            key={resolved.src}
-            src={resolved.src}
+            key={playback.src}
+            src={playback.src}
             controls
             playsInline
             preload="metadata"
             controlsList="nodownload"
             className="w-full h-full object-contain bg-black"
-            onError={() => setFailed(true)}
+            onError={() => (playback.variant === 'web' ? setLeveFalhou(true) : setFailed(true))}
           />
         )}
 

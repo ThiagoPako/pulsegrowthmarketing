@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
+import PlaybackVideo from '@/components/media/PlaybackVideo';
 import { ChevronLeft, ChevronRight, Heart, MessageCircle, Send, Bookmark, Link2, ChevronUp } from 'lucide-react';
 import type { PostMediaItem, SocialPublishType } from '@/services/socialPostsApi';
 
@@ -36,7 +37,7 @@ export function InstagramPreview({
       );
     }
     if (IS_VIDEO.test(item.url)) {
-      return <video src={item.url} className="absolute inset-0 h-full w-full object-cover" muted loop playsInline controls />;
+      return <PlaybackVideo src={item.url} className="absolute inset-0 h-full w-full object-cover" muted loop playsInline controls />;
     }
     return <img src={item.url} alt={item.label || 'Prévia da publicação'} className="absolute inset-0 h-full w-full object-cover" loading="lazy" />;
   };

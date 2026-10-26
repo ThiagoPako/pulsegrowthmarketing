@@ -9272,10 +9272,11 @@ async function runScheduledPostNow(post, { manual = false } = {}) {
   }
 
   // Vídeo no formato que a Meta pede (lib/instagramVideo.mjs): troca só a URL enviada à Meta (a .ig.mp4
-  // quando pronta; o original quando ele cumpre). O banco continua com o original.
+  // quando pronta; o original quando ele cumpre). O banco continua com o original. Só quando o Instagram
+  // está entre os destinos: post só do Facebook sai com o original, sem esperar nem perder as novas tentativas.
   let publishPost = post;
   let mediaFallback = null;
-  if (targets.length) {
+  if (targets.some((a) => a.platform === 'instagram')) {
     const media = postMediaList(post);
     const choice = await igVideo.chooseMedia(media.map((m) => m.url), {
       publishType: post.publish_type, scheduledAt: manual ? null : post.scheduled_at,
@@ -10136,8 +10137,11 @@ app.get('/api/social-posts', async (req, res) => {
  * (uma só por rede). Usado pelo POST /api/social-posts e pelo módulo de Agendamentos (scheduling.mjs),
  * para as duas telas seguirem as mesmas regras. Lança erro com statusCode 400 e a mensagem da tela;
  * devolve os campos prontos para gravar em scheduled_posts.
+ * - requireAccounts: exige a conta conectada (false no lembrete de story, que a equipe posta pelo app);
+ * - apiPublish: o robô publica pela API (padrão: igual a requireAccounts). Só então valem os limites de
+ *   duração do Instagram (e não no post só do Facebook).
  */
-async function prepareScheduledPost(input = {}, { requireAccounts = true } = {}) {
+async function prepareScheduledPost(input = {}, { requireAccounts = true, apiPublish = requireAccounts } = {}) {
   const fail = (message) => { throw Object.assign(new Error(message), { statusCode: 400 }); };
   const {
     client_id, platform = 'instagram', publish_type = 'reels',
@@ -10162,9 +10166,14 @@ async function prepareScheduledPost(input = {}, { requireAccounts = true } = {})
   if (publish_type === 'carousel' && urls.length < 2) fail('Carrossel precisa de pelo menos 2 mídias.');
   if (publish_type === 'carousel' && urls.length > 10) fail('Carrossel aceita no máximo 10 mídias.');
   if (story_link && !/^https?:\/\//i.test(story_link)) fail('O link do story precisa começar com https://');
-  // Duração que a Meta aceita (ffprobe com cache; vídeos de /uploads): story até 60 s, reels de 3 s a 15 min
-  const durationProblem = await igVideo.durationProblem(urls, publish_type);
-  if (durationProblem) fail(durationProblem);
+  // Duração que a API do Instagram aceita (ffprobe com cache; vídeos de /uploads): story até 60 s, reels de
+  // 3 s a 15 min. Só vale quando o robô publica no Instagram (apiPublish): o lembrete a equipe posta pelo
+  // app, e o post só do Facebook sai como vídeo comum. Com 'both' vale.
+  const instagramApi = apiPublish && platform !== 'facebook';
+  if (instagramApi) {
+    const durationProblem = await igVideo.durationProblem(urls, publish_type);
+    if (durationProblem) fail(durationProblem);
+  }
 
   const when = new Date(scheduled_at);
   if (!scheduled_at || Number.isNaN(when.getTime())) fail('scheduled_at inválido');
@@ -10184,7 +10193,7 @@ async function prepareScheduledPost(input = {}, { requireAccounts = true } = {})
     fail(`O cliente tem ${detail}. Desconecte as que não são dele em Conexões Sociais antes de agendar.`);
   }
   // A versão Instagram do vídeo começa logo depois do agendamento (a tarefa relê os posts em segundos)
-  igVideo.scanSoon();
+  if (instagramApi) igVideo.scanSoon();
 
   return {
     client_id, platform, publish_type, items, urls, caption, when,

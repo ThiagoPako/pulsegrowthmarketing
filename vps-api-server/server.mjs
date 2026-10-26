@@ -13006,6 +13006,8 @@ app.delete('/api/clients/:id', async (req, res) => {
 // tenta: avisa uma vez no log com o comando para o dono rodar.
 const PERFORMANCE_INDEXES = [
   { name: 'idx_notifications_user_created', table: 'notifications', columns: ['user_id', 'created_at'], definition: '(user_id, created_at DESC)' },
+  // Menções não lidas (popup e indicador, a cada 5 s por aba): parcial, só as linhas não lidas do tipo menção.
+  { name: 'idx_notifications_mention_unread', table: 'notifications', columns: null, definition: "(user_id, created_at DESC) WHERE type = 'mention' AND read = false" },
   { name: 'idx_content_tasks_recording', table: 'content_tasks', columns: ['recording_id'], definition: '(recording_id)', before: () => ensureCampaignTables() },
   { name: 'idx_delivery_records_recording', table: 'delivery_records', columns: ['recording_id'], definition: '(recording_id)' },
   { name: 'idx_task_comments_task', table: 'task_comments', columns: ['task_id'], definition: '(task_id)' },
@@ -13042,8 +13044,9 @@ async function ensurePerformanceIndexes() {
             WHERE i.indrelid = to_regclass($1)`,
           [`public.${index.table}`]
         );
-        const covered = existing.some((row) => row.valid && !row.partial
-          && index.columns.every((column, position) => row.columns[position] === column));
+        // Já existe: o próprio índice (pelo nome) ou outro válido que começa pelas mesmas colunas.
+        const covered = existing.some((row) => row.valid && (row.name === index.name
+          || (index.columns && !row.partial && index.columns.every((column, position) => row.columns[position] === column))));
         if (covered) continue;
         if (!table.can_own) { forOwner.push(`${statement};`); continue; }
         // Sobra de uma criação interrompida (CONCURRENTLY deixa o índice inválido): refaz.

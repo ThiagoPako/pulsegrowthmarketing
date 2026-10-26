@@ -44,6 +44,7 @@ const ids = {
   client: '00000000-0000-0000-0000-00000000f101',
   avulso: '00000000-0000-0000-0000-00000000f201',
   task: '00000000-0000-0000-0000-00000000f202',
+  agentTask: '00000000-0000-0000-0000-00000000f203',
 };
 
 // ── Banco ──────────────────────────────────────────────────────
@@ -127,7 +128,7 @@ fs.symlinkSync(src.heavy, symlinkFile);
 
 const USERS = [ids.admin];
 await pool.query(`DELETE FROM edit_versions WHERE task_id = ANY($1)`, [[ids.task, ids.avulso]]).catch(() => {});
-await pool.query(`DELETE FROM content_tasks WHERE id = ANY($1)`, [[ids.task, ids.avulso]]);
+await pool.query(`DELETE FROM content_tasks WHERE id = ANY($1)`, [[ids.task, ids.avulso, ids.agentTask]]);
 await pool.query(`DELETE FROM client_portal_contents WHERE client_id = $1`, [ids.client]);
 await pool.query(`DELETE FROM clients WHERE id = $1`, [ids.client]);
 await pool.query(`DELETE FROM user_roles WHERE user_id = ANY($1)`, [USERS]);
@@ -202,6 +203,7 @@ const portal = jwt.sign({ typ: 'portal', cid: ids.client, puid: null }, PORTAL_S
 const asTeam = { Authorization: `Bearer ${team}` };
 const asClient = { 'x-portal-token': portal };
 
+let res;
 async function upload(file, folder, headers = asTeam, name = path.basename(file)) {
   const form = new FormData();
   form.append('folder', folder);
@@ -265,6 +267,31 @@ const portalUpload = await upload(src.hevcShort, `panfletagem/${ids.client}`, {}
 await waitFor(() => fs.existsSync(portalUpload.web), 'versão leve do upload do portal');
 ok('upload do portal (sem login da equipe) também gera a versão leve');
 
+// ── 5b. Entrega do agente (/api/agent/tasks/:id/deliver) também entra na fila ──
+await fetch(`${BASE}/agent/me`, { headers: { Authorization: 'Agent pa_cria-o-esquema' } }); // cria as tabelas dos agentes
+const agentKey = `pa_${crypto.randomBytes(24).toString('base64url')}`;
+await pool.query(`DELETE FROM agent_keys WHERE user_id = $1`, [ids.admin]);
+await pool.query(
+  `INSERT INTO agent_keys (user_id, role, key_hash, key_hint, created_by) VALUES ($1, 'editor', $2, $3, $1)`,
+  [ids.admin, crypto.createHash('sha256').update(agentKey).digest('hex'), agentKey.slice(-4)]
+);
+await pool.query(
+  `INSERT INTO content_tasks (id, client_id, title, content_type, kanban_column, assigned_to) VALUES ($1, $2, 'Entrega do agente', 'reels', 'edicao', $3)`,
+  [ids.agentTask, ids.client, ids.admin]
+);
+const agentForm = new FormData();
+agentForm.append('video', new Blob([fs.readFileSync(src.hevcShort)], { type: 'video/quicktime' }), 'final.mov');
+agentForm.append('notes', 'v1');
+res = await fetch(`${BASE}/agent/tasks/${ids.agentTask}/deliver`, { method: 'POST', headers: { Authorization: `Agent ${agentKey}` }, body: agentForm });
+const delivered = await res.json();
+assert.equal(res.status, 200, JSON.stringify(delivered));
+const deliveredFull = path.join(UPLOAD_ROOT, delivered.video_url.replace(`${PUBLIC}/`, ''));
+await waitFor(() => fs.existsSync(webVariantPath(deliveredFull)), 'versão leve da entrega do agente');
+assert.equal(probe(webVariantPath(deliveredFull)).codec, 'h264');
+const { rows: [taskRow] } = await pool.query(`SELECT edited_video_link FROM content_tasks WHERE id = $1`, [ids.agentTask]);
+assert.equal(taskRow.edited_video_link, delivered.video_url, 'a URL gravada no banco continua a do original');
+ok('entrega do agente (/api/agent/tasks/:id/deliver) gera a versão leve; o banco guarda o original');
+
 // ── 6. Arquivo quebrado: falha uma vez e não tenta de novo ──
 const broken = await upload(src.broken, `content/${ids.client}/upload-quebrado`);
 await waitFor(() => logLines().some((l) => l.includes('falhou') && l.includes(broken.rel)), 'falha do arquivo quebrado');
@@ -310,7 +337,7 @@ assert.equal(r.status, 404, 'atalho que aponta para fora das raízes não é abe
 r = await playback(`${PUBLIC}/content/${ids.client}/nao-existe.mp4`);
 assert.equal(r.status, 404);
 // lote (cards do portal)
-let res = await fetch(`${BASE}/media/playback`, {
+res = await fetch(`${BASE}/media/playback`, {
   method: 'POST', headers: { ...asClient, 'Content-Type': 'application/json' },
   body: JSON.stringify({ urls: [heavy.url, light.url, '/etc/passwd'] }),
 });

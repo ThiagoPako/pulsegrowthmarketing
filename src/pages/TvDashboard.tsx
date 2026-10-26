@@ -1350,7 +1350,6 @@ function YouTubePlayer({ url, command }: { url: string; command: TvRemoteCommand
   );
 }
 
-/* ─── Playlist Editor ───────────────────────────────────── */
 /** Relógio do topo: só ele redesenha a cada segundo (antes era a tela inteira). */
 function HeaderClock() {
   const [now, setNow] = useState(() => new Date());
@@ -1366,6 +1365,7 @@ function HeaderClock() {
   );
 }
 
+/* ─── Playlist Editor ───────────────────────────────────── */
 function PlaylistEditor({ url, onSave }: { url: string; onSave: (url: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(url);

@@ -14977,9 +14977,15 @@ async function loadTvDashboardPayload() {
     }
 
     stage = 'seasonal_slides';
-    const seasonalClients = await loadSeasonalClients();
-    const seasonalAlerts = await fetchSystemSeasonalAlerts({ fallbackClients: seasonalClients });
-    const seasonalSlides = buildTvSeasonalSlidesFromAlerts(seasonalAlerts);
+    // Opcional como as outras seções: falha aqui não derruba o painel inteiro
+    let seasonalSlides = [];
+    try {
+      const seasonalClients = await loadSeasonalClients();
+      const seasonalAlerts = await fetchSystemSeasonalAlerts({ fallbackClients: seasonalClients });
+      seasonalSlides = buildTvSeasonalSlidesFromAlerts(seasonalAlerts);
+    } catch (error) {
+      console.warn('[tv-dashboard] Failed to load seasonal slides:', error?.message || error);
+    }
 
     // Build list of recording IDs that are actively being recorded
     const activeRecordingIds = (activeRecs || []).map(r => r?.recording_id).filter(Boolean);

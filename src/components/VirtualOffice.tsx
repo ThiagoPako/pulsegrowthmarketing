@@ -174,6 +174,9 @@ export default function VirtualOffice() {
     subscribeOfficeChannel();
 
     const unsync = onPresenceSync(syncPresence);
+    // O servidor só reenvia a lista quando alguém entra/sai ou a cada 30 s: ao abrir o
+    // escritório com o socket já conectado, usa a última lista recebida em vez de esperar.
+    if (Object.keys(getPresenceState()).length > 0) syncPresence();
     const unmsg = onQuickMessage((payload: any) => {
       const msg = normalizeMsg(payload);
       if (!msg || !currentUser) return;

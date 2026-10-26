@@ -7635,6 +7635,19 @@ function warmPortal480pCache(sourcePath, cachedFile) {
   return job;
 }
 
+// Variante (cache 480p ou original) escolhida no primeiro pedido de cada reprodução do portal.
+const portal480pPlaybackVariant = new Map();
+function rememberPortal480pVariant(key, variant) {
+  const now = Date.now();
+  if (portal480pPlaybackVariant.size >= 5000) {
+    for (const [k, v] of portal480pPlaybackVariant) {
+      if (now - v.at > 6 * 60 * 60 * 1000) portal480pPlaybackVariant.delete(k);
+    }
+    if (portal480pPlaybackVariant.size >= 5000) portal480pPlaybackVariant.delete(portal480pPlaybackVariant.keys().next().value);
+  }
+  portal480pPlaybackVariant.set(key, { variant, at: now });
+}
+
 app.all('/api/portal-media-proxy', async (req, res) => {
   try {
     const targetUrl = req.method === 'GET' ? req.query.url : req.body?.url;
@@ -7665,7 +7678,15 @@ app.all('/api/portal-media-proxy', async (req, res) => {
       const urlHash = crypto.createHash('md5').update(localSourcePath).digest('hex');
       const cachedFile = path.join(TRANSCODE_CACHE_DIR, `${urlHash}_480p.mp4`);
 
-      if (fs.existsSync(cachedFile)) {
+      // A mesma reprodução fica sempre no mesmo arquivo: se o cache 480p ficar pronto no meio
+      // do vídeo, os próximos pedidos de Range da mesma URL ainda vêm do original (trocar de
+      // arquivo no meio dá 416 ou vídeo corrompido). O player manda `p` (um id por reprodução).
+      const playbackKey = typeof req.query.p === 'string' && req.query.p ? `${req.query.p.slice(0, 64)}|${cachedFile}` : null;
+      const pinned = playbackKey ? portal480pPlaybackVariant.get(playbackKey) : null;
+      const useCache = pinned ? pinned.variant === 'cache' : (playbackKey && fs.existsSync(cachedFile));
+      if (playbackKey && !pinned) rememberPortal480pVariant(playbackKey, useCache ? 'cache' : 'orig');
+
+      if (useCache && fs.existsSync(cachedFile)) {
         return streamLocalPortalMedia(req, res, cachedFile, '480p-cached');
       }
 

@@ -19,7 +19,8 @@ const VPS_UPLOADS_URL = 'https://agenciapulse.tech/uploads';
 function resolveVideoUrl(url: string): string {
   if (!url.startsWith(VPS_UPLOADS_URL)) return url;
   // Use streaming proxy URL instead of downloading entire blob
-  const params = new URLSearchParams({ url, quality: '480p' });
+  // p: id da reprodução, para o servidor não trocar de arquivo no meio do vídeo
+  const params = new URLSearchParams({ url, quality: '480p', p: Math.random().toString(36).slice(2) + Date.now().toString(36) });
   return `${PORTAL_MEDIA_PROXY_URL}?${params.toString()}`;
 }
 

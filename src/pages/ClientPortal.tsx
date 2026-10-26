@@ -89,10 +89,16 @@ function shouldProxyPortalVideo(url: string) {
   return url.startsWith(VPS_UPLOADS_URL);
 }
 
+function playbackId() {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
 async function createPortalVideoObjectUrl(url: string, quality: VideoQuality = '480p') {
   const params = new URLSearchParams({
     url,
     quality,
+    // id da reprodução: o servidor mantém o mesmo arquivo (original ou 480p) do começo ao fim
+    p: playbackId(),
   });
 
   return `${PORTAL_MEDIA_PROXY_URL}?${params.toString()}`;

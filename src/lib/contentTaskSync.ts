@@ -30,6 +30,8 @@ interface SyncContext {
   userId?: string | null;
   clientName?: string;
   clientWhatsapp?: string;
+  /** Detalhe do histórico da movimentação (ex.: "Ajustes: …" ao pedir alteração), como a API dos agentes grava. */
+  historyDetails?: string | null;
 }
 
 // Map kanban columns → social_media_deliveries statuses
@@ -458,6 +460,7 @@ export async function syncContentTaskColumnChange(
     ideias: 'Movido para Zona de Ideias',
     captacao: 'Movido para Captação',
     edicao: 'Movido para Edição',
+    pre_revisao: 'Enviado para Análise',
     revisao: 'Enviado para Revisão',
     alteracao: 'Solicitado Alteração',
     envio: 'Enviado para Cliente',
@@ -470,7 +473,7 @@ export async function syncContentTaskColumnChange(
     task_id: ctx.taskId,
     user_id: ctx.userId || null,
     action: actionMap[newColumn] || `Movido para ${newColumn}`,
-    details: null,
+    details: ctx.historyDetails || null,
   });
 }
 
@@ -529,7 +532,7 @@ export function claimGuardFilter(identityIds: Array<string | null | undefined>):
  */
 export function buildSyncContext(
   task: { id: string; client_id: string; title: string; content_type: string; description: string | null; script_id: string | null; recording_id: string | null; assigned_to: string | null; edited_by?: string | null; edited_video_link: string | null; immediate_alteration?: boolean; approved_at?: string | null; kanban_column?: string | null },
-  opts?: { userId?: string; clientName?: string; clientWhatsapp?: string; startEditing?: boolean }
+  opts?: { userId?: string; clientName?: string; clientWhatsapp?: string; startEditing?: boolean; historyDetails?: string | null }
 ): SyncContext {
   return {
     taskId: task.id,
@@ -549,5 +552,6 @@ export function buildSyncContext(
     userId: opts?.userId,
     clientName: opts?.clientName,
     clientWhatsapp: opts?.clientWhatsapp,
+    historyDetails: opts?.historyDetails ?? null,
   };
 }

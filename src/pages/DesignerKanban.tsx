@@ -1,5 +1,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect, DragEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCity } from '@/contexts/CityContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BookOpen } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -207,10 +209,11 @@ export default function DesignerKanban() {
   const { tasksQuery, updateTask, addHistory, deleteTask } = useDesignTasks();
   const { currentUser, clients } = useApp();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { activeCity } = useCity();
   const [view, setView] = useState<'kanban' | 'lista' | 'agendamentos'>('kanban');
   const [createOpen, setCreateOpen] = useState(false);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
-  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [filterClient, setFilterClient] = useState<string>('all');
@@ -319,22 +322,21 @@ export default function DesignerKanban() {
     setDraggingTaskId(task.id);
   }, []);
 
-  const handleDragOver = useCallback((e: DragEvent, colKey: string, overTaskId?: string) => {
+  // Só a coluna destacada vira estado: guardar o card sobrevoado re-renderizava o quadro
+  // inteiro a cada card cruzado e o valor nem era usado (o drop no card já informa o alvo).
+  const handleDragOver = useCallback((e: DragEvent, colKey: string) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDragOverColumn(colKey);
-    if (overTaskId) setDragOverTaskId(overTaskId);
   }, []);
 
-  const handleDragLeave = useCallback(() => { 
-    setDragOverColumn(null); 
-    setDragOverTaskId(null);
+  const handleDragLeave = useCallback(() => {
+    setDragOverColumn(null);
   }, []);
 
   const handleDrop = useCallback(async (e: DragEvent, targetColumn: DesignTaskColumn, overTaskId?: string) => {
     e.preventDefault();
     setDragOverColumn(null);
-    setDragOverTaskId(null);
     setDraggingTaskId(null);
 
     const taskId = e.dataTransfer.getData('text/plain');
@@ -343,9 +345,16 @@ export default function DesignerKanban() {
 
     // Se mudou de coluna ou se mudou de posição na mesma coluna
     const isChangingColumn = task.kanban_column !== targetColumn;
-    const isChangingPosition = overTaskId && overTaskId !== taskId;
+    const isChangingPosition = !!overTaskId && overTaskId !== taskId;
 
     if (!isChangingColumn && !isChangingPosition) return;
+    // Com outra ordenação na tela a posição manual não aparece: reordenar não teria efeito visível.
+    if (!isChangingColumn && sortMode !== 'default') {
+      toast.info('Para reordenar, use "Aparecem primeiro: Padrão (ordem manual)".');
+      return;
+    }
+    // Em outra ordenação, o card solto em outra coluna vai para o fim da ordem manual.
+    const overId = sortMode === 'default' && isChangingPosition ? overTaskId : undefined;
 
     const targetLabel = DESIGN_COLUMNS.find(c => c.key === targetColumn)?.label || targetColumn;
     const extraFields: Record<string, any> = {};
@@ -357,26 +366,25 @@ export default function DesignerKanban() {
       const n = Number(t.position);
       return !Number.isFinite(n) || Math.abs(n) > MAX_SAFE_POS;
     });
+    // Solto em cima de um card: entra antes dele.
+    const overIdx = overId ? colTasks.findIndex(t => t.id === overId) : -1;
+    const prevPos = overIdx > 0 ? Number(colTasks[overIdx - 1].position) : NaN;
+    const overPos = overIdx >= 0 ? Number(colTasks[overIdx].position) : NaN;
+    // Posições repetidas (ex.: vários cards criados com position 0) não deixam encaixar entre os dois.
+    const noRoom = overIdx > 0 && Math.abs(overPos - prevPos) < 2;
 
     let newPosition = 0;
     let renormalizeUpdates: Array<{ id: string; position: number }> = [];
 
-    if (hasCorruptPos) {
-      // Renormaliza posições da coluna para evitar overflow de bigint
-      let insertIdx = colTasks.length;
-      if (overTaskId) {
-        const i = colTasks.findIndex(t => t.id === overTaskId);
-        if (i >= 0) insertIdx = i;
-      }
+    if (hasCorruptPos || noRoom) {
+      // Renormaliza posições da coluna (evita overflow de bigint e abre espaço entre os cards)
+      const insertIdx = overIdx >= 0 ? overIdx : colTasks.length;
       const reordered = [...colTasks];
       reordered.splice(insertIdx, 0, { id: taskId } as any);
       renormalizeUpdates = reordered.map((t, idx) => ({ id: t.id, position: (idx + 1) * 1000 }));
       newPosition = (insertIdx + 1) * 1000;
-    } else if (overTaskId) {
-      const overIdx = colTasks.findIndex(t => t.id === overTaskId);
-      const prevPos = Number(colTasks[overIdx-1]?.position ?? 0);
-      const overPos = Number(colTasks[overIdx]?.position ?? 0);
-      newPosition = overIdx === 0 ? Number(colTasks[0]?.position ?? 1000) - 100 : (prevPos + overPos) / 2;
+    } else if (overIdx >= 0) {
+      newPosition = overIdx === 0 ? overPos - 100 : (prevPos + overPos) / 2;
     } else {
       const lastPos = Number(colTasks[colTasks.length-1]?.position ?? 0);
       newPosition = colTasks.length > 0 ? lastPos + 100 : 1000;
@@ -475,6 +483,11 @@ export default function DesignerKanban() {
 
     const performStart = async (reason: string) => {
       if (renormalizeUpdates.length > 0) {
+        // Atualiza a ordem no cache na hora (o refetch só vem em 2 min) e grava sem mexer no updated_at.
+        const posById = new Map(renormalizeUpdates.map(u => [u.id, u.position]));
+        queryClient.setQueryData<DesignTask[]>(['design-tasks', activeCity], prev =>
+          prev?.map(t => (posById.has(t.id) && t.id !== taskId ? { ...t, position: posById.get(t.id)! } : t))
+        );
         await Promise.all(
           renormalizeUpdates
             .filter(u => u.id !== taskId)
@@ -483,6 +496,8 @@ export default function DesignerKanban() {
       }
       if (conflicting.length > 0) await pauseConflicting(conflicting, task.title, reason);
       await updateTask.mutateAsync({ id: taskId, kanban_column: targetColumn, ...extraFields } as any);
+      // Reordenar na mesma coluna não é movimentação: sem histórico nem aviso.
+      if (!isChangingColumn) return;
       await addHistory.mutateAsync({ task_id: taskId, action: `Movido para ${targetLabel}`, user_id: user?.id });
       toast.success(`Tarefa movida para "${targetLabel}"`);
     };
@@ -504,12 +519,11 @@ export default function DesignerKanban() {
     } catch (err: any) {
       toast.error(err.message || 'Erro ao mover tarefa');
     }
-  }, [tasks, user, updateTask, addHistory, tasksByColumn]);
+  }, [tasks, user, updateTask, addHistory, tasksByColumn, sortMode, queryClient, activeCity]);
 
   const handleDragEnd = useCallback(() => {
     setDraggingTaskId(null);
     setDragOverColumn(null);
-    setDragOverTaskId(null);
   }, []);
 
   const pauseConflictingTasksExt = async (conflicting: DesignTask[], newTitle: string, reason: string) => {
@@ -847,7 +861,8 @@ export default function DesignerKanban() {
                     {colTasks.map((task, i) => (
                       <div
                         key={task.id}
-                        onDragOver={e => handleDragOver(e, col.key, task.id)}
+                        onDragOver={e => handleDragOver(e, col.key)}
+                        onDrop={e => { e.stopPropagation(); handleDrop(e, col.key, task.id); }}
                       >
                         <TaskCard
                           task={task}

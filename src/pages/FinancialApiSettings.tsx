@@ -51,7 +51,7 @@ const PROVIDERS = [
   { value: 'custom', label: 'API Personalizada', icon: '🔧' },
 ];
 
-const AI_PROVIDERS = [
+const ALL_AI_PROVIDERS = [
   {
     value: 'gemini',
     label: 'Google Gemini',
@@ -66,11 +66,12 @@ const AI_PROVIDERS = [
       'Copie a chave e cole abaixo',
     ],
     models: [
-      { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', desc: 'Mais rápido e econômico' },
-      { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', desc: 'Equilíbrio velocidade/qualidade' },
-      { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', desc: 'Máxima qualidade e raciocínio' },
+      // Apelidos "-latest": o Google atualiza a versão sozinho (a família 2.x foi desativada)
+      { value: 'gemini-flash-lite-latest', label: 'Gemini Flash Lite', desc: 'Mais rápido e econômico' },
+      { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', desc: 'Equilíbrio velocidade/qualidade' },
+      { value: 'gemini-pro-latest', label: 'Gemini Pro', desc: 'Máxima qualidade e raciocínio' },
     ],
-    defaultModel: 'gemini-2.5-flash-lite',
+    defaultModel: 'gemini-flash-lite-latest',
   },
   {
     value: 'openai',
@@ -106,13 +107,17 @@ const AI_PROVIDERS = [
       'Copie a chave e cole abaixo',
     ],
     models: [
-      { value: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku', desc: 'Mais rápido e barato' },
-      { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet', desc: 'Melhor equilíbrio' },
-      { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus', desc: 'Máxima capacidade' },
+      { value: 'claude-opus-5-5', label: 'Claude Opus 5.5', desc: 'Máxima capacidade (padrão)' },
+      { value: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5', desc: 'Melhor equilíbrio' },
+      { value: 'claude-haiku-5-5', label: 'Claude Haiku 5.5', desc: 'Mais rápido e barato' },
     ],
-    defaultModel: 'claude-3-haiku-20240307',
+    defaultModel: 'claude-opus-5-5',
   },
 ];
+
+// A IA do sistema roda só no Claude (decisão de 26/10/2026). Os outros provedores ficam na
+// lista acima só para a API reconhecer configurações antigas; a tela mostra apenas o Claude.
+const AI_PROVIDERS = ALL_AI_PROVIDERS.filter(p => p.value === 'claude');
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: any }> = {
   ativo: { label: 'Ativo', color: 'text-emerald-500', icon: CheckCircle },
@@ -132,8 +137,8 @@ export default function FinancialApiSettings() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [aiConfig, setAiConfig] = useState({
-    provider: 'gemini',
-    model: 'gemini-2.5-flash-lite',
+    provider: 'claude',
+    model: 'claude-opus-5-5',
     active: false,
     integrationId: null as string | null,
     apiKeySet: false,
@@ -156,19 +161,20 @@ export default function FinancialApiSettings() {
   useEffect(() => { loadData(); loadAiConfig(); }, []);
 
   const loadAiConfig = async () => {
+    // Só a integração do Claude: é o único provedor de IA do sistema
     const { data } = await supabase
       .from('api_integrations')
       .select('*')
-      .in('provider', ['ai_gemini', 'ai_openai', 'ai_claude'])
+      .eq('provider', 'ai_claude')
       .eq('status', 'ativo')
       .limit(1)
-      .single();
+      .maybeSingle();
     if (data) {
       const d = data as any;
-      const providerMap: Record<string, string> = { ai_gemini: 'gemini', ai_openai: 'openai', ai_claude: 'claude' };
+      const saved = String(d.config?.ai_model || '');
       setAiConfig({
-        provider: providerMap[d.provider] || 'gemini',
-        model: d.config?.ai_model || 'gemini-2.5-flash-lite',
+        provider: 'claude',
+        model: /^claude-(opus|sonnet|haiku)-5-5$/.test(saved) ? saved : 'claude-opus-5-5',
         active: d.status === 'ativo',
         integrationId: d.id,
         apiKeySet: !!d.config?.api_key_set,

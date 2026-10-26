@@ -9,6 +9,8 @@
     "whatsapp": "node whatsapp/wa-server.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.133.0",
+    "baileys": "7.0.0-rc14",
     "bcryptjs": "^3.0.2",
     "compression": "^1.7.5",
     "cors": "^2.8.5",
@@ -17,9 +19,8 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
     "pg": "^8.13.0",
-    "ws": "^8.18.0",
-    "baileys": "7.0.0-rc14",
+    "pino": "^9.6.0",
     "qrcode": "^1.5.4",
-    "pino": "^9.6.0"
+    "ws": "^8.18.0"
   }
 }

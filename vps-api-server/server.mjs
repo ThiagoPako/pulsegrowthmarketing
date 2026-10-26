@@ -30,6 +30,7 @@ import { buildProposalRevenueSchedule, stripRevenueMark } from './lib/proposalRe
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import Anthropic from '@anthropic-ai/sdk';
 import crypto from 'crypto';
 import multer from 'multer';
 import { WebSocketServer } from 'ws';
@@ -3981,39 +3982,110 @@ async function fetchDbApiKey(db, aiProvider) {
   return data?.config?.api_key_encrypted;
 }
 
+// O Google desativou a família Gemini 1.x/2.x (404 "no longer available"): os nomes antigos,
+// salvos na tela de APIs ou fixos no código, viram os apelidos "-latest", que acompanham a
+// versão atual sozinhos. Claude 3 também saiu de linha.
+function resolveAiModel(model, provider) {
+  const raw = String(model || '').trim().replace(/^(?:google|models)\//i, '');
+  if (provider === 'gemini') {
+    if (!raw || /^gemini-(1\.|2\.)/i.test(raw)) {
+      if (/pro/i.test(raw)) return 'gemini-pro-latest';
+      if (/lite|8b/i.test(raw)) return 'gemini-flash-lite-latest';
+      return 'gemini-3.5-flash';
+    }
+    // 'gemini-flash-latest' travava (>50 s sem resposta, out/2026): usa a versão fixa que responde
+    if (raw === 'gemini-flash-latest') return 'gemini-3.5-flash';
+    return raw;
+  }
+  if (provider === 'claude') {
+    // Modelo escolhido na tela de APIs (Haiku/Sonnet/Opus atuais) vale como está; nome de
+    // outro provedor ou de linha antiga (Claude 3/4) vira o equivalente atual.
+    if (/^claude-(haiku|sonnet|opus)-5-5$/i.test(raw)) return raw;
+    if (/haiku/i.test(raw)) return 'claude-haiku-5-5';
+    if (/sonnet/i.test(raw)) return 'claude-sonnet-5-5';
+    return 'claude-opus-5-5';
+  }
+  return raw;
+}
+
+// ── Claude (provedor de IA do sistema) ──
+// SDK oficial. Os modelos atuais pensam antes de responder (não dá para desligar): o esforço
+// controla quanto, e o max_tokens precisa caber o pensamento + a resposta. Sem temperature
+// (a API recusa sampling desde 21/10/2026). A resposta pode começar com blocos 'thinking':
+// o texto é lido pelos blocos 'text'.
+const anthropicClients = new Map();
+function getAnthropicClient(apiKey) {
+  let client = anthropicClients.get(apiKey);
+  if (!client) {
+    // Um pedido não pode passar dos 120 s do Nginx: sem nova tentativa automática.
+    client = new Anthropic({ apiKey, timeout: 100_000, maxRetries: 0 });
+    anthropicClients.set(apiKey, client);
+  }
+  return client;
+}
+
+async function callClaude(apiKey, model, messages, options = {}) {
+  const system = messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n');
+  const chat = messages.filter(m => m.role !== 'system');
+  // Recusa do classificador de segurança: Opus/Sonnet tentam o modelo de reserva indicado
+  // pela Anthropic (Haiku não tem reserva no servidor).
+  const withFallback = /^claude-(opus|sonnet)-/i.test(model);
+  const response = await getAnthropicClient(apiKey).beta.messages.create({
+    model,
+    max_tokens: 16000,
+    output_config: { effort: options.effort || 'medium' },
+    ...(system ? { system } : {}),
+    messages: chat,
+    ...(withFallback ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' } : {}),
+  });
+  if (response.stop_reason === 'refusal') {
+    throw Object.assign(new Error('A IA recusou este pedido. Reformule e tente de novo.'), { status: 422 });
+  }
+  return response.content.filter(block => block.type === 'text').map(block => block.text).join('').trim();
+}
+
+/**
+ * Provedor de IA do pedido: o Claude, sempre que houver chave (ANTHROPIC_API_KEY ou a
+ * integração Claude da tela de APIs). Sem chave do Claude, segue o provedor configurado
+ * (reserva até a chave ser cadastrada).
+ */
+async function resolveAiConfig(aiProvider, dbApiKey) {
+  let claudeKey = process.env.ANTHROPIC_API_KEY;
+  if (!claudeKey) {
+    const admin = getAdminClient();
+    if (admin) claudeKey = await fetchDbApiKey(admin, 'claude').catch(() => undefined);
+  }
+  if (claudeKey) return { url: 'https://api.anthropic.com/v1/messages', key: claudeKey, provider: 'claude' };
+  return getAiConfig(aiProvider, dbApiKey);
+}
+
+// Cada tentativa tem limite: o Nginx corta o pedido em 120 s, então um modelo travado não pode segurar a resposta
+const AI_ATTEMPT_TIMEOUT_MS = 45_000;
+
 async function callAi(ai, model, messages, options = {}) {
   const { temperature = 0.3, max_tokens = 2000, retries = 2 } = options;
-  
-  // Fallback chain: se o modelo falhar com 429, tenta modelos com cotas mais altas
+  const resolvedModel = resolveAiModel(model, ai.provider);
+  // Claude: uma chamada só (sem a cadeia de modelos e as novas tentativas do Gemini)
+  if (ai.provider === 'claude') return callClaude(ai.key, resolvedModel, messages, options);
+
+  // Fallback chain: se o modelo falhar com 429/404, tenta modelos com cotas mais altas
   const FALLBACK_MODELS = {
-    'gemini-2.5-flash': ['gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'],
-    'gemini-2.5-pro': ['gemini-2.5-flash', 'gemini-2.5-flash-lite'],
-    'gemini-1.5-flash-8b': ['gemini-2.5-flash-lite', 'gemini-2.0-flash-lite'],
-    'gemini-1.5-flash': ['gemini-2.5-flash', 'gemini-2.5-flash-lite'],
-    'gemini-1.5-pro': ['gemini-2.5-pro', 'gemini-2.5-flash'],
+    'gemini-pro-latest': ['gemini-3.5-flash', 'gemini-flash-lite-latest'],
+    'gemini-3.5-flash': ['gemini-flash-lite-latest', 'gemini-3.5-flash-lite'],
+    'gemini-flash-lite-latest': ['gemini-3.5-flash-lite', 'gemini-3.5-flash'],
   };
-  const modelsToTry = ai.provider === 'gemini' 
-    ? [model, ...(FALLBACK_MODELS[model] || [])]
-    : [model];
+  const modelsToTry = ai.provider === 'gemini'
+    ? [resolvedModel, ...(FALLBACK_MODELS[resolvedModel] || ['gemini-3.5-flash', 'gemini-flash-lite-latest'])]
+        .filter((m, i, all) => all.indexOf(m) === i)
+    : [resolvedModel];
 
   let lastError;
   for (const tryModel of modelsToTry) {
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
-        if (ai.provider === 'claude') {
-          const systemMsg = messages.find(m => m.role === 'system');
-          const otherMsgs = messages.filter(m => m.role !== 'system');
-          const res = await fetch(ai.url, {
-            method: 'POST',
-            headers: { 'x-api-key': ai.key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: tryModel, max_tokens, ...(systemMsg ? { system: systemMsg.content } : {}), messages: otherMsgs }),
-          });
-          if (!res.ok) throw new Error(`Claude error [${res.status}]: ${await res.text()}`);
-          const data = await res.json();
-          return data.content?.[0]?.text || '';
-        }
         const res = await fetch(ai.url, {
           method: 'POST',
+          signal: AbortSignal.timeout(AI_ATTEMPT_TIMEOUT_MS),
           headers: { Authorization: `Bearer ${ai.key}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: tryModel, messages, temperature, max_tokens }),
         });
@@ -4041,6 +4113,11 @@ async function callAi(ai, model, messages, options = {}) {
         return data.choices?.[0]?.message?.content || '';
       } catch (err) {
         lastError = err;
+        // Modelo que não respondeu a tempo: passa para o próximo da cadeia
+        if (err?.name === 'TimeoutError') {
+          console.warn(`[callAi] ${tryModel} sem resposta em ${AI_ATTEMPT_TIMEOUT_MS / 1000}s, tentando próximo modelo...`);
+          break;
+        }
         if (err.status === 429 || err.status === 404) break; // próximo modelo
         if (attempt === retries) throw err;
       }
@@ -4515,10 +4592,10 @@ ${contextData}`;
     // quando o front não manda os seus (sem provedor, getAiConfig ignora a chave do banco).
     const dbApiKeyConfig = apiKeyRes.rows?.[0]?.config;
     const dbApiKey = dbApiKeyConfig?.api_key_encrypted;
-    const ai = getAiConfig(aiProvider || dbApiKeyConfig?.ai_provider, dbApiKey);
-    const DEFAULT_CHAT_MODELS = { gemini: 'gemini-2.5-flash', openai: 'gpt-4o-mini', claude: 'claude-3-haiku-20240307' };
+    const ai = await resolveAiConfig(aiProvider || dbApiKeyConfig?.ai_provider, dbApiKey);
+    const DEFAULT_CHAT_MODELS = { gemini: 'gemini-3.5-flash', openai: 'gpt-4o-mini', claude: 'claude-opus-5-5' };
     const configuredModel = (!dbApiKeyConfig?.ai_provider || dbApiKeyConfig.ai_provider === ai.provider) ? dbApiKeyConfig?.ai_model : null;
-    const selectedModel = aiModel || configuredModel || DEFAULT_CHAT_MODELS[ai.provider] || 'gemini-2.5-flash';
+    const selectedModel = aiModel || configuredModel || DEFAULT_CHAT_MODELS[ai.provider] || 'gemini-3.5-flash';
     const answer = await callAi(ai, selectedModel, messages, { temperature: 0.3, max_tokens: 3000 });
 
     // Save chat messages to local DB
@@ -4639,8 +4716,8 @@ app.post('/api/generate-script', async (req, res) => {
       : [];
     const admin = getAdminClient();
     const dbApiKey = await fetchDbApiKey(admin, aiProvider);
-    const ai = getAiConfig(aiProvider, dbApiKey);
-    const selectedModel = sanitizeAiModelName(aiModel, ai.provider, 'gemini-2.5-flash');
+    const ai = await resolveAiConfig(aiProvider, dbApiKey);
+    const selectedModel = sanitizeAiModelName(aiModel, ai.provider, 'gemini-3.5-flash');
     const structure = VIDEO_TYPE_STRUCTURES[videoType] || VIDEO_TYPE_STRUCTURES.vendas;
     const format = FORMAT_CONTEXT[contentFormat] || FORMAT_CONTEXT.reels;
 
@@ -4694,8 +4771,8 @@ app.post('/api/generate-caption', async (req, res) => {
 
     const admin = getAdminClient();
     const dbApiKey = await fetchDbApiKey(admin, aiProvider);
-    const ai = getAiConfig(aiProvider, dbApiKey);
-    const model = sanitizeAiModelName(aiModel, ai.provider, 'gemini-2.5-flash');
+    const ai = await resolveAiConfig(aiProvider, dbApiKey);
+    const model = sanitizeAiModelName(aiModel, ai.provider, 'gemini-3.5-flash');
 
     const prompt = `Você é um social media profissional brasileiro. Gere uma LEGENDA curta para Instagram.\nRegras: Máximo 200 chars, CTA, 1-3 emojis, sem hashtags.\n${clientName ? `CLIENTE: ${clientName}` : ''}\n${niche ? `NICHO: ${niche}` : ''}\nROTEIRO:\n${scriptContent}\n\nResponda APENAS com a legenda.`;
 
@@ -4711,7 +4788,7 @@ app.post('/api/generate-caption', async (req, res) => {
       const data = await response.json();
       caption = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
     } else {
-      caption = await callAi(ai, model, [{ role: 'user', content: prompt }], { temperature: 0.7, max_tokens: 300 });
+      caption = await callAi(ai, model, [{ role: 'user', content: prompt }], { temperature: 0.7, max_tokens: 300, effort: 'low' });
     }
     if (caption.length > 200) caption = caption.slice(0, 197) + '...';
     res.json({ caption });
@@ -13365,17 +13442,26 @@ app.post('/api/active-recordings/:recordingId/finalize', async (req, res) => {
 });
 
 // ─── Production Assistant (AI Mascot) ──────────────────────
+// Foguetinho: cada aba aberta pede um recado ao abrir e a cada hora. Um recado por pessoa a
+// cada 20 min basta (o resto sai do cache), e falha da IA vai para o log no máximo a cada 10 min.
+const ASSISTANT_CACHE_MS = 20 * 60 * 1000;
+const assistantCache = new Map();
+let assistantErrorLoggedAt = 0;
+
 app.post('/api/production-assistant', async (req, res) => {
   try {
     const { user } = await verifyUser(req);
+    const cachedTip = assistantCache.get(String(user.id));
+    if (cachedTip && Date.now() - cachedTip.at < ASSISTANT_CACHE_MS) return res.json({ message: cachedTip.message, cached: true });
     const admin = getAdminClient();
     if (!admin) return res.status(500).json({ error: 'DB not available' });
     const { context, aiModel, aiProvider } = req.body;
     if (!context) return res.status(400).json({ error: 'Context is required' });
 
-    const selectedModel = aiModel || 'gemini-2.5-flash';
+    // Recado curto: o modelo leve basta
+    const selectedModel = aiModel || 'gemini-flash-lite-latest';
     const dbApiKey = await fetchDbApiKey(admin, aiProvider);
-    const ai = getAiConfig(aiProvider, dbApiKey);
+    const ai = await resolveAiConfig(aiProvider, dbApiKey);
 
     const systemPrompt = `Você é o "Foguetinho", o mascote animado da Agência Pulse — um foguetinho com olhos expressivos.
 Sua missão é manter a produção fluindo! Você monitora prazos, deadlines e cobranças de maneira LEVE, DIVERTIDA e MOTIVACIONAL.
@@ -13405,7 +13491,9 @@ Gere uma mensagem curta e divertida para este momento.`;
       { role: 'user', content: userPrompt },
     ];
 
-    const message = await callAi(ai, selectedModel, messages, { temperature: 0.8, max_tokens: 300 });
+    const message = await callAi(ai, selectedModel, messages, { temperature: 0.8, max_tokens: 1200, effort: 'low' });
+    assistantCache.set(String(user.id), { at: Date.now(), message });
+    if (assistantCache.size > 500) assistantCache.delete(assistantCache.keys().next().value);
     res.json({ message });
   } catch (error) {
     // Sem chave de IA configurada não é um erro de servidor: responde 200 desativado
@@ -13413,7 +13501,10 @@ Gere uma mensagem curta e divertida para este momento.`;
     if (String(error?.message || '').includes('Nenhuma API key de IA')) {
       return res.json({ message: null, disabled: true, reason: 'ai_not_configured' });
     }
-    console.error('Production assistant error:', error);
+    if (Date.now() - assistantErrorLoggedAt > 10 * 60 * 1000) {
+      assistantErrorLoggedAt = Date.now();
+      console.error('Production assistant error:', error?.message || error);
+    }
     res.status(500).json({ error: error.message });
   }
 });

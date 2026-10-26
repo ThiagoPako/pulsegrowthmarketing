@@ -28,6 +28,8 @@ import {
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { LeadHarvester } from '@/components/crm/LeadHarvester';
 import { CRMBanner } from '@/components/crm/CRMBanner';
+import { useCity } from '@/contexts/CityContext';
+import { cityCodeFrom, hasPromo66 } from '@/services/publicPlans';
 
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -1167,6 +1169,14 @@ function LeadDetailsDialog({
   trigger?: ReactNode,
 }) {
   const [note, setNote] = useState('');
+  const { activeCity } = useCity();
+  // Links da proposta: não existe plano 'mensal' (caía na lista sem lead nem cidade).
+  // Vão para a lista de planos da cidade do lead, levando o lead e a oferta 6+6.
+  const proposalLinkQuery = (() => {
+    const qs = new URLSearchParams({ city: cityCodeFrom(lead.city) || activeCity, lead: lead.id });
+    if (hasPromo66(lead)) qs.set('type', 'promo_6_6');
+    return qs.toString();
+  })();
   const { data: notes = [] } = useQuery({
     queryKey: ['lead_notes', lead.id],
     queryFn: async () => {
@@ -1274,7 +1284,7 @@ function LeadDetailsDialog({
                       variant="outline"
                       className="h-8 text-[10px] bg-primary/5 text-primary border-primary/20 hover:bg-primary/10"
                       onClick={() => {
-                        const url = `${window.location.origin}/apresentacao/mensal?lead=${lead.id}${lead.source_tag === 'promo_6_6' ? '&type=promo_6_6' : ''}`;
+                        const url = `${window.location.origin}/apresentacao?${proposalLinkQuery}`;
                         window.open(url, '_blank');
                       }}
                     >
@@ -1285,7 +1295,7 @@ function LeadDetailsDialog({
                       variant="outline"
                       className="h-8 text-[10px] bg-primary/5 text-primary border-primary/20 hover:bg-primary/10"
                       onClick={async () => {
-                        const url = `${window.location.origin}/p/planos/mensal?lead=${lead.id}${lead.source_tag === 'promo_6_6' ? '&type=promo_6_6' : ''}`;
+                        const url = `${window.location.origin}/p/planos?${proposalLinkQuery}`;
                         await navigator.clipboard.writeText(url);
                         toast.success('Link público copiado!');
                       }}
@@ -1600,6 +1610,16 @@ function MeetingActions({ lead, leads, onUpdate, onSetRefreshKey, scheduleOnly =
 
 function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Partial<Lead> & { id: string }) => void }) {
   const [open, setOpen] = useState(false);
+  // Oferta 6+6 em referral_info.promo_66: a origem (indicação, colheita...) fica em source_tag.
+  const [promo66, setPromo66] = useState(() => hasPromo66(lead));
+  const [sourceTag, setSourceTag] = useState(lead.source_tag || '');
+  const [promoValue, setPromoValue] = useState<string>(String((lead.referral_info as any)?.promo_value ?? ''));
+  useEffect(() => {
+    if (!open) return;
+    setPromo66(hasPromo66(lead));
+    setSourceTag(lead.source_tag || '');
+    setPromoValue(String((lead.referral_info as any)?.promo_value ?? ''));
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -1625,10 +1645,11 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
             city: formData.get('city') as string,
             description: formData.get('description') as string,
             status: formData.get('status') as LeadStatus,
-            source_tag: formData.get('source_tag') as string,
+            source_tag: sourceTag || null,
             referral_info: {
               ...lead.referral_info,
-              promo_value: formData.get('promo_value') ? Number(formData.get('promo_value')) : undefined
+              promo_66: promo66,
+              promo_value: promoValue ? Number(promoValue) : undefined
             } as any
           });
           setOpen(false);
@@ -1700,34 +1721,30 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
                 <Button 
                   type="button"
                   size="sm"
-                  variant={lead.source_tag === 'promo_6_6' ? 'default' : 'outline'}
+                  variant={promo66 ? 'default' : 'outline'}
                   className="h-8 text-[10px]"
                   onClick={() => {
-                    const input = document.getElementById('edit-source-tag') as HTMLInputElement;
-                    const promoValueInput = document.getElementById('edit-promo-value') as HTMLInputElement;
-                    
-                    if (lead.source_tag === 'promo_6_6') {
-                      if (input) input.value = 'manual';
+                    if (promo66) {
+                      setPromo66(false);
+                      // Lead antigo guardava a oferta em source_tag: a origem real já tinha se perdido.
+                      if (sourceTag === 'promo_6_6') setSourceTag('manual');
                       toast.success('Oferta Desativada');
                     } else {
-                      if (input) input.value = 'promo_6_6';
-                      // Se não tiver valor promo ainda, sugere 50% do valor atual
-                      if (promoValueInput && !promoValueInput.value) {
+                      setPromo66(true);
+                      // Se não tiver valor promo ainda, sugere 80% do valor atual
+                      if (!promoValue) {
                         const baseVal = Number((document.getElementById('edit-value') as HTMLInputElement)?.value || 0);
-                        promoValueInput.value = (baseVal * 0.8).toFixed(2);
+                        if (baseVal > 0) setPromoValue((baseVal * 0.8).toFixed(2));
                       }
                       toast.success('Oferta 6+6 Ativada!');
                     }
-                    // Força re-render para mostrar o campo de valor se necessário (na prática o usuário verá o campo agora)
-                    const container = document.getElementById('promo-value-container');
-                    if (container) container.classList.toggle('hidden', input?.value !== 'promo_6_6');
                   }}
                 >
-                  {lead.source_tag === 'promo_6_6' ? 'Ativado' : 'Ativar'}
+                  {promo66 ? 'Ativado' : 'Ativar'}
                 </Button>
               </div>
               
-              <div id="promo-value-container" className={lead.source_tag === 'promo_6_6' ? '' : 'hidden'}>
+              <div className={promo66 ? '' : 'hidden'}>
                 <Label htmlFor="edit-promo-value" className="text-[10px] uppercase font-bold text-muted-foreground">Valor nos primeiros 6 meses</Label>
                 <div className="relative mt-1">
                   <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
@@ -1737,14 +1754,14 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
                     type="number" 
                     step="0.01" 
                     placeholder="Valor promocional"
-                    defaultValue={(lead.referral_info as any)?.promo_value || ''} 
+                    value={promoValue}
+                    onChange={(e) => setPromoValue(e.target.value)}
                     className="pl-8 h-8 text-sm bg-background" 
                   />
                 </div>
                 <p className="text-[9px] text-muted-foreground mt-1">Este valor será aplicado automaticamente nas primeiras 6 parcelas da proposta anual.</p>
               </div>
               
-              <input type="hidden" id="edit-source-tag" name="source_tag" defaultValue={lead.source_tag || ''} />
             </div>
           </div>
           <Button type="submit" className="w-full mt-4">

@@ -667,6 +667,93 @@ async function incrementPromotionsForClosedLead(lead) {
   }
 }
 
+// ─── Promoções e oferta 6+6 na apresentação pública de planos (/p/planos) ───
+// A página é pública e lia plan_promotions/crm_leads pelo /api/db/query, que exige login:
+// o cliente nunca via a promoção, o link exclusivo nem o valor combinado no CRM.
+const PUBLIC_PROMO_COLUMNS = `id, title, discount_percent, duration_months, applies_to, plan_key, city,
+  active, exclusive, starts_at, ends_at, max_redemptions, redemptions_count`;
+const PUBLIC_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function publicPlanKey(value) {
+  const key = String(value || '').trim().toLowerCase();
+  return /^[a-z0-9_-]{1,40}$/.test(key) ? key : null;
+}
+
+// Promoções gerais (não exclusivas) ativas, no período e com vaga, da cidade e do plano.
+app.get('/api/public/plan-promotions', async (req, res) => {
+  try {
+    await ensurePlanPromotionsTable();
+    const city = assertValidCity(req.query.city || 'minacu');
+    const planKey = publicPlanKey(req.query.plan);
+    const { rows } = await pool.query(
+      `SELECT ${PUBLIC_PROMO_COLUMNS} FROM plan_promotions
+        WHERE active = true AND COALESCE(exclusive, false) = false
+          AND (starts_at IS NULL OR starts_at <= $1::date)
+          AND (ends_at IS NULL OR ends_at >= $1::date)
+          AND (max_redemptions IS NULL OR COALESCE(redemptions_count, 0) < max_redemptions)
+          AND (city IS NULL OR btrim(city::text) = '' OR ${cityScopeExpression('city')} = $2)
+          AND ($3::text IS NULL OR plan_key IS NULL OR plan_key = $3)
+        ORDER BY discount_percent DESC`,
+      [brtDateString(), city, planKey]
+    );
+    res.json({ promotions: rows });
+  } catch (e) {
+    console.error('[public plan-promotions] error:', e?.message || e);
+    res.status(500).json({ error: 'Erro ao carregar promoções' });
+  }
+});
+
+// Link exclusivo (?promo=<id>): vale pelo id mesmo sendo exclusiva, mas confere período, vagas e plano.
+app.get('/api/public/plan-promotions/:id', async (req, res) => {
+  try {
+    const id = String(req.params.id || '');
+    if (!PUBLIC_UUID_RE.test(id)) return res.json({ promotion: null });
+    await ensurePlanPromotionsTable();
+    const planKey = publicPlanKey(req.query.plan);
+    const { rows } = await pool.query(
+      `SELECT ${PUBLIC_PROMO_COLUMNS} FROM plan_promotions
+        WHERE id = $1
+          AND (starts_at IS NULL OR starts_at <= $2::date)
+          AND (ends_at IS NULL OR ends_at >= $2::date)
+          AND (max_redemptions IS NULL OR COALESCE(redemptions_count, 0) < max_redemptions)
+          AND ($3::text IS NULL OR plan_key IS NULL OR plan_key = $3)
+        LIMIT 1`,
+      [id, brtDateString(), planKey]
+    );
+    res.json({ promotion: rows[0] || null });
+  } catch (e) {
+    console.error('[public plan-promotion] error:', e?.message || e);
+    res.status(500).json({ error: 'Erro ao carregar a promoção' });
+  }
+});
+
+// Oferta 6+6 combinada no CRM (link com ?lead=<id>): devolve só o valor promocional,
+// nunca os dados do lead.
+app.get('/api/public/plan-offer/:leadId', async (req, res) => {
+  try {
+    const id = String(req.params.leadId || '');
+    if (!PUBLIC_UUID_RE.test(id)) return res.json({ offer: null });
+    await ensureCrmLeadsColumns();
+    const { rows } = await pool.query(
+      'SELECT source_tag, referral_info FROM crm_leads WHERE id = $1 LIMIT 1',
+      [id]
+    );
+    const lead = rows[0];
+    let info = lead?.referral_info || {};
+    if (typeof info === 'string') {
+      try { info = JSON.parse(info); } catch { info = {}; }
+    }
+    // promo_66 é o campo novo; leads antigos marcavam a oferta em source_tag.
+    const active = info?.promo_66 === true || (info?.promo_66 === undefined && lead?.source_tag === 'promo_6_6');
+    if (!lead || !active) return res.json({ offer: null });
+    const promoValue = Number(info?.promo_value);
+    res.json({ offer: { promo_value: Number.isFinite(promoValue) && promoValue > 0 ? promoValue : null } });
+  } catch (e) {
+    console.error('[public plan-offer] error:', e?.message || e);
+    res.status(500).json({ error: 'Erro ao carregar a oferta' });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════
 // LINK SHORTENER TABLES
 // ═══════════════════════════════════════════════════════════════

@@ -29,7 +29,8 @@ interface SlotScriptManagerProps {
   clientId: string;
   campaignName: string;
   /** Chamado quando o vínculo muda, para recarregar a campanha. */
-  onChanged: () => void;
+  /** linked: roteiro vinculado (scriptId) ou desvinculado (null) nesta ação. */
+  onChanged: (linked?: { scriptId: string | null }) => void;
 }
 
 const VIDEO_TYPES = [
@@ -160,7 +161,7 @@ export default function SlotScriptManager({
       await markSlotLinked(id);
       toast.success('Roteiro criado e vinculado à campanha');
       await loadScript();
-      onChanged();
+      onChanged({ scriptId: id });
     } catch (e: any) {
       toast.error(e?.message || 'Erro ao criar roteiro');
     } finally {
@@ -204,7 +205,7 @@ export default function SlotScriptManager({
       toast.success('Roteiro anexado ao card da campanha');
       setMode('create');
       await loadScript();
-      onChanged();
+      onChanged({ scriptId: existing.id });
     } catch (e: any) {
       toast.error(e?.message || 'Erro ao anexar roteiro');
     } finally {
@@ -223,7 +224,7 @@ export default function SlotScriptManager({
       setContent('');
       setCaption('');
       setTitle(slotTitle || '');
-      onChanged();
+      onChanged({ scriptId: null });
     } catch (e: any) {
       toast.error(e?.message || 'Erro ao desvincular');
     } finally {

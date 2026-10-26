@@ -10,6 +10,7 @@ import {
 } from '@/lib/bioTheme';
 import { normalizeBioSections } from '@/lib/bioSections';
 import BioSectionsView from '@/components/bio/BioSectionsView';
+import { safeLinkHref } from '@/lib/safeUrl';
 
 const API_BASE = 'https://agenciapulse.tech';
 
@@ -45,7 +46,8 @@ function hrefFor(button: BioButton) {
     const digits = String(button.value || '').replace(/\D/g, '');
     return `https://wa.me/${digits}`;
   }
-  return button.value;
+  // Só http(s), tel: e mailto: — um valor 'javascript:' rodaria na página pública.
+  return safeLinkHref(button.value);
 }
 
 export function BioButtonList({

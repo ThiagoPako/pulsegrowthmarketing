@@ -872,6 +872,125 @@ async function ensureShortLinksTables() {
 }
 ensureShortLinksTables();
 
+/** Destino de redirecionamento aceito: só http(s) (um 'javascript:' rodaria no domínio do sistema). */
+function isSafeRedirectUrl(value) {
+  try {
+    const url = new URL(String(value || '').trim());
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function publicSlugParam(value) {
+  return String(value || '').trim().toLowerCase().slice(0, 120);
+}
+
+// Link curto /r/:slug é público: antes a página lia short_links pelo /api/db/query, que exige
+// login, e o visitante via "Link inválido". Aqui busca o link ativo, conta o clique e devolve
+// só o destino.
+app.post('/api/public/short-links/:slug', async (req, res) => {
+  try {
+    await ensureShortLinksTables();
+    const slug = publicSlugParam(req.params.slug);
+    if (!slug) return res.status(404).json({ error: 'Link não encontrado' });
+    const { rows } = await pool.query(
+      'SELECT id, original_url, city FROM short_links WHERE lower(slug) = $1 AND active IS NOT FALSE LIMIT 1',
+      [slug]
+    );
+    const link = rows[0];
+    if (!link || !isSafeRedirectUrl(link.original_url)) return res.status(404).json({ error: 'Link não encontrado' });
+    pool.query(
+      'INSERT INTO short_link_clicks (short_link_id, user_agent, referrer, city) VALUES ($1, $2, $3, $4)',
+      [
+        link.id,
+        String(req.headers['user-agent'] || '').slice(0, 500) || null,
+        String(req.body?.referrer || '').slice(0, 1000) || null,
+        link.city || null,
+      ]
+    ).catch((error) => console.error('[short-links] falha ao contar clique:', error?.message || error));
+    res.json({ original_url: link.original_url });
+  } catch (error) {
+    console.error('[short-links] public error:', error?.message || error);
+    res.status(500).json({ error: 'Falha ao abrir o link' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// REGULAMENTOS (/regulamentos e página pública /regulamento/:slug)
+// ═══════════════════════════════════════════════════════════════
+// As tabelas só existiam na migração do Supabase; na VPS a tela dava "tabela não liberada".
+// created_by sem FK: a VPS não tem o schema auth.
+let regulationsTablesPromise = null;
+async function ensureRegulationsTables() {
+  if (regulationsTablesPromise) return regulationsTablesPromise;
+  regulationsTablesPromise = (async () => {
+    const { rows: [existing] } = await pool.query(
+      `SELECT to_regclass('public.regulations') IS NOT NULL AS regulations,
+              to_regclass('public.regulation_clicks') IS NOT NULL AS clicks`
+    );
+    if (existing.regulations && existing.clicks) return;
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS regulations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        slug TEXT NOT NULL UNIQUE,
+        title TEXT NOT NULL,
+        client_name TEXT NOT NULL,
+        content TEXT,
+        external_url TEXT,
+        city TEXT NOT NULL DEFAULT 'minacu',
+        active BOOLEAN NOT NULL DEFAULT true,
+        created_by UUID,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS idx_regulations_city ON regulations(city);
+
+      CREATE TABLE IF NOT EXISTS regulation_clicks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        regulation_id UUID NOT NULL REFERENCES regulations(id) ON DELETE CASCADE,
+        user_agent TEXT,
+        referrer TEXT,
+        clicked_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS idx_regulation_clicks_reg ON regulation_clicks(regulation_id);
+    `);
+  })().catch((error) => {
+    regulationsTablesPromise = null;
+    throw error;
+  });
+  return regulationsTablesPromise;
+}
+ensureRegulationsTables().catch((error) => console.error('ensureRegulationsTables error:', error?.message || error));
+
+// Regulamento público: só os campos da página, de regulamento ativo, e conta o acesso.
+app.post('/api/public/regulations/:slug', async (req, res) => {
+  try {
+    await ensureRegulationsTables();
+    const slug = publicSlugParam(req.params.slug);
+    if (!slug) return res.status(404).json({ error: 'Regulamento não encontrado' });
+    const { rows } = await pool.query(
+      `SELECT id, slug, title, client_name, content, external_url, active
+         FROM regulations WHERE lower(slug) = $1 LIMIT 1`,
+      [slug]
+    );
+    const row = rows[0];
+    // inactive: a página não mostra nem o modelo fixo de um regulamento desativado.
+    if (!row || !row.active) return res.json({ regulation: null, inactive: !!row });
+    const { active, ...regulation } = row;
+    pool.query(
+      'INSERT INTO regulation_clicks (regulation_id, user_agent, referrer) VALUES ($1, $2, $3)',
+      [regulation.id, String(req.headers['user-agent'] || '').slice(0, 500) || null, String(req.body?.referrer || '').slice(0, 1000) || null]
+    ).catch((error) => console.error('[regulations] falha ao contar acesso:', error?.message || error));
+    const { id, ...publicFields } = regulation;
+    if (publicFields.external_url && !isSafeRedirectUrl(publicFields.external_url)) publicFields.external_url = null;
+    res.json({ regulation: publicFields });
+  } catch (error) {
+    console.error('[regulations] public error:', error?.message || error);
+    res.status(500).json({ error: 'Falha ao carregar o regulamento' });
+  }
+});
+
 
 // BANCO DE DADOS DE CLIENTES (Profissionais + Unidades/Rede)
 // ═══════════════════════════════════════════════════════════════
@@ -10507,8 +10626,16 @@ app.post('/api/endo-daily-tasks-notify', async (req, res) => {
     let tasksQuery = admin.from('endomarketing_partner_tasks').select('*, clients(company_name)').eq('date', today).eq('status', 'pendente');
     const requestedPartnerId = req.body?.partner_id;
     if (requestedPartnerId) tasksQuery = tasksQuery.eq('partner_id', requestedPartnerId);
-    const { data: todayTasks } = await tasksQuery;
-    if (!todayTasks?.length) return res.json({ success: true, message: 'Sem tarefas para hoje', sent: 0 });
+    const { data: pendingToday } = await tasksQuery;
+    // Só tarefas de contrato ativo: contrato encerrado não manda mais tarefa para o parceiro.
+    const contractIds = [...new Set((pendingToday || []).map(t => t.contract_id).filter(Boolean))];
+    let activeContractIds = new Set();
+    if (contractIds.length) {
+      const { data: activeContracts } = await admin.from('client_endomarketing_contracts').select('id').in('id', contractIds).eq('status', 'ativo');
+      activeContractIds = new Set((activeContracts || []).map(c => c.id));
+    }
+    const todayTasks = (pendingToday || []).filter(t => !t.contract_id || activeContractIds.has(t.contract_id));
+    if (!todayTasks.length) return res.json({ success: true, message: 'Sem tarefas para hoje', sent: 0 });
 
     const tasksByPartner = new Map();
     for (const task of todayTasks) { if (!task.partner_id) continue; const arr = tasksByPartner.get(task.partner_id) || []; arr.push(task); tasksByPartner.set(task.partner_id, arr); }
@@ -10565,6 +10692,7 @@ const ALLOWED_TABLES = [
   'campaigns','campaign_slots',
   'story_editing_sessions','script_requests','manual_video_tasks','plan_promotions',
   'client_professionals','client_units','client_collaborators','short_links','client_bio_links','client_bio_buttons',
+  'short_link_clicks','regulations','regulation_clicks',
   'warehouse_items','warehouse_movements','structure_investments','recurring_revenues',
   'salary_bonuses',
 
@@ -10602,6 +10730,9 @@ const TABLES_WITH_CITY = new Set([
   'crm_leads','crm_notes',
   'plans',
   'story_editing_sessions','script_requests','manual_video_tasks','client_bio_links','client_bio_buttons',
+  'short_links','short_link_clicks','regulations',
+  // campanhas: a cidade vem do cliente (trg_global_client_city); sem a coluna, nada muda
+  'campaigns',
 ]);
 
 // Cache de quais tabelas realmente possuem a coluna `city` no schema atual.
@@ -11012,7 +11143,15 @@ const DB_QUERY_TABLE_RULES = {
   // bônus de salário (Financeiro → Salários); o banner do colaborador usa /api/me/salary-bonuses
   salary_bonuses: { read: 'team', write: 'team' },
   expense_categories: { read: DB_QUERY_ENDO_ROLES, write: DB_QUERY_ENDO_ROLES },
+  // Encurtador e Regulamentos (menu de admin e social_media); o clique entra pela rota pública
+  short_links: { write: 'admin' },
+  short_link_clicks: { read: 'admin', write: 'admin' },
+  regulations: { write: 'admin' },
+  regulation_clicks: { read: 'admin', write: 'admin' },
 };
+
+// Colunas de destino de redirecionamento: só http(s) — um 'javascript:' rodaria no domínio do sistema.
+const DB_QUERY_REDIRECT_URL_COLUMNS = { short_links: 'original_url', regulations: 'external_url' };
 
 // Artes: excluir um card (e o histórico dele) é de admin/social_media, como no detalhe da
 // tarefa. Apagar em massa — filtro que não é o id de um card, como o "Limpar Banco de Dados"
@@ -11138,6 +11277,16 @@ async function enforceDbQueryRules({ safeTable, operation, data, filters, user, 
     if (!bySingleCard && !(await isStrictAdminUser(user))) {
       throw forbidden('Só um administrador pode apagar várias artes de uma vez.');
     }
+  }
+
+  if (DB_QUERY_REDIRECT_URL_COLUMNS[safeTable] && (operation === 'insert' || operation === 'update' || operation === 'upsert')) {
+    const column = DB_QUERY_REDIRECT_URL_COLUMNS[safeTable];
+    const items = Array.isArray(data) ? data : [data];
+    const badUrl = items.some((item) => {
+      const value = dbQueryRowValue(item, column);
+      return value !== undefined && value !== null && String(value).trim() !== '' && !isSafeRedirectUrl(value);
+    });
+    if (badUrl) throw dbQueryError('Use um endereço que comece com http:// ou https://.', 400);
   }
 
   // Token de publicação só entra pelas rotas da Meta (que validam a conta); pelo genérico
@@ -11353,6 +11502,10 @@ app.post('/api/db/query', async (req, res) => {
 
     if (safeTable === 'short_links' || safeTable === 'short_link_clicks') {
       await ensureShortLinksTables();
+    }
+
+    if (safeTable === 'regulations' || safeTable === 'regulation_clicks') {
+      await ensureRegulationsTables();
     }
 
     if (safeTable === 'salary_bonuses') {
@@ -13884,10 +14037,13 @@ async function insertCampaignCoupons(db, campaignId, count) {
   for (let round = 0; round < 5 && inserted < count; round += 1) {
     const codes = new Set();
     while (codes.size < count - inserted) codes.add(generateCouponCode());
+    // Sem ON CONFLICT (code): num banco sem índice único em discount_coupons.code (como o de
+    // teste com o esquema da VPS) o ON CONFLICT falha ("no unique or exclusion constraint") e
+    // nenhuma campanha é criada. O NOT EXISTS funciona com ou sem o índice.
     const { rowCount } = await db.query(
       `INSERT INTO discount_coupons (campaign_id, code)
-       SELECT $1, unnest($2::text[])
-       ON CONFLICT (code) DO NOTHING`,
+       SELECT $1, x.code FROM unnest($2::text[]) AS x(code)
+        WHERE NOT EXISTS (SELECT 1 FROM discount_coupons d WHERE d.code = x.code)`,
       [campaignId, [...codes]]
     );
     inserted += rowCount || 0;
@@ -13905,6 +14061,35 @@ function maskClaimPhone(phone) {
   const digits = String(phone || '').replace(/\D/g, '');
   if (!digits) return phone || null;
   return `•••• ${digits.slice(-4)}`;
+}
+
+/** Telefone só com dígitos, sem o 55 do começo (10 ou 11 dígitos), para comparar resgates. */
+function normalizeClaimPhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  return digits.length >= 12 && digits.startsWith('55') ? digits.slice(2) : digits;
+}
+// Mesma normalização no banco (para os telefones já gravados como '(62) 99999-9999').
+const CLAIM_PHONE_SQL = `regexp_replace(regexp_replace(coalesce(claimed_by_phone, ''), '\\D', '', 'g'), '^55(\\d{10,11})$', '\\1')`;
+
+/**
+ * Quem consulta ou baixa cupons de uma loja: a equipe (JWT) ou o cliente logado no portal
+ * (x-portal-token) dessa mesma loja. Antes as duas rotas eram públicas: com o client_id
+ * (listado em /api/discount-clubs) dava para ler os códigos e queimar os cupons.
+ * Sem sessão: no modo 'log' do portal passa (com aviso no log), no 'enforce' responde 401.
+ * Devolve { kind: 'team'|'client'|'anonymous', user? } ou null quando já respondeu.
+ */
+async function resolveDiscountStoreAccess(req, res, clientId, route) {
+  const caller = await resolvePortalCaller(req);
+  if (caller?.kind === 'team') return { kind: 'team', user: caller.user };
+  if (caller?.kind === 'client') {
+    if (String(caller.clientId) !== String(clientId || '')) {
+      res.status(403).json({ error: 'Esta loja não pertence ao seu acesso.', valid: false });
+      return null;
+    }
+    return { kind: 'client' };
+  }
+  if (rejectPortalCallWithoutSession(res, route, 'discount')) return null;
+  return { kind: 'anonymous' };
 }
 
 // List all clients with active discount campaigns (public)
@@ -13932,12 +14117,50 @@ app.get('/api/discount-clubs', async (req, res) => {
   }
 });
 
+// Admin (Clube de Descontos): todas as campanhas dos clientes da cidade ativa, com as
+// contagens, numa consulta só (antes a tela fazia uma chamada por cliente e baixava todos
+// os cupons só para ler as campanhas).
+app.get('/api/discount-campaigns', async (req, res) => {
+  let user;
+  try {
+    ({ user } = await verifyAdmin(req));
+  } catch (authError) {
+    return res.status(discountAuthErrorStatus(authError)).json({ error: authError.message || 'Unauthorized' });
+  }
+  try {
+    const activeCity = await resolveActiveCity(req, user.id, user);
+    const { rows: campaigns } = await pool.query(
+      `SELECT dc.*,
+              COALESCE(cnt.available, 0)::int AS available_coupons,
+              COALESCE(cnt.claimed, 0)::int AS claimed_coupons,
+              COALESCE(cnt.used, 0)::int AS used_coupons
+         FROM discount_campaigns dc
+         JOIN clients c ON c.id = dc.client_id
+         LEFT JOIN LATERAL (
+           SELECT COUNT(*) FILTER (WHERE status = 'available') AS available,
+                  COUNT(*) FILTER (WHERE status = 'claimed') AS claimed,
+                  COUNT(*) FILTER (WHERE status = 'used') AS used
+             FROM discount_coupons WHERE campaign_id = dc.id
+         ) cnt ON true
+        WHERE ${cityVisibilityExpression('c.city', '$1')}
+        ORDER BY dc.created_at DESC`,
+      [activeCity]
+    );
+    res.json({ campaigns });
+  } catch (e) {
+    console.error('GET /api/discount-campaigns (admin) error:', e);
+    res.status(e?.statusCode || 500).json({ error: e.message });
+  }
+});
+
 // Get campaigns for a client (public - no auth)
 app.get('/api/discount-campaigns/:clientId', async (req, res) => {
   try {
     const { clientId } = req.params;
     const { rows: campaigns } = await pool.query(
-      `SELECT dc.*, c.company_name, c.logo_url, c.color
+      `SELECT dc.*, c.company_name, c.logo_url, c.color,
+              (SELECT COUNT(*)::int FROM discount_coupons dcoup
+                WHERE dcoup.campaign_id = dc.id AND dcoup.status = 'available') AS available_coupons
        FROM discount_campaigns dc
        JOIN clients c ON c.id = dc.client_id
        WHERE dc.client_id = $1 AND dc.is_active = true
@@ -13945,14 +14168,6 @@ app.get('/api/discount-campaigns/:clientId', async (req, res) => {
        ORDER BY dc.created_at DESC`,
       [clientId]
     );
-    // For each campaign, get available coupon count
-    for (const camp of campaigns) {
-      const { rows: [countRow] } = await pool.query(
-        `SELECT COUNT(*) as available FROM discount_coupons WHERE campaign_id = $1 AND status = 'available'`,
-        [camp.id]
-      );
-      camp.available_coupons = parseInt(countRow.available);
-    }
     res.json({ campaigns });
   } catch (e) {
     console.error('GET /api/discount-campaigns error:', e);
@@ -13962,23 +14177,56 @@ app.get('/api/discount-campaigns/:clientId', async (req, res) => {
 
 // Claim a coupon (public - mini registration)
 app.post('/api/discount-claim', async (req, res) => {
+  let db = null;
   try {
-    const { campaign_id, name, phone } = req.body;
+    const campaign_id = String(req.body?.campaign_id || '').trim();
+    const name = String(req.body?.name || '').trim().slice(0, 80);
+    const phone = String(req.body?.phone || '').trim().slice(0, 30);
     if (!campaign_id || !name || !phone) {
       return res.status(400).json({ error: 'campaign_id, name e phone são obrigatórios' });
     }
+    if (!PUBLIC_UUID_RE.test(campaign_id)) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const phoneKey = normalizeClaimPhone(phone);
+    if (phoneKey.length < 10 || phoneKey.length > 11) {
+      return res.status(400).json({ error: 'Informe um WhatsApp válido com DDD.' });
+    }
 
-    // Check if this phone already claimed from this campaign
-    const { rows: existing } = await pool.query(
-      `SELECT id FROM discount_coupons WHERE campaign_id = $1 AND claimed_by_phone = $2 AND status != 'available'`,
-      [campaign_id, phone]
+    // Limite por IP (folgado: clientes na mesma rede da loja) e por telefone: cada resgate
+    // manda WhatsApp para o número informado.
+    const ip = getClientIp(req);
+    if ((!isLoopbackIp(ip) && promoRateLimited(`discount-claim:${ip}`, 30))
+      || promoRateLimited(`discount-claim-phone:${phoneKey}`, 10, 10 * 60_000)) {
+      return res.status(429).json({ error: 'Muitas tentativas. Aguarde alguns minutos.' });
+    }
+
+    db = await pool.connect();
+    await db.query('BEGIN');
+    // Um resgate por vez por telefone e campanha: a checagem de duplicado e a baixa ficam atômicas.
+    await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`discount-claim:${campaign_id}:${phoneKey}`]);
+
+    // Campanha desativada ou vencida não entrega cupom (antes só a listagem filtrava).
+    const { rows: [campaignRow] } = await db.query(
+      `SELECT id FROM discount_campaigns
+        WHERE id = $1 AND is_active = true AND (expires_at IS NULL OR expires_at > NOW())`,
+      [campaign_id]
+    );
+    if (!campaignRow) {
+      await db.query('ROLLBACK');
+      return res.status(410).json({ error: 'Esta campanha não está mais disponível.' });
+    }
+
+    // Check if this phone already claimed from this campaign (qualquer formato do número)
+    const { rows: existing } = await db.query(
+      `SELECT id FROM discount_coupons WHERE campaign_id = $1 AND status != 'available' AND ${CLAIM_PHONE_SQL} = $2 LIMIT 1`,
+      [campaign_id, phoneKey]
     );
     if (existing.length > 0) {
+      await db.query('ROLLBACK');
       return res.status(409).json({ error: 'Você já resgatou um cupom desta campanha' });
     }
 
     // Find first available coupon and claim it atomically
-    const { rows: claimed } = await pool.query(
+    const { rows: claimed } = await db.query(
       `UPDATE discount_coupons
        SET status = 'claimed', claimed_by_name = $2, claimed_by_phone = $3, claimed_at = NOW()
        WHERE id = (
@@ -13993,14 +14241,18 @@ app.post('/api/discount-claim', async (req, res) => {
     );
 
     if (claimed.length === 0) {
+      await db.query('ROLLBACK');
       return res.status(410).json({ error: 'Todos os cupons desta campanha já foram resgatados' });
     }
 
     // Update campaign claimed count
-    await pool.query(
+    await db.query(
       `UPDATE discount_campaigns SET coupons_claimed = coupons_claimed + 1, updated_at = NOW() WHERE id = $1`,
       [campaign_id]
     );
+    await db.query('COMMIT');
+    db.release();
+    db = null;
 
     // Get campaign + client info for WhatsApp message
     const { rows: [campInfo] } = await pool.query(
@@ -14026,68 +14278,74 @@ app.post('/api/discount-claim', async (req, res) => {
 
     res.json({ coupon: claimed[0], store_name: campInfo.company_name });
   } catch (e) {
+    if (db) await db.query('ROLLBACK').catch(() => {});
     console.error('POST /api/discount-claim error:', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Não foi possível resgatar o cupom agora. Tente de novo.' });
+  } finally {
+    db?.release();
   }
 });
 
 // Verify/redeem coupon (portal - client validates at checkout)
 app.post('/api/discount-verify', async (req, res) => {
   try {
-    const { code, client_id, sale_value } = req.body;
-    if (!code || !client_id) {
+    const { sale_value } = req.body || {};
+    const code = String(req.body?.code || '').trim().toUpperCase();
+    if (!code || !req.body?.client_id) {
       return res.status(400).json({ error: 'code e client_id são obrigatórios' });
     }
+    const access = await resolveDiscountStoreAccess(req, res, req.body.client_id, '/api/discount-verify');
+    if (!access) return;
+    const client_id = String(req.body.client_id);
 
-    const { rows: coupons } = await pool.query(
-      `SELECT dc2.*, dcamp.title as campaign_title, dcamp.discount_type, dcamp.discount_value, dcamp.client_id
-       FROM discount_coupons dc2
-       JOIN discount_campaigns dcamp ON dcamp.id = dc2.campaign_id
-       WHERE dc2.code = $1`,
-      [code.toUpperCase()]
+    const ip = getClientIp(req);
+    if (promoRateLimited(`discount-verify:${client_id}:${isLoopbackIp(ip) ? 'local' : ip}`, 30)) {
+      return res.status(429).json({ error: 'Muitas tentativas. Aguarde um instante.', valid: false });
+    }
+
+    // Baixa atômica: só um cupom resgatado desta loja vira 'usado' (antes era SELECT e depois
+    // UPDATE, e dois caixas podiam validar o mesmo cupom).
+    const { rows: [usedCoupon] } = await pool.query(
+      `UPDATE discount_coupons dc2
+          SET status = 'used', used_at = NOW(), sale_value = $3
+         FROM discount_campaigns dcamp
+        WHERE dcamp.id = dc2.campaign_id AND dcamp.client_id::text = $2 AND dc2.code = $1 AND dc2.status = 'claimed'
+        RETURNING dc2.*, dcamp.title as campaign_title, dcamp.discount_type, dcamp.discount_value, dcamp.client_id`,
+      [code, client_id, Number(sale_value) || 0]
     );
 
-    if (coupons.length === 0) {
-      return res.status(404).json({ error: 'Cupom não encontrado', valid: false });
-    }
-
-    const coupon = coupons[0];
-
-    if (coupon.client_id !== client_id) {
-      return res.status(403).json({ error: 'Este cupom não pertence a esta loja', valid: false });
-    }
-
-    if (coupon.status === 'used') {
-      return res.status(409).json({ error: 'Este cupom já foi utilizado', valid: false, coupon });
-    }
-
-    if (coupon.status === 'available') {
+    if (!usedCoupon) {
+      const { rows: [current] } = await pool.query(
+        `SELECT dc2.status FROM discount_coupons dc2
+           JOIN discount_campaigns dcamp ON dcamp.id = dc2.campaign_id
+          WHERE dc2.code = $1 AND dcamp.client_id::text = $2`,
+        [code, client_id]
+      );
+      // Cupom de outra loja responde igual a inexistente (não confirma que o código existe).
+      if (!current) return res.status(404).json({ error: 'Cupom não encontrado', valid: false });
+      if (current.status === 'used') return res.status(409).json({ error: 'Este cupom já foi utilizado', valid: false });
       return res.status(400).json({ error: 'Este cupom ainda não foi resgatado', valid: false });
     }
 
-    // Mark as used
-    await pool.query(
-      `UPDATE discount_coupons SET status = 'used', used_at = NOW(), sale_value = $2 WHERE id = $1`,
-      [coupon.id, sale_value || 0]
-    );
-
-    res.json({ valid: true, coupon: { ...coupon, status: 'used', used_at: new Date().toISOString() } });
+    const coupon = access.kind === 'anonymous'
+      ? { ...usedCoupon, claimed_by_phone: maskClaimPhone(usedCoupon.claimed_by_phone) }
+      : usedCoupon;
+    res.json({ valid: true, coupon });
   } catch (e) {
     console.error('POST /api/discount-verify error:', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Não foi possível validar o cupom agora.', valid: false });
   }
 });
 
 // Get discount stats for portal
-// Equipe (admin/social_media, com Bearer) vê tudo; sem login (portal do cliente)
-// o telefone de quem pegou o cupom sai mascarado — o client_id é público.
+// Só a equipe (Bearer) ou o cliente logado no portal desta loja (x-portal-token).
+// Telefone completo: admin/social_media e o dono da loja; o resto vê mascarado.
 app.get('/api/discount-stats/:clientId', async (req, res) => {
   try {
     const { clientId } = req.params;
-    let isTeamAdmin = false;
-    if (req.headers.authorization?.startsWith('Bearer ')) {
-      isTeamAdmin = await verifyAdmin(req).then(() => true).catch(() => false);
-    }
+    const access = await resolveDiscountStoreAccess(req, res, clientId, '/api/discount-stats');
+    if (!access) return;
+    const showFullPhone = access.kind === 'client' || (access.kind === 'team' && await isAdminUser(access.user));
     const { rows: campaigns } = await pool.query(
       `SELECT * FROM discount_campaigns WHERE client_id = $1 ORDER BY created_at DESC`,
       [clientId]
@@ -14115,7 +14373,7 @@ app.get('/api/discount-stats/:clientId', async (req, res) => {
 
     res.json({
       campaigns,
-      coupons: isTeamAdmin
+      coupons: showFullPhone
         ? coupons
         : coupons.map((c) => ({ ...c, claimed_by_phone: maskClaimPhone(c.claimed_by_phone) })),
       stats: {
@@ -15595,9 +15853,93 @@ app.get('/api/public/bio/:slug', async (req, res) => {
 // SORTEIOS DE PRÊMIOS (roleta / raspadinha com QR Code descartável)
 // ═══════════════════════════════════════════════════════════════
 let promoTablesPromise = null;
+// Colunas de promo_campaigns que vieram depois da criação da tabela (nicho de atuação:
+// o módulo atende postos, lojas, restaurantes, clínicas etc.).
+const PROMO_CAMPAIGN_EXTRA_COLUMNS = {
+  business_segment: "TEXT DEFAULT 'generico'",
+  earn_ticket_text: 'TEXT',
+  redeem_instruction_text: 'TEXT',
+  operator_label: 'TEXT',
+};
+const PROMO_INDEXES = {
+  idx_promo_prizes_campaign: 'CREATE INDEX IF NOT EXISTS idx_promo_prizes_campaign ON promo_prizes(campaign_id)',
+  idx_promo_tickets_token: 'CREATE INDEX IF NOT EXISTS idx_promo_tickets_token ON promo_tickets(token)',
+  idx_promo_tickets_campaign: 'CREATE INDEX IF NOT EXISTS idx_promo_tickets_campaign ON promo_tickets(campaign_id)',
+  idx_promo_tickets_code: 'CREATE INDEX IF NOT EXISTS idx_promo_tickets_code ON promo_tickets(redemption_code)',
+  idx_promo_tickets_batch: 'CREATE INDEX IF NOT EXISTS idx_promo_tickets_batch ON promo_tickets(campaign_id, batch_label)',
+};
+// Colunas que promo_campaigns tem de fato (o salvamento só grava as que existem).
+let promoCampaignColumns = new Set();
+
+function isPgOwnershipError(error) {
+  return error?.code === '42501' || /must be owner|permission denied/i.test(error?.message || '');
+}
+
+/**
+ * Tabelas do sorteio. Na produção elas foram criadas por outro usuário do Postgres, e
+ * CREATE INDEX / ALTER TABLE exigem ser dono da tabela mesmo com IF NOT EXISTS: antes o
+ * bloco inteiro falhava ("must be owner of table promo_prizes") a cada subida e a cada
+ * pedido, e as colunas novas nunca entravam. Agora confere o que existe e só tenta o que
+ * falta; sem ser dono, avisa uma vez e o sorteio segue com as colunas que já existem.
+ */
 async function ensurePromoTables() {
   if (promoTablesPromise) return promoTablesPromise;
-  promoTablesPromise = pool.query(`
+  promoTablesPromise = (async () => {
+    const { rows: [existing] } = await pool.query(
+      `SELECT to_regclass('public.promo_campaigns') IS NOT NULL AS campaigns,
+              to_regclass('public.promo_prizes') IS NOT NULL AS prizes,
+              to_regclass('public.promo_tickets') IS NOT NULL AS tickets,
+              current_user AS db_user`
+    );
+    if (!existing.campaigns || !existing.prizes || !existing.tickets) {
+      await pool.query(PROMO_TABLES_DDL);
+    }
+
+    const { rows: indexRows } = await pool.query(
+      `SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND indexname = ANY($1::text[])`,
+      [Object.keys(PROMO_INDEXES)]
+    );
+    const haveIndexes = new Set(indexRows.map((row) => row.indexname));
+    for (const [name, statement] of Object.entries(PROMO_INDEXES)) {
+      if (haveIndexes.has(name)) continue;
+      await pool.query(statement).catch((error) => {
+        if (!isPgOwnershipError(error)) throw error;
+        console.warn(`[promo] índice ${name} não criado (o usuário ${existing.db_user} não é dono da tabela).`);
+      });
+    }
+
+    tableColumnsPromiseCache.delete('promo_campaigns');
+    let columns = await getExistingColumns('promo_campaigns');
+    const missing = Object.keys(PROMO_CAMPAIGN_EXTRA_COLUMNS).filter((name) => !columns.has(name));
+    if (missing.length > 0) {
+      const clauses = missing.map((name) => `ADD COLUMN IF NOT EXISTS ${name} ${PROMO_CAMPAIGN_EXTRA_COLUMNS[name]}`);
+      const added = await pool.query(`ALTER TABLE promo_campaigns ${clauses.join(', ')}`)
+        .then(() => true)
+        .catch((error) => {
+          if (!isPgOwnershipError(error)) throw error;
+          console.warn(
+            `[promo] promo_campaigns sem as colunas ${missing.join(', ')}: o usuário ${existing.db_user} não é dono da tabela. ` +
+            `O sorteio funciona sem elas (nicho e textos personalizados não são gravados). Para corrigir, o dono roda: ` +
+            `ALTER TABLE promo_campaigns OWNER TO ${existing.db_user}; ALTER TABLE promo_prizes OWNER TO ${existing.db_user}; ` +
+            `ALTER TABLE promo_tickets OWNER TO ${existing.db_user};`
+          );
+          return false;
+        });
+      if (added) {
+        tableColumnsPromiseCache.delete('promo_campaigns');
+        columns = await getExistingColumns('promo_campaigns');
+      }
+    }
+    promoCampaignColumns = columns;
+  })().catch((error) => {
+    console.error('ensurePromoTables error:', error);
+    promoTablesPromise = null;
+  });
+  return promoTablesPromise;
+}
+
+// Só as tabelas (base nova); índices e colunas novas entram pelo ensurePromoTables.
+const PROMO_TABLES_DDL = `
     CREATE TABLE IF NOT EXISTS promo_campaigns (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       title TEXT NOT NULL,
@@ -15629,7 +15971,6 @@ async function ensurePromoTables() {
       is_active BOOLEAN NOT NULL DEFAULT true,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
-    CREATE INDEX IF NOT EXISTS idx_promo_prizes_campaign ON promo_prizes(campaign_id);
 
     CREATE TABLE IF NOT EXISTS promo_tickets (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -15651,22 +15992,7 @@ async function ensurePromoTables() {
       redeemed_by TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
-    CREATE INDEX IF NOT EXISTS idx_promo_tickets_token ON promo_tickets(token);
-    CREATE INDEX IF NOT EXISTS idx_promo_tickets_campaign ON promo_tickets(campaign_id);
-    CREATE INDEX IF NOT EXISTS idx_promo_tickets_code ON promo_tickets(redemption_code);
-    CREATE INDEX IF NOT EXISTS idx_promo_tickets_batch ON promo_tickets(campaign_id, batch_label);
-
-    -- Nicho de atuação: o módulo atende postos, lojas, restaurantes, clínicas etc.
-    ALTER TABLE promo_campaigns ADD COLUMN IF NOT EXISTS business_segment TEXT DEFAULT 'generico';
-    ALTER TABLE promo_campaigns ADD COLUMN IF NOT EXISTS earn_ticket_text TEXT;
-    ALTER TABLE promo_campaigns ADD COLUMN IF NOT EXISTS redeem_instruction_text TEXT;
-    ALTER TABLE promo_campaigns ADD COLUMN IF NOT EXISTS operator_label TEXT;
-  `).catch((error) => {
-    console.error('ensurePromoTables error:', error);
-    promoTablesPromise = null;
-  });
-  return promoTablesPromise;
-}
+`;
 ensurePromoTables();
 
 const PROMO_TOKEN_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -15713,6 +16039,36 @@ function promoRateLimited(key, limit = 30, windowMs = 60_000) {
   bucket.count += 1;
   return bucket.count > limit;
 }
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, bucket] of promoRateBuckets) {
+    if (now > bucket.reset) promoRateBuckets.delete(key);
+  }
+}, 5 * 60_000).unref?.();
+
+// PIN do caixa: 6 caracteres ou mais e nada óbvio (antes o padrão era '1234').
+const PROMO_WEAK_PINS = new Set(['123456', '654321', '000000', '111111', '123123', '12345678', '1234567']);
+function promoPinProblem(pin) {
+  const value = String(pin || '').trim();
+  if (value.length < 6) return 'O PIN do caixa precisa ter pelo menos 6 caracteres.';
+  if (PROMO_WEAK_PINS.has(value) || /^(.)\1+$/.test(value)) return 'Escolha um PIN menos óbvio para o caixa.';
+  return null;
+}
+
+// Erros de PIN e de código no caixa: contam por sorteio + IP (getClientIp usa o X-Real-IP /
+// último X-Forwarded-For posto pelo nginx; antes o primeiro valor vinha do próprio cliente).
+const PROMO_PIN_FAILURE_LIMIT = 10;
+const PROMO_CODE_FAILURE_LIMIT = 30;
+function promoValidateKeys(req, slug) {
+  const ip = getClientIp(req);
+  const local = isLoopbackIp(ip);
+  return {
+    pin: `promo-pin:${slug}:${local ? 'local' : ip}`,
+    code: `promo-code:${slug}:${local ? 'local' : ip}`,
+    // sem o IP real (proxy sem X-Real-IP), todo mundo cai no mesmo balde: teto maior
+    factor: local ? 5 : 1,
+  };
+}
 
 /** GET /api/promo/public/:slug — dados públicos da campanha (usado pela tela de validação) */
 app.get('/api/promo/public/:slug', async (req, res) => {
@@ -15743,7 +16099,6 @@ app.get('/api/promo/public/:slug/:token', async (req, res) => {
     );
     if (!campaignRows.length) return res.status(404).json({ error: 'Sorteio não encontrado' });
     const campaign = campaignRows[0];
-    if (!campaign.is_active) return res.status(403).json({ error: 'Este sorteio está encerrado.' });
 
     const { rows: ticketRows } = await pool.query(
       `SELECT t.id, t.status, t.game_type, t.redemption_code, t.participant_name, t.revealed_at,
@@ -15754,6 +16109,11 @@ app.get('/api/promo/public/:slug/:token', async (req, res) => {
         LIMIT 1`,
       [campaign.id, token]
     );
+
+    // Sorteio encerrado: quem já ganhou continua vendo o voucher (o caixa ainda valida o
+    // código); só o bilhete que ainda não foi jogado fica bloqueado.
+    const alreadyDrawn = ticketRows[0] && (ticketRows[0].status === 'revealed' || ticketRows[0].status === 'redeemed');
+    if (!campaign.is_active && !alreadyDrawn) return res.status(403).json({ error: 'Este sorteio está encerrado.' });
 
     if (!ticketRows.length) {
       return res.json({ campaign: promoPublicCampaign(campaign), ticket: null, reason: 'not_found' });
@@ -15807,8 +16167,8 @@ app.post('/api/promo/play', async (req, res) => {
   const client = await pool.connect();
   try {
     await ensurePromoTables();
-    const ip = req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || 'unknown';
-    if (promoRateLimited(`play:${ip}`)) {
+    const ip = getClientIp(req);
+    if (!isLoopbackIp(ip) && promoRateLimited(`play:${ip}`)) {
       return res.status(429).json({ error: 'Muitas tentativas. Aguarde um instante.' });
     }
 
@@ -15892,15 +16252,17 @@ app.post('/api/promo/play', async (req, res) => {
     }
     if (winner) {
       const prefix = (campaign.code_prefix || 'A3P').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'A3P';
+      // 6 caracteres do alfabeto sem ambíguos (antes 4 dígitos: dava para chutar no balcão).
+      // Os códigos antigos de 4 dígitos continuam valendo (a busca é por igualdade).
       for (let attempt = 0; attempt < 12 && !redemptionCode; attempt += 1) {
-        const candidate = `${prefix}-${String(crypto.randomInt(1000, 9999))}`;
+        const candidate = `${prefix}-${promoRandomToken(6)}`;
         const { rows: exists } = await client.query(
           'SELECT 1 FROM promo_tickets WHERE redemption_code = $1 LIMIT 1',
           [candidate]
         );
         if (!exists.length) redemptionCode = candidate;
       }
-      if (!redemptionCode) redemptionCode = `${prefix}-${promoRandomToken(6)}`;
+      if (!redemptionCode) redemptionCode = `${prefix}-${promoRandomToken(8)}`;
     }
 
     await client.query(
@@ -15949,21 +16311,29 @@ async function promoFindCampaignBySlug(slug) {
 app.post('/api/promo/validate', async (req, res) => {
   try {
     await ensurePromoTables();
-    const ip = req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || 'unknown';
-    if (promoRateLimited(`validate:${ip}`, 60)) {
+    const ip = getClientIp(req);
+    if (!isLoopbackIp(ip) && promoRateLimited(`validate:${ip}`, 60)) {
       return res.status(429).json({ error: 'Muitas tentativas. Aguarde um instante.' });
     }
 
     const campaign = await promoFindCampaignBySlug(req.body?.slug);
     if (!campaign) return res.status(404).json({ error: 'Sorteio não encontrado' });
 
+    const limits = promoValidateKeys(req, String(campaign.slug || '').toLowerCase());
+    if (authAttemptCount(limits.pin) >= PROMO_PIN_FAILURE_LIMIT * limits.factor) {
+      return res.status(429).json({ error: 'Muitas tentativas de PIN. Aguarde 15 minutos.' });
+    }
     const pin = String(req.body?.pin || '');
     if (pin !== String(campaign.validation_pin || '')) {
+      registerAuthAttempt(limits.pin);
       return res.status(401).json({ error: 'PIN incorreto' });
     }
 
     const code = String(req.body?.code || '').trim().toUpperCase();
     if (!code) return res.status(400).json({ error: 'Informe o código de resgate' });
+    if (authAttemptCount(limits.code) >= PROMO_CODE_FAILURE_LIMIT * limits.factor) {
+      return res.status(429).json({ error: 'Muitos códigos inválidos. Aguarde 15 minutos.' });
+    }
 
     const { rows } = await pool.query(
       `SELECT t.*, p.name AS prize_name, p.description AS prize_description, p.image_url AS prize_image_url
@@ -15973,13 +16343,17 @@ app.post('/api/promo/validate', async (req, res) => {
         LIMIT 1`,
       [campaign.id, code]
     );
-    if (!rows.length) return res.status(404).json({ error: 'Código inválido' });
+    if (!rows.length) {
+      registerAuthAttempt(limits.code);
+      return res.status(404).json({ error: 'Código inválido' });
+    }
     const ticket = rows[0];
 
     const payload = {
       code: ticket.redemption_code,
       participant_name: ticket.participant_name,
-      participant_phone: ticket.participant_phone,
+      // O caixa confere pelos 4 últimos dígitos; o número inteiro fica só no admin (Leads).
+      participant_phone: ticket.participant_phone ? maskClaimPhone(ticket.participant_phone) : null,
       prize: ticket.prize_name
         ? { name: ticket.prize_name, description: ticket.prize_description, image_url: ticket.prize_image_url }
         : null,
@@ -16048,6 +16422,9 @@ async function promoRequireAuth(req, res) {
 app.get('/api/promo/campaigns', async (req, res) => {
   if (!(await promoRequireAuth(req, res))) return;
   try {
+    // Cidade ativa: sorteios antigos sem cidade continuam visíveis nas duas.
+    const { user } = req.promoUser;
+    const activeCity = await resolveActiveCity(req, user.id, user);
     const { rows } = await pool.query(`
       SELECT c.*,
              (SELECT count(*) FROM promo_tickets t WHERE t.campaign_id = c.id) AS tickets_total,
@@ -16056,8 +16433,9 @@ app.get('/api/promo/campaigns', async (req, res) => {
              (SELECT count(*) FROM promo_tickets t WHERE t.campaign_id = c.id AND t.status = 'redeemed') AS prizes_redeemed,
              (SELECT count(*) FROM promo_tickets t WHERE t.campaign_id = c.id AND t.participant_phone IS NOT NULL) AS leads_total
         FROM promo_campaigns c
+       WHERE ${cityVisibilityExpression('c.city', '$1')}
        ORDER BY c.created_at DESC
-    `);
+    `, [activeCity]);
     res.json({ campaigns: rows });
   } catch (error) {
     console.error('[promo/campaigns] error:', error);
@@ -16072,33 +16450,55 @@ app.post('/api/promo/campaigns', async (req, res) => {
     const slug = String(b.slug || '').toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
     if (!b.title || !slug) return res.status(400).json({ error: 'Informe título e slug' });
 
+    // PIN do caixa: obrigatório e forte no sorteio novo e quando for trocado. Sorteio antigo com
+    // PIN fraco continua salvando sem trocar (o caixa já usa esse PIN); a tela avisa.
+    const newPin = String(b.validation_pin || '').trim();
+    let pinChanged = true;
+    if (b.id) {
+      const { rows: [current] } = await pool.query('SELECT validation_pin FROM promo_campaigns WHERE id = $1', [b.id]);
+      if (!current) return res.status(404).json({ error: 'Sorteio não encontrado' });
+      pinChanged = newPin !== String(current.validation_pin || '');
+    }
+    if (pinChanged) {
+      const pinProblem = promoPinProblem(newPin);
+      if (pinProblem) return res.status(400).json({ error: pinProblem });
+    }
+
+    // Colunas novas só entram se existirem na tabela (sem ser dono, o ALTER não roda).
+    const values = {
+      title: b.title, slug, rules_text: b.rules_text || '', require_lead_capture: !!b.require_lead_capture,
+      require_document: !!b.require_document, lgpd_terms_text: b.lgpd_terms_text || '',
+      banner_url: b.banner_url || null, logo_url: b.logo_url || null, accent_color: b.accent_color || '#E11D48',
+      code_prefix: b.code_prefix || 'A3P', validation_pin: newPin, is_active: b.is_active !== false,
+    };
+    const extras = {
+      business_segment: b.business_segment || 'generico', earn_ticket_text: b.earn_ticket_text || '',
+      redeem_instruction_text: b.redeem_instruction_text || '', operator_label: b.operator_label || '',
+    };
+    for (const [column, value] of Object.entries(extras)) {
+      if (promoCampaignColumns.has(column)) values[column] = value;
+    }
+    const columns = Object.keys(values);
+    const params = Object.values(values);
+
     if (b.id) {
       const { rows } = await pool.query(
         `UPDATE promo_campaigns SET
-            title = $2, slug = $3, rules_text = $4, require_lead_capture = $5, require_document = $6,
-            lgpd_terms_text = $7, banner_url = $8, logo_url = $9, accent_color = $10,
-            code_prefix = $11, validation_pin = $12, is_active = $13,
-            business_segment = $14, earn_ticket_text = $15, redeem_instruction_text = $16, operator_label = $17,
+            ${columns.map((column, index) => `${column} = $${index + 2}`).join(', ')},
             updated_at = now()
           WHERE id = $1 RETURNING *`,
-        [b.id, b.title, slug, b.rules_text || '', !!b.require_lead_capture, !!b.require_document,
-         b.lgpd_terms_text || '', b.banner_url || null, b.logo_url || null, b.accent_color || '#E11D48',
-         b.code_prefix || 'A3P', String(b.validation_pin || '1234'), b.is_active !== false,
-         b.business_segment || 'generico', b.earn_ticket_text || '', b.redeem_instruction_text || '', b.operator_label || '']
+        [b.id, ...params]
       );
       return res.json({ campaign: rows[0] });
     }
 
+    // Sorteio novo nasce na cidade ativa de quem cria.
+    const { user } = req.promoUser;
+    const city = await resolveActiveCity(req, user.id, user);
     const { rows } = await pool.query(
-      `INSERT INTO promo_campaigns
-         (title, slug, rules_text, require_lead_capture, require_document, lgpd_terms_text,
-          banner_url, logo_url, accent_color, code_prefix, validation_pin, is_active,
-          business_segment, earn_ticket_text, redeem_instruction_text, operator_label)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
-      [b.title, slug, b.rules_text || '', !!b.require_lead_capture, !!b.require_document,
-       b.lgpd_terms_text || '', b.banner_url || null, b.logo_url || null, b.accent_color || '#E11D48',
-       b.code_prefix || 'A3P', String(b.validation_pin || '1234'), b.is_active !== false,
-       b.business_segment || 'generico', b.earn_ticket_text || '', b.redeem_instruction_text || '', b.operator_label || '']
+      `INSERT INTO promo_campaigns (${[...columns, 'city'].join(', ')})
+       VALUES (${[...columns, 'city'].map((_, index) => `$${index + 1}`).join(', ')}) RETURNING *`,
+      [...params, city]
     );
     res.json({ campaign: rows[0] });
   } catch (error) {
@@ -16142,17 +16542,32 @@ app.post('/api/promo/prizes', async (req, res) => {
     const probability = Math.min(100, Math.max(0, Number(b.win_probability_percent) || 0));
 
     if (b.id) {
+      // Saldo: sem remaining_quantity, mudar o total ajusta o saldo pela diferença (o formulário
+      // trazia o saldo de quando abriu e devolvia ao estoque o que foi sorteado no meio-tempo).
+      // Ajuste manual vem com expected_remaining: só grava se o saldo ainda for o que a tela viu.
       const remaining = b.remaining_quantity === undefined || b.remaining_quantity === null
         ? null
         : Math.max(0, Number(b.remaining_quantity) || 0);
+      const expected = remaining === null || b.expected_remaining === undefined || b.expected_remaining === null
+        ? null
+        : Math.max(0, Number(b.expected_remaining) || 0);
       const { rows } = await pool.query(
         `UPDATE promo_prizes SET
             name = $2, description = $3, image_url = $4, total_quantity = $5,
-            remaining_quantity = COALESCE($6, remaining_quantity),
+            remaining_quantity = CASE WHEN $6::int IS NOT NULL THEN $6::int
+                                      ELSE GREATEST(0, remaining_quantity + ($5::int - total_quantity)) END,
             win_probability_percent = $7, is_active = $8
-          WHERE id = $1 RETURNING *`,
-        [b.id, b.name, b.description || '', b.image_url || null, total, remaining, probability, b.is_active !== false]
+          WHERE id = $1 AND ($9::int IS NULL OR remaining_quantity = $9::int) RETURNING *`,
+        [b.id, b.name, b.description || '', b.image_url || null, total, remaining, probability, b.is_active !== false, expected]
       );
+      if (!rows.length) {
+        const { rows: current } = await pool.query('SELECT remaining_quantity FROM promo_prizes WHERE id = $1', [b.id]);
+        if (!current.length) return res.status(404).json({ error: 'Prêmio não encontrado' });
+        return res.status(409).json({
+          error: `O saldo mudou enquanto você editava (agora ${current[0].remaining_quantity}). Feche, abra o prêmio de novo e ajuste.`,
+          remaining_quantity: current[0].remaining_quantity,
+        });
+      }
       return res.json({ prize: rows[0] });
     }
 

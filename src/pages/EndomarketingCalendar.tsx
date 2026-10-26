@@ -17,7 +17,6 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function EndomarketingCalendar() {
-  const { tasks, loading: loadingT } = useEndoTasks();
   const { contracts, loading: loadingC } = useEndoContracts();
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
@@ -28,6 +27,13 @@ export default function EndomarketingCalendar() {
   const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
   const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
 
+  // Só as tarefas do mês na tela e da semana atual (quadro da semana), em vez do histórico todo.
+  const thisWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const rangeFrom = format(calendarStart < thisWeekStart ? calendarStart : thisWeekStart, 'yyyy-MM-dd');
+  const thisWeekEnd = addDays(thisWeekStart, 6);
+  const rangeTo = format(calendarEnd > thisWeekEnd ? calendarEnd : thisWeekEnd, 'yyyy-MM-dd');
+  const { tasks, loading: loadingT } = useEndoTasks(undefined, { from: rangeFrom, to: rangeTo });
+
   const calendarDays = useMemo(() => {
     const days: Date[] = [];
     let d = calendarStart;
@@ -35,10 +41,19 @@ export default function EndomarketingCalendar() {
     return days;
   }, [calendarStart, calendarEnd]);
 
-  const getTasksForDay = useCallback((date: Date) => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    return tasks.filter(t => t.date === dateStr).sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
+  // Tarefas por dia montadas uma vez (antes cada célula filtrava a lista inteira).
+  const tasksByDay = useMemo(() => {
+    const map = new Map<string, typeof tasks>();
+    for (const task of tasks) {
+      const list = map.get(task.date) || [];
+      list.push(task);
+      map.set(task.date, list);
+    }
+    for (const list of map.values()) list.sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
+    return map;
   }, [tasks]);
+
+  const getTasksForDay = useCallback((date: Date) => tasksByDay.get(format(date, 'yyyy-MM-dd')) || [], [tasksByDay]);
 
   const kanbanWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const kanbanDays = useMemo(() => {

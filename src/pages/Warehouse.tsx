@@ -48,6 +48,12 @@ interface WarehouseMovement {
 }
 
 const ITEM_TYPES = ['Equipamento', 'Mobiliário', 'Ferramenta', 'Eletrônico', 'Veículo', 'Outros'];
+// O Select não aceita value vazio: "sem responsável" usa este valor e vira null ao salvar.
+const NO_RESPONSIBLE = 'none';
+
+/** Campos opcionais vazios vão como null (o banco recusa '' em coluna UUID ou DATE). */
+const nullIfEmpty = (value: string | null | undefined) => (value && value !== NO_RESPONSIBLE ? value : null);
+
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   em_uso: { label: 'Em Uso', color: 'bg-blue-500' },
   manutencao: { label: 'Manutenção', color: 'bg-amber-500' },
@@ -63,6 +69,7 @@ export default function Warehouse() {
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<WarehouseItem | null>(null);
+  const [saving, setSaving] = useState(false);
   
   const [form, setForm] = useState({
     name: '',
@@ -80,9 +87,15 @@ export default function Warehouse() {
     const { data, error } = await supabase.from('warehouse_items').select('*').order('created_at', { ascending: false });
     if (data) setItems(data as WarehouseItem[]);
     if (error) toast.error('Erro ao carregar almoxerifado');
-    
-    const { data: movs, error: movErr } = await supabase.from('warehouse_movements').select('*, item:warehouse_items(*)').order('created_at', { ascending: false });
-    if (movs) setMovements(movs as WarehouseMovement[]);
+
+    // O item de cada movimentação vem da lista já carregada (o join 'item:warehouse_items(*)'
+    // não era entendido pela API e a aba ficava sempre vazia).
+    const { data: movs, error: movErr } = await supabase.from('warehouse_movements').select('*').order('created_at', { ascending: false });
+    if (movErr) toast.error(`Erro ao carregar movimentações: ${movErr.message}`);
+    if (movs) {
+      const itemsById = new Map(((data || []) as WarehouseItem[]).map(item => [item.id, item]));
+      setMovements((movs as WarehouseMovement[]).map(mov => ({ ...mov, item: itemsById.get(mov.item_id) })));
+    }
     
     setLoading(false);
   };
@@ -101,42 +114,49 @@ export default function Warehouse() {
       return;
     }
 
-    const payload = { ...form };
+    if (saving) return;
+    const responsibleId = nullIfEmpty(form.responsible_id);
+    const payload = { ...form, responsible_id: responsibleId, purchase_date: nullIfEmpty(form.purchase_date) };
     let error;
+    let movementError = null;
+    setSaving(true);
 
     if (editingItem) {
       // Check if status or responsible changed to record a movement
       const statusChanged = editingItem.status !== form.status;
-      const responsibleChanged = editingItem.responsible_id !== form.responsible_id;
+      const previousResponsible = nullIfEmpty(editingItem.responsible_id);
+      const responsibleChanged = previousResponsible !== responsibleId;
 
       const res = await supabase.from('warehouse_items').update(payload as any).eq('id', editingItem.id);
       error = res.error;
 
       if (!error && (statusChanged || responsibleChanged)) {
-        await supabase.from('warehouse_movements').insert({
+        ({ error: movementError } = await supabase.from('warehouse_movements').insert({
           item_id: editingItem.id,
           type: responsibleChanged ? 'transferencia' : (form.status === 'manutencao' ? 'manutencao' : 'entrada'),
-          from_responsible_id: editingItem.responsible_id,
-          to_responsible_id: form.responsible_id,
+          from_responsible_id: previousResponsible,
+          to_responsible_id: responsibleId,
           observations: `Alteração manual: ${statusChanged ? `Status ${editingItem.status} -> ${form.status}` : ''} ${responsibleChanged ? 'Responsável alterado' : ''}`,
           movement_date: new Date().toISOString().split('T')[0]
-        } as any);
+        } as any));
       }
     } else {
       const res = await supabase.from('warehouse_items').insert(payload as any).select();
       error = res.error;
       
       if (!error && res.data?.[0]) {
-        await supabase.from('warehouse_movements').insert({
+        ({ error: movementError } = await supabase.from('warehouse_movements').insert({
           item_id: res.data[0].id,
           type: 'entrada',
-          to_responsible_id: form.responsible_id,
+          to_responsible_id: responsibleId,
           observations: 'Entrada inicial no sistema',
           movement_date: new Date().toISOString().split('T')[0]
-        } as any);
+        } as any));
       }
     }
+    setSaving(false);
 
+    if (movementError) toast.error(`Item salvo, mas a movimentação não foi registrada: ${movementError.message}`);
     if (!error) {
       toast.success(editingItem ? 'Item atualizado' : 'Item cadastrado');
       setOpen(false);
@@ -144,7 +164,7 @@ export default function Warehouse() {
       setForm({ name: '', type: 'Equipamento', tag_id: '', responsible_id: '', status: 'disponivel', purchase_date: new Date().toISOString().split('T')[0], purchase_price: 0, observations: '' });
       fetchItems();
     } else {
-      toast.error('Erro ao salvar item');
+      toast.error(`Erro ao salvar item${error.message ? `: ${error.message}` : ''}`);
     }
   };
 
@@ -154,7 +174,7 @@ export default function Warehouse() {
       name: item.name,
       type: item.type,
       tag_id: item.tag_id || '',
-      responsible_id: item.responsible_id || '',
+      responsible_id: item.responsible_id || NO_RESPONSIBLE,
       status: item.status,
       purchase_date: item.purchase_date || new Date().toISOString().split('T')[0],
       purchase_price: item.purchase_price || 0,
@@ -252,9 +272,10 @@ export default function Warehouse() {
                   </div>
                   <div className="space-y-2">
                     <Label>Responsável</Label>
-                    <Select value={form.responsible_id} onValueChange={v => setForm({ ...form, responsible_id: v })}>
+                    <Select value={form.responsible_id || NO_RESPONSIBLE} onValueChange={v => setForm({ ...form, responsible_id: v })}>
                       <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
+                        <SelectItem value={NO_RESPONSIBLE}>Sem responsável</SelectItem>
                         {users.map(u => (
                           <SelectItem key={u.id} value={u.id}>{u.displayName || u.name}</SelectItem>
                         ))}
@@ -288,8 +309,8 @@ export default function Warehouse() {
                     placeholder="Detalhes extras, serial number, etc."
                   />
                 </div>
-                <Button onClick={handleSave} className="w-full mt-2">
-                  {editingItem ? 'Atualizar Item' : 'Salvar Item'}
+                <Button onClick={handleSave} className="w-full mt-2" disabled={saving}>
+                  {saving ? 'Salvando...' : editingItem ? 'Atualizar Item' : 'Salvar Item'}
                 </Button>
               </div>
             </DialogContent>

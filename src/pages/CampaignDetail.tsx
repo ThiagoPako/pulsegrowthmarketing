@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/vpsDb';
+import { deleteCampaignWithSlots } from '@/lib/campaignDelete';
 import { useApp } from '@/contexts/AppContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -66,9 +67,10 @@ export default function CampaignDetail() {
   const [editingSlot, setEditingSlot] = useState<Slot | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const load = async () => {
+  // silent: só atualiza os dados, sem a tela de carregando (que desmontaria o diálogo do slot).
+  const load = async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!id) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     const [{ data: c }, { data: s }] = await Promise.all([
       supabase.from('campaigns').select('*').eq('id', id).single(),
       supabase.from('campaign_slots').select('*').eq('campaign_id', id).order('position', { ascending: true }),
@@ -98,9 +100,7 @@ export default function CampaignDetail() {
     if (!campaign) return;
     setDeleting(true);
     try {
-      await supabase.from('campaign_slots').delete().eq('campaign_id', campaign.id);
-      const { error } = await supabase.from('campaigns').delete().eq('id', campaign.id);
-      if (error) throw error;
+      await deleteCampaignWithSlots(campaign.id);
       toast.success('Campanha apagada');
       navigate('/campanhas');
     } catch (e: any) {
@@ -338,6 +338,7 @@ export default function CampaignDetail() {
           campaign={campaign}
           onClose={() => setEditingSlot(null)}
           onSaved={() => { setEditingSlot(null); load(); }}
+          onScriptChanged={() => load({ silent: true })}
         />
       )}
     </div>
@@ -346,8 +347,8 @@ export default function CampaignDetail() {
 
 
 // ---------- Slot editor ----------
-function SlotDialog({ slot, campaign, onClose, onSaved }: {
-  slot: Slot; campaign: Campaign; onClose: () => void; onSaved: () => void;
+function SlotDialog({ slot, campaign, onClose, onSaved, onScriptChanged }: {
+  slot: Slot; campaign: Campaign; onClose: () => void; onSaved: () => void; onScriptChanged: () => void;
 }) {
   const navigate = useNavigate();
   const [title, setTitle] = useState(slot.title || '');
@@ -453,7 +454,12 @@ function SlotDialog({ slot, campaign, onClose, onSaved }: {
                 slotKind={slot.kind}
                 clientId={campaign.client_id}
                 campaignName={campaign.name}
-                onChanged={onSaved}
+                onChanged={(linked) => {
+                  // Mexer no roteiro não fecha o diálogo (antes perdia título, data e notas
+                  // ainda não salvos). Vincular grava 'roteiro_pronto' no slot: a tela acompanha.
+                  if (linked?.scriptId) setStatus('roteiro_pronto');
+                  onScriptChanged();
+                }}
               />
             </div>
           )}

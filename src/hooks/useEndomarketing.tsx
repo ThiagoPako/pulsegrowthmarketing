@@ -1,6 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/vpsDb';
 import { format, addDays, getDay } from 'date-fns';
+import { toast } from 'sonner';
+
+/** Erro ao gravar: avisa com o motivo e devolve false (quem chama não mostra sucesso). */
+function reportEndoSaveError(label: string, error: unknown): false {
+  console.error(`${label} error:`, error);
+  const message = (error as { message?: string } | null)?.message;
+  toast.error(`Não foi possível salvar${message ? `: ${message}` : '. Tente de novo.'}`);
+  return false;
+}
 
 // ─── Legacy compatibility exports (used by Schedule.tsx, Scripts.tsx) ────
 export interface EndoCliente { id: string; company_name: string; client_id?: string; color: string; active: boolean; stories_per_week: number; presence_days_per_week: number; selected_days: string[]; session_duration: number; execution_type: string; plan_type: string; total_contracted_hours: number; notes?: string; editorial?: string; created_at: string; updated_at: string; responsible_person?: string; phone?: string; }
@@ -196,17 +205,69 @@ export function useEndoContracts(includePartnerProfiles = true) {
     return !error;
   };
 
-  const updateContract = async (id: string, updates: Partial<EndoContract>) => {
-    await (supabase as any).from('client_endomarketing_contracts').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', id);
+  const updateContract = async (id: string, updates: Partial<EndoContract>): Promise<boolean> => {
+    const previous = contracts.find(c => c.id === id);
+    const { error } = await (supabase as any).from('client_endomarketing_contracts').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) return reportEndoSaveError('updateContract', error);
+    await syncPendingTasksAfterContractChange(id, previous, updates);
     fetchContracts();
+    return true;
   };
 
-  const deactivateContract = async (id: string) => {
-    await (supabase as any).from('client_endomarketing_contracts').update({ status: 'inativo', updated_at: new Date().toISOString() }).eq('id', id);
+  const deactivateContract = async (id: string): Promise<boolean> => {
+    const { error } = await (supabase as any).from('client_endomarketing_contracts').update({ status: 'inativo', updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) return reportEndoSaveError('deactivateContract', error);
+    // Contrato encerrado: as pendentes de hoje em diante são canceladas (não apagadas, para manter
+    // o histórico) e o parceiro deixa de recebê-las no calendário e no WhatsApp.
+    const { error: tasksError } = await (supabase as any).from('endomarketing_partner_tasks')
+      .update({ status: 'cancelada', updated_at: new Date().toISOString() })
+      .eq('contract_id', id).eq('status', 'pendente').gte('date', format(new Date(), 'yyyy-MM-dd'));
+    if (tasksError) {
+      console.error('deactivateContract: cancel pending tasks error', tasksError);
+      toast.error('Contrato desativado, mas as tarefas pendentes não foram canceladas. Cancele-as em Tarefas.');
+    }
     fetchContracts();
+    return true;
   };
 
   return { contracts, loading, addContract, updateContract, deactivateContract, refresh: fetchContracts };
+}
+
+/**
+ * Depois de editar o contrato: troca de parceiro passa as pendentes de hoje em diante para o
+ * parceiro novo (as passadas e as concluídas ficam com o antigo, que já recebeu por elas);
+ * troca de pacote ou de início regenera as pendentes de hoje até a última já agendada.
+ */
+async function syncPendingTasksAfterContractChange(
+  contractId: string, previous: EndoContract | undefined, updates: Partial<EndoContract>,
+) {
+  if (!previous || previous.status !== 'ativo') return;
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const partnerChanged = updates.partner_id !== undefined && (updates.partner_id || null) !== (previous.partner_id || null);
+  const scheduleChanged = (updates.package_id !== undefined && updates.package_id !== previous.package_id)
+    || (updates.start_date !== undefined && normalizeDateOnly(updates.start_date) !== normalizeDateOnly(previous.start_date));
+
+  if (partnerChanged) {
+    const { error } = await (supabase as any).from('endomarketing_partner_tasks')
+      .update({ partner_id: updates.partner_id || null, updated_at: new Date().toISOString() })
+      .eq('contract_id', contractId).eq('status', 'pendente').gte('date', today);
+    if (error) {
+      console.error('updateContract: move pending tasks error', error);
+      toast.error('Contrato salvo, mas as tarefas pendentes continuam com o parceiro antigo. Regenere as tarefas.');
+      return;
+    }
+  }
+
+  if (scheduleChanged) {
+    const { data: lastPending } = await (supabase as any).from('endomarketing_partner_tasks')
+      .select('date')
+      .eq('contract_id', contractId).eq('status', 'pendente').gte('date', today)
+      .order('date', { ascending: false }).limit(1);
+    const until = normalizeDateOnly(lastPending?.[0]?.date);
+    if (!until) return;
+    const ok = await generateEndoContractTasks(contractId, today, until, { notBeforeToday: true });
+    if (!ok) toast.error('Contrato salvo, mas as tarefas não foram regeneradas. Use "Regenerar Todas".');
+  }
 }
 
 // Helper: create expense for partner cost
@@ -280,14 +341,19 @@ export async function syncEndoExpenses(): Promise<number> {
 }
 
 
-export function useEndoTasks(partnerId?: string) {
+/** range (opcional, 'yyyy-MM-dd'): só as tarefas do período, para telas que não precisam do histórico todo. */
+export function useEndoTasks(partnerId?: string, range?: { from: string; to: string }) {
   const [tasks, setTasks] = useState<EndoTask[]>([]);
   const [loading, setLoading] = useState(true);
+  const rangeFrom = range?.from;
+  const rangeTo = range?.to;
 
   const fetchTasks = useCallback(async () => {
     try {
       let query = (supabase as any).from('endomarketing_partner_tasks').select('*, clients(company_name, color)').order('date');
       if (partnerId) query = query.eq('partner_id', partnerId);
+      if (rangeFrom) query = query.gte('date', rangeFrom);
+      if (rangeTo) query = query.lte('date', rangeTo);
       const { data } = await query;
       if (data) {
         setTasks(data.map((task: any) => ({
@@ -299,7 +365,7 @@ export function useEndoTasks(partnerId?: string) {
     } finally {
       setLoading(false);
     }
-  }, [partnerId]);
+  }, [partnerId, rangeFrom, rangeTo]);
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
 
@@ -310,189 +376,241 @@ export function useEndoTasks(partnerId?: string) {
     return () => { supabase.removeChannel(ch); };
   }, [fetchTasks]);
 
-  const completeTask = async (id: string, notes?: string) => {
-    await (supabase as any).from('endomarketing_partner_tasks').update({
-      status: 'concluida', completed_at: new Date().toISOString(),
-      notes: notes || null, updated_at: new Date().toISOString(),
-    }).eq('id', id);
-    fetchTasks();
+  // Concluir/cancelar atualizam só o card na tela (antes recarregavam todas as tarefas) e
+  // devolvem false quando a API recusa, para a tela não mostrar sucesso sem ter salvo.
+  const patchTaskLocally = (id: string, patch: Partial<EndoTask>) => {
+    setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...patch } : t)));
   };
 
-  const updateTask = async (id: string, updates: Partial<EndoTask>) => {
-    await (supabase as any).from('endomarketing_partner_tasks').update({
+  const completeTask = async (id: string, notes?: string): Promise<boolean> => {
+    const now = new Date().toISOString();
+    const patch = { status: 'concluida', completed_at: now, notes: notes || null };
+    const { error } = await (supabase as any).from('endomarketing_partner_tasks').update({
+      ...patch, updated_at: now,
+    }).eq('id', id);
+    if (error) return reportEndoSaveError('completeTask', error);
+    patchTaskLocally(id, patch);
+    return true;
+  };
+
+  const updateTask = async (id: string, updates: Partial<EndoTask>): Promise<boolean> => {
+    const { error } = await (supabase as any).from('endomarketing_partner_tasks').update({
       ...updates, updated_at: new Date().toISOString(),
     }).eq('id', id);
+    if (error) return reportEndoSaveError('updateTask', error);
     fetchTasks();
+    return true;
   };
 
-  const cancelTask = async (id: string) => {
-    await (supabase as any).from('endomarketing_partner_tasks').update({
+  const cancelTask = async (id: string): Promise<boolean> => {
+    const { error } = await (supabase as any).from('endomarketing_partner_tasks').update({
       status: 'cancelada', updated_at: new Date().toISOString(),
     }).eq('id', id);
-    fetchTasks();
+    if (error) return reportEndoSaveError('cancelTask', error);
+    patchTaskLocally(id, { status: 'cancelada' });
+    return true;
   };
 
-  const generateTasks = async (contractId: string, fromDate: string, toDate: string) => {
-    try {
-      // Fetch contract and package separately to avoid join issues
-      const { data: contract, error: contractErr } = await (supabase as any)
-        .from('client_endomarketing_contracts')
-        .select('*')
-        .eq('id', contractId).single();
-
-      if (contractErr || !contract) {
-        console.error('generateTasks: contract fetch error', contractErr);
-        return false;
-      }
-      if (contract.status !== 'ativo') return false;
-
-      const { data: pkg, error: pkgErr } = await (supabase as any)
-        .from('endomarketing_packages')
-        .select('*')
-        .eq('id', contract.package_id).single();
-
-      if (pkgErr || !pkg) {
-        console.error('generateTasks: package fetch error', pkgErr);
-        return false;
-      }
-
-      // Fetch ALL existing tasks for this partner in the date range BEFORE deleting
-      const existingQuery = (supabase as any).from('endomarketing_partner_tasks')
-        .select('date, start_time, duration_minutes, contract_id')
-        .gte('date', fromDate).lte('date', toDate)
-        .neq('status', 'cancelada');
-      if (contract.partner_id) {
-        existingQuery.eq('partner_id', contract.partner_id);
-      }
-      const { data: existingTasks } = await existingQuery;
-
-      // Build a map of occupied time slots per date (excluding THIS contract's tasks since we'll regenerate them)
-      const occupiedSlots = new Map<string, { start: number; end: number }[]>();
-      if (existingTasks) {
-        for (const t of existingTasks) {
-          if (!t.start_time || t.contract_id === contractId) continue;
-          const [h, m] = t.start_time.split(':').map(Number);
-          const startMin = h * 60 + m;
-          const slots = occupiedSlots.get(t.date) || [];
-          slots.push({ start: startMin, end: startMin + (Number(t.duration_minutes) || 60) });
-          occupiedSlots.set(t.date, slots);
-        }
-      }
-
-      // NOW delete existing pending tasks for this contract
-      await (supabase as any).from('endomarketing_partner_tasks')
-        .delete().eq('contract_id', contractId).eq('status', 'pendente')
-        .gte('date', fromDate).lte('date', toDate);
-
-      // Find next available start time on a given date (08:30-18:00 window)
-      const WORK_START = 8 * 60 + 30; // 08:30
-      const WORK_END = 18 * 60;  // 18:00
-      const BUFFER = 15; // 15 min buffer between tasks
-
-      const findAvailableTime = (dateStr: string, durationMin: number): string => {
-        const slots = occupiedSlots.get(dateStr) || [];
-        slots.sort((a, b) => a.start - b.start);
-
-        let candidate = WORK_START;
-        for (const slot of slots) {
-          if (candidate + durationMin <= slot.start) break;
-          candidate = Math.max(candidate, slot.end + BUFFER);
-        }
-        if (candidate + durationMin > WORK_END) {
-          candidate = WORK_START; // fallback if no slot fits
-        }
-        const hours = Math.floor(candidate / 60).toString().padStart(2, '0');
-        const mins = (candidate % 60).toString().padStart(2, '0');
-        return `${hours}:${mins}`;
-      };
-
-      const tasksToInsert: any[] = [];
-      let current = new Date(fromDate + 'T12:00:00');
-      const end = new Date(toDate + 'T12:00:00');
-
-      // Define which weekdays to include based on sessions_per_week
-      const getPresencaDays = (sessionsPerWeek: number): number[] => {
-        switch (sessionsPerWeek) {
-          case 1: return [0]; // Mon
-          case 2: return [0, 2]; // Mon, Wed
-          case 3: return [0, 2, 4]; // Mon, Wed, Fri
-          case 4: return [0, 1, 2, 3]; // Mon-Thu
-          case 5: return [0, 1, 2, 3, 4]; // Mon-Fri
-          default: return sessionsPerWeek >= 5 ? [0, 1, 2, 3, 4] : [0];
-        }
-      };
-
-      while (current <= end) {
-        const dow = getDay(current); // 0=Sun
-        const dateStr = format(current, 'yyyy-MM-dd');
-        const isWeekday = dow >= 1 && dow <= 5;
-
-        if (isWeekday) {
-          const dayIdx = dow - 1; // 0=Mon..4=Fri
-
-          if (pkg.category === 'presenca_completa') {
-            const allowedDays = getPresencaDays(pkg.sessions_per_week);
-            if (allowedDays.includes(dayIdx)) {
-              const durationMin = Math.round((pkg.duration_hours || 2) * 60);
-              const startTime = findAvailableTime(dateStr, durationMin);
-              const task = {
-                contract_id: contractId, client_id: contract.client_id,
-                partner_id: contract.partner_id, date: dateStr,
-                start_time: startTime,
-                duration_minutes: durationMin,
-                task_type: 'presenca', status: 'pendente',
-              };
-              tasksToInsert.push(task);
-              // Register this slot as occupied for subsequent tasks on same date
-              const [h, m] = startTime.split(':').map(Number);
-              const startMin = h * 60 + m;
-              const slots = occupiedSlots.get(dateStr) || [];
-              slots.push({ start: startMin, end: startMin + durationMin });
-              occupiedSlots.set(dateStr, slots);
-            }
-          } else if (pkg.category === 'gravacao_concentrada') {
-            if (pkg.sessions_per_week > 0 && dow === 1) {
-              const durationMin = Math.round((pkg.duration_hours || 2) * 60);
-              const startTime = findAvailableTime(dateStr, durationMin);
-              const task = {
-                contract_id: contractId, client_id: contract.client_id,
-                partner_id: contract.partner_id, date: dateStr,
-                start_time: startTime,
-                duration_minutes: durationMin,
-                task_type: 'gravacao', status: 'pendente',
-              };
-              tasksToInsert.push(task);
-              const [h, m] = startTime.split(':').map(Number);
-              const startMin = h * 60 + m;
-              const slots = occupiedSlots.get(dateStr) || [];
-              slots.push({ start: startMin, end: startMin + durationMin });
-              occupiedSlots.set(dateStr, slots);
-            }
-          }
-        }
-        current = addDays(current, 1);
-      }
-
-      if (tasksToInsert.length > 0) {
-        // Insert in batches of 50
-        for (let i = 0; i < tasksToInsert.length; i += 50) {
-          const batch = tasksToInsert.slice(i, i + 50);
-          const { error: insertErr } = await (supabase as any).from('endomarketing_partner_tasks').insert(batch);
-          if (insertErr) {
-            console.error('generateTasks: insert error', insertErr);
-            return false;
-          }
-        }
-        fetchTasks();
-      }
-      return true;
-    } catch (err) {
-      console.error('generateTasks: unexpected error', err);
-      return false;
-    }
+  const generateTasks = async (contractId: string, fromDate: string, toDate: string, options?: GenerateEndoTasksOptions) => {
+    const ok = await generateEndoContractTasks(contractId, fromDate, toDate, options);
+    if (ok) fetchTasks();
+    return ok;
   };
 
   return { tasks, loading, completeTask, updateTask, cancelTask, generateTasks, refresh: fetchTasks };
+}
+
+export interface GenerateEndoTasksOptions {
+  /** Não apaga nem recria pendentes antes de hoje (usado no 'Regenerar Todas'). */
+  notBeforeToday?: boolean;
+}
+
+/** Gera as tarefas de um contrato no período. Fora do hook porque a edição do contrato também regenera. */
+export async function generateEndoContractTasks(
+contractId: string, fromDate: string, toDate: string, options: GenerateEndoTasksOptions = {},
+): Promise<boolean> {
+  try {
+    // Fetch contract and package separately to avoid join issues
+    const { data: contract, error: contractErr } = await (supabase as any)
+      .from('client_endomarketing_contracts')
+      .select('*')
+      .eq('id', contractId).single();
+
+    if (contractErr || !contract) {
+      console.error('generateTasks: contract fetch error', contractErr);
+      return false;
+    }
+    if (contract.status !== 'ativo') return false;
+
+    // Regenerar Todas só mexe de hoje em diante (o diálogo Gerar Tarefas aceita datas passadas
+    // de propósito). Nada nasce antes do início do contrato.
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const clearFrom = options.notBeforeToday && today > fromDate ? today : fromDate;
+    const contractStart = normalizeDateOnly(contract.start_date);
+    const generateFrom = contractStart && contractStart > clearFrom ? contractStart : clearFrom;
+    if (clearFrom > toDate) return true;
+
+    const { data: pkg, error: pkgErr } = await (supabase as any)
+      .from('endomarketing_packages')
+      .select('*')
+      .eq('id', contract.package_id).single();
+
+    if (pkgErr || !pkg) {
+      console.error('generateTasks: package fetch error', pkgErr);
+      return false;
+    }
+
+    // Fetch ALL existing tasks for this partner in the date range BEFORE deleting
+    const existingQuery = (supabase as any).from('endomarketing_partner_tasks')
+      .select('date, start_time, duration_minutes, contract_id')
+      .gte('date', clearFrom).lte('date', toDate)
+      .neq('status', 'cancelada');
+    if (contract.partner_id) {
+      existingQuery.eq('partner_id', contract.partner_id);
+    }
+    const { data: existingTasks } = await existingQuery;
+
+    // Build a map of occupied time slots per date (excluding THIS contract's tasks since we'll regenerate them)
+    const occupiedSlots = new Map<string, { start: number; end: number }[]>();
+    if (existingTasks) {
+      for (const t of existingTasks) {
+        if (!t.start_time || t.contract_id === contractId) continue;
+        const [h, m] = t.start_time.split(':').map(Number);
+        const startMin = h * 60 + m;
+        const taskDate = normalizeDateOnly(t.date);
+        const slots = occupiedSlots.get(taskDate) || [];
+        slots.push({ start: startMin, end: startMin + (Number(t.duration_minutes) || 60) });
+        occupiedSlots.set(taskDate, slots);
+      }
+    }
+
+    // Dias em que este contrato já tem tarefa concluída ou cancelada não ganham outra pendente
+    // (antes cada regeneração duplicava os dias já feitos).
+    const { data: keptTasks, error: keptErr } = await (supabase as any).from('endomarketing_partner_tasks')
+      .select('date, task_type')
+      .eq('contract_id', contractId)
+      .in('status', ['concluida', 'cancelada'])
+      .gte('date', generateFrom).lte('date', toDate);
+    if (keptErr) {
+      console.error('generateTasks: existing tasks fetch error', keptErr);
+      return false;
+    }
+    const keptSlots = new Set<string>((keptTasks || []).map((t: any) => `${normalizeDateOnly(t.date)}|${t.task_type}`));
+
+    // NOW delete existing pending tasks for this contract
+    const { error: deleteErr } = await (supabase as any).from('endomarketing_partner_tasks')
+      .delete().eq('contract_id', contractId).eq('status', 'pendente')
+      .gte('date', clearFrom).lte('date', toDate);
+    if (deleteErr) {
+      console.error('generateTasks: delete pending error', deleteErr);
+      return false;
+    }
+
+    // Find next available start time on a given date (08:30-18:00 window)
+    const WORK_START = 8 * 60 + 30; // 08:30
+    const WORK_END = 18 * 60;  // 18:00
+    const BUFFER = 15; // 15 min buffer between tasks
+
+    const findAvailableTime = (dateStr: string, durationMin: number): string => {
+      const slots = occupiedSlots.get(dateStr) || [];
+      slots.sort((a, b) => a.start - b.start);
+
+      let candidate = WORK_START;
+      for (const slot of slots) {
+        if (candidate + durationMin <= slot.start) break;
+        candidate = Math.max(candidate, slot.end + BUFFER);
+      }
+      if (candidate + durationMin > WORK_END) {
+        candidate = WORK_START; // fallback if no slot fits
+      }
+      const hours = Math.floor(candidate / 60).toString().padStart(2, '0');
+      const mins = (candidate % 60).toString().padStart(2, '0');
+      return `${hours}:${mins}`;
+    };
+
+    const tasksToInsert: any[] = [];
+    let current = new Date(generateFrom + 'T12:00:00');
+    const end = new Date(toDate + 'T12:00:00');
+
+    // Define which weekdays to include based on sessions_per_week
+    const getPresencaDays = (sessionsPerWeek: number): number[] => {
+      switch (sessionsPerWeek) {
+        case 1: return [0]; // Mon
+        case 2: return [0, 2]; // Mon, Wed
+        case 3: return [0, 2, 4]; // Mon, Wed, Fri
+        case 4: return [0, 1, 2, 3]; // Mon-Thu
+        case 5: return [0, 1, 2, 3, 4]; // Mon-Fri
+        default: return sessionsPerWeek >= 5 ? [0, 1, 2, 3, 4] : [0];
+      }
+    };
+
+    while (current <= end) {
+      const dow = getDay(current); // 0=Sun
+      const dateStr = format(current, 'yyyy-MM-dd');
+      const isWeekday = dow >= 1 && dow <= 5;
+
+      if (isWeekday) {
+        const dayIdx = dow - 1; // 0=Mon..4=Fri
+
+        if (pkg.category === 'presenca_completa') {
+          const allowedDays = getPresencaDays(pkg.sessions_per_week);
+          if (allowedDays.includes(dayIdx) && !keptSlots.has(`${dateStr}|presenca`)) {
+            const durationMin = Math.round((pkg.duration_hours || 2) * 60);
+            const startTime = findAvailableTime(dateStr, durationMin);
+            const task = {
+              contract_id: contractId, client_id: contract.client_id,
+              partner_id: contract.partner_id, date: dateStr,
+              start_time: startTime,
+              duration_minutes: durationMin,
+              task_type: 'presenca', status: 'pendente',
+            };
+            tasksToInsert.push(task);
+            // Register this slot as occupied for subsequent tasks on same date
+            const [h, m] = startTime.split(':').map(Number);
+            const startMin = h * 60 + m;
+            const slots = occupiedSlots.get(dateStr) || [];
+            slots.push({ start: startMin, end: startMin + durationMin });
+            occupiedSlots.set(dateStr, slots);
+          }
+        } else if (pkg.category === 'gravacao_concentrada') {
+          if (pkg.sessions_per_week > 0 && dow === 1 && !keptSlots.has(`${dateStr}|gravacao`)) {
+            const durationMin = Math.round((pkg.duration_hours || 2) * 60);
+            const startTime = findAvailableTime(dateStr, durationMin);
+            const task = {
+              contract_id: contractId, client_id: contract.client_id,
+              partner_id: contract.partner_id, date: dateStr,
+              start_time: startTime,
+              duration_minutes: durationMin,
+              task_type: 'gravacao', status: 'pendente',
+            };
+            tasksToInsert.push(task);
+            const [h, m] = startTime.split(':').map(Number);
+            const startMin = h * 60 + m;
+            const slots = occupiedSlots.get(dateStr) || [];
+            slots.push({ start: startMin, end: startMin + durationMin });
+            occupiedSlots.set(dateStr, slots);
+          }
+        }
+      }
+      current = addDays(current, 1);
+    }
+
+    if (tasksToInsert.length > 0) {
+      // Insert in batches of 50
+      for (let i = 0; i < tasksToInsert.length; i += 50) {
+        const batch = tasksToInsert.slice(i, i + 50);
+        const { error: insertErr } = await (supabase as any).from('endomarketing_partner_tasks').insert(batch);
+        if (insertErr) {
+          console.error('generateTasks: insert error', insertErr);
+          return false;
+        }
+      }
+    }
+    return true;
+  } catch (err) {
+    console.error('generateTasks: unexpected error', err);
+    return false;
+  }
 }
 
 // ─── Metrics ────────────────────────────────

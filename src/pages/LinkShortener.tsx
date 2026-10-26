@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/vpsDb";
+import { isSafeRedirectUrl } from "@/lib/safeUrl";
 import { useAuth } from "@/hooks/useAuth";
 import { useCity } from "@/contexts/CityContext";
 import { Button } from "@/components/ui/button";
@@ -88,10 +89,8 @@ export default function LinkShortener() {
       toast.error("Preencha campanha e URL");
       return;
     }
-    try {
-      new URL(url);
-    } catch {
-      toast.error("URL inválida (inclua https://)");
+    if (!isSafeRedirectUrl(url)) {
+      toast.error("URL inválida (comece com https:// ou http://)");
       return;
     }
     const slug = (customSlug.trim() || randomSlug()).toLowerCase().replace(/[^a-z0-9-]/g, "");

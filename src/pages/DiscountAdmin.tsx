@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/lib/vpsDb';
+import { supabase, getActiveCity } from '@/lib/vpsDb';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,7 @@ const VPS_API = 'https://agenciapulse.tech/api';
 const TOKEN_KEY = 'pulse_jwt';
 
 function getVpsAuthHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', 'x-pulse-city': getActiveCity() };
   const token = localStorage.getItem(TOKEN_KEY);
 
   if (token) {
@@ -114,19 +114,12 @@ export default function DiscountAdmin() {
       const safeClients = clientsData || [];
       setClients(safeClients);
 
-      const campaignResults = await Promise.all(
-        safeClients.map(async (client) => {
-          try {
-            const res = await fetch(`${VPS_API}/discount-stats/${client.id}`, { headers: getVpsAuthHeaders() });
-            const data = await res.json();
-            return data.campaigns || [];
-          } catch {
-            return [];
-          }
-        })
-      );
-
-      setCampaigns(campaignResults.flat());
+      // Uma chamada só com as campanhas dos clientes da cidade (antes era uma por cliente,
+      // cada uma baixando todos os cupons).
+      const res = await fetch(`${VPS_API}/discount-campaigns`, { headers: getVpsAuthHeaders() });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Erro ao carregar campanhas');
+      setCampaigns(data.campaigns || []);
     } catch (e: any) {
       setClients([]);
       setCampaigns([]);

@@ -44,13 +44,26 @@ const EMPTY_CAMPAIGN: Partial<PromoCampaign> = {
   require_document: false,
   accent_color: '#E11D48',
   code_prefix: 'PULSE',
-  validation_pin: '1234',
+  validation_pin: '',
   business_segment: 'generico',
   earn_ticket_text: '',
   redeem_instruction_text: '',
   operator_label: '',
   is_active: true,
 };
+
+/** PIN do caixa sorteado para o sorteio novo (antes vinha sempre '1234'). */
+function randomCashierPin() {
+  const values = new Uint32Array(1);
+  crypto.getRandomValues(values);
+  return String(100000 + (values[0] % 900000));
+}
+
+/** Mesma regra do servidor: 6 caracteres ou mais e nada óbvio. */
+function isWeakCashierPin(pin: string | undefined) {
+  const value = String(pin || '').trim();
+  return value.length < 6 || /^(.)\1+$/.test(value) || ['123456', '654321', '123123', '1234567', '12345678'].includes(value);
+}
 
 const EMPTY_PRIZE: Partial<PromoPrize> = {
   name: '',
@@ -161,6 +174,8 @@ export default function PromoAdmin() {
   const [prizes, setPrizes] = useState<PromoPrize[]>([]);
   const [prizeForm, setPrizeForm] = useState<Partial<PromoPrize>>(EMPTY_PRIZE);
   const [prizeDialog, setPrizeDialog] = useState(false);
+  // Saldo do prêmio quando o diálogo abriu: só um ajuste feito à mão é enviado.
+  const [prizeOpenedRemaining, setPrizeOpenedRemaining] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
 
   const [tickets, setTickets] = useState<PromoTicket[]>([]);
@@ -244,7 +259,16 @@ export default function PromoAdmin() {
     if (!selectedId) return;
     setSaving(true);
     try {
-      await savePromoPrize({ ...prizeForm, campaign_id: selectedId });
+      // Sem mexer no saldo, ele não vai no corpo: o servidor ajusta pela diferença do total
+      // e não devolve ao estoque o que foi sorteado enquanto o diálogo estava aberto.
+      const { remaining_quantity: remaining, ...prizeFields } = prizeForm;
+      const manualRemaining = !!prizeForm.id && remaining !== undefined && prizeOpenedRemaining !== null
+        && Number(remaining) !== Number(prizeOpenedRemaining);
+      await savePromoPrize({
+        ...prizeFields,
+        campaign_id: selectedId,
+        ...(manualRemaining ? { remaining_quantity: remaining, expected_remaining: prizeOpenedRemaining } : {}),
+      });
       toast.success('Prêmio salvo!');
       setPrizeDialog(false);
       const r = await listPromoPrizes(selectedId);
@@ -357,7 +381,7 @@ export default function PromoAdmin() {
         <Button
           className="hidden sm:inline-flex"
           onClick={() => {
-            setCampaignForm(EMPTY_CAMPAIGN);
+            setCampaignForm({ ...EMPTY_CAMPAIGN, validation_pin: randomCashierPin() });
             setCampaignDialog(true);
           }}
         >
@@ -370,7 +394,7 @@ export default function PromoAdmin() {
         size="lg"
         className="fixed bottom-4 left-3 right-3 z-40 h-12 shadow-lg sm:hidden"
         onClick={() => {
-          setCampaignForm(EMPTY_CAMPAIGN);
+          setCampaignForm({ ...EMPTY_CAMPAIGN, validation_pin: randomCashierPin() });
           setCampaignDialog(true);
         }}
       >
@@ -442,6 +466,7 @@ export default function PromoAdmin() {
                       size="sm"
                       onClick={() => {
                         setPrizeForm(EMPTY_PRIZE);
+                        setPrizeOpenedRemaining(null);
                         setPrizeDialog(true);
                       }}
                     >
@@ -476,6 +501,7 @@ export default function PromoAdmin() {
                                 variant="outline"
                                 onClick={() => {
                                   setPrizeForm(prize);
+                                  setPrizeOpenedRemaining(Number(prize.remaining_quantity) || 0);
                                   setPrizeDialog(true);
                                 }}
                               >
@@ -805,7 +831,12 @@ export default function PromoAdmin() {
               </div>
               <div>
                 <Label>PIN do caixa</Label>
-                <Input value={campaignForm.validation_pin || ''} onChange={(e) => setCampaignForm((f) => ({ ...f, validation_pin: e.target.value }))} placeholder="1234" />
+                <Input value={campaignForm.validation_pin || ''} onChange={(e) => setCampaignForm((f) => ({ ...f, validation_pin: e.target.value }))} placeholder="6 dígitos ou mais" />
+                {isWeakCashierPin(campaignForm.validation_pin) ? (
+                  <p className="mt-1 text-xs text-amber-500">
+                    PIN fraco: use 6 caracteres ou mais. Ao trocar, avise o caixa do PIN novo.
+                  </p>
+                ) : null}
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">

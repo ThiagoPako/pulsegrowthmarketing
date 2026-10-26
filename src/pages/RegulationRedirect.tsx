@@ -1,20 +1,19 @@
 import { useEffect, useState, lazy, Suspense } from "react";
 import { useParams } from "react-router-dom";
-import { supabase } from "@/lib/vpsDb";
+import { isSafeRedirectUrl } from "@/lib/safeUrl";
 
 const pulseLogo = { url: "/pulse-logo.png" };
+const API_BASE = "https://agenciapulse.tech";
 
 const CUSTOM_TEMPLATES: Record<string, React.LazyExoticComponent<React.ComponentType<any>>> = {
   "super-brasil-desafio-10s": lazy(() => import("@/pages/regulations/SuperBrasilDesafio10s")),
 };
 
 type Regulation = {
-  id: string;
   title: string;
   client_name: string;
   content: string | null;
   external_url: string | null;
-  active: boolean;
 };
 
 export default function RegulationRedirect() {
@@ -27,33 +26,39 @@ export default function RegulationRedirect() {
     let cancelled = false;
     async function go() {
       if (!slug) return;
-      const { data } = await supabase
-        .from("regulations")
-        .select("id, title, client_name, content, external_url, active")
-        .eq("slug", slug)
-        .maybeSingle();
+      const tpl = CUSTOM_TEMPLATES[slug.toLowerCase()];
+      // Rota pública (sem login): regulamento ativo e contagem do acesso.
+      let data: Regulation | null = null;
+      let inactive = false;
+      try {
+        const response = await fetch(`${API_BASE}/api/public/regulations/${encodeURIComponent(slug)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ referrer: document.referrer || null }),
+        });
+        const payload = response.ok ? await response.json().catch(() => null) : null;
+        data = payload?.regulation ?? null;
+        inactive = payload?.inactive === true;
+      } catch {
+        data = null;
+      }
 
       if (cancelled) return;
-      if (!data || !data.active) {
+      // O modelo fixo (ex.: super-brasil-desafio-10s) aparece mesmo sem linha no banco,
+      // mas não quando o regulamento foi desativado.
+      if (inactive || (!data && !tpl)) {
         setStatus("notfound");
         return;
       }
 
-      // Log click (fire-and-forget)
-      supabase.from("regulation_clicks").insert({
-        regulation_id: data.id,
-        user_agent: navigator.userAgent,
-        referrer: document.referrer || null,
-      }).then(() => {});
-
-      if (data.external_url) {
+      if (data?.external_url && isSafeRedirectUrl(data.external_url)) {
+        const target = data.external_url;
         setTimeout(() => {
-          window.location.replace(data.external_url as string);
+          window.location.replace(target);
         }, 1400);
       } else {
-        const tpl = slug ? CUSTOM_TEMPLATES[slug] : undefined;
         setTimeout(() => {
-          setReg(data as Regulation);
+          setReg(data);
           if (tpl) {
             setCustomTpl(() => tpl);
             setStatus("custom");

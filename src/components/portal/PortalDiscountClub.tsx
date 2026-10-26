@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Check, X, Ticket, DollarSign, TrendingUp, ShoppingBag, Loader2, Tag, Clock } from 'lucide-react';
 import { toast } from 'sonner';
+import { portalHeaders } from '@/lib/portalApi';
 
 const VPS_API = 'https://agenciapulse.tech/api';
 
@@ -78,8 +79,13 @@ export default function PortalDiscountClub({ clientId, clientColor }: Props) {
 
   const loadStats = async () => {
     try {
-      const res = await fetch(`${VPS_API}/discount-stats/${clientId}`);
+      // Sessão do portal (ou da equipe): sem ela o servidor não entrega cupons nem telefones.
+      const res = await fetch(`${VPS_API}/discount-stats/${clientId}`, { headers: portalHeaders() });
       const data = await res.json();
+      if (!res.ok) {
+        toast.error(data?.error || 'Não foi possível carregar o clube de descontos');
+        return;
+      }
       setStats(data.stats);
       setCoupons(data.coupons || []);
       setCampaigns(data.campaigns || []);
@@ -100,7 +106,7 @@ export default function PortalDiscountClub({ clientId, clientColor }: Props) {
     try {
       const res = await fetch(`${VPS_API}/discount-verify`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: portalHeaders(),
         body: JSON.stringify({
           code: verifyCode.trim().toUpperCase(),
           client_id: clientId,

@@ -158,7 +158,7 @@ export default function PromoValidate() {
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === 'Enter' && lookup()}
-              placeholder="A3P-8492"
+              placeholder="A3P-K7M2QX"
               className="mt-1 h-14 border-white/15 bg-black/40 text-center text-2xl font-black tracking-widest text-white"
             />
           </div>

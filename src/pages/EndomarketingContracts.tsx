@@ -91,13 +91,14 @@ export default function EndomarketingContracts() {
     }
 
     if (editing) {
-      await updateContract(editing.id, {
+      const ok = await updateContract(editing.id, {
         package_id: formPackageId,
         partner_id: formPartnerId || null,
         partner_cost: formPartnerCost,
         sale_price: formSalePrice,
         start_date: formStartDate,
       } as any);
+      if (!ok) return; // o erro já foi avisado; o diálogo fica aberto
       toast.success('Contrato atualizado');
     } else {
       const ok = await addContract({
@@ -115,8 +116,8 @@ export default function EndomarketingContracts() {
   };
 
   const handleDeactivate = async (id: string) => {
-    await deactivateContract(id);
-    toast.success('Contrato desativado');
+    if (!confirm('Desativar este contrato? As tarefas pendentes dele de hoje em diante serão canceladas.')) return;
+    if (await deactivateContract(id)) toast.success('Contrato desativado');
   };
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });

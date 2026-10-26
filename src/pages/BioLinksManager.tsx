@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,6 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { BioButtonList } from '@/pages/PublicBioLink';
 import BioSectionsEditor from '@/components/bio/BioSectionsEditor';
 import BioSectionsView from '@/components/bio/BioSectionsView';
 import {
@@ -268,15 +267,6 @@ export default function BioLinksManager() {
       toast.error(error?.message || 'Erro ao excluir');
     }
   }
-
-  const previewButtons = useMemo(
-    () => [
-      { id: 'p1', label: 'WhatsApp Comercial', type: 'whatsapp' as const, value: '5562999999999' },
-      { id: 'p2', label: 'Como chegar', type: 'location' as const, value: 'https://maps.google.com' },
-      { id: 'p3', label: 'Instagram', type: 'social' as const, value: 'https://instagram.com' },
-    ],
-    [],
-  );
 
   const avatarPx = AVATAR_SIZE_PX[theme.avatarSize] ?? AVATAR_SIZE_PX.md;
 
@@ -616,9 +606,8 @@ export default function BioLinksManager() {
                       {formData.description || 'Descrição curta do cliente'}
                     </p>
                   </div>
-                  <div className="w-full">
-                    <BioButtonList buttons={previewButtons} theme={theme} />
-                  </div>
+                  {/* Os três botões de exemplo que ficavam aqui não existiam na página publicada
+                      (não há cadastro de botões); a prévia mostra só o que vai ao ar. */}
                   <BioSectionsView sections={sections} theme={theme} />
                 </div>
               </div>

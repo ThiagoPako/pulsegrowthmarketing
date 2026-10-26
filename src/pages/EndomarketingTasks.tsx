@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
@@ -33,6 +34,8 @@ export default function EndomarketingTasks() {
   const [generating, setGenerating] = useState(false);
   const [sendingNotifications, setSendingNotifications] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [cancelingTaskId, setCancelingTaskId] = useState<string | null>(null);
+  const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
 
   const formatTaskGroupDate = (dateValue: string) => {
     const parsed = new Date(`${dateValue}T12:00:00`);
@@ -74,11 +77,17 @@ export default function EndomarketingTasks() {
   const handleRegenerateAll = async () => {
     const activeContracts = contracts.filter(c => c.status === 'ativo');
     if (activeContracts.length === 0) { toast.error('Nenhum contrato ativo'); return; }
+    // De hoje em diante: o que já passou (inclusive pendentes atrasadas) fica como está.
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const from = genFrom > today ? genFrom : today;
+    if (from > genTo) { toast.error('O período escolhido já passou. Ajuste as datas em "Gerar Tarefas".'); return; }
+    const periodLabel = `${format(new Date(`${from}T12:00:00`), 'dd/MM/yyyy')} a ${format(new Date(`${genTo}T12:00:00`), 'dd/MM/yyyy')}`;
+    if (!confirm(`Regenerar as tarefas pendentes de ${activeContracts.length} contrato(s) de ${periodLabel}? Tarefas concluídas e canceladas são mantidas.`)) return;
     setGenerating(true);
     let success = 0;
     let fail = 0;
     for (const c of activeContracts) {
-      const ok = await generateTasks(c.id, genFrom, genTo);
+      const ok = await generateTasks(c.id, genFrom, genTo, { notBeforeToday: true });
       if (ok) success++; else fail++;
     }
     setGenerating(false);
@@ -104,14 +113,22 @@ export default function EndomarketingTasks() {
   };
 
   const handleComplete = async () => {
-    await completeTask(completingTaskId, completeNotes);
+    setBusyTaskId(completingTaskId);
+    const ok = await completeTask(completingTaskId, completeNotes);
+    setBusyTaskId(null);
+    if (!ok) return; // o erro já foi avisado; o diálogo fica aberto para tentar de novo
     toast.success('Tarefa concluída! ✅');
     setCompleteDialogOpen(false);
   };
 
-  const handleCancel = async (id: string) => {
-    await cancelTask(id);
-    toast.success('Tarefa cancelada');
+  const handleCancel = async () => {
+    const id = cancelingTaskId;
+    setCancelingTaskId(null);
+    if (!id) return;
+    setBusyTaskId(id);
+    const ok = await cancelTask(id);
+    setBusyTaskId(null);
+    if (ok) toast.success('Tarefa cancelada');
   };
 
   const handleSendDailyNotifications = async () => {
@@ -288,10 +305,10 @@ export default function EndomarketingTasks() {
                     <div className="hidden sm:flex items-center gap-2 shrink-0">
                       {t.status === 'pendente' && (
                         <>
-                          <Button size="sm" variant="ghost" onClick={() => handleCancel(t.id)}>
+                          <Button size="sm" variant="ghost" onClick={() => setCancelingTaskId(t.id)} disabled={busyTaskId === t.id}>
                             <XCircle size={14} className="text-destructive" />
                           </Button>
-                          <Button size="sm" onClick={() => openComplete(t.id)} className="gap-1">
+                          <Button size="sm" onClick={() => openComplete(t.id)} disabled={busyTaskId === t.id} className="gap-1">
                             <CheckCircle size={14} /> Concluir
                           </Button>
                         </>
@@ -308,10 +325,10 @@ export default function EndomarketingTasks() {
                   {/* Mobile action buttons */}
                   {t.status === 'pendente' && (
                     <div className="flex sm:hidden gap-1.5 px-2.5 pb-2.5">
-                      <Button size="sm" variant="outline" onClick={() => handleCancel(t.id)} className="flex-1 h-8 text-xs gap-1 text-destructive border-destructive/30">
+                      <Button size="sm" variant="outline" onClick={() => setCancelingTaskId(t.id)} disabled={busyTaskId === t.id} className="flex-1 h-8 text-xs gap-1 text-destructive border-destructive/30">
                         <XCircle size={12} /> Cancelar
                       </Button>
-                      <Button size="sm" onClick={() => openComplete(t.id)} className="flex-1 h-8 text-xs gap-1">
+                      <Button size="sm" onClick={() => openComplete(t.id)} disabled={busyTaskId === t.id} className="flex-1 h-8 text-xs gap-1">
                         <CheckCircle size={12} /> Concluir
                       </Button>
                     </div>
@@ -352,7 +369,7 @@ export default function EndomarketingTasks() {
               </div>
             </div>
             <p className="text-[10px] sm:text-xs text-muted-foreground">
-              As tarefas pendentes existentes no período serão substituídas. Tarefas já concluídas serão mantidas.
+              As tarefas pendentes existentes no período serão substituídas. Dias com tarefa concluída ou cancelada são mantidos e não ganham outra.
             </p>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -377,12 +394,30 @@ export default function EndomarketingTasks() {
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setCompleteDialogOpen(false)} size="sm">Cancelar</Button>
-            <Button onClick={handleComplete} size="sm" className="gap-1">
-              <CheckCircle size={14} /> Confirmar
+            <Button onClick={handleComplete} size="sm" className="gap-1" disabled={busyTaskId === completingTaskId}>
+              <CheckCircle size={14} /> {busyTaskId === completingTaskId ? 'Salvando...' : 'Confirmar'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Cancel Task Confirmation */}
+      <AlertDialog open={!!cancelingTaskId} onOpenChange={(open) => { if (!open) setCancelingTaskId(null); }}>
+        <AlertDialogContent className="mx-2 sm:mx-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar esta tarefa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A tarefa sai da agenda do parceiro e não pode ser reativada por esta tela.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancel} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Cancelar tarefa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

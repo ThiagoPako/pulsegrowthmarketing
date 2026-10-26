@@ -756,8 +756,8 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
   const TypeIcon = typeConfig.icon;
   const colConfig = KANBAN_COLUMNS.find(c => c.id === task.kanban_column);
 
-  const syncTask = async (newColumn: string) => {
-    const ctx = buildSyncContext(task as any, {
+  const syncTask = async (newColumn: string, overrides?: Record<string, any>) => {
+    const ctx = buildSyncContext({ ...task, ...overrides } as any, {
       userId: user?.id,
       clientName: client?.companyName,
       clientWhatsapp: client?.whatsapp,
@@ -881,7 +881,8 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
       ...(isReviewer ? { assigned_to: user?.id } : {}),
       updated_at: new Date().toISOString(),
     } as any).eq('id', task.id);
-    await syncTask('alteracao');
+    // O pedido imediato precisa chegar ao sync (sem prazo e com aviso "IMEDIATO" ao editor)
+    await syncTask('alteracao', { immediate_alteration: adjustmentImmediate });
     toast.success(adjustmentImmediate ? '🚨 Alteração IMEDIATA solicitada!' : '📝 Ajustes solicitados');
     onRefresh();
     onOpenChange(false);

@@ -6011,9 +6011,11 @@ app.post('/api/portal-actions', async (req, res) => {
       if (!content_id) return res.status(400).json({ error: 'content_id required' });
       // Idempotente (clique duplo não aprova nem avisa duas vezes) e nunca em 'revisao_interna':
       // o vídeo ainda não foi liberado para o cliente. O Kanban se mexe aqui mesmo.
+      // 'agendado'/'publicado' (agendamento do conteúdo avulso) contam como aprovado: não regrava.
       const { rows: [approvedContent] } = await pool.query(
         `UPDATE client_portal_contents SET status = 'aprovado', approved_at = NOW(), updated_at = NOW()
-          WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) AND status NOT IN ('aprovado', 'revisao_interna')
+          WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)
+            AND status NOT IN ('aprovado', 'agendado', 'publicado', 'revisao_interna')
           RETURNING *`,
         [content_id, scopeClientId]
       );
@@ -6023,7 +6025,7 @@ app.post('/api/portal-actions', async (req, res) => {
           [content_id, scopeClientId]
         );
         if (!currentContent || (currentContent.status === 'revisao_interna' && !isTeamCaller)) return res.status(404).json({ error: 'Conteúdo não encontrado' });
-        if (currentContent.status === 'aprovado') return res.json({ success: true, already_approved: true });
+        if (['aprovado', 'agendado', 'publicado'].includes(currentContent.status)) return res.json({ success: true, already_approved: true });
         return res.status(409).json({ error: 'Este conteúdo ainda está em revisão interna' });
       }
       // A aprovação já foi gravada: falha no Kanban/avisos só vai para o log. Devolver erro aqui
@@ -6038,9 +6040,10 @@ app.post('/api/portal-actions', async (req, res) => {
 
     if (action === 'request_adjustment') {
       if (!content_id || !message) return res.status(400).json({ error: 'content_id and message required' });
+      // Agendado ou publicado: o ajuste não para o post (pede à equipe).
       const { rows: [adjustedContent] } = await pool.query(
         `UPDATE client_portal_contents SET status = 'ajuste_solicitado', updated_at = NOW()
-          WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) AND status <> 'revisao_interna'
+          WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid) AND status NOT IN ('revisao_interna', 'agendado', 'publicado')
           RETURNING *`,
         [content_id, scopeClientId]
       );
@@ -6049,6 +6052,9 @@ app.post('/api/portal-actions', async (req, res) => {
           'SELECT status FROM client_portal_contents WHERE id = $1 AND ($2::uuid IS NULL OR client_id = $2::uuid)',
           [content_id, scopeClientId]
         );
+        if (currentContent && ['agendado', 'publicado'].includes(currentContent.status)) {
+          return res.status(409).json({ error: 'Este conteúdo já está agendado/publicado. Fale com a equipe para alterar.' });
+        }
         if (!currentContent || !isTeamCaller) return res.status(404).json({ error: 'Conteúdo não encontrado' });
         return res.status(409).json({ error: 'Este conteúdo ainda está em revisão interna' });
       }

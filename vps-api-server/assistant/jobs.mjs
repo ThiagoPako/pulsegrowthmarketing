@@ -285,7 +285,7 @@ export function registerJobRoutes(app, { pool, uploadRoot, publicUploadsUrl, get
                 COALESCE(sum(arts_produced), 0)::int AS artes, COALESCE(sum(extras_produced), 0)::int AS extras, count(*)::int AS registros
            FROM delivery_records WHERE client_id = $1 AND date BETWEEN $2::date AND $3::date`, [client.id, start, end]),
       q(`SELECT id, title, content_type, approved_at FROM client_portal_contents
-          WHERE client_id = $1 AND status = 'aprovado' AND approved_at BETWEEN $2 AND $3 ORDER BY approved_at`, [client.id, startTs, endTs]),
+          WHERE client_id = $1 AND status IN ('aprovado', 'agendado', 'publicado') AND approved_at BETWEEN $2 AND $3 ORDER BY approved_at`, [client.id, startTs, endTs]),
       q(`SELECT id, title, content_type, updated_at FROM client_portal_contents
           WHERE client_id = $1 AND status = 'ajuste_solicitado' AND updated_at BETWEEN $2 AND $3`, [client.id, startTs, endTs]),
       q(`SELECT id, title, content_type, created_at FROM client_portal_contents WHERE client_id = $1 AND status = 'pendente' ORDER BY created_at`, [client.id]),

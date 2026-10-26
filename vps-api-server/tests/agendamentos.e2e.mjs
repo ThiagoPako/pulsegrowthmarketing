@@ -6,6 +6,7 @@
 // O banco precisa ter o esquema da produção (ex.: CREATE DATABASE pulse_agendamentos TEMPLATE pulse_db).
 
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -41,6 +42,7 @@ const ids = {
   // histórico do portal sem vínculo (antes de 25/10): não pode voltar como "não agendado"
   taskMay: '00000000-0000-0000-0000-00000000a626', portalMay: '00000000-0000-0000-0000-00000000a642',
   portalOld: '00000000-0000-0000-0000-00000000a643', portalSolo: '00000000-0000-0000-0000-00000000a644',
+  portalA: '00000000-0000-0000-0000-00000000a645',
 };
 const CLIENTS = [ids.cliMin, ids.cliNoAcc, ids.cliUru];
 const PEOPLE = [ids.thiago, ids.other, ids.social];
@@ -142,6 +144,12 @@ async function fixtures() {
             ($6, $3, 'Vídeo avulso novo', 'reel', $7, 'aprovado', now() - interval '1 day', 10, 2026)`,
     [ids.portalMay, ids.portalOld, ids.cliMin, MEDIA('maio.mp4'), MEDIA('antigo.mp4'), ids.portalSolo, MEDIA('solo.mp4')]
   );
+  // Vídeo A no portal, ligado ao card (aprovado pelo cliente)
+  await pool.query(
+    `INSERT INTO client_portal_contents (id, client_id, title, content_type, file_url, status, approved_at, season_month, season_year, content_task_id)
+     VALUES ($1, $2, 'Vídeo A', 'reel', $3, 'aprovado', now() - interval '2 days', 10, 2026, $4)`,
+    [ids.portalA, ids.cliMin, MEDIA('video.mp4'), ids.taskA]
+  );
 }
 
 // ── Sobe o servidor ────────────────────────────────────────────
@@ -181,6 +189,16 @@ const api = async (method, url, body, { auth = thiagoToken, city = 'minacu' } = 
     method,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth}`, 'x-pulse-city': city },
     body: body ? JSON.stringify(body) : undefined,
+  });
+  return { status: r.status, json: await r.json().catch(() => null) };
+};
+// Sessão do portal do cliente (mesmo segredo derivado do servidor)
+const PORTAL_SECRET = crypto.createHash('sha256').update(`${SECRET}:pulse-portal-session`).digest('hex');
+const portalAction = async (clientId, body) => {
+  const r = await fetch(`${BASE}/portal-actions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-portal-token': jwt.sign({ typ: 'portal', cid: clientId, puid: null }, PORTAL_SECRET, { expiresIn: '1h' }) },
+    body: JSON.stringify(body),
   });
   return { status: r.status, json: await r.json().catch(() => null) };
 };
@@ -306,6 +324,7 @@ try {
   assert.equal(schedA.mode, 'auto');
   assert.equal(schedA.when.time, '10:30');
   assert.ok(!r.json.unscheduled.some((i) => i.key === `conteudo:${ids.taskA}`));
+  assert.equal((await row(`SELECT status FROM client_portal_contents WHERE id = $1`, [ids.portalA])).status, 'aprovado', 'portal ligado ao card fica aprovado');
   ok('agendar com conta: cria o post na fila, grava a data no card, na entrega e move para Acompanhamento');
 
   // Repetir não duplica: o pendente anterior sai
@@ -416,7 +435,28 @@ try {
   assert.equal(task.posting_at, null);
   delivery = await row(`SELECT * FROM social_media_deliveries WHERE content_task_id = $1`, [ids.taskA]);
   assert.equal(delivery.status, 'entregue');
+  assert.equal((await row(`SELECT status FROM client_portal_contents WHERE id = $1`, [ids.portalA])).status, 'aprovado');
   ok('cancelar: post cancelado, card volta para Agendamentos e a entrega para Pronto p/ agendar');
+
+  // ── Conteúdo avulso agendado: o cliente não pede ajuste e o portal o trata como aprovado ──
+  r = await api('POST', '/scheduling/schedule', { client_id: ids.cliMin, kind: 'portal', id: ids.portalSolo, date: addDays(today, 4), time: '09:00', mode: 'manual' });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal((await row(`SELECT status FROM client_portal_contents WHERE id = $1`, [ids.portalSolo])).status, 'agendado');
+  r = await portalAction(ids.cliMin, { action: 'request_adjustment', content_id: ids.portalSolo, message: 'Troca a música' });
+  assert.equal(r.status, 409);
+  assert.equal(r.json.error, 'Este conteúdo já está agendado/publicado. Fale com a equipe para alterar.');
+  r = await portalAction(ids.cliMin, { action: 'approve', content_id: ids.portalSolo });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.already_approved, true);
+  assert.equal((await row(`SELECT status FROM client_portal_contents WHERE id = $1`, [ids.portalSolo])).status, 'agendado');
+  assert.equal((await row(`SELECT count(*)::int AS n FROM client_portal_comments WHERE content_id = $1`, [ids.portalSolo])).n, 0);
+  r = await portalAction(ids.cliMin, { action: 'request_adjustment', content_id: ids.portalA, message: 'Ajuste no vídeo A' });
+  assert.equal(r.status, 200, 'conteúdo ligado ao card (aprovado) segue o fluxo antigo');
+  await pool.query(`UPDATE client_portal_contents SET status = 'aprovado' WHERE id = $1`, [ids.portalA]);
+  r = await api('POST', '/scheduling/cancel', { client_id: ids.cliMin, kind: 'portal', id: ids.portalSolo });
+  assert.equal(r.status, 200);
+  assert.equal((await row(`SELECT status FROM client_portal_contents WHERE id = $1`, [ids.portalSolo])).status, 'aprovado');
+  ok('portal avulso agendado: pedido de ajuste do cliente recusado (409), aprovar não regrava; ligado ao card segue aprovado');
 
   // ── Publicado não remarca ──
   r = await api('POST', '/scheduling/schedule', {

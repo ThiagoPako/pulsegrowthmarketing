@@ -1117,10 +1117,7 @@ export function registerSchedulingRoutes(app, deps) {
         const detail = `${label} · ${mode === 'auto' ? `${platformLabel(prepared.platform)} (automático)` : 'manual'}`;
         if (kind === 'conteudo') {
           const wasScheduled = material.kanban_column === 'acompanhamento';
-          await db.query(
-            `UPDATE client_portal_contents SET status = 'agendado', updated_at = now() WHERE content_task_id = $1 AND status = 'aprovado'`,
-            [material.id]
-          );
+          // O conteúdo do portal ligado ao card fica 'aprovado' (o portal do cliente só conhece esse estado final).
           // Por último: os gatilhos da entrega/fila gravam posting_at também; o valor final é este.
           await db.query(
             `UPDATE content_tasks
@@ -1142,10 +1139,6 @@ export function registerSchedulingRoutes(app, deps) {
           }
         } else if (kind === 'arte') {
           const wasScheduled = !!material.posting_at;
-          await db.query(
-            `UPDATE client_portal_contents SET status = 'agendado', updated_at = now() WHERE design_task_id = $1 AND status = 'aprovado'`,
-            [material.id]
-          );
           await db.query(`UPDATE design_tasks SET posting_at = $2, updated_at = now() WHERE id = $1`, [material.id, whenIso]);
           await insertHistory(db, kind, material, user, wasScheduled ? '📅 Postagem remarcada' : '📅 Agendada para postagem', detail);
         } else if (kind === 'portal') {
@@ -1278,10 +1271,6 @@ export function registerSchedulingRoutes(app, deps) {
               WHERE content_task_id = $1 AND status = 'agendado'`,
             [material.id]
           );
-          await db.query(
-            `UPDATE client_portal_contents SET status = 'aprovado', updated_at = now() WHERE content_task_id = $1 AND status = 'agendado'`,
-            [material.id]
-          );
           // A data de gravação só é apagada quando era a data desta postagem (o agendar do Kanban grava ali).
           await db.query(
             `UPDATE content_tasks
@@ -1297,10 +1286,6 @@ export function registerSchedulingRoutes(app, deps) {
           }
         } else if (kind === 'arte') {
           await db.query(`UPDATE design_tasks SET posting_at = NULL, updated_at = now() WHERE id = $1`, [material.id]);
-          await db.query(
-            `UPDATE client_portal_contents SET status = 'aprovado', updated_at = now() WHERE design_task_id = $1 AND status = 'agendado'`,
-            [material.id]
-          );
           await insertHistory(db, kind, material, user, '↩️ Agendamento cancelado', null);
         } else if (kind === 'portal') {
           await db.query(

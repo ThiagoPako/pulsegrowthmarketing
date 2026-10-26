@@ -166,11 +166,14 @@ function ContentTile({ content, onDelete, onPlay }: { content: ContentRow; onDel
 
   const statusColor = (s: string) =>
     s === 'aprovado' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
+    s === 'agendado' ? 'bg-sky-500/20 text-sky-400 border-sky-500/30' :
+    s === 'publicado' ? 'bg-violet-500/20 text-violet-400 border-violet-500/30' :
     s === 'ajuste_solicitado' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
     s === 'revisao_interna' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
     'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
   const statusLabel = (s: string) =>
-    s === 'aprovado' ? 'Aprovado' : s === 'ajuste_solicitado' ? 'Ajuste' : s === 'revisao_interna' ? 'Em Revisão' : 'Pendente';
+    s === 'aprovado' ? 'Aprovado' : s === 'agendado' ? 'Agendado' : s === 'publicado' ? 'Publicado'
+      : s === 'ajuste_solicitado' ? 'Ajuste' : s === 'revisao_interna' ? 'Em Revisão' : 'Pendente';
 
   const typeIcon = CONTENT_TYPES.find(t => t.value === content.content_type);
   const TypeIcon = typeIcon?.icon || Film;

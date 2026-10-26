@@ -565,7 +565,8 @@ export default function ContentKanban() {
 
       // If column changed, sync with social media and other modules
       if (columnChanged) {
-        const updatedTask = { ...editingTask, ...payload };
+        // Mantém a coluna de origem no card passado ao sync (ele sabe de onde o card veio)
+        const updatedTask = { ...editingTask, ...payload, kanban_column: editingTask.kanban_column };
         await syncOnColumnChange(updatedTask, payload.kanban_column);
       }
 

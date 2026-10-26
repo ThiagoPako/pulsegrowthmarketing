@@ -23,6 +23,8 @@ interface SyncContext {
   immediateAlteration?: boolean;
   /** Quem move para Edição está pegando o card agora (o timer começa). Sem isso o card entra na fila. */
   startEditing?: boolean;
+  /** Coluna de onde o card saiu (quando o chamador passa o card ainda com a coluna antiga). */
+  previousColumn?: string | null;
   approvedAt?: string | null;
   userId?: string | null;
   clientName?: string;
@@ -137,6 +139,17 @@ export async function syncContentTaskColumnChange(
   };
   const workDays: string[] = (settingsRow?.work_days as string[]) ?? ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
 
+  // Primeira entrada em Edição = vindo de Ideias/Captação. Sem a coluna anterior (o chamador já
+  // passou o card com a coluna nova), card com vídeo editado está voltando de alteração/revisão.
+  const previousColumn = ctx.previousColumn && ctx.previousColumn !== newColumn ? ctx.previousColumn : null;
+  const enteringEditingFirstTime = newColumn === 'edicao'
+    && (previousColumn ? ['ideias', 'captacao'].includes(previousColumn) : !ctx.editedVideoLink);
+  // Texto do prazo de edição a partir da configuração (antes era sempre "2 dias úteis")
+  const editingDays = Math.max(1, Math.ceil(deadlineHours.editing / 24));
+  const editingDeadlineText = deadlineEnabled.editing
+    ? ` Prazo previsto: ${editingDays} ${editingDays === 1 ? 'dia útil' : 'dias úteis'}.`
+    : '';
+
   // 1. Set editing_started_at and editing_deadline when entering edicao
   if (newColumn === 'edicao') {
     // O timer só começa quando alguém pega o card. Antes toda entrada em Edição gravava agora:
@@ -151,10 +164,11 @@ export async function syncContentTaskColumnChange(
       await supabase.from('scripts').update({ recorded: true } as any).eq('id', ctx.scriptId);
     }
 
-    // Send WhatsApp to client: video recorded, now in editing
+    // Send WhatsApp to client: video recorded, now in editing — só na primeira entrada em Edição
+    // (vindo da gravação). Card que volta de alteração/revisão/análise não avisa o cliente de novo.
     try {
       const whatsConfig = await getWhatsAppConfig();
-      if (whatsConfig?.integrationActive && whatsConfig?.autoTaskEditing && ctx.clientWhatsapp) {
+      if (enteringEditingFirstTime && whatsConfig?.integrationActive && whatsConfig?.autoTaskEditing && ctx.clientWhatsapp) {
         const portalUrl = `https://agenciapulse.tech/portal/${ctx.clientId}`;
         const editingMsg = whatsConfig.msgTaskEditing
           .replace('{nome_cliente}', ctx.clientName || '')
@@ -368,7 +382,7 @@ export async function syncContentTaskColumnChange(
   const portalNotifMap: Record<string, { title: string; message: string; type: string }> = {
     edicao: {
       title: '✂️ Vídeo em edição',
-      message: `"${ctx.title}" foi enviado para edição. Prazo previsto: 2 dias úteis.`,
+      message: `"${ctx.title}" foi enviado para edição.${editingDeadlineText}`,
       type: 'editing_started',
     },
     revisao: {
@@ -399,7 +413,9 @@ export async function syncContentTaskColumnChange(
   };
 
   const portalNotif = portalNotifMap[newColumn];
-  if (portalNotif && newColumn !== 'envio' && ctx.clientId) {
+  // "Vídeo em edição" só na primeira entrada em Edição (a volta de alteração já tem o aviso de ajuste)
+  const skipPortalNotif = newColumn === 'edicao' && !enteringEditingFirstTime;
+  if (portalNotif && newColumn !== 'envio' && ctx.clientId && !skipPortalNotif) {
     try {
       await supabase.from('client_portal_notifications').insert({
         client_id: ctx.clientId,
@@ -487,7 +503,7 @@ export function claimGuardFilter(identityIds: Array<string | null | undefined>):
  * Build SyncContext from a content_task row and optional client data.
  */
 export function buildSyncContext(
-  task: { id: string; client_id: string; title: string; content_type: string; description: string | null; script_id: string | null; recording_id: string | null; assigned_to: string | null; edited_by?: string | null; edited_video_link: string | null; immediate_alteration?: boolean; approved_at?: string | null },
+  task: { id: string; client_id: string; title: string; content_type: string; description: string | null; script_id: string | null; recording_id: string | null; assigned_to: string | null; edited_by?: string | null; edited_video_link: string | null; immediate_alteration?: boolean; approved_at?: string | null; kanban_column?: string | null },
   opts?: { userId?: string; clientName?: string; clientWhatsapp?: string; startEditing?: boolean }
 ): SyncContext {
   return {
@@ -503,6 +519,7 @@ export function buildSyncContext(
     editedVideoLink: task.edited_video_link,
     immediateAlteration: task.immediate_alteration,
     startEditing: opts?.startEditing,
+    previousColumn: task.kanban_column ?? null,
     approvedAt: task.approved_at,
     userId: opts?.userId,
     clientName: opts?.clientName,

@@ -142,6 +142,8 @@ export default function Clients() {
   const [searchParams] = useSearchParams();
   const buscaParam = searchParams.get('busca') || '';
   const [searchTerm, setSearchTerm] = useState(buscaParam);
+  // Clientes sem a pasta do Drive (a IA de design busca identidade, logos e fotos nela)
+  const [onlyWithoutDrive, setOnlyWithoutDrive] = useState(false);
   useEffect(() => { if (buscaParam) setSearchTerm(buscaParam); }, [buscaParam]);
   const [generatingChecklistFor, setGeneratingChecklistFor] = useState<string | null>(null);
   const [checklistClient, setChecklistClient] = useState<Client | null>(null);
@@ -692,6 +694,18 @@ export default function Clients() {
     if (saving || loadingEditData) return;
     if (!form.companyName || !form.responsiblePerson || !form.whatsapp) {
       toast.error('Preencha todos os campos obrigatórios'); return;
+    }
+    // Pasta do Drive: obrigatória no cadastro novo e na edição de quem ainda não tem.
+    // Os agentes de IA de design buscam ali identidade visual, logos e fotos do cliente.
+    const driveLink = (form.driveLink || '').trim();
+    const driveRequired = !editing || !(editing.driveLink || '').trim();
+    if (driveRequired && !driveLink) {
+      toast.error('Informe o link da pasta do Drive do cliente (Acessos e Links). A IA de design busca ali identidade, logos e fotos.');
+      return;
+    }
+    if (driveLink && !/^https?:\/\//i.test(driveLink)) {
+      toast.error('O link do Drive precisa começar com https://');
+      return;
     }
     if (clientType === 'sem_contrato' && !proposalId) {
       toast.error('Selecione uma proposta para Pacotes de Serviços'); return;
@@ -1287,8 +1301,15 @@ export default function Clients() {
           </div>
         </div>
         <div className="space-y-1">
-          <Label className="flex items-center gap-1"><FolderOpen size={12} /> Link do Drive (Geral)</Label>
-          <Input value={form.driveLink || ''} onChange={e => setForm({ ...form, driveLink: e.target.value })} placeholder="https://drive.google.com/..." />
+          <Label className="flex items-center gap-1">
+            <FolderOpen size={12} /> Pasta do Drive do cliente (geral)
+            {(!editing || !(editing.driveLink || '').trim()) && <span className="text-destructive">*</span>}
+          </Label>
+          <Input value={form.driveLink || ''} onChange={e => setForm({ ...form, driveLink: e.target.value })} placeholder="https://drive.google.com/drive/folders/..." />
+          <p className="text-[11px] text-muted-foreground">
+            Obrigatória. Os agentes de IA (e a equipe de design) buscam nesta pasta a identidade visual, os logos e as fotos do cliente.
+            Use a pasta principal do cliente no Drive da Pulse.
+          </p>
         </div>
         <div className="space-y-1">
           <Label className="flex items-center gap-1"><FolderOpen size={12} /> Drive de Fotos</Label>
@@ -2650,8 +2671,24 @@ export default function Clients() {
       </div>
 
       {(() => {
+        const withoutDrive = clients.filter(c => !(c.driveLink || '').trim() && (c as any).status !== 'cancelado');
+        return withoutDrive.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/50 bg-amber-50 dark:bg-amber-950/20 p-3 text-sm text-amber-800 dark:text-amber-200">
+            <FolderOpen size={16} className="shrink-0" />
+            <span className="flex-1 min-w-[200px]">
+              <b>{withoutDrive.length}</b> cliente{withoutDrive.length > 1 ? 's' : ''} sem a pasta do Drive. A IA de design busca ali identidade, logos e fotos — edite o cliente e cole o link em "Acessos e Links".
+            </span>
+            <Button size="sm" variant={onlyWithoutDrive ? 'default' : 'outline'} className="h-8 text-xs" onClick={() => setOnlyWithoutDrive(v => !v)}>
+              {onlyWithoutDrive ? 'Mostrar todos' : 'Mostrar só esses'}
+            </Button>
+          </div>
+        ) : null;
+      })()}
+
+      {(() => {
         const filtered = clients.filter(c =>
           c.companyName.toLowerCase().includes(searchTerm.toLowerCase())
+          && (!onlyWithoutDrive || !(c.driveLink || '').trim())
         );
         return filtered.length === 0 ? (
           <div className="glass-card p-12 text-center text-muted-foreground">
@@ -2687,6 +2724,14 @@ export default function Clients() {
                     )}
                     {(c as any).status === 'cancelado' && (
                       <Badge className="text-[10px] px-1.5 py-0.5 bg-destructive/20 text-destructive border-destructive/30">❌ Cancelado</Badge>
+                    )}
+                    {!(c.driveLink || '').trim() && (
+                      <Badge
+                        className="text-[10px] px-1.5 py-0.5 bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 cursor-pointer"
+                        title="Sem pasta do Drive: a IA de design não acha identidade, logos e fotos. Edite o cliente e cole o link."
+                      >
+                        📁 Sem pasta do Drive
+                      </Badge>
                     )}
                    {(c as any).clientType === 'sem_contrato' && (
                       <Badge className="text-[10px] px-1.5 py-0.5 bg-blue-500/20 text-blue-600 border-blue-500/30">📦 Pacotes de Serviços</Badge>

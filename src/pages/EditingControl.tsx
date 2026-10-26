@@ -14,6 +14,9 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useCity } from '@/contexts/CityContext';
 import { useAuth } from '@/hooks/useAuth';
+import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/ConfirmActionDialog';
+import { useAgentIds } from '@/hooks/useAgentIds';
+import { agentWorkState, formatSince } from '@/lib/agentCardStatus';
 
 interface EditingTask {
   id: string;
@@ -29,6 +32,9 @@ interface EditingTask {
   created_at: string;
   editing_deadline: string | null;
   alteration_deadline: string | null;
+  /** Agente de IA com o card (etapa e último sinal, gravados pela API dos agentes). */
+  agent_step?: string | null;
+  agent_heartbeat_at?: string | null;
 }
 
 const COLUMN_COLORS: Record<string, { bg: string; text: string; label: string }> = {
@@ -60,6 +66,9 @@ export default function EditingControl() {
   const [draggedTask, setDraggedTask] = useState<EditingTask | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<string | null>(null);
   const [reassigning, setReassigning] = useState(false);
+  // Tirar card de agente que está trabalhando cancela a entrega dele: pede confirmação
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const agentIds = useAgentIds();
 
   // Editor e videomaker possuem as mesmas funções operacionais no módulo de edição.
   const editors = useMemo(() =>
@@ -76,7 +85,7 @@ export default function EditingControl() {
   const fetchTasks = async () => {
     const { data, error } = await supabase
       .from('content_tasks')
-      .select('id, title, client_id, kanban_column, content_type, assigned_to, edited_by, editing_started_at, editing_priority, immediate_alteration, created_at, editing_deadline, alteration_deadline')
+      .select('id, title, client_id, kanban_column, content_type, assigned_to, edited_by, editing_started_at, editing_priority, immediate_alteration, created_at, editing_deadline, alteration_deadline, agent_step, agent_heartbeat_at')
       .in('kanban_column', ['edicao', 'revisao', 'alteracao']);
 
     if (!error && data) {
@@ -173,12 +182,32 @@ export default function EditingControl() {
     });
   };
 
-  const handleDrop = async (e: React.DragEvent, targetEditorId: string) => {
+  const handleDrop = (e: React.DragEvent, targetEditorId: string) => {
     e.preventDefault();
     setDragOverTarget(null);
 
     if (!draggedTask) { setDraggedTask(null); return; }
+    const task = draggedTask;
+    // Agente com sinal recente (mesma regra do /api/agent/tasks/:id/assign): tirar o card no meio
+    // da renderização faz a entrega dele falhar
+    const work = agentWorkState(task, { agentIds });
+    const currentOwner = task.edited_by || task.assigned_to;
+    if (work?.state === 'working' && currentOwner !== targetEditorId) {
+      const agentName = (users.find(u => u.id === task.assigned_to)?.name || 'O agente').trim().split(/\s+/)[0];
+      setConfirmAction({
+        title: `Tirar o card de ${agentName}?`,
+        description: `${agentName} (agente de IA) está trabalhando neste card agora (etapa: ${work.step}, sinal há ${formatSince(work.minutes ?? 0)}). Se mudar o dono, a entrega dele será recusada.`,
+        confirmLabel: 'Tirar mesmo assim',
+        destructive: true,
+        onConfirm: () => performDrop(task, targetEditorId),
+      });
+      setDraggedTask(null);
+      return;
+    }
+    void performDrop(task, targetEditorId);
+  };
 
+  const performDrop = async (draggedTask: EditingTask, targetEditorId: string) => {
     const currentEditorId = draggedTask.edited_by || draggedTask.assigned_to;
     if (currentEditorId === targetEditorId && targetEditorId !== '__queue__') {
       setDraggedTask(null);
@@ -204,6 +233,8 @@ export default function EditingControl() {
           editing_started_at: null,
           editing_paused_at: null,
           editing_paused_seconds: 0,
+          // Card que estava com agente: limpa a etapa, como o `pulse liberar`
+          ...(draggedTask.agent_step ? { agent_step: null, agent_heartbeat_at: null } : {}),
           updated_at: new Date().toISOString(),
         }).eq('id', draggedTask.id).select('id');
         if (error || !updated?.length) {
@@ -238,6 +269,8 @@ export default function EditingControl() {
         editing_started_at: draggedTask.editing_started_at || new Date().toISOString(),
         editing_paused_at: null,
         editing_paused_seconds: 0,
+        // O novo dono começa do zero: a etapa do agente anterior sairia no selo do card
+        ...(draggedTask.agent_step ? { agent_step: null, agent_heartbeat_at: null } : {}),
         updated_at: new Date().toISOString(),
       }).eq('id', draggedTask.id).select('id');
       if (error || !updated?.length) {
@@ -468,7 +501,10 @@ export default function EditingControl() {
         <span className="ml-2 flex items-center gap-1">
           <GripVertical size={10} /> Arraste para reatribuir
         </span>
+        <span className="ml-2">🤖 agente de IA trabalhando · ⏸ agente sem sinal há 30 min ou mais</span>
       </div>
+
+      <ConfirmActionDialog action={confirmAction} onClose={() => setConfirmAction(null)} />
     </div>
   );
 }
@@ -486,6 +522,7 @@ function EditingTaskCard({
 }) {
   const colInfo = COLUMN_COLORS[task.kanban_column] || COLUMN_COLORS.edicao;
   const isAlteration = task.kanban_column === 'alteracao';
+  const work = agentWorkState(task);
 
   // Calculate time in current state
   const timeLabel = task.editing_started_at
@@ -550,6 +587,15 @@ function EditingTaskCard({
           </span>
         )}
       </div>
+
+      {/* Agente de IA com o card */}
+      {work && (
+        <div className={`mt-1.5 text-[9px] font-semibold truncate ${work.state === 'working' ? 'text-indigo-400' : 'text-slate-400'}`}>
+          {work.state === 'working'
+            ? `🤖 ${work.step}`
+            : `⏸ sem sinal${work.minutes !== null ? ` há ${formatSince(work.minutes)}` : ''} · ${work.step}`}
+        </div>
+      )}
 
       {/* Deadline warning */}
       {(task.editing_deadline || task.alteration_deadline) && (() => {

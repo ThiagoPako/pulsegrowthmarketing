@@ -190,3 +190,115 @@ Gravidade: 🔴 arriscado/quebrado · 🟠 confuso/escondido · 🟡 detalhe.
 | P22 | Agentes / API | O parecer do Uriel só existe como recado para a Marcely; não fica no card. Histórico de ajustes e versões não saem na API | 🟠 |
 | P23 | Permissões | No Kanban de Conteúdo, qualquer papel que não seja editor/videomaker (copywriter, designer, gestor…) arrasta qualquer card para qualquer coluna, inclusive enviar ao cliente | 🟠 regra do dono |
 | P24 | Kanban de Conteúdo | Botão "Portal" abre o portal inteiro do cliente, não o vídeo do card; o detalhe já tem player | 🟡 |
+
+## 4. O que mudou (ramo `feat/kanban-conteudo`)
+
+Nenhuma regra de negócio mudou: o sync de coluna, os prazos, o portal, o WhatsApp, o Social Media e a aprovação
+continuam iguais. O que mudou é o caminho até eles (menos atalho perigoso, mais confirmação) e o que a tela mostra.
+
+### 4.1 Para a equipe (humanos)
+
+| Onde | Mudança | Resolve |
+|---|---|---|
+| Kanban de Conteúdo | Setas seguem o fluxo (`FLOW_ARROWS`): Ideias ▶ Captação; Captação ◀ Ideias; Edição ◀ Captação / ▶ Revisão; Alteração ▶ Revisão (só para quem não tem "Reenviar Revisão"); Enviado ◀ Pedir ajuste; Agendamentos ◀ Enviado; Acompanhamento ◀ Agendamentos. Onde a coluna tem botão próprio, a seta não repete. Card com agente trabalhando não tem seta | P4 |
+| Kanbans (seta, arrastar, diálogo Editar) | Toda ida para **Alteração** abre o pedido de ajuste (texto obrigatório; no "Devolver" da Análise já vem o parecer do revisor IA). Ida para **Enviado p/ Cliente** pede confirmação ("o cliente recebe o aviso pelo WhatsApp"). Arrastar para **Acompanhamento** abre o agendamento (data e hora) | P2, P3 |
+| Kanban de Conteúdo | Coluna Análise com aviso do que acontece nela; card com parecer do revisor IA e, para o admin, **Liberar p/ Revisão** e **Devolver** | P13 |
+| Kanban de Conteúdo | Card: cliente uma vez (e o nome do não cadastrado), tipo só no selo, rótulo do avatar ("Editado por", "Quem corrige", "Responsável", "· 🤖 IA"), sem a bolinha "online" falsa, link dos brutos também na Análise e na Alteração, "Aprovar e enviar" (deixa claro que vai ao cliente) | P19 |
+| Kanban de Conteúdo | "Organizar" (não fazia nada) virou **Ordem: recentes / prazo** (imediatas e prioridades no topo, depois o prazo da etapa) | P1 |
+| Kanbans e detalhes | Erros com o motivo do servidor ("Não foi possível mover o cartão: …"); o detalhe confere a resposta antes de mostrar sucesso e rodar o sync; link precisa começar com https:// | P10 |
+| Kanban de Conteúdo e detalhe | **Confirmar Postagem** roda o sync, como o "Postado" do Social Media: cancela a postagem automática pendente e registra o histórico | P7 |
+| Celular (Kanban de Conteúdo e de Edição) | Faixa de atalho para cada coluna (com contagem); colunas com 85% da tela; Editar/Excluir sempre visíveis; filtros ocupam a largura | P6 |
+| Kanban de Edição | Clique no card abre o detalhe (histórico, comentários, upload, pacote de stories); coluna "Concluído" agora é **Enviado p/ Cliente**; card mostra quem editou na Análise/Revisão/Enviado; "Reenviar para Revisão" com o mesmo nome do outro quadro | P8, P9, P14 |
+| Kanban de Edição | Liberar card (clique na bandeira) e "Ops! Volta aqui" pedem confirmação; arrastar para Alteração pede o ajuste; para Enviado, confirmação | P2, P3, P6 |
+| Detalhe do editor | "Marcar como Finalizado" (mandava ao cliente) virou **Aprovar e enviar ao cliente**, só para admin/social media e com confirmação; status "Análise" e "Enviado ao cliente" | P9 |
+| Detalhe do card | Análise com nome e etapa certa na jornada; histórico mostra o detalhe (texto do ajuste, motivo) e guarda 50 itens; "Editado por" quando não há responsável | P11, P12, P14 |
+| Sync | O texto do ajuste vai para o histórico ("Ajustes: …", como a API dos agentes grava); "Enviado para Análise" no lugar de "Movido para pre_revisao" | P11, P15 |
+| Bancada | Alteração com o prazo de alteração (selo e ordem da fila) e o "o que mudar" no card da fila | P17 |
+| Bancada | Card pego por agente aparece com 🤖 e a etapa; com sinal recente não abre a bancada nem mostra "Devolver"; parado, pode ser devolvido (limpa a etapa do agente) | P16 |
+| Controle de Edição | Card mostra a etapa do agente ou "sem sinal há X"; tirar card de agente ativo pede confirmação; reatribuir limpa a etapa do agente | P18 (parte técnica) |
+
+### 4.2 Para os agentes de IA (visibilidade nos quadros)
+
+- **Selo de agente trabalhando** (`AgentWorkBadge`, substitui o `AgentFixBadge`): na Edição "🤖 Editando · Beatriz ·
+  cortando", na Alteração "🔧 Em correção · Davi · …". Sem sinal há 30 min ou mais (o limite do `pulse travados`):
+  "⏸ Edição/Correção parada · Beatriz · sem sinal há 45 min". Vem de `agent_step`/`agent_heartbeat_at`; só conta
+  quando o dono do card é um agente (lista do Escritório Virtual), então uma etapa que sobrou num card passado a um
+  humano não aparece. Está no Kanban de Conteúdo, no de Edição, na Bancada (fila), nos detalhes e no Controle de Edição.
+- **Parecer da Análise** (`AgentReviewBadge`): "🤖 Análise · aguardando parecer", "✅ Parecer IA: ok · Uriel" ou
+  "⚠ Parecer IA: ajustes · Uriel" com o que mudar. Só na Análise (fora dela seria de uma versão antiga).
+- **Pronto para a IA** (`AgentReadinessBadge`, regras em `src/lib/agentCardStatus.ts`): aparece só no card que está
+  na fila dos agentes (Edição livre ou atribuída a agente sem pegar; Alteração de vídeo feito por agente).
+  Verde "🤖 Pronto p/ IA"; âmbar "🤖 IA: falta roteiro, prazo"; vermelho "🤖 IA não pega: falta brutos". O detalhe
+  lista item a item.
+  - Obrigatório (o `pulse pegar` recusa ou o agente não sabe o que fazer): link dos brutos (`drive_link`), cliente
+    cadastrado, tipo reels/story/criativo, e na alteração o texto do ajuste.
+  - Recomendado: roteiro (reels e criativo; story costuma ser gravado sem roteiro) e prazo (na alteração, prazo de
+    alteração ou imediata).
+- **Filtro "Responsável"** nos dois Kanbans: todos, 🤖 com agente de IA, 👤 com a equipe, ⏳ sem responsável,
+  ✅ prontos para a IA, ⏸ agente sem sinal. "Com" = responsável ou, sem ele, quem editou.
+- Os ids dos agentes vêm de `GET /api/agents/office` (já aberto a toda a equipe), guardados por 5 min (`useAgentIds`).
+
+### 4.3 Mudanças de API (`vps-api-server/agentRoutes.mjs`, pequenas e compatíveis)
+
+| Rota | Mudança |
+|---|---|
+| Esquema | `content_tasks.agent_review_verdict`, `agent_review_notes`, `agent_review_by`, `agent_review_at` (`ADD COLUMN IF NOT EXISTS`, no `ensureAgentSchema`) |
+| `GET /api/agent/queue` | cada card ganha `readiness: { ready, blocked, missing: [{ key, label, blocking }] }` (mesmas regras do selo), `script_id`, `script_alteration_type` ('altered' = não seguir o roteiro original) e o parecer. A ordem e o filtro da fila não mudaram |
+| `POST /api/agent/tasks/:id/claim` | a resposta traz `task.adjustments`: todos os pedidos de ajuste (equipe, chefe, cliente pelo portal, pareceres) em ordem, mais o pedido atual do card |
+| `GET /api/agent/tasks/:id` (nova) | card completo: campos da fila + `readiness`, parecer com nome, `edited_by_name`, `assigned_to_name`, `adjustments`, `versions` (versão, vídeo, notas, quem, se tem plano) e `history` (30 últimos). Editor lê o card livre da Edição ou que é/foi dele; chefe e revisão, qualquer card. Aceita começo do id (6+ caracteres) |
+| `POST /api/agent/tasks/:id/review` (nova) | revisor ou chefe: `{ verdict: 'ok' \| 'ajustes', notes }` (notas obrigatórias no ajustes). Só na Análise ou Revisão. Grava no card e no histórico ("Parecer da Análise"). **Não move o card** |
+| `POST /api/agent/tasks/:id/deliver` | a entrega nova apaga o parecer anterior (a versão mudou) |
+| `GET /api/agent/tasks?search=` | traz também Drive do cliente e identidade visual, `agent_step`/`agent_heartbeat_at`, imediata/prioridade, roteiro alterado e parecer |
+
+O Drive do cliente (`clients.drive_link`) já saía na fila e no claim como `client_drive_link`.
+
+## 5. O que o CLI (`pulse.mjs`) deveria mostrar
+
+O CLI não foi alterado (outro trabalho cuida dele). Sugestões para quem for mexer:
+
+- `pulse fila`: marcar cada card com o `readiness` — "✓ pronto", "⚠ falta roteiro/prazo" ou "⛔ sem brutos (não dá
+  para pegar)" — e pôr os bloqueados no fim; mostrar "ROTEIRO ALTERADO" quando `script_alteration_type = 'altered'`.
+- `pulse pegar`: imprimir `adjustments` (todos os pedidos, não só o último), `script_alteration_type` e o parecer.
+- `pulse ver <card>`: usar `GET /api/agent/tasks/:id` (hoje lê a fila e, para chefe/revisão, a busca) e mostrar
+  versões com as notas, histórico, parecer e readiness.
+- Comando novo para o Uriel: `pulse parecer <card> ok|ajustes "mm:ss + o que mudar"` →
+  `POST /api/agent/tasks/:id/review`. Continua mandando o recado para a Marcely, que decide; o parecer passa a
+  aparecer no card para a equipe.
+- `pulse buscar`: mostrar o parecer dos cards em Análise ("✅ ok" / "⚠ ajustes" / "aguardando").
+- Fichas do `uriel.md` e `marcely.md`: incluir o `pulse parecer` no passo da Análise (a pasta dos agentes não foi
+  alterada).
+
+## 6. Sugestões que dependem do dono
+
+1. **Regra "responsável obrigatório para entrar em Edição"** (P5): no Kanban de Conteúdo, mover para Edição exige
+   responsável, e quem é escolhido vira dono — o card sai da fila dos editores e dos agentes. Sugestão: exigir o link
+   dos brutos (como já é de Captação para Edição) e deixar o card entrar livre na fila.
+2. **Quem move cards no Kanban de Conteúdo** (P23): hoje todo papel que não é editor/videomaker move qualquer card
+   para qualquer coluna (inclusive mandar ao cliente). Sugestão: só admin e social media movem de Revisão em diante.
+3. **Quem libera da Análise**: deixei Liberar/Devolver só para o admin (a regra é a Marcely decidir). Se a social
+   media também deve poder, é uma linha (`userRole === 'admin'` nos dois botões do card e `isAdmin` no detalhe).
+4. **Controle de Edição** (P18): editores e videomakers acessam e podem tirar card de colega. Sugestão: só admin e
+   gestor de projetos reatribuem; editor só devolve o próprio.
+5. **"Aprovar e enviar" com confirmação**: mandar ao cliente pelo botão da Revisão continua com um clique (é a ação
+   mais frequente). Se houver muito clique errado, pôr a mesma confirmação do arrastar.
+6. **Confirmar Postagem**: continua com um clique; agora cancela a postagem automática. Se preferir, um "Desfazer"
+   no aviso por alguns segundos.
+7. **Recado automático no parecer**: o `POST …/review` poderia mandar o recado para a chefe (hoje o Uriel manda pelo
+   `pulse mandar`). Não fiz para não duplicar recados enquanto o CLI não usa a rota.
+8. **Fila humana x fila dos agentes**: a Bancada ordena imediata → prioridade → atrasado → prazo; a fila dos agentes
+   põe toda alteração primeiro. Vale alinhar uma regra só.
+9. **"Ops! Volta aqui"** não roda o sync: o conteúdo do portal fica em "revisão interna" enquanto o card volta para
+   a Edição. Sugestão: sync da coluna Edição (sem aviso ao cliente, que já é o comportamento da volta).
+
+## 7. Testes
+
+- `npx tsc --noEmit -p tsconfig.app.json`: 0 erros.
+- `npx vitest run`: 119 testes (88 antes). Novos: `agentCardStatus.test.ts` (prontidão, estado do agente, filtro,
+  parecer), `kanbanAgentBadges.test.tsx` (selos), `contentKanbanFlow.test.tsx` e `editorKanbanFlow.test.tsx`
+  (fumaça das páginas com servidor simulado: setas pelo fluxo, Análise, pedido de ajuste ao devolver, detalhe em
+  qualquer card, confirmação ao aprovar).
+- `npx vite build`: ok.
+- `node --check vps-api-server/agentRoutes.mjs`: ok.
+- Ponta a ponta contra Postgres (banco `pulse_conteudo`): o teste de agentes existente passa inteiro; um teste novo
+  cobre readiness na fila, histórico de ajustes no claim, parecer (papéis, validação, coluna, histórico, não move),
+  card completo (permissões, versões) e a entrega apagando o parecer.

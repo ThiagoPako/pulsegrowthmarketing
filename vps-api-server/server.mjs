@@ -568,12 +568,6 @@ async function ensureProposalTables() {
         END IF;
       END $$;
 
-      -- Receitas previstas geradas uma vez só por proposta aceita (ver generateProposalRevenues).
-      ALTER TABLE commercial_proposals ADD COLUMN IF NOT EXISTS revenues_generated_at TIMESTAMPTZ;
-      -- Propostas que já geraram receitas pelo navegador (marca antiga em observations): não gerar de novo.
-      UPDATE commercial_proposals
-         SET revenues_generated_at = COALESCE(client_response_at, now())
-       WHERE revenues_generated_at IS NULL AND observations LIKE '%[RECEITAS GERADAS%';
 
       CREATE TABLE IF NOT EXISTS proposal_comments (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -596,6 +590,39 @@ async function ensureProposalTables() {
 
 ensureProposalTables().catch((error) => {
   console.error('Failed to ensure proposal tables:', error);
+});
+
+// Receitas previstas geradas uma vez só por proposta aceita (ver generateProposalRevenues).
+// Separado do ensure acima: se falhar, a proposta pública continua funcionando.
+let proposalRevenueColumnPromise = null;
+function ensureProposalRevenueColumn() {
+  if (!proposalRevenueColumnPromise) {
+    proposalRevenueColumnPromise = (async () => {
+      await ensureProposalTables();
+      await pool.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='commercial_proposals' AND column_name='revenues_generated_at') THEN
+            ALTER TABLE commercial_proposals ADD COLUMN revenues_generated_at TIMESTAMPTZ;
+          END IF;
+        END $$;
+      `);
+      // Propostas que já geraram receitas pelo navegador (marca antiga em observations): não gerar de novo.
+      await pool.query(`
+        UPDATE commercial_proposals
+           SET revenues_generated_at = COALESCE(client_response_at, now())
+         WHERE revenues_generated_at IS NULL AND observations LIKE '%[RECEITAS GERADAS%'
+      `);
+    })().catch((error) => {
+      proposalRevenueColumnPromise = null;
+      throw error;
+    });
+  }
+  return proposalRevenueColumnPromise;
+}
+
+ensureProposalRevenueColumn().catch((error) => {
+  console.error('Failed to ensure commercial_proposals.revenues_generated_at:', error?.message || error);
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -5087,7 +5114,7 @@ app.get('/api/briefing-versions', async (req, res) => {
 // não duplicam as receitas. Antes o navegador de quem abrisse /propostas gerava (e duplicava)
 // e gravava a marca em observations, que o cliente via na página pública.
 async function generateProposalRevenues(proposalId) {
-  await ensureProposalTables();
+  await ensureProposalRevenueColumn();
   await ensureRecurringRevenuesTables();
   const revenuesHaveCity = await tableHasCityColumn('revenues');
   const db = await pool.connect();
@@ -11717,23 +11744,34 @@ app.put('/api/landing-settings/facebook-pixel', async (req, res) => {
 let testimonialsTableReady = null;
 function ensureTestimonialsTable() {
   if (!testimonialsTableReady) {
-    testimonialsTableReady = pool.query(`
-      CREATE TABLE IF NOT EXISTS client_testimonials (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        client_name TEXT NOT NULL DEFAULT '',
-        client_role TEXT NOT NULL DEFAULT '',
-        message TEXT NOT NULL DEFAULT '',
-        rating INTEGER NOT NULL DEFAULT 5,
-        token TEXT NOT NULL DEFAULT encode(gen_random_bytes(32), 'hex'),
-        status TEXT NOT NULL DEFAULT 'pending',
-        approved_at TIMESTAMPTZ,
-        city TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      );
-      ALTER TABLE client_testimonials ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
-      CREATE INDEX IF NOT EXISTS idx_client_testimonials_token ON client_testimonials (token);
-    `).catch((error) => {
+    testimonialsTableReady = (async () => {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS client_testimonials (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          client_name TEXT NOT NULL DEFAULT '',
+          client_role TEXT NOT NULL DEFAULT '',
+          message TEXT NOT NULL DEFAULT '',
+          rating INTEGER NOT NULL DEFAULT 5,
+          token TEXT NOT NULL DEFAULT encode(gen_random_bytes(32), 'hex'),
+          status TEXT NOT NULL DEFAULT 'pending',
+          approved_at TIMESTAMPTZ,
+          city TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      // Ajustes opcionais (tabela antiga vinda do Supabase): sem permissão, seguem como estão.
+      await pool.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='client_testimonials' AND column_name='updated_at') THEN
+            ALTER TABLE client_testimonials ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+          END IF;
+        END $$;
+      `).catch((e) => console.warn('client_testimonials.updated_at:', e?.message || e));
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_client_testimonials_token ON client_testimonials (token)')
+        .catch((e) => console.warn('idx_client_testimonials_token:', e?.message || e));
+    })().catch((error) => {
       testimonialsTableReady = null;
       throw error;
     });
@@ -11808,7 +11846,7 @@ app.get('/api/public/testimonials/:token', async (req, res) => {
   try {
     const token = cleanFeedbackToken(req.params.token);
     if (!token) return res.json({ valid: false });
-    await ensureTestimonialsTable();
+    await ensureTestimonialsTable().catch((e) => console.warn('ensureTestimonialsTable:', e?.message || e));
     const { rows } = await pool.query('SELECT status FROM client_testimonials WHERE token = $1 LIMIT 1', [token]);
     res.json({ valid: rows[0]?.status === 'pending' });
   } catch (e) {
@@ -11834,7 +11872,7 @@ app.post('/api/public/testimonials/:token', async (req, res) => {
     if (name.length > 120 || role.length > 120) return res.status(400).json({ error: 'Nome ou cargo muito longo' });
     if (message.length > 2000) return res.status(400).json({ error: 'Depoimento muito longo (máx. 2000 caracteres)' });
     if (!Number.isInteger(rating) || rating < 1 || rating > 5) return res.status(400).json({ error: 'Nota inválida' });
-    await ensureTestimonialsTable();
+    await ensureTestimonialsTable().catch((e) => console.warn('ensureTestimonialsTable:', e?.message || e));
     const { rows } = await pool.query(
       `UPDATE client_testimonials
           SET client_name = $2, client_role = $3, message = $4, rating = $5, status = 'submitted', updated_at = now()

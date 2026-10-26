@@ -7256,6 +7256,92 @@ const secretSuffix = (s) => (s ? '••••' + String(s).slice(-4) : '(vazio)
 /** Códigos OAuth do Instagram já trocados (uso único; mantidos por 1h em memória). */
 const USED_IG_CODES = new Set();
 
+// Login do Facebook que devolve várias Páginas: antes todas viravam contas do cliente e o
+// robô publicava em todas (inclusive nas de outros clientes). Agora a pessoa escolhe UMA.
+// O código OAuth é de uso único, então as Páginas (com os tokens) ficam só aqui, em memória,
+// por 15 min; o navegador recebe só id, nome e @ do Instagram.
+const FB_PAGE_SELECTIONS = new Map();
+const FB_PAGE_SELECTION_TTL_MS = 15 * 60 * 1000;
+
+function publicFacebookPageInfo(page) {
+  return {
+    id: String(page.id),
+    name: page.name || String(page.id),
+    instagram_username: page.instagram_business_account?.username || null,
+    picture: fbPagePictureUrl(page.id),
+  };
+}
+
+function createFacebookPageSelection(clientId, pages) {
+  const now = Date.now();
+  for (const [key, entry] of FB_PAGE_SELECTIONS) {
+    if (entry.expiresAt < now) FB_PAGE_SELECTIONS.delete(key);
+  }
+  const key = crypto.randomBytes(24).toString('hex');
+  FB_PAGE_SELECTIONS.set(key, { clientId: String(clientId), pages, expiresAt: now + FB_PAGE_SELECTION_TTL_MS });
+  return { needs_page_selection: true, selection_key: key, pages: pages.map(publicFacebookPageInfo) };
+}
+
+/** Escolha pendente; só vale para o mesmo cliente que fez o login. */
+function getFacebookPageSelection(key, clientId) {
+  const entry = FB_PAGE_SELECTIONS.get(String(key || ''));
+  if (!entry || entry.expiresAt < Date.now() || entry.clientId !== String(clientId)) return null;
+  return entry;
+}
+
+/**
+ * Grava UMA Página do Facebook (e o Instagram ligado a ela) como conta do cliente.
+ * Troca só o que veio por Página: o Instagram conectado direto (api_base='instagram')
+ * é mantido e, nesse caso, o Instagram da Página não entra (seria uma segunda conta de IG).
+ */
+async function saveFacebookPageConnection(clientId, page, logMessage) {
+  await ensureSocialPostsSchema();
+  const expiration = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
+  const connectedAccounts = [];
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    await db.query(`DELETE FROM social_accounts WHERE client_id = $1 AND COALESCE(api_base,'facebook') = 'facebook'`, [clientId]);
+    const { rows: directIg } = await db.query(
+      `SELECT account_name, username, instagram_business_id, profile_picture_url FROM social_accounts
+        WHERE client_id = $1 AND platform = 'instagram' AND api_base = 'instagram' LIMIT 1`,
+      [clientId]
+    );
+    await db.query(
+      `INSERT INTO social_accounts (client_id, platform, facebook_page_id, account_name, username, profile_picture_url, access_token, status, token_expiration, api_base)
+       VALUES ($1,'facebook',$2,$3,$4,$5,$6,'connected',$7,'facebook')`,
+      [clientId, page.id, page.name, page.name, fbPagePictureUrl(page.id), page.access_token, expiration]
+    );
+    connectedAccounts.push({ platform: 'facebook', name: page.name, pageId: page.id });
+    if (page.instagram_business_account && directIg.length === 0) {
+      const ig = page.instagram_business_account;
+      await db.query(
+        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, username, profile_picture_url, access_token, status, token_expiration, api_base)
+         VALUES ($1,'instagram',$2,$3,$4,$5,$6,$7,'connected',$8,'facebook')`,
+        [clientId, page.id, ig.id, ig.username || ig.name, ig.username || null, ig.profile_picture_url || null, page.access_token, expiration]
+      );
+      connectedAccounts.push({ platform: 'instagram', name: ig.username || ig.name, username: ig.username, businessId: ig.id, profilePicture: ig.profile_picture_url, pageId: page.id });
+    } else if (directIg.length) {
+      // O Instagram conectado direto continua valendo: vai na resposta para a tela não mostrá-lo como desconectado
+      const ig = directIg[0];
+      connectedAccounts.push({ platform: 'instagram', name: ig.username || ig.account_name, username: ig.username || ig.account_name, businessId: ig.instagram_business_id, profilePicture: ig.profile_picture_url, pageId: '', api_base: 'instagram' });
+    }
+    await db.query('COMMIT');
+  } catch (err) {
+    await db.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    db.release();
+  }
+  if (logMessage) {
+    await pool.query(
+      `INSERT INTO integration_logs (client_id, platform, action, status, message) VALUES ($1,'facebook','oauth_connect','success',$2)`,
+      [clientId, `${logMessage}: Página ${page.name}.`]
+    ).catch(() => {});
+  }
+  return connectedAccounts;
+}
+
 /**
  * Diagnóstico das credenciais do Login do Instagram (somente admin).
  * Não expõe segredos: mostra só os 4 últimos caracteres e valida o par
@@ -7302,6 +7388,108 @@ app.post('/api/meta-oauth-diagnose', async (req, res) => {
 });
 
 /**
+ * Linha da integração Meta que o servidor usa (a mesma escolhida no OAuth), sem filtro
+ * de cidade: a integração é uma só para a agência. Sem linha ativa, a mais recente.
+ */
+async function findMetaIntegrationRow() {
+  const loaded = await loadMetaOAuthConfig(getAdminClient());
+  if (loaded.metaIntegration) {
+    return { id: loaded.metaIntegration.id, status: 'ativo', config: loaded.metaIntegration.config || {}, activeRows: loaded.rows.length };
+  }
+  const { rows } = await pool.query(
+    `SELECT id, status, config FROM api_integrations WHERE provider = 'meta_ads' ORDER BY updated_at DESC NULLS LAST LIMIT 1`
+  );
+  return rows[0] ? { id: rows[0].id, status: rows[0].status, config: rows[0].config || {}, activeRows: 0 } : null;
+}
+
+/**
+ * Card "Integração Meta" (Configurações): lê e grava pela API, e não pelo /api/db/query,
+ * que filtra api_integrations pela cidade — em Uruaçu o card não achava a linha de
+ * Minaçu, mostrava "Pendente" e salvar criava uma segunda integração ativa.
+ * Os secrets nunca voltam: só os 4 últimos caracteres.
+ */
+app.get('/api/meta-integration', async (req, res) => {
+  try {
+    await verifyAdmin(req);
+    const row = await findMetaIntegrationRow();
+    const config = row?.config || {};
+    res.json({
+      id: row?.id || null,
+      status: row?.status || null,
+      configured: row?.status === 'ativo' && !!config.meta_app_id,
+      meta_app_id: config.meta_app_id || '',
+      instagram_app_id: config.instagram_app_id || '',
+      meta_secret: config.meta_app_secret_encrypted ? secretSuffix(config.meta_app_secret_encrypted) : null,
+      instagram_secret: config.instagram_app_secret_encrypted ? secretSuffix(config.instagram_app_secret_encrypted) : null,
+      active_rows: row?.activeRows || 0,
+    });
+  } catch (error) {
+    // 401 sem sessão (o front renova e tenta de novo), 403 sem papel de admin
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
+  }
+});
+
+app.post('/api/meta-integration', async (req, res) => {
+  try {
+    const { user, admin } = await verifyAdmin(req);
+    const b = req.body || {};
+    const clean = (v) => (typeof v === 'string' ? v.replace(/\s+/g, '') : '');
+    const metaAppId = clean(b.meta_app_id);
+    const instagramAppId = clean(b.instagram_app_id);
+    const metaAppSecret = clean(b.meta_app_secret);
+    const instagramAppSecret = clean(b.instagram_app_secret);
+    if (!metaAppId) return res.status(400).json({ error: 'Preencha o App ID da Meta.' });
+    // Valida ANTES de gravar qualquer coisa (antes a linha era gravada e só depois o secret recusado).
+    // App Secrets são 32 caracteres hexadecimais; tokens (EAA..., IGAA...) não servem aqui.
+    const isHexSecret = (v) => /^[a-f0-9]{32}$/i.test(v);
+    for (const [label, val] of [['Meta App Secret', metaAppSecret], ['Instagram App Secret', instagramAppSecret]]) {
+      if (val && !isHexSecret(val)) {
+        return res.status(400).json({ error: `${label} inválido: deve ter 32 caracteres (letras a-f e números). O valor colado parece um token de acesso, não a "Chave secreta do app".` });
+      }
+    }
+
+    const row = await findMetaIntegrationRow();
+    const config = { ...(row?.config || {}), meta_app_id: metaAppId, credentials_updated_at: new Date().toISOString() };
+    // Campo vazio = usa o App ID da Meta também no Login do Instagram (como antes)
+    if (instagramAppId) config.instagram_app_id = instagramAppId; else delete config.instagram_app_id;
+    if (metaAppSecret) { config.meta_app_secret_encrypted = metaAppSecret; config.meta_app_secret = '••••' + metaAppSecret.slice(-4); }
+    if (instagramAppSecret) { config.instagram_app_secret_encrypted = instagramAppSecret; config.instagram_app_secret = '••••' + instagramAppSecret.slice(-4); }
+
+    let integrationId = row?.id || null;
+    if (integrationId) {
+      await pool.query(
+        `UPDATE api_integrations SET config = $2::jsonb, status = 'ativo', updated_at = now() WHERE id = $1`,
+        [integrationId, JSON.stringify(config)]
+      );
+    } else {
+      const { rows } = await pool.query(
+        `INSERT INTO api_integrations (name, provider, api_type, endpoint_url, config, status, updated_at)
+         VALUES ('Meta (Postagens Automáticas)', 'meta_ads', 'rest', $1, $2::jsonb, 'ativo', now()) RETURNING id`,
+        [META_API_BASE, JSON.stringify(config)]
+      );
+      integrationId = rows[0]?.id || null;
+    }
+    try {
+      await admin.from('api_integration_logs').insert({
+        integration_id: integrationId, action: 'credenciais atualizadas (Configurações → Integração Meta)', status: 'success',
+        details: { fields_updated: ['app_id', instagramAppId && 'instagram_app_id', metaAppSecret && 'app_secret', instagramAppSecret && 'instagram_app_secret'].filter(Boolean) },
+        performed_by: user.id,
+      });
+    } catch { /* log é secundário */ }
+    res.json({
+      success: true,
+      id: integrationId,
+      configured: true,
+      meta_secret: config.meta_app_secret_encrypted ? secretSuffix(config.meta_app_secret_encrypted) : null,
+      instagram_secret: config.instagram_app_secret_encrypted ? secretSuffix(config.instagram_app_secret_encrypted) : null,
+    });
+  } catch (error) {
+    console.error('meta-integration save error:', error);
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
+  }
+});
+
+/**
  * Quem pode mexer nas conexões sociais dos clientes: os mesmos papéis do menu
  * Conexões Sociais (admin, social_media, gestor_projetos, revisor_meta).
  */
@@ -7317,6 +7505,30 @@ function socialAuthErrorStatus(error) {
   return error?.message === 'Admin access required' ? 403 : 401;
 }
 
+/** Status das rotas sociais que também têm erros internos: 401 sem login, 403 sem o papel, 500 o resto. */
+function socialRouteErrorStatus(error) {
+  if (error?.statusCode === 400) return 400;
+  if (error?.message === 'Unauthorized') return 401;
+  if (error?.message === 'Admin access required') return 403;
+  return 500;
+}
+
+// Link de conexão: vale até expires_at e, depois do primeiro uso, só por mais 24 h
+// (dá para conectar Instagram e depois Facebook na mesma visita, mas o link enviado
+// pelo WhatsApp não fica valendo para sempre).
+const SOCIAL_CONNECT_REUSE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** Motivo para recusar o link ({ status, error }) ou null quando ele ainda vale. */
+function socialConnectLinkProblem(link) {
+  if (new Date(link.expires_at).getTime() < Date.now()) {
+    return { status: 410, error: 'Este link expirou. Peça um novo para a agência.' };
+  }
+  if (link.used_at && new Date(link.used_at).getTime() + SOCIAL_CONNECT_REUSE_WINDOW_MS < Date.now()) {
+    return { status: 410, error: 'Este link já foi usado. Peça um novo para a agência.' };
+  }
+  return null;
+}
+
 /**
  * Cliente autorizado a conectar contas no /api/meta-oauth:
  * equipe logada (Clientes) usa o client_id do corpo; o cliente na página
@@ -7324,20 +7536,19 @@ function socialAuthErrorStatus(error) {
  */
 async function resolveMetaOAuthClientId(req) {
   if (req.headers.authorization?.startsWith('Bearer ')) {
-    const isTeam = await verifyUser(req).then(() => true).catch(() => false);
+    const isTeam = await verifySocialManager(req).then(() => true).catch(() => false);
     if (isTeam) return req.body?.client_id || null;
   }
   const inviteToken = String(req.body?.invite_token || '').trim();
   if (!inviteToken) throw Object.assign(new Error('Unauthorized'), { status: 401 });
   await ensureSocialPostsSchema();
   const { rows } = await pool.query(
-    'SELECT client_id, expires_at FROM social_connect_links WHERE token = $1 LIMIT 1',
+    'SELECT client_id, expires_at, used_at FROM social_connect_links WHERE token = $1 LIMIT 1',
     [inviteToken]
   );
   if (!rows.length) throw Object.assign(new Error('Link inválido ou removido.'), { status: 401 });
-  if (new Date(rows[0].expires_at).getTime() < Date.now()) {
-    throw Object.assign(new Error('Este link expirou. Peça um novo para a agência.'), { status: 410 });
-  }
+  const problem = socialConnectLinkProblem(rows[0]);
+  if (problem) throw Object.assign(new Error(problem.error), { status: problem.status });
   return rows[0].client_id;
 }
 
@@ -7388,20 +7599,28 @@ app.post('/api/meta-oauth', async (req, res) => {
       if (pagesData.error) return res.status(400).json({ error: 'Failed to fetch pages: ' + pagesData.error.message });
 
       const pages = pagesData.data || [];
-      const connectedAccounts = [];
-      await admin.from('social_accounts').delete().eq('client_id', client_id);
-
-      for (const page of pages) {
-        await admin.from('social_accounts').insert({ client_id, platform: 'facebook', facebook_page_id: page.id, account_name: page.name, username: page.name, profile_picture_url: fbPagePictureUrl(page.id), access_token: page.access_token, status: 'connected', token_expiration: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() });
-        connectedAccounts.push({ platform: 'facebook', name: page.name, pageId: page.id });
-        if (page.instagram_business_account) {
-          const ig = page.instagram_business_account;
-          await admin.from('social_accounts').insert({ client_id, platform: 'instagram', facebook_page_id: page.id, instagram_business_id: ig.id, account_name: ig.username || ig.name, username: ig.username || ig.name, profile_picture_url: ig.profile_picture_url || null, access_token: page.access_token, status: 'connected', token_expiration: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString() });
-          connectedAccounts.push({ platform: 'instagram', name: ig.username || ig.name, username: ig.username, businessId: ig.id, profilePicture: ig.profile_picture_url, pageId: page.id });
-        }
-        await admin.from('integration_logs').insert({ client_id, platform: 'facebook', action: 'oauth_connect', status: 'success', message: `Página ${page.name} conectada via OAuth.` });
+      // Sem Página autorizada não apaga nada (antes o cliente ficava sem conta nenhuma)
+      if (pages.length === 0) {
+        return res.status(400).json({ error: 'Nenhuma Página do Facebook foi autorizada. Na tela da Meta, marque a Página do cliente e tente de novo.' });
       }
+      // Várias Páginas (o login é de quem administra Páginas de vários clientes): escolher uma
+      if (pages.length > 1) return res.json(createFacebookPageSelection(client_id, pages));
+
+      const connectedAccounts = await saveFacebookPageConnection(client_id, pages[0], 'Conectada via OAuth');
       return res.json({ success: true, accounts: connectedAccounts, pages_found: pages.length });
+    }
+
+    // Segunda etapa do login do Facebook com várias Páginas: grava só a escolhida
+    if (action === 'select_facebook_page') {
+      const { selection_key, page_id } = req.body;
+      if (!client_id || !selection_key || !page_id) return res.status(400).json({ error: 'Escolha a Página do cliente.' });
+      const pending = getFacebookPageSelection(selection_key, client_id);
+      if (!pending) return res.status(410).json({ error: 'A escolha da Página expirou. Clique em conectar de novo.' });
+      const page = pending.pages.find(p => String(p.id) === String(page_id));
+      if (!page) return res.status(400).json({ error: 'Página não encontrada entre as autorizadas.' });
+      const connectedAccounts = await saveFacebookPageConnection(client_id, page, 'Conectada via OAuth (Página escolhida)');
+      FB_PAGE_SELECTIONS.delete(String(selection_key));
+      return res.json({ success: true, accounts: connectedAccounts, pages_found: pending.pages.length });
     }
 
     // ── Instagram Login direto (sem Página do Facebook) ──
@@ -7496,11 +7715,11 @@ app.post('/api/meta-oauth', async (req, res) => {
   }
 });
 
+// Mesma linha do OAuth (loadMetaOAuthConfig): antes era LIMIT 1 sem ordem e, com duas
+// linhas ativas, o token manual podia pegar a que não tem secret.
 async function getMetaConfigFromDb() {
-  const { rows } = await pool.query(
-    "SELECT config FROM api_integrations WHERE provider = 'meta_ads' AND status = 'ativo' LIMIT 1"
-  );
-  return rows[0]?.config || {};
+  const loaded = await loadMetaOAuthConfig(getAdminClient());
+  return loaded.config || {};
 }
 
 /**
@@ -7568,31 +7787,18 @@ app.post('/api/social-accounts/manual-token', async (req, res) => {
     const pages = pagesData.data || [];
     if (pages.length === 0) return res.status(400).json({ error: 'Nenhuma página do Facebook encontrada para esse token.' });
 
-    // Preserva conexão direta do Instagram (api_base='instagram'), remove apenas o que veio via Página
-    await pool.query(`DELETE FROM social_accounts WHERE client_id = $1 AND COALESCE(api_base,'facebook') = 'facebook'`, [client_id]);
-    const { rows: directIg } = await pool.query(
-      `SELECT 1 FROM social_accounts WHERE client_id = $1 AND platform = 'instagram' AND api_base = 'instagram' LIMIT 1`,
-      [client_id]
-    );
-    const hasDirectIg = directIg.length > 0;
-    const connectedAccounts = [];
-    for (const page of pages) {
-      await pool.query(
-        `INSERT INTO social_accounts (client_id, platform, facebook_page_id, account_name, username, profile_picture_url, access_token, status, token_expiration, api_base)
-         VALUES ($1,'facebook',$2,$3,$4,$5,$6,'connected',$7,'facebook')`,
-        [client_id, page.id, page.name, page.name, fbPagePictureUrl(page.id), page.access_token, new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()]
-      );
-      connectedAccounts.push({ platform: 'facebook', name: page.name, pageId: page.id });
-      if (page.instagram_business_account && !hasDirectIg) {
-        const ig = page.instagram_business_account;
-        await pool.query(
-          `INSERT INTO social_accounts (client_id, platform, facebook_page_id, instagram_business_id, account_name, username, profile_picture_url, access_token, status, token_expiration, api_base)
-           VALUES ($1,'instagram',$2,$3,$4,$5,$6,$7,'connected',$8,'facebook')`,
-          [client_id, page.id, ig.id, ig.username || ig.name, ig.username || null, ig.profile_picture_url || null, page.access_token, new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()]
-        );
-        connectedAccounts.push({ platform: 'instagram', name: ig.username || ig.name, username: ig.username, businessId: ig.id, pageId: page.id });
-      }
+    // Token com várias Páginas: grava só a escolhida (antes todas viravam contas do cliente).
+    // A tela manda de novo o mesmo token com facebook_page_id.
+    let page = pages[0];
+    if (facebook_page_id) {
+      page = pages.find(p => String(p.id) === String(facebook_page_id));
+      if (!page) return res.status(400).json({ error: 'Essa Página não está entre as do token.' });
+    } else if (pages.length > 1) {
+      return res.json({ needs_page_selection: true, pages: pages.map(publicFacebookPageInfo) });
     }
+
+    // Preserva conexão direta do Instagram (api_base='instagram'), troca apenas o que veio via Página
+    const connectedAccounts = await saveFacebookPageConnection(client_id, page, null);
     await enablePortalInsights(client_id);
     return res.json({ success: true, accounts: connectedAccounts, pages_found: pages.length });
 
@@ -7850,7 +8056,7 @@ app.post('/api/social-connect-links', async (req, res) => {
   }
 
   try {
-    const { client_id, days = 14 } = req.body || {};
+    const { client_id, days = 14, reuse = false } = req.body || {};
     if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
     await ensureSocialPostsSchema();
 
@@ -7859,6 +8065,23 @@ app.post('/api/social-connect-links', async (req, res) => {
       [client_id]
     );
     if (!clientRows.length) return res.status(404).json({ error: 'Cliente não encontrado' });
+
+    // reuse: devolve o link que o cliente já recebeu, se ainda vale (gerar outro derruba o anterior)
+    if (reuse) {
+      const { rows: current } = await pool.query(
+        `SELECT token, expires_at, used_at FROM social_connect_links WHERE client_id = $1 ORDER BY created_at DESC LIMIT 1`,
+        [client_id]
+      );
+      if (current[0] && !socialConnectLinkProblem(current[0])) {
+        return res.json({
+          token: current[0].token,
+          path: `/conectar-social/${current[0].token}`,
+          client_name: clientRows[0].company_name,
+          expires_at: new Date(current[0].expires_at).toISOString(),
+          reused: true,
+        });
+      }
+    }
 
     const token = crypto.randomBytes(24).toString('hex');
     const validDays = Math.min(Math.max(Number(days) || 14, 1), 90);
@@ -7887,16 +8110,15 @@ app.get('/api/social-connect/:token', async (req, res) => {
   try {
     await ensureSocialPostsSchema();
     const { rows } = await pool.query(
-      `SELECT l.client_id, l.expires_at, c.company_name
+      `SELECT l.client_id, l.expires_at, l.used_at, c.company_name
          FROM social_connect_links l
          JOIN clients c ON c.id = l.client_id
         WHERE l.token = $1 LIMIT 1`,
       [req.params.token]
     );
     if (!rows.length) return res.status(404).json({ error: 'Link inválido ou removido.' });
-    if (new Date(rows[0].expires_at).getTime() < Date.now()) {
-      return res.status(410).json({ error: 'Este link expirou. Peça um novo para a agência.' });
-    }
+    const problem = socialConnectLinkProblem(rows[0]);
+    if (problem) return res.status(problem.status).json({ error: problem.error });
 
     const { rows: accounts } = await pool.query(
       `SELECT platform, account_name, username, profile_picture_url FROM social_accounts WHERE client_id = $1 AND status = 'connected'`,
@@ -7919,7 +8141,15 @@ app.get('/api/social-connect/:token', async (req, res) => {
 app.post('/api/social-connect/:token/complete', async (req, res) => {
   try {
     await ensureSocialPostsSchema();
-    await pool.query(`UPDATE social_connect_links SET used_at = now() WHERE token = $1`, [req.params.token]);
+    const { rows } = await pool.query(
+      'SELECT expires_at, used_at FROM social_connect_links WHERE token = $1 LIMIT 1',
+      [req.params.token]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Link inválido ou removido.' });
+    const problem = socialConnectLinkProblem(rows[0]);
+    if (problem) return res.status(problem.status).json({ error: problem.error });
+    // Guarda só o primeiro uso: a janela de 24 h conta dele e não se renova a cada conexão
+    await pool.query(`UPDATE social_connect_links SET used_at = COALESCE(used_at, now()) WHERE token = $1`, [req.params.token]);
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -8138,12 +8368,20 @@ function fbPagePictureUrl(pageId) {
   return pageId ? `${META_API_BASE}/${pageId}/picture?type=normal` : null;
 }
 
+// Contas cuja foto já tentamos buscar (id → quando): perfil sem foto ou token vencido não
+// é consultado de novo a cada abertura de Conexões Sociais.
+const PROFILE_REFRESH_TRIED = new Map();
+const PROFILE_REFRESH_RETRY_MS = 6 * 60 * 60 * 1000;
+
 /** Busca @usuário e foto do perfil na Meta e atualiza a linha (melhor esforço). */
 async function refreshAccountProfile(a) {
   try {
     const base = a.api_base === 'instagram' ? IG_API_BASE : META_API_BASE;
     if (a.platform === 'instagram' && a.instagram_business_id) {
-      const r = await fetch(`${base}/${a.instagram_business_id}?fields=username,profile_picture_url&access_token=${a.access_token}`);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      const r = await fetch(`${base}/${a.instagram_business_id}?fields=username,profile_picture_url&access_token=${a.access_token}`, { signal: controller.signal })
+        .finally(() => clearTimeout(timer));
       const d = await r.json().catch(() => ({}));
       if (!d.error && (d.username || d.profile_picture_url)) {
         await pool.query(`UPDATE social_accounts SET username = COALESCE($2, username), profile_picture_url = COALESCE($3, profile_picture_url) WHERE id = $1`,
@@ -8183,10 +8421,124 @@ function sanitizeAccount(a) {
   };
 }
 
+// Colunas do kanban de conteúdo em que o card voltou para a produção: o post
+// agendado não vale mais (o vídeo vai mudar ou ainda não foi aprovado).
+const AUTOPOST_BLOCKING_CONTENT_COLUMNS = new Set(['ideias', 'captacao', 'edicao', 'pre_revisao', 'revisao', 'alteracao', 'envio']);
+const DELIVERY_STATUS_LABELS = {
+  revisao: 'Revisão', ajuste: 'Alteração', aprovacao_cliente: 'Enviado p/ cliente',
+  entregue: 'Agendar', agendado: 'Agendado', postado: 'Postado',
+};
+
+/**
+ * Confere, logo antes de publicar, se a entrega e o card ainda pedem esta postagem.
+ * Vale para qualquer tela (kanban social, kanban de conteúdo, tráfego, agentes) e
+ * para o card excluído. Devolve o motivo do cancelamento ou null quando pode publicar.
+ * 'postado' na entrega é aceito: abas antigas marcavam 'postado' no horário, antes do robô.
+ */
+async function getAutoPostCancelReason(post) {
+  let deliveryStatus = null;
+  if (post.delivery_id) {
+    const { rows } = await pool.query('SELECT status FROM social_media_deliveries WHERE id = $1', [post.delivery_id]);
+    if (!rows.length) return 'a entrega foi excluída do kanban social';
+    deliveryStatus = rows[0].status;
+    if (!['agendado', 'postado'].includes(deliveryStatus)) {
+      return `a entrega saiu de Agendado (está em "${DELIVERY_STATUS_LABELS[deliveryStatus] || deliveryStatus}")`;
+    }
+  }
+  if (post.content_task_id) {
+    const { rows } = await pool.query('SELECT kanban_column FROM content_tasks WHERE id = $1', [post.content_task_id]);
+    if (!rows.length) return 'o card de conteúdo foi excluído';
+    const column = rows[0].kanban_column;
+    if (AUTOPOST_BLOCKING_CONTENT_COLUMNS.has(column)) return `o card de conteúdo voltou para "${column}"`;
+    // "Postado!" manual (entrega postada e card arquivado): publicar agora duplicaria o post.
+    if (deliveryStatus === 'postado' && column === 'arquivado') return 'o conteúdo já foi marcado como postado manualmente';
+  }
+  return null;
+}
+
+/** Contas repetidas da mesma rede no cliente (ex.: várias Páginas): não dá para saber qual é a dele. */
+function duplicatedPlatformAccounts(accounts) {
+  const byPlatform = new Map();
+  for (const a of accounts) byPlatform.set(a.platform, [...(byPlatform.get(a.platform) || []), a]);
+  return [...byPlatform.entries()].filter(([, list]) => list.length > 1);
+}
+
+async function getClientDisplayName(clientId) {
+  try {
+    const { rows } = await pool.query('SELECT company_name FROM clients WHERE id = $1', [clientId]);
+    return rows[0]?.company_name || String(clientId);
+  } catch {
+    return String(clientId);
+  }
+}
+
+/** Aviso para quem cuida das redes sociais (admin e social_media). */
+async function notifySocialTeam(title, message) {
+  await pool.query(
+    `INSERT INTO notifications (user_id, title, message, type, link)
+     SELECT DISTINCT ur.user_id, $1, $2, 'error', '/entregas-social'
+     FROM user_roles ur WHERE ur.role IN ('admin','social_media')`,
+    [title, String(message).slice(0, 500)]
+  ).catch(() => {});
+}
+
+// Posts em andamento neste processo (robô e "Publicar agora"): a recuperação não mexe neles.
+const SOCIAL_POSTS_IN_FLIGHT = new Set();
+
 /** Executa um post da fila. Nunca lança — grava resultado/erro na linha. */
 async function runScheduledPost(post) {
+  SOCIAL_POSTS_IN_FLIGHT.add(String(post.id));
+  try {
+    await runScheduledPostNow(post);
+  } finally {
+    SOCIAL_POSTS_IN_FLIGHT.delete(String(post.id));
+  }
+}
+
+async function runScheduledPostNow(post) {
+  let cancelReason = null;
+  try {
+    cancelReason = await getAutoPostCancelReason(post);
+  } catch (err) {
+    // Sem conseguir conferir a entrega, não publica (ela pode ter voltado para alteração).
+    await pool.query(
+      `UPDATE scheduled_posts SET status='erro', last_error=$2, updated_at=now() WHERE id=$1`,
+      [post.id, `Não foi possível conferir a entrega antes de publicar: ${err.message}`.slice(0, 2000)]
+    );
+    return;
+  }
+  if (cancelReason) {
+    await pool.query(
+      `UPDATE scheduled_posts SET status='cancelado', last_error=$2, updated_at=now() WHERE id=$1`,
+      [post.id, `Cancelado antes de publicar: ${cancelReason}.`]
+    );
+    if (post.created_by) {
+      await pool.query(
+        `INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, 'Postagem automática cancelada', $2, 'info', '/entregas-social')`,
+        [post.created_by, `${await getClientDisplayName(post.client_id)}: não publicado porque ${cancelReason}.`.slice(0, 500)]
+      ).catch(() => {});
+    }
+    return;
+  }
+
   const accounts = await getConnectedAccounts(post.client_id);
   const targets = accounts.filter(a => post.platform === 'both' ? true : a.platform === post.platform);
+  const duplicated = duplicatedPlatformAccounts(targets);
+  if (duplicated.length) {
+    // Conexão antiga gravou várias Páginas/perfis no mesmo cliente: publicar em todas
+    // espalharia o conteúdo em perfis de outros clientes. Não publica em nenhuma.
+    const detail = duplicated
+      .map(([platform, list]) => `${list.length} contas de ${platform} (${list.map(a => a.username || a.account_name).join(', ')})`)
+      .join(' e ');
+    const message = `Não publicado: o cliente tem ${detail}. Desconecte as que não são dele em Conexões Sociais e publique de novo.`;
+    await pool.query(
+      `UPDATE scheduled_posts SET status='erro', last_error=$2, attempts=attempts+1, updated_at=now() WHERE id=$1`,
+      [post.id, message]
+    );
+    await notifySocialTeam('⚠️ Postagem automática bloqueada', `${await getClientDisplayName(post.client_id)}: ${message}`);
+    return;
+  }
+
   const results = [];
   const errors = [];
   if (targets.length === 0) errors.push(`Nenhuma conta ${post.platform === 'both' ? '' : post.platform + ' '}conectada para este cliente.`);
@@ -8208,43 +8560,70 @@ async function runScheduledPost(post) {
   }
 
   const attempts = (post.attempts || 0) + 1;
-  if (errors.length === 0) {
+  const partial = errors.length > 0 && results.length > 0;
+  if (errors.length === 0 || partial) {
+    // Saiu em pelo menos uma rede: não tenta de novo (duplicaria onde já saiu) e a entrega vira postada.
     await pool.query(
-      `UPDATE scheduled_posts SET status='publicado', published_at=now(), result=$2, last_error=NULL, attempts=$3, updated_at=now() WHERE id=$1`,
-      [post.id, JSON.stringify(results), attempts]
+      `UPDATE scheduled_posts SET status='publicado', published_at=now(), result=$2, last_error=$4, attempts=$3, updated_at=now() WHERE id=$1`,
+      [post.id, JSON.stringify(results), attempts, partial ? errors.join(' | ').slice(0, 2000) : null]
     );
     if (post.delivery_id) {
       await pool.query(`UPDATE social_media_deliveries SET status='postado', posted_at=CURRENT_DATE, updated_at=now() WHERE id=$1`, [post.delivery_id]).catch(() => {});
     }
     if (post.content_task_id) {
-      await pool.query(`UPDATE content_tasks SET kanban_column='postado', updated_at=now() WHERE id=$1 AND kanban_column <> 'postado'`, [post.content_task_id]).catch(() => {});
+      // 'arquivado' é a coluna do conteúdo postado (igual ao botão "Postado!"); 'postado' não existe
+      // no kanban de conteúdo e fazia o card reaparecer na Zona de Ideias.
+      await pool.query(
+        `UPDATE content_tasks SET kanban_column='arquivado', updated_at=now()
+          WHERE id=$1 AND kanban_column IN ('agendamentos','acompanhamento','postado')`,
+        [post.content_task_id]
+      ).catch(() => {});
     }
     await pool.query(
       `INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1,'✅ Conteúdo publicado',$2,'success')`,
       [post.client_id, `Seu conteúdo foi publicado automaticamente${results[0]?.account ? ' em ' + results[0].account : ''}.`]
     ).catch(() => {});
+    if (partial) {
+      await notifySocialTeam(
+        '⚠️ Postagem automática incompleta',
+        `${await getClientDisplayName(post.client_id)}: publicado em ${results.map(r => r.platform).join(', ')}, mas falhou em ${errors.join(' | ')}`
+      );
+    }
     return;
   }
 
-  const partial = results.length > 0;
-  const retry = !partial && attempts < SOCIAL_POST_MAX_ATTEMPTS;
+  const retry = attempts < SOCIAL_POST_MAX_ATTEMPTS;
   await pool.query(
     `UPDATE scheduled_posts
        SET status=$2, attempts=$3, last_error=$4, result=$5,
            scheduled_at = CASE WHEN $2='agendado' THEN now() + interval '5 minutes' ELSE scheduled_at END,
-           published_at = CASE WHEN $6 THEN now() ELSE published_at END,
            updated_at=now()
      WHERE id=$1`,
-    [post.id, retry ? 'agendado' : (partial ? 'publicado' : 'erro'), attempts, errors.join(' | ').slice(0, 2000), JSON.stringify(results), partial]
+    [post.id, retry ? 'agendado' : 'erro', attempts, errors.join(' | ').slice(0, 2000), JSON.stringify(results)]
   );
-  if (!retry && !partial) {
-    // Avisa a equipe de social media que a postagem falhou
-    await pool.query(
-      `INSERT INTO notifications (user_id, title, message, type, link)
-       SELECT ur.user_id, '⚠️ Postagem automática falhou', $1, 'error', '/entregas-social'
-       FROM user_roles ur WHERE ur.role IN ('admin','social_media')`,
-      [`Cliente ${post.client_id}: ${errors[0]}`.slice(0, 500)]
-    ).catch(() => {});
+  if (!retry) {
+    // Avisa a equipe de social media que a postagem falhou (com o nome do cliente, não o id)
+    await notifySocialTeam('⚠️ Postagem automática falhou', `${await getClientDisplayName(post.client_id)}: ${errors[0]}`);
+  }
+}
+
+const STUCK_POST_MESSAGE = 'Publicação interrompida (o servidor reiniciou no meio). Confira o perfil antes de publicar de novo.';
+
+/**
+ * Post preso em 'publicando' porque a API reiniciou no meio da publicação: vira 'erro'
+ * com aviso (pode já ter saído na Meta), em vez de voltar sozinho para 'agendado'.
+ * Roda a cada ciclo do robô e ignora os posts que este processo ainda está publicando.
+ */
+async function recoverStuckScheduledPosts() {
+  const { rows } = await pool.query(
+    `UPDATE scheduled_posts SET status='erro', last_error=$2, updated_at=now()
+      WHERE status='publicando' AND updated_at < now() - interval '40 minutes'
+        AND NOT (id::text = ANY($1::text[]))
+      RETURNING id, client_id`,
+    [[...SOCIAL_POSTS_IN_FLIGHT], STUCK_POST_MESSAGE]
+  );
+  for (const post of rows) {
+    await notifySocialTeam('⚠️ Postagem automática interrompida', `${await getClientDisplayName(post.client_id)}: ${STUCK_POST_MESSAGE}`);
   }
 }
 
@@ -8254,6 +8633,11 @@ async function processDueScheduledPosts() {
   socialPostWorkerBusy = true;
   try {
     await ensureSocialPostsSchema();
+    try {
+      await recoverStuckScheduledPosts();
+    } catch (err) {
+      console.error('[social-posts] recuperação de posts travados falhou:', err.message);
+    }
     // Claim atômico: evita publicar duas vezes se houver mais de uma instância
     const { rows } = await pool.query(
       `UPDATE scheduled_posts SET status='publicando', updated_at=now()
@@ -8305,25 +8689,25 @@ async function refreshInstagramDirectTokens() {
 }
 setInterval(refreshInstagramDirectTokens, 24 * 60 * 60 * 1000);
 setTimeout(refreshInstagramDirectTokens, 30_000);
-// Recupera posts que ficaram travados em 'publicando' após um restart do PM2
-pool.query(`UPDATE scheduled_posts SET status='agendado' WHERE status='publicando' AND updated_at < now() - interval '15 minutes'`).catch(() => {});
+// Posts travados em 'publicando' depois de um restart do PM2: recoverStuckScheduledPosts,
+// a cada ciclo do robô (vão para 'erro' com aviso, sem republicar sozinhos).
 
 // Status de conexão do cliente (sem expor tokens)
 app.get('/api/social-posts/accounts/:clientId', async (req, res) => {
   try {
-    await verifyUser(req);
+    await verifySocialManager(req);
     await ensureSocialPostsSchema();
     const accounts = await getConnectedAccounts(req.params.clientId);
     res.json({ accounts: accounts.map(sanitizeAccount) });
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
 // Visão geral de conexões de TODOS os clientes (sem expor tokens)
 app.get('/api/social-posts/accounts-overview', async (req, res) => {
   try {
-    await verifyUser(req);
+    await verifySocialManager(req);
     await ensureSocialPostsSchema();
     await ensureSocialInsightsSchema();
     const { rows: clients } = await pool.query(
@@ -8335,8 +8719,13 @@ app.get('/api/social-posts/accounts-overview', async (req, res) => {
        FROM social_accounts WHERE status = 'connected'`
     );
     // Preenche @usuário/foto de contas conectadas antes dessa melhoria (melhor esforço, sem travar a lista)
-    const missing = accounts.filter(a => !a.profile_picture_url);
-    await Promise.all(missing.slice(0, 20).map(a => refreshAccountProfile(a)));
+    // Sem segurar a resposta (a foto aparece na próxima carga) e sem repetir a mesma conta por 6 h
+    const now = Date.now();
+    const missing = accounts
+      .filter(a => !a.profile_picture_url && now - (PROFILE_REFRESH_TRIED.get(a.id) || 0) > PROFILE_REFRESH_RETRY_MS)
+      .slice(0, 20);
+    for (const a of missing) PROFILE_REFRESH_TRIED.set(a.id, now);
+    if (missing.length) Promise.all(missing.map(a => refreshAccountProfile({ ...a }))).catch(() => {});
     const byClient = new Map();
     for (const a of accounts) {
       if (!byClient.has(a.client_id)) byClient.set(a.client_id, []);
@@ -8346,7 +8735,7 @@ app.get('/api/social-posts/accounts-overview', async (req, res) => {
       clients: clients.map(c => ({ ...c, accounts: byClient.get(c.id) || [] })),
     });
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -8448,6 +8837,25 @@ async function fetchMediaMetric(base, mediaId, token, metric) {
 
 const sumSeries = (series) => series.reduce((acc, i) => acc + (i.value || 0), 0);
 
+/** Roda fn em todos os itens com no máximo `limit` ao mesmo tempo (mantém a ordem do resultado). */
+async function mapWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index], index);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+// Métricas por publicação. 'plays', 'total_watch_time' e 'avg_watch_time' saíram da API
+// da Meta (só davam erro e log); para reels valem os nomes ig_reels_*.
+const IG_MEDIA_METRICS = ['reach', 'saved', 'total_interactions', 'shares', 'views'];
+const IG_REELS_EXTRA_METRICS = ['ig_reels_video_view_total_time', 'ig_reels_avg_watch_time'];
+
 /**
  * Reúne todas as métricas do período para uma conta do Instagram.
  * Cada bloco é tolerante a falha: se a Meta negar uma métrica, ela vem como null.
@@ -8467,25 +8875,29 @@ async function fetchInstagramInsights(account, since, until) {
   }
   const windows = insightWindows(startMs, endMs);
 
-  let profile = {};
-  try {
-    profile = await metaGetJson(`${base}/${igId}?fields=username,followers_count,media_count&access_token=${token}`);
-  } catch (err) {
-    console.warn('[insights] perfil indisponível:', err.message);
-  }
-
-  const reachSeries = await fetchDailyMetric(base, igId, token, 'reach', windows);
-  const followerSeries = await fetchDailyMetric(base, igId, token, 'follower_count', windows);
-  const profileViews = await fetchTotalMetric(base, igId, token, 'profile_views', windows);
-  const websiteClicks = await fetchTotalMetric(base, igId, token, 'website_clicks', windows);
-  const accountsEngaged = await fetchTotalMetric(base, igId, token, 'accounts_engaged', windows);
-  const impressions = await fetchTotalMetric(base, igId, token, 'views', windows);
-  const totalInteractions = await fetchTotalMetric(base, igId, token, 'total_interactions', windows);
-  const likes = await fetchTotalMetric(base, igId, token, 'likes', windows);
-  const comments = await fetchTotalMetric(base, igId, token, 'comments', windows);
-  const saves = await fetchTotalMetric(base, igId, token, 'saves', windows);
-  const shares = await fetchTotalMetric(base, igId, token, 'shares', windows);
-  const replies = await fetchTotalMetric(base, igId, token, 'replies', windows);
+  // Perfil e métricas da conta ao mesmo tempo (antes eram 13 chamadas uma depois da outra).
+  // Cada métrica continua separada para que uma negada pela Meta não esconda as outras.
+  const [
+    profile, reachSeries, followerSeries, profileViews, websiteClicks, accountsEngaged,
+    impressions, totalInteractions, likes, comments, saves, shares, replies,
+  ] = await Promise.all([
+    metaGetJson(`${base}/${igId}?fields=username,followers_count,media_count&access_token=${token}`).catch((err) => {
+      console.warn('[insights] perfil indisponível:', err.message);
+      return {};
+    }),
+    fetchDailyMetric(base, igId, token, 'reach', windows),
+    fetchDailyMetric(base, igId, token, 'follower_count', windows),
+    fetchTotalMetric(base, igId, token, 'profile_views', windows),
+    fetchTotalMetric(base, igId, token, 'website_clicks', windows),
+    fetchTotalMetric(base, igId, token, 'accounts_engaged', windows),
+    fetchTotalMetric(base, igId, token, 'views', windows),
+    fetchTotalMetric(base, igId, token, 'total_interactions', windows),
+    fetchTotalMetric(base, igId, token, 'likes', windows),
+    fetchTotalMetric(base, igId, token, 'comments', windows),
+    fetchTotalMetric(base, igId, token, 'saves', windows),
+    fetchTotalMetric(base, igId, token, 'shares', windows),
+    fetchTotalMetric(base, igId, token, 'replies', windows),
+  ]);
 
   // Publicações do período com desempenho individual
   const posts = [];
@@ -8496,39 +8908,51 @@ async function fetchInstagramInsights(account, since, until) {
     ].join(',');
     let url = `${base}/${igId}/media?fields=${encodeURIComponent(fields)}&limit=50&access_token=${token}`;
     let pages = 0;
-    while (url && pages < 6) {
-      const page = await metaGetJson(url);
-      for (const m of page.data || []) {
-        const ts = m.timestamp ? new Date(m.timestamp).getTime() : 0;
-        if (!ts || ts < startMs || ts > endMs + DAY_SECONDS * 1000) continue;
-        const metricNames = m.media_product_type === 'REELS'
-          ? ['reach', 'saved', 'total_interactions', 'shares', 'views', 'plays', 'total_watch_time', 'avg_watch_time']
-          : ['reach', 'saved', 'total_interactions', 'shares', 'views'];
-        const values = await Promise.all(metricNames.map(name => fetchMediaMetric(base, m.id, token, name)));
-        const ins = Object.fromEntries(metricNames.map((name, index) => [name, values[index]]));
-        posts.push({
-          id: m.id,
-          caption: (m.caption || '').slice(0, 220),
-          media_type: m.media_product_type === 'REELS' ? 'REELS' : (m.media_type || 'IMAGE'),
-          thumbnail: m.thumbnail_url || m.media_url || null,
-          permalink: m.permalink || null,
-          timestamp: m.timestamp || null,
-          likes: m.like_count ?? 0,
-          comments: m.comments_count ?? 0,
-          reach: ins.reach ?? null,
-          saved: ins.saved ?? null,
-          interactions: ins.total_interactions ?? null,
-          shares: ins.shares ?? null,
-          views: ins.views ?? null,
-          plays: ins.plays ?? null,
-          total_watch_time: ins.total_watch_time ?? null,
-          avg_watch_time: ins.avg_watch_time ?? null,
-        });
+    const inPeriod = [];
+    try {
+      while (url && pages < 6) {
+        const page = await metaGetJson(url);
+        for (const m of page.data || []) {
+          const ts = m.timestamp ? new Date(m.timestamp).getTime() : 0;
+          if (!ts || ts < startMs || ts > endMs + DAY_SECONDS * 1000) continue;
+          inPeriod.push(m);
+        }
+        const oldest = (page.data || []).slice(-1)[0]?.timestamp;
+        if (oldest && new Date(oldest).getTime() < startMs) break;
+        url = page.paging?.next || null;
+        pages += 1;
       }
-      const oldest = (page.data || []).slice(-1)[0]?.timestamp;
-      if (oldest && new Date(oldest).getTime() < startMs) break;
-      url = page.paging?.next || null;
-      pages += 1;
+    } catch (err) {
+      // Página seguinte falhou: segue com as publicações já listadas (como antes)
+      console.warn('[insights] lista de publicações incompleta:', err.message);
+    }
+    // Até 4 publicações ao mesmo tempo (antes uma de cada vez), sem estourar o limite da Meta
+    const withMetrics = await mapWithConcurrency(inPeriod, 4, async (m) => {
+      const metricNames = m.media_product_type === 'REELS'
+        ? [...IG_MEDIA_METRICS, ...IG_REELS_EXTRA_METRICS]
+        : IG_MEDIA_METRICS;
+      const values = await Promise.all(metricNames.map(name => fetchMediaMetric(base, m.id, token, name)));
+      return { m, ins: Object.fromEntries(metricNames.map((name, index) => [name, values[index]])) };
+    });
+    for (const { m, ins } of withMetrics) {
+      posts.push({
+        id: m.id,
+        caption: (m.caption || '').slice(0, 220),
+        media_type: m.media_product_type === 'REELS' ? 'REELS' : (m.media_type || 'IMAGE'),
+        thumbnail: m.thumbnail_url || m.media_url || null,
+        permalink: m.permalink || null,
+        timestamp: m.timestamp || null,
+        likes: m.like_count ?? 0,
+        comments: m.comments_count ?? 0,
+        reach: ins.reach ?? null,
+        saved: ins.saved ?? null,
+        interactions: ins.total_interactions ?? null,
+        shares: ins.shares ?? null,
+        views: ins.views ?? null,
+        plays: null,
+        total_watch_time: ins.ig_reels_video_view_total_time ?? null,
+        avg_watch_time: ins.ig_reels_avg_watch_time ?? null,
+      });
     }
   } catch (err) {
     console.warn('[insights] publicações indisponíveis:', err.message);
@@ -8600,7 +9024,41 @@ async function fetchFacebookInsights(account, since, until) {
 }
 
 /** Busca (com cache) as métricas do cliente no período. */
+const INSIGHTS_MAX_RANGE_DAYS = 93;
+
+/**
+ * Período das métricas: datas reais, início ≤ fim, até 93 dias (cabe qualquer mês e o
+ * atalho de 90 dias do portal) e fim até um mês à frente (o modo mensal manda o último
+ * dia do mês). Sem limite, um período de anos virava milhares de chamadas à Meta e
+ * gastava o limite de chamadas do perfil, o mesmo da postagem automática.
+ * Devolve a mensagem do problema ou null.
+ */
+function insightsPeriodError(since, until) {
+  const parse = (value) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+    if (!m) return null;
+    const time = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    const d = new Date(time);
+    // Date.UTC joga ano < 100 para 19xx e aceita 31/02: só vale a data que volta igual
+    if (d.getUTCFullYear() !== Number(m[1]) || d.getUTCMonth() !== Number(m[2]) - 1 || d.getUTCDate() !== Number(m[3])) return null;
+    return time;
+  };
+  const start = parse(since);
+  const end = parse(until);
+  if (start === null || end === null) return 'Período inválido (use datas reais no formato AAAA-MM-DD).';
+  if (start > end) return 'A data inicial é depois da final.';
+  if ((end - start) / 86400000 + 1 > INSIGHTS_MAX_RANGE_DAYS) return 'Escolha um período de até 3 meses.';
+  if (end > Date.now() + 32 * 86400000) return 'A data final está muito no futuro.';
+  return null;
+}
+
+// Busca sem cache já em andamento (mesmo cliente e período): quem pedir de novo espera a
+// mesma resposta em vez de repetir todas as chamadas à Meta.
+const INSIGHTS_IN_FLIGHT = new Map();
+
 async function getClientInsights(clientId, since, until, { maxAgeMinutes = 180 } = {}) {
+  const periodError = insightsPeriodError(since, until);
+  if (periodError) throw Object.assign(new Error(periodError), { statusCode: 400 });
   await ensureSocialInsightsSchema();
   const { rows: cached } = await pool.query(
     `SELECT data, fetched_at FROM social_insights_snapshots
@@ -8610,6 +9068,14 @@ async function getClientInsights(clientId, since, until, { maxAgeMinutes = 180 }
   const fresh = cached[0] && (Date.now() - new Date(cached[0].fetched_at).getTime()) < maxAgeMinutes * 60000;
   if (fresh) return { ...cached[0].data, cached: true, fetched_at: cached[0].fetched_at };
 
+  const key = `${clientId}:${since}:${until}`;
+  if (INSIGHTS_IN_FLIGHT.has(key)) return INSIGHTS_IN_FLIGHT.get(key);
+  const pending = fetchAndCacheClientInsights(clientId, since, until, cached).finally(() => INSIGHTS_IN_FLIGHT.delete(key));
+  INSIGHTS_IN_FLIGHT.set(key, pending);
+  return pending;
+}
+
+async function fetchAndCacheClientInsights(clientId, since, until, cached) {
   const { rows: accounts } = await pool.query(
     `SELECT * FROM social_accounts WHERE client_id = $1 AND platform IN ('instagram', 'facebook') AND status = 'connected'`,
     [clientId]
@@ -8651,7 +9117,7 @@ async function getClientInsights(clientId, since, until, { maxAgeMinutes = 180 }
 // Métricas de um cliente (equipe)
 app.get('/api/social-posts/insights', async (req, res) => {
   try {
-    await verifyUser(req);
+    await verifySocialManager(req);
     const clientId = String(req.query.client_id || '').trim();
     const since = String(req.query.since || '').trim();
     const until = String(req.query.until || '').trim();
@@ -8662,21 +9128,21 @@ app.get('/api/social-posts/insights', async (req, res) => {
     const insights = await getClientInsights(clientId, since, until, { maxAgeMinutes: refresh ? 0 : 180 });
     res.json({ insights });
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
 // Liga/desliga a exibição das métricas no portal do cliente
 app.post('/api/social-posts/portal-insights', async (req, res) => {
   try {
-    await verifyUser(req);
+    await verifySocialManager(req);
     await ensureSocialInsightsSchema();
     const { client_id, enabled } = req.body || {};
     if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
     await pool.query(`UPDATE clients SET portal_insights_enabled = $2 WHERE id = $1`, [client_id, !!enabled]);
     res.json({ success: true, enabled: !!enabled });
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -8685,7 +9151,7 @@ app.post('/api/social-posts/portal-insights', async (req, res) => {
 // Biblioteca de mídias já existentes no sistema para um cliente (artes e vídeos)
 app.get('/api/social-posts/media-library', async (req, res) => {
   try {
-    await verifyUser(req);
+    await verifySocialManager(req);
     const clientId = String(req.query.client_id || '').trim();
     if (!clientId) return res.status(400).json({ error: 'client_id é obrigatório' });
 
@@ -8730,24 +9196,27 @@ app.get('/api/social-posts/media-library', async (req, res) => {
 
     res.json({ items });
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
 // Desconectar conta social de um cliente
 app.post('/api/social-accounts/disconnect', async (req, res) => {
   try {
-    await verifyUser(req);
-    const { client_id, platform } = req.body || {};
+    await verifySocialManager(req);
+    const { client_id, platform, account_id } = req.body || {};
     if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
-    if (platform) {
+    if (account_id) {
+      // Uma conta só (ex.: Página de outro cliente gravada por uma conexão antiga)
+      await pool.query(`DELETE FROM social_accounts WHERE id = $1 AND client_id = $2`, [account_id, client_id]);
+    } else if (platform) {
       await pool.query(`DELETE FROM social_accounts WHERE client_id = $1 AND platform = $2`, [client_id, platform]);
     } else {
       await pool.query(`DELETE FROM social_accounts WHERE client_id = $1`, [client_id]);
     }
     res.json({ success: true });
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -8788,13 +9257,13 @@ function parseMetaSignedRequest(signedRequest, appSecret) {
   return data;
 }
 
-/** Lê o App Secret da integração Meta ativa. */
-async function getMetaAppSecret() {
-  const { rows } = await pool.query(
-    `SELECT config FROM api_integrations WHERE provider = 'meta_ads' AND status = 'ativo' ORDER BY created_at DESC LIMIT 1`
-  );
-  const config = rows[0]?.config || {};
-  return config.meta_app_secret_encrypted || config.instagram_app_secret_encrypted || null;
+/**
+ * App Secrets da integração Meta (a mesma linha do OAuth). O callback pode vir assinado
+ * pelo app da Meta ou pelo app do Instagram (quando são apps separados): os dois são testados.
+ */
+async function getMetaAppSecrets() {
+  const { config } = await loadMetaOAuthConfig(getAdminClient());
+  return [...new Set([config.meta_app_secret_encrypted, config.instagram_app_secret_encrypted].filter(Boolean))];
 }
 
 /** Remove todas as contas sociais vinculadas a um usuário Meta/Instagram. */
@@ -8814,11 +9283,11 @@ async function purgeMetaUserData(metaUserId) {
 async function handleMetaComplianceRequest(req, res, kind) {
   try {
     await ensureMetaDeletionSchema();
-    const appSecret = await getMetaAppSecret();
-    if (!appSecret) return res.status(503).json({ error: 'Meta integration not configured' });
+    const appSecrets = await getMetaAppSecrets();
+    if (!appSecrets.length) return res.status(503).json({ error: 'Meta integration not configured' });
 
     const signedRequest = req.body?.signed_request || req.query?.signed_request;
-    const parsed = parseMetaSignedRequest(signedRequest, appSecret);
+    const parsed = appSecrets.map(secret => parseMetaSignedRequest(signedRequest, secret)).find(Boolean) || null;
     if (!parsed) return res.status(400).json({ error: 'Invalid signed_request' });
 
     const metaUserId = parsed.user_id || parsed.user?.id || null;
@@ -8866,13 +9335,19 @@ app.get('/api/meta/deletion-status/:code', async (req, res) => {
 
 app.get('/api/social-posts', async (req, res) => {
   try {
-    await verifyUser(req);
+    await verifySocialManager(req);
     await ensureSocialPostsSchema();
-    const { client_id, status, limit } = req.query;
+    const { client_id, status, limit, delivery_ids } = req.query;
     const params = [];
     const where = [];
     if (client_id) { params.push(client_id); where.push(`sp.client_id = $${params.length}`); }
     if (status && SOCIAL_POST_STATUSES.includes(String(status))) { params.push(status); where.push(`sp.status = $${params.length}`); }
+    // Posts de entregas específicas (o kanban social confere se a entrega agendada tem postagem automática)
+    if (delivery_ids) {
+      const ids = String(delivery_ids).split(',').map(s => s.trim()).filter(s => /^[0-9a-f-]{36}$/i.test(s)).slice(0, 300);
+      params.push(ids);
+      where.push(`sp.delivery_id::text = ANY($${params.length}::text[])`);
+    }
     params.push(Math.min(Number(limit) || 200, 500));
     const { rows } = await pool.query(
       `SELECT sp.*, c.company_name AS client_name
@@ -8883,13 +9358,13 @@ app.get('/api/social-posts', async (req, res) => {
     );
     res.json({ posts: rows });
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
 app.post('/api/social-posts', async (req, res) => {
   try {
-    const { user } = await verifyUser(req);
+    const { user } = await verifySocialManager(req);
     await ensureSocialPostsSchema();
     const {
       client_id, delivery_id, content_task_id, platform = 'instagram', publish_type = 'reels',
@@ -8917,16 +9392,24 @@ app.post('/api/social-posts', async (req, res) => {
 
     const when = new Date(scheduled_at);
     if (!scheduled_at || Number.isNaN(when.getTime())) return res.status(400).json({ error: 'scheduled_at inválido' });
+    // Data no passado publicaria na hora (o robô pega tudo que já venceu). Folga de 5 min para relógio atrasado.
+    if (when.getTime() < Date.now() - 5 * 60_000) return res.status(400).json({ error: 'O horário escolhido já passou. Escolha um horário futuro.' });
     if (caption.length > 2200) return res.status(400).json({ error: 'Legenda acima de 2200 caracteres (limite do Instagram)' });
 
     const accounts = await getConnectedAccounts(client_id);
     const needed = platform === 'both' ? ['instagram', 'facebook'] : [platform];
     const missing = needed.filter(p => !accounts.some(a => a.platform === p && a.access_token));
     if (missing.length) return res.status(400).json({ error: `Cliente sem conta conectada: ${missing.join(', ')}. Conecte em Clientes → editar → Redes Sociais.` });
+    // Várias contas da mesma rede: o robô não publicaria (não sabe qual é a do cliente). Avisa já no agendamento.
+    const duplicated = duplicatedPlatformAccounts(accounts.filter(a => needed.includes(a.platform)));
+    if (duplicated.length) {
+      const detail = duplicated.map(([p, list]) => `${list.length} contas de ${p} (${list.map(a => a.username || a.account_name).join(', ')})`).join(' e ');
+      return res.status(400).json({ error: `O cliente tem ${detail}. Desconecte as que não são dele em Conexões Sociais antes de agendar.` });
+    }
 
-    // Evita duplicar a mesma entrega na fila
+    // Evita duplicar a mesma entrega na fila (o post com erro também sai, senão "Publicar agora" nele duplicaria)
     if (delivery_id) {
-      await pool.query(`UPDATE scheduled_posts SET status='cancelado', updated_at=now() WHERE delivery_id=$1 AND status IN ('agendado')`, [delivery_id]);
+      await pool.query(`UPDATE scheduled_posts SET status='cancelado', updated_at=now() WHERE delivery_id=$1 AND status IN ('agendado','erro')`, [delivery_id]);
     }
     const { rows } = await pool.query(
       `INSERT INTO scheduled_posts (client_id, delivery_id, content_task_id, platform, publish_type, media_url, media_items, caption, scheduled_at, created_by, story_link, story_link_text)
@@ -8939,16 +9422,46 @@ app.post('/api/social-posts', async (req, res) => {
     );
     res.json({ success: true, post: rows[0] });
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
 app.post('/api/social-posts/:id/cancel', async (req, res) => {
   try {
-    await verifyUser(req);
+    await verifySocialManager(req);
     const { rowCount } = await pool.query(`UPDATE scheduled_posts SET status='cancelado', updated_at=now() WHERE id=$1 AND status IN ('agendado','erro')`, [req.params.id]);
     if (!rowCount) return res.status(400).json({ error: 'Só é possível cancelar posts agendados ou com erro' });
     res.json({ success: true });
+  } catch (error) {
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
+  }
+});
+
+/**
+ * Cancela os posts automáticos ainda pendentes de uma entrega e/ou de um card de conteúdo.
+ * O front chama quando o card sai de Agendado (alteração, volta de coluna, "Postado!" manual)
+ * ou é excluído. Quem move cards (editor, videomaker…) também chama, por isso vale para a
+ * equipe interna toda; o robô confere a entrega de novo antes de publicar.
+ */
+app.post('/api/social-posts/cancel-linked', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    if (!(await userHasAnyRole(user, INTERNAL_TEAM_ROLES))) return res.status(403).json({ error: 'Sem permissão' });
+    await ensureSocialPostsSchema();
+    const { delivery_id, content_task_id, reason } = req.body || {};
+    const isUuid = (v) => typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v);
+    const params = [];
+    const conds = [];
+    if (isUuid(delivery_id)) { params.push(delivery_id); conds.push(`delivery_id = $${params.length}`); }
+    if (isUuid(content_task_id)) { params.push(content_task_id); conds.push(`content_task_id = $${params.length}`); }
+    if (!conds.length) return res.status(400).json({ error: 'delivery_id ou content_task_id é obrigatório' });
+    params.push(`Cancelado: ${String(reason || 'o card saiu de Agendado').slice(0, 200)}.`);
+    const { rowCount } = await pool.query(
+      `UPDATE scheduled_posts SET status='cancelado', last_error=$${params.length}, updated_at=now()
+        WHERE status IN ('agendado','erro') AND (${conds.join(' OR ')})`,
+      params
+    );
+    res.json({ success: true, cancelled: rowCount });
   } catch (error) {
     res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
   }
@@ -8956,7 +9469,7 @@ app.post('/api/social-posts/:id/cancel', async (req, res) => {
 
 app.post('/api/social-posts/:id/publish-now', async (req, res) => {
   try {
-    await verifyUser(req);
+    await verifySocialManager(req);
     const { rows } = await pool.query(
       `UPDATE scheduled_posts SET status='publicando', updated_at=now() WHERE id=$1 AND status IN ('agendado','erro') RETURNING *`,
       [req.params.id]
@@ -8968,7 +9481,7 @@ app.post('/api/social-posts/:id/publish-now', async (req, res) => {
     res.json({ success: ok, post: fresh[0], error: ok ? null : (fresh[0]?.last_error || 'Falha ao publicar') });
 
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -8979,7 +9492,7 @@ app.post('/api/social-posts/:id/publish-now', async (req, res) => {
  */
 app.post('/api/social-posts/diagnose', async (req, res) => {
   try {
-    await verifyUser(req);
+    await verifySocialManager(req);
     await ensureSocialPostsSchema();
     const { client_id, media_url } = req.body || {};
     if (!client_id) return res.status(400).json({ error: 'client_id é obrigatório' });
@@ -9043,7 +9556,7 @@ app.post('/api/social-posts/diagnose', async (req, res) => {
 
     res.json({ checks, ok: checks.every(c => c.ok) });
   } catch (error) {
-    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -10035,10 +10548,12 @@ function dbQueryError(message, statusCode = 400) {
   return err;
 }
 
-// Colunas que nunca saem pelo /api/db/query (hash de senha da equipe e do portal).
+// Colunas que nunca saem pelo /api/db/query (hash de senha da equipe e do portal e o
+// token de publicação das contas sociais dos clientes, que só o servidor usa).
 const DB_QUERY_HIDDEN_COLUMNS = {
   profiles: ['password_hash', 'profile_password_hash', 'auth_password_hash'],
   clients: ['client_password_hash'],
+  social_accounts: ['access_token'],
 };
 
 // Colunas que só quem gerencia a equipe enxerga (a pessoa sempre vê a própria linha).
@@ -10289,6 +10804,9 @@ const DB_QUERY_TABLE_RULES = {
   whatsapp_config: { read: 'team', write: 'team' }, // o front usa /api/whatsapp/config
   whatsapp_messages: { read: 'team', write: 'team' }, // telefones e valores de cobrança
   api_integrations: { write: 'admin' }, // Financeiro → APIs e Configurações → integrações
+  // Contas sociais: só Clientes (admin, social_media, gestor_projetos) grava pelo genérico;
+  // a conexão de verdade (com token) é feita pelas rotas da Meta.
+  social_accounts: { write: 'team' },
   api_integration_logs: { read: 'admin', write: 'admin' },
   plans: { write: 'admin' },
   commercial_proposals: { write: 'admin' },
@@ -10431,6 +10949,15 @@ async function enforceDbQueryRules({ safeTable, operation, data, filters, user, 
     );
     if (!bySingleCard && !(await isStrictAdminUser(user))) {
       throw forbidden('Só um administrador pode apagar várias artes de uma vez.');
+    }
+  }
+
+  // Token de publicação só entra pelas rotas da Meta (que validam a conta); pelo genérico
+  // dava para trocar a conta de um cliente pela de outra pessoa.
+  if (safeTable === 'social_accounts' && isWrite) {
+    const items = Array.isArray(data) ? data : [data];
+    if (items.some((item) => dbQueryRowKeys(item).includes('access_token'))) {
+      throw forbidden('O token da conta social só é gravado pela conexão com a Meta.');
     }
   }
 
@@ -10987,7 +11514,16 @@ app.post('/api/db/query', async (req, res) => {
         }
 
         let paramIdx = 1;
-        const setClauses = keys.map(k => `${k} = $${paramIdx++}`);
+        const setClauses = keys.map(k => {
+          const placeholder = `$${paramIdx++}`;
+          // api_integrations: os secrets (*_encrypted) que não vierem no config novo continuam.
+          // A tela de APIs regravava o config só com App ID e notas e apagava o App Secret da Meta.
+          if (safeTable === 'api_integrations' && k === 'config') {
+            return `config = COALESCE((SELECT jsonb_object_agg(e.key, e.value) FROM jsonb_each(COALESCE(api_integrations.config, '{}'::jsonb)) e
+                       WHERE right(e.key, 10) = '_encrypted'), '{}'::jsonb) || COALESCE(${placeholder}::jsonb, '{}'::jsonb)`;
+          }
+          return `${k} = ${placeholder}`;
+        });
 
         let query = `UPDATE ${safeTable} SET ${setClauses.join(', ')}`;
         const params = [...values];

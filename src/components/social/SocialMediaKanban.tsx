@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -79,6 +79,11 @@ interface SocialDelivery {
   content_task_id: string | null;
 }
 
+export interface AutoPostInfo {
+  status: string;
+  last_error: string | null;
+}
+
 interface KanbanColumn {
   id: string;
   title: string;
@@ -102,13 +107,16 @@ interface SocialMediaKanbanProps {
     posted: SocialDelivery[];
   };
   taskDeadlines: Record<string, any>;
-  onApproveReview: (d: SocialDelivery) => void;
+  /** Postagem automática de cada entrega agendada (para o selo "falhou"). */
+  autoPostByDelivery?: Record<string, AutoPostInfo>;
+  // Devolvem false quando a gravação falhou (aí o foguete não sobe)
+  onApproveReview: (d: SocialDelivery) => Promise<boolean> | void;
   onOpenAlteration: (d: SocialDelivery) => void;
   onMarkPriority: (d: SocialDelivery) => void;
-  onClientApproved: (d: SocialDelivery) => void;
+  onClientApproved: (d: SocialDelivery) => Promise<boolean> | void;
   onSendWhatsApp: (d: SocialDelivery) => void;
   onOpenSchedule: (d: SocialDelivery) => void;
-  onMarkPosted: (id: string) => void;
+  onMarkPosted: (id: string) => Promise<boolean> | void;
   onTogglePriority: (taskId: string, current: boolean) => void;
   sendingWhatsApp: boolean;
   onDragMove?: (delivery: SocialDelivery, targetColumnId: string, socialStatus: string, contentColumn: string) => void;
@@ -160,19 +168,16 @@ function RocketBurst({ onComplete }: { onComplete: () => void }) {
   );
 }
 
-// Video link inline component
-function ReviewVideoLink({ contentTaskId, clientId, showDownload = false }: { contentTaskId: string | null; clientId: string | null; showDownload?: boolean }) {
-  const [isAltered, setIsAltered] = useState(false);
-  const [videoData, setVideoData] = useState<{ edited_video_link: string | null; drive_link: string | null } | null>(null);
+export interface CardVideoInfo {
+  edited_video_link: string | null;
+  drive_link: string | null;
+  adjustment_notes: string | null;
+}
 
-  useEffect(() => {
-    if (!contentTaskId) return;
-    supabase.from('content_tasks').select('edited_video_link, drive_link, adjustment_notes').eq('id', contentTaskId).single()
-      .then(({ data }) => {
-        setVideoData(data);
-        setIsAltered(!!data?.adjustment_notes);
-      });
-  }, [contentTaskId]);
+// Video link inline component (os dados vêm do kanban, numa consulta só para todos os cards)
+function ReviewVideoLink({ contentTaskId, clientId, info, showDownload = false }: { contentTaskId: string | null; clientId: string | null; info?: CardVideoInfo; showDownload?: boolean }) {
+  const videoData = info || null;
+  const isAltered = !!info?.adjustment_notes;
 
   const hasVideo = !!(videoData?.edited_video_link || videoData?.drive_link);
   if (!hasVideo && !isAltered) return null;
@@ -238,6 +243,7 @@ export default function SocialMediaKanban({
   editingQueueTasks,
   deliveries,
   taskDeadlines,
+  autoPostByDelivery,
   onApproveReview,
   onOpenAlteration,
   onMarkPriority,
@@ -259,6 +265,27 @@ export default function SocialMediaKanban({
     setShowRocket(true);
   }, []);
 
+  // Vídeo e notas dos cards de Revisão, Enviado e Postado numa consulta só
+  // (antes cada card fazia a própria consulta ao banco).
+  const [videoInfo, setVideoInfo] = useState<Record<string, CardVideoInfo>>({});
+  const videoTaskIdsKey = useMemo(() => (
+    [...deliveries.review, ...deliveries.approval, ...deliveries.posted.slice(0, 20)]
+      .map(d => d.content_task_id)
+      .filter((id): id is string => !!id)
+      .sort()
+      .join(',')
+  ), [deliveries.review, deliveries.approval, deliveries.posted]);
+  useEffect(() => {
+    if (!videoTaskIdsKey) { setVideoInfo({}); return; }
+    let active = true;
+    supabase.from('content_tasks').select('id, edited_video_link, drive_link, adjustment_notes').in('id', videoTaskIdsKey.split(','))
+      .then(({ data }) => {
+        if (!active || !data) return;
+        setVideoInfo(Object.fromEntries((data as any[]).map(t => [t.id, t as CardVideoInfo])));
+      });
+    return () => { active = false; };
+  }, [videoTaskIdsKey]);
+
   const columns: KanbanColumn[] = COLUMN_DEFS.map(def => {
     let items: SocialDelivery[] = [];
     switch (def.id) {
@@ -273,9 +300,10 @@ export default function SocialMediaKanban({
     return { ...def, items };
   });
 
-  const handleActionWithRocket = (action: () => void) => {
-    triggerRocket();
-    action();
+  // O foguete só sobe depois que a ação gravou (antes subia mesmo com erro)
+  const handleActionWithRocket = async (action: () => Promise<boolean> | void) => {
+    const ok = await action();
+    if (ok !== false) triggerRocket();
   };
 
   // Drag handlers
@@ -419,6 +447,7 @@ export default function SocialMediaKanban({
                             index={i}
                             columnId={col.id}
                             taskDeadlines={taskDeadlines}
+                            autoPost={autoPostByDelivery?.[item.id]}
                             onApproveReview={() => handleActionWithRocket(() => onApproveReview(item))}
                             onOpenAlteration={() => onOpenAlteration(item)}
                             onMarkPriority={() => onMarkPriority(item)}
@@ -434,6 +463,7 @@ export default function SocialMediaKanban({
                             forwardLabel={adj.next?.title}
                             backwardLabel={adj.prev?.title}
                             isHighlighted={highlightTaskId != null && item.content_task_id === highlightTaskId}
+                            videoInfo={item.content_task_id ? videoInfo[item.content_task_id] : undefined}
                             onDelete={onDelete ? () => onDelete(item) : undefined}
                           />
                         );
@@ -499,6 +529,7 @@ function DeliveryCard({
   index,
   columnId,
   taskDeadlines,
+  autoPost,
   onApproveReview,
   onOpenAlteration,
   onMarkPriority,
@@ -515,11 +546,13 @@ function DeliveryCard({
   backwardLabel,
   isHighlighted,
   onDelete,
+  videoInfo,
 }: {
   delivery: SocialDelivery;
   index: number;
   columnId: string;
   taskDeadlines: Record<string, any>;
+  autoPost?: AutoPostInfo;
   onApproveReview: () => void;
   onOpenAlteration: () => void;
   onMarkPriority: () => void;
@@ -536,6 +569,7 @@ function DeliveryCard({
   backwardLabel?: string;
   isHighlighted?: boolean;
   onDelete?: () => void;
+  videoInfo?: CardVideoInfo;
 }) {
   const typeConf = getTypeConfig(d.content_type);
   const td = d.content_task_id ? taskDeadlines[d.content_task_id] : null;
@@ -603,6 +637,16 @@ function DeliveryCard({
             {d.platform && columnId === 'agendado' && (
               <Badge variant="outline" className="text-[9px] px-1.5 py-0">{d.platform}</Badge>
             )}
+            {columnId === 'agendado' && autoPost?.status === 'erro' && (
+              <Badge className="text-[9px] px-1.5 py-0 border-0 bg-red-500 text-white gap-1" title={autoPost.last_error || undefined}>
+                <AlertTriangle size={9} /> Postagem automática falhou
+              </Badge>
+            )}
+            {columnId === 'agendado' && (autoPost?.status === 'agendado' || autoPost?.status === 'publicando') && (
+              <Badge variant="outline" className="text-[9px] px-1.5 py-0 gap-1 text-primary border-primary/30">
+                <Zap size={9} /> {autoPost.status === 'publicando' ? 'Publicando…' : 'Automática'}
+              </Badge>
+            )}
           </div>
 
           {/* Scheduled info */}
@@ -615,7 +659,7 @@ function DeliveryCard({
 
           {/* Video link */}
           {(columnId === 'revisao' || columnId === 'envio') && (
-            <ReviewVideoLink contentTaskId={d.content_task_id} clientId={d.client_id} />
+            <ReviewVideoLink contentTaskId={d.content_task_id} clientId={d.client_id} info={videoInfo} />
           )}
 
           {/* Actions */}
@@ -676,7 +720,7 @@ function DeliveryCard({
                     {d.platform && ` · ${d.platform}`}
                   </div>
                 )}
-                <ReviewVideoLink contentTaskId={d.content_task_id} clientId={d.client_id} showDownload={true} />
+                <ReviewVideoLink contentTaskId={d.content_task_id} clientId={d.client_id} info={videoInfo} showDownload={true} />
                 {d.content_type === 'reels' && (
                   <Button
                     size="sm"

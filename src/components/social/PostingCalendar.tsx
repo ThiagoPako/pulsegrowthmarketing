@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { supabase } from '@/lib/vpsDb';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isSameDay, isToday, isWeekend } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent } from '@/components/ui/card';
@@ -25,6 +26,8 @@ interface SocialDelivery {
 interface PostingCalendarProps {
   deliveries: SocialDelivery[];
   clients: Client[];
+  /** A página só carrega as postadas a partir desta data (AAAA-MM-DD); meses anteriores vêm sob demanda. */
+  loadedSince?: string;
 }
 
 const TYPE_CONFIG: Record<string, { icon: typeof Film; label: string; color: string; dotColor: string; bgClass: string }> = {
@@ -42,10 +45,42 @@ const STATUS_CONFIG: Record<string, { label: string; icon: typeof Clock; color: 
 
 const WEEKDAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
-export default function PostingCalendar({ deliveries, clients }: PostingCalendarProps) {
+export default function PostingCalendar({ deliveries: loadedDeliveries, clients, loadedSince }: PostingCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedClientId, setSelectedClientId] = useState<string>('all');
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+
+  // Mês anterior ao que a página carregou: busca as postadas daquele mês uma vez
+  const [olderMonths, setOlderMonths] = useState<Record<string, SocialDelivery[]>>({});
+  const viewMonthStart = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
+  const viewMonthEnd = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
+  const viewMonthKey = viewMonthStart.slice(0, 7);
+  const needsOlder = !!loadedSince && viewMonthStart < loadedSince;
+  useEffect(() => {
+    if (!needsOlder || olderMonths[viewMonthKey]) return;
+    let active = true;
+    Promise.all([
+      supabase.from('social_media_deliveries').select('*').eq('status', 'postado')
+        .gte('posted_at', viewMonthStart).lte('posted_at', viewMonthEnd),
+      supabase.from('social_media_deliveries').select('*').eq('status', 'postado').is('posted_at', null)
+        .gte('delivered_at', viewMonthStart).lte('delivered_at', viewMonthEnd),
+    ]).then(([byPosted, byDelivered]) => {
+      if (!active) return;
+      setOlderMonths(prev => ({
+        ...prev,
+        [viewMonthKey]: [...((byPosted.data as SocialDelivery[]) || []), ...((byDelivered.data as SocialDelivery[]) || [])],
+      }));
+    });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsOlder, viewMonthKey]);
+
+  const deliveries = useMemo(() => {
+    const extra = Object.values(olderMonths).flat();
+    if (!extra.length) return loadedDeliveries;
+    const ids = new Set(loadedDeliveries.map(d => d.id));
+    return [...loadedDeliveries, ...extra.filter(d => !ids.has(d.id))];
+  }, [loadedDeliveries, olderMonths]);
 
   const clientMap = useMemo(() => {
     const m: Record<string, Client> = {};

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLang, tr } from '@/lib/i18n';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import {
@@ -59,6 +59,9 @@ export default function PostStudio() {
   const [queue, setQueue] = useState<ScheduledPost[]>([]);
   const [assets, setAssets] = useState<ClientMediaAsset[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(false);
+  // Último post criado e com qual conteúdo: "Publicar agora" de novo (depois de erro ou timeout)
+  // reaproveita o mesmo post em vez de criar outro, que sairia duplicado no perfil.
+  const lastPostRef = useRef<{ id: string; key: string } | null>(null);
 
   const loadClients = async () => {
     setLoading(true);
@@ -107,7 +110,23 @@ export default function PostStudio() {
   useEffect(() => {
     if (platform === 'instagram' && !hasIg && hasFb) setPlatform('facebook');
     if (platform === 'facebook' && !hasFb && hasIg) setPlatform('instagram');
-  }, [hasIg, hasFb, platform]);
+    // 'both' só existe com as duas redes: senão o select ficava em branco e o servidor recusava
+    if (platform === 'both' && client && !(hasIg && hasFb)) setPlatform(hasIg ? 'instagram' : 'facebook');
+  }, [hasIg, hasFb, platform, client]);
+
+  /** Trocar de cliente limpa as mídias, a legenda e o link do story do anterior (sairiam no perfil errado). */
+  const changeClient = (id: string) => {
+    if (id === clientId) return;
+    const hasContent = items.some(i => i.url.trim()) || caption.trim() || storyLink.trim();
+    if (clientId && hasContent && !window.confirm('Trocar de cliente limpa as mídias, a legenda e o link do story escolhidos. Continuar?')) return;
+    setClientId(id);
+    if (clientId) {
+      setItems([emptyItem(), emptyItem()]);
+      setCaption('');
+      setStoryLink('');
+    }
+    lastPostRef.current = null;
+  };
 
   const maxItems = publishType === 'carousel' ? 10 : 1;
   const visibleItems = useMemo(() => items.slice(0, maxItems), [items, maxItems]);
@@ -176,29 +195,60 @@ export default function PostStudio() {
     if (publishType === 'carousel' && filledItems.length < 2) { toast.error('Carrossel precisa de pelo menos 2 mídias.'); return; }
     const when = now ? new Date(Date.now() + 30_000) : new Date(scheduledAt);
     if (!now && (!scheduledAt || Number.isNaN(when.getTime()))) { toast.error('Escolha a data e a hora da postagem.'); return; }
+    // Data no passado publicaria na hora (o robô pega tudo que já venceu)
+    if (!now && when.getTime() < Date.now() - 60_000) { toast.error('Esse horário já passou. Escolha um horário futuro ou use "Publicar agora".'); return; }
+    if (now) {
+      const target = platform === 'both' ? 'Instagram e Facebook' : platform === 'facebook' ? 'Facebook' : 'Instagram';
+      if (!window.confirm(`Publicar agora no ${target} de ${client?.name || 'cliente'}${accountName ? ` (${accountName})` : ''}?`)) return;
+    }
+
+    const input = {
+      client_id: clientId,
+      platform,
+      publish_type: publishType,
+      media_items: filledItems.map(i => ({ url: i.url.trim(), label: i.label?.trim() || undefined })),
+      caption: publishType === 'stories' ? '' : caption,
+      story_link: publishType === 'stories' ? storyLink.trim() || null : null,
+      story_link_text: publishType === 'stories' ? storyLinkText.trim() || null : null,
+    };
+    const key = JSON.stringify({ ...input, when: now ? 'agora' : scheduledAt });
 
     setSaving(true);
     try {
-      const post = await createScheduledPost({
-        client_id: clientId,
-        platform,
-        publish_type: publishType,
-        media_items: filledItems.map(i => ({ url: i.url.trim(), label: i.label?.trim() || undefined })),
-        caption: publishType === 'stories' ? '' : caption,
-        story_link: publishType === 'stories' ? storyLink.trim() || null : null,
-        story_link_text: publishType === 'stories' ? storyLinkText.trim() || null : null,
-        scheduled_at: when.toISOString(),
-      });
+      let postId = lastPostRef.current?.key === key ? lastPostRef.current.id : null;
+      if (!postId) {
+        const post = await createScheduledPost({ ...input, scheduled_at: when.toISOString() });
+        postId = post.id;
+        lastPostRef.current = { id: post.id, key };
+      }
       if (now) {
-        await publishScheduledPostNow(post.id);
+        try {
+          await publishScheduledPostNow(postId);
+        } catch (err) {
+          // Timeout do proxy ou erro de rede: a publicação pode ter seguido no servidor.
+          const current = (await fetchScheduledPosts({ client_id: clientId }).catch(() => [] as ScheduledPost[]))
+            .find(p => p.id === postId);
+          if (current?.status === 'publicado' || current?.status === 'publicando') {
+            toast.info(current.status === 'publicado'
+              ? tr('Publicado no perfil do cliente.', 'Content published successfully to Instagram.')
+              : 'A publicação continua no servidor. Acompanhe na fila ao lado.');
+            lastPostRef.current = null;
+            reset();
+            loadQueue();
+            return;
+          }
+          throw err;
+        }
         toast.success(tr('Publicado no perfil do cliente.', 'Content published successfully to Instagram.'));
       } else {
         toast.success(tr('Postagem agendada.', 'Content scheduled successfully for Instagram publishing.'));
       }
+      lastPostRef.current = null;
       reset();
       loadQueue();
     } catch (err) {
       toast.error((err as Error).message);
+      loadQueue();
     } finally {
       setSaving(false);
     }
@@ -233,7 +283,7 @@ export default function PostStudio() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
                     <Label className="text-xs">Cliente</Label>
-                    <Select value={clientId} onValueChange={setClientId}>
+                    <Select value={clientId} onValueChange={changeClient}>
                       <SelectTrigger><SelectValue placeholder="Escolher cliente" /></SelectTrigger>
                       <SelectContent>
                         {clients.map(c => (

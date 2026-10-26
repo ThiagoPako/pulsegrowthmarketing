@@ -24,6 +24,13 @@ const nf = (v: number | null | undefined) =>
 const pad = (n: number) => String(n).padStart(2, '0');
 const toIso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const daysAgo = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return toIso(d); };
+/** Data (AAAA-MM-DD) n dias antes de outra; o servidor aceita períodos de até 93 dias. */
+const daysBefore = (iso: string, n: number) => {
+  const d = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return undefined;
+  d.setDate(d.getDate() - n);
+  return toIso(d);
+};
 
 /** Aba opcional que mostra ao cliente o desempenho real do Instagram no período escolhido. */
 export function PortalInsightsTab({ clientId, clientColor, clientName = 'Cliente' }: PortalInsightsTabProps) {
@@ -48,7 +55,10 @@ export function PortalInsightsTab({ clientId, clientColor, clientName = 'Cliente
 
   useEffect(() => {
     let active = true;
-    (async () => {
+    // Período personalizado: espera a digitação da data terminar antes de buscar
+    // (cada dígito do ano disparava uma busca na Meta).
+    const delay = mode === 'custom' ? 600 : 0;
+    const timer = window.setTimeout(async () => {
       setLoading(true);
       setMessage(null);
       try {
@@ -69,9 +79,9 @@ export function PortalInsightsTab({ clientId, clientColor, clientName = 'Cliente
       } finally {
         if (active) setLoading(false);
       }
-    })();
-    return () => { active = false; };
-  }, [clientId, period.since, period.until]);
+    }, delay);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [clientId, period.since, period.until, mode]);
 
   const cards: InsightMetric[] = data ? [
     { id: 'reach', label: 'Pessoas alcançadas', value: data.reach, icon: TrendingUp, tone: 'primary', description: 'Contas únicas que viram seu conteúdo.', detail: 'Mostra quantas pessoas diferentes foram impactadas pelas suas publicações no período.' },
@@ -163,7 +173,7 @@ export function PortalInsightsTab({ clientId, clientColor, clientName = 'Cliente
             ))}
             <label className="flex items-center gap-2 text-xs text-white/50">
               De
-              <input type="date" value={customSince} max={customUntil} onChange={e => setCustomSince(e.target.value)} className={selectClass} />
+              <input type="date" value={customSince} min={daysBefore(customUntil, 92)} max={customUntil} onChange={e => setCustomSince(e.target.value)} className={selectClass} />
             </label>
             <label className="flex items-center gap-2 text-xs text-white/50">
               até

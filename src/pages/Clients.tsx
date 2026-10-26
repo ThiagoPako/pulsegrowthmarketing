@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Building2, Star, Clock, CalendarCheck, ChevronRight, ChevronLeft, AlertTriangle, User, Video, Target, Upload, X, MessageSquare, Send, Package, DollarSign, Instagram, Facebook, Link2, Unlink, RefreshCw, Globe, Info, Printer, FolderOpen, KeyRound, Copy, ExternalLink, Database, FileText as FileTextIcon, MonitorPlay, Loader2, UserMinus, Sparkles, Palette, Users as UsersIcon, Megaphone, Lightbulb, Camera, Award, Layers, MoveHorizontal, ArrowRightLeft, Save } from 'lucide-react';
 import { TransferClientDialog } from '@/components/TransferClientDialog';
+import FacebookPagePickerDialog, { type FacebookPageOption } from '@/components/social/FacebookPagePickerDialog';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/vpsDb';
@@ -169,6 +170,9 @@ export default function Clients() {
   const [manualToken, setManualToken] = useState('');
   const [manualPlatform, setManualPlatform] = useState<'instagram' | 'facebook'>('instagram');
   const [savingManualToken, setSavingManualToken] = useState(false);
+  // Login/token do Facebook com várias Páginas: escolher a do cliente (só ela fica conectada)
+  const [pagePicker, setPagePicker] = useState<{ clientId: string; pages: FacebookPageOption[]; selectionKey?: string; manualToken?: string } | null>(null);
+  const [pagePickerSaving, setPagePickerSaving] = useState<string | null>(null);
   /** A etapa de conexão de redes sociais é sempre exibida — sem ela o botão de conectar ficava invisível. */
   const hasMetaApi = true;
 
@@ -1483,6 +1487,8 @@ export default function Clients() {
 
                 if (exchangeError || result?.error) {
                   toast.error(result?.error || 'Erro ao conectar contas');
+                } else if (result?.needs_page_selection) {
+                  setPagePicker({ clientId: parsedClientId, pages: result.pages || [], selectionKey: result.selection_key });
                 } else {
                   const accounts = result.accounts || [];
                   const ig = accounts.find((a: any) => a.platform === 'instagram');
@@ -1542,6 +1548,8 @@ export default function Clients() {
 
           if (error || result?.error) {
             toast.error(result?.error || 'Erro ao conectar contas');
+          } else if (result?.needs_page_selection) {
+            setPagePicker({ clientId: parsedClientId, pages: result.pages || [], selectionKey: result.selection_key });
           } else {
             const accounts = result.accounts || [];
             const ig = accounts.find((a: any) => a.platform === 'instagram');
@@ -1564,6 +1572,36 @@ export default function Clients() {
       }
     }
   }, []);
+
+  const selectFacebookPage = async (pageId: string) => {
+    if (!pagePicker) return;
+    setPagePickerSaving(pageId);
+    try {
+      const { data: result, error } = pagePicker.manualToken
+        ? await invokeVpsFunction('social-accounts/manual-token', {
+            body: { client_id: pagePicker.clientId, platform: 'facebook', token: pagePicker.manualToken, facebook_page_id: pageId },
+          })
+        : await invokeVpsFunction('meta-oauth', {
+            body: { action: 'select_facebook_page', client_id: pagePicker.clientId, selection_key: pagePicker.selectionKey, page_id: pageId },
+          });
+      if (error || result?.error) {
+        toast.error(result?.error || error?.message || 'Erro ao conectar a Página');
+        return;
+      }
+      const accounts = result?.accounts || [];
+      const ig = accounts.find((a: any) => a.platform === 'instagram');
+      const fb = accounts.find((a: any) => a.platform === 'facebook');
+      setSocialAccounts(prev => ({
+        instagram: ig ? { connected: true, accountName: ig.name, username: `@${ig.username || ig.name}`, pageId: ig.pageId || '', businessId: ig.businessId || '' } : prev.instagram,
+        facebook: fb ? { connected: true, accountName: fb.name, pageId: fb.pageId || '' } : prev.facebook,
+      }));
+      if (pagePicker.manualToken) setManualToken('');
+      setPagePicker(null);
+      toast.success(`✅ ${accounts.length} conta(s) conectada(s)!`);
+    } finally {
+      setPagePickerSaving(null);
+    }
+  };
 
   const disconnectAccount = async (platform: 'instagram' | 'facebook') => {
     const label = platform === 'instagram' ? 'Instagram' : 'Facebook';
@@ -1608,6 +1646,10 @@ export default function Clients() {
       });
       if (error || data?.error) {
         toast.error(data?.error || error?.message || 'Erro ao salvar token');
+        return;
+      }
+      if (data?.needs_page_selection) {
+        setPagePicker({ clientId, pages: data.pages || [], manualToken: manualToken.trim() });
         return;
       }
       const accounts = data?.accounts || [];
@@ -2949,6 +2991,15 @@ export default function Clients() {
         </DialogContent>
       </Dialog>
       
+      <FacebookPagePickerDialog
+        open={!!pagePicker}
+        pages={pagePicker?.pages || []}
+        clientName={form.companyName || undefined}
+        savingPageId={pagePickerSaving}
+        onSelect={selectFacebookPage}
+        onCancel={() => setPagePicker(null)}
+      />
+
       {transferClient && (
         <TransferClientDialog
           client={transferClient}

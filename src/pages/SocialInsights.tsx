@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { fetchClientInsights, type ClientInsights, type ConnectedSocialAccount } from '@/services/socialPostsApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,6 +37,8 @@ export default function SocialInsights() {
   const [data, setData] = useState<ClientInsights | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingClients, setLoadingClients] = useState(true);
+  // Só a busca mais recente vale: uma resposta lenta (sem cache) de outro cliente/mês não sobrescreve a tela
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     (async () => {
@@ -58,15 +60,19 @@ export default function SocialInsights() {
 
   const load = async (refresh = false) => {
     if (!clientId) return;
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const { since, until } = monthRange(year, month);
-      setData(await fetchClientInsights(clientId, since, until, refresh));
+      const result = await fetchClientInsights(clientId, since, until, refresh);
+      if (requestId !== requestIdRef.current) return;
+      setData(result);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setData(null);
       toast.error((err as Error).message);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   };
 

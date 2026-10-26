@@ -511,8 +511,14 @@ export default function PromoAdmin() {
                                 size="sm"
                                 variant="ghost"
                                 onClick={async () => {
-                                  await deletePromoPrize(prize.id);
-                                  setPrizes((list) => list.filter((p) => p.id !== prize.id));
+                                  if (!window.confirm(`Excluir o prêmio "${prize.name}"?`)) return;
+                                  try {
+                                    await deletePromoPrize(prize.id);
+                                    setPrizes((list) => list.filter((p) => p.id !== prize.id));
+                                    toast.success('Prêmio excluído');
+                                  } catch (error: any) {
+                                    toast.error(error?.message || 'Falha ao excluir o prêmio');
+                                  }
                                 }}
                               >
                                 <Trash2 className="h-4 w-4 text-destructive" />

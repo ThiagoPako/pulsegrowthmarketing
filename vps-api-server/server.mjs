@@ -16889,6 +16889,11 @@ app.post('/api/promo/prizes', async (req, res) => {
 app.delete('/api/promo/prizes/:id', async (req, res) => {
   if (!(await promoRequireAuth(req, res))) return;
   try {
+    // Prêmio que já saiu para alguém não some: o ganhador perderia o voucher (prize_id viraria NULL)
+    const { rows: [won] } = await pool.query('SELECT count(*)::int AS total FROM promo_tickets WHERE prize_id = $1', [req.params.id]);
+    if (won?.total > 0) {
+      return res.status(409).json({ error: `Este prêmio já saiu para ${won.total} pessoa(s). Para tirá-lo do sorteio, zere o saldo em Editar.` });
+    }
     await pool.query('DELETE FROM promo_prizes WHERE id = $1', [req.params.id]);
     res.json({ success: true });
   } catch (error) {

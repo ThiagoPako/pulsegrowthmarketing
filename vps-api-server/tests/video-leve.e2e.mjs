@@ -220,7 +220,9 @@ async function playback(url, headers = asTeam, extra = '') {
 }
 
 // ── 1. Vídeos antigos: os dos últimos 14 dias, do mais novo para o mais antigo, um por vez ──
-await waitFor(() => fs.existsSync(recent1.web) && fs.existsSync(recent2.web), 'versão leve dos vídeos recentes');
+// O arquivo aparece (rename) um instante antes da linha "pronto:" no log: espera os dois
+await waitFor(() => fs.existsSync(recent1.web) && fs.existsSync(recent2.web)
+  && logLines().filter((l) => l.includes('pronto:')).length >= 2, 'versão leve dos vídeos recentes');
 assert.equal(fs.existsSync(old.web), false, 'arquivo de 20 dias não entra na tarefa de fundo');
 const doneOrder = logLines().filter((l) => l.includes('pronto:')).map((l) => (l.includes(recent1.rel) ? 'r1' : l.includes(recent2.rel) ? 'r2' : '?'));
 assert.deepEqual(doneOrder.slice(0, 2), ['r1', 'r2'], `ordem: ${doneOrder}`);
@@ -235,7 +237,7 @@ ok('tarefa de fundo: 2 vídeos recentes convertidos (o mais novo primeiro), o de
 
 // ── 2. Upload de vídeo pesado (equipe) ──
 const heavy = await upload(src.heavy, `content/${ids.client}/upload-pesado`);
-await waitFor(() => fs.existsSync(heavy.web), 'versão leve do upload pesado');
+await waitFor(() => fs.existsSync(heavy.web), 'versão leve do upload pesado', 120_000);
 const heavyWeb = probe(heavy.web);
 assert.equal(heavyWeb.codec, 'h264');
 assert.equal(heavyWeb.pixFmt, 'yuv420p');

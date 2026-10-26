@@ -470,8 +470,12 @@ export function useOnboarding() {
               .update({ status: 'pendente', completed_at: null, updated_at: now } as any)
               .eq('id', r.id);
           }
-        } else {
-          await supabase.from('onboarding_tasks').delete().eq('id', r.id);
+        } else if (r.status !== 'pendente') {
+          // Voltar de etapa não apaga as seguintes (contrato anexado, briefing...): elas só
+          // voltam a ficar pendentes e são retomadas ao avançar de novo.
+          await supabase.from('onboarding_tasks')
+            .update({ status: 'pendente', completed_at: null, updated_at: now } as any)
+            .eq('id', r.id);
         }
       }
 

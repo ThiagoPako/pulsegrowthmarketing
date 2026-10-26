@@ -156,7 +156,12 @@ export default function OnboardingManagement() {
               if (draggingClientId) {
                 const group = clientGroups.find(g => g.clientId === draggingClientId);
                 if (group && group.currentStage !== stage.key) {
-                  moveClientToStage.mutate({ clientId: draggingClientId, targetStage: stage.key });
+                  const fromIdx = ONBOARDING_STAGES.findIndex(s => s.key === group.currentStage);
+                  const toIdx = ONBOARDING_STAGES.findIndex(s => s.key === stage.key);
+                  const goingBack = toIdx < fromIdx;
+                  if (!goingBack || confirm(`Voltar ${group.companyName} para "${stage.label}"? As etapas seguintes voltam a ficar pendentes (contrato e briefing anexados são mantidos).`)) {
+                    moveClientToStage.mutate({ clientId: draggingClientId, targetStage: stage.key });
+                  }
                 }
               }
               setDraggingClientId(null);

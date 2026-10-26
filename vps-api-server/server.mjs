@@ -26,7 +26,7 @@ import { createPgClient } from './pgClient.mjs';
 import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
 import { registerSchedulingRoutes } from './scheduling.mjs';
-import { createPulsePlus } from './pulsePlus.mjs';
+import { createPulsePlus, neutralizeAvatars } from './pulsePlus.mjs';
 import { registerWhatsAppRoutes } from './whatsapp/routes.mjs';
 import { registerAssistant } from './assistant/index.mjs';
 import { recordPortalAccess } from './assistant/temperature.mjs';
@@ -6287,7 +6287,7 @@ app.post('/api/portal-actions', async (req, res) => {
         );
         profiles.forEach(p => { authors[p.id] = p; });
       }
-      return res.json({ scripts, authors });
+      return res.json({ scripts, authors: neutralizeAvatars(authors) });
     }
 
     // ── Update script client priority ──
@@ -10583,7 +10583,7 @@ app.get('/api/public-team-presentation', async (_req, res) => {
     );
 
     res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
-    return res.json({ members: rows || [] });
+    return res.json({ members: neutralizeAvatars(rows || []) });
   } catch (error) {
     console.error('public-team-presentation error:', error);
     return res.status(500).json({ error: 'Não foi possível carregar a equipe.' });
@@ -15846,9 +15846,9 @@ app.get('/api/tv-dashboard', async (req, res) => {
   try {
     const force = req.query?._ !== undefined;
     if (!force && tvDashboardCache && Date.now() - tvDashboardCache.at < TV_DASHBOARD_CACHE_MS) {
-      return res.json(tvDashboardCache.payload);
+      return res.json(neutralizeAvatars(tvDashboardCache.payload));
     }
-    res.json(await loadTvDashboardShared());
+    res.json(neutralizeAvatars(await loadTvDashboardShared()));
   } catch {
     res.status(500).json({ error: 'Não foi possível carregar o painel da TV.' });
   }
@@ -20156,7 +20156,7 @@ app.post('/api/public/client-database/:token/media', async (req, res) => {
 
 // ─── Pulse Plus (pulsePlus.mjs): configurações e informações dos agentes só para quem está na lista ──
 // A trava fica antes das rotas dos agentes, do PULSE e dos Agendamentos (registradas abaixo).
-const pulsePlus = createPulsePlus({ pool, verifyUser, getLinkedUserIds, isStrictAdmin: isStrictAdminUser });
+const pulsePlus = createPulsePlus({ pool, verifyUser, getLinkedUserIds, isStrictAdmin: isStrictAdminUser, uploadRoot: UPLOAD_ROOT });
 app.use(pulsePlus.guard);
 pulsePlus.registerRoutes(app);
 

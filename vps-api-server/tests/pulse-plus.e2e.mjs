@@ -39,9 +39,12 @@ const ids = {
   design: '00000000-0000-0000-0000-00000000b731',
   waPulse: '00000000-0000-0000-0000-00000000b741', waMixed: '00000000-0000-0000-0000-00000000b742',
   notif: '00000000-0000-0000-0000-00000000b751', waMsg: '00000000-0000-0000-0000-00000000b752',
+  taskPulse: '00000000-0000-0000-0000-00000000b724', // card pedido pelo PULSE (texto antigo, com robô)
+  fin: '00000000-0000-0000-0000-00000000b761', // lançamento do financeiro feito pelo PULSE (texto antigo)
 };
 const PEOPLE = [ids.plus, ids.admin, ids.editor, ids.agent, ids.thiago];
-const TASKS = [ids.taskWork, ids.taskReview, ids.taskFree];
+const TASKS = [ids.taskWork, ids.taskReview, ids.taskFree, ids.taskPulse];
+const AGENT_AVATAR = `https://agenciapulse.tech/uploads/avatars/agentes/${ids.agent}/foto.png`;
 const AGENT_KEY = `pa_teste_pulse_plus_${crypto.randomBytes(6).toString('hex')}`;
 const sha256 = (raw) => crypto.createHash('sha256').update(raw).digest('hex');
 
@@ -62,6 +65,7 @@ async function cleanup() {
   await pool.query(`DELETE FROM design_tasks WHERE id = $1`, [ids.design]).catch(() => {});
   await pool.query(`DELETE FROM notifications WHERE id = $1`, [ids.notif]).catch(() => {});
   await pool.query(`DELETE FROM whatsapp_messages WHERE id = $1`, [ids.waMsg]).catch(() => {});
+  await pool.query(`DELETE FROM financial_activity_log WHERE entity_id = $1`, [ids.fin]).catch(() => {});
   await pool.query(`DELETE FROM wa_connections WHERE id = ANY($1)`, [[ids.waPulse, ids.waMixed]]).catch(() => {});
   await pool.query(`DELETE FROM agent_keys WHERE user_id = $1`, [ids.agent]).catch(() => {});
   await pool.query(`DELETE FROM clients WHERE id = $1`, [ids.client]).catch(() => {});
@@ -132,6 +136,25 @@ async function fixtures() {
     `INSERT INTO wa_connections (id, name, purposes) VALUES ($1, 'PULSE', ARRAY['assistente']), ($2, 'Aprovações', ARRAY['aprovacao', 'assistente'])`,
     [ids.waPulse, ids.waMixed]
   );
+  // textos que o PULSE gravava antes (cards e financeiro): ficam no banco como estão
+  await pool.query(
+    `INSERT INTO content_tasks (id, client_id, title, content_type, kanban_column, description, city)
+     VALUES ($1, $2, 'Reels pedido', 'reels', 'ideias', $3, 'minacu')`,
+    [ids.taskPulse, ids.client, '🤖 Pedido pelo PULSE (WhatsApp) — Thiago\n\nReels de clareamento']
+  );
+  await pool.query(`INSERT INTO task_history (task_id, user_id, action, details) VALUES ($1, $2, '🤖 Card criado pelo PULSE (WhatsApp)', 'Pedido por Thiago')`,
+    [ids.taskPulse, ids.plus]);
+  await pool.query(`UPDATE design_tasks SET description = $2 WHERE id = $1`, [ids.design, '🤖 Pedido pelo PULSE (WhatsApp) — Thiago\n\nArte da promoção']);
+  await pool.query(
+    `INSERT INTO financial_activity_log (user_id, action_type, entity_type, entity_id, description, details, city)
+     VALUES ($1, 'criação', 'despesa', $2, 'Registrou despesa - R$ 50,00 - Almoço (PULSE, Thiago)', $3, 'minacu')`,
+    [ids.plus, ids.fin, JSON.stringify({ valor: 50, descricao: 'Almoço', origem: 'assistente_pulse', numero: 'Thiago' })]
+  );
+  // foto de agente trocada pelo Painel antes de 26/10/2026 (pasta com "agentes" no endereço)
+  await pool.query(`UPDATE profiles SET avatar_url = $2 WHERE id = $1`, [ids.agent, AGENT_AVATAR]);
+  const avatarDir = path.join(TMP, 'uploads', 'avatars', 'agentes', ids.agent);
+  fs.mkdirSync(avatarDir, { recursive: true });
+  fs.writeFileSync(path.join(avatarDir, 'foto.png'), Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex'));
 }
 
 function startServer() {
@@ -234,6 +257,30 @@ try {
   r = await fetch(`${BASE}/agents/office`);
   assert.equal(r.status, 401);
   ok(`sem Pulse Plus: ${guarded.length} rotas de agentes e do PULSE respondem 403 (admin e editor); sem login, 401`);
+
+  // O Express encaminha sem diferenciar maiúsculas (e aceita barra no fim): a trava também
+  const disguised = [
+    ['GET', '/Agents/office'], ['GET', '/AGENTS/OFFICE'], ['GET', '/agents/office/'], ['GET', '/Agents/Overview'],
+    ['GET', '/AGENT-KEYS'], ['GET', '/Agent-Machines'], ['GET', '/Design-Agents'], ['GET', `/design-tasks/${ids.design}/Agent-Reviews`],
+    ['GET', '/Assistant/overview'], ['GET', '/%61gents/office'], ['GET', '/agents%2Foffice'],
+    ['POST', '/Agent-Keys', { user_id: ids.editor, role: 'editor' }], ['PATCH', '/Assistant/settings', { enabled: true }],
+    ['POST', '/AGENTS/pause', { scope: 'all' }],
+  ];
+  for (const who of ['admin', 'editor']) {
+    for (const [method, url, body] of disguised) {
+      r = await api(method, url, body, { auth: T[who] });
+      assert.equal(r.status, 403, `${who} ${method} ${url} → ${r.status}`);
+    }
+  }
+  for (const url of ['/api//agents/office', '//api/agents/office', '/api/agents//office']) {
+    const resp = await fetch(`http://127.0.0.1:${PORT}${url}`, { headers: { Authorization: `Bearer ${T.editor}` } });
+    assert.ok([403, 404].includes(resp.status), `${url} → ${resp.status}`);
+    assert.ok(!JSON.stringify(await resp.json().catch(() => ({}))).includes(ids.agent));
+  }
+  assert.equal((await pool.query(`SELECT count(*)::int AS n FROM agent_keys WHERE user_id = $1`, [ids.editor])).rows[0].n, 0, 'nenhuma chave criada');
+  r = await api('GET', '/Agents/office');
+  assert.equal(r.status, 200, 'o caminho com outra caixa chega mesmo à rota (com Pulse Plus)');
+  ok('a trava não depende de maiúsculas, barra no fim, barra dupla nem caractere codificado');
 
   r = await api('GET', '/agents/office');
   assert.equal(r.status, 200);
@@ -345,6 +392,107 @@ try {
   assert.equal(r.json.data[0].trigger_type, 'assistente');
   ok('perfil, funções e histórico do agente visíveis para todos; sem Pulse Plus só some a marca "agente"/"IA" dos textos');
 
+  // ── Coluna interna escrita de outro jeito (ponto no fim, tabela.coluna.x, maiúsculas) e ON do join ──
+  const sneaky = [
+    { filters: [{ column: 'agent_step.', op: 'is', value: 'not_null' }] },
+    { filters: [{ column: 'agent_step.', op: 'like', value: 'cort%' }] },
+    { filters: [{ column: 'AGENT_STEP', op: 'eq', value: 'cortando' }] },
+    { filters: [{ column: 'content_tasks.agent_step.x', op: 'eq', value: 'cortando' }] },
+    { filters: [{ column: 'agent_heartbeat_at.', op: 'gt', value: '2000-01-01' }] },
+    { filters: [{ op: 'or', value: 'agent_step..eq.cortando,title.eq.x' }] },
+    { filters: [{ op: 'or', value: '(agent_step.eq.cortando)' }] },
+    { order: { column: 'agent_heartbeat_at.', ascending: false } },
+    { order: { column: 'content_tasks.agent_heartbeat_at.x' } },
+    { select: 'id, AGENT_STEP as etapa' },
+  ];
+  for (const extra of sneaky) {
+    r = await dbq(T.editor, { table: 'content_tasks', operation: 'select', select: 'id', filters: [{ column: 'id', op: 'in', value: TASKS }], ...extra });
+    assert.equal(r.status, 403, `sem Pulse Plus: ${JSON.stringify(extra)} → ${r.status}`);
+  }
+  const joinByReviewer = (auth, on) => dbq(auth, {
+    table: 'profiles', operation: 'select', select: 'profiles.id',
+    joins: [{ table: 'content_tasks', type: 'inner', ...on }],
+  });
+  r = await joinByReviewer(T.editor, { leftTable: 'profiles', leftColumn: 'id', rightTable: 'content_tasks', rightColumn: 'agent_review_by' });
+  assert.equal(r.status, 403, 'join pelo revisor agente');
+  r = await joinByReviewer(T.editor, { on: 'profiles.id = content_tasks.agent_review_by' });
+  assert.equal(r.status, 403, 'join (texto) pelo revisor agente');
+  r = await joinByReviewer(T.plus, { leftTable: 'profiles', leftColumn: 'id', rightTable: 'content_tasks', rightColumn: 'agent_review_by' });
+  assert.equal(r.status, 200);
+  assert.ok(r.json.data.some((p) => p.id === ids.agent), 'com Pulse Plus o join funciona');
+  r = await dbq(T.plus, { table: 'content_tasks', operation: 'select', select: 'id', filters: [{ column: 'agent_step.', op: 'eq', value: 'cortando' }] });
+  assert.equal(r.status, 200);
+  ok('sem Pulse Plus, coluna interna não entra por ponto no fim, tabela.coluna.x, maiúsculas, "or", ordem, apelido nem ON do join');
+
+  // ── Colunas de texto limpas: não dá para filtrar, ordenar nem renomear (escolheria as linhas de agente) ──
+  const textProbes = [
+    { table: 'design_task_history', filters: [{ column: 'action', op: 'like', value: '%(agente)' }] },
+    { table: 'design_task_history', filters: [{ column: 'details.', op: 'ilike', value: '%arquivo%' }] },
+    { table: 'design_task_history', select: 'task_id, action as acao' },
+    { table: 'task_history', filters: [{ column: 'action', op: 'eq', value: 'Parecer da Análise' }] },
+    { table: 'task_history', order: { column: 'action' } },
+    { table: 'design_tasks', filters: [{ column: 'observations', op: 'like', value: '🤖 Análise IA%' }] },
+    { table: 'content_tasks', filters: [{ op: 'or', value: 'description.ilike.%PULSE%' }] },
+    { table: 'notifications', filters: [{ column: 'message', op: 'ilike', value: '%agente%' }] },
+    { table: 'whatsapp_messages', filters: [{ column: 'trigger_type', op: 'eq', value: 'assistente' }], auth: T.admin },
+    { table: 'financial_activity_log', filters: [{ column: 'description', op: 'ilike', value: '%PULSE%' }], auth: T.admin },
+  ];
+  for (const { auth = T.editor, ...probe } of textProbes) {
+    r = await dbq(auth, { operation: 'select', select: probe.select || '*', ...probe });
+    assert.equal(r.status, 403, `sem Pulse Plus: ${JSON.stringify(probe)} → ${r.status}`);
+  }
+  r = await dbq(T.admin, { table: 'design_task_history', operation: 'delete', filters: [{ column: 'action', op: 'like', value: '%(agente)' }] });
+  assert.equal(r.status, 403, 'nem para apagar (admin sem Pulse Plus)');
+  assert.equal((await pool.query(`SELECT count(*)::int AS n FROM design_task_history WHERE task_id = $1`, [ids.design])).rows[0].n, 2);
+  r = await dbq(T.plus, { table: 'design_task_history', operation: 'select', select: 'action', filters: [{ column: 'action', op: 'like', value: '%(agente)' }] });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.json.data.map((h) => h.action), ['Arte iniciada (agente)']);
+  r = await dbq(T.editor, { table: 'task_history', operation: 'select', select: '*', filters: [{ column: 'task_id', op: 'eq', value: ids.taskWork }], order: { column: 'created_at' } });
+  assert.equal(r.status, 200, 'filtrar e ordenar pelas outras colunas segue livre');
+  ok('sem Pulse Plus, histórico, avisos, observações, descrição, financeiro e gatilho do WhatsApp não servem de filtro, ordem nem apelido');
+
+  // ── Textos que o PULSE gravou antes: cards e financeiro ──
+  r = await dbq(T.editor, { table: 'content_tasks', operation: 'select', select: '*', filters: [{ column: 'id', op: 'eq', value: ids.taskPulse }] });
+  assert.equal(r.json.data[0].description, 'Pedido pelo WhatsApp — Thiago\n\nReels de clareamento');
+  r = await dbq(T.editor, { table: 'task_history', operation: 'select', select: '*', filters: [{ column: 'task_id', op: 'eq', value: ids.taskPulse }] });
+  assert.equal(r.json.data[0].action, 'Card criado pelo WhatsApp');
+  r = await dbq(T.editor, { table: 'design_tasks', operation: 'select', select: 'id, description', filters: [{ column: 'id', op: 'eq', value: ids.design }] });
+  assert.equal(r.json.data[0].description, 'Pedido pelo WhatsApp — Thiago\n\nArte da promoção');
+  r = await api('GET', '/design-tasks/fast', null, { auth: T.editor });
+  assert.equal(r.json.find((t) => t.id === ids.design).description, 'Pedido pelo WhatsApp — Thiago\n\nArte da promoção');
+  r = await dbq(T.plus, { table: 'content_tasks', operation: 'select', select: 'description', filters: [{ column: 'id', op: 'eq', value: ids.taskPulse }] });
+  assert.match(r.json.data[0].description, /^🤖 Pedido pelo PULSE \(WhatsApp\)/, 'com Pulse Plus, como está gravado');
+  r = await dbq(T.admin, { table: 'financial_activity_log', operation: 'select', select: '*', filters: [{ column: 'entity_id', op: 'eq', value: ids.fin }] });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.data[0].description, 'Registrou despesa - R$ 50,00 - Almoço');
+  assert.deepEqual(r.json.data[0].details, { valor: 50, descricao: 'Almoço' });
+  r = await dbq(T.plus, { table: 'financial_activity_log', operation: 'select', select: '*', filters: [{ column: 'entity_id', op: 'eq', value: ids.fin }] });
+  assert.match(r.json.data[0].description, /\(PULSE, Thiago\)$/);
+  assert.equal(r.json.data[0].details.origem, 'assistente_pulse');
+  ok('cards e lançamentos antigos do PULSE: sem robô nem "PULSE" para quem não tem Pulse Plus (texto e details); com Pulse Plus, como gravado');
+
+  // ── Foto antiga de agente: endereço neutro para todos, servido pela API ──
+  const neutralAvatar = `https://agenciapulse.tech/api/avatar-files/${ids.agent}/foto.png`;
+  for (const who of ['editor', 'plus']) {
+    r = await dbq(T[who], { table: 'profiles', operation: 'select', select: 'id, avatar_url', filters: [{ column: 'id', op: 'eq', value: ids.agent }] });
+    assert.equal(r.json.data[0].avatar_url, neutralAvatar, who);
+  }
+  r = await api('GET', '/design-tasks/fast', null, { auth: T.editor });
+  assert.equal(r.json.find((t) => t.id === ids.design).profiles.avatar_url, neutralAvatar);
+  r = await api('GET', '/tv-dashboard?_=1', null, { auth: T.editor });
+  const tvText = JSON.stringify(r.json);
+  assert.ok(!tvText.includes('avatars/agentes'), `TV sem o endereço antigo: ${tvText.slice(Math.max(0, tvText.indexOf('avatars/agentes') - 200), tvText.indexOf('avatars/agentes') + 80)}`);
+  r = await api('GET', '/public-team-presentation', null, { auth: null });
+  assert.ok(!JSON.stringify(r.json).includes('avatars/agentes'), 'apresentação sem o endereço antigo');
+  const img = await fetch(`${BASE}/avatar-files/${ids.agent}/foto.png`);
+  assert.equal(img.status, 200);
+  assert.match(img.headers.get('content-type') || '', /image\/png/);
+  for (const bad of [`/avatar-files/${ids.agent}/..%2F..%2F..%2Fetc%2Fpasswd`, `/avatar-files/${ids.agent}/foto.txt`, `/avatar-files/..%2F..%2Fx/foto.png`, `/avatar-files/${ids.agent}/nao-existe.png`]) {
+    assert.equal((await fetch(`${BASE}${bad}`)).status, 404, bad);
+  }
+  assert.equal((await row(`SELECT avatar_url FROM profiles WHERE id = $1`, [ids.agent])).avatar_url, AGENT_AVATAR, 'banco intacto');
+  ok('foto antiga de agente sai por um endereço neutro (/api/avatar-files) na Equipe, nos cards, na TV e na apresentação; banco e arquivo intactos');
+
   // ── Escritório, presença e TV: nada que marque alguém como agente ──
   r = await api('GET', '/presence', null, { auth: T.editor });
   assert.ok(r.status < 500);
@@ -382,8 +530,8 @@ try {
   assert.equal(r.status, 409);
   assert.match(r.json.error.message, /^Bia está trabalhando neste card/);
   assert.ok(!/agente|IA\b/.test(r.json.error.message));
-  r = await move(T.admin, ids.taskWork, { assigned_to: ids.editor });
-  assert.equal(r.status, 409);
+  r = await move(T.admin, ids.taskWork, { kanban_column: 'alteracao', assigned_to: ids.editor });
+  assert.equal(r.status, 409, 'mudar a coluna junto com o dono também trava');
   r = await move(T.admin, ids.taskWork, { title: 'Vídeo com agente (título novo)' });
   assert.equal(r.status, 200, 'editar outro campo continua livre');
   assert.equal(r.json.data[0].agent_step, null, 'RETURNING também sem a coluna interna');
@@ -391,18 +539,32 @@ try {
   r = await move(T.admin, ids.taskWork, { kanban_column: 'edicao', assigned_to: ids.agent, title: 'Vídeo com agente' });
   assert.equal(r.status, 200, 'salvar o card sem mudar coluna nem dono continua livre');
   assert.equal((await row(`SELECT agent_step FROM content_tasks WHERE id = $1`, [ids.taskWork])).agent_step, 'cortando', 'e a etapa fica');
-  // arte: quem não vê o agente move como qualquer card, e a etapa dele sai junto (como a tela de quem vê faz)
-  r = await dbq(T.admin, { table: 'design_tasks', operation: 'update', data: { kanban_column: 'em_analise' }, filters: [{ column: 'id', op: 'eq', value: ids.design }] });
+  // trocar o responsável continua livre (o "Tirar mesmo assim" do Controle de Edição e a ficha do card) e limpa a etapa
+  r = await move(T.admin, ids.taskWork, { assigned_to: ids.editor });
+  assert.equal(r.status, 200, 'troca de dono não trava');
+  assert.deepEqual(await row(`SELECT kanban_column, assigned_to, agent_step, agent_heartbeat_at FROM content_tasks WHERE id = $1`, [ids.taskWork]),
+    { kanban_column: 'edicao', assigned_to: ids.editor, agent_step: null, agent_heartbeat_at: null });
+  ok('vídeo com agente dando sinal não muda de coluna por quem não vê o agente (mensagem neutra); trocar o responsável é livre e limpa a etapa');
+
+  // arte: a mesma trava de coluna enquanto o agente cria ou corrige (sinal recente); trocar o dono é livre
+  const moveArt = (data) => dbq(T.admin, { table: 'design_tasks', operation: 'update', data, filters: [{ column: 'id', op: 'eq', value: ids.design }] });
+  r = await moveArt({ kanban_column: 'em_analise' });
+  assert.equal(r.status, 409);
+  assert.match(r.json.error.message, /^Bia está trabalhando neste card agora\. Espere a entrega para mover\.$/);
+  assert.equal((await row(`SELECT kanban_column, agent_step FROM design_tasks WHERE id = $1`, [ids.design])).agent_step, 'montando');
+  r = await dbq(T.plus, { table: 'design_tasks', operation: 'update', data: { priority: 'alta' }, filters: [{ column: 'id', op: 'eq', value: ids.design }] });
+  assert.equal(r.status, 200, 'quem tem Pulse Plus segue como antes');
+  r = await moveArt({ assigned_to: ids.editor });
+  assert.equal(r.status, 200);
+  assert.deepEqual(await row(`SELECT kanban_column, assigned_to, agent_step, agent_heartbeat_at FROM design_tasks WHERE id = $1`, [ids.design]),
+    { kanban_column: 'executando', assigned_to: ids.editor, agent_step: null, agent_heartbeat_at: null });
+  // de volta com a agente, parada (sem sinal há 2 h): a arte sai de coluna e a etapa sai junto
+  await pool.query(`UPDATE design_tasks SET assigned_to = $2, agent_step = 'montando', agent_heartbeat_at = now() - interval '2 hours' WHERE id = $1`, [ids.design, ids.agent]);
+  r = await moveArt({ kanban_column: 'em_analise' });
   assert.equal(r.status, 200);
   assert.deepEqual(await row(`SELECT kanban_column, agent_step, agent_heartbeat_at FROM design_tasks WHERE id = $1`, [ids.design]),
     { kanban_column: 'em_analise', agent_step: null, agent_heartbeat_at: null });
-  // sem sinal há mais de 30 min (parada): pode destravar, e a etapa sai junto com o responsável
-  await pool.query(`UPDATE content_tasks SET agent_heartbeat_at = now() - interval '2 hours' WHERE id = $1`, [ids.taskWork]);
-  r = await move(T.admin, ids.taskWork, { assigned_to: null });
-  assert.equal(r.status, 200);
-  const freed = await row(`SELECT assigned_to, agent_step, agent_heartbeat_at FROM content_tasks WHERE id = $1`, [ids.taskWork]);
-  assert.deepEqual(freed, { assigned_to: null, agent_step: null, agent_heartbeat_at: null });
-  ok('card com agente dando sinal não muda de coluna nem de dono por quem não vê o agente (mensagem neutra); parado, libera e limpa a etapa');
+  ok('arte com agente dando sinal não muda de coluna por quem não vê o agente; dono livre; parada, sai e limpa a etapa');
 
   // ── O agente segue trabalhando com a chave ──
   r = await api('GET', '/agent/me', null, { auth: AGENT_KEY });

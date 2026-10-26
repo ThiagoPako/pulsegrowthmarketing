@@ -1702,6 +1702,9 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       const { rowCount: hasCity } = await pool.query(
         `SELECT 1 FROM information_schema.columns WHERE table_name = 'content_tasks' AND column_name = 'city'`
       );
+      const { rowCount: historyHasCity } = await pool.query(
+        `SELECT 1 FROM information_schema.columns WHERE table_name = 'task_history' AND column_name = 'city'`
+      );
       const db = await pool.connect();
       try {
         await db.query('BEGIN');
@@ -1733,8 +1736,8 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           // O histórico do pacote (gravação, quem pegou, alterações) passa para cada story:
           // o card original é apagado logo abaixo e o histórico dele ficava órfão.
           await db.query(
-            `INSERT INTO task_history (task_id, user_id, action, details, created_at)
-             SELECT $1, user_id, action, details, created_at FROM task_history WHERE task_id = $2`,
+            `INSERT INTO task_history (task_id, user_id, action, details, created_at${historyHasCity ? ', city' : ''})
+             SELECT $1, user_id, action, details, created_at${historyHasCity ? ', city' : ''} FROM task_history WHERE task_id = $2`,
             [childId, task.id]
           );
           await db.query(

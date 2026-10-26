@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import { highlightQuotes } from '@/lib/highlightQuotes';
-import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
+import { syncContentTaskColumnChange, buildSyncContext, claimGuardFilter, insertChildContentTask, finishContentTaskSplit } from '@/lib/contentTaskSync';
 import { uploadFileToVps } from '@/services/vpsApi';
 import type { EditorTask } from '@/pages/EditorDashboard';
 import { getDeadlineStatus, getTypeConfig } from '@/pages/EditorDashboard';
@@ -197,7 +197,7 @@ function makeDefaultSlots(): OptSlot[] {
 
 export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }: Props) {
   const { clients, scripts, users } = useApp();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [comments, setComments] = useState<Comment[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [newComment, setNewComment] = useState('');
@@ -382,12 +382,21 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
   const startEditing = async () => {
     if (!user) return;
     setSaving(true);
-    await supabase.from('content_tasks').update({
+    // Atômico: só inicia se o card estiver livre ou já for meu (não toma o de outro editor/agente).
+    const myIds = profile?.identity_ids?.length ? profile.identity_ids : [user.id];
+    const { data: started, error } = await supabase.from('content_tasks').update({
       assigned_to: user.id,
       edited_by: user.id,
       editing_started_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
-    }).eq('id', task.id);
+    }).eq('id', task.id).or(claimGuardFilter(myIds)).select('id');
+    if (error) { toast.error('Erro ao iniciar a edição'); setSaving(false); return; }
+    if (!started || (Array.isArray(started) && started.length === 0)) {
+      toast.error('🚫 Este vídeo já foi pego por outra pessoa!');
+      onRefresh();
+      setSaving(false);
+      return;
+    }
     await logAction('Edição iniciada');
     toast.success('Edição iniciada! Timer rodando.');
     onRefresh();
@@ -511,6 +520,7 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
       setSaving(true);
       const now = new Date().toISOString();
       const baseTitle = task.title.trim();
+      const childIds: string[] = [];
       for (let i = 0; i < filledStories.length; i++) {
         const s = filledStories[i];
         const payload: any = {
@@ -535,25 +545,23 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
           created_at: now,
           updated_at: now,
         };
-        const { error } = await supabase.from('content_tasks').insert(payload);
-        if (error) {
-          const { parent_task_id: _parent, ...rest } = payload;
-          const retry = await supabase.from('content_tasks').insert(rest);
-          if (retry.error) {
-            toast.error('Erro ao criar os cards dos stories: ' + retry.error.message);
-            setSaving(false);
-            return;
-          }
+        // Usa o id devolvido pelo insert (antes buscava pelo título e, sem achar, sincronizava o pai)
+        const { id: childId, error: insertError } = await insertChildContentTask(payload);
+        if (insertError || !childId) {
+          toast.error('Erro ao criar os cards dos stories: ' + (insertError || 'card não criado'));
+          setSaving(false);
+          return;
         }
-        const { data: created } = await supabase.from('content_tasks').select('id')
-          .eq('client_id', task.client_id).eq('title', payload.title).order('created_at', { ascending: false }).limit(1);
-        const childCtx = buildSyncContext({ ...task, ...payload, id: created?.[0]?.id || task.id } as any, {
+        childIds.push(childId);
+        const childCtx = buildSyncContext({ ...task, ...payload, id: childId } as any, {
           userId: user?.id, clientName: cl?.companyName, clientWhatsapp: (cl as any)?.whatsapp,
         });
         await syncContentTaskColumnChange('revisao', childCtx);
       }
-      await supabase.from('content_tasks').delete().eq('id', task.id);
-      await logAction('Pacote de stories dividido em cards', names.join(' · '));
+      // O histórico do pacote passa para os stories antes de apagar o card original
+      await finishContentTaskSplit(task.id, childIds, {
+        userId: user?.id, action: 'Pacote de stories dividido em cards', details: names.join(' · '),
+      });
       setCelebrationPoints(filledStories.length * (POINTS_PER_TYPE.story || 3));
       setShowCelebration(true);
       toast.success(`🚀 ${filledStories.length} story(s) enviados para revisão, cada um com o próprio nome!`);
@@ -580,12 +588,18 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
       const baseTitle = task.title.replace(/^\[OTIMIZAÇÃO(?:\s·\s\w+)?\]\s*/i, '').trim();
       const typeLabel: Record<OptSlot['type'], string> = { story: 'STORY', criativo: 'CRIATIVO', reels: 'REELS' };
 
+      // Títulos únicos por slot: dois slots do mesmo tipo tinham o mesmo título, e o portal
+      // (que localiza o conteúdo pelo título) trocava o vídeo de um pelo do outro.
+      const typeCount: Record<string, number> = {};
+      const childIds: string[] = [];
       // Create one child card per filled slot, in "revisao"
       for (let i = 0; i < filled.length; i++) {
         const s = filled[i];
+        typeCount[s.type] = (typeCount[s.type] || 0) + 1;
+        const slotSuffix = typeCount[s.type] > 1 ? ` #${typeCount[s.type]}` : '';
         const payload: any = {
           client_id: task.client_id,
-          title: `[OTIMIZAÇÃO · ${typeLabel[s.type]}] ${baseTitle}`,
+          title: `[OTIMIZAÇÃO · ${typeLabel[s.type]}] ${baseTitle}${slotSuffix}`,
           content_type: s.type, // 'story' | 'criativo' | 'reels'
           kanban_column: 'revisao',
           description: `Conteúdo otimizado a partir do Reels: "${baseTitle}".`,
@@ -604,26 +618,25 @@ export default function EditorTaskDetail({ task, open, onOpenChange, onRefresh }
           created_at: now,
           updated_at: now,
         };
-        let { error } = await supabase.from('content_tasks').insert(payload);
-        if (error) {
-          const { parent_task_id, ...rest } = payload;
-          const retry = await supabase.from('content_tasks').insert(rest);
-          if (retry.error) {
-            toast.error('Erro ao criar cards: ' + retry.error.message);
-            setSaving(false);
-            return;
-          }
+        const { id: childId, error: insertError } = await insertChildContentTask(payload);
+        if (insertError || !childId) {
+          toast.error('Erro ao criar cards: ' + (insertError || 'card não criado'));
+          setSaving(false);
+          return;
         }
-        // Sync each child card as newly-in-review
-        const childCtx = buildSyncContext({ ...task, ...payload } as any, {
+        childIds.push(childId);
+        // Sync each child card as newly-in-review (com o id do FILHO; antes ia o id do pai,
+        // que é apagado logo abaixo, e os filhos ficavam sem prazo e sem entrega no Social Media)
+        const childCtx = buildSyncContext({ ...task, ...payload, id: childId } as any, {
           userId: user?.id, clientName: cl?.companyName, clientWhatsapp: (cl as any)?.whatsapp,
         });
         await syncContentTaskColumnChange('revisao', childCtx);
       }
 
-      // Remove the container optimization card
-      await supabase.from('content_tasks').delete().eq('id', task.id);
-      await logAction('Otimização dividida em cards', `${filled.length} peças`);
+      // Remove the container optimization card (o histórico dele passa para os filhos)
+      await finishContentTaskSplit(task.id, childIds, {
+        userId: user?.id, action: 'Otimização dividida em cards', details: `${filled.length} peças`,
+      });
 
       // Sum points per slot type
       const totalPts = filled.reduce((sum, s) => sum + (POINTS_PER_TYPE[s.type] || 0), 0);

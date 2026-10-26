@@ -8,6 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -23,7 +27,7 @@ import DeadlineBadge from '@/components/DeadlineBadge';
 import { highlightQuotes } from '@/lib/highlightQuotes';
 import { format, differenceInHours, isPast, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { syncContentTaskColumnChange, buildSyncContext } from '@/lib/contentTaskSync';
+import { syncContentTaskColumnChange, buildSyncContext, claimGuardFilter } from '@/lib/contentTaskSync';
 import { uploadFileToVps, deleteFileFromVps } from '@/services/vpsApi';
 import { EDITOR_SCORE, EDITOR_APPROVED_COLUMNS, getEditorScoreBreakdown, getEditorTaskOwnerId, getEditorTaskReferenceDate } from '@/lib/scoringSystem';
 import { useCity } from '@/contexts/CityContext';
@@ -218,6 +222,8 @@ export default function EditorDashboard() {
   const [uploadProgress, setUploadProgress] = useState('');
    const [saving, setSaving] = useState(false);
    const [oldVideoLink, setOldVideoLink] = useState<string | null>(null);
+   // Confirmação do "Devolver à Fila" (na edição ele remove o vídeo enviado)
+   const [confirmReturnTask, setConfirmReturnTask] = useState<EditorTask | null>(null);
    const fileInputRef = useRef<HTMLInputElement>(null);
    const isEditorRole = profileHasRole(profile, 'editor', 'videomaker');
 
@@ -238,8 +244,23 @@ export default function EditorDashboard() {
   }, [clients, recordings]);
 
   const fetchTasks = useCallback(async () => {
-    const { data } = await supabase.from('content_tasks').select('*')
-      .in('kanban_column', ['edicao', 'revisao', 'alteracao', 'envio', 'agendamentos', 'acompanhamento', 'arquivado']);
+    // Arquivados só a partir do início da semana ou do mês (o que vier antes): é o que a
+    // pontuação usa (data de referência approved_at/approval_sent_at/updated_at, todas <=
+    // updated_at). Antes vinha todo o histórico de arquivados a cada 15 s.
+    const nowRef = new Date();
+    const weekRef = startOfWeek(nowRef, { weekStartsOn: 1 });
+    const monthRef = startOfMonth(nowRef);
+    const archivedSince = (weekRef < monthRef ? weekRef : monthRef).toISOString();
+    const [activeRes, archivedRes] = await Promise.all([
+      supabase.from('content_tasks').select('*')
+        .in('kanban_column', ['edicao', 'revisao', 'alteracao', 'envio', 'agendamentos', 'acompanhamento']),
+      supabase.from('content_tasks').select('*')
+        .eq('kanban_column', 'arquivado').gte('updated_at', archivedSince),
+    ]);
+    // Se uma das duas falhar, mantém a lista anterior (não some com cards nem pontos)
+    const data = activeRes.error || archivedRes.error
+      ? null
+      : [...(activeRes.data || []), ...(archivedRes.data || [])];
     
     if (data) {
       // Sort client-side to be resilient to missing 'position' column
@@ -265,8 +286,17 @@ export default function EditorDashboard() {
   // Polling every 15s for sync (realtime channel is a no-op with VPS client)
   useEffect(() => {
     if (cityLoading) return;
-    const interval = setInterval(fetchTasks, 15000);
-    return () => clearInterval(interval);
+    // Com a aba escondida não consulta; atualiza quando a aba volta a ficar visível
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      fetchTasks();
+    }, 15000);
+    const onVisibility = () => { if (document.visibilityState === 'visible') fetchTasks(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [fetchTasks, cityLoading]);
 
   // Fetch script when active task changes
@@ -366,14 +396,27 @@ export default function EditorDashboard() {
   }, [queueTasks, filterClient, filterType, searchQuery, getTaskDisplayMeta]);
 
   /* ─── Actions ──────────────────────────────────────────── */
+   // Ids do colaborador (o perfil pode ter ids antigos ligados) para a guarda do "pegar card".
+   const myIdentityIds = useMemo(
+     () => (profile?.identity_ids?.length ? profile.identity_ids : [user?.id]),
+     [profile?.identity_ids, user?.id]
+   );
+
    const handleClaimTask = async (task: EditorTask) => {
      if (!user) return;
-     const { error } = await supabase.from('content_tasks').update({
+     // Atômico: só marca se o card ainda estiver livre (ou já for meu). Antes dois editores,
+     // ou um editor e um agente, pegavam o mesmo vídeo e o segundo sobrescrevia o primeiro.
+     const { data: claimed, error } = await supabase.from('content_tasks').update({
        assigned_to: user.id,
        edited_by: user.id,
        updated_at: new Date().toISOString(),
-     } as any).eq('id', task.id);
+     } as any).eq('id', task.id).or(claimGuardFilter(myIdentityIds)).select('id');
      if (error) { toast.error('Erro ao marcar tarefa'); return; }
+     if (!claimed || (Array.isArray(claimed) && claimed.length === 0)) {
+       toast.error('🚫 Este vídeo já foi pego por outra pessoa!');
+       fetchTasks();
+       return;
+     }
      const editorName = users.find(u => u.id === user.id)?.name || 'Você';
      await supabase.from('task_history').insert({ task_id: task.id, user_id: user.id, action: `Tarefa reivindicada por ${editorName}` });
      toast.success('🚩 Tarefa marcada como sua!');
@@ -382,9 +425,14 @@ export default function EditorDashboard() {
 
    const handleUnclaimTask = async (task: EditorTask) => {
      if (!user) return;
+     // Em alteração o card continua do editor original (edited_by): só ele e os agentes dele
+     // enxergam a alteração. Zerar edited_by deixava o ajuste do cliente parado sem dono.
+     const isAlteration = task.kanban_column === 'alteracao';
      const { error } = await supabase.from('content_tasks').update({
        assigned_to: null,
-       edited_by: null,
+       ...(isAlteration
+         ? { editing_started_at: null, editing_paused_at: null, editing_paused_seconds: 0 }
+         : { edited_by: null }),
        updated_at: new Date().toISOString(),
      } as any).eq('id', task.id);
      if (error) { toast.error('Erro ao liberar tarefa'); return; }
@@ -396,13 +444,20 @@ export default function EditorDashboard() {
    const handleStartEditing = async (task: EditorTask) => {
      if (!user) return;
      const isAlteration = task.kanban_column === 'alteracao';
-     const { error } = await supabase.from('content_tasks').update({
+     // Mesma guarda do "Marcar como Meu": não toma o card de outro editor nem de um agente
+     // que acabou de pegá-lo (a tela só atualiza a cada 15 s).
+     const { data: started, error } = await supabase.from('content_tasks').update({
        assigned_to: user.id,
        edited_by: user.id,
        editing_started_at: new Date().toISOString(),
        updated_at: new Date().toISOString(),
-     } as any).eq('id', task.id);
+     } as any).eq('id', task.id).or(claimGuardFilter(myIdentityIds)).select('id');
      if (error) { toast.error(`Erro ao iniciar ${isAlteration ? 'alteração' : 'edição'}`); return; }
+     if (!started || (Array.isArray(started) && started.length === 0)) {
+       toast.error('🚫 Este vídeo já foi pego por outra pessoa!');
+       fetchTasks();
+       return;
+     }
      await supabase.from('task_history').insert({ task_id: task.id, user_id: user.id, action: isAlteration ? 'Alteração iniciada' : 'Edição iniciada' });
      toast.success(isAlteration ? 'Alteração iniciada!' : 'Edição iniciada!');
      const updated = { ...task, assigned_to: user.id, edited_by: user.id, editing_started_at: new Date().toISOString() };
@@ -428,8 +483,13 @@ export default function EditorDashboard() {
      try {
        const folder = `content/${activeEditTask.client_id || 'avulso'}/${activeEditTask.id}`;
        const url = await uploadFileToVps(file, folder);
-       // Delete previous video if replacing
        const previousVideo = oldVideoLink || activeEditTask.edited_video_link;
+       // Grava o novo link primeiro: se falhar, o card continua com o vídeo anterior intacto.
+       const { error: linkError } = await supabase.from('content_tasks').update({
+         edited_video_link: url, edited_video_type: 'upload', edited_by: user?.id || activeEditTask.edited_by, updated_at: new Date().toISOString()
+       }).eq('id', activeEditTask.id);
+       if (linkError) throw new Error('O vídeo subiu, mas não foi salvo no card: ' + (linkError.message || 'tente de novo'));
+       // Só então remove o vídeo anterior (se ainda estiver no portal do cliente, o servidor mantém)
        if (previousVideo && previousVideo !== url && previousVideo.includes('agenciapulse.tech')) {
          try {
            // Só registra "removido" quando o servidor confirma; se o vídeo ainda está no portal, fica.
@@ -440,9 +500,6 @@ export default function EditorDashboard() {
          }
        }
        setOldVideoLink(null);
-        await supabase.from('content_tasks').update({
-          edited_video_link: url, edited_video_type: 'upload', edited_by: user?.id || activeEditTask.edited_by, updated_at: new Date().toISOString()
-        }).eq('id', activeEditTask.id);
        setVideoLink(url);
        await supabase.from('task_history').insert({ task_id: activeEditTask.id, user_id: user?.id, action: 'Vídeo enviado via upload', details: url });
        toast.success('Vídeo enviado!');
@@ -460,8 +517,16 @@ export default function EditorDashboard() {
   const saveVideoLink = async () => {
     if (!videoLink.trim() || !activeEditTask) return;
     setSaving(true);
-    // Delete previous video if replacing
     const previousVideo = oldVideoLink || activeEditTask.edited_video_link;
+    // Grava o novo link primeiro: se falhar, o vídeo anterior não é apagado.
+    const { error: linkError } = await supabase.from('content_tasks').update({
+      edited_video_link: videoLink.trim(), edited_video_type: 'link', edited_by: user?.id || activeEditTask.edited_by, updated_at: new Date().toISOString()
+    }).eq('id', activeEditTask.id);
+    if (linkError) {
+      toast.error('Erro ao salvar o link: ' + (linkError.message || 'tente de novo'));
+      setSaving(false);
+      return;
+    }
     if (previousVideo && previousVideo !== videoLink.trim() && previousVideo.includes('agenciapulse.tech')) {
       try {
         const { removed } = await deleteFileFromVps(previousVideo, { keepIfReferenced: true });
@@ -471,9 +536,6 @@ export default function EditorDashboard() {
       }
     }
     setOldVideoLink(null);
-     await supabase.from('content_tasks').update({
-       edited_video_link: videoLink.trim(), edited_video_type: 'link', edited_by: user?.id || activeEditTask.edited_by, updated_at: new Date().toISOString()
-     }).eq('id', activeEditTask.id);
     toast.success('Link salvo!');
     setShowUpload(false);
     fetchTasks();
@@ -551,25 +613,31 @@ export default function EditorDashboard() {
     const targetTask = task || activeEditTask;
     if (!targetTask || !user) return;
     setSaving(true);
-    // Delete VPS file if editor uploaded one
-    if (targetTask.edited_video_link?.includes('agenciapulse.tech')) {
+    // Alteração: o vídeo é o que o cliente já viu no portal e o card é do editor original
+    // (edited_by). Só libera o card e zera o timer; o vídeo e o editor ficam.
+    const isAlteration = targetTask.kanban_column === 'alteracao';
+    const { error } = await supabase.from('content_tasks').update({
+      assigned_to: null,
+      ...(isAlteration ? {} : { edited_by: null, edited_video_link: null, edited_video_type: 'link' }),
+      editing_started_at: null,
+      editing_paused_at: null,
+      editing_paused_seconds: 0,
+      updated_at: new Date().toISOString(),
+    } as any).eq('id', targetTask.id);
+    if (error) {
+      toast.error('Erro ao devolver para a fila: ' + (error.message || 'tente de novo'));
+      setSaving(false);
+      return;
+    }
+    // Só apaga o arquivo depois que o card soltou o link (e nunca o que ainda está no portal).
+    if (!isAlteration && targetTask.edited_video_link?.includes('agenciapulse.tech')) {
       try {
         await deleteFileFromVps(targetTask.edited_video_link, { keepIfReferenced: true });
       } catch (err) { console.warn('Erro ao remover vídeo:', err); }
     }
-    await supabase.from('content_tasks').update({
-      assigned_to: null,
-      edited_by: null,
-      editing_started_at: null,
-      editing_paused_at: null,
-      editing_paused_seconds: 0,
-      edited_video_link: null,
-      edited_video_type: 'link',
-      updated_at: new Date().toISOString(),
-    } as any).eq('id', targetTask.id);
     await supabase.from('task_history').insert({
       task_id: targetTask.id, user_id: user.id,
-      action: 'Devolvida para fila de edição',
+      action: isAlteration ? 'Alteração devolvida para a fila do editor' : 'Devolvida para fila de edição',
     });
     toast.success('📥 Tarefa devolvida para a fila!');
     if (activeEditTask?.id === targetTask.id) {
@@ -671,6 +739,7 @@ export default function EditorDashboard() {
         season_month: now.getMonth() + 1,
         season_year: now.getFullYear(),
         uploaded_by: user.id,
+        content_task_id: taskId, // vínculo com o card (o portal deixa de depender do título)
       } as any);
 
       // 5. Portal notification
@@ -918,7 +987,7 @@ export default function EditorDashboard() {
                 <motion.div whileTap={{ scale: 0.93 }}>
                   <Button variant="outline" size="sm" className="gap-1.5 text-xs border-destructive/30 text-destructive hover:bg-destructive/10"
                     disabled={saving}
-                    onClick={() => handleReturnToQueue()}>
+                    onClick={() => setConfirmReturnTask(activeEditTask)}>
                     <ArrowRight size={14} className="rotate-180" /> Devolver à Fila
                   </Button>
                 </motion.div>
@@ -1066,7 +1135,7 @@ export default function EditorDashboard() {
                     </div>
                   )}
                   <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-destructive/60 hover:text-destructive hover:bg-destructive/10"
-                    onClick={(e) => { e.stopPropagation(); handleReturnToQueue(task); }}
+                    onClick={(e) => { e.stopPropagation(); setConfirmReturnTask(task); }}
                     title="Devolver à fila">
                     <ArrowRight size={12} className="rotate-180" />
                   </Button>
@@ -1241,6 +1310,34 @@ export default function EditorDashboard() {
           </div>
         </div>
       </div>
+
+      <AlertDialog open={!!confirmReturnTask} onOpenChange={(open) => { if (!open) setConfirmReturnTask(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Devolver à fila?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmReturnTask?.kanban_column === 'alteracao'
+                ? 'A alteração volta para a fila e o timer zera. O vídeo atual e o editor responsável continuam no card.'
+                : confirmReturnTask?.edited_video_link
+                  ? 'A tarefa volta para a fila de edição e o vídeo enviado é removido do card (o arquivo é apagado do servidor, a não ser que já esteja no portal do cliente).'
+                  : 'A tarefa volta para a fila de edição e o timer zera.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                const target = confirmReturnTask;
+                setConfirmReturnTask(null);
+                if (target) void handleReturnToQueue(target);
+              }}
+            >
+              Devolver à fila
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <style>{`
         @keyframes shimmer {

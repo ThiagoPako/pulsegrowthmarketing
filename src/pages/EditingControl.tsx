@@ -13,6 +13,7 @@ import ClientLogo from '@/components/ClientLogo';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useCity } from '@/contexts/CityContext';
+import { useAuth } from '@/hooks/useAuth';
 
 interface EditingTask {
   id: string;
@@ -42,8 +43,17 @@ const CONTENT_TYPE_LABELS: Record<string, string> = {
   produto: 'Produto',
 };
 
+// Fila = card de edição sem dono e sem timer, ou alteração ainda não iniciada. Card de edição já
+// atribuído a alguém (marcado ou distribuído), mas ainda não iniciado, fica na coluna do editor:
+// entrar em Edição não liga mais o timer, então editing_started_at sozinho não diz se o card tem dono.
+function isQueueTask(t: EditingTask) {
+  return (t.kanban_column === 'edicao' && !t.editing_started_at && !t.assigned_to) ||
+    (t.kanban_column === 'alteracao' && !t.editing_started_at);
+}
+
 export default function EditingControl() {
   const { clients, users } = useApp();
+  const { user } = useAuth();
   const { activeCity, isLoading: cityLoading } = useCity();
   const [tasks, setTasks] = useState<EditingTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,12 +92,9 @@ export default function EditingControl() {
     return () => clearInterval(interval);
   }, [activeCity, cityLoading]);
 
-  // Queue = tasks in edicao/alteracao with no editing_started_at (not yet picked up)
+  // Queue = tasks in edicao/alteracao with no editing_started_at (not yet picked up) — ver isQueueTask
   const queueTasks = useMemo(() =>
-    tasks.filter(t =>
-      (t.kanban_column === 'edicao' || t.kanban_column === 'alteracao') &&
-      !t.editing_started_at
-    ).sort((a, b) => {
+    tasks.filter(isQueueTask).sort((a, b) => {
       // Priority first, then immediate alteration, then by date
       if (a.editing_priority !== b.editing_priority) return a.editing_priority ? -1 : 1;
       if (a.immediate_alteration !== b.immediate_alteration) return a.immediate_alteration ? -1 : 1;
@@ -102,8 +109,8 @@ export default function EditingControl() {
     editors.forEach(e => { map[e.id] = []; });
 
     tasks.forEach(t => {
-      // Skip queue tasks (edicao/alteracao without editing started)
-      if ((t.kanban_column === 'edicao' || t.kanban_column === 'alteracao') && !t.editing_started_at) return;
+      // Skip queue tasks (edicao sem dono / alteracao without editing started)
+      if (isQueueTask(t)) return;
 
       const editorId = t.edited_by || t.assigned_to;
       if (editorId && map[editorId]) {
@@ -147,6 +154,25 @@ export default function EditingControl() {
 
   const handleDragLeave = () => setDragOverTarget(null);
 
+  // Histórico: quem reatribuiu ou devolveu o card (antes não ficava registro).
+  const logReassignment = async (task: EditingTask, action: string) => {
+    await supabase.from('task_history').insert({ task_id: task.id, user_id: user?.id || null, action, details: null });
+  };
+
+  // Avisa o editor que perdeu o card (não avisa quem fez a mudança nem o próprio novo editor).
+  const notifyPreviousEditor = async (task: EditingTask, newEditorId: string | null) => {
+    const previousId = task.edited_by || task.assigned_to;
+    if (!previousId || previousId === newEditorId || previousId === user?.id) return;
+    const client = clients.find(c => c.id === task.client_id);
+    await supabase.rpc('notify_user', {
+      _user_id: previousId,
+      _title: 'Card de edição reatribuído',
+      _message: `"${task.title}"${client?.companyName ? ` (${client.companyName})` : ''} ${newEditorId ? 'foi passado para outro editor' : 'voltou para a fila de edição'}.`,
+      _type: 'adjustment',
+      _link: '/edicao',
+    });
+  };
+
   const handleDrop = async (e: React.DragEvent, targetEditorId: string) => {
     e.preventDefault();
     setDragOverTarget(null);
@@ -160,17 +186,34 @@ export default function EditingControl() {
     }
 
     if (targetEditorId === '__queue__') {
+      // Revisão não tem fila: sem editor o card sumia do painel. Para trocar, arraste para um editor.
+      if (draggedTask.kanban_column === 'revisao') {
+        toast.error('Card em revisão não volta para a fila. Arraste para um editor.');
+        setDraggedTask(null);
+        return;
+      }
       // Move back to queue — clear assignment
       setReassigning(true);
       try {
-        await supabase.from('content_tasks').update({
+        // Em alteração o card continua do editor original (edited_by): só ele e os agentes
+        // dele enxergam a alteração. Zerar edited_by deixava o ajuste do cliente parado.
+        const isAlteration = draggedTask.kanban_column === 'alteracao';
+        const { data: updated, error } = await supabase.from('content_tasks').update({
           assigned_to: null,
-          edited_by: null,
+          ...(isAlteration ? {} : { edited_by: null }),
           editing_started_at: null,
           editing_paused_at: null,
           editing_paused_seconds: 0,
-        }).eq('id', draggedTask.id);
+          updated_at: new Date().toISOString(),
+        }).eq('id', draggedTask.id).select('id');
+        if (error || !updated?.length) {
+          toast.error(error?.message ? `Erro: ${error.message}` : 'Não foi possível devolver: o card mudou ou é de outra cidade.');
+          fetchTasks();
+          return;
+        }
 
+        await logReassignment(draggedTask, 'Devolvido para a fila de edição (Controle de Edição)');
+        await notifyPreviousEditor(draggedTask, null);
         toast.success('Tarefa devolvida para a fila');
         fetchTasks();
       } catch (err: any) {
@@ -188,14 +231,24 @@ export default function EditingControl() {
     const client = clients.find(c => c.id === draggedTask.client_id);
 
     try {
-      await supabase.from('content_tasks').update({
+      // O vpsDb não lança exceção: confere o erro e as linhas antes de dizer que deu certo.
+      const { data: updated, error } = await supabase.from('content_tasks').update({
         assigned_to: targetEditorId,
         edited_by: targetEditorId,
         editing_started_at: draggedTask.editing_started_at || new Date().toISOString(),
         editing_paused_at: null,
         editing_paused_seconds: 0,
-      }).eq('id', draggedTask.id);
+        updated_at: new Date().toISOString(),
+      }).eq('id', draggedTask.id).select('id');
+      if (error || !updated?.length) {
+        toast.error(error?.message ? `Erro ao reatribuir: ${error.message}` : 'Não foi possível reatribuir: o card mudou ou é de outra cidade.');
+        fetchTasks();
+        return;
+      }
 
+      const previousName = users.find(u => u.id === (draggedTask.edited_by || draggedTask.assigned_to))?.name || 'fila';
+      await logReassignment(draggedTask, `Reatribuído de ${previousName} para ${newEditor?.name || '?'} (Controle de Edição)`);
+      await notifyPreviousEditor(draggedTask, targetEditorId);
       toast.success(
         `"${client?.companyName || 'Tarefa'}" reatribuída para ${newEditor?.name || '?'}`,
         { duration: 3000 }

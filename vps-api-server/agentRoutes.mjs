@@ -701,9 +701,14 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
       const active = cur && cur.until > Date.now();
       pairFailures.set(ip, { count: active ? cur.count + 1 : 1, until: active ? cur.until : Date.now() + 15 * 60_000 });
     };
-    const client = await pool.connect();
+    // O esquema usa outra conexão do pool: garante antes de segurar a da transação
     try {
       await ensureAgentSchema();
+    } catch (error) {
+      return sendError(res, error);
+    }
+    const client = await pool.connect();
+    try {
       const code = normalizePairCode(req.body?.code);
       const hostname = String(req.body?.hostname || '').trim().slice(0, 120) || null;
       await client.query('BEGIN');
@@ -1048,7 +1053,8 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         `UPDATE content_tasks SET
             assigned_to = $2,
             edited_by = $2,
-            editing_started_at = CASE WHEN kanban_column = 'alteracao' OR editing_started_at IS NULL THEN now() ELSE editing_started_at END,
+            -- card livre começa o timer agora (o valor antigo podia vir de quando o card só entrou na fila)
+            editing_started_at = CASE WHEN kanban_column = 'alteracao' OR assigned_to IS NULL OR editing_started_at IS NULL THEN now() ELSE editing_started_at END,
             editing_paused_at = NULL,
             agent_step = 'iniciado',
             agent_heartbeat_at = now(),
@@ -1141,6 +1147,20 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
 
   // ── Organização (chefe): buscar e mover cards do fluxo de edição ──
   const MOVABLE = new Set(['edicao', 'revisao', 'alteracao']);
+
+  // client_portal_contents.content_task_id (criada pelo server.mjs na subida): liga o conteúdo do
+  // portal ao card. Só memoriza o "sim", porque a coluna pode surgir depois desta checagem.
+  // db: dentro de uma transação, passe o client dela (não pega outra conexão do pool).
+  let portalTaskLinkReady = false;
+  async function hasPortalTaskLink(db = pool) {
+    if (portalTaskLinkReady) return true;
+    const { rowCount } = await db.query(
+      `SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'client_portal_contents' AND column_name = 'content_task_id'`
+    ).catch(() => ({ rowCount: 0 }));
+    portalTaskLinkReady = rowCount > 0;
+    return portalTaskLinkReady;
+  }
   const SOCIAL_STATUS = { revisao: 'revisao', alteracao: 'ajuste' };
   const MOVE_ACTION = { edicao: 'Movido para Edição', revisao: 'Enviado para Revisão', alteracao: 'Solicitado Alteração' };
   const PORTAL_NOTIF = {
@@ -1179,17 +1199,27 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
   });
 
   app.post('/api/agent/tasks/:id/move', async (req, res) => {
-    const client = await pool.connect();
+    // Autentica e valida ANTES de pegar a conexão da transação: o verifyAgent usa outra conexão
+    // do mesmo pool, e 10 pedidos simultâneos (até com chave falsa) travavam a API inteira.
+    let agent;
+    let column;
+    let reason;
+    let notes;
     try {
-      const agent = await verifyAgent(req);
+      agent = await verifyAgent(req);
       if (agent.role !== 'chefe') return res.status(403).json({ error: 'Apenas a chefe move cards' });
-      const column = String(req.body?.column || '');
+      column = String(req.body?.column || '');
       if (!MOVABLE.has(column)) {
         return res.status(400).json({ error: 'Coluna permitida: edicao, revisao ou alteracao (enviar ao cliente é decisão humana)' });
       }
-      const reason = String(req.body?.reason || '').slice(0, 500) || null;
-      const notes = req.body?.adjustment_notes != null ? String(req.body.adjustment_notes).slice(0, 4000) : null;
+      reason = String(req.body?.reason || '').slice(0, 500) || null;
+      notes = req.body?.adjustment_notes != null ? String(req.body.adjustment_notes).slice(0, 4000) : null;
+    } catch (error) {
+      return sendError(res, error);
+    }
 
+    const client = await pool.connect();
+    try {
       await client.query('BEGIN');
       const { rows } = await client.query(
         `SELECT t.*, c.company_name AS client_name FROM content_tasks t LEFT JOIN clients c ON c.id = t.client_id
@@ -1227,7 +1257,11 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         agent_step: null, agent_heartbeat_at: null,
       };
       if (column === 'edicao') {
-        set.editing_started_at = now.toISOString();
+        // Volta para a fila sem dono: o timer só começa quando alguém pegar (claim/Iniciar).
+        // Antes gravava now() e o card aparecia como "editando" na Bancada sem ninguém nele.
+        set.editing_started_at = null;
+        set.editing_paused_at = null;
+        set.editing_paused_seconds = 0;
         set.editing_deadline = deadline('editing_deadline_hours', 'editing_deadline_enabled', 48);
         set.assigned_to = null;
       }
@@ -1268,23 +1302,33 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
           await client.query('DELETE FROM social_media_deliveries WHERE content_task_id = $1', [task.id]);
         }
         if (column === 'revisao' && task.edited_video_link) {
-          // Vínculo pelo título: ignora conteúdos já fechados (aprovado/agendado/publicado), como o
-          // contentTaskSync — senão o vídeo novo sobrescreveria o de um mês anterior com o mesmo título.
+          // Pelo vínculo com o card (conteúdo antigo, sem vínculo, pelo título), ignorando conteúdos
+          // já fechados (aprovado/agendado/publicado), como o contentTaskSync — senão o vídeo novo
+          // sobrescreveria o de um mês anterior com o mesmo título.
+          const linked = await hasPortalTaskLink(client);
           const { rows: portalRows } = await client.query(
-            `SELECT id FROM client_portal_contents WHERE client_id = $1 AND title = $2
-               AND status NOT IN ('aprovado', 'agendado', 'publicado') ORDER BY created_at DESC LIMIT 1`,
-            [task.client_id, task.title]
+            linked
+              ? `SELECT id FROM client_portal_contents WHERE client_id = $1
+                   AND (content_task_id = $3 OR (content_task_id IS NULL AND title = $2))
+                   AND status NOT IN ('aprovado', 'agendado', 'publicado')
+                 ORDER BY (content_task_id IS NOT NULL) DESC, created_at DESC LIMIT 1`
+              : `SELECT id FROM client_portal_contents WHERE client_id = $1 AND title = $2
+                   AND status NOT IN ('aprovado', 'agendado', 'publicado') ORDER BY created_at DESC LIMIT 1`,
+            linked ? [task.client_id, task.title, task.id] : [task.client_id, task.title]
           );
           if (portalRows.length) {
-            await client.query(`UPDATE client_portal_contents SET file_url = $2, status = 'revisao_interna', updated_at = now() WHERE id = $1`,
-              [portalRows[0].id, task.edited_video_link]);
+            await client.query(
+              `UPDATE client_portal_contents SET file_url = $2, status = 'revisao_interna'${linked ? ', content_task_id = $3' : ''}, updated_at = now() WHERE id = $1`,
+              linked ? [portalRows[0].id, task.edited_video_link, task.id] : [portalRows[0].id, task.edited_video_link]
+            );
           } else {
             const month = Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'numeric' }).format(now));
             const year = Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, year: 'numeric' }).format(now));
             await client.query(
-              `INSERT INTO client_portal_contents (client_id, title, content_type, file_url, status, season_month, season_year, uploaded_by)
-               VALUES ($1, $2, $3, $4, 'revisao_interna', $5, $6, $7)`,
-              [task.client_id, task.title, task.content_type, task.edited_video_link, month, year, task.edited_by || agent.userId]
+              `INSERT INTO client_portal_contents (client_id, title, content_type, file_url, status, season_month, season_year, uploaded_by${linked ? ', content_task_id' : ''})
+               VALUES ($1, $2, $3, $4, 'revisao_interna', $5, $6, $7${linked ? ', $8' : ''})`,
+              [task.client_id, task.title, task.content_type, task.edited_video_link, month, year, task.edited_by || agent.userId,
+                ...(linked ? [task.id] : [])]
             );
           }
         }
@@ -1448,6 +1492,13 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
   });
 
   // ── Entrega ───────────────────────────────────────────────
+  // Extensão final decidida pelo servidor, nunca a do nome original: um "x.html" declarado como
+  // video/mp4 passava no filtro e ia para /uploads como .html (rodando no domínio do sistema).
+  function safeVideoExt(file) {
+    const original = String(file.originalname || '').toLowerCase();
+    return /\.mov$/.test(original) || file.mimetype === 'video/quicktime' ? '.mov' : '.mp4';
+  }
+
   const deliverUpload = multer({
     storage: multer.diskStorage({
       destination(req, _file, cb) {
@@ -1459,7 +1510,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         }
       },
       filename(_req, file, cb) {
-        const ext = path.extname(file.originalname || '').toLowerCase().replace(/[^.a-z0-9]/g, '');
+        const ext = file.fieldname === 'plan' ? '.json' : safeVideoExt(file);
         cb(null, `${Date.now()}_${crypto.randomBytes(6).toString('hex')}${ext}`);
       },
     }),
@@ -1592,8 +1643,7 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         try { fs.mkdirSync(req.agentUploadDir, { recursive: true }); cb(null, req.agentUploadDir); } catch (error) { cb(error); }
       },
       filename(_req, file, cb) {
-        const ext = path.extname(file.originalname || '').toLowerCase().replace(/[^.a-z0-9]/g, '');
-        cb(null, `${Date.now()}_${crypto.randomBytes(6).toString('hex')}${ext}`);
+        cb(null, `${Date.now()}_${crypto.randomBytes(6).toString('hex')}${safeVideoExt(file)}`);
       },
     }),
     limits: { fileSize: 2 * 1024 * 1024 * 1024, files: 30 },
@@ -1648,10 +1698,12 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         return res.status(400).json({ error: 'Cada story precisa de um nome diferente' });
       }
       const notes = String(req.body?.notes || '').slice(0, 4000) || null;
-      const now = new Date();
       // a coluna city só existe em alguns bancos (escopo por cidade); copia do card pai quando existir
       const { rowCount: hasCity } = await pool.query(
         `SELECT 1 FROM information_schema.columns WHERE table_name = 'content_tasks' AND column_name = 'city'`
+      );
+      const { rowCount: historyHasCity } = await pool.query(
+        `SELECT 1 FROM information_schema.columns WHERE table_name = 'task_history' AND column_name = 'city'`
       );
       const db = await pool.connect();
       try {
@@ -1662,15 +1714,8 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
         );
         if (!locked.length) throw Object.assign(new Error('O card mudou durante o envio; entrega cancelada'), { status: 409 });
 
-        const { rows: settingsRows } = await db.query('SELECT * FROM company_settings LIMIT 1');
-        const settings = settingsRows[0] || {};
-        if (typeof settings.work_days === 'string') { try { settings.work_days = JSON.parse(settings.work_days); } catch { settings.work_days = null; } }
-        const workDays = Array.isArray(settings.work_days) && settings.work_days.length ? settings.work_days : ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
-        const reviewDeadline = (settings.review_deadline_enabled ?? true)
-          ? addBusinessHours(now, settings.review_deadline_hours ?? 24, workDays).toISOString() : null;
-        const month = Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'numeric' }).format(now));
-        const year = Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, year: 'numeric' }).format(now));
-
+        // Os stories entram em 'pre_revisao', que de propósito não tem prazo (review_deadline NULL,
+        // como no deliver simples): o prazo de revisão é gravado quando a chefe move para 'revisao'.
         const created = [];
         for (let i = 0; i < files.length; i++) {
           const rel = path.relative(path.resolve(uploadRoot), files[i].path).split(path.sep).join('/');
@@ -1688,6 +1733,13 @@ export function registerAgentRoutes(app, { pool, uploadRoot, verifyUser, isStric
               ...(hasCity ? [task.city || null] : [])]
           );
           const childId = child[0].id;
+          // O histórico do pacote (gravação, quem pegou, alterações) passa para cada story:
+          // o card original é apagado logo abaixo e o histórico dele ficava órfão.
+          await db.query(
+            `INSERT INTO task_history (task_id, user_id, action, details, created_at${historyHasCity ? ', city' : ''})
+             SELECT $1, user_id, action, details, created_at${historyHasCity ? ', city' : ''} FROM task_history WHERE task_id = $2`,
+            [childId, task.id]
+          );
           await db.query(
             `INSERT INTO edit_versions (task_id, version, video_url, notes, created_by) VALUES ($1, 1, $2, $3, $4)`,
             [childId, url, notes, agent.userId]

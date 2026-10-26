@@ -17,8 +17,14 @@ interface SyncContext {
   scriptId: string | null;
   recordingId: string | null;
   assignedTo: string | null;
+  /** Quem editou o vídeo: é quem corrige a alteração (assigned_to já vem zerado da revisão). */
+  editedBy?: string | null;
   editedVideoLink: string | null;
   immediateAlteration?: boolean;
+  /** Quem move para Edição está pegando o card agora (o timer começa). Sem isso o card entra na fila. */
+  startEditing?: boolean;
+  /** Coluna de onde o card saiu (quando o chamador passa o card ainda com a coluna antiga). */
+  previousColumn?: string | null;
   approvedAt?: string | null;
   userId?: string | null;
   clientName?: string;
@@ -63,10 +69,62 @@ function addBusinessHours(from: Date, hours: number, workDays: string[]): Date {
   return current;
 }
 
+/**
+ * Conteúdo do portal ligado a um card. Primeiro pelo vínculo (client_portal_contents.content_task_id);
+ * conteúdos antigos, sem vínculo, continuam casando pelo título (só entre os que não têm vínculo,
+ * para não pegar o vídeo de outro card com o mesmo nome).
+ * openOnly: ignora conteúdos já fechados (aprovado/agendado/publicado). status: só esse status.
+ */
+export async function findPortalContentForTask(
+  task: { taskId: string; clientId: string | null; title: string },
+  opts: { openOnly?: boolean; status?: string } = {}
+): Promise<{ id: string; linked: boolean } | null> {
+  if (!task.clientId) return null;
+  const withStatus = (query: any) => {
+    let q = query;
+    if (opts.status) q = q.eq('status', opts.status);
+    if (opts.openOnly) q = q.not('status', 'in', '(aprovado,agendado,publicado)');
+    return q.order('created_at', { ascending: false }).limit(1);
+  };
+  const byLink = await withStatus(
+    supabase.from('client_portal_contents').select('id').eq('client_id', task.clientId).eq('content_task_id', task.taskId)
+  );
+  if (!byLink.error && byLink.data?.length) return { id: byLink.data[0].id, linked: true };
+  let byTitle = supabase.from('client_portal_contents').select('id').eq('client_id', task.clientId).eq('title', task.title);
+  // Servidor sem a coluna nova: o filtro do vínculo dá erro e fica só o título (como antes)
+  if (!byLink.error) byTitle = byTitle.is('content_task_id', null);
+  const { data } = await withStatus(byTitle);
+  return data?.length ? { id: data[0].id, linked: false } : null;
+}
+
+// Prazos e dias úteis mudam raramente: guarda por 60 s em vez de buscar a cada movimentação
+const DEADLINE_SETTINGS_TTL_MS = 60_000;
+let deadlineSettingsCache: { value: any; at: number } | null = null;
+async function getDeadlineSettings(): Promise<any> {
+  if (deadlineSettingsCache && Date.now() - deadlineSettingsCache.at < DEADLINE_SETTINGS_TTL_MS) {
+    return deadlineSettingsCache.value;
+  }
+  const { data, error } = await supabase.from('company_settings').select('editing_deadline_hours, review_deadline_hours, alteration_deadline_hours, approval_deadline_hours, work_days, editing_deadline_enabled, review_deadline_enabled, alteration_deadline_enabled, approval_deadline_enabled').limit(1).single();
+  // Só guarda leitura que deu certo (falha cai nos padrões só desta vez)
+  if (!error && data) deadlineSettingsCache = { value: data, at: Date.now() };
+  return data;
+}
+
 export async function syncContentTaskColumnChange(
   newColumn: string,
   ctx: SyncContext
 ) {
+  // Só sincroniza card que existe na cidade ativa. O update de um card de outra cidade (ou já
+  // removido) não muda nada no servidor, mas o sync seguia e criava entrega no Social Media,
+  // aviso no portal e histórico "fantasmas".
+  if (!ctx.taskId) return;
+  const { data: currentRow, error: currentRowError } = await supabase
+    .from('content_tasks').select('id').eq('id', ctx.taskId).maybeSingle();
+  if (!currentRowError && !currentRow) {
+    console.warn('[contentTaskSync] card fora da cidade ativa ou removido; sync ignorado:', ctx.taskId);
+    return;
+  }
+
   const updates: Record<string, any> = {
     reviewing_by: null,
     reviewing_by_name: null,
@@ -78,8 +136,8 @@ export async function syncContentTaskColumnChange(
     approval_deadline: null,
   };
 
-  // Fetch deadline settings + work_days + enabled flags
-  const { data: settingsRow } = await supabase.from('company_settings').select('editing_deadline_hours, review_deadline_hours, alteration_deadline_hours, approval_deadline_hours, work_days, editing_deadline_enabled, review_deadline_enabled, alteration_deadline_enabled, approval_deadline_enabled').limit(1).single();
+  // Fetch deadline settings + work_days + enabled flags (cache curto: uma chamada a menos por movimentação)
+  const settingsRow = await getDeadlineSettings();
   const deadlineHours = {
     editing: settingsRow?.editing_deadline_hours ?? 48,
     review: settingsRow?.review_deadline_hours ?? 24,
@@ -94,9 +152,22 @@ export async function syncContentTaskColumnChange(
   };
   const workDays: string[] = (settingsRow?.work_days as string[]) ?? ['segunda', 'terca', 'quarta', 'quinta', 'sexta'];
 
+  // Primeira entrada em Edição = vindo de Ideias/Captação. Sem a coluna anterior (o chamador já
+  // passou o card com a coluna nova), card com vídeo editado está voltando de alteração/revisão.
+  const previousColumn = ctx.previousColumn && ctx.previousColumn !== newColumn ? ctx.previousColumn : null;
+  const enteringEditingFirstTime = newColumn === 'edicao'
+    && (previousColumn ? ['ideias', 'captacao'].includes(previousColumn) : !ctx.editedVideoLink);
+  // Texto do prazo de edição a partir da configuração (antes era sempre "2 dias úteis")
+  const editingDays = Math.max(1, Math.ceil(deadlineHours.editing / 24));
+  const editingDeadlineText = deadlineEnabled.editing
+    ? ` Prazo previsto: ${editingDays} ${editingDays === 1 ? 'dia útil' : 'dias úteis'}.`
+    : '';
+
   // 1. Set editing_started_at and editing_deadline when entering edicao
   if (newColumn === 'edicao') {
-    updates.editing_started_at = new Date().toISOString();
+    // O timer só começa quando alguém pega o card. Antes toda entrada em Edição gravava agora:
+    // o card da fila aparecia como "editando" na Bancada e o tempo de edição vinha inflado.
+    updates.editing_started_at = ctx.startEditing ? new Date().toISOString() : null;
     if (deadlineEnabled.editing) {
       const editingDeadline = addBusinessHours(new Date(), deadlineHours.editing, workDays);
       updates.editing_deadline = editingDeadline.toISOString();
@@ -106,10 +177,11 @@ export async function syncContentTaskColumnChange(
       await supabase.from('scripts').update({ recorded: true } as any).eq('id', ctx.scriptId);
     }
 
-    // Send WhatsApp to client: video recorded, now in editing
+    // Send WhatsApp to client: video recorded, now in editing — só na primeira entrada em Edição
+    // (vindo da gravação). Card que volta de alteração/revisão/análise não avisa o cliente de novo.
     try {
       const whatsConfig = await getWhatsAppConfig();
-      if (whatsConfig?.integrationActive && whatsConfig?.autoTaskEditing && ctx.clientWhatsapp) {
+      if (enteringEditingFirstTime && whatsConfig?.integrationActive && whatsConfig?.autoTaskEditing && ctx.clientWhatsapp) {
         const portalUrl = `https://agenciapulse.tech/portal/${ctx.clientId}`;
         const editingMsg = whatsConfig.msgTaskEditing
           .replace('{nome_cliente}', ctx.clientName || '')
@@ -240,23 +312,17 @@ export async function syncContentTaskColumnChange(
     // Skip for avulso (no client_id)
     if (ctx.editedVideoLink && ctx.clientId) {
       const now = new Date();
-      // O vínculo é pelo título: ignora conteúdos já fechados (aprovado/agendado/publicado),
-      // senão o vídeo novo sobrescrevia o de um mês anterior com o mesmo título.
-      const { data: existing } = await supabase
-        .from('client_portal_contents')
-        .select('id')
-        .eq('client_id', ctx.clientId)
-        .eq('title', ctx.title)
-        .not('status', 'in', '(aprovado,agendado,publicado)')
-        .order('created_at', { ascending: false })
-        .limit(1);
+      // Pelo vínculo com o card (ou, em conteúdo antigo, pelo título), ignorando conteúdos já
+      // fechados (aprovado/agendado/publicado): um vídeo de outro mês não pode ser sobrescrito.
+      const existing = await findPortalContentForTask(ctx, { openOnly: true });
 
-      if (existing?.length) {
+      if (existing) {
         await supabase.from('client_portal_contents').update({
           file_url: ctx.editedVideoLink,
           status: 'revisao_interna',
+          content_task_id: ctx.taskId,
           updated_at: now.toISOString(),
-        } as any).eq('id', existing[0].id);
+        } as any).eq('id', existing.id);
       } else {
         await supabase.from('client_portal_contents').insert({
           client_id: ctx.clientId,
@@ -267,17 +333,20 @@ export async function syncContentTaskColumnChange(
           season_month: now.getMonth() + 1,
           season_year: now.getFullYear(),
           uploaded_by: ctx.userId || null,
+          content_task_id: ctx.taskId,
         } as any);
       }
     }
   }
 
   if (newColumn === 'alteracao') {
-    // Notify the assigned editor
-    if (ctx.assignedTo) {
+    // Avisa o editor do vídeo (edited_by). O assigned_to chega zerado da revisão e do envio,
+    // por isso antes o aviso nunca saía. Não avisa quem pediu o ajuste.
+    const editorToNotify = ctx.editedBy || ctx.assignedTo;
+    if (editorToNotify && editorToNotify !== ctx.userId) {
       const urgencyPrefix = ctx.immediateAlteration ? '🚨 IMEDIATO: ' : '';
       await supabase.rpc('notify_user', {
-        _user_id: ctx.assignedTo,
+        _user_id: editorToNotify,
         _title: `${urgencyPrefix}Ajuste solicitado`,
         _message: `\"${ctx.title}\" (${ctx.clientName || ''}) precisa de ajustes${ctx.immediateAlteration ? ' IMEDIATOS' : ''}`,
         _type: 'adjustment',
@@ -291,20 +360,13 @@ export async function syncContentTaskColumnChange(
     if (ctx.clientId) {
       // Update portal content from revisao_interna → pendente (now visible to client)
       try {
-        const { data: portalContentToPublish } = await supabase
-          .from('client_portal_contents')
-          .select('id')
-          .eq('client_id', ctx.clientId)
-          .eq('title', ctx.title)
-          .eq('status', 'revisao_interna')
-          .order('created_at', { ascending: false })
-          .limit(1);
+        const portalContentToPublish = await findPortalContentForTask(ctx, { status: 'revisao_interna' });
 
-        if (portalContentToPublish?.length) {
+        if (portalContentToPublish) {
           await supabase.from('client_portal_contents').update({
             status: 'pendente',
             updated_at: new Date().toISOString(),
-          } as any).eq('id', portalContentToPublish[0].id);
+          } as any).eq('id', portalContentToPublish.id);
         }
       } catch (err) {
         console.error('Portal content publish error:', err);
@@ -314,21 +376,14 @@ export async function syncContentTaskColumnChange(
 
       // Create portal notification for the client (o conteúdo em aberto, não um antigo já fechado)
       try {
-        const { data: portalContent } = await supabase
-          .from('client_portal_contents')
-          .select('id')
-          .eq('client_id', ctx.clientId)
-          .eq('title', ctx.title)
-          .not('status', 'in', '(aprovado,agendado,publicado)')
-          .order('created_at', { ascending: false })
-          .limit(1);
+        const portalContent = await findPortalContentForTask(ctx, { openOnly: true });
 
         await supabase.from('client_portal_notifications').insert({
           client_id: ctx.clientId,
           title: '🎬 Novo vídeo para aprovação',
           message: `"${ctx.title}" está pronto para sua análise e aprovação.`,
           type: 'video_approval',
-          link_content_id: portalContent?.[0]?.id || null,
+          link_content_id: portalContent?.id || null,
         } as any);
       } catch (err) {
         console.error('Portal notification error:', err);
@@ -340,7 +395,7 @@ export async function syncContentTaskColumnChange(
   const portalNotifMap: Record<string, { title: string; message: string; type: string }> = {
     edicao: {
       title: '✂️ Vídeo em edição',
-      message: `"${ctx.title}" foi enviado para edição. Prazo previsto: 2 dias úteis.`,
+      message: `"${ctx.title}" foi enviado para edição.${editingDeadlineText}`,
       type: 'editing_started',
     },
     revisao: {
@@ -371,7 +426,9 @@ export async function syncContentTaskColumnChange(
   };
 
   const portalNotif = portalNotifMap[newColumn];
-  if (portalNotif && newColumn !== 'envio' && ctx.clientId) {
+  // "Vídeo em edição" só na primeira entrada em Edição (a volta de alteração já tem o aviso de ajuste)
+  const skipPortalNotif = newColumn === 'edicao' && !enteringEditingFirstTime;
+  if (portalNotif && newColumn !== 'envio' && ctx.clientId && !skipPortalNotif) {
     try {
       await supabase.from('client_portal_notifications').insert({
         client_id: ctx.clientId,
@@ -406,11 +463,61 @@ export async function syncContentTaskColumnChange(
 }
 
 /**
+ * Insere um card filho (divisão de otimização ou pacote de stories) e devolve o id criado.
+ * Se a coluna parent_task_id ainda não existir, tenta de novo sem ela.
+ */
+export async function insertChildContentTask(payload: Record<string, any>): Promise<{ id: string | null; error: string | null }> {
+  let { data, error } = await supabase.from('content_tasks').insert(payload as any).select('id').single();
+  if (error) {
+    const { parent_task_id: _parent, ...rest } = payload;
+    ({ data, error } = await supabase.from('content_tasks').insert(rest as any).select('id').single());
+  }
+  if (error) return { id: null, error: error.message || 'erro' };
+  const created = Array.isArray(data) ? data[0] : data;
+  return { id: created?.id ?? null, error: null };
+}
+
+/**
+ * Fecha a divisão de um card em vários: o histórico do card original passa para cada filho
+ * (antes ficava órfão), a entrega dele no Social Media sai e o card original é apagado.
+ */
+export async function finishContentTaskSplit(
+  parentId: string,
+  childIds: string[],
+  log: { userId?: string | null; action: string; details?: string | null }
+) {
+  const { data: history } = await supabase.from('task_history')
+    .select('user_id, action, details, created_at').eq('task_id', parentId);
+  const rows: Record<string, any>[] = [];
+  for (const childId of childIds) {
+    for (const h of (history as any[]) || []) {
+      rows.push({ task_id: childId, user_id: h.user_id ?? null, action: h.action, details: h.details ?? null, created_at: h.created_at });
+    }
+    rows.push({ task_id: childId, user_id: log.userId || null, action: log.action, details: log.details || null });
+  }
+  if (rows.length > 0) await supabase.from('task_history').insert(rows as any);
+  await supabase.from('social_media_deliveries').delete().eq('content_task_id', parentId);
+  await supabase.from('content_tasks').delete().eq('id', parentId);
+}
+
+/**
+ * Filtro .or() do "pegar card" (Marcar como Meu / Iniciar): o UPDATE só passa se o card
+ * estiver livre ou já for do próprio colaborador (o perfil pode ter vários ids).
+ * Use com .select('id'): nenhuma linha de volta = outra pessoa ou um agente pegou antes.
+ */
+export function claimGuardFilter(identityIds: Array<string | null | undefined>): string {
+  const ids = Array.from(new Set(identityIds.filter((id): id is string => !!id)));
+  return ids.length > 0
+    ? `assigned_to.is.null,assigned_to.in.(${ids.join(',')})`
+    : 'assigned_to.is.null';
+}
+
+/**
  * Build SyncContext from a content_task row and optional client data.
  */
 export function buildSyncContext(
-  task: { id: string; client_id: string; title: string; content_type: string; description: string | null; script_id: string | null; recording_id: string | null; assigned_to: string | null; edited_video_link: string | null; immediate_alteration?: boolean; approved_at?: string | null },
-  opts?: { userId?: string; clientName?: string; clientWhatsapp?: string }
+  task: { id: string; client_id: string; title: string; content_type: string; description: string | null; script_id: string | null; recording_id: string | null; assigned_to: string | null; edited_by?: string | null; edited_video_link: string | null; immediate_alteration?: boolean; approved_at?: string | null; kanban_column?: string | null },
+  opts?: { userId?: string; clientName?: string; clientWhatsapp?: string; startEditing?: boolean }
 ): SyncContext {
   return {
     taskId: task.id,
@@ -421,8 +528,11 @@ export function buildSyncContext(
     scriptId: task.script_id,
     recordingId: task.recording_id,
     assignedTo: task.assigned_to,
+    editedBy: task.edited_by ?? null,
     editedVideoLink: task.edited_video_link,
     immediateAlteration: task.immediate_alteration,
+    startEditing: opts?.startEditing,
+    previousColumn: task.kanban_column ?? null,
     approvedAt: task.approved_at,
     userId: opts?.userId,
     clientName: opts?.clientName,

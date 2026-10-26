@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -68,15 +68,29 @@ export default function AgentsPanel() {
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  // Falha ao carregar: aviso fixo na página (antes saía um toast novo a cada 15 s)
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [forbidden, setForbidden] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(async () => {
     try {
       const response = await vpsAuthedFetch('/agents/overview');
       const body = await response.json().catch(() => ({}));
+      if (response.status === 403) {
+        // Só admin vê o painel: para o polling em vez de repetir o erro
+        setForbidden(true);
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        return;
+      }
       if (!response.ok) throw new Error(body.error || 'Falha ao carregar os agentes');
       setData(body);
+      setLoadError(null);
     } catch (error) {
-      toast.error(errorMessage(error));
+      const message = errorMessage(error);
+      setLoadError(message);
+      // id fixo: o sonner troca o toast em vez de empilhar um novo a cada tentativa
+      toast.error(message, { id: 'agents-load' });
     } finally {
       setLoading(false);
     }
@@ -84,8 +98,11 @@ export default function AgentsPanel() {
 
   useEffect(() => {
     load();
-    const timer = setInterval(load, 15000);
-    return () => clearInterval(timer);
+    timerRef.current = setInterval(load, 15000);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = null;
+    };
   }, [load]);
 
   const changePhoto = async (agent: AgentRow, file: File | undefined) => {
@@ -143,6 +160,16 @@ export default function AgentsPanel() {
     );
   }
 
+  if (forbidden) {
+    return (
+      <div className="max-w-5xl">
+        <div className="glass-card flex items-center gap-2 p-6 text-sm text-muted-foreground">
+          <AlertTriangle size={16} /> Apenas administradores acessam o painel de agentes.
+        </div>
+      </div>
+    );
+  }
+
   const pausedAll = !!data?.paused_all;
   const queue = data?.queue;
 
@@ -171,6 +198,13 @@ export default function AgentsPanel() {
         </div>
       </div>
 
+      {loadError && (
+        <div className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
+          <AlertTriangle size={16} className="text-warning" />
+          Não foi possível atualizar o painel: {loadError}. Tentando de novo a cada 15 s{data ? ' (mostrando os últimos dados carregados)' : ''}.
+        </div>
+      )}
+
       {pausedAll && (
         <div className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
           <Pause size={16} />
@@ -195,7 +229,7 @@ export default function AgentsPanel() {
       )}
 
       <div className="space-y-3">
-        {(data?.agents || []).length === 0 && (
+        {data && (data.agents || []).length === 0 && (
           <div className="glass-card p-6 text-sm text-muted-foreground">
             Nenhum agente com chave ativa. Gere as chaves em <Link className="underline" to="/configuracoes">Configurações</Link>.
           </div>

@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, ArrowLeft, Send, Eye, Maximize2, Rocket, Download, ChevronLeft, ChevronRight, ArrowDownUp, RefreshCw } from 'lucide-react';
+import { Plus, GripVertical, Film, Megaphone, Image, Palette, Calendar, User, Trash2, Edit, X, Search, Filter, FileText, CheckCircle2, AlertTriangle, Clock, ExternalLink, ThumbsUp, MessageSquareWarning, Link2, ArrowRight, ArrowLeft, Send, Eye, Maximize2, Rocket, Download, ChevronLeft, ChevronRight, ArrowDownUp } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import ClientLogo from '@/components/ClientLogo';
 import DeadlineBadge from '@/components/DeadlineBadge';
@@ -222,6 +222,8 @@ export default function ContentKanban() {
   const [formSchedTime, setFormSchedTime] = useState('');
   const [formDriveLink, setFormDriveLink] = useState('');
   const [formVideoLink, setFormVideoLink] = useState('');
+  // Coluna em que o diálogo abriu (card novo): base da validação de editor/videomaker
+  const [dialogInitialColumn, setDialogInitialColumn] = useState<string>('ideias');
 
   // Quick link dialog
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
@@ -266,7 +268,14 @@ export default function ContentKanban() {
     const response = await vpsAuthedFetch('/db/query', {
       method: 'POST',
       headers: { 'x-pulse-city': city },
-      body: JSON.stringify({ table: 'content_tasks', operation: 'select', select: '*' }),
+      // Arquivados não aparecem no Kanban: o filtro fica no servidor (antes vinha a tabela
+      // inteira a cada 15 s e o descarte era só na tela)
+      body: JSON.stringify({
+        table: 'content_tasks',
+        operation: 'select',
+        select: '*',
+        filters: [{ column: '_or', op: 'or', value: 'kanban_column.neq.arquivado,kanban_column.is.null' }],
+      }),
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
@@ -351,113 +360,24 @@ export default function ContentKanban() {
   }, [citiesToLoad, activeCity]);
 
 
-  // ─── AUTO-FIX agora roda no backend (edge function content-tasks-autofix via cron 1x/min) ──
-  // Mantemos um disparo silencioso ao montar para acelerar a primeira correção visível.
-  const [autofixRunning, setAutofixRunning] = useState(false);
-
-  // Indicadores admin acumulados a partir do retorno da edge function (sem refetch global)
-  type AutofixVmStat = { name: string; moved: number; cancelled: number; extras: number; orphans: number };
-  type AutofixStats = {
-    moved: number;
-    cancelled: number;
-    extras: number;
-    orphans: number;
-    byVideomaker: Record<string, AutofixVmStat>;
-    lastRunAt: string | null;
-    lastScanned: number;
-  };
-  const [autofixStats, setAutofixStats] = useState<AutofixStats>({
-    moved: 0,
-    cancelled: 0,
-    extras: 0,
-    orphans: 0,
-    byVideomaker: {},
-    lastRunAt: null,
-    lastScanned: 0,
-  });
-
-  const isAdmin = profile?.role === 'admin';
-
-  const runAutofix = useCallback(async (manual = false) => {
-    setAutofixRunning(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('content-tasks-autofix');
-      if (error) {
-        if (manual) toast.error('Falha ao reprocessar: ' + error.message);
-        console.warn('[ContentKanban] autofix invoke falhou:', error.message);
-        return;
-      }
-      const scanned = data?.scanned ?? 0;
-      const results: Array<{
-        id: string;
-        to: string;
-        ok: boolean;
-        skipped?: boolean;
-        videomaker_id?: string | null;
-        videomaker_name?: string | null;
-        recording_status?: string;
-        is_extra?: boolean;
-      }> = data?.results ?? [];
-      const movedResults = results.filter(r => r.ok && !r.skipped);
-
-      if (movedResults.length > 0) {
-        // Patch local: atualiza somente as tarefas afetadas, sem refazer o fetch
-        const nowIso = new Date().toISOString();
-        setTasks(prev =>
-          prev.map(t => {
-            const hit = movedResults.find(r => r.id === t.id);
-            return hit ? { ...t, kanban_column: hit.to, updated_at: nowIso } : t;
-          }),
-        );
-        if (manual) toast.success(`✅ ${movedResults.length} tarefa(s) corrigida(s)`);
-      } else if (manual) {
-        toast.info(`Nenhuma tarefa presa encontrada (${scanned} verificadas)`);
-      }
-
-      // ─── Atualiza indicadores admin acumulados (apenas com base no retorno) ──
-      const stats = data?.stats as
-        | { moved: number; cancelled: number; extras: number; orphans?: number; byVideomaker: Record<string, Partial<AutofixVmStat> & { name: string }> }
-        | undefined;
-      if (stats) {
-        setAutofixStats(prev => {
-          const mergedVm: Record<string, AutofixVmStat> = { ...prev.byVideomaker };
-          for (const [vmId, s] of Object.entries(stats.byVideomaker ?? {})) {
-            const existing = mergedVm[vmId];
-            mergedVm[vmId] = {
-              name: s.name || existing?.name || 'Sem videomaker',
-              moved: (existing?.moved ?? 0) + (s.moved ?? 0),
-              cancelled: (existing?.cancelled ?? 0) + (s.cancelled ?? 0),
-              extras: (existing?.extras ?? 0) + (s.extras ?? 0),
-              orphans: (existing?.orphans ?? 0) + (s.orphans ?? 0),
-            };
-          }
-          return {
-            moved: prev.moved + (stats.moved ?? 0),
-            cancelled: prev.cancelled + (stats.cancelled ?? 0),
-            extras: prev.extras + (stats.extras ?? 0),
-            orphans: prev.orphans + (stats.orphans ?? 0),
-            byVideomaker: mergedVm,
-            lastRunAt: new Date().toISOString(),
-            lastScanned: scanned,
-          };
-        });
-      }
-    } finally {
-      setAutofixRunning(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (loading) return;
-    runAutofix(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading]);
+  // "Reprocessar presas" chamava a edge function content-tasks-autofix, que não existe na VPS:
+  // falhava sempre (e disparava a cada abertura do Kanban). Botão e painel foram retirados; os
+  // cards saem de Captação pelo fluxo da gravação (Agenda/Videomaker).
 
   useEffect(() => {
     fetchTasks();
-    // Poll every 15s for near real-time updates (VPS has no websocket channels)
-    const interval = setInterval(fetchTasks, 15000);
-    return () => clearInterval(interval);
+    // Poll every 15s for near real-time updates (VPS has no websocket channels).
+    // Com a aba escondida não consulta; atualiza na hora em que a aba volta a ficar visível.
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      fetchTasks();
+    }, 15000);
+    const onVisibility = () => { if (document.visibilityState === 'visible') fetchTasks(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [fetchTasks]);
 
   // Deep-link highlight: open detail sheet of mentioned card and scroll to it.
@@ -601,6 +521,7 @@ export default function ContentKanban() {
   const openNew = (column?: KanbanColumnId) => {
     resetForm();
     if (column) setFormColumn(column);
+    setDialogInitialColumn(column || 'ideias');
     setDialogOpen(true);
   };
 
@@ -655,6 +576,15 @@ export default function ContentKanban() {
         payload.kanban_column = 'acompanhamento';
       }
       const columnChanged = editingTask.kanban_column !== payload.kanban_column;
+      // Editor/videomaker: trocar a coluna pelo "Editar" passa pelas mesmas regras do arrastar.
+      // Antes dava para levar o card direto para "Enviado p/ Cliente" pulando a revisão.
+      if (columnChanged && isRestricted) {
+        const transitionError = validateKanbanTransition(
+          { ...editingTask, ...payload, kanban_column: editingTask.kanban_column } as ContentTask,
+          payload.kanban_column
+        );
+        if (transitionError) { toast.error(transitionError); return; }
+      }
       const { error } = await supabase.from('content_tasks').update(payload).eq('id', editingTask.id);
       if (error) { toast.error('Erro ao atualizar'); return; }
       toast.success(payload.kanban_column === 'acompanhamento' && editingTask.kanban_column === 'agendamentos'
@@ -663,7 +593,8 @@ export default function ContentKanban() {
 
       // If column changed, sync with social media and other modules
       if (columnChanged) {
-        const updatedTask = { ...editingTask, ...payload };
+        // Mantém a coluna de origem no card passado ao sync (ele sabe de onde o card veio)
+        const updatedTask = { ...editingTask, ...payload, kanban_column: editingTask.kanban_column };
         await syncOnColumnChange(updatedTask, payload.kanban_column);
       }
 
@@ -676,6 +607,14 @@ export default function ContentKanban() {
         await supabase.from('scripts').update({ recorded: true } as any).eq('id', formScriptId);
       }
     } else {
+      // Card novo de editor/videomaker fora da coluna em que o diálogo abriu: mesmas regras do arrastar
+      if (isRestricted && payload.kanban_column !== dialogInitialColumn) {
+        const transitionError = validateKanbanTransition(
+          { ...payload, kanban_column: dialogInitialColumn } as ContentTask,
+          payload.kanban_column
+        );
+        if (transitionError) { toast.error(transitionError); return; }
+      }
       payload.created_by = user?.id || null;
       payload.position = tasksByColumn[formColumn]?.length || 0;
       const { data: inserted, error } = await supabase.from('content_tasks').insert(payload).select().single();
@@ -757,14 +696,14 @@ export default function ContentKanban() {
       t.id === draggedTask.id ? { ...t, kanban_column: targetColumn } : t
     ));
 
-    const { error } = await supabase.from('content_tasks').update({
+    const result = await updateTaskRow(draggedTask.id, {
       kanban_column: targetColumn,
       ...(targetColumn === 'revisao' ? { assigned_to: null } : {}),
       updated_at: new Date().toISOString(),
-    } as any).eq('id', draggedTask.id);
+    });
 
-    if (error) {
-      toast.error('Erro ao mover cartão');
+    if (result !== 'ok') {
+      toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao mover cartão');
       setTasks(prev => prev.map(t =>
         t.id === draggedTask.id ? { ...t, kanban_column: oldColumn } : t
       ));
@@ -855,14 +794,24 @@ export default function ContentKanban() {
     await syncContentTaskColumnChange(newColumn, ctx);
   };
 
+  // Update do card conferindo se alguma linha mudou: card de outra cidade (ou já removido)
+  // volta vazio do servidor, sem erro. Antes o handler seguia, mostrava sucesso e sincronizava.
+  const MISSING_TASK_MSG = 'Este card não está na cidade ativa (ou foi removido). Nada foi alterado.';
+  const updateTaskRow = async (taskId: string, payload: Record<string, any>): Promise<'ok' | 'error' | 'missing'> => {
+    const { data, error } = await supabase.from('content_tasks').update(payload as any).eq('id', taskId).select('id');
+    if (error) return 'error';
+    if (!data || (Array.isArray(data) && data.length === 0)) return 'missing';
+    return 'ok';
+  };
+
   // ─── APPROVE FROM REVISÃO ─────────────────────────────────
   const handleApproveTask = async (task: ContentTask) => {
-    const { error } = await supabase.from('content_tasks').update({
+    const result = await updateTaskRow(task.id, {
       kanban_column: 'envio',
       approved_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
-    if (error) { toast.error('Erro ao aprovar'); return; }
+    });
+    if (result !== 'ok') { toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao aprovar'); return; }
     await syncOnColumnChange(task, 'envio');
     toast.success('✅ Conteúdo aprovado! Movido para Enviado p/ Cliente');
     fetchTasks();
@@ -887,14 +836,14 @@ export default function ContentKanban() {
       return;
     }
     
-    const { error } = await supabase.from('content_tasks').update({
+    const result = await updateTaskRow(adjustmentTask.id, {
       kanban_column: 'alteracao',
       adjustment_notes: adjustmentNotes.trim(),
       immediate_alteration: adjustmentImmediate,
       assigned_to: null,
       updated_at: new Date().toISOString(),
-    } as any).eq('id', adjustmentTask.id);
-    if (error) { toast.error('Erro ao solicitar ajustes'); return; }
+    });
+    if (result !== 'ok') { toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao solicitar ajustes'); return; }
 
     // Use shared sync for full cross-module synchronization
     const client = clients.find(c => c.id === adjustmentTask.client_id);
@@ -913,12 +862,12 @@ export default function ContentKanban() {
 
   // ─── CONFIRM POSTED (archive card) ────────────────────────
   const handleConfirmPosted = async (task: ContentTask) => {
-    const { error } = await supabase.from('content_tasks').update({
+    const result = await updateTaskRow(task.id, {
       kanban_column: 'arquivado',
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
+    });
 
-    if (error) { toast.error('Erro ao arquivar'); return; }
+    if (result !== 'ok') { toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao arquivar'); return; }
 
     await supabase.from('social_media_deliveries').update({
       status: 'postado',
@@ -972,9 +921,9 @@ export default function ContentKanban() {
     // Optimistic
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, kanban_column: targetColumn } : t));
 
-    const { error } = await supabase.from('content_tasks').update(updatePayload as any).eq('id', task.id);
-    if (error) {
-      toast.error('Erro ao mover');
+    const result = await updateTaskRow(task.id, updatePayload);
+    if (result !== 'ok') {
+      toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao mover');
       setTasks(prev => prev.map(t => t.id === task.id ? { ...t, kanban_column: oldColumn } : t));
       return;
     }
@@ -1010,13 +959,13 @@ export default function ContentKanban() {
       toast.error('Preencha data e horário');
       return;
     }
-    const { error } = await supabase.from('content_tasks').update({
+    const result = await updateTaskRow(scheduleDialogTask.id, {
       scheduled_recording_date: scheduleDate,
       scheduled_recording_time: scheduleTime,
       kanban_column: 'acompanhamento',
       updated_at: new Date().toISOString(),
-    } as any).eq('id', scheduleDialogTask.id);
-    if (error) { toast.error('Erro ao agendar'); return; }
+    });
+    if (result !== 'ok') { toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao agendar'); return; }
 
     await syncOnColumnChange(scheduleDialogTask, 'acompanhamento');
     toast.success('📅 Agendado! Movido para Acompanhamento');
@@ -1031,11 +980,11 @@ export default function ContentKanban() {
       toast.error('Adicione o link do vídeo editado antes de reenviar');
       return;
     }
-    const { error } = await supabase.from('content_tasks').update({
+    const result = await updateTaskRow(task.id, {
       kanban_column: 'revisao',
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
-    if (error) { toast.error('Erro ao reenviar'); return; }
+    });
+    if (result !== 'ok') { toast.error(result === 'missing' ? MISSING_TASK_MSG : 'Erro ao reenviar'); return; }
 
     await syncOnColumnChange(task, 'revisao');
     toast.success('🔄 Reenviado para Revisão!');
@@ -1141,19 +1090,6 @@ export default function ContentKanban() {
             </SelectContent>
           </Select>
           <motion.div whileTap={{ scale: 0.95 }} whileHover={{ scale: 1.03 }}>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => runAutofix(true)}
-              disabled={autofixRunning}
-              title="Reprocessa tarefas presas em Captação cuja gravação já foi finalizada"
-              className="gap-1.5 rounded-xl h-9 px-3 font-medium border-border/60"
-            >
-              <RefreshCw size={14} className={autofixRunning ? 'animate-spin' : ''} />
-              {autofixRunning ? 'Reprocessando...' : 'Reprocessar presas'}
-            </Button>
-          </motion.div>
-          <motion.div whileTap={{ scale: 0.95 }} whileHover={{ scale: 1.03 }}>
             <Button size="sm" variant="outline" onClick={() => {
               setTasks(prev => [...prev].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
               toast.success('Cards organizados por última movimentação');
@@ -1169,79 +1105,6 @@ export default function ContentKanban() {
           </motion.div>
         </div>
       </div>
-
-      {/* ─── Painel Admin: indicadores do autofix (atualiza só pelo retorno) ─── */}
-      {isAdmin && autofixStats.lastRunAt && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-3 rounded-xl border border-border/60 bg-card/50 backdrop-blur px-4 py-3"
-        >
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <RefreshCw size={14} className="text-primary" />
-              Auto-correção (acumulado da sessão)
-              <span className="text-xs font-normal text-muted-foreground">
-                · última {format(new Date(autofixStats.lastRunAt), 'HH:mm:ss', { locale: ptBR })} · {autofixStats.lastScanned} verificadas
-              </span>
-            </div>
-            <button
-              onClick={() => setAutofixStats({ moved: 0, cancelled: 0, extras: 0, orphans: 0, byVideomaker: {}, lastRunAt: null, lastScanned: 0 })}
-              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Limpar
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
-            <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-medium">Corrigidas</div>
-              <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{autofixStats.moved}</div>
-            </div>
-            <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wider text-rose-600 dark:text-rose-400 font-medium">Canceladas</div>
-              <div className="text-xl font-bold text-rose-600 dark:text-rose-400">{autofixStats.cancelled}</div>
-            </div>
-            <div className="rounded-lg bg-violet-500/10 border border-violet-500/20 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wider text-violet-600 dark:text-violet-400 font-medium">Órfãs → Ideias</div>
-              <div className="text-xl font-bold text-violet-600 dark:text-violet-400">{autofixStats.orphans}</div>
-            </div>
-            <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-400 font-medium">Extras</div>
-              <div className="text-xl font-bold text-amber-600 dark:text-amber-400">{autofixStats.extras}</div>
-            </div>
-            <div className="rounded-lg bg-primary/10 border border-primary/20 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wider text-primary font-medium">Videomakers</div>
-              <div className="text-xl font-bold text-primary">{Object.keys(autofixStats.byVideomaker).length}</div>
-            </div>
-          </div>
-
-          {Object.keys(autofixStats.byVideomaker).length > 0 && (
-            <div className="space-y-1">
-              <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium mb-1">Por videomaker</div>
-              <div className="flex flex-wrap gap-1.5">
-                {Object.entries(autofixStats.byVideomaker)
-                  .sort(([, a], [, b]) => b.moved - a.moved)
-                  .map(([vmId, s]) => (
-                    <div
-                      key={vmId}
-                      className="inline-flex items-center gap-2 rounded-full bg-secondary/60 border border-border/50 px-2.5 py-1 text-xs"
-                    >
-                      <span className="font-medium text-foreground">{s.name}</span>
-                      <span className="text-emerald-600 dark:text-emerald-400">✓ {s.moved}</span>
-                      {s.cancelled > 0 && (
-                        <span className="text-rose-600 dark:text-rose-400">⊘ {s.cancelled}</span>
-                      )}
-                      {s.extras > 0 && (
-                        <span className="text-amber-600 dark:text-amber-400">★ {s.extras}</span>
-                      )}
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
-        </motion.div>
-      )}
 
       {/* Kanban Board */}
       <DragScrollContainer className="flex-1">
@@ -1399,6 +1262,7 @@ export default function ContentKanban() {
                               if (isRestricted) return undefined;
                               return getAdjacentColumns(task.kanban_column).prev?.label;
                             })()}
+                            {...(isForeignTask(task) ? FOREIGN_TASK_NO_ACTIONS : {})}
                           />
                         </motion.div>
                       ))}
@@ -1510,7 +1374,11 @@ export default function ContentKanban() {
                 <Select value={formColumn} onValueChange={v => setFormColumn(v as KanbanColumnId)}>
                   <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {visibleColumns.map(c => (
+                    {/* Editor/videomaker só escolhem as colunas em que atuam (mais a de origem) */}
+                    {(isRestricted
+                      ? visibleColumns.filter(c => interactiveColumns.includes(c.id) || c.id === (editingTask?.kanban_column ?? dialogInitialColumn))
+                      : visibleColumns
+                    ).map(c => (
                       <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
                     ))}
                   </SelectContent>
@@ -1771,6 +1639,22 @@ interface TaskCardProps {
   forwardLabel?: string;
   backwardLabel?: string;
 }
+
+// Card de outra cidade é só para consulta: sem aprovar, ajustes, setas, links nem agendar.
+// O servidor não altera nada fora da cidade ativa, e as ações geravam registros fantasmas.
+const FOREIGN_TASK_NO_ACTIONS: Partial<TaskCardProps> = {
+  onDelete: undefined,
+  onConfirmPosted: undefined,
+  onApprove: undefined,
+  onRequestAdjustments: undefined,
+  onAddDriveLink: undefined,
+  onAddVideoLink: undefined,
+  onMoveToNext: undefined,
+  onSchedule: undefined,
+  onResubmit: undefined,
+  onMoveForward: undefined,
+  onMoveBackward: undefined,
+};
 
 function TaskCard({ task, client, assignedUser, videomaker, recordingStatus, linkedScript, isDragging, viewOnly, cityLabel, onDragStart, onEdit, onDelete, onCardClick, onConfirmPosted, onApprove, onRequestAdjustments, onAddDriveLink, onAddVideoLink, onMoveToNext, nextColumnLabel, onSchedule, onResubmit, onMoveForward, onMoveBackward, forwardLabel, backwardLabel }: TaskCardProps) {
   const [scriptPreviewOpen, setScriptPreviewOpen] = useState(false);

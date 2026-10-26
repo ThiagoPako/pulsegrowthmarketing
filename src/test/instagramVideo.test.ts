@@ -359,7 +359,7 @@ describe('nomes: a .ig.mp4 e a .web.mp4 não se misturam', () => {
   });
 });
 
-describe('instância: conversão impossível, tipo do post e varredura', () => {
+describe('instância: conversão impossível, tipo do post, varredura e limpeza depois de publicar', () => {
   const ORIGIN = 'https://agenciapulse.tech';
   let root = '';
   let seq = 0;
@@ -462,5 +462,28 @@ describe('instância: conversão impossível, tipo do post e varredura', () => {
     expect(select).toContain("story_mode IS DISTINCT FROM 'lembrete'");
     expect(select).toContain("platform IS DISTINCT FROM 'facebook'");
     expect(select).toContain("scheduled_at >= now() - interval '1 day'");
+  });
+
+  it('depois de publicado: a .ig.mp4 sai quando nenhum outro post pendente usa a mídia', async () => {
+    const used = place();
+    const free = place();
+    for (const f of [used, free]) fs.writeFileSync(f.ig, 'ig');
+    const pool = {
+      query: async (sql: string, params: unknown[] = []) => {
+        if (sql.includes("status = 'publicado'")) {
+          return { rows: [{ id: 'p1', media_url: used.url, media_items: null }, { id: 'p2', media_url: null, media_items: [{ url: free.url }] }] };
+        }
+        if (sql.includes("status IN ('agendado', 'publicando')")) {
+          return { rows: String(params[1]).includes(path.basename(used.full)) ? [{ '?column?': 1 }] : [] };
+        }
+        return { rows: [] };
+      },
+    };
+    const { ig } = make({ pool });
+    const result = await ig.scan();
+    expect(result.cleaned).toMatchObject({ removed: 1 });
+    expect(fs.existsSync(used.ig)).toBe(true);
+    expect(fs.existsSync(free.ig)).toBe(false);
+    expect(fs.existsSync(free.full)).toBe(true);
   });
 });

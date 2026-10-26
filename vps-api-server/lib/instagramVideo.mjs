@@ -501,6 +501,8 @@ function readSettings(env, base) {
     maxWaitMs: n(env.IG_VIDEO_MAX_WAIT_MS, 30 * 60_000),
     recheckMs: n(env.IG_VIDEO_RECHECK_MS, 30_000),
     scheduleProbeTimeoutMs: n(env.IG_VIDEO_SCHEDULE_PROBE_MS, 15_000),
+    // .ig.mp4 de post publicado sai depois disso (a Meta já baixou; o Facebook baixa depois de responder)
+    keepAfterPublishMs: n(env.IG_VIDEO_KEEP_AFTER_PUBLISH_MS, 60 * 60_000),
     // ffmpeg/ffprobe ausente: não tenta converter nesse intervalo (o original vai na hora)
     toolRetryMs: n(env.IG_VIDEO_TOOL_RETRY_MS, 5 * 60_000),
     ffmpeg: base.ffmpeg || 'ffmpeg',
@@ -777,6 +779,50 @@ export function createInstagramVideo({ pool, webVideo, logger = console, env = p
        AND platform IS DISTINCT FROM 'facebook'
      ORDER BY scheduled_at ASC LIMIT 300`;
 
+  /**
+   * .ig.mp4 de post publicado há mais de keepAfterPublishMs que nenhum outro post agendado (ou publicando)
+   * usa: a Meta já baixou o arquivo. Se outro post usar a mídia depois, a conversão é feita de novo.
+   */
+  async function cleanupPublished() {
+    const { rows } = await pool.query(
+      `SELECT id, media_url, media_items FROM scheduled_posts
+        WHERE status = 'publicado'
+          AND published_at <= now() - make_interval(secs => $1::double precision)
+          AND published_at > now() - interval '14 days'`,
+      [settings.keepAfterPublishMs / 1000]
+    );
+    let removed = 0;
+    let bytes = 0;
+    for (const post of rows) {
+      for (const url of postMediaUrls(post)) {
+        const found = localVideoFor(url);
+        if (!found) continue;
+        const ig = igVariantPath(found.localPath);
+        if (!ig || !fs.existsSync(ig) || webVideo.taskState?.(`ig:${found.localPath}`)) continue;
+        // o nome do arquivo (<timestamp>_<hex>) é único: qualquer post pendente que o cite segura a cópia
+        const name = path.basename(found.localPath);
+        const { rows: inUse } = await pool.query(
+          `SELECT 1 FROM scheduled_posts
+            WHERE id <> $1 AND status IN ('agendado', 'publicando')
+              AND (coalesce(media_url, '') LIKE $2 OR coalesce(media_items::text, '') LIKE $2)
+            LIMIT 1`,
+          [post.id, `%${name}%`]
+        );
+        if (inUse.length) continue;
+        try {
+          const size = fs.statSync(ig).size;
+          fs.unlinkSync(ig);
+          removed += 1;
+          bytes += size;
+        } catch (error) {
+          warn(`não apagou ${ig}: ${error?.message || error}`);
+        }
+      }
+    }
+    if (removed) log(`apagada(s) ${removed} .ig.mp4 de posts já publicados (${fmtMb(bytes)} liberados)`);
+    return { removed, bytes };
+  }
+
   /** Uma passada: posts que vão para a API do Instagram nas próximas 48 h; vídeo fora da especificação vai para a fila. */
   async function scan() {
     if (settings.disabled || !pool) return { queued: 0 };
@@ -805,7 +851,13 @@ export function createInstagramVideo({ pool, webVideo, logger = console, env = p
       if (counts.videos) {
         log(`posts das próximas ${settings.horizonHours} h: ${counts.videos} vídeo(s); ${counts.pending} na fila, ${counts.ready} prontos, ${counts.original} já cumprem`);
       }
-      return { queued: counts.pending, ...counts };
+      let cleaned = { removed: 0, bytes: 0 };
+      try {
+        cleaned = await cleanupPublished();
+      } catch (error) {
+        warn(`limpeza das .ig.mp4 publicadas falhou: ${error?.message || error}`);
+      }
+      return { queued: counts.pending, ...counts, cleaned };
     } catch (error) {
       warn(`tarefa dos posts agendados falhou: ${error?.message || error}`);
       return { queued: 0, error: error?.message };

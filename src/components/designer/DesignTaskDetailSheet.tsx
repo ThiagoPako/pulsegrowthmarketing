@@ -28,6 +28,7 @@ import { downloadSingleArt, downloadArtsAsPdf } from '@/lib/designerDownload';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import CollaboratorInfoCard from '@/components/designer/CollaboratorInfoCard';
+import { sanitizeScriptHtml } from '@/lib/highlightQuotes';
 
 interface Props {
   task: DesignTask;
@@ -731,7 +732,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                       </summary>
                       <div
                         className="text-sm mt-2 leading-relaxed prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap"
-                        dangerouslySetInnerHTML={{ __html: (task.clients as any).editorial }}
+                        dangerouslySetInnerHTML={{ __html: sanitizeScriptHtml((task.clients as any).editorial) }}
                       />
                     </details>
                   )}

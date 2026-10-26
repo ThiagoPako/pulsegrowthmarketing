@@ -4750,6 +4750,7 @@ app.all('/api/client-briefing', async (req, res) => {
     if (req.method === 'GET') {
       const clientId = req.query.clientId;
       if (!clientId) return res.status(400).json({ error: 'Missing clientId' });
+      if (!UUID_RE.test(String(clientId))) return res.status(404).json({ error: 'Client not found' });
       const { rows } = await pool.query(
         `SELECT id, company_name, responsible_person, color, logo_url, briefing_data
          FROM clients WHERE id = $1 LIMIT 1`, [clientId]
@@ -4834,9 +4835,15 @@ app.all('/api/client-briefing', async (req, res) => {
       }
 
 
+      // Link público: o resumo vem como texto (markdown). Tira tags HTML para não virar
+      // script na tela da equipe, sem escapar (Roteiros, IA e PDF leem como texto).
+      const safeEditorial = String(editorial || '').replace(/<[^>]*>/g, '').slice(0, 20000);
+
+      // A linha editorial só é preenchida com o resumo quando ainda está vazia: um reenvio
+      // não sobrescreve a editorial que a equipe já redigiu (o resumo fica na versão).
       await pool.query(
-        `UPDATE clients SET briefing_data = $1, editorial = $2, updated_at = now() WHERE id = $3`,
-        [JSON.stringify(safePayload), editorial || '', clientId]
+        `UPDATE clients SET briefing_data = $1, editorial = COALESCE(NULLIF(editorial, ''), $2), updated_at = now() WHERE id = $3`,
+        [JSON.stringify(safePayload), safeEditorial, clientId]
       );
 
       // Snapshot da versão
@@ -4844,7 +4851,7 @@ app.all('/api/client-briefing', async (req, res) => {
         await pool.query(
           `INSERT INTO briefing_versions (client_id, version, briefing_data, editorial, submitted_at)
            VALUES ($1, $2, $3, $4, now())`,
-          [clientId, nextVersion, JSON.stringify(safePayload), editorial || '']
+          [clientId, nextVersion, JSON.stringify(safePayload), safeEditorial]
         );
       } catch (e) { console.warn('briefing version snapshot failed:', e?.message); }
 

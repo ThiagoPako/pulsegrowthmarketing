@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { ProviderBriefingSummary, isProviderBriefing } from '@/components/briefing/ProviderBriefingSummary';
+import { sanitizeScriptHtml } from '@/lib/highlightQuotes';
 
 const STATUS_COLORS: Record<string, string> = {
   pendente: 'bg-muted text-muted-foreground',
@@ -701,7 +702,7 @@ function AnexarEditorialActions({ group, task, onAttach, onStart }: {
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
             <FileText size={10} /> Linha Editorial
           </p>
-          <div className="text-sm leading-relaxed whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: group.editorial }} />
+          <div className="text-sm leading-relaxed whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: sanitizeScriptHtml(group.editorial) }} />
         </div>
       ) : (
         <Textarea

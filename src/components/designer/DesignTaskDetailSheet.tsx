@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { sendWhatsAppMessage, sendWhatsAppMediaMessage } from '@/services/whatsappService';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -12,7 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn } from '@/hooks/useDesignTasks';
+import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn, stopTimerFields, hasOpenTimer, getConflictingExecutingTasks, formatDueDate } from '@/hooks/useDesignTasks';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
@@ -58,7 +59,7 @@ function getTaskCategory(task: DesignTask): 'identidade_visual' | 'reformulacao'
 }
 
 export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Props) {
-  const { updateTask, addHistory, historyQuery, deleteTask } = useDesignTasks();
+  const { tasksQuery, updateTask, addHistory, historyQuery, deleteTask } = useDesignTasks();
   const { currentUser } = useApp();
   const { user } = useAuth();
   const [observations, setObservations] = useState(task.observations || '');
@@ -81,6 +82,8 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   const [copyText, setCopyText] = useState(task.copy_text || '');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [movingAction, setMovingAction] = useState<string | null>(null);
+  // Envio ao cliente em andamento: trava o botão (o clique repetido mandava a arte duas vezes)
+  const [sendingToClient, setSendingToClient] = useState(false);
   const [stageAnimKey, setStageAnimKey] = useState(0);
   const [showRocketFlyby, setShowRocketFlyby] = useState(false);
   const [dueDate, setDueDate] = useState(task.due_date || '');
@@ -100,12 +103,23 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
     }
   }, [task.kanban_column]);
 
+  // "Arquivo editável" e "Observações" só vão para o banco no "Enviar p/ análise": o que a
+  // designer digitou não é sobrescrito quando a tarefa muda por outro motivo (upload de arte,
+  // mockup, prazo). Ao trocar de tarefa ou de coluna (ex.: depois de enviar), volta a sincronizar.
+  const dirtyFieldsRef = useRef({ observations: false, editableFileUrl: false });
+  const dirtyKeyRef = useRef(`${task.id}:${task.kanban_column}`);
+
   // Sync local state when task prop changes
   useEffect(() => {
-    setObservations(task.observations || '');
+    const dirtyKey = `${task.id}:${task.kanban_column}`;
+    if (dirtyKeyRef.current !== dirtyKey) {
+      dirtyKeyRef.current = dirtyKey;
+      dirtyFieldsRef.current = { observations: false, editableFileUrl: false };
+    }
+    if (!dirtyFieldsRef.current.observations) setObservations(task.observations || '');
     setAttachmentUrl(task.attachment_url || '');
     setAttachmentUrls((task as any).attachment_urls || []);
-    setEditableFileUrl(task.editable_file_url || '');
+    if (!dirtyFieldsRef.current.editableFileUrl) setEditableFileUrl(task.editable_file_url || '');
     setMockupUrl((task as any).mockup_url || '');
     setChecklist((task as any).checklist || []);
     setDueDate(task.due_date ? task.due_date.slice(0, 10) : '');
@@ -144,8 +158,32 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
     }
   };
 
+  // Saindo da execução: fecha a sessão do cronômetro somando o tempo corrido (senão ele
+  // seguia ligado em análise/ajustes e inflava o tempo, ou a sessão se perdia).
+  const timerStopFields = () => (hasOpenTimer(task) ? stopTimerFields(task) : {});
+
   const handleStartTask = async () => {
-    await moveToColumn('executando', { started_at: new Date().toISOString(), assigned_to: user?.id } as any);
+    const now = new Date().toISOString();
+    // O card continua com o responsável dele; sem responsável, fica com quem iniciou.
+    const owner = task.assigned_to || user?.id || null;
+    // Uma tarefa ativa por pessoa (como no Kanban): pausa as outras em execução do mesmo responsável.
+    const conflicting = getConflictingExecutingTasks(tasksQuery.data || [], task.id, owner);
+    for (const other of conflicting) {
+      await updateTask.mutateAsync({ id: other.id, kanban_column: 'fila_baixa_prioridade', ...stopTimerFields(other) } as any);
+      await addHistory.mutateAsync({
+        task_id: other.id,
+        action: 'Pausada por prioridade',
+        details: `Movida para Fila Baixa Prioridade porque "${task.title}" entrou em execução`,
+        user_id: user?.id,
+      });
+    }
+    if (conflicting.length > 0) toast.info(`${conflicting.length} tarefa(s) pausada(s) na Fila Baixa Prioridade`);
+    await moveToColumn('executando', {
+      started_at: task.started_at || now,
+      assigned_to: owner,
+      timer_running: true,
+      timer_started_at: now,
+    } as any);
     toast.success('Tarefa iniciada!');
   };
 
@@ -153,13 +191,13 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
     const finalAttachment = attachmentUrl || mockupUrl || (task as any).mockup_url || task.attachment_url;
     if (!finalAttachment) { toast.error('Anexe a arte ou mockup antes de enviar'); return; }
     // Card pronto: limpa data de vencimento para não ficar marcado como atrasado
-    await updateTask.mutateAsync({ id: task.id, kanban_column: 'em_analise', attachment_url: finalAttachment, editable_file_url: editableFileUrl, observations, due_date: null } as any);
+    await updateTask.mutateAsync({ id: task.id, kanban_column: 'em_analise', attachment_url: finalAttachment, editable_file_url: editableFileUrl, observations, due_date: null, ...timerStopFields() } as any);
     await addHistory.mutateAsync({ task_id: task.id, action: 'Enviado para análise', attachment_url: finalAttachment, user_id: user?.id });
     toast.success('Enviado para análise!');
   };
 
   const handleApprove = async () => {
-    await moveToColumn('enviar_cliente');
+    await moveToColumn('enviar_cliente', timerStopFields() as any);
     toast.success('Aprovada internamente!');
   };
 
@@ -176,6 +214,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
       observations: fullObservations,
       reference_images: [...(task.reference_images || []), ...adjustmentRefImages],
       references_links: [...(task.references_links || []), ...adjustmentRefLinks],
+      ...timerStopFields(),
     } as any);
     await addHistory.mutateAsync({
       task_id: task.id,
@@ -275,89 +314,207 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
 
 
-  const handleSendToClient = async () => {
-    const fileUrl = attachmentUrl || task.attachment_url;
-    let portalContentId: string | null = null;
-    
-    // Send art to client portal for approval (like videos)
-    if (fileUrl && task.client_id) {
-      try {
-        const now = new Date();
-        const { data: portalContent } = await supabase.from('client_portal_contents').insert({
-          client_id: task.client_id,
-          title: `Arte: ${task.title}`,
-          content_type: 'arte',
-          file_url: fileUrl,
-          thumbnail_url: /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(fileUrl) ? fileUrl : null,
-          status: 'pendente',
-          season_month: now.getMonth() + 1,
-          season_year: now.getFullYear(),
-          uploaded_by: user?.id,
-        } as any).select('id').single();
-        portalContentId = (portalContent as any)?.id || null;
-        
-        // Notify client in portal
-        await supabase.from('client_portal_notifications').insert({
-          client_id: task.client_id,
-          title: 'Nova arte para aprovação',
-          message: `A arte "${task.title}" está pronta para sua aprovação.`,
-          type: 'design',
-        } as any);
-      } catch (err) { console.error('Portal insert error:', err); }
+  /**
+   * Upload de artes no modo de edição (Executando/Ajustes). Em Ajustes, arte única é trocada
+   * pela corrigida; num carrossel (2+ artes) só troca todas com confirmação — senão adiciona,
+   * e a troca de uma arte só é pelo "Substituir" de cada uma. Antes qualquer upload em Ajustes
+   * apagava os outros slides.
+   */
+  const handleUploadArts = async (files: File[]) => {
+    if (!files.length) return;
+    const isAjustes = task.kanban_column === 'ajustes';
+    let replaceAll = isAjustes && attachmentUrls.length <= 1;
+    if (isAjustes && attachmentUrls.length > 1) {
+      replaceAll = window.confirm(
+        `Este card tem ${attachmentUrls.length} artes. Substituir TODAS pela(s) ${files.length} nova(s)?\n\n` +
+        'OK = substituir todas · Cancelar = adicionar às existentes (para trocar só uma, use "Substituir" na arte).'
+      );
     }
-
+    const removedUrls = replaceAll ? attachmentUrls.filter(Boolean) : [];
+    setUploadingArt(true);
     try {
-      const clientName = task.clients?.responsible_person || task.clients?.company_name;
-      const msg = `Olá, ${clientName}! 🎨\n\nSegue a arte criada para sua empresa. Pode nos confirmar se está aprovado?\n\nVocê também pode aprovar pelo Portal do Cliente.`;
+      const newUrls = replaceAll ? [] : [...attachmentUrls];
 
-      if (fileUrl && task.clients?.whatsapp) {
-        const fileName = fileUrl.split('/').pop() || 'arte.png';
-        const result = await sendWhatsAppMediaMessage({
-          number: task.clients?.whatsapp || '',
-          message: msg,
-          mediaUrl: fileUrl,
-          mediaFileName: fileName,
-          clientId: task.client_id,
-          triggerType: 'auto_design_approved',
-          purpose: 'aprovacao',
-        });
-        if (!result.success) {
-          console.error('WhatsApp media send error:', result.error);
-          toast.error('Erro ao enviar arte: ' + (result.error || 'erro desconhecido'));
-        } else if (portalContentId) {
-          // o cliente já recebeu a arte aqui: o aviso automático de "conteúdo novo no portal" não manda de novo
-          await supabase.from('client_portal_contents').update({ wa_notified_at: new Date().toISOString() } as any).eq('id', portalContentId);
-        }
-      } else if (task.clients?.whatsapp) {
-        await sendWhatsAppMessage({
-          number: task.clients?.whatsapp || '',
-          message: msg,
-          clientId: task.client_id,
-          triggerType: 'auto_design_approved',
-          purpose: 'aprovacao',
+      for (const file of files) {
+        const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
+        newUrls.push(publicUrl);
+        await addHistory.mutateAsync({
+          task_id: task.id,
+          action: replaceAll ? 'Arte corrigida enviada (substituiu anterior)' : 'Arte enviada por upload',
+          details: file.name,
+          attachment_url: publicUrl,
+          user_id: user?.id
         });
       }
-    } catch (err) { console.error('WhatsApp send error:', err); }
-    await updateTask.mutateAsync({ id: task.id, sent_to_client_at: new Date().toISOString() } as any);
-    await addHistory.mutateAsync({ task_id: task.id, action: 'Enviado para cliente via WhatsApp + Portal', user_id: user?.id });
-    toast.success('Arte enviada ao cliente e adicionada ao Portal!');
+
+      setAttachmentUrls(newUrls);
+      const primary = newUrls[0] || attachmentUrl;
+      await updateTask.mutateAsync({ id: task.id, attachment_urls: newUrls, attachment_url: primary } as any);
+      if (removedUrls.length > 0) {
+        // Guarda os links das artes trocadas para poder recuperar
+        await addHistory.mutateAsync({
+          task_id: task.id,
+          action: `${removedUrls.length} arte(s) anterior(es) substituída(s)`,
+          details: removedUrls.join('\n'),
+          user_id: user?.id,
+        });
+      }
+      toast.success(replaceAll ? 'Arte anterior substituída pela nova arte corrigida! 🎉' : `${files.length} arte(s) enviada(s) com sucesso! 🎉`);
+    } catch (err: any) { toast.error(err.message || 'Erro ao enviar arquivo'); }
+    finally { setUploadingArt(false); }
+  };
+
+  const handleSendToClient = async () => {
+    if (sendingToClient) return;
+    if (task.sent_to_client_at) {
+      const sentAt = new Date(task.sent_to_client_at).toLocaleString('pt-BR');
+      if (!window.confirm(`Esta arte já foi enviada ao cliente em ${sentAt}. Enviar de novo?`)) return;
+    }
+    setSendingToClient(true);
+    try {
+      const fileUrl = attachmentUrl || task.attachment_url;
+      let portalContentId: string | null = null;
+      // Resultado por canal, para o aviso final dizer o que deu certo e o que falhou
+      let portalStatus: 'ok' | 'ja_estava' | 'falhou' | 'sem_arte' = 'sem_arte';
+      let whatsStatus: 'na_fila' | 'falhou' | 'sem_numero' = 'sem_numero';
+      let whatsError = '';
+
+      // Send art to client portal for approval (like videos)
+      if (fileUrl && task.client_id) {
+        try {
+          // Reenvio da mesma arte não cria um segundo item pendente no portal
+          const { data: existing } = await supabase
+            .from('client_portal_contents')
+            .select('id')
+            .eq('client_id', task.client_id)
+            .eq('file_url', fileUrl)
+            .eq('status', 'pendente')
+            .limit(1);
+          if (Array.isArray(existing) && existing.length > 0) {
+            portalContentId = (existing[0] as any).id;
+            portalStatus = 'ja_estava';
+          } else {
+            const now = new Date();
+            const { data: portalContent, error: portalError } = await supabase.from('client_portal_contents').insert({
+              client_id: task.client_id,
+              title: `Arte: ${task.title}`,
+              content_type: 'arte',
+              file_url: fileUrl,
+              thumbnail_url: /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(fileUrl) ? fileUrl : null,
+              status: 'pendente',
+              season_month: now.getMonth() + 1,
+              season_year: now.getFullYear(),
+              uploaded_by: user?.id,
+              // Vínculo com o card: a aprovação/ajuste pela biblioteca do portal anda este card
+              design_task_id: task.id,
+            } as any).select('id').single();
+            if (portalError) throw portalError;
+            portalContentId = (portalContent as any)?.id || null;
+            portalStatus = 'ok';
+
+            // Notify client in portal
+            await supabase.from('client_portal_notifications').insert({
+              client_id: task.client_id,
+              title: 'Nova arte para aprovação',
+              message: `A arte "${task.title}" está pronta para sua aprovação.`,
+              type: 'design',
+            } as any);
+          }
+        } catch (err) {
+          console.error('Portal insert error:', err);
+          portalStatus = 'falhou';
+        }
+      }
+
+      try {
+        const clientName = task.clients?.responsible_person || task.clients?.company_name;
+        const msg = `Olá, ${clientName}! 🎨\n\nSegue a arte criada para sua empresa. Pode nos confirmar se está aprovado?\n\nVocê também pode aprovar pelo Portal do Cliente.`;
+
+        if (task.clients?.whatsapp) {
+          const result = fileUrl
+            ? await sendWhatsAppMediaMessage({
+                number: task.clients?.whatsapp || '',
+                message: msg,
+                mediaUrl: fileUrl,
+                mediaFileName: fileUrl.split('/').pop() || 'arte.png',
+                clientId: task.client_id,
+                triggerType: 'auto_design_approved',
+                purpose: 'aprovacao',
+              })
+            : await sendWhatsAppMessage({
+                number: task.clients?.whatsapp || '',
+                message: msg,
+                clientId: task.client_id,
+                triggerType: 'auto_design_approved',
+                purpose: 'aprovacao',
+              });
+          if (!result.success) {
+            console.error('WhatsApp send error:', result.error);
+            whatsStatus = 'falhou';
+            whatsError = result.error || 'erro desconhecido';
+          } else {
+            whatsStatus = 'na_fila';
+            if (fileUrl && portalContentId) {
+              // o cliente já recebeu a arte aqui: o aviso automático de "conteúdo novo no portal" não manda de novo
+              await supabase.from('client_portal_contents').update({ wa_notified_at: new Date().toISOString() } as any).eq('id', portalContentId);
+            }
+          }
+        }
+      } catch (err: any) {
+        console.error('WhatsApp send error:', err);
+        whatsStatus = 'falhou';
+        whatsError = err?.message || 'erro desconhecido';
+      }
+
+      const portalOk = portalStatus === 'ok' || portalStatus === 'ja_estava';
+      if (!portalOk && whatsStatus !== 'na_fila') {
+        // Nada chegou ao cliente: não marca como enviada
+        toast.error(whatsStatus === 'falhou'
+          ? `Não foi possível enviar a arte: ${whatsError}`
+          : 'Não foi possível enviar: o cliente não tem WhatsApp cadastrado e a arte não foi para o Portal.');
+        return;
+      }
+
+      await updateTask.mutateAsync({ id: task.id, sent_to_client_at: new Date().toISOString() } as any);
+      const channels = [portalOk ? 'Portal' : null, whatsStatus === 'na_fila' ? 'WhatsApp' : null].filter(Boolean).join(' + ');
+      await addHistory.mutateAsync({ task_id: task.id, action: `Enviado para cliente via ${channels}`, user_id: user?.id });
+
+      const portalMsg = portalStatus === 'ok' ? 'Portal ok' : portalStatus === 'ja_estava' ? 'já estava no Portal' : portalStatus === 'falhou' ? 'falhou no Portal' : 'sem arte para o Portal';
+      const whatsMsg = whatsStatus === 'na_fila' ? 'WhatsApp na fila' : whatsStatus === 'falhou' ? `WhatsApp falhou (${whatsError})` : 'sem WhatsApp cadastrado';
+      if (portalStatus === 'ok' && whatsStatus === 'na_fila') toast.success('Arte enviada ao cliente e adicionada ao Portal!');
+      else if (portalOk && whatsStatus === 'na_fila') toast.success(`Arte enviada: ${portalMsg} · ${whatsMsg}`);
+      else toast.warning(`Arte enviada só em parte: ${portalMsg} · ${whatsMsg}`);
+    } finally {
+      setSendingToClient(false);
+    }
   };
 
   const handleClientApproval = async () => {
-    await updateTask.mutateAsync({ id: task.id, kanban_column: 'aprovado', client_approved_at: new Date().toISOString(), completed_at: new Date().toISOString() } as any);
+    await updateTask.mutateAsync({ id: task.id, kanban_column: 'aprovado', client_approved_at: new Date().toISOString(), completed_at: new Date().toISOString(), ...timerStopFields() } as any);
     await addHistory.mutateAsync({ task_id: task.id, action: 'Aprovado pelo cliente', user_id: user?.id });
 
-    // Update portal content status to approved
+    // Update portal content status to approved: pelo vínculo com o card e, no legado (enviado
+    // antes do vínculo), pelo título exato "Arte: <título>" — o ilike pegava "Post Promo 2" no lugar de "Post Promo".
     if (task.client_id) {
-      const { data: portalContents } = await supabase
+      const approvedAt = new Date().toISOString();
+      const { data: linked, error: linkedError } = await supabase
         .from('client_portal_contents')
-        .select('id')
+        .update({ status: 'aprovado', approved_at: approvedAt } as any)
         .eq('client_id', task.client_id)
-        .ilike('title', `%${task.title}%`)
-        .eq('status', 'pendente')
-        .limit(1);
-      if (portalContents && portalContents.length > 0) {
-        await supabase.from('client_portal_contents').update({ status: 'aprovado', approved_at: new Date().toISOString() }).eq('id', portalContents[0].id);
+        .eq('design_task_id', task.id)
+        .eq('status', 'pendente');
+      if (linkedError || !Array.isArray(linked) || linked.length === 0) {
+        const { data: portalContents } = await supabase
+          .from('client_portal_contents')
+          .select('id')
+          .eq('client_id', task.client_id)
+          .eq('title', `Arte: ${task.title}`)
+          .eq('status', 'pendente')
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (portalContents && portalContents.length > 0) {
+          await supabase.from('client_portal_contents').update({ status: 'aprovado', approved_at: approvedAt }).eq('id', portalContents[0].id);
+        }
       }
     }
 
@@ -397,13 +554,24 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
   const moveActions = getMoveActions();
 
+  // Fechar com "Arquivo editável"/"Observações" digitados e não enviados pede confirmação.
+  const handleSheetOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      const unsaved =
+        (dirtyFieldsRef.current.observations && observations !== (task.observations || '')) ||
+        (dirtyFieldsRef.current.editableFileUrl && editableFileUrl !== (task.editable_file_url || ''));
+      if (unsaved && !window.confirm('O "Arquivo editável" e as "Observações" digitados só são salvos ao enviar para análise. Fechar e descartar?')) return;
+    }
+    onOpenChange(nextOpen);
+  };
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={handleSheetOpenChange}>
       <SheetContent className="!w-full !max-w-full h-full p-0 overflow-hidden flex flex-col" aria-describedby={undefined} side="right">
         <SheetTitle className="sr-only">{task.title}</SheetTitle>
         {/* Header */}
         <div className="border-b border-border px-5 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-3 min-w-0">
               <ClientLogo client={{ companyName: task.clients?.company_name || task.prospect_name || '', color: task.clients?.color || '217 91% 60%', logoUrl: task.clients?.logo_url }} size="md" />
               <div className="min-w-0">
@@ -411,7 +579,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                 <p className="text-xs text-muted-foreground truncate">{task.title}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 md:gap-3 md:shrink-0">
               {task.profiles && (
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <User size={13} />
@@ -464,7 +632,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                     onClick={() => setEditingDueDate(true)}
                     className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    {task.due_date ? new Date(task.due_date).toLocaleDateString('pt-BR') : 'Sem prazo'}
+                    {formatDueDate(task.due_date) || 'Sem prazo'}
                   </button>
                 )}
               </div>
@@ -524,7 +692,6 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                         </DropdownMenu>
                       )
                     )}
-                return (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="Mais ações">
@@ -582,11 +749,11 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           </div>
         </div>
 
-        {/* Body: 3-column layout like reference */}
-        <div className="flex flex-1 overflow-hidden">
+        {/* Body: 3-column layout like reference (no celular: uma coluna só, ações primeiro, com scroll único) */}
+        <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
 
           {/* LEFT COLUMN (~40%): Briefing / Formulário */}
-          <div className="flex-[4] min-w-0 overflow-hidden flex flex-col border-r border-border">
+          <div className="md:flex-[4] min-w-0 md:overflow-hidden flex flex-col border-b md:border-b-0 md:border-r border-border">
             <Tabs defaultValue="briefing" className="flex-1 flex flex-col overflow-hidden">
               <TabsList className="h-10 rounded-none border-b border-border bg-transparent px-4 justify-start gap-0">
                 <TabsTrigger value="briefing" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs gap-1.5">
@@ -619,9 +786,9 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                           )}
                         </div>
                       </div>
-                      <a href={`/clients`} className="text-primary hover:text-primary/80">
+                      <Link to="/clientes" className="text-primary hover:text-primary/80" title="Abrir Clientes">
                         <ExternalLink size={14} />
-                      </a>
+                      </Link>
                     </div>
                   </div>
 
@@ -1062,7 +1229,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           </div>
 
           {/* CENTER COLUMN (~40%): Etapa atual + Arquivos + Colaboração */}
-          <div className="flex-[4] min-w-0 overflow-hidden flex flex-col border-r border-border">
+          <div className="md:flex-[4] min-w-0 md:overflow-hidden flex flex-col border-b md:border-b-0 md:border-r border-border">
             <ScrollArea className="flex-1">
               <div className="px-6 py-5 space-y-5">
                 {/* Etapa Atual header */}
@@ -1283,13 +1450,31 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                                           const updated = attachmentUrls.filter((_, i) => i !== idx);
                                           setAttachmentUrls(updated);
                                           await updateTask.mutateAsync({ id: task.id, attachment_urls: updated, attachment_url: updated[0] || null } as any);
-                                          await addHistory.mutateAsync({ task_id: task.id, action: `Arte ${idx + 1} removida`, user_id: user?.id });
+                                          await addHistory.mutateAsync({ task_id: task.id, action: `Arte ${idx + 1} removida`, details: url, user_id: user?.id });
                                           toast.success('Arte removida');
                                         }}
                                         className="absolute top-1 right-1 w-5 h-5 rounded-full bg-destructive/90 text-white flex items-center justify-center opacity-0 group-hover/art:opacity-100 transition-opacity"
+                                        title="Remover esta arte"
                                       >
                                         <X size={10} />
                                       </button>
+                                      {/* Troca só esta arte (ex.: ajuste em um slide do carrossel) */}
+                                      <label
+                                        className="absolute top-1 left-1 w-5 h-5 rounded-full bg-background/90 text-foreground flex items-center justify-center opacity-0 group-hover/art:opacity-100 transition-opacity cursor-pointer"
+                                        title="Substituir esta arte"
+                                      >
+                                        <input
+                                          type="file"
+                                          accept="image/*,.pdf,.ai,.psd,.svg,.eps"
+                                          className="hidden"
+                                          onChange={e => {
+                                            const f = e.target.files?.[0];
+                                            if (f) handleReplaceArt(idx, f);
+                                            e.currentTarget.value = '';
+                                          }}
+                                        />
+                                        <RotateCcw size={10} />
+                                      </label>
                                     </div>
                                   );
                                 })}
@@ -1313,59 +1498,13 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                             onDrop={async (e) => {
                               e.preventDefault();
                               e.currentTarget.classList.remove('border-violet-500', 'bg-violet-100/50');
-                              const files = Array.from(e.dataTransfer.files);
-                              if (!files.length) return;
-                              setUploadingArt(true);
-                              try {
-                                // Se estiver na coluna de ajustes, substitui a arte anterior pela nova
-                                const isAjustes = task.kanban_column === 'ajustes';
-                                const newUrls = isAjustes ? [] : [...attachmentUrls];
-                                
-                                for (const file of files) {
-                                  const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
-                                  newUrls.push(publicUrl);
-                                  await addHistory.mutateAsync({ 
-                                    task_id: task.id, 
-                                    action: isAjustes ? 'Arte corrigida enviada (substituiu anterior)' : 'Arte enviada por upload', 
-                                    details: file.name, 
-                                    user_id: user?.id 
-                                  });
-                                }
-                                
-                                setAttachmentUrls(newUrls);
-                                const primary = newUrls[0] || attachmentUrl;
-                                await updateTask.mutateAsync({ id: task.id, attachment_urls: newUrls, attachment_url: primary } as any);
-                                toast.success(isAjustes ? 'Arte anterior substituída pela nova arte corrigida! 🎉' : `${files.length} arte(s) enviada(s) com sucesso! 🎉`);
-                              } catch (err: any) { toast.error(err.message || 'Erro ao enviar arquivo'); }
-                              finally { setUploadingArt(false); }
+                              await handleUploadArts(Array.from(e.dataTransfer.files));
                             }}
                           >
                             <input type="file" accept="image/*,.pdf,.ai,.psd,.svg,.eps" multiple className="hidden" onChange={async (e) => {
                               const files = Array.from(e.target.files || []);
-                              if (!files.length) return;
-                              setUploadingArt(true);
-                              try {
-                                // Se estiver na coluna de ajustes, substitui a arte anterior pela nova
-                                const isAjustes = task.kanban_column === 'ajustes';
-                                const newUrls = isAjustes ? [] : [...attachmentUrls];
-                                
-                                for (const file of files) {
-                                  const publicUrl = await uploadFileToVps(file, `design/artes/${task.client_id}`);
-                                  newUrls.push(publicUrl);
-                                  await addHistory.mutateAsync({ 
-                                    task_id: task.id, 
-                                    action: isAjustes ? 'Arte corrigida enviada (substituiu anterior)' : 'Arte enviada por upload', 
-                                    details: file.name, 
-                                    user_id: user?.id 
-                                  });
-                                }
-                                
-                                setAttachmentUrls(newUrls);
-                                const primary = newUrls[0] || attachmentUrl;
-                                await updateTask.mutateAsync({ id: task.id, attachment_urls: newUrls, attachment_url: primary } as any);
-                                toast.success(isAjustes ? 'Arte anterior substituída pela nova arte corrigida! 🎉' : `${files.length} arte(s) enviada(s) com sucesso! 🎉`);
-                              } catch (err: any) { toast.error(err.message || 'Erro ao enviar arquivo'); }
-                              finally { setUploadingArt(false); }
+                              e.target.value = '';
+                              await handleUploadArts(files);
                             }} />
                             {uploadingArt ? (
                               <div className="flex flex-col items-center gap-2">
@@ -1390,11 +1529,11 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
                       <div>
                         <Label className="text-[10px] text-muted-foreground uppercase">Arquivo editável</Label>
-                        <Input value={editableFileUrl} onChange={e => setEditableFileUrl(e.target.value)} placeholder="Link do arquivo editável" className="text-xs h-9 mt-1" />
+                        <Input value={editableFileUrl} onChange={e => { dirtyFieldsRef.current.editableFileUrl = true; setEditableFileUrl(e.target.value); }} placeholder="Link do arquivo editável" className="text-xs h-9 mt-1" />
                       </div>
                       <div>
                         <Label className="text-[10px] text-muted-foreground uppercase">Observações</Label>
-                        <Textarea value={observations} onChange={e => setObservations(e.target.value)} rows={3} className="text-xs mt-1" />
+                        <Textarea value={observations} onChange={e => { dirtyFieldsRef.current.observations = true; setObservations(e.target.value); }} rows={3} className="text-xs mt-1" />
                       </div>
                     </div>
                    ) : (task.attachment_url || ((task as any).attachment_urls?.length > 0)) ? (
@@ -1781,7 +1920,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
           </div>
 
           {/* RIGHT COLUMN (~20%): Mover Para + Informações */}
-          <div className="flex-[2] min-w-0 flex flex-col overflow-hidden">
+          <div className="order-first md:order-none md:flex-[2] min-w-0 flex flex-col md:overflow-hidden border-b md:border-b-0 border-border">
             <ScrollArea className="flex-1">
               <div className="p-4 space-y-5 overflow-hidden">
                 {/* Move actions */}
@@ -1813,11 +1952,13 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                         >
                           <Button
                             onClick={action.onClick}
-                            disabled={!!movingAction}
+                            disabled={!!movingAction || sendingToClient}
                             className="w-full justify-start gap-2 text-xs font-bold h-10 text-white border-0 hover:opacity-90 transition-opacity"
                             style={{ backgroundColor: action.color }}
                           >
-                            <Icon size={14} /> {action.label}
+                            {sendingToClient && action.onClick === handleSendToClient
+                              ? <><Loader2 size={14} className="animate-spin" /> ENVIANDO...</>
+                              : <><Icon size={14} /> {action.label}</>}
                             <ArrowRight size={12} className="ml-auto" />
                           </Button>
                         </motion.div>

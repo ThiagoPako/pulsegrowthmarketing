@@ -367,6 +367,9 @@ class QueryBuilder {
       clients: 'client_id',
       profiles: 'assigned_to',
     },
+    design_task_history: {
+      profiles: 'user_id',
+    },
     delivery_records: {
       clients: 'client_id',
       profiles: 'videomaker_id',

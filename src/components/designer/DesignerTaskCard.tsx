@@ -47,7 +47,7 @@ interface Props {
 }
 
 function getDesignDeadlineStatus(task: DesignTask) {
-  if (['aprovado'].includes(task.kanban_column)) return { label: 'Concluído 💖', variant: 'success' as const, progress: 100 };
+  if (['aprovado', 'postado'].includes(task.kanban_column)) return { label: 'Concluído 💖', variant: 'success' as const, progress: 100 };
   const sla = PRIORITY_CONFIG[task.priority]?.slaHours || 72;
   const deadline = new Date(new Date(task.created_at).getTime() + sla * 3600000);
   const now = new Date();
@@ -103,7 +103,8 @@ export default function DesignerTaskCard({ task, index, onOpenDetail, updateTask
       id: task.id,
       kanban_column: 'executando',
       started_at: task.started_at || now,
-      assigned_to: user?.id || task.assigned_to,
+      // O card continua com o responsável dele; sem responsável, fica com quem iniciou.
+      assigned_to: task.assigned_to || user?.id,
       timer_running: true,
       timer_started_at: now,
     } as any);

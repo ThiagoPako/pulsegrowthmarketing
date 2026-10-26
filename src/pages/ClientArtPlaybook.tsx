@@ -5,10 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { ArrowLeft, Search, Download, ExternalLink, Image as ImageIcon, FileText, Sparkles, Grid3x3, LayoutList, Clock, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Search, Download, ExternalLink, Image as ImageIcon, FileText, Sparkles, Grid3x3, LayoutList, Clock, AlertTriangle, ChevronLeft, ChevronRight, Layers, RotateCcw } from 'lucide-react';
 import ClientLogo from '@/components/ClientLogo';
 import { motion } from 'framer-motion';
 import { downloadSingleArt } from '@/lib/designerDownload';
+import { getTaskArtUrls, collectArtDownloadItems } from '@/hooks/useDesignTasks';
 import { toast } from 'sonner';
 
 interface ArtRow {
@@ -16,6 +17,7 @@ interface ArtRow {
   title: string;
   format_type: string;
   attachment_url: string | null;
+  attachment_urls?: string[] | string | null;
   mockup_url: string | null;
   editable_file_url: string | null;
   kanban_column: string;
@@ -23,6 +25,10 @@ interface ArtRow {
   created_at: string;
   priority: string;
 }
+
+// Todas as artes do card (carrossel inteiro); a capa é a primeira.
+const artUrls = (a: ArtRow) => getTaskArtUrls(a);
+const hasArt = (a: ArtRow) => artUrls(a).length > 0;
 
 interface ClientRow {
   id: string;
@@ -71,24 +77,33 @@ export default function ClientArtPlaybook() {
   const [format, setFormat] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<StatusKey>('aprovado');
   const [view, setView] = useState<'grid' | 'mosaic'>('mosaic');
-  const [preview, setPreview] = useState<string | null>(null);
+  // Prévia navega entre as artes do card (carrossel)
+  const [preview, setPreview] = useState<{ urls: string[]; idx: number } | null>(null);
+  // Falha ao carregar (rede/servidor) não é "cliente não encontrado"
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!clientId) return;
     let cancel = false;
     (async () => {
       setLoading(true);
-      const [{ data: c }, { data: a }] = await Promise.all([
+      setLoadError(null);
+      const [{ data: c, error: clientError }, { data: a, error: artsError }] = await Promise.all([
         supabase.from('clients').select('id, company_name, color, logo_url, niche, responsible_person').eq('id', clientId).maybeSingle(),
-        supabase.from('design_tasks').select('id, title, format_type, attachment_url, mockup_url, editable_file_url, kanban_column, completed_at, created_at, priority').eq('client_id', clientId).order('completed_at', { ascending: false }).order('created_at', { ascending: false }),
+        supabase.from('design_tasks').select('id, title, format_type, attachment_url, attachment_urls, mockup_url, editable_file_url, kanban_column, completed_at, created_at, priority').eq('client_id', clientId).order('completed_at', { ascending: false }).order('created_at', { ascending: false }),
       ]);
       if (cancel) return;
+      if (clientError || artsError) {
+        console.error('[playbook] erro ao carregar', clientError || artsError);
+        setLoadError((clientError || artsError)?.message || 'erro desconhecido');
+      }
       setClient((c as ClientRow) || null);
       setArts((a as ArtRow[]) || []);
       setLoading(false);
     })();
     return () => { cancel = true; };
-  }, [clientId]);
+  }, [clientId, reloadKey]);
 
   const matchesStatus = (a: ArtRow, s: StatusKey) => {
     if (s === 'all') return true;
@@ -104,7 +119,7 @@ export default function ClientArtPlaybook() {
     return arts.filter(a => {
       if (!matchesStatus(a, statusFilter)) return false;
       // Pendentes podem não ter anexo; nos demais status exigimos arquivo
-      if (statusFilter !== 'pendente' && !(a.attachment_url || a.mockup_url)) return false;
+      if (statusFilter !== 'pendente' && !hasArt(a)) return false;
       if (format !== 'all' && a.format_type !== format) return false;
       if (q && !a.title.toLowerCase().includes(q)) return false;
       return true;
@@ -117,17 +132,18 @@ export default function ClientArtPlaybook() {
   }, [arts, statusFilter]);
 
   const counts = useMemo(() => ({
-    aprovado: arts.filter(a => a.kanban_column === 'aprovado' && (a.attachment_url || a.mockup_url)).length,
-    postado: arts.filter(a => a.kanban_column === 'postado' && (a.attachment_url || a.mockup_url)).length,
+    aprovado: arts.filter(a => a.kanban_column === 'aprovado' && hasArt(a)).length,
+    postado: arts.filter(a => a.kanban_column === 'postado' && hasArt(a)).length,
     pendente: arts.filter(a => PENDING_COLUMNS.includes(a.kanban_column)).length,
-    mes: arts.filter(a => isCurrentMonth(a.completed_at || a.created_at) && (a.attachment_url || a.mockup_url)).length,
-    total: arts.filter(a => a.attachment_url || a.mockup_url).length,
+    mes: arts.filter(a => isCurrentMonth(a.completed_at || a.created_at) && hasArt(a)).length,
+    total: arts.filter(a => hasArt(a)).length,
   }), [arts]);
 
   const backHref = searchParams.get('from') || '/dashboard';
 
   const handleDownloadAll = async () => {
-    const items = filtered.map(a => ({ url: (a.attachment_url || a.mockup_url)!, title: a.title })).filter(i => i.url);
+    // Todas as artes de cada card (carrossel com sufixo -1, -2...)
+    const items = collectArtDownloadItems(filtered);
     if (!items.length) return toast.error('Nenhuma arte para baixar');
     toast.info(`Baixando ${items.length} arte${items.length > 1 ? 's' : ''}...`);
     for (const it of items) await downloadSingleArt(it.url, it.title);
@@ -135,6 +151,18 @@ export default function ClientArtPlaybook() {
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center text-muted-foreground text-sm">Carregando portfólio...</div>;
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3">
+        <p className="text-sm text-muted-foreground">Não foi possível carregar o book de artes.</p>
+        <div className="flex gap-2">
+          <Button size="sm" onClick={() => setReloadKey(k => k + 1)}><RotateCcw size={14} className="mr-1" /> Tentar de novo</Button>
+          <Link to={backHref}><Button size="sm" variant="outline"><ArrowLeft size={14} className="mr-1" /> Voltar</Button></Link>
+        </div>
+      </div>
+    );
   }
 
   if (!client) {
@@ -217,7 +245,7 @@ export default function ClientArtPlaybook() {
               <button onClick={() => setView('mosaic')} className={`h-7 w-7 flex items-center justify-center rounded-full ${view === 'mosaic' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}><LayoutList size={13} /></button>
               <button onClick={() => setView('grid')} className={`h-7 w-7 flex items-center justify-center rounded-full ${view === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}><Grid3x3 size={13} /></button>
             </div>
-            <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={handleDownloadAll} disabled={!filtered.some(a => a.attachment_url || a.mockup_url)}>
+            <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={handleDownloadAll} disabled={!filtered.some(hasArt)}>
               <Download size={13} /> Baixar filtradas
             </Button>
           </div>
@@ -236,7 +264,8 @@ export default function ClientArtPlaybook() {
         ) : view === 'mosaic' ? (
           <div className="columns-2 sm:columns-3 lg:columns-4 gap-3 [column-fill:_balance]">
             {filtered.map((a, i) => {
-              const url = (a.attachment_url || a.mockup_url) as string;
+              const urls = artUrls(a);
+              const url = urls[0];
               return (
                 <motion.div
                   key={a.id}
@@ -245,8 +274,9 @@ export default function ClientArtPlaybook() {
                   transition={{ delay: Math.min(i * 0.02, 0.4) }}
                   className="break-inside-avoid mb-3 group relative rounded-xl overflow-hidden border border-border bg-muted/30"
                 >
+                  {urls.length > 1 && <ArtCountBadge count={urls.length} />}
                   {isImage(url) ? (
-                    <button onClick={() => setPreview(url)} className="block w-full">
+                    <button onClick={() => setPreview({ urls, idx: 0 })} className="block w-full">
                       <img src={url} alt={a.title} loading="lazy" className="w-full h-auto group-hover:scale-[1.02] transition-transform duration-300" />
                     </button>
                   ) : (
@@ -268,7 +298,8 @@ export default function ClientArtPlaybook() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {filtered.map((a, i) => {
-              const url = (a.attachment_url || a.mockup_url) as string;
+              const urls = artUrls(a);
+              const url = urls[0];
               return (
                 <motion.div
                   key={a.id}
@@ -277,8 +308,9 @@ export default function ClientArtPlaybook() {
                   transition={{ delay: Math.min(i * 0.02, 0.4) }}
                   className="group relative aspect-square rounded-xl overflow-hidden border border-border bg-muted/30"
                 >
+                  {urls.length > 1 && <ArtCountBadge count={urls.length} />}
                   {isImage(url) ? (
-                    <button onClick={() => setPreview(url)} className="w-full h-full">
+                    <button onClick={() => setPreview({ urls, idx: 0 })} className="w-full h-full">
                       <img src={url} alt={a.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                     </button>
                   ) : (
@@ -304,7 +336,33 @@ export default function ClientArtPlaybook() {
 
       <Dialog open={!!preview} onOpenChange={() => setPreview(null)}>
         <DialogContent className="max-w-5xl p-2 bg-black/95 border-none">
-          {preview && <img src={preview} alt="preview" className="w-full max-h-[85vh] object-contain rounded" />}
+          {preview && (() => {
+            const current = preview.urls[preview.idx];
+            const total = preview.urls.length;
+            const go = (delta: number) => setPreview({ urls: preview.urls, idx: (preview.idx + delta + total) % total });
+            return (
+              <div className="relative">
+                {isImage(current) ? (
+                  <img src={current} alt="preview" className="w-full max-h-[85vh] object-contain rounded" />
+                ) : (
+                  <a href={current} target="_blank" rel="noreferrer" className="flex flex-col items-center justify-center gap-2 h-64 text-white/80 hover:text-white">
+                    <FileText size={36} /> <span className="text-xs">Abrir arquivo</span>
+                  </a>
+                )}
+                {total > 1 && (
+                  <>
+                    <button onClick={() => go(-1)} className="absolute left-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80" aria-label="Arte anterior">
+                      <ChevronLeft size={18} />
+                    </button>
+                    <button onClick={() => go(1)} className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80" aria-label="Próxima arte">
+                      <ChevronRight size={18} />
+                    </button>
+                    <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[11px] text-white bg-black/60 rounded-full px-2 py-0.5">{preview.idx + 1} / {total}</span>
+                  </>
+                )}
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>
@@ -338,13 +396,13 @@ function PendingList({ arts, brand }: { arts: ArtRow[]; brand: string }) {
               const created = new Date(a.created_at);
               const ageDays = Math.floor((Date.now() - created.getTime()) / (24 * 3600 * 1000));
               const overdue = ageDays >= 3;
-              const hasArt = !!(a.attachment_url || a.mockup_url);
+              const cover = artUrls(a)[0];
               return (
                 <div key={a.id} className="border border-border rounded-xl p-3 bg-card hover:border-primary/40 transition-colors">
                   <div className="flex items-start gap-3">
                     <div className="w-14 h-14 rounded-lg bg-muted/50 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                      {hasArt && isImage(a.attachment_url || a.mockup_url!) ? (
-                        <img src={(a.attachment_url || a.mockup_url)!} alt="" className="w-full h-full object-cover" />
+                      {cover && isImage(cover) ? (
+                        <img src={cover} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <ImageIcon size={20} className="text-muted-foreground/50" />
                       )}
@@ -370,6 +428,14 @@ function PendingList({ arts, brand }: { arts: ArtRow[]; brand: string }) {
         </div>
       ))}
     </div>
+  );
+}
+
+function ArtCountBadge({ count }: { count: number }) {
+  return (
+    <span className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 text-[10px] font-semibold text-white bg-black/60 rounded-full px-1.5 py-0.5 pointer-events-none">
+      <Layers size={10} /> {count} artes
+    </span>
   );
 }
 

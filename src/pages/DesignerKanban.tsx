@@ -1,10 +1,12 @@
 import { useState, useMemo, useCallback, useRef, useEffect, DragEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCity } from '@/contexts/CityContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BookOpen } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/vpsDb';
-import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn } from '@/hooks/useDesignTasks';
+import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn, stopTimerFields, hasOpenTimer, getConflictingExecutingTasks, parseDueDate, formatDueDate, getTaskArtUrls, collectArtDownloadItems } from '@/hooks/useDesignTasks';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -207,10 +209,11 @@ export default function DesignerKanban() {
   const { tasksQuery, updateTask, addHistory, deleteTask } = useDesignTasks();
   const { currentUser, clients } = useApp();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { activeCity } = useCity();
   const [view, setView] = useState<'kanban' | 'lista' | 'agendamentos'>('kanban');
   const [createOpen, setCreateOpen] = useState(false);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
-  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [filterClient, setFilterClient] = useState<string>('all');
@@ -319,22 +322,21 @@ export default function DesignerKanban() {
     setDraggingTaskId(task.id);
   }, []);
 
-  const handleDragOver = useCallback((e: DragEvent, colKey: string, overTaskId?: string) => {
+  // Só a coluna destacada vira estado: guardar o card sobrevoado re-renderizava o quadro
+  // inteiro a cada card cruzado e o valor nem era usado (o drop no card já informa o alvo).
+  const handleDragOver = useCallback((e: DragEvent, colKey: string) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDragOverColumn(colKey);
-    if (overTaskId) setDragOverTaskId(overTaskId);
   }, []);
 
-  const handleDragLeave = useCallback(() => { 
-    setDragOverColumn(null); 
-    setDragOverTaskId(null);
+  const handleDragLeave = useCallback(() => {
+    setDragOverColumn(null);
   }, []);
 
   const handleDrop = useCallback(async (e: DragEvent, targetColumn: DesignTaskColumn, overTaskId?: string) => {
     e.preventDefault();
     setDragOverColumn(null);
-    setDragOverTaskId(null);
     setDraggingTaskId(null);
 
     const taskId = e.dataTransfer.getData('text/plain');
@@ -343,9 +345,16 @@ export default function DesignerKanban() {
 
     // Se mudou de coluna ou se mudou de posição na mesma coluna
     const isChangingColumn = task.kanban_column !== targetColumn;
-    const isChangingPosition = overTaskId && overTaskId !== taskId;
+    const isChangingPosition = !!overTaskId && overTaskId !== taskId;
 
     if (!isChangingColumn && !isChangingPosition) return;
+    // Com outra ordenação na tela a posição manual não aparece: reordenar não teria efeito visível.
+    if (!isChangingColumn && sortMode !== 'default') {
+      toast.info('Para reordenar, use "Aparecem primeiro: Padrão (ordem manual)".');
+      return;
+    }
+    // Em outra ordenação, o card solto em outra coluna vai para o fim da ordem manual.
+    const overId = sortMode === 'default' && isChangingPosition ? overTaskId : undefined;
 
     const targetLabel = DESIGN_COLUMNS.find(c => c.key === targetColumn)?.label || targetColumn;
     const extraFields: Record<string, any> = {};
@@ -357,26 +366,25 @@ export default function DesignerKanban() {
       const n = Number(t.position);
       return !Number.isFinite(n) || Math.abs(n) > MAX_SAFE_POS;
     });
+    // Solto em cima de um card: entra antes dele.
+    const overIdx = overId ? colTasks.findIndex(t => t.id === overId) : -1;
+    const prevPos = overIdx > 0 ? Number(colTasks[overIdx - 1].position) : NaN;
+    const overPos = overIdx >= 0 ? Number(colTasks[overIdx].position) : NaN;
+    // Posições repetidas (ex.: vários cards criados com position 0) não deixam encaixar entre os dois.
+    const noRoom = overIdx > 0 && Math.abs(overPos - prevPos) < 2;
 
     let newPosition = 0;
     let renormalizeUpdates: Array<{ id: string; position: number }> = [];
 
-    if (hasCorruptPos) {
-      // Renormaliza posições da coluna para evitar overflow de bigint
-      let insertIdx = colTasks.length;
-      if (overTaskId) {
-        const i = colTasks.findIndex(t => t.id === overTaskId);
-        if (i >= 0) insertIdx = i;
-      }
+    if (hasCorruptPos || noRoom) {
+      // Renormaliza posições da coluna (evita overflow de bigint e abre espaço entre os cards)
+      const insertIdx = overIdx >= 0 ? overIdx : colTasks.length;
       const reordered = [...colTasks];
       reordered.splice(insertIdx, 0, { id: taskId } as any);
       renormalizeUpdates = reordered.map((t, idx) => ({ id: t.id, position: (idx + 1) * 1000 }));
       newPosition = (insertIdx + 1) * 1000;
-    } else if (overTaskId) {
-      const overIdx = colTasks.findIndex(t => t.id === overTaskId);
-      const prevPos = Number(colTasks[overIdx-1]?.position ?? 0);
-      const overPos = Number(colTasks[overIdx]?.position ?? 0);
-      newPosition = overIdx === 0 ? Number(colTasks[0]?.position ?? 1000) - 100 : (prevPos + overPos) / 2;
+    } else if (overIdx >= 0) {
+      newPosition = overIdx === 0 ? overPos - 100 : (prevPos + overPos) / 2;
     } else {
       const lastPos = Number(colTasks[colTasks.length-1]?.position ?? 0);
       newPosition = colTasks.length > 0 ? lastPos + 100 : 1000;
@@ -388,33 +396,39 @@ export default function DesignerKanban() {
     }
     extraFields.position = Math.round(newPosition);
 
-    if (targetColumn === 'executando') {
+    // Só "entra em execução" quando muda de coluna: reordenar dentro de 'Executando'
+    // não reinicia o cronômetro nem pausa as outras tarefas.
+    const isStarting = isChangingColumn && targetColumn === 'executando';
+
+    if (isStarting) {
       if (!task.started_at) extraFields.started_at = new Date().toISOString();
       if (!task.assigned_to && user?.id) extraFields.assigned_to = user.id;
-      extraFields.timer_running = true;
-      extraFields.timer_started_at = new Date().toISOString();
+      // Cronômetro já rodando (ex.: vindo de Ajustes) segue a mesma sessão.
+      if (!(task.timer_running && task.timer_started_at)) {
+        extraFields.timer_running = true;
+        extraFields.timer_started_at = new Date().toISOString();
+      }
     }
 
-    if (targetColumn === 'fila_baixa_prioridade') {
-      extraFields.timer_running = false;
-      extraFields.timer_started_at = null;
+    // Saindo para qualquer outra coluna: fecha a sessão do cronômetro somando o tempo corrido
+    // (antes só zerava o timer e a sessão em curso se perdia, ou ficava ligado e inflava o tempo).
+    if (isChangingColumn && targetColumn !== 'executando' && hasOpenTimer(task)) {
+      Object.assign(extraFields, stopTimerFields(task));
     }
 
-    if (targetColumn === 'em_analise') {
+    // Efeitos de entrada na coluna só valem quando o card muda de coluna (não ao reordenar).
+    if (isChangingColumn && targetColumn === 'em_analise') {
       const hasAttachment = task.attachment_url || (task as any).mockup_url;
       if (!hasAttachment) {
         toast.error('Anexe a arte ou mockup antes de enviar para análise');
         return;
       }
       extraFields.due_date = null;
-      extraFields.timer_running = false;
-      extraFields.timer_started_at = null;
     }
 
-    if (targetColumn === 'aprovado') {
+    if (isChangingColumn && targetColumn === 'aprovado') {
       extraFields.completed_at = new Date().toISOString();
       extraFields.client_approved_at = new Date().toISOString();
-      extraFields.timer_running = false;
       if (task.format_type === 'logomarca' && task.client_id) {
         const fileUrl = task.attachment_url || (task as any).mockup_url;
         if (fileUrl) {
@@ -424,10 +438,14 @@ export default function DesignerKanban() {
       }
     }
 
-    if (targetColumn === 'enviar_cliente') {
+    if (isChangingColumn && targetColumn === 'enviar_cliente') {
       if (!task.sent_to_client_at) extraFields.sent_to_client_at = new Date().toISOString();
-      extraFields.timer_running = false;
     }
+
+    // Uma tarefa ativa por pessoa: só pausa as outras em execução do mesmo responsável,
+    // e só quando o card está entrando em execução (antes qualquer arraste pausava tudo).
+    const owner = extraFields.assigned_to ?? task.assigned_to ?? user?.id ?? null;
+    const conflicting = isStarting ? getConflictingExecutingTasks(tasks, taskId, owner) : [];
 
     // Pausa as tarefas conflitantes (movendo pra fila_baixa_prioridade), acumulando o tempo
     // e opcionalmente registrando o motivo (justificativa da designer).
@@ -465,23 +483,28 @@ export default function DesignerKanban() {
 
     const performStart = async (reason: string) => {
       if (renormalizeUpdates.length > 0) {
+        // Atualiza a ordem no cache na hora (o refetch só vem em 2 min) e grava sem mexer no updated_at.
+        const posById = new Map(renormalizeUpdates.map(u => [u.id, u.position]));
+        queryClient.setQueryData<DesignTask[]>(['design-tasks', activeCity], prev =>
+          prev?.map(t => (posById.has(t.id) && t.id !== taskId ? { ...t, position: posById.get(t.id)! } : t))
+        );
         await Promise.all(
           renormalizeUpdates
             .filter(u => u.id !== taskId)
             .map(u => supabase.from('design_tasks').update({ position: u.position }).eq('id', u.id))
         );
       }
-      const conflicting = tasks.filter(t => t.id !== taskId && t.kanban_column === 'executando');
       if (conflicting.length > 0) await pauseConflicting(conflicting, task.title, reason);
       await updateTask.mutateAsync({ id: taskId, kanban_column: targetColumn, ...extraFields } as any);
+      // Reordenar na mesma coluna não é movimentação: sem histórico nem aviso.
+      if (!isChangingColumn) return;
       await addHistory.mutateAsync({ task_id: taskId, action: `Movido para ${targetLabel}`, user_id: user?.id });
       toast.success(`Tarefa movida para "${targetLabel}"`);
     };
 
     try {
-      // Se iniciar execução e já houver outra ativa → pedir justificativa antes
-      if (targetColumn === 'executando') {
-        const conflicting = tasks.filter(t => t.id !== taskId && t.kanban_column === 'executando');
+      // Se iniciar execução e já houver outra ativa da mesma pessoa → pedir justificativa antes
+      if (isStarting) {
         if (conflicting.length > 0) {
           setPauseReasonText('');
           setPausePrompt({
@@ -496,12 +519,11 @@ export default function DesignerKanban() {
     } catch (err: any) {
       toast.error(err.message || 'Erro ao mover tarefa');
     }
-  }, [tasks, user, updateTask, addHistory, tasksByColumn]);
+  }, [tasks, user, updateTask, addHistory, tasksByColumn, sortMode, queryClient, activeCity]);
 
   const handleDragEnd = useCallback(() => {
     setDraggingTaskId(null);
     setDragOverColumn(null);
-    setDragOverTaskId(null);
   }, []);
 
   const pauseConflictingTasksExt = async (conflicting: DesignTask[], newTitle: string, reason: string) => {
@@ -534,7 +556,9 @@ export default function DesignerKanban() {
 
   const handleQuickStart = async (task: DesignTask) => {
     const now = new Date().toISOString();
-    const conflicting = tasks.filter(t => t.id !== task.id && t.kanban_column === 'executando');
+    // O card continua com o responsável dele (o admin iniciando não "pega" a arte da designer).
+    const owner = task.assigned_to || user?.id || null;
+    const conflicting = getConflictingExecutingTasks(tasks, task.id, owner);
 
     const doStart = async () => {
       try {
@@ -542,7 +566,7 @@ export default function DesignerKanban() {
           id: task.id,
           kanban_column: 'executando',
           started_at: task.started_at || now,
-          assigned_to: user?.id || task.assigned_to,
+          assigned_to: owner,
           timer_running: true,
           timer_started_at: now,
         } as any);
@@ -775,7 +799,7 @@ export default function DesignerKanban() {
                         className="ml-auto flex items-center gap-1"
                       >
                         <Badge variant="secondary" className="text-[10px] h-5">{allColTasks.length}</Badge>
-                        {col.key === 'aprovado' && colTasks.some(t => t.attachment_url || (t as any).mockup_url) && (
+                        {col.key === 'aprovado' && allColTasks.some(t => getTaskArtUrls(t).length > 0) && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button
@@ -789,11 +813,11 @@ export default function DesignerKanban() {
                             <DropdownMenuContent align="end" className="w-52">
                               <DropdownMenuItem
                                 onClick={async () => {
-                                  const items = colTasks
-                                    .map(t => ({ url: (t.attachment_url || (t as any).mockup_url) as string, title: t.title }))
-                                    .filter(i => i.url);
+                                  // Todos os cards da coluna (não só os 10 visíveis) e todos os slides de cada carrossel
+                                  const items = collectArtDownloadItems(allColTasks);
                                   if (items.length === 0) return toast.error('Nenhuma arte disponível');
-                                  toast.info(`Baixando ${items.length} arte${items.length > 1 ? 's' : ''}...`);
+                                  if (items.length > 30 && !window.confirm(`Baixar ${items.length} arquivos de ${allColTasks.length} cards? Para menos arquivos, filtre por cliente antes.`)) return;
+                                  toast.info(`Baixando ${items.length} arte${items.length > 1 ? 's' : ''} de ${allColTasks.length} card${allColTasks.length > 1 ? 's' : ''}...`);
                                   for (const it of items) await downloadSingleArt(it.url, it.title);
                                 }}
                               >
@@ -801,11 +825,10 @@ export default function DesignerKanban() {
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={async () => {
-                                  const items = colTasks
-                                    .map(t => ({ url: (t.attachment_url || (t as any).mockup_url) as string, title: t.title }))
-                                    .filter(i => i.url);
+                                  const items = collectArtDownloadItems(allColTasks);
                                   if (items.length === 0) return toast.error('Nenhuma arte disponível');
-                                  toast.info(`Gerando PDF com ${items.length} arte${items.length > 1 ? 's' : ''}...`);
+                                  if (items.length > 30 && !window.confirm(`Gerar um PDF com ${items.length} artes de ${allColTasks.length} cards? Pode demorar; para menos artes, filtre por cliente antes.`)) return;
+                                  toast.info(`Gerando PDF com ${items.length} arte${items.length > 1 ? 's' : ''} de ${allColTasks.length} card${allColTasks.length > 1 ? 's' : ''}...`);
                                   await downloadArtsAsPdf(items, `Artes-Aprovadas-${new Date().toISOString().slice(0, 10)}`);
                                   toast.success('PDF gerado!');
                                 }}
@@ -837,7 +860,8 @@ export default function DesignerKanban() {
                     {colTasks.map((task, i) => (
                       <div
                         key={task.id}
-                        onDragOver={e => handleDragOver(e, col.key, task.id)}
+                        onDragOver={e => handleDragOver(e, col.key)}
+                        onDrop={e => { e.stopPropagation(); handleDrop(e, col.key, task.id); }}
                       >
                         <TaskCard
                           task={task}
@@ -1073,14 +1097,14 @@ export default function DesignerKanban() {
 
 /* ── Agendamentos View: tasks grouped by due_date ── */
 function AgendamentosView({ tasks, onOpen }: { tasks: DesignTask[]; onOpen: (id: string) => void }) {
-  const COMPLETED_COLS = ['em_analise', 'enviar_cliente', 'aprovado'];
+  const COMPLETED_COLS = ['em_analise', 'enviar_cliente', 'aprovado', 'postado'];
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
   const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + 7);
 
   const scheduled = tasks
-    .filter(t => t.due_date && !COMPLETED_COLS.includes(t.kanban_column))
-    .sort((a, b) => new Date(a.due_date!).getTime() - new Date(b.due_date!).getTime());
+    .filter(t => parseDueDate(t.due_date) && !COMPLETED_COLS.includes(t.kanban_column))
+    .sort((a, b) => parseDueDate(a.due_date)!.getTime() - parseDueDate(b.due_date)!.getTime());
 
   const groups: { label: string; tone: string; items: DesignTask[] }[] = [
     { label: '⚠️ Atrasados', tone: 'text-red-600 border-red-500/40', items: [] },
@@ -1091,7 +1115,7 @@ function AgendamentosView({ tasks, onOpen }: { tasks: DesignTask[]; onOpen: (id:
   ];
 
   scheduled.forEach(t => {
-    const d = new Date(t.due_date!); d.setHours(0, 0, 0, 0);
+    const d = parseDueDate(t.due_date)!;
     if (d < today) groups[0].items.push(t);
     else if (d.getTime() === today.getTime()) groups[1].items.push(t);
     else if (d.getTime() === tomorrow.getTime()) groups[2].items.push(t);
@@ -1126,7 +1150,7 @@ function AgendamentosView({ tasks, onOpen }: { tasks: DesignTask[]; onOpen: (id:
                   <p className="text-[11px] text-muted-foreground truncate">{t.clients?.company_name} • {FORMAT_LABELS[t.format_type] || t.format_type}</p>
                 </div>
                 <Badge variant="outline" className="text-[10px] shrink-0">
-                  <Calendar size={10} className="mr-1" /> {new Date(t.due_date!).toLocaleDateString('pt-BR')}
+                  <Calendar size={10} className="mr-1" /> {formatDueDate(t.due_date)}
                 </Badge>
                 <Badge className={`text-[10px] shrink-0 ${PRIORITY_CONFIG[t.priority]?.color}`}>{PRIORITY_CONFIG[t.priority]?.label}</Badge>
                 <Badge variant="secondary" className="text-[10px] shrink-0">{DESIGN_COLUMNS.find(c => c.key === t.kanban_column)?.label}</Badge>
@@ -1306,8 +1330,9 @@ function TaskCard({ task, queueIndex, columnKey, isDragging, onClick, onOpenDeta
   const priorityCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.media;
   
   const COMPLETED_COLS = ['em_analise', 'enviar_cliente', 'aprovado', 'postado'];
-  const isOverdue = task.due_date && new Date(task.due_date) < new Date() && !COMPLETED_COLS.includes(task.kanban_column);
-  const formattedDueDate = task.due_date && !COMPLETED_COLS.includes(task.kanban_column) ? new Date(task.due_date).toLocaleDateString('pt-BR') : null;
+  // Mesma regra do filtro "Atrasados": só depois do dia do prazo (comparando datas, não horários)
+  const isOverdue = isDesignTaskOverdue(task);
+  const formattedDueDate = task.due_date && !COMPLETED_COLS.includes(task.kanban_column) ? formatDueDate(task.due_date) || null : null;
   const isNext = queueIndex === 1 && columnKey === 'nova_tarefa';
 
   return (

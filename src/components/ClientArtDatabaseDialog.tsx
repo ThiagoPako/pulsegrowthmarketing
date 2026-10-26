@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { useApp } from '@/contexts/AppContext';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/lib/vpsDb';
 import { toast } from 'sonner';
@@ -45,15 +47,22 @@ const COLUMN_LABELS: Record<string, string> = {
 };
 
 export default function ClientArtDatabaseDialog({ client, open, onOpenChange }: Props) {
+  const { currentUser } = useApp();
+  // Apagar todas as artes do cliente é irreversível: só o administrador vê o botão
+  // (o servidor também recusa a exclusão em massa para os outros cargos).
+  const canClear = currentUser?.role === 'admin';
   const [arts, setArts] = useState<ArtRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [confirmName, setConfirmName] = useState('');
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
     if (open) {
       fetchArts();
       setConfirmClear(false);
+      setConfirmName('');
     }
   }, [open, client.id]);
 
@@ -73,19 +82,30 @@ export default function ClientArtDatabaseDialog({ client, open, onOpenChange }: 
     setLoading(false);
   };
 
+  const nameMatches = confirmName.trim().toLowerCase() === (client.companyName || '').trim().toLowerCase();
+
   const handleClearDatabase = async () => {
+    if (!canClear || !nameMatches || clearing) return;
+    setClearing(true);
     try {
       // Delete history first (FK constraint)
       const taskIds = arts.map(a => a.id);
       if (taskIds.length > 0) {
-        await supabase.from('design_task_history').delete().in('task_id', taskIds);
-        await supabase.from('design_tasks').delete().eq('client_id', client.id);
+        // O vpsDb não lança erro: devolve { error }. Antes o erro era ignorado e a tela dizia "limpo".
+        const { error: historyError } = await supabase.from('design_task_history').delete().in('task_id', taskIds);
+        if (historyError) throw new Error(historyError.message || 'Erro ao apagar o histórico das artes');
+        const { error: tasksError } = await supabase.from('design_tasks').delete().eq('client_id', client.id);
+        if (tasksError) throw new Error(tasksError.message || 'Erro ao apagar as artes');
       }
       setArts([]);
       setConfirmClear(false);
+      setConfirmName('');
       toast.success('Banco de dados do cliente limpo com sucesso!');
     } catch (err: any) {
       toast.error(err.message || 'Erro ao limpar banco de dados');
+      fetchArts();
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -118,26 +138,37 @@ export default function ClientArtDatabaseDialog({ client, open, onOpenChange }: 
                 🔄 {inProgressArts.length} em andamento
               </Badge>
             </div>
-            {!confirmClear ? (
+            {!canClear ? null : !confirmClear ? (
               <Button
                 variant="ghost"
                 size="sm"
                 className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10 gap-1"
                 onClick={() => setConfirmClear(true)}
+                disabled={arts.length === 0}
               >
                 <Trash2 size={13} /> Limpar Banco de Dados
               </Button>
             ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-destructive font-medium flex items-center gap-1">
-                  <AlertTriangle size={12} /> Tem certeza?
+              <div className="flex flex-col items-end gap-1.5">
+                <span className="text-xs text-destructive font-medium flex items-center gap-1 text-right">
+                  <AlertTriangle size={12} /> Apaga para sempre {arts.length} arte{arts.length !== 1 ? 's' : ''}
+                  {inProgressArts.length > 0 ? `, incluindo ${inProgressArts.length} em andamento` : ''}, e o histórico.
                 </span>
-                <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={handleClearDatabase}>
-                  Sim, limpar tudo
-                </Button>
-                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setConfirmClear(false)}>
-                  Cancelar
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={confirmName}
+                    onChange={e => setConfirmName(e.target.value)}
+                    placeholder={`Digite "${client.companyName}" para confirmar`}
+                    className="h-7 text-xs w-56"
+                    autoFocus
+                  />
+                  <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={handleClearDatabase} disabled={!nameMatches || clearing}>
+                    {clearing ? 'Limpando...' : 'Sim, limpar tudo'}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setConfirmClear(false); setConfirmName(''); }} disabled={clearing}>
+                    Cancelar
+                  </Button>
+                </div>
               </div>
             )}
           </div>

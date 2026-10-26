@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useDesignTasks, type DesignTask } from '@/hooks/useDesignTasks';
+import { supabase } from '@/lib/vpsDb';
+import { useCity } from '@/contexts/CityContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,6 +27,20 @@ function startOfWeek(d: Date) {
 }
 function toInput(d: Date) { return d.toISOString().slice(0, 10); }
 
+// Arte entregue/concluída: aprovada ou já postada.
+const DONE_COLS = ['aprovado', 'postado'];
+// Data de referência do card no período: conclusão (o envio em massa para Postadas só mexe no updated_at).
+function refDate(t: DesignTask) {
+  return new Date(t.completed_at || t.client_approved_at || t.updated_at || t.created_at);
+}
+
+// Colunas do relatório (sem os campos pesados do Kanban).
+const REPORT_COLS = [
+  'id', 'client_id', 'title', 'format_type', 'kanban_column', 'priority',
+  'attachment_url', 'attachment_urls', 'mockup_url', 'time_spent_seconds',
+  'completed_at', 'client_approved_at', 'created_at', 'updated_at',
+].join(',');
+
 function countArts(t: DesignTask): number {
   const urls = Array.isArray(t.attachment_urls) ? t.attachment_urls.filter(Boolean) : [];
   const single = t.attachment_url ? 1 : 0;
@@ -33,7 +50,7 @@ function countArts(t: DesignTask): number {
 
 export default function DesignerReports() {
   const { tasksQuery } = useDesignTasks();
-  const allTasks = tasksQuery.data || [];
+  const { activeCity } = useCity();
 
   const [preset, setPreset] = useState<Preset>('month');
   const [selectedClient, setSelectedClient] = useState<string>('all');
@@ -42,15 +59,6 @@ export default function DesignerReports() {
   const now = new Date();
   const [from, setFrom] = useState<string>(toInput(new Date(now.getFullYear(), now.getMonth(), 1)));
   const [to, setTo] = useState<string>(toInput(now));
-
-  // Lista de clientes presentes nas tarefas (para o filtro)
-  const clientOptions = useMemo(() => {
-    const map = new Map<string, string>();
-    allTasks.forEach(t => {
-      if (t.client_id) map.set(t.client_id, t.clients?.company_name || 'Cliente');
-    });
-    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [allTasks]);
 
   const range = useMemo(() => {
     const n = new Date();
@@ -67,24 +75,55 @@ export default function DesignerReports() {
     return { from: startOfDay(new Date(from + 'T12:00:00')), to: endOfDay(new Date(to + 'T12:00:00')) };
   }, [preset, from, to, selectedDay, selectedMonth]);
 
+  // Consulta própria do período: o feed do Kanban (useDesignTasks) só traz 600 cards e as
+  // postadas dos últimos 21 dias, então meses anteriores e 'Tudo' sumiam com o histórico.
+  // updated_at >= início e created_at <= fim cobrem todo card cuja data de referência cai no período.
+  const reportQuery = useQuery({
+    queryKey: ['design-tasks-report', activeCity, range.from.toISOString(), range.to.toISOString()],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('design_tasks')
+        .select(`${REPORT_COLS}, clients(company_name)`)
+        .gte('updated_at', range.from.toISOString())
+        .lte('created_at', range.to.toISOString())
+        .order('updated_at', { ascending: false })
+        .limit(5000);
+      if (error) throw error;
+      return (data || []) as DesignTask[];
+    },
+    staleTime: 60_000,
+    placeholderData: (prev) => prev,
+  });
+  // Se a consulta do relatório falhar, mostra ao menos o que o feed do Kanban tem.
+  const allTasks = reportQuery.data ?? (reportQuery.isError ? tasksQuery.data : undefined) ?? [];
+
+  // Lista de clientes presentes nas tarefas (para o filtro)
+  const clientOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    allTasks.forEach(t => {
+      if (t.client_id) map.set(t.client_id, t.clients?.company_name || 'Cliente');
+    });
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [allTasks]);
+
   const tasks = useMemo(() => {
     return allTasks.filter(t => {
       if (selectedClient !== 'all' && t.client_id !== selectedClient) return false;
-      const ref = new Date(t.completed_at || t.updated_at || t.created_at);
+      const ref = refDate(t);
       return ref >= range.from && ref <= range.to;
     });
   }, [allTasks, range, selectedClient]);
 
   const stats = useMemo(() => {
     const total = tasks.length;
-    const completed = tasks.filter(t => t.kanban_column === 'aprovado').length;
+    const completed = tasks.filter(t => DONE_COLS.includes(t.kanban_column)).length;
     const inProgress = tasks.filter(t => ['executando', 'ajustes'].includes(t.kanban_column)).length;
     const totalArts = tasks.reduce((sum, t) => sum + countArts(t), 0);
     const deliveredArts = tasks
-      .filter(t => ['aprovado', 'enviar_cliente', 'em_analise'].includes(t.kanban_column))
+      .filter(t => [...DONE_COLS, 'enviar_cliente', 'em_analise'].includes(t.kanban_column))
       .reduce((sum, t) => sum + countArts(t), 0);
 
-    const completedWithTime = tasks.filter(t => t.kanban_column === 'aprovado' && t.time_spent_seconds > 0);
+    const completedWithTime = tasks.filter(t => DONE_COLS.includes(t.kanban_column) && t.time_spent_seconds > 0);
     const avgTimeSeconds = completedWithTime.length > 0
       ? completedWithTime.reduce((sum, t) => sum + t.time_spent_seconds, 0) / completedWithTime.length
       : 0;
@@ -98,7 +137,7 @@ export default function DesignerReports() {
     // Por dia dentro do range
     const byDay: Record<string, { day: string; artes: number; cards: number }> = {};
     tasks.forEach(t => {
-      const ref = new Date(t.completed_at || t.updated_at || t.created_at);
+      const ref = refDate(t);
       const key = toInput(ref);
       if (!byDay[key]) byDay[key] = { day: ref.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }), artes: 0, cards: 0 };
       byDay[key].artes += countArts(t);
@@ -109,7 +148,7 @@ export default function DesignerReports() {
     const weekdayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
     const byWeekday = weekdayNames.map(n => ({ dia: n, artes: 0, cards: 0 }));
     tasks.forEach(t => {
-      const ref = new Date(t.completed_at || t.updated_at || t.created_at);
+      const ref = refDate(t);
       const wd = ref.getDay();
       byWeekday[wd].artes += countArts(t);
       byWeekday[wd].cards += 1;
@@ -186,6 +225,8 @@ export default function DesignerReports() {
             Período: {range.from.toLocaleDateString('pt-BR')} → {range.to.toLocaleDateString('pt-BR')}
             {selectedClient !== 'all' && ` · Cliente: ${clientOptions.find(([id]) => id === selectedClient)?.[1] || ''}`}
             {' · '}<span className="font-semibold text-foreground">{stats.deliveredArts} arte(s) entregue(s)</span>
+            {reportQuery.isFetching && ' · atualizando...'}
+            {reportQuery.isError && ' · não foi possível carregar o histórico completo (mostrando só os cards recentes)'}
           </p>
         </CardContent>
       </Card>

@@ -54,6 +54,85 @@ export interface DesignTask {
   profiles?: { name: string; display_name: string | null; avatar_url: string | null } | null;
 }
 
+// ── Cronômetro e regra "uma tarefa ativa por pessoa" ──
+// Compartilhados por Kanban, painel e detalhe da tarefa, para todos pararem e pausarem igual.
+
+type TimerFields = Pick<DesignTask, 'time_spent_seconds' | 'timer_running' | 'timer_started_at'>;
+
+/** Campos que param o cronômetro somando a sessão em curso (só quando estava rodando) ao tempo gasto. */
+export function stopTimerFields(task: TimerFields, nowMs: number = Date.now()) {
+  const runSecs = task.timer_running && task.timer_started_at
+    ? Math.max(0, Math.floor((nowMs - new Date(task.timer_started_at).getTime()) / 1000))
+    : 0;
+  return {
+    timer_running: false,
+    timer_started_at: null as string | null,
+    time_spent_seconds: (task.time_spent_seconds || 0) + runSecs,
+  };
+}
+
+/** O card tem sessão de cronômetro aberta (rodando ou com início pendurado) que precisa ser fechada. */
+export function hasOpenTimer(task: TimerFields) {
+  return !!task.timer_running || !!task.timer_started_at;
+}
+
+/**
+ * Outras tarefas em 'executando' que devem ser pausadas quando uma tarefa de `ownerId`
+ * entra em execução: só as do mesmo responsável (ou sem responsável). A tarefa de um
+ * colega na mesma cidade não é mexida.
+ */
+export function getConflictingExecutingTasks(tasks: DesignTask[], taskId: string, ownerId: string | null | undefined) {
+  const owner = ownerId || null;
+  return tasks.filter(t =>
+    t.id !== taskId &&
+    t.kanban_column === 'executando' &&
+    (!t.assigned_to || t.assigned_to === owner)
+  );
+}
+
+// ── Artes do card ──
+/**
+ * Todas as artes do card (o carrossel inteiro, sem repetir arquivo). O mockup só entra quando
+ * não há arte, para não trocar a arte final por ele. attachment_urls pode vir como texto JSON.
+ */
+export function getTaskArtUrls(task: { attachment_urls?: unknown; attachment_url?: string | null; mockup_url?: string | null }): string[] {
+  let list: unknown = task.attachment_urls;
+  if (typeof list === 'string') {
+    try { list = JSON.parse(list); } catch { list = []; }
+  }
+  const urls = [...(Array.isArray(list) ? list : []), task.attachment_url]
+    .filter((u): u is string => typeof u === 'string' && !!u);
+  const unique = Array.from(new Set(urls));
+  if (unique.length === 0 && task.mockup_url) unique.push(task.mockup_url);
+  return unique;
+}
+
+/** Itens de download de vários cards: uma entrada por arte, com sufixo -1, -2... no carrossel. */
+export function collectArtDownloadItems(tasks: Array<{ title: string; attachment_urls?: unknown; attachment_url?: string | null; mockup_url?: string | null }>) {
+  return tasks.flatMap(t => {
+    const urls = getTaskArtUrls(t);
+    return urls.map((url, i) => ({ url, title: urls.length > 1 ? `${t.title}-${i + 1}` : t.title }));
+  });
+}
+
+// ── Prazo (due_date) ──
+// O prazo é uma data (YYYY-MM-DD). new Date('YYYY-MM-DD') é meia-noite UTC, ou seja, 21h do
+// dia anterior em Brasília: o card ficava "atrasado" no próprio dia e mostrava o dia anterior.
+
+/** Prazo como data local (meia-noite do dia do prazo). */
+export function parseDueDate(value?: string | null): Date | null {
+  if (!value) return null;
+  const m = String(value).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+/** Prazo formatado em pt-BR ('' sem prazo). */
+export function formatDueDate(value?: string | null): string {
+  const d = parseDueDate(value);
+  return d ? d.toLocaleDateString('pt-BR') : '';
+}
+
 // Persistência local pra primeira renderização instantânea entre reloads/navegações.
 // Guarda por cidade e limita ao que é útil pro kanban/painel.
 const LS_KEY = (city: string) => `pulse:design-tasks:${city || 'default'}`;
@@ -112,7 +191,7 @@ export function useDesignTasks() {
     'priority','copy_text','attachment_url','attachment_urls','editable_file_url',
     'assigned_to','started_at','completed_at','sent_to_client_at','client_approved_at',
     'auto_approved','time_spent_seconds','timer_running','timer_started_at','version',
-    'mockup_url','due_date','position','created_at','updated_at','collaborator_id'
+    'mockup_url','due_date','position','created_at','updated_at','collaborator_id','checklist'
   ].join(',');
 
   const tasksQuery = useQuery({
@@ -223,7 +302,9 @@ export function useDesignTasks() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('design_task_history')
-        .select('*, profiles:user_id(name, display_name, avatar_url)')
+        // Join pelo FK_MAP do vpsDb (design_task_history.user_id → profiles); a sintaxe
+        // "profiles:user_id(...)" virava SQL inválido e a aba Histórico nunca carregava.
+        .select('*, profiles(name, display_name, avatar_url)')
         .eq('task_id', taskId)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -297,7 +378,7 @@ export function useDesignTasks() {
       if (error) throw error;
     },
     onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: ['design-task-history', vars.task_id] });
+      queryClient.invalidateQueries({ queryKey: ['design-task-history', activeCity, vars.task_id] });
     },
   });
 

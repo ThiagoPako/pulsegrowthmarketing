@@ -8,7 +8,8 @@ export const POSTING_TZ = 'America/Sao_Paulo';
 export const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-export type SchedulingKind = 'conteudo' | 'arte' | 'portal' | 'post';
+/** 'serie' = data prevista de uma repetição de stories, além da janela já gerada (só abre a repetição). */
+export type SchedulingKind = 'conteudo' | 'arte' | 'portal' | 'post' | 'serie';
 export type SchedulingState = 'nao_agendado' | 'agendado' | 'manual' | 'publicando' | 'publicado' | 'erro' | 'cancelado';
 export type SchedulingType = 'reels' | 'story' | 'carrossel' | 'arte' | 'feed';
 export type PublishTarget = 'instagram' | 'facebook' | 'both';
@@ -34,6 +35,47 @@ export interface SchedulingPost {
   scheduled_at: string | null;
   published_at: string | null;
   last_error: string | null;
+  /** Story: 'auto' = postar sozinho; 'lembrete' = a equipe posta pelo app com o link (o robô não publica). */
+  story_mode?: StoryMode | null;
+  reminder_sent_at?: string | null;
+  reminder_followup_at?: string | null;
+  /** Marcado como "Postado" por alguém (lembrete). */
+  manual_posted?: boolean;
+}
+
+export type StoryMode = 'auto' | 'lembrete';
+
+/** Regra da repetição de stories (0 = segunda … 6 = domingo; hora de Brasília). */
+export interface StoryRule {
+  kind: 'interval' | 'weekly';
+  interval_days: number | null;
+  weekdays: number[] | null;
+  time: string;
+  start_date: string;
+  end_kind: 'never' | 'date' | 'count';
+  end_date: string | null;
+  max_count: number | null;
+}
+
+export interface SchedulingSeries {
+  id: string;
+  label: string;
+  status: 'ativa' | 'encerrada' | 'cancelada';
+  story_mode: StoryMode;
+  rule: StoryRule;
+  /** Horário original desta data na repetição (arrastar não muda). */
+  slot_at: string | null;
+  /** 0 = primeira data da repetição */
+  index: number | null;
+  last_error?: string | null;
+}
+
+/** Link e botões do story que vêm preenchidos (link do cliente). */
+export interface StoryLinkDefaults {
+  url: string | null;
+  button_texts: string[];
+  default_text: string;
+  saved: boolean;
 }
 
 export interface SchedulingItem {
@@ -57,6 +99,10 @@ export interface SchedulingItem {
   locked?: boolean;
   ghost?: boolean;
   post?: SchedulingPost | null;
+  /** Data de uma repetição de stories */
+  series?: SchedulingSeries | null;
+  /** Data prevista (ainda não gerada): só abre a repetição */
+  virtual?: boolean;
 }
 
 export interface SchedulingClient {
@@ -85,6 +131,7 @@ export interface SchedulingMaterials {
   range: { from: string; to: string };
   scheduled: SchedulingItem[];
   unscheduled: SchedulingItem[];
+  story_link?: StoryLinkDefaults | null;
 }
 
 const partsFormatter = new Intl.DateTimeFormat('en-CA', {
@@ -193,10 +240,19 @@ export function sameMonth(a: string, b: string): boolean {
   return a.slice(0, 7) === b.slice(0, 7);
 }
 
-/** Pode arrastar: agendado (automático ou manual) e ainda não publicado. */
+/** Pode arrastar: agendado (automático ou manual) e ainda não publicado. Data prevista de repetição não arrasta. */
 export function canDrag(item: SchedulingItem): boolean {
-  if (item.ghost || item.locked) return false;
+  if (item.ghost || item.locked || item.virtual) return false;
   return item.state === 'agendado' || item.state === 'manual';
+}
+
+/** Selo do story com link: 'lembrete' (vai avisar), 'avisado' (aviso enviado), 'postado' (alguém marcou). */
+export type StoryBadge = 'lembrete' | 'avisado' | 'postado';
+export function storyBadge(item: Pick<SchedulingItem, 'post' | 'state'>): StoryBadge | null {
+  if (item.post?.story_mode !== 'lembrete') return null;
+  if (item.state === 'publicado') return 'postado';
+  if (item.state === 'cancelado') return null;
+  return item.post.reminder_sent_at ? 'avisado' : 'lembrete';
 }
 
 export function groupByDate(items: SchedulingItem[]): Map<string, SchedulingItem[]> {

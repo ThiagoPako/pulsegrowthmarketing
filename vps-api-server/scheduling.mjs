@@ -16,12 +16,17 @@
 //   POST /api/scheduling/reschedule  { client_id, kind, id, date, time?, allow_past? }  sem time: mantém a hora
 //   POST /api/scheduling/cancel      { client_id, kind, id }
 // kind: conteudo (content_tasks) | arte (design_tasks) | portal (client_portal_contents) | post (scheduled_posts sem material)
+// Stories (link do cliente, "Lembrete com link" e repetição): storySeries.mjs, registrado no fim deste arquivo.
+// As ocorrências de uma repetição aparecem como itens 'post' (cada uma arrasta sozinha); as datas além da janela
+// já gerada aparecem como 'serie' (previstas, só abrem a repetição).
 //
 // Banco (aditivo): posting_at em content_tasks, design_tasks e client_portal_contents; design_task_id e
 // portal_content_id em scheduled_posts; gatilhos que mantêm posting_at igual ao que as outras telas
 // gravam (Entregas Social, Kanban de Conteúdo, Estúdio e a fila de postagem).
 
 import { POSTING_TZ, DATE_KEY_RE, TIME_RE, brtParts, brtToIso, formatBrt } from './lib/postingTime.mjs';
+import { listOccurrences, occurrenceAt, ruleFromRow, ruleSummary } from './lib/storyRecurrence.mjs';
+import { registerStoryRoutes } from './storySeries.mjs';
 
 export const SCHEDULING_MODULE = 'agendamentos';
 
@@ -164,6 +169,36 @@ function postSummary(p) {
     scheduled_at: p.scheduled_at ? new Date(p.scheduled_at).toISOString() : null,
     published_at: p.published_at ? new Date(p.published_at).toISOString() : null,
     last_error: p.last_error || null,
+    story_mode: p.story_mode || null,
+    reminder_sent_at: p.reminder_sent_at ? new Date(p.reminder_sent_at).toISOString() : null,
+    reminder_followup_at: p.reminder_followup_at ? new Date(p.reminder_followup_at).toISOString() : null,
+    manual_posted: !!p.manual_posted_by,
+  };
+}
+
+const isoOf = (v) => (v ? new Date(v).toISOString() : null);
+
+/** Material da ocorrência de uma repetição (a série guarda o material; o post tem a mesma ligação). */
+function materialKeyOfPost(p) {
+  if (p.content_task_id) return `conteudo:${p.content_task_id}`;
+  if (p.design_task_id) return `arte:${p.design_task_id}`;
+  if (p.portal_content_id) return `portal:${p.portal_content_id}`;
+  return null;
+}
+
+/** Resumo da repetição para a tela (regra, situação e o número da ocorrência). */
+export function seriesInfo(series, slotAt) {
+  const rule = ruleFromRow(series);
+  const slot = isoOf(slotAt);
+  const occurrence = slot ? occurrenceAt(rule, slot) : null;
+  return {
+    id: String(series.id),
+    label: ruleSummary(rule),
+    status: series.status,
+    story_mode: series.story_mode,
+    rule,
+    slot_at: slot,
+    index: occurrence ? occurrence.index : null,
   };
 }
 
@@ -171,10 +206,31 @@ function postSummary(p) {
  * Monta os itens do calendário e a lista de não agendados a partir das linhas do banco.
  * Período em dias de Brasília (from/to inclusivos).
  */
-export function buildMaterials(rows, { from, to, publicAppUrl } = {}) {
-  const { tasks = [], designs = [], portals = [], deliveries = [], posts = [], scripts = [] } = rows;
+export function buildMaterials(rows, { from, to, publicAppUrl, now = Date.now() } = {}) {
+  const { tasks = [], designs = [], portals = [], deliveries = [], posts = [], scripts = [], series = [] } = rows;
   const media = makeMediaHelpers(publicAppUrl);
   const inRange = (when) => !!when && when.date >= from && when.date <= to;
+
+  // Repetição de stories: cada ocorrência aparece sozinha. Enquanto a repetição vale (ativa ou com datas
+  // pendentes), o material não aparece nem em "não agendados" nem como item próprio; depois que ela publicou,
+  // o material publicado também não (as ocorrências publicadas já mostram).
+  const seriesById = new Map(series.map((sr) => [String(sr.id), sr]));
+  const seriesMaterial = new Map();
+  const markSeries = (key, field) => {
+    if (!key) return;
+    const st = seriesMaterial.get(key) || { busy: false, published: false };
+    st[field] = true;
+    seriesMaterial.set(key, st);
+  };
+  for (const sr of series) if (sr.status === 'ativa') markSeries(`${sr.material_kind}:${sr.material_id}`, 'busy');
+  for (const p of posts) {
+    if (!p.story_series_id) continue;
+    const sr = seriesById.get(String(p.story_series_id));
+    const key = sr ? `${sr.material_kind}:${sr.material_id}` : materialKeyOfPost(p);
+    if (ACTIVE_POST_STATUSES.has(p.status)) markSeries(key, 'busy');
+    if (p.status === 'publicado') markSeries(key, 'published');
+  }
+  const materialInfo = new Map(); // chave do material → miniatura (para as ocorrências)
 
   const scriptCaption = new Map(scripts.map((s) => [String(s.id), s.caption || '']));
   const deliveriesByTask = new Map();
@@ -197,7 +253,7 @@ export function buildMaterials(rows, { from, to, publicAppUrl } = {}) {
   const index = (field) => {
     const map = new Map();
     for (const p of posts) {
-      if (!p[field]) continue;
+      if (!p[field] || p.story_series_id) continue;
       const key = String(p[field]);
       map.set(key, [...(map.get(key) || []), p]);
     }
@@ -264,8 +320,12 @@ export function buildMaterials(rows, { from, to, publicAppUrl } = {}) {
       caption: current?.caption || scriptCaption.get(String(t.script_id)) || '',
       platform_label: delivery?.platform || null,
     };
+    materialInfo.set(base.key, { thumb_url: base.thumb_url, media_kind: base.media_kind });
+    const inSeries = seriesMaterial.get(base.key);
+    if (inSeries?.busy && !active) continue;
 
     if (t.kanban_column === 'arquivado') {
+      if (!published && inSeries?.published) continue;
       const when = published
         ? whenFromInstant(published.published_at || published.scheduled_at)
         : (whenFromInstant(t.posting_at)
@@ -317,8 +377,12 @@ export function buildMaterials(rows, { from, to, publicAppUrl } = {}) {
       caption: current?.caption || '',
       platform_label: null,
     };
+    materialInfo.set(base.key, { thumb_url: base.thumb_url, media_kind: base.media_kind });
+    const inSeries = seriesMaterial.get(base.key);
+    if (inSeries?.busy && !active) continue;
     // Em Postadas com post ainda na fila (levada antes da hora): aparece como o post, não como publicada
     if (d.kanban_column === 'postado' && !active) {
+      if (!published && inSeries?.published) continue;
       const when = published ? whenFromInstant(published.published_at || published.scheduled_at) : whenFromInstant(d.posting_at);
       if (when) pushScheduled({ ...base, when, state: 'publicado', mode: published ? 'auto' : 'manual', locked: true, post: postSummary(published) });
       continue;
@@ -361,7 +425,11 @@ export function buildMaterials(rows, { from, to, publicAppUrl } = {}) {
       caption: current?.caption || '',
       platform_label: null,
     };
+    materialInfo.set(base.key, { thumb_url: base.thumb_url, media_kind: base.media_kind });
+    const inSeries = seriesMaterial.get(base.key);
+    if (inSeries?.busy && !active) continue;
     if (p.status === 'publicado') {
+      if (!published && inSeries?.published) continue;
       const when = published ? whenFromInstant(published.published_at || published.scheduled_at) : whenFromInstant(p.posting_at);
       if (when) pushScheduled({ ...base, when, state: 'publicado', mode: published ? 'auto' : 'manual', locked: true, post: postSummary(published) });
       continue;
@@ -385,16 +453,18 @@ export function buildMaterials(rows, { from, to, publicAppUrl } = {}) {
     const kind = media.kindOf(firstUrl);
     const when = p.status === 'publicado' ? whenFromInstant(p.published_at || p.scheduled_at) : whenFromInstant(p.scheduled_at);
     const firstLine = String(p.caption || '').split('\n').map((s) => s.trim()).find(Boolean);
+    const sr = p.story_series_id ? seriesById.get(String(p.story_series_id)) : null;
+    const owner = materialInfo.get(materialKeyOfPost(p) || '');
     pushScheduled({
       key: `post:${p.id}`,
       kind: 'post',
       id: String(p.id),
-      title: p.material_title || (firstLine ? firstLine.slice(0, 80) : 'Post'),
+      title: p.material_title || sr?.title || (firstLine ? firstLine.slice(0, 80) : 'Post'),
       content_type: p.publish_type,
       type: visualType({ kind: 'post', publishType: p.publish_type, mediaCount: summary.media_items.length }),
       column: p.status,
       approved_at: null,
-      thumb_url: media.thumbFor(firstUrl),
+      thumb_url: media.thumbFor(firstUrl) || owner?.thumb_url || media.absolute(sr?.thumb_url) || null,
       media_url: firstUrl,
       media_kind: kind || (p.publish_type === 'reels' ? 'video' : 'image'),
       media_items: summary.media_items.length ? summary.media_items.map(media.absolute) : (firstUrl ? [firstUrl] : []),
@@ -406,7 +476,52 @@ export function buildMaterials(rows, { from, to, publicAppUrl } = {}) {
       locked: p.status !== 'agendado',
       ghost: p.status === 'cancelado',
       post: summary,
+      series: sr ? seriesInfo(sr, p.series_slot_at) : null,
     });
+  }
+
+  // Datas da repetição além do que já foi gerado (janela de 30 dias): previstas, só abrem a repetição
+  const rangeEnd = Date.parse(brtToIso(to, '23:59') || '') + 59_999;
+  const rangeStart = Date.parse(brtToIso(from, '00:00') || '');
+  for (const sr of series) {
+    if (sr.status !== 'ativa' || !Number.isFinite(rangeEnd)) continue;
+    const generated = sr.generated_until ? Date.parse(sr.generated_until) : 0;
+    const fromMs = Math.max(rangeStart, generated + 1, now + 60_000);
+    if (fromMs > rangeEnd) continue;
+    const taken = new Set(posts.filter((p) => String(p.story_series_id) === String(sr.id)).map((p) => isoOf(p.series_slot_at)));
+    const owner = materialInfo.get(`${sr.material_kind}:${sr.material_id}`);
+    const mediaUrl = media.absolute(sr.media_url);
+    for (const occ of listOccurrences(ruleFromRow(sr), { fromMs, toMs: rangeEnd })) {
+      if (taken.has(occ.at)) continue;
+      pushScheduled({
+        key: `serie:${sr.id}:${occ.at}`,
+        kind: 'serie',
+        id: String(sr.id),
+        title: sr.title || 'Story',
+        content_type: 'stories',
+        type: 'story',
+        column: null,
+        approved_at: null,
+        thumb_url: owner?.thumb_url || media.absolute(sr.thumb_url) || media.thumbFor(mediaUrl),
+        media_url: mediaUrl,
+        media_kind: media.kindOf(mediaUrl) || owner?.media_kind || 'video',
+        media_items: mediaUrl ? [mediaUrl] : [],
+        caption: '',
+        platform_label: null,
+        when: whenFromInstant(occ.at),
+        state: 'agendado',
+        mode: 'auto',
+        locked: true,
+        virtual: true,
+        post: {
+          id: null, status: 'agendado', platform: sr.platform, publish_type: 'stories', caption: '',
+          media_url: mediaUrl, media_items: mediaUrl ? [mediaUrl] : [], story_link: sr.story_link || null,
+          story_link_text: sr.story_link_text || null, scheduled_at: occ.at, published_at: null, last_error: null,
+          story_mode: sr.story_mode, reminder_sent_at: null, reminder_followup_at: null, manual_posted: false,
+        },
+        series: seriesInfo(sr, occ.at),
+      });
+    }
   }
 
   scheduled.sort((a, b) => (a.when.date + (a.when.time || '99:99')).localeCompare(b.when.date + (b.when.time || '99:99')));
@@ -421,6 +536,7 @@ export function registerSchedulingRoutes(app, deps) {
     ensureSocialPostsSchema, getConnectedAccounts, sanitizeAccount, duplicatedPlatformAccounts,
     prepareScheduledPost, onSchemaChange, publicAppUrl, logger = console, hasPulsePlus,
   } = deps;
+  let stories = null; // storySeries.mjs (registrado no fim)
   const historyHasCity = { task_history: false, design_task_history: false };
 
   // ── Esquema (aditivo, idempotente) ──
@@ -542,7 +658,8 @@ export function registerSchedulingRoutes(app, deps) {
       LANGUAGE plpgsql AS $fn$
       BEGIN
         BEGIN
-          IF NEW.status = 'agendado'
+          -- ocorrências de repetição de stories (story_series_id) não mexem na data do material
+          IF NEW.status = 'agendado' AND NEW.story_series_id IS NULL
              AND (TG_OP = 'INSERT' OR NEW.scheduled_at IS DISTINCT FROM OLD.scheduled_at
                   OR OLD.status IS DISTINCT FROM 'agendado') THEN
             IF NEW.content_task_id IS NOT NULL THEN
@@ -667,6 +784,8 @@ export function registerSchedulingRoutes(app, deps) {
 
   async function requireModule(req) {
     const { user } = await verifyUser(req);
+    await ready();
+    if (stories) await stories.ready();
     // Pulse Plus libera o módulo; sem a função (testes antigos), vale a lista 'agendamentos'
     const allowed = typeof hasPulsePlus === 'function'
       ? await hasPulsePlus(user)
@@ -812,7 +931,7 @@ export function registerSchedulingRoutes(app, deps) {
     const designIds = designs.rows.map((d) => d.id);
     const portalIds = portals.rows.map((p) => p.id);
     const scriptIds = [...new Set(tasks.rows.map((t) => t.script_id).filter(Boolean))];
-    const [deliveries, posts, scripts] = await Promise.all([
+    const [deliveries, posts, scripts, series] = await Promise.all([
       taskIds.length
         ? pool.query(
           `SELECT id, content_task_id, status, posted_at, scheduled_time, platform, created_at, updated_at
@@ -838,10 +957,11 @@ export function registerSchedulingRoutes(app, deps) {
       scriptIds.length
         ? pool.query(`SELECT id, caption FROM scripts WHERE id = ANY($1::uuid[])`, [scriptIds])
         : { rows: [] },
+      pool.query(`SELECT * FROM story_series WHERE client_id = $1 ORDER BY created_at`, [clientId]),
     ]);
     return {
       tasks: tasks.rows, designs: designs.rows, portals: portals.rows,
-      deliveries: deliveries.rows, posts: posts.rows, scripts: scripts.rows,
+      deliveries: deliveries.rows, posts: posts.rows, scripts: scripts.rows, series: series.rows,
     };
   }
 
@@ -859,9 +979,10 @@ export function registerSchedulingRoutes(app, deps) {
       const { city } = await requireModule(req);
       const client = await loadClient(req.params.clientId, city);
       const { from, to } = readRange(req.query || {});
-      const [rows, accounts] = await Promise.all([
+      const [rows, accounts, storyLink] = await Promise.all([
         loadMaterialRows(client.id, from, to),
         getConnectedAccounts(client.id),
+        stories.linkDefaults(client.id),
       ]);
       const { scheduled, unscheduled } = buildMaterials(rows, { from, to, publicAppUrl });
       res.set('Cache-Control', 'no-store');
@@ -872,6 +993,7 @@ export function registerSchedulingRoutes(app, deps) {
         range: { from, to },
         scheduled,
         unscheduled,
+        story_link: storyLink,
       });
     } catch (error) {
       sendError(res, error, logger);
@@ -923,6 +1045,22 @@ export function registerSchedulingRoutes(app, deps) {
       params
     );
     return rows;
+  }
+
+  /** Ocorrências de repetição de stories não contam como "o post do material" (storySeries.mjs cuida delas). */
+  function withoutSeries(posts) {
+    return posts.filter((p) => !p.story_series_id);
+  }
+
+  /** Material numa repetição de stories ativa: agendar, remarcar e cancelar o material inteiro não vale. */
+  async function assertNoActiveSeries(db, kind, materialId) {
+    const { rows } = await db.query(
+      `SELECT 1 FROM story_series WHERE material_kind = $1 AND material_id = $2 AND status = 'ativa' LIMIT 1`,
+      [kind, materialId]
+    );
+    if (rows.length) {
+      throw httpError(409, 'Este material está numa repetição de stories. Mude pelas datas da repetição.', { code: 'series_active' });
+    }
   }
 
   /** Momento de postagem que vale hoje para o material (para manter a hora ao arrastar). */
@@ -1012,6 +1150,101 @@ export function registerSchedulingRoutes(app, deps) {
     return [];
   }
 
+  /** Entrega do Social do vídeo agendado (o registro do agendamento dos vídeos): data, hora e rede. */
+  async function upsertDelivery(db, { kind, material, links, client, user, date, time, label }) {
+    if (kind !== 'conteudo') return null;
+    let deliveryId = links.delivery?.id || null;
+    if (deliveryId) {
+      await db.query(
+        `UPDATE social_media_deliveries SET status = 'agendado', posted_at = $2, scheduled_time = $3, platform = $4, updated_at = now()
+          WHERE content_task_id = $1`,
+        [material.id, date, time, label]
+      );
+    } else {
+      const { rows: [created] } = await db.query(
+        `INSERT INTO social_media_deliveries
+           (client_id, content_type, title, description, status, delivered_at, posted_at, scheduled_time, platform,
+            recording_id, script_id, created_by, content_task_id)
+         VALUES ($1, $2, $3, $4, 'agendado', (now() AT TIME ZONE '${POSTING_TZ}')::date, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING id`,
+        [client.id, material.content_type || 'reels', material.title, material.description || null, date, time, label,
+          material.recording_id || null, material.script_id || null, user?.id || null, material.id]
+      );
+      deliveryId = created.id;
+    }
+    return deliveryId;
+  }
+
+  /** Data de postagem no material (card, arte ou conteúdo do portal), histórico e aviso no portal do cliente. */
+  async function markScheduled(db, { kind, material, client, user, date, time, whenIso, detail }) {
+    if (kind === 'conteudo') {
+      const wasScheduled = material.kanban_column === 'acompanhamento';
+      // O conteúdo do portal ligado ao card fica 'aprovado' (o portal do cliente só conhece esse estado final).
+      // Por último: os gatilhos da entrega/fila gravam posting_at também; o valor final é este.
+      await db.query(
+        `UPDATE content_tasks
+            SET posting_at = $2, scheduled_recording_date = $3, scheduled_recording_time = $4,
+                kanban_column = 'acompanhamento',
+                reviewing_by = NULL, reviewing_by_name = NULL, reviewing_at = NULL,
+                editing_deadline = NULL, review_deadline = NULL, alteration_deadline = NULL, approval_deadline = NULL,
+                updated_at = now()
+          WHERE id = $1`,
+        [material.id, whenIso, date, time]
+      );
+      await insertHistory(db, kind, material, user, wasScheduled ? 'Postagem remarcada' : 'Agendado para Postagem', detail);
+      if (!wasScheduled) {
+        await db.query(
+          `INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, 'info')`,
+          [client.id, '📅 Conteúdo agendado para postagem',
+            `Seu conteúdo "${material.title}" foi agendado para ${date.split('-').reverse().join('/')} às ${time}.`]
+        );
+      }
+    } else if (kind === 'arte') {
+      const wasScheduled = !!material.posting_at;
+      await db.query(`UPDATE design_tasks SET posting_at = $2, updated_at = now() WHERE id = $1`, [material.id, whenIso]);
+      await insertHistory(db, kind, material, user, wasScheduled ? '📅 Postagem remarcada' : '📅 Agendada para postagem', detail);
+    } else if (kind === 'portal') {
+      await db.query(
+        `UPDATE client_portal_contents SET posting_at = $2, status = 'agendado', updated_at = now() WHERE id = $1`,
+        [material.id, whenIso]
+      );
+    }
+  }
+
+  /** O material volta para "não agendados" (card para Agendamentos, entrega para Pronto p/ agendar). */
+  async function markUnscheduled(db, { kind, material, user, currentDate = null }) {
+    if (kind === 'conteudo') {
+      await db.query(
+        `UPDATE social_media_deliveries SET status = 'entregue', posted_at = NULL, scheduled_time = NULL, updated_at = now()
+          WHERE content_task_id = $1 AND status = 'agendado'`,
+        [material.id]
+      );
+      // A data de gravação só é apagada quando era a data desta postagem (o agendar do Kanban grava ali).
+      await db.query(
+        `UPDATE content_tasks
+            SET posting_at = NULL, kanban_column = 'agendamentos',
+                scheduled_recording_time = CASE WHEN scheduled_recording_date = $2::date THEN NULL ELSE scheduled_recording_time END,
+                scheduled_recording_date = CASE WHEN scheduled_recording_date = $2::date THEN NULL ELSE scheduled_recording_date END,
+                updated_at = now()
+          WHERE id = $1 AND kanban_column IN ('agendamentos', 'acompanhamento')`,
+        [material.id, currentDate]
+      );
+      if (material.kanban_column === 'acompanhamento') {
+        await insertHistory(db, kind, material, user, 'Movido para Agendamentos', 'Agendamento cancelado');
+      }
+    } else if (kind === 'arte') {
+      await db.query(`UPDATE design_tasks SET posting_at = NULL, updated_at = now() WHERE id = $1`, [material.id]);
+      await insertHistory(db, kind, material, user, '↩️ Agendamento cancelado', null);
+    } else if (kind === 'portal') {
+      await db.query(
+        `UPDATE client_portal_contents
+            SET posting_at = NULL, status = CASE WHEN status = 'agendado' THEN 'aprovado' ELSE status END, updated_at = now()
+          WHERE id = $1`,
+        [material.id]
+      );
+    }
+  }
+
   // Agendar (ou refazer o agendamento pelo diálogo): data, hora, rede, formato, legenda, link do story.
   app.post('/api/scheduling/schedule', async (req, res) => {
     try {
@@ -1027,9 +1260,16 @@ export function registerSchedulingRoutes(app, deps) {
       if (kind === 'post' && mode !== 'auto') throw httpError(400, 'Este post só existe na fila de postagem');
       pastCheck(whenIso, mode, !!body.allow_past);
       const platform = ['instagram', 'facebook', 'both'].includes(body.platform) ? body.platform : 'instagram';
+      // Story: "Postar sozinho" (o robô publica) ou "Lembrete com link" (avisa a equipe, que posta pelo app)
+      const storyMode = mode === 'auto' && body.publish_type === 'stories'
+        ? (body.story_mode === 'lembrete' ? 'lembrete' : 'auto') : null;
 
       const result = await withTransaction(async (db) => {
         const material = await lockMaterial(db, kind, id, client.id);
+        if (kind === 'post' && material.story_series_id) {
+          throw httpError(409, 'Este story faz parte de uma repetição: mude pela própria data.', { code: 'series_post' });
+        }
+        if (kind !== 'post') await assertNoActiveSeries(db, kind, material.id);
         if (kind === 'conteudo' && !['agendamentos', 'acompanhamento'].includes(material.kanban_column)) {
           throw httpError(409, `O card não está aprovado para agendar (está em "${material.kanban_column}").`, { code: 'not_ready' });
         }
@@ -1044,7 +1284,7 @@ export function registerSchedulingRoutes(app, deps) {
           throw httpError(409, 'Só dá para mudar posts agendados ou com erro.', { code: 'not_ready' });
         }
         const links = await linksOf(db, kind, material);
-        const posts = await lockLinkedPosts(db, links);
+        const posts = withoutSeries(await lockLinkedPosts(db, links));
         if (kind === 'post') {
           if (material.status === 'publicando') throw httpError(409, 'Este post está sendo publicado agora.', { code: 'publishing' });
         } else {
@@ -1072,34 +1312,17 @@ export function registerSchedulingRoutes(app, deps) {
             media_url: mediaUrl,
             caption: body.publish_type === 'stories' ? '' : String(body.caption ?? ''),
             scheduled_at: whenIso,
-            story_link: body.publish_type === 'stories' ? (String(body.story_link || '').trim() || null) : null,
-            story_link_text: body.publish_type === 'stories' ? (String(body.story_link_text || '').trim() || null) : null,
-          });
+            // Link e botão só no lembrete: "Postar sozinho" sai sem link clicável (a API da Meta não aplica o adesivo)
+            story_link: storyMode === 'lembrete' ? (String(body.story_link || '').trim() || null) : null,
+            story_link_text: storyMode === 'lembrete' ? (String(body.story_link_text || '').trim().slice(0, 40) || 'Clique aqui') : null,
+          }, { requireAccounts: storyMode !== 'lembrete' });
         }
 
         // Entrega do Social (o registro do agendamento dos vídeos): data, hora e rede
-        let deliveryId = links.delivery?.id || null;
-        if (kind === 'conteudo') {
-          const label = mode === 'auto' ? platformLabel(prepared.platform) : platformLabel(platform);
-          if (deliveryId) {
-            await db.query(
-              `UPDATE social_media_deliveries SET status = 'agendado', posted_at = $2, scheduled_time = $3, platform = $4, updated_at = now()
-                WHERE content_task_id = $1`,
-              [material.id, date, time, label]
-            );
-          } else {
-            const { rows: [created] } = await db.query(
-              `INSERT INTO social_media_deliveries
-                 (client_id, content_type, title, description, status, delivered_at, posted_at, scheduled_time, platform,
-                  recording_id, script_id, created_by, content_task_id)
-               VALUES ($1, $2, $3, $4, 'agendado', (now() AT TIME ZONE '${POSTING_TZ}')::date, $5, $6, $7, $8, $9, $10, $11)
-               RETURNING id`,
-              [client.id, material.content_type || 'reels', material.title, material.description || null, date, time, label,
-                material.recording_id || null, material.script_id || null, user?.id || null, material.id]
-            );
-            deliveryId = created.id;
-          }
-        }
+        const deliveryId = await upsertDelivery(db, {
+          kind, material, links, client, user, date, time,
+          label: mode === 'auto' ? platformLabel(prepared.platform) : platformLabel(platform),
+        });
 
         // Post anterior pendente sai (um material, um post na fila)
         const pending = posts.filter((p) => ['agendado', 'erro'].includes(p.status)).map((p) => p.id);
@@ -1116,8 +1339,8 @@ export function registerSchedulingRoutes(app, deps) {
           const { rows: [created] } = await db.query(
             `INSERT INTO scheduled_posts
                (client_id, delivery_id, content_task_id, design_task_id, portal_content_id, platform, publish_type,
-                media_url, media_items, caption, scheduled_at, created_by, story_link, story_link_text)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                media_url, media_items, caption, scheduled_at, created_by, story_link, story_link_text, story_mode)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
              RETURNING *`,
             [
               client.id,
@@ -1128,46 +1351,16 @@ export function registerSchedulingRoutes(app, deps) {
               prepared.platform, prepared.publish_type, prepared.urls[0],
               prepared.items.length ? JSON.stringify(prepared.items) : null,
               prepared.caption, prepared.when.toISOString(), user?.id || null,
-              prepared.story_link, prepared.story_link_text,
+              prepared.story_link, prepared.story_link_text, storyMode,
             ]
           );
           post = created;
         }
 
-        const label = formatBrt(date, time);
-        const detail = `${label} · ${mode === 'auto' ? `${platformLabel(prepared.platform)} (automático)` : 'manual'}`;
-        if (kind === 'conteudo') {
-          const wasScheduled = material.kanban_column === 'acompanhamento';
-          // O conteúdo do portal ligado ao card fica 'aprovado' (o portal do cliente só conhece esse estado final).
-          // Por último: os gatilhos da entrega/fila gravam posting_at também; o valor final é este.
-          await db.query(
-            `UPDATE content_tasks
-                SET posting_at = $2, scheduled_recording_date = $3, scheduled_recording_time = $4,
-                    kanban_column = 'acompanhamento',
-                    reviewing_by = NULL, reviewing_by_name = NULL, reviewing_at = NULL,
-                    editing_deadline = NULL, review_deadline = NULL, alteration_deadline = NULL, approval_deadline = NULL,
-                    updated_at = now()
-              WHERE id = $1`,
-            [material.id, whenIso, date, time]
-          );
-          await insertHistory(db, kind, material, user, wasScheduled ? 'Postagem remarcada' : 'Agendado para Postagem', detail);
-          if (!wasScheduled) {
-            await db.query(
-              `INSERT INTO client_portal_notifications (client_id, title, message, type) VALUES ($1, $2, $3, 'info')`,
-              [client.id, '📅 Conteúdo agendado para postagem',
-                `Seu conteúdo "${material.title}" foi agendado para ${date.split('-').reverse().join('/')} às ${time}.`]
-            );
-          }
-        } else if (kind === 'arte') {
-          const wasScheduled = !!material.posting_at;
-          await db.query(`UPDATE design_tasks SET posting_at = $2, updated_at = now() WHERE id = $1`, [material.id, whenIso]);
-          await insertHistory(db, kind, material, user, wasScheduled ? '📅 Postagem remarcada' : '📅 Agendada para postagem', detail);
-        } else if (kind === 'portal') {
-          await db.query(
-            `UPDATE client_portal_contents SET posting_at = $2, status = 'agendado', updated_at = now() WHERE id = $1`,
-            [material.id, whenIso]
-          );
-        }
+        const modeLabel = mode !== 'auto' ? 'manual'
+          : storyMode === 'lembrete' ? `${platformLabel(prepared.platform)} (lembrete de story)`
+            : `${platformLabel(prepared.platform)} (automático)`;
+        await markScheduled(db, { kind, material, client, user, date, time, whenIso, detail: `${formatBrt(date, time)} · ${modeLabel}` });
         return { post: postSummary(post), when: { at: whenIso, date, time }, mode };
       });
       res.json({ success: true, ...result });
@@ -1190,8 +1383,10 @@ export function registerSchedulingRoutes(app, deps) {
 
       const result = await withTransaction(async (db) => {
         const material = await lockMaterial(db, kind, id, client.id);
+        if (kind !== 'post') await assertNoActiveSeries(db, kind, material.id);
         const links = await linksOf(db, kind, material);
-        const posts = await lockLinkedPosts(db, links);
+        // Ocorrência de uma repetição (kind 'post'): arrastar muda só ela (o horário original da série fica guardado)
+        const posts = kind === 'post' ? await lockLinkedPosts(db, links) : withoutSeries(await lockLinkedPosts(db, links));
         if (kind === 'post') {
           if (material.status === 'publicado') throw httpError(409, 'Este material já foi publicado.', { code: 'published' });
           if (material.status === 'publicando') throw httpError(409, 'Este post está sendo publicado agora.', { code: 'publishing' });
@@ -1220,7 +1415,9 @@ export function registerSchedulingRoutes(app, deps) {
         const postToMove = kind === 'post' ? material : active;
         if (postToMove) {
           const { rowCount } = await db.query(
-            `UPDATE scheduled_posts SET scheduled_at = $2, updated_at = now() WHERE id = $1 AND status = 'agendado'`,
+            // lembrete de story remarcado avisa de novo no horário novo
+            `UPDATE scheduled_posts SET scheduled_at = $2, reminder_sent_at = NULL, reminder_followup_at = NULL, updated_at = now()
+              WHERE id = $1 AND status = 'agendado'`,
             [postToMove.id, whenIso]
           );
           if (!rowCount) throw httpError(409, 'Este post está sendo publicado agora.', { code: 'publishing' });
@@ -1267,8 +1464,9 @@ export function registerSchedulingRoutes(app, deps) {
 
       await withTransaction(async (db) => {
         const material = await lockMaterial(db, kind, id, client.id);
+        if (kind !== 'post') await assertNoActiveSeries(db, kind, material.id);
         const links = await linksOf(db, kind, material);
-        const posts = await lockLinkedPosts(db, links);
+        const posts = kind === 'post' ? await lockLinkedPosts(db, links) : withoutSeries(await lockLinkedPosts(db, links));
         if (kind === 'post') {
           if (!['agendado', 'erro'].includes(material.status)) throw httpError(409, 'Só dá para cancelar posts agendados ou com erro.', { code: 'not_scheduled' });
         } else {
@@ -1283,39 +1481,10 @@ export function registerSchedulingRoutes(app, deps) {
             [pending]
           );
         }
-        if (kind === 'conteudo') {
-          if (!['agendamentos', 'acompanhamento'].includes(material.kanban_column)) {
-            throw httpError(409, `O card não está agendado (está em "${material.kanban_column}").`, { code: 'not_scheduled' });
-          }
-          await db.query(
-            `UPDATE social_media_deliveries SET status = 'entregue', posted_at = NULL, scheduled_time = NULL, updated_at = now()
-              WHERE content_task_id = $1 AND status = 'agendado'`,
-            [material.id]
-          );
-          // A data de gravação só é apagada quando era a data desta postagem (o agendar do Kanban grava ali).
-          await db.query(
-            `UPDATE content_tasks
-                SET posting_at = NULL, kanban_column = 'agendamentos',
-                    scheduled_recording_time = CASE WHEN scheduled_recording_date = $2::date THEN NULL ELSE scheduled_recording_time END,
-                    scheduled_recording_date = CASE WHEN scheduled_recording_date = $2::date THEN NULL ELSE scheduled_recording_date END,
-                    updated_at = now()
-              WHERE id = $1`,
-            [material.id, current?.date || null]
-          );
-          if (material.kanban_column === 'acompanhamento') {
-            await insertHistory(db, kind, material, user, 'Movido para Agendamentos', 'Agendamento cancelado');
-          }
-        } else if (kind === 'arte') {
-          await db.query(`UPDATE design_tasks SET posting_at = NULL, updated_at = now() WHERE id = $1`, [material.id]);
-          await insertHistory(db, kind, material, user, '↩️ Agendamento cancelado', null);
-        } else if (kind === 'portal') {
-          await db.query(
-            `UPDATE client_portal_contents
-                SET posting_at = NULL, status = CASE WHEN status = 'agendado' THEN 'aprovado' ELSE status END, updated_at = now()
-              WHERE id = $1`,
-            [material.id]
-          );
+        if (kind === 'conteudo' && !['agendamentos', 'acompanhamento'].includes(material.kanban_column)) {
+          throw httpError(409, `O card não está agendado (está em "${material.kanban_column}").`, { code: 'not_scheduled' });
         }
+        await markUnscheduled(db, { kind, material, user, currentDate: current?.date || null });
       });
       res.json({ success: true });
     } catch (error) {
@@ -1323,5 +1492,13 @@ export function registerSchedulingRoutes(app, deps) {
     }
   });
 
-  return { ready, userModules };
+  // ── Stories: link do cliente, lembrete com link e repetição (storySeries.mjs) ──
+  stories = registerStoryRoutes(app, {
+    ...deps, logger, schedulingReady: ready, requireModule, loadClient, withTransaction, httpError,
+    sendError: (res, error) => sendError(res, error, logger),
+    lockMaterial, linksOf, lockLinkedPosts, withoutSeries, assertNotPublished, assertStandalonePortal, defaultMedia,
+    upsertDelivery, markScheduled, markUnscheduled, insertHistory, platformLabel, makeMediaHelpers,
+  });
+
+  return { ready, userModules, stories };
 }

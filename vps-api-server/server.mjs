@@ -8665,6 +8665,18 @@ async function ensureSocialPostsSchema() {
     ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS story_link TEXT;
     ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS story_link_text TEXT;
     ALTER TABLE scheduled_posts ALTER COLUMN media_url DROP NOT NULL;
+    -- Stories do módulo Agendamentos (storySeries.mjs): 'lembrete' nunca é publicado pelo robô (só avisa a
+    -- equipe, que posta pelo app com o adesivo de link); série de repetição com uma linha por horário.
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS story_mode TEXT;
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS story_series_id UUID;
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS series_slot_at TIMESTAMPTZ;
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ;
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS reminder_followup_at TIMESTAMPTZ;
+    ALTER TABLE scheduled_posts ADD COLUMN IF NOT EXISTS manual_posted_by UUID;
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_scheduled_posts_series_slot
+      ON scheduled_posts (story_series_id, series_slot_at) WHERE story_series_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_scheduled_posts_reminder
+      ON scheduled_posts (scheduled_at) WHERE story_mode = 'lembrete' AND status = 'agendado';
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS access_token TEXT NOT NULL DEFAULT '';
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS token_expiration TIMESTAMPTZ;
     ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS api_base TEXT NOT NULL DEFAULT 'facebook';
@@ -9092,6 +9104,13 @@ function comparableMediaUrl(url) {
  * 'postado' na entrega é aceito: abas antigas marcavam 'postado' no horário, antes do robô.
  */
 async function getAutoPostCancelReason(post) {
+  // Série de stories (storySeries.mjs): o mesmo material sai várias vezes. Depois da primeira, o card fica
+  // arquivado, a arte em Postadas e o conteúdo do portal publicado; isso não cancela as próximas.
+  const inSeries = !!post.story_series_id;
+  if (inSeries) {
+    const { rows } = await pool.query('SELECT 1 FROM story_series WHERE id = $1', [post.story_series_id]);
+    if (!rows.length) return 'a série de stories foi excluída';
+  }
   let deliveryStatus = null;
   if (post.delivery_id) {
     const { rows } = await pool.query('SELECT status FROM social_media_deliveries WHERE id = $1', [post.delivery_id]);
@@ -9107,7 +9126,7 @@ async function getAutoPostCancelReason(post) {
     const column = rows[0].kanban_column;
     if (AUTOPOST_BLOCKING_CONTENT_COLUMNS.has(column)) return `o card de conteúdo voltou para "${column}"`;
     // "Postado!" manual (entrega postada e card arquivado): publicar agora duplicaria o post.
-    if (deliveryStatus === 'postado' && column === 'arquivado') return 'o conteúdo já foi marcado como postado manualmente';
+    if (!inSeries && deliveryStatus === 'postado' && column === 'arquivado') return 'o conteúdo já foi marcado como postado manualmente';
   }
   // Arte e conteúdo avulso do portal agendados pelo módulo de Agendamentos (scheduling.mjs)
   if (post.design_task_id) {
@@ -9118,8 +9137,10 @@ async function getAutoPostCancelReason(post) {
     );
     if (!rows.length) return 'a arte foi excluída';
     // 'postado' aqui só pode ser marcação manual (o robô move depois de publicar): sair de novo duplicaria.
-    if (rows[0].kanban_column === 'postado') return 'a arte já foi marcada como postada';
-    if (rows[0].kanban_column !== 'aprovado') return `a arte saiu de Aprovado (está em "${rows[0].kanban_column}")`;
+    if (!inSeries && rows[0].kanban_column === 'postado') return 'a arte já foi marcada como postada';
+    if (!['aprovado', ...(inSeries ? ['postado'] : [])].includes(rows[0].kanban_column)) {
+      return `a arte saiu de Aprovado (está em "${rows[0].kanban_column}")`;
+    }
     // O post guarda a cópia das URLs: se a arte foi trocada, publicaria a versão antiga.
     const listed = Array.isArray(rows[0].attachment_urls) ? rows[0].attachment_urls : [];
     const current = new Set([...listed.map((u) => (typeof u === 'string' ? u : u?.url)), rows[0].attachment_url, rows[0].mockup_url]
@@ -9132,8 +9153,10 @@ async function getAutoPostCancelReason(post) {
   if (post.portal_content_id) {
     const { rows } = await pool.query('SELECT status FROM client_portal_contents WHERE id = $1', [post.portal_content_id]);
     if (!rows.length) return 'o conteúdo foi excluído do portal';
-    if (rows[0].status === 'publicado') return 'o conteúdo já foi marcado como publicado';
-    if (!['aprovado', 'agendado'].includes(rows[0].status)) return `o conteúdo saiu de Aprovado no portal (está em "${rows[0].status}")`;
+    if (!inSeries && rows[0].status === 'publicado') return 'o conteúdo já foi marcado como publicado';
+    if (!['aprovado', 'agendado', ...(inSeries ? ['publicado'] : [])].includes(rows[0].status)) {
+      return `o conteúdo saiu de Aprovado no portal (está em "${rows[0].status}")`;
+    }
   }
   return null;
 }
@@ -9178,6 +9201,14 @@ async function runScheduledPost(post) {
 }
 
 async function runScheduledPostNow(post) {
+  // Story em modo lembrete: a equipe posta pelo app (o adesivo de link não passa pela API). Nunca publica.
+  if (post.story_mode === 'lembrete') {
+    await pool.query(
+      `UPDATE scheduled_posts SET status='agendado', updated_at=now() WHERE id=$1 AND status='publicando'`,
+      [post.id]
+    );
+    return;
+  }
   let cancelReason = null;
   try {
     cancelReason = await getAutoPostCancelReason(post);
@@ -9337,7 +9368,7 @@ async function processDueScheduledPosts() {
       `UPDATE scheduled_posts SET status='publicando', updated_at=now()
        WHERE id IN (
          SELECT id FROM scheduled_posts
-         WHERE status='agendado' AND scheduled_at <= now()
+         WHERE status='agendado' AND scheduled_at <= now() AND story_mode IS DISTINCT FROM 'lembrete'
          ORDER BY scheduled_at ASC LIMIT 5 FOR UPDATE SKIP LOCKED
        ) RETURNING *`
     );
@@ -10062,7 +10093,7 @@ app.get('/api/social-posts', async (req, res) => {
  * para as duas telas seguirem as mesmas regras. Lança erro com statusCode 400 e a mensagem da tela;
  * devolve os campos prontos para gravar em scheduled_posts.
  */
-async function prepareScheduledPost(input = {}) {
+async function prepareScheduledPost(input = {}, { requireAccounts = true } = {}) {
   const fail = (message) => { throw Object.assign(new Error(message), { statusCode: 400 }); };
   const {
     client_id, platform = 'instagram', publish_type = 'reels',
@@ -10094,8 +10125,9 @@ async function prepareScheduledPost(input = {}) {
   if (when.getTime() < Date.now() - 5 * 60_000) fail('O horário escolhido já passou. Escolha um horário futuro.');
   if (caption.length > 2200) fail('Legenda acima de 2200 caracteres (limite do Instagram)');
 
-  const accounts = await getConnectedAccounts(client_id);
-  const needed = platform === 'both' ? ['instagram', 'facebook'] : [platform];
+  // Story em modo lembrete (storySeries.mjs) não passa pela conta: a equipe posta pelo app.
+  const accounts = requireAccounts ? await getConnectedAccounts(client_id) : [];
+  const needed = !requireAccounts ? [] : platform === 'both' ? ['instagram', 'facebook'] : [platform];
   const missing = needed.filter(p => !accounts.some(a => a.platform === p && a.access_token));
   if (missing.length) fail(`Cliente sem conta conectada: ${missing.join(', ')}. Conecte em Clientes → editar → Redes Sociais.`);
   // Várias contas da mesma rede: o robô não publicaria (não sabe qual é a do cliente). Avisa já no agendamento.
@@ -10182,7 +10214,8 @@ app.post('/api/social-posts/:id/publish-now', async (req, res) => {
   try {
     await verifySocialManager(req);
     const { rows } = await pool.query(
-      `UPDATE scheduled_posts SET status='publicando', updated_at=now() WHERE id=$1 AND status IN ('agendado','erro') RETURNING *`,
+      `UPDATE scheduled_posts SET status='publicando', updated_at=now()
+        WHERE id=$1 AND status IN ('agendado','erro') AND story_mode IS DISTINCT FROM 'lembrete' RETURNING *`,
       [req.params.id]
     );
     if (!rows[0]) return res.status(400).json({ error: 'Post não está agendado nem com erro' });
@@ -20246,6 +20279,12 @@ const scheduling = registerSchedulingRoutes(app, {
   sanitizeAccount,
   duplicatedPlatformAccounts,
   prepareScheduledPost,
+  // stories (storySeries.mjs): conferência do robô, link curto, avisos e quem atende a cidade do cliente
+  getAutoPostCancelReason,
+  userHasAnyRole,
+  ensureShortLinksTables,
+  cityMemberSql: portalCityMemberSql,
+  tableHasCityColumn,
   publicAppUrl: process.env.PUBLIC_APP_URL,
   // posting_at novo: o /api/db/query relê as colunas (senão grava sem elas por até 1 h)
   onSchemaChange: (tables) => tables.forEach((table) => {

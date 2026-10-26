@@ -145,30 +145,38 @@ export default function SchedulingCalendar({
           {days.map((day) => {
             const list = byDate.get(day) || [];
             const outside = !sameMonth(day, anchor);
+            // Cada dia recebe o material arrastado da faixa de não agendados (toque longo e arrastar)
             return (
-              <button
-                key={day}
-                type="button"
-                onClick={() => onSelectDay(day)}
-                aria-pressed={selectedDay === day}
-                aria-label={`${formatDayLabel(day)}: ${list.length}`}
-                className={cn(
-                  'flex min-h-[52px] flex-col items-center gap-1 rounded-lg border border-transparent p-1 transition-colors',
-                  isWeekendKey(day) && 'bg-muted/40',
-                  outside && 'opacity-40',
-                  selectedDay === day && 'border-primary bg-primary/10',
+              <Droppable key={day} droppableId={`day:${day}`}>
+                {(provided, snapshot) => (
+                  <button
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    type="button"
+                    onClick={() => onSelectDay(day)}
+                    aria-pressed={selectedDay === day}
+                    aria-label={`${formatDayLabel(day)}: ${list.length}`}
+                    className={cn(
+                      'relative flex min-h-[52px] flex-col items-center gap-1 rounded-lg border border-transparent p-1 transition-colors',
+                      isWeekendKey(day) && 'bg-muted/40',
+                      outside && 'opacity-40',
+                      selectedDay === day && 'border-primary bg-primary/10',
+                      snapshot.isDraggingOver && 'border-primary bg-primary/15 ring-2 ring-primary/40',
+                    )}
+                  >
+                    <DayNumber day={day} today={today} />
+                    <div className="flex flex-wrap justify-center gap-0.5">
+                      {list.slice(0, 4).map((item) => (
+                        <span
+                          key={item.key}
+                          className={cn('h-1.5 w-1.5 rounded-full', (TYPE_STYLES[item.type] || TYPE_STYLES.feed).dot, (item.ghost || item.virtual) && 'opacity-30')}
+                        />
+                      ))}
+                    </div>
+                    <span className="pointer-events-none absolute h-0 w-0 overflow-hidden">{provided.placeholder}</span>
+                  </button>
                 )}
-              >
-                <DayNumber day={day} today={today} />
-                <div className="flex flex-wrap justify-center gap-0.5">
-                  {list.slice(0, 4).map((item) => (
-                    <span
-                      key={item.key}
-                      className={cn('h-1.5 w-1.5 rounded-full', (TYPE_STYLES[item.type] || TYPE_STYLES.feed).dot, item.ghost && 'opacity-30')}
-                    />
-                  ))}
-                </div>
-              </button>
+              </Droppable>
             );
           })}
         </div>

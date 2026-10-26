@@ -43,6 +43,7 @@ const SocialConnectInvite = lazy(() => import("@/pages/SocialConnectInvite"));
 const SocialInsights = lazy(() => import("@/pages/SocialInsights"));
 const PostStudio = lazy(() => import("@/pages/PostStudio"));
 const Scheduling = lazy(() => import("@/pages/Scheduling"));
+const StoryReminder = lazy(() => import("@/pages/StoryReminder"));
 const RequireModuleAccess = lazy(() => import("@/components/scheduling/RequireModuleAccess"));
 const ContentKanban = lazy(() => import("@/pages/ContentKanban"));
 const EditorDashboard = lazy(() => import("@/pages/EditorDashboard"));
@@ -326,6 +327,8 @@ function AppRoutes() {
         <Route path="/conectar-social/:token" element={<SocialConnectInvite />} />
         <Route path="/estudio-postagem" element={<ProtectedRoute><PostStudio /></ProtectedRoute>} />
         <Route path="/agendamentos" element={<ProtectedRoute><RequireModuleAccess module="pulse_plus"><Scheduling /></RequireModuleAccess></ProtectedRoute>} />
+        {/* Lembrete de story com link: quem posta os stories do cliente (o servidor confere), sem Pulse Plus */}
+        <Route path="/lembrete-story/:id" element={<ProtectedRoute><StoryReminder /></ProtectedRoute>} />
 
 
         <Route path="/desempenho-social" element={<ProtectedRoute><SocialInsights /></ProtectedRoute>} />

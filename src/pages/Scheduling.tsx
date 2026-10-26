@@ -4,8 +4,8 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import { DragDropContext, type DropResult } from '@hello-pangea/dnd';
 import { toast } from 'sonner';
 import {
-  AlertTriangle, CalendarClock, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Facebook, Hourglass,
-  Instagram, LayoutGrid, Loader2, RefreshCw, Rows3, Search,
+  AlertTriangle, BellRing, CalendarClock, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Facebook, Hourglass,
+  Instagram, LayoutGrid, Link2, Loader2, RefreshCw, Repeat2, Rows3, Search,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,8 @@ import ConfirmActionDialog, { type ConfirmAction } from '@/components/kanban/Con
 import SchedulingCalendar from '@/components/scheduling/SchedulingCalendar';
 import UnscheduledPanel from '@/components/scheduling/UnscheduledPanel';
 import ScheduleDialog from '@/components/scheduling/ScheduleDialog';
+import ClientStoryLinkDialog from '@/components/scheduling/ClientStoryLinkDialog';
+import UnscheduledStrip from '@/components/scheduling/UnscheduledStrip';
 import SchedulingClientPicker, { AccountIcons } from '@/components/scheduling/SchedulingClientPicker';
 import { TYPE_STYLES, clientLogoProps } from '@/components/scheduling/schedulingStyles';
 import { useCity } from '@/contexts/CityContext';
@@ -27,6 +29,7 @@ import {
 import {
   fetchSchedulingClients, fetchSchedulingMaterials, rescheduleMaterial, type SchedulingApiError,
 } from '@/services/schedulingApi';
+import { lastUsedTime } from '@/lib/storySeries';
 
 type View = 'month' | 'week';
 
@@ -61,7 +64,10 @@ export default function Scheduling() {
   const [view, setView] = useState<View>(() => (typeof window !== 'undefined' && window.innerWidth < 768 ? 'week' : 'month'));
   const [anchor, setAnchor] = useState(today);
   const [selectedDay, setSelectedDay] = useState<string | null>(today);
-  const [dialog, setDialog] = useState<{ item: SchedulingItem; presetDate?: string | null } | null>(null);
+  const [dialog, setDialog] = useState<{ item: SchedulingItem; presetDate?: string | null; presetTime?: string | null } | null>(null);
+  const [linkDialog, setLinkDialog] = useState(false);
+  // Material da lista: abre o agendamento com a hora padrão (a última usada)
+  const pickMaterial = (item: SchedulingItem, day?: string) => setDialog({ item, presetDate: day || null, presetTime: lastUsedTime() });
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
   const [mobileTab, setMobileTab] = useState<'calendario' | 'pendentes'>('calendario');
   const [clientSearch, setClientSearch] = useState('');
@@ -145,8 +151,9 @@ export default function Scheduling() {
     if (!destination || !destination.droppableId.startsWith('day:')) return;
     const day = destination.droppableId.slice(4);
     if (source.droppableId === 'unscheduled') {
+      // Soltar um material num dia abre o agendamento (legenda, tipo e rede) com o dia e a hora padrão
       const item = unscheduled.find((i) => i.key === draggableId);
-      if (item) setDialog({ item, presetDate: day });
+      if (item) pickMaterial(item, day);
       return;
     }
     if (source.droppableId === destination.droppableId) return;
@@ -291,6 +298,18 @@ export default function Scheduling() {
                     {a.username || a.account_name}
                   </span>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => setLinkDialog(true)}
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-full border px-2 py-px text-[10px] font-semibold transition-colors',
+                    data?.story_link?.saved
+                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300'
+                      : 'border-dashed border-emerald-500/50 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300',
+                  )}
+                >
+                  <Link2 size={10} /> Link do story
+                </button>
               </div>
             </div>
           </div>
@@ -344,6 +363,16 @@ export default function Scheduling() {
                 <span className={cn('h-2 w-2 rounded-full', TYPE_STYLES[t].dot)} /> {TYPE_STYLES[t].label}
               </span>
             ))}
+            {scheduled.some((i) => i.post?.story_mode === 'lembrete') && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                <BellRing size={11} className="text-amber-500" /> Lembrete
+              </span>
+            )}
+            {scheduled.some((i) => i.series) && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                <Repeat2 size={11} className="text-pink-500" /> Repetição
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -371,8 +400,14 @@ export default function Scheduling() {
                 </button>
               ))}
             </div>
-            {mobileTab === 'calendario' ? calendar : (
-              <UnscheduledPanel items={unscheduled} onPick={(item) => setDialog({ item })} draggable={false} />
+            {mobileTab === 'calendario' ? (
+              <>
+                {/* toque longo num material e arraste até o dia */}
+                <UnscheduledStrip items={unscheduled} onPick={(item) => pickMaterial(item)} />
+                {calendar}
+              </>
+            ) : (
+              <UnscheduledPanel items={unscheduled} onPick={(item) => pickMaterial(item)} draggable={false} />
             )}
           </div>
         ) : (
@@ -380,7 +415,7 @@ export default function Scheduling() {
             {calendar}
             <UnscheduledPanel
               items={unscheduled}
-              onPick={(item) => setDialog({ item })}
+              onPick={(item) => pickMaterial(item)}
               draggable
               className="self-start"
             />
@@ -392,10 +427,21 @@ export default function Scheduling() {
         <ScheduleDialog
           item={dialog.item}
           presetDate={dialog.presetDate}
+          presetTime={dialog.presetTime}
           clientId={client.id}
           accounts={accounts}
+          storyLink={data?.story_link}
+          onEditClientLink={() => setLinkDialog(true)}
           onClose={() => setDialog(null)}
           onSaved={onSaved}
+        />
+      )}
+      {linkDialog && (
+        <ClientStoryLinkDialog
+          clientId={client.id}
+          clientName={client.company_name}
+          onClose={() => setLinkDialog(false)}
+          onSaved={refresh}
         />
       )}
       <ConfirmActionDialog action={confirm} onClose={() => setConfirm(null)} />

@@ -78,10 +78,6 @@ fi
 # --- 6. API ----------------------------------------------------------------
 step "6/8 Atualizando a API (pulse-api)"
 ( cd "$PROJECT_DIR/vps-api-server" && npm install && node --check server.mjs ) || die "API inválida"
-if ! grep -qs '^PORTAL_AUTH_MODE=' "$PROJECT_DIR/.env" "$PROJECT_DIR/vps-api-server/.env"; then
-  ylw "  Aviso: PORTAL_AUTH_MODE não definido (padrão enforce). No primeiro deploy da sessão do portal,"
-  ylw "  use PORTAL_AUTH_MODE=log por alguns dias (veja vps-api-server/.env.example); depois defina enforce."
-fi
 if pm2 describe pulse-api >/dev/null 2>&1; then
   pm2 restart pulse-api --update-env
 else

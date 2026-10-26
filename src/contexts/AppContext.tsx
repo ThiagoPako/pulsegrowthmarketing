@@ -58,7 +58,8 @@ interface AppContextType {
   /** Cria várias gravações de uma vez, sem aviso de WhatsApp (ex.: backups e extras gerados em lote) */
   addRecordingsBulk: (recordings: Recording[]) => Promise<boolean>;
   updateRecording: (recording: Recording) => Promise<boolean>;
-  cancelRecording: (id: string) => Promise<boolean>;
+  /** skipAutoFill: a vaga já tem destino (ex.: encaixe de backup), não roda o preencher vagas */
+  cancelRecording: (id: string, options?: { skipAutoFill?: boolean }) => Promise<boolean>;
   deleteRecording: (id: string, options?: { force?: boolean }) => Promise<boolean>;
   /** Igual ao deleteRecording, mas devolve o motivo da recusa do servidor */
   tryDeleteRecording: (id: string, options?: { force?: boolean }) => Promise<RecordingDeleteResult>;
@@ -123,7 +124,7 @@ const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { profile, signOut, loading: authLoading, user } = useAuth();
-  const { isLoading: cityLoading } = useCity();
+  const { isLoading: cityLoading, activeCity } = useCity();
   const data = useSupabaseData();
 
   // profile.roles já traz as funções de user_roles (o /auth/me junta todas): não
@@ -193,17 +194,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (cityLoading) return;
     if (!hasVpsToken) {
       setUsers([]);
-      setCityMemberIds(null);
       return;
     }
-    const [profilesRes, rolesRes, cityMembersRes] = await Promise.all([
+    const [profilesRes, rolesRes] = await Promise.all([
       supabase.from('profiles').select('*'),
       supabase.from('user_roles').select('user_id, role'),
-      invokeVpsFunction('team/city-members', { method: 'GET' }),
     ]);
-    setCityMemberIds(!cityMembersRes.error && Array.isArray(cityMembersRes.data?.user_ids)
-      ? new Set<string>(cityMembersRes.data.user_ids.map(String))
-      : null);
 
     if (profilesRes.error) {
       console.error('[AppContext] error loading profiles:', profilesRes.error);
@@ -229,8 +225,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
     }));
 
-    // profiles e user_roles não têm cidade: trocar de cidade não precisa recarregar a equipe.
+    // profiles e user_roles não têm cidade: trocar de cidade não precisa recarregar a equipe
+    // (quem atende cada cidade vem do efeito abaixo).
   }, [cityLoading]);
+
+  // Quem atende a cidade ativa: recarrega a cada troca de cidade. Enquanto a nova lista
+  // não chega fica null (não filtra), para não usar os videomakers da cidade anterior.
+  useEffect(() => {
+    const hasVpsToken = typeof window !== 'undefined' && !!localStorage.getItem('pulse_jwt');
+    setCityMemberIds(null);
+    if (cityLoading || !hasVpsToken || !profile?.id) return;
+    let cancelled = false;
+    invokeVpsFunction('team/city-members', { method: 'GET' }).then((res) => {
+      if (cancelled) return;
+      setCityMemberIds(!res.error && Array.isArray(res.data?.user_ids)
+        ? new Set<string>(res.data.user_ids.map(String))
+        : null);
+    });
+    return () => { cancelled = true; };
+  }, [activeCity, cityLoading, profile?.id]);
 
   // Recarrega a equipe quando muda quem está logado ou o que aparece dele na lista
   // (nome, foto, cargo), não a cada novo objeto de perfil (ex.: trocar o tamanho da fonte).
@@ -737,10 +750,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [data]);
 
   const updateRecording = useCallback((recording: Recording) => data.updateRecording(recording), [data]);
-  const cancelRecording = useCallback(async (id: string) => { 
+  const cancelRecording = useCallback(async (id: string, options?: { skipAutoFill?: boolean }) => {
     const rec = data.recordings.find(r => r.id === id);
     const ok = await data.cancelRecording(id);
-    if (ok && data.settings.autoFillVacancies && rec) {
+    if (ok && data.settings.autoFillVacancies && rec && !options?.skipAutoFill) {
       // A lista deste render ainda tem a gravação como agendada: passa já com o cancelamento,
       // senão a vaga liberada nunca é preenchida.
       const updated = data.recordings.map(r => r.id === id ? { ...r, status: 'cancelada' as const } : r);

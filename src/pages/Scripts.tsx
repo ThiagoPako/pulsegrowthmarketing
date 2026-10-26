@@ -413,7 +413,7 @@ export default function Scripts() {
       const scriptId = crypto.randomUUID();
       const scriptObj = { ...scriptData, id: scriptId, recorded: false, createdAt: now, updatedAt: now, createdBy: user?.id || undefined };
       
-      await addScript(scriptObj);
+      if (!(await addScript(scriptObj))) return; // o hook já mostrou o erro; nada é vinculado
       if (captionToSave) {
         await supabase.from('scripts').update({ caption: captionToSave } as any).eq('id', scriptId);
       }

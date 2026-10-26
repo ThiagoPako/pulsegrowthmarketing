@@ -557,8 +557,8 @@ export default function Schedule() {
 
   const handleSelectBackup = async (backupClient: Client) => {
     if (!cancellingRec) return;
-    // Cancel original
-    const cancelled = await cancelRecording(cancellingRec.id);
+    // Cancel original (sem o preencher vagas: o horário vai para o backup logo abaixo)
+    const cancelled = await cancelRecording(cancellingRec.id, { skipAutoFill: true });
     if (!cancelled) return; // o hook já mostrou o erro da API
 
     // Send cancellation message to original client

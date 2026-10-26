@@ -802,7 +802,7 @@ export default function RecordingControl() {
             createdBy: authUser?.id,
           };
           try {
-            await addScript(newScript);
+            if (!(await addScript(newScript))) return; // o hook já mostrou o erro
             setWizard(w => ({
               ...w,
               scriptId: newScript.id,

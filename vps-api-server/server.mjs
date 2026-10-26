@@ -170,6 +170,10 @@ const pool = pgConnectionString
       ...(typeof pgPassword === 'string' && pgPassword.length > 0 ? { password: pgPassword } : {}),
     });
 
+// Cache das colunas de cada tabela. Fica aqui no topo porque os ensure* que rodam na
+// subida (planos, CRM...) usam getExistingColumns antes do resto do arquivo carregar.
+const tableColumnsPromiseCache = new Map();
+
 const ONLINE_PRESENCE_MS = 120_000;
 const presenceState = new Map();
 
@@ -2378,7 +2382,6 @@ async function userHasAnyRole(user, roles) {
 let profilesPasswordHashColumnPromise;
 let authSupportTablesPromise;
 const wssClients = new Set();
-const tableColumnsPromiseCache = new Map();
 
 function getTableColumnsPromiseCache() {
   return tableColumnsPromiseCache;
@@ -3597,6 +3600,34 @@ app.get('/api/admin/user-cities', async (req, res) => {
 // A Agenda e o Controle de Gravações usam para não oferecer nem distribuir gravação para
 // videomaker da outra cidade. Mesma regra do resolveActiveCity: sem cidade cadastrada = Minaçu;
 // contas ligadas pelo e-mail (profiles x auth_users) contam juntas.
+// Bônus do próprio usuário no mês (banner de parabéns). A tabela inteira só a gestão lê.
+app.get('/api/me/salary-bonuses', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    const month = String(req.query.month || '');
+    if (!/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: 'month (AAAA-MM) obrigatório' });
+    await ensureSalaryBonusesTable();
+    const ids = (await getLinkedUserIds(user).catch(() => [])).map(String);
+    if (!ids.includes(String(user.id))) ids.push(String(user.id));
+    // Bônus antigos não têm user_id: guardavam o nome (às vezes o de exibição)
+    const { rows: [profileRow] } = await pool.query(
+      `SELECT name, display_name FROM profiles WHERE id::text = ANY($1::text[]) LIMIT 1`, [ids]
+    ).catch(() => ({ rows: [] }));
+    const names = [profileRow?.name, profileRow?.display_name].map((n) => String(n || '').trim().toLowerCase()).filter(Boolean);
+    const { rows } = await pool.query(
+      `SELECT id, user_id, user_name, user_role, bonus_amount, reference_month, created_at
+         FROM salary_bonuses
+        WHERE reference_month = $1
+          AND (user_id::text = ANY($2::text[]) OR (user_id IS NULL AND lower(trim(user_name)) = ANY($3::text[])))
+        ORDER BY created_at`,
+      [month, ids, names]
+    );
+    res.json({ bonuses: rows });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+  }
+});
+
 app.get('/api/team/city-members', async (req, res) => {
   try {
     await ensureUserCitiesTable();
@@ -4436,9 +4467,17 @@ async function verifyPortalPassword(rawPassword, passwordHash) {
 // exigido em /api/portal-actions e /api/portal-recordings junto com o JWT da equipe.
 const PORTAL_JWT_SECRET = process.env.PORTAL_JWT_SECRET
   || crypto.createHash('sha256').update(`${JWT_SECRET}:pulse-portal-session`).digest('hex');
-// 'enforce' (padrão): sem token do portal nem JWT da equipe → 401.
+// 'enforce': sem token do portal nem JWT da equipe → 401.
 // 'log': só registra e deixa passar — válvula para voltar atrás sem novo deploy.
-const PORTAL_AUTH_MODE = String(process.env.PORTAL_AUTH_MODE || '').trim().toLowerCase() === 'log' ? 'log' : 'enforce';
+// Sem PORTAL_AUTH_MODE no .env: 'log' até PORTAL_AUTH_ENFORCE_FROM e 'enforce' depois. A transição
+// existe porque abas do portal abertas antes do deploy (bundle antigo, sem token) mostrariam
+// "aprovado" sem gravar nada; em dois dias elas já foram recarregadas.
+const PORTAL_AUTH_MODE_ENV = String(process.env.PORTAL_AUTH_MODE || '').trim().toLowerCase();
+const PORTAL_AUTH_ENFORCE_FROM = Date.parse(process.env.PORTAL_AUTH_ENFORCE_FROM || '2026-10-28T03:00:00Z');
+function portalAuthMode() {
+  if (PORTAL_AUTH_MODE_ENV === 'log' || PORTAL_AUTH_MODE_ENV === 'enforce') return PORTAL_AUTH_MODE_ENV;
+  return Number.isFinite(PORTAL_AUTH_ENFORCE_FROM) && Date.now() < PORTAL_AUTH_ENFORCE_FROM ? 'log' : 'enforce';
+}
 const portalSession = createPortalSession({
   jwt,
   secret: PORTAL_JWT_SECRET,
@@ -4451,8 +4490,8 @@ function resolvePortalCaller(req) {
 
 /** Sem sessão do portal nem da equipe. Devolve true quando já respondeu 401 (a rota para aí). */
 function rejectPortalCallWithoutSession(res, route, action) {
-  if (PORTAL_AUTH_MODE === 'log') {
-    console.warn(`[Portal-Auth] ${route} sem sessão (action=${action || '-'}) — liberado por PORTAL_AUTH_MODE=log`);
+  if (portalAuthMode() === 'log') {
+    console.warn(`[Portal-Auth] ${route} sem sessão (action=${action || '-'}) — liberado (modo log)`);
     return false;
   }
   res.status(401).json({ error: 'Sua sessão do portal expirou. Entre de novo.', code: 'portal_session_required' });
@@ -5811,6 +5850,10 @@ app.post('/api/portal-recordings', async (req, res) => {
       }
       if (!vmId) return res.status(400).json({ error: 'Nenhum videomaker atribuído' });
       const settings = await getCompanySettingsForCity(await getClientCityForAgenda(client_id));
+      // Mesma regra do reschedule: dia sem expediente na cidade do cliente não tem horário
+      if (!isValidAgendaDate(new_date) || !getSettingsWorkDays(settings).includes(weekdayNameOfDate(new_date))) {
+        return res.json({ available_slots: [], videomaker_id: vmId, date: new_date, reason: 'A agência não grava neste dia' });
+      }
       const rawDur = settings?.recording_duration || 2;
       const duration = rawDur > 10 ? rawDur : rawDur * 60;
       console.log('[check_availability] recording_duration raw:', rawDur, '-> duration (min):', duration, 'shifts:', settings?.shift_a_start, '-', settings?.shift_a_end, '|', settings?.shift_b_start, '-', settings?.shift_b_end);
@@ -5926,8 +5969,9 @@ app.post('/api/portal-recordings', async (req, res) => {
       }
 
       // If main videomaker backup not available, find alternative videomakers with space
+      // (só em dia de expediente: o accept_backup recusa videomaker alternativo fora dele)
       let alternativeVideomakers = [];
-      if (!backupAvailable && backupDateCancel) {
+      if (!backupAvailable && backupDateCancel && getSettingsWorkDays(settingsCancel).includes(weekdayNameOfDate(backupDateCancel))) {
         // Só videomakers que atendem a cidade do cliente; gravações do dia numa consulta só
         const allVideomakers = await listVideomakersForCity(clientCityCancel, clientCancel?.videomaker_id || null);
         const { rows: altRecsCancel } = allVideomakers.length > 0
@@ -9581,6 +9625,8 @@ const DB_QUERY_TABLE_RULES = {
   billing_messages: { read: 'team', write: 'team' },
   structure_investments: { read: 'team', write: 'team' },
   expenses: { read: DB_QUERY_ENDO_ROLES, write: DB_QUERY_ENDO_ROLES },
+  // bônus de salário (Financeiro → Salários); o banner do colaborador usa /api/me/salary-bonuses
+  salary_bonuses: { read: 'team', write: 'team' },
   expense_categories: { read: DB_QUERY_ENDO_ROLES, write: DB_QUERY_ENDO_ROLES },
 };
 

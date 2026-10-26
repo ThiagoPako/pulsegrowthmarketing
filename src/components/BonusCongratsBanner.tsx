@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/lib/vpsDb';
+import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { useAuth } from '@/hooks/useAuth';
 import { useApp } from '@/contexts/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -26,20 +26,11 @@ export default function BonusCongratsBanner() {
     if (!currentUser?.id && !currentUser?.name) return;
 
     const fetchBonuses = async () => {
-      const { data } = await supabase
-        .from('salary_bonuses')
-        .select('*')
-        .eq('reference_month', currentMonth);
-
-      // Pelo id do usuário (bônus novos) ou pelo nome (bônus antigos, que guardavam
-      // o nome da descrição do salário — às vezes o nome de exibição)
-      const names = [currentUser.name, currentUser.displayName]
-        .map(n => (n || '').trim().toLowerCase())
-        .filter(Boolean);
-      const mine = ((data as SalaryBonus[]) || []).filter(b =>
-        (b.user_id && b.user_id === currentUser.id) ||
-        (!b.user_id && names.includes((b.user_name || '').trim().toLowerCase()))
-      );
+      // O servidor devolve só os do próprio usuário: pelo id (bônus novos) ou pelo nome
+      // (bônus antigos, que guardavam o nome da descrição do salário)
+      const { data, error } = await invokeVpsFunction('me/salary-bonuses', { method: 'GET', body: { month: currentMonth } });
+      if (error) return;
+      const mine = ((data?.bonuses as SalaryBonus[]) || []);
       if (mine.length > 0) {
         setBonuses(mine);
       }

@@ -552,6 +552,8 @@ export default function Copy() {
           .map((f, i) => ({ f, task: finalizing.batch![i] }))
           .filter(x => x.f.content.trim());
         if (filled.length === 0) { toast.error('Escreva pelo menos um roteiro'); setSaving(false); return; }
+        let created = 0;
+        let notSaved = 0;
         for (const { f, task } of filled) {
           if (!task.client_id) continue;
           const scriptId = crypto.randomUUID();
@@ -573,7 +575,9 @@ export default function Copy() {
             caption: f.caption || undefined,
             createdBy: user?.id,
           };
-          await addScript(script);
+          // A API recusou (o hook já avisou): não vincula a story a um roteiro que não existe
+          if (!(await addScript(script))) { notSaved++; continue; }
+          created++;
           if (f.caption) {
             await supabase.from('scripts').update({ caption: f.caption } as any).eq('id', scriptId);
           }
@@ -581,7 +585,9 @@ export default function Copy() {
             script_id: scriptId, updated_at: nowIso,
           } as any).eq('id', task.id);
         }
-        toast.success(`${filled.length} stories criadas em ${durationLabel}`);
+        if (created === 0) return; // nada salvo: a sessão continua aberta para tentar de novo
+        toast.success(`${created} stories criadas em ${durationLabel}`);
+        if (notSaved > 0) toast.error(`${notSaved} ${notSaved === 1 ? 'story não foi salva' : 'stories não foram salvas'}: elas continuam na fila.`);
         setActiveSession(null);
         if (sessionKey) localStorage.removeItem(sessionKey);
         await clearCopyLive();
@@ -615,7 +621,7 @@ export default function Copy() {
         caption: form.caption || undefined,
         createdBy: user?.id,
       };
-      await addScript(script);
+      if (!(await addScript(script))) return; // o hook já mostrou o erro; nada é vinculado
       if (form.caption) {
         await supabase.from('scripts').update({ caption: form.caption } as any).eq('id', scriptId);
       }

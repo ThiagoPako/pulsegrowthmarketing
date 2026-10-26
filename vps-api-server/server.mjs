@@ -1498,7 +1498,8 @@ function removeUploadFile(fileUrl) {
 // Limpeza diária das versões antigas de vídeo (regra em lib/versionCleanup.mjs). Uma vez por
 // dia (fuso de Brasília): a primeira checagem sai 2 min depois da subida, depois a cada 3 h.
 async function runDailyVersionCleanup() {
-  const job = 'limpeza_versoes_video';
+  // _v2: regra que ignora histórico/logs ao decidir o que está em uso (roda de novo no dia da troca)
+  const job = 'limpeza_versoes_video_v2';
   try {
     await pool.query(`CREATE TABLE IF NOT EXISTS pulse_job_runs (
       job TEXT NOT NULL, day DATE NOT NULL, ran_at TIMESTAMPTZ NOT NULL DEFAULT now(), result JSONB,

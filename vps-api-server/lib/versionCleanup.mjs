@@ -5,11 +5,14 @@
 // da VPS enchia (24 GB numa semana). Regra decidida pelo dono em 26/10/2026:
 // - cada card fica com a versão atual e a anterior (para comparar);
 // - card aprovado pelo cliente (agendamentos, acompanhamento, arquivado) fica só com a final;
-// - nunca apaga arquivo citado em qualquer outra tabela (portal, entregas, card, fila do
-//   WhatsApp...) nem arquivo com menos de 24 h.
+// - nunca apaga arquivo em uso em outra tabela (portal, entregas, card, fila do WhatsApp...)
+//   nem arquivo com menos de 24 h. Menção em histórico, log ou recado não conta como uso.
 // O histórico continua: a linha da versão fica, só ganha video_deleted_at.
 
 const FINAL_ONLY_COLUMNS = new Set(['agendamentos', 'acompanhamento', 'arquivado']);
+// Histórico, logs, avisos e recados só registram que o vídeo existiu ("versão 3 entregue: <link>"):
+// citar o arquivo ali não é uso. Sem esta exceção quase nenhuma versão antiga saía.
+const LOG_TABLE_RE = /(_history|_log|_logs|_messages|_activity|notifications|^wa_inbound)$/;
 const MIN_AGE_MS = 24 * 60 * 60 * 1000;
 
 /** Caminhos relativos (dentro de /uploads/) citados em qualquer coluna de texto/json/array. */
@@ -22,6 +25,7 @@ async function collectReferencedUploads(pool, uploadRelativePath) {
        AND (c.data_type IN ('text', 'character varying', 'jsonb', 'json') OR c.data_type = 'ARRAY')`);
   const referenced = new Set();
   for (const { table_name: table, column_name: column } of columns) {
+    if (LOG_TABLE_RE.test(table)) continue;
     const ident = (name) => `"${String(name).replace(/"/g, '""')}"`;
     let rows = [];
     try {

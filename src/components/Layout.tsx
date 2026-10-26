@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { ROLE_LABELS } from '@/types';
 import { useMyPermissions, AVAILABLE_MODULES } from '@/hooks/useUserPermissions';
 import { useModuleAccess } from '@/hooks/useModuleAccess';
+import { CalendarClock } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import pulseLogo from '@/assets/pulse_logo.png';
 import { Input } from '@/components/ui/input';
@@ -15,7 +16,7 @@ import ProfileDialog from '@/components/ProfileDialog';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
   LayoutDashboard, Users, Building2, Calendar, CalendarDays, Settings, LogOut, Target, Search, FileText, Megaphone, MessageSquare, Package, ClipboardList, BarChart3, Share2, DollarSign, Kanban, Scissors, Palette, UserPlus, MonitorPlay, TrendingUp, Cpu, MessageCircle, Workflow, Plug, Car, Menu, X, Video, Handshake, Star, Rocket, Type, Gift, Monitor, UserMinus, BookOpen, Sun, Moon, Gauge, Flame, Pin, PinOff, Database, Link2, Images
-  , Sparkles, CalendarClock, type LucideIcon,
+  , Sparkles, type LucideIcon,
 } from 'lucide-react';
 
 import { useTheme } from '@/hooks/useTheme';

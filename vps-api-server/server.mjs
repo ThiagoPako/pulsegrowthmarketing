@@ -185,6 +185,73 @@ const pool = pgConnectionString
 // subida (planos, CRM...) usam getExistingColumns antes do resto do arquivo carregar.
 const tableColumnsPromiseCache = new Map();
 
+// ─── Cache curto da autenticação ────────────────────────────
+// Cada requisição refazia as consultas de quem é o usuário (perfil + papel principal) e, fora
+// do admin, as de cidade (ids ligados, papel de admin, user_cities): 3 a 7 idas ao banco antes
+// da consulta pedida. Agora o resultado fica guardado por usuário durante AUTH_CACHE_TTL_MS
+// (5 s; 0 desliga) e é descartado na hora em que qualquer consulta deste processo grava em
+// profiles, auth_users, user_roles ou user_cities (de novo no COMMIT, se estiver numa
+// transação). Erro de banco nunca entra no cache. Fica aqui no topo porque o pool já
+// conecta durante a subida.
+const AUTH_CACHE_TTL_MS = Math.max(0, Number(process.env.AUTH_CACHE_TTL_MS ?? 5_000) || 0);
+const AUTH_TABLE_WRITE_RE = /\b(?:insert\s+into|update|delete\s+from|truncate(?:\s+table)?|alter\s+table|drop\s+table)\s+(?:only\s+)?(?:"?public"?\.)?"?(?:profiles|auth_users|user_roles|user_cities)\b/i;
+const SQL_TRANSACTION_END_RE = /^\s*(?:commit|end|rollback|abort)\b/i;
+let authCacheGeneration = 0;
+const authCaches = { identity: new Map(), linkedIds: new Map(), admin: new Map(), cities: new Map() };
+
+function invalidateAuthCache() {
+  authCacheGeneration += 1;
+  for (const cache of Object.values(authCaches)) cache.clear();
+}
+
+/**
+ * Resultado guardado de uma consulta de autenticação. Pedidos que chegam juntos dividem a
+ * mesma consulta. `keep(valor)` diz se o resultado pode ficar guardado (ex.: perfil não
+ * encontrado ou consulta que caiu no plano B não ficam).
+ */
+function cachedAuthLookup(cache, key, load, keep = () => true) {
+  if (AUTH_CACHE_TTL_MS <= 0) return load();
+  const now = Date.now();
+  const hit = cache.get(key);
+  if (hit && hit.generation === authCacheGeneration && now - hit.at < AUTH_CACHE_TTL_MS) return hit.promise;
+  const entry = { at: now, generation: authCacheGeneration, promise: null };
+  const drop = () => { if (cache.get(key) === entry) cache.delete(key); };
+  entry.promise = Promise.resolve().then(load);
+  entry.promise.then((value) => { if (!keep(value)) drop(); }, drop);
+  cache.set(key, entry);
+  return entry.promise;
+}
+
+/** Toda conexão do pool avisa o cache quando grava numa tabela de acesso (pool.query inclusive). */
+function watchAuthTableWrites(client) {
+  if (!client || client.__pulseAuthWatch) return;
+  client.__pulseAuthWatch = true;
+  const originalQuery = client.query;
+  client.query = function queryWatchingAuthTables(...args) {
+    const first = args[0];
+    const text = typeof first === 'string' ? first : (typeof first?.text === 'string' ? first.text : '');
+    const writesAuth = text !== '' && AUTH_TABLE_WRITE_RE.test(text);
+    const endsTransaction = !writesAuth && client.__pulseAuthDirty === true && SQL_TRANSACTION_END_RE.test(text);
+    if (!writesAuth && !endsTransaction) return originalQuery.apply(this, args);
+    invalidateAuthCache();
+    // Gravou: descarta de novo quando a transação (se houver) terminar.
+    client.__pulseAuthDirty = writesAuth;
+    const last = args.length - 1;
+    if (typeof args[last] === 'function') {
+      const callback = args[last];
+      args[last] = function afterAuthWrite(...callbackArgs) {
+        invalidateAuthCache();
+        return callback.apply(this, callbackArgs);
+      };
+      return originalQuery.apply(this, args);
+    }
+    const result = originalQuery.apply(this, args);
+    if (result && typeof result.then === 'function') result.then(invalidateAuthCache, invalidateAuthCache);
+    return result;
+  };
+}
+pool.on('connect', watchAuthTableWrites);
+
 const ONLINE_PRESENCE_MS = 120_000;
 const presenceState = new Map();
 
@@ -2548,6 +2615,22 @@ function decodeTokenForRefresh(token) {
   }
 }
 
+/** Quem é o usuário do token: id, e-mail e papel principal (as consultas que o verifyUser fazia). */
+async function loadAuthIdentity(userId) {
+  const profile = await getAuthProfileById(userId);
+  if (!profile) return null;
+  const fallbackRole = profile.role || 'editor';
+  let role = fallbackRole;
+  let cacheable = true;
+  try {
+    role = await queryUserPrimaryRole(profile.id, fallbackRole);
+  } catch (error) {
+    console.error('Role lookup failed, using profile fallback role:', error?.message || error);
+    cacheable = false;
+  }
+  return { id: profile.id, email: profile.email, role, cacheable };
+}
+
 async function verifyUser(req) {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) throw new Error('Unauthorized');
@@ -2566,7 +2649,14 @@ async function verifyUser(req) {
     if (decoded.scope) throw new Error('Unauthorized');
 
     let profileLookupFailed = false;
-    const profile = await getAuthProfileById(decoded.sub).catch(err => {
+    // Perfil e papel principal: cache curto por usuário (ver cachedAuthLookup); perfil
+    // inexistente e papel lido pelo plano B não ficam guardados.
+    const identity = await cachedAuthLookup(
+      authCaches.identity,
+      String(decoded.sub),
+      () => loadAuthIdentity(decoded.sub),
+      (value) => Boolean(value?.cacheable)
+    ).catch(err => {
       console.error("[Auth-DB-Error] Failed to fetch profile from DB:", { sub: decoded.sub, error: err.message });
       profileLookupFailed = true;
       return null;
@@ -2580,18 +2670,16 @@ async function verifyUser(req) {
 
     // Perfil apagado (excluído pela Equipe): o token deixa de valer na hora,
     // em vez de seguir com o papel gravado nele por até 30 dias.
-    if (!profile) {
+    if (!identity) {
       console.warn("[Auth-ProfileNotFound] User ID not found in profiles/auth_users, token refused:", { sub: decoded.sub });
       throw new Error('Unauthorized');
     }
 
-    const role = await getUserPrimaryRole(profile.id, profile.role || 'editor');
-
     return {
       user: {
-        id: profile.id || decoded.sub,
-        email: profile.email || decoded.email,
-        role,
+        id: identity.id || decoded.sub,
+        email: identity.email || decoded.email,
+        role: identity.role,
       },
       userClient: getUserClient(authHeader),
     };
@@ -2648,11 +2736,25 @@ async function getLinkedUserIds(user) {
 async function loadLinkedUserIds(user) {
   const directId = user?.id ? String(user.id) : '';
   const email = user?.email ? String(user.email).trim().toLowerCase() : '';
+  // Cache curto entre requisições; se a consulta falhar, o resultado parcial não fica guardado.
+  const result = await cachedAuthLookup(
+    authCaches.linkedIds,
+    `${directId}|${email}`,
+    () => queryLinkedUserIds(directId, email),
+    (value) => value.ok
+  );
+  return [...result.ids];
+}
+
+async function queryLinkedUserIds(directId, email) {
   const ids = new Set(directId ? [directId] : []);
+  let ok = true;
 
   try {
     const profileColumns = await getExistingColumns('profiles').catch(() => new Set());
     const authColumns = await getExistingColumns('auth_users').catch(() => new Set());
+    // Sem conseguir ler as colunas, o resultado sai parcial: vale para esta requisição, sem cache.
+    if (profileColumns.size === 0 || authColumns.size === 0) ok = false;
     const queries = [];
 
     if (profileColumns.has('id') && (directId || (email && profileColumns.has('email')))) {
@@ -2687,9 +2789,10 @@ async function loadLinkedUserIds(user) {
     }
   } catch (error) {
     console.error('Linked user id lookup failed:', error?.message || error);
+    ok = false;
   }
 
-  return Array.from(ids).filter(Boolean);
+  return { ids: Array.from(ids).filter(Boolean), ok };
 }
 
 async function isAdminUser(user) {
@@ -2701,17 +2804,22 @@ async function isAdminUser(user) {
 }
 
 async function loadIsAdminUser(user) {
-  try {
-    await ensureAuthSupportTables();
-    const linkedIds = await getLinkedUserIds(user);
-    const { rows } = await pool.query(
-      'SELECT 1 FROM user_roles WHERE user_id::text = ANY($1::text[]) AND role IN ($2, $3) LIMIT 1',
-      [linkedIds, 'admin', 'social_media']
-    );
-    return rows.length > 0;
-  } catch {
-    return false;
-  }
+  const key = `${user?.id ? String(user.id) : ''}|${user?.email ? String(user.email).trim().toLowerCase() : ''}`;
+  // Cache curto entre requisições; erro de banco (que vira false) não fica guardado.
+  const result = await cachedAuthLookup(authCaches.admin, key, async () => {
+    try {
+      await ensureAuthSupportTables();
+      const linkedIds = await getLinkedUserIds(user);
+      const { rows } = await pool.query(
+        'SELECT 1 FROM user_roles WHERE user_id::text = ANY($1::text[]) AND role IN ($2, $3) LIMIT 1',
+        [linkedIds, 'admin', 'social_media']
+      );
+      return { admin: rows.length > 0, ok: true };
+    } catch {
+      return { admin: false, ok: false };
+    }
+  }, (value) => value.ok);
+  return result.admin;
 }
 
 async function userHasAssignedRole(user, role) {
@@ -3383,25 +3491,30 @@ async function getAuthProfileById(userId) {
 
 async function getUserPrimaryRole(userId, fallbackRole = 'editor') {
   try {
-    await ensureAuthSupportTables();
-    const { rows: roles } = await pool.query(
-      `SELECT ur.role
-         FROM user_roles ur
-         LEFT JOIN profiles role_profile ON role_profile.id = ur.user_id
-         LEFT JOIN auth_users role_auth ON role_auth.id = ur.user_id
-         LEFT JOIN profiles current_profile ON current_profile.id = $1
-         LEFT JOIN auth_users current_auth ON current_auth.id = $1
-        WHERE ur.user_id = $1
-           OR lower(COALESCE(role_profile.email, role_auth.email, '')) = lower(COALESCE(current_profile.email, current_auth.email, ''))
-         ORDER BY CASE WHEN ur.role::text = $2 THEN 0 ELSE 1 END, ur.role::text
-         LIMIT 1`,
-      [userId, fallbackRole]
-    );
-    return roles[0]?.role || fallbackRole || 'editor';
+    return await queryUserPrimaryRole(userId, fallbackRole);
   } catch (error) {
     console.error('Role lookup failed, using profile fallback role:', error?.message || error);
     return fallbackRole || 'editor';
   }
+}
+
+/** Igual ao getUserPrimaryRole, mas deixa o erro de banco subir (o cache não guarda o plano B). */
+async function queryUserPrimaryRole(userId, fallbackRole = 'editor') {
+  await ensureAuthSupportTables();
+  const { rows: roles } = await pool.query(
+    `SELECT ur.role
+       FROM user_roles ur
+       LEFT JOIN profiles role_profile ON role_profile.id = ur.user_id
+       LEFT JOIN auth_users role_auth ON role_auth.id = ur.user_id
+       LEFT JOIN profiles current_profile ON current_profile.id = $1
+       LEFT JOIN auth_users current_auth ON current_auth.id = $1
+      WHERE ur.user_id = $1
+         OR lower(COALESCE(role_profile.email, role_auth.email, '')) = lower(COALESCE(current_profile.email, current_auth.email, ''))
+       ORDER BY CASE WHEN ur.role::text = $2 THEN 0 ELSE 1 END, ur.role::text
+       LIMIT 1`,
+    [userId, fallbackRole]
+  );
+  return roles[0]?.role || fallbackRole || 'editor';
 }
 
 async function storeUserPassword(userId, rawPassword) {
@@ -11022,9 +11135,12 @@ async function resolveActiveCity(req, userId, userObj = null) {
 
   const linkedUserIds = await getLinkedUserIds(userObj || { id: userId });
   try {
-    const { rows } = await pool.query(
-      'SELECT city, is_primary FROM user_cities WHERE user_id::text = ANY($1::text[])',
-      [linkedUserIds.length ? linkedUserIds : [String(userId)]]
+    const cityUserIds = linkedUserIds.length ? linkedUserIds : [String(userId)];
+    // Cache curto entre requisições (a cidade pedida no cabeçalho é conferida a cada vez).
+    const { rows } = await cachedAuthLookup(
+      authCaches.cities,
+      cityUserIds.join(','),
+      () => pool.query('SELECT city, is_primary FROM user_cities WHERE user_id::text = ANY($1::text[])', [cityUserIds])
     );
     // Sem registro em user_cities: só Minaçu, igual ao /api/me/cities (antes valia
     // qualquer cidade mandada no cabeçalho).

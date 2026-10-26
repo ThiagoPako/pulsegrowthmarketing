@@ -45,7 +45,8 @@ const FORMAT_LABELS: Record<string, string> = {
 // Arte concluída pela designer: aprovada ou já postada (o envio em massa leva as aprovadas para 'postado').
 const DONE_COLS = ['aprovado', 'postado'];
 // Arte entregue, esperando revisão interna ou o cliente: não é atraso da designer.
-const WAITING_COLS = ['em_analise', 'enviar_cliente'];
+// (Análise IA: entrega de agente esperando o revisor de artes)
+const WAITING_COLS = ['analise_ia', 'em_analise', 'enviar_cliente'];
 // Data em que a arte foi concluída (updated_at muda no envio em massa para Postadas).
 const doneAt = (t: DesignTask) => t.completed_at || t.client_approved_at || t.updated_at;
 

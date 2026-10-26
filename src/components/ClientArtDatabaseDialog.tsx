@@ -40,6 +40,7 @@ const FORMAT_LABELS: Record<string, string> = {
 const COLUMN_LABELS: Record<string, string> = {
   nova_tarefa: 'Nova Tarefa',
   executando: 'Executando',
+  analise_ia: 'Análise IA',
   em_analise: 'Em Análise',
   enviar_cliente: 'Enviar Cliente',
   aprovado: 'Aprovado',

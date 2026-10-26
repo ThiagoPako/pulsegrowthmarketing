@@ -15838,7 +15838,8 @@ app.post('/api/upload', async (req, res) => {
         filename: req.file.filename,
         size: req.file.size,
         mimetype: req.file.mimetype,
-        url: `/uploads/${relative}`,
+        // URL completa, como o upload-server antigo devolvia (bio links e treinamento gravam o url direto)
+        url: `${String(process.env.PUBLIC_UPLOADS_URL || 'https://agenciapulse.tech/uploads').replace(/\/+$/, '')}/${relative}`,
       });
     } catch (error) {
       console.error('[upload:process] error:', error);

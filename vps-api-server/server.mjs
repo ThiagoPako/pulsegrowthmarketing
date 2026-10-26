@@ -5189,7 +5189,7 @@ Responda APENAS com JSON válido, sem texto antes ou depois:
       background_color: SLIDE_HSL.test(String(s?.background_color || '')) ? s.background_color : '220 15% 10%',
       text_color: SLIDE_HSL.test(String(s?.text_color || '')) ? s.text_color : '0 0% 100%',
     })).filter((s) => s.title || s.content);
-    if (slides.length === 0) return res.status(502).json({ error: 'A IA não devolveu slides. Tente de novo.' });
+    if (slides.length === 0) return res.status(502).json({ error: 'Os slides não foram gerados. Tente de novo.' });
     res.json({ slides });
   } catch (error) {
     console.error('Generate slides error:', error);

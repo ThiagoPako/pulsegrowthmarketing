@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { BookOpen } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/vpsDb';
-import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn } from '@/hooks/useDesignTasks';
+import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn, stopTimerFields, hasOpenTimer, getConflictingExecutingTasks } from '@/hooks/useDesignTasks';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -388,33 +388,39 @@ export default function DesignerKanban() {
     }
     extraFields.position = Math.round(newPosition);
 
-    if (targetColumn === 'executando') {
+    // Só "entra em execução" quando muda de coluna: reordenar dentro de 'Executando'
+    // não reinicia o cronômetro nem pausa as outras tarefas.
+    const isStarting = isChangingColumn && targetColumn === 'executando';
+
+    if (isStarting) {
       if (!task.started_at) extraFields.started_at = new Date().toISOString();
       if (!task.assigned_to && user?.id) extraFields.assigned_to = user.id;
-      extraFields.timer_running = true;
-      extraFields.timer_started_at = new Date().toISOString();
+      // Cronômetro já rodando (ex.: vindo de Ajustes) segue a mesma sessão.
+      if (!(task.timer_running && task.timer_started_at)) {
+        extraFields.timer_running = true;
+        extraFields.timer_started_at = new Date().toISOString();
+      }
     }
 
-    if (targetColumn === 'fila_baixa_prioridade') {
-      extraFields.timer_running = false;
-      extraFields.timer_started_at = null;
+    // Saindo para qualquer outra coluna: fecha a sessão do cronômetro somando o tempo corrido
+    // (antes só zerava o timer e a sessão em curso se perdia, ou ficava ligado e inflava o tempo).
+    if (isChangingColumn && targetColumn !== 'executando' && hasOpenTimer(task)) {
+      Object.assign(extraFields, stopTimerFields(task));
     }
 
-    if (targetColumn === 'em_analise') {
+    // Efeitos de entrada na coluna só valem quando o card muda de coluna (não ao reordenar).
+    if (isChangingColumn && targetColumn === 'em_analise') {
       const hasAttachment = task.attachment_url || (task as any).mockup_url;
       if (!hasAttachment) {
         toast.error('Anexe a arte ou mockup antes de enviar para análise');
         return;
       }
       extraFields.due_date = null;
-      extraFields.timer_running = false;
-      extraFields.timer_started_at = null;
     }
 
-    if (targetColumn === 'aprovado') {
+    if (isChangingColumn && targetColumn === 'aprovado') {
       extraFields.completed_at = new Date().toISOString();
       extraFields.client_approved_at = new Date().toISOString();
-      extraFields.timer_running = false;
       if (task.format_type === 'logomarca' && task.client_id) {
         const fileUrl = task.attachment_url || (task as any).mockup_url;
         if (fileUrl) {
@@ -424,10 +430,14 @@ export default function DesignerKanban() {
       }
     }
 
-    if (targetColumn === 'enviar_cliente') {
+    if (isChangingColumn && targetColumn === 'enviar_cliente') {
       if (!task.sent_to_client_at) extraFields.sent_to_client_at = new Date().toISOString();
-      extraFields.timer_running = false;
     }
+
+    // Uma tarefa ativa por pessoa: só pausa as outras em execução do mesmo responsável,
+    // e só quando o card está entrando em execução (antes qualquer arraste pausava tudo).
+    const owner = extraFields.assigned_to ?? task.assigned_to ?? user?.id ?? null;
+    const conflicting = isStarting ? getConflictingExecutingTasks(tasks, taskId, owner) : [];
 
     // Pausa as tarefas conflitantes (movendo pra fila_baixa_prioridade), acumulando o tempo
     // e opcionalmente registrando o motivo (justificativa da designer).
@@ -471,7 +481,6 @@ export default function DesignerKanban() {
             .map(u => supabase.from('design_tasks').update({ position: u.position }).eq('id', u.id))
         );
       }
-      const conflicting = tasks.filter(t => t.id !== taskId && t.kanban_column === 'executando');
       if (conflicting.length > 0) await pauseConflicting(conflicting, task.title, reason);
       await updateTask.mutateAsync({ id: taskId, kanban_column: targetColumn, ...extraFields } as any);
       await addHistory.mutateAsync({ task_id: taskId, action: `Movido para ${targetLabel}`, user_id: user?.id });
@@ -479,9 +488,8 @@ export default function DesignerKanban() {
     };
 
     try {
-      // Se iniciar execução e já houver outra ativa → pedir justificativa antes
-      if (targetColumn === 'executando') {
-        const conflicting = tasks.filter(t => t.id !== taskId && t.kanban_column === 'executando');
+      // Se iniciar execução e já houver outra ativa da mesma pessoa → pedir justificativa antes
+      if (isStarting) {
         if (conflicting.length > 0) {
           setPauseReasonText('');
           setPausePrompt({
@@ -534,7 +542,9 @@ export default function DesignerKanban() {
 
   const handleQuickStart = async (task: DesignTask) => {
     const now = new Date().toISOString();
-    const conflicting = tasks.filter(t => t.id !== task.id && t.kanban_column === 'executando');
+    // O card continua com o responsável dele (o admin iniciando não "pega" a arte da designer).
+    const owner = task.assigned_to || user?.id || null;
+    const conflicting = getConflictingExecutingTasks(tasks, task.id, owner);
 
     const doStart = async () => {
       try {
@@ -542,7 +552,7 @@ export default function DesignerKanban() {
           id: task.id,
           kanban_column: 'executando',
           started_at: task.started_at || now,
-          assigned_to: user?.id || task.assigned_to,
+          assigned_to: owner,
           timer_running: true,
           timer_started_at: now,
         } as any);

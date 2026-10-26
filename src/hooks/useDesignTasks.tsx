@@ -54,6 +54,42 @@ export interface DesignTask {
   profiles?: { name: string; display_name: string | null; avatar_url: string | null } | null;
 }
 
+// ── Cronômetro e regra "uma tarefa ativa por pessoa" ──
+// Compartilhados por Kanban, painel e detalhe da tarefa, para todos pararem e pausarem igual.
+
+type TimerFields = Pick<DesignTask, 'time_spent_seconds' | 'timer_running' | 'timer_started_at'>;
+
+/** Campos que param o cronômetro somando a sessão em curso (só quando estava rodando) ao tempo gasto. */
+export function stopTimerFields(task: TimerFields, nowMs: number = Date.now()) {
+  const runSecs = task.timer_running && task.timer_started_at
+    ? Math.max(0, Math.floor((nowMs - new Date(task.timer_started_at).getTime()) / 1000))
+    : 0;
+  return {
+    timer_running: false,
+    timer_started_at: null as string | null,
+    time_spent_seconds: (task.time_spent_seconds || 0) + runSecs,
+  };
+}
+
+/** O card tem sessão de cronômetro aberta (rodando ou com início pendurado) que precisa ser fechada. */
+export function hasOpenTimer(task: TimerFields) {
+  return !!task.timer_running || !!task.timer_started_at;
+}
+
+/**
+ * Outras tarefas em 'executando' que devem ser pausadas quando uma tarefa de `ownerId`
+ * entra em execução: só as do mesmo responsável (ou sem responsável). A tarefa de um
+ * colega na mesma cidade não é mexida.
+ */
+export function getConflictingExecutingTasks(tasks: DesignTask[], taskId: string, ownerId: string | null | undefined) {
+  const owner = ownerId || null;
+  return tasks.filter(t =>
+    t.id !== taskId &&
+    t.kanban_column === 'executando' &&
+    (!t.assigned_to || t.assigned_to === owner)
+  );
+}
+
 // Persistência local pra primeira renderização instantânea entre reloads/navegações.
 // Guarda por cidade e limita ao que é útil pro kanban/painel.
 const LS_KEY = (city: string) => `pulse:design-tasks:${city || 'default'}`;

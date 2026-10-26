@@ -103,7 +103,8 @@ export default function DesignerTaskCard({ task, index, onOpenDetail, updateTask
       id: task.id,
       kanban_column: 'executando',
       started_at: task.started_at || now,
-      assigned_to: user?.id || task.assigned_to,
+      // O card continua com o responsável dele; sem responsável, fica com quem iniciou.
+      assigned_to: task.assigned_to || user?.id,
       timer_running: true,
       timer_started_at: now,
     } as any);

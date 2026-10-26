@@ -12,7 +12,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn } from '@/hooks/useDesignTasks';
+import { useDesignTasks, DESIGN_COLUMNS, DesignTask, DesignTaskColumn, stopTimerFields, hasOpenTimer, getConflictingExecutingTasks } from '@/hooks/useDesignTasks';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/vpsDb';
@@ -57,7 +57,7 @@ function getTaskCategory(task: DesignTask): 'identidade_visual' | 'reformulacao'
 }
 
 export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Props) {
-  const { updateTask, addHistory, historyQuery, deleteTask } = useDesignTasks();
+  const { tasksQuery, updateTask, addHistory, historyQuery, deleteTask } = useDesignTasks();
   const { currentUser } = useApp();
   const { user } = useAuth();
   const [observations, setObservations] = useState(task.observations || '');
@@ -143,8 +143,32 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
     }
   };
 
+  // Saindo da execução: fecha a sessão do cronômetro somando o tempo corrido (senão ele
+  // seguia ligado em análise/ajustes e inflava o tempo, ou a sessão se perdia).
+  const timerStopFields = () => (hasOpenTimer(task) ? stopTimerFields(task) : {});
+
   const handleStartTask = async () => {
-    await moveToColumn('executando', { started_at: new Date().toISOString(), assigned_to: user?.id } as any);
+    const now = new Date().toISOString();
+    // O card continua com o responsável dele; sem responsável, fica com quem iniciou.
+    const owner = task.assigned_to || user?.id || null;
+    // Uma tarefa ativa por pessoa (como no Kanban): pausa as outras em execução do mesmo responsável.
+    const conflicting = getConflictingExecutingTasks(tasksQuery.data || [], task.id, owner);
+    for (const other of conflicting) {
+      await updateTask.mutateAsync({ id: other.id, kanban_column: 'fila_baixa_prioridade', ...stopTimerFields(other) } as any);
+      await addHistory.mutateAsync({
+        task_id: other.id,
+        action: 'Pausada por prioridade',
+        details: `Movida para Fila Baixa Prioridade porque "${task.title}" entrou em execução`,
+        user_id: user?.id,
+      });
+    }
+    if (conflicting.length > 0) toast.info(`${conflicting.length} tarefa(s) pausada(s) na Fila Baixa Prioridade`);
+    await moveToColumn('executando', {
+      started_at: task.started_at || now,
+      assigned_to: owner,
+      timer_running: true,
+      timer_started_at: now,
+    } as any);
     toast.success('Tarefa iniciada!');
   };
 
@@ -152,13 +176,13 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
     const finalAttachment = attachmentUrl || mockupUrl || (task as any).mockup_url || task.attachment_url;
     if (!finalAttachment) { toast.error('Anexe a arte ou mockup antes de enviar'); return; }
     // Card pronto: limpa data de vencimento para não ficar marcado como atrasado
-    await updateTask.mutateAsync({ id: task.id, kanban_column: 'em_analise', attachment_url: finalAttachment, editable_file_url: editableFileUrl, observations, due_date: null } as any);
+    await updateTask.mutateAsync({ id: task.id, kanban_column: 'em_analise', attachment_url: finalAttachment, editable_file_url: editableFileUrl, observations, due_date: null, ...timerStopFields() } as any);
     await addHistory.mutateAsync({ task_id: task.id, action: 'Enviado para análise', attachment_url: finalAttachment, user_id: user?.id });
     toast.success('Enviado para análise!');
   };
 
   const handleApprove = async () => {
-    await moveToColumn('enviar_cliente');
+    await moveToColumn('enviar_cliente', timerStopFields() as any);
     toast.success('Aprovada internamente!');
   };
 
@@ -175,6 +199,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
       observations: fullObservations,
       reference_images: [...(task.reference_images || []), ...adjustmentRefImages],
       references_links: [...(task.references_links || []), ...adjustmentRefLinks],
+      ...timerStopFields(),
     } as any);
     await addHistory.mutateAsync({
       task_id: task.id,
@@ -343,7 +368,7 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
   };
 
   const handleClientApproval = async () => {
-    await updateTask.mutateAsync({ id: task.id, kanban_column: 'aprovado', client_approved_at: new Date().toISOString(), completed_at: new Date().toISOString() } as any);
+    await updateTask.mutateAsync({ id: task.id, kanban_column: 'aprovado', client_approved_at: new Date().toISOString(), completed_at: new Date().toISOString(), ...timerStopFields() } as any);
     await addHistory.mutateAsync({ task_id: task.id, action: 'Aprovado pelo cliente', user_id: user?.id });
 
     // Update portal content status to approved

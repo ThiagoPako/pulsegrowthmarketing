@@ -26,6 +26,7 @@ import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerWhatsAppRoutes } from './whatsapp/routes.mjs';
 import { enqueueWhatsApp, clientTarget, clientsForGroup } from './whatsapp/shared.mjs';
 import { createPortalSession, effectiveClientId, itemScopeClientId, pickBackupOption } from './lib/portalSession.mjs';
+import { cleanupOldEditVersions } from './lib/versionCleanup.mjs';
 import { buildProposalRevenueSchedule, stripRevenueMark } from './lib/proposalRevenues.mjs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
@@ -1493,6 +1494,31 @@ function removeUploadFile(fileUrl) {
   }
   return freed;
 }
+
+// Limpeza diária das versões antigas de vídeo (regra em lib/versionCleanup.mjs). Uma vez por
+// dia (fuso de Brasília): a primeira checagem sai 2 min depois da subida, depois a cada 3 h.
+async function runDailyVersionCleanup() {
+  const job = 'limpeza_versoes_video';
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS pulse_job_runs (
+      job TEXT NOT NULL, day DATE NOT NULL, ran_at TIMESTAMPTZ NOT NULL DEFAULT now(), result JSONB,
+      PRIMARY KEY (job, day))`);
+    const { rowCount } = await pool.query(
+      `INSERT INTO pulse_job_runs (job, day) VALUES ($1, (now() AT TIME ZONE 'America/Sao_Paulo')::date) ON CONFLICT DO NOTHING`, [job]
+    );
+    if (!rowCount) return;
+    const result = await cleanupOldEditVersions(pool, { removeUploadFile, uploadRelativePath });
+    await pool.query(
+      `UPDATE pulse_job_runs SET result = $2 WHERE job = $1 AND day = (now() AT TIME ZONE 'America/Sao_Paulo')::date`,
+      [job, JSON.stringify(result)]
+    );
+    console.log(`[limpeza-versoes] ${result.deleted} vídeo(s) antigo(s) apagado(s), ${(result.bytes / 1e9).toFixed(2)} GB liberados, ${result.skipped} mantido(s) por uso ou idade`);
+  } catch (error) {
+    console.error('[limpeza-versoes] falha:', error?.message || error);
+  }
+}
+setTimeout(runDailyVersionCleanup, 2 * 60 * 1000).unref?.();
+setInterval(runDailyVersionCleanup, 3 * 60 * 60 * 1000).unref?.();
 
 async function cleanupOldPortalVideos(options = {}) {
   const { 

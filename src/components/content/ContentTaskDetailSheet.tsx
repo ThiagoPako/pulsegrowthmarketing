@@ -22,6 +22,7 @@ import {
   History, Lightbulb, Video, Scissors, ScanEye, Pencil, MailCheck, CalendarCheck, MonitorCheck,
   Upload, Loader2, Rocket
 } from 'lucide-react';
+import { formatPostingDate } from '@/lib/postingSchedule';
 import UserAvatar from '@/components/UserAvatar';
 import InlineVideoPlayer from '@/components/content/InlineVideoPlayer';
 import AgentWorkBadge from '@/components/kanban/AgentWorkBadge';
@@ -203,6 +204,8 @@ interface ContentTask {
   edited_by: string | null;
   scheduled_recording_date: string | null;
   scheduled_recording_time: string | null;
+  /** Data e hora de postagem (Agendamentos, Entregas, Kanban) */
+  posting_at?: string | null;
   drive_link: string | null;
   edited_video_link: string | null;
   adjustment_notes: string | null;
@@ -1705,8 +1708,16 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                   onMentioned={onRefresh}
                 />
 
-                {/* Scheduled date */}
-                {task.scheduled_recording_date && safeFormatDate(task.scheduled_recording_date) !== '—' && (
+                {/* Data de postagem */}
+                {task.posting_at && ['acompanhamento', 'arquivado'].includes(task.kanban_column) && formatPostingDate(task.posting_at) ? (
+                  <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted border border-border">
+                    <CalendarClock size={16} className="text-muted-foreground shrink-0" />
+                    <div>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">Data de postagem</span>
+                      <span className="text-sm font-bold text-foreground">{formatPostingDate(task.posting_at)}</span>
+                    </div>
+                  </div>
+                ) : task.scheduled_recording_date && safeFormatDate(task.scheduled_recording_date) !== '—' && (
                   <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted border border-border">
                     <Calendar size={16} className="text-muted-foreground shrink-0" />
                     <div>

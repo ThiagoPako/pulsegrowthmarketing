@@ -35,8 +35,9 @@ import {
   Play, Send, CheckCircle, RotateCcw, Clock, ExternalLink, History,
   Upload, Image, FileText, Palette, Info, User, Calendar, ArrowRight, X,
   ChevronRight, Eye, Link2, MessageSquare, CheckSquare, Paperclip, ZoomIn, Loader2, Trash2, Pencil, Download, FileDown, MoreVertical,
-  FolderOpen, AlertTriangle, Layers, ScanSearch
+  FolderOpen, AlertTriangle, Layers, ScanSearch, CalendarClock
 } from 'lucide-react';
+import { formatPostingDate } from '@/lib/postingSchedule';
 import { downloadSingleArt, downloadArtsAsPdf } from '@/lib/designerDownload';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
@@ -739,6 +740,12 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
                   </button>
                 )}
               </div>
+              {task.posting_at && ['aprovado', 'postado'].includes(task.kanban_column) && formatPostingDate(task.posting_at) && (
+                <span className="flex items-center gap-1.5 text-[11px] font-medium text-foreground" title="Data de postagem">
+                  <CalendarClock size={13} className="text-muted-foreground" />
+                  {formatPostingDate(task.posting_at)}
+                </span>
+              )}
               {(() => {
                 const downloadable = [
                   task.attachment_url,

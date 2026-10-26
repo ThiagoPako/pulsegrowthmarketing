@@ -11942,6 +11942,7 @@ app.get('/api/design-tasks/fast', async (req, res) => {
     const extraSelect = [
       dtColumns?.has('checklist') ? 'dt.checklist' : null,
       dtColumns?.has('collaborator_id') ? 'dt.collaborator_id' : null,
+      dtColumns?.has('posting_at') ? 'dt.posting_at' : null, // data de postagem (módulo Agendamentos)
       ...AGENT_DESIGN_COLUMNS.map((col) => (dtColumns?.has(col) ? `dt.${col}` : null)),
       'c.drive_link AS clients_drive_link',
     ].filter(Boolean).map((col) => `\n          ${col},`).join('');

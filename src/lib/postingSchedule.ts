@@ -234,6 +234,14 @@ export function suggestFormat(item: SchedulingItem): PublishFormat {
   return 'reels';
 }
 
+/** Data de postagem gravada no card: "03/11/2026 às 10:30" (Brasília). */
+export function formatPostingDate(iso: string | null | undefined): string | null {
+  const parts = iso ? brtParts(iso) : null;
+  if (!parts) return null;
+  const [y, m, d] = parts.date.split('-');
+  return `${d}/${m}/${y} às ${parts.time}`;
+}
+
 /** "seg., 03/11" */
 export function formatDayLabel(dateKey: string): string {
   const [y, m, d] = dateKey.split('-').map(Number);

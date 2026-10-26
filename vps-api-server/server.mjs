@@ -6855,8 +6855,8 @@ app.get('/api/meta-integration', async (req, res) => {
       active_rows: row?.activeRows || 0,
     });
   } catch (error) {
-    const denied = /access required|unauthorized|token/i.test(error.message || '');
-    res.status(denied ? 403 : 500).json({ error: error.message });
+    // 401 sem sessão (o front renova e tenta de novo), 403 sem papel de admin
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 
@@ -6915,9 +6915,8 @@ app.post('/api/meta-integration', async (req, res) => {
       instagram_secret: config.instagram_app_secret_encrypted ? secretSuffix(config.instagram_app_secret_encrypted) : null,
     });
   } catch (error) {
-    const denied = /access required|unauthorized|token/i.test(error.message || '');
     console.error('meta-integration save error:', error);
-    res.status(denied ? 403 : 500).json({ error: error.message });
+    res.status(socialRouteErrorStatus(error)).json({ error: error.message });
   }
 });
 

@@ -279,15 +279,16 @@ export default function SocialMediaDeliveries() {
       });
       if (toPost.length > 0) {
         const candidates = toPost.map(d => d.id);
-        // Entrega com postagem automática: quem marca 'postado' é o robô, só quando a publicação dá certo.
-        // Se a consulta falhar, não marca nada agora (tenta de novo no próximo minuto).
+        // Entrega com postagem automática pendente (agendada, publicando ou com erro): quem marca
+        // 'postado' é o robô, só quando a publicação dá certo. Se a consulta falhar, não marca nada
+        // agora (tenta de novo no próximo minuto).
         const withAutoPost = new Set<string>();
         try {
           for (let i = 0; i < candidates.length; i += 50) {
             const chunk = candidates.slice(i, i + 50);
             const posts = await fetchScheduledPosts({ delivery_ids: chunk });
             posts
-              .filter(p => p.delivery_id && chunk.includes(p.delivery_id) && p.status !== 'cancelado')
+              .filter(p => p.delivery_id && chunk.includes(p.delivery_id) && ['agendado', 'publicando', 'erro'].includes(p.status))
               .forEach(p => withAutoPost.add(p.delivery_id as string));
           }
         } catch {

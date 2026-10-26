@@ -428,7 +428,8 @@ export function planPostMedia(entries, { delayMs = 0, maxWaitMs = 30 * 60_000 } 
     return { wait: true, urls: entries.map((e) => e.url), changed: false, fallback: null, pending: pending.map((e) => e.relative || e.url) };
   }
   const urls = entries.map((e) => (e.status === 'ready' && e.igUrl ? e.igUrl : e.url));
-  const notReady = entries.filter((e) => ['pending', 'failed', 'disabled'].includes(e.status));
+  // desligado (IG_VIDEO_DISABLED): o original vai como antes, com as novas tentativas de sempre
+  const notReady = entries.filter((e) => ['pending', 'failed'].includes(e.status));
   let fallback = null;
   if (notReady.length) {
     const first = notReady[0];

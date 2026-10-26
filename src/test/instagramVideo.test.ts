@@ -290,6 +290,10 @@ describe('escolha da URL na hora de publicar', () => {
     expect(plan.fallback).toContain('Não deu para ajustar o vídeo ao formato do Instagram');
   });
 
+  it('versão Instagram desligada: vai o original como antes (sem motivo, o post tenta de novo)', () => {
+    expect(planPostMedia([{ url: orig, status: 'disabled', check: reason }], { delayMs: 0 })).toMatchObject({ wait: false, urls: [orig], fallback: null });
+  });
+
   it('mídias do post: media_items (lista ou texto JSON) ou media_url', () => {
     expect(postMediaUrls({ media_url: orig, media_items: null })).toEqual([orig]);
     expect(postMediaUrls({ media_url: orig, media_items: JSON.stringify([{ url: 'https://a/1.mp4' }, 'https://a/2.png', { url: '/rel.mp4' }]) }))

@@ -315,6 +315,10 @@ try {
   const { rows: [mirror] } = await pool.query(`SELECT * FROM cash_reserve_movements WHERE description = $1`, [`[Despesa] gasolina do carro da gravação - ID: ${expense.id}`]);
   assert.ok(mirror && mirror.type === 'saida' && mirror.city === 'minacu' && !mirror.is_reserve, 'espelho no caixa igual à tela');
   assert.ok((await pool.query(`SELECT 1 FROM financial_activity_log WHERE entity_id = $1 AND entity_type = 'despesa' AND user_id = $2`, [expense.id, ids.admin])).rows.length, 'log do financeiro');
+  // texto do log neutro (Pulse Plus); a origem fica em details, que a tela não mostra
+  const { rows: [finLog] } = await pool.query(`SELECT description, details FROM financial_activity_log WHERE entity_id = $1`, [expense.id]);
+  assert.ok(!/PULSE/.test(finLog.description), 'descrição do log sem PULSE');
+  assert.equal((typeof finLog.details === 'string' ? JSON.parse(finLog.details) : finLog.details).origem, 'assistente_pulse');
   res = await say(PHONES.thiago, 'sim');
   assert.equal((await pool.query(`SELECT count(*)::int AS n FROM expenses WHERE category_id = $1`, [ids.category])).rows[0].n, 1, 'segundo sim não lança de novo');
   ok('ação com confirmação: resumo do servidor, "sim" executa o payload guardado sem chamar o modelo; despesa nas colunas e na cidade certas');
@@ -347,7 +351,14 @@ try {
   assert.equal(card.content_type, 'reels');
   assert.equal(card.created_by, ids.admin);
   assert.equal(card.city, 'minacu', 'cidade do cliente (gatilho do banco)');
-  assert.match(card.description, /PULSE/);
+  // texto do card neutro (Pulse Plus): a origem PULSE fica no registro do assistente, com o id do card
+  assert.match(card.description, /^Pedido pelo WhatsApp — Thiago/);
+  assert.ok(!/PULSE|🤖/.test(card.description), 'card sem robô nem PULSE no texto');
+  const { rows: cardHistory } = await pool.query(`SELECT action FROM task_history WHERE task_id = $1`, [card.id]);
+  assert.ok(cardHistory.some((h) => h.action === 'Card criado pelo WhatsApp'), 'histórico neutro');
+  assert.ok((await pool.query(
+    `SELECT 1 FROM assistant_log WHERE kind = 'acao' AND tool = 'criar_card_video' AND detail->>'content_task_id' = $1`, [card.id]
+  )).rows.length, 'origem PULSE registrada no log do assistente');
   ok('card de vídeo criado no Kanban de conteúdo (Ideias), com busca tolerante a erro de digitação');
 
   // ── 8. relatório: job → claim → deliver → pergunta → sim → arquivo no grupo do cliente ──

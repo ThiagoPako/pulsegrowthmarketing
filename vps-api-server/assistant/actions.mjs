@@ -127,7 +127,7 @@ const EXECUTORS = {
         `INSERT INTO financial_activity_log (user_id, action_type, entity_type, entity_id, description, details, city)
          VALUES ($1, 'criação', 'despesa', $2, $3, $4, $5)`,
         [number.user_id || null, expense.id,
-          `Registrou despesa - R$ ${Number(p.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${p.descricao} (PULSE, ${requesterName(number)})`,
+          `Registrou despesa - R$ ${Number(p.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${p.descricao}`,
           JSON.stringify({ ...p, origem: 'assistente_pulse', numero: number.name }), p.cidade]
       );
       return { message: `✅ Despesa lançada: ${fmtMoney(p.valor)} · ${cityLabel(p.cidade)} · ${category.name} · ${fmtDate(p.data)}.`, result: { expense_id: expense.id } };
@@ -158,7 +158,7 @@ const EXECUTORS = {
         `INSERT INTO financial_activity_log (user_id, action_type, entity_type, entity_id, description, details, city)
          VALUES ($1, 'criação', 'receita', $2, $3, $4, $5)`,
         [number.user_id || null, revenue.id,
-          `Registrou receita - R$ ${Number(p.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (PULSE, ${requesterName(number)})`,
+          `Registrou receita - R$ ${Number(p.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
           JSON.stringify({ ...p, origem: 'assistente_pulse', numero: number.name }), revenue.city || p.cidade]
       );
       return { message: `✅ Receita lançada: ${fmtMoney(p.valor)} · ${cityLabel(p.cidade)}${client ? ` · ${client.company_name}` : ''} · ${p.recebida ? 'recebida' : `vence ${fmtDate(p.vencimento)}`}.`, result: { revenue_id: revenue.id } };
@@ -168,7 +168,9 @@ const EXECUTORS = {
   async criar_card_video(pool, action) {
     const p = action.payload;
     const { number, client } = await recheck(pool, action.number_id, 'criar_cards', { clientId: p.client_id });
-    const description = [`🤖 Pedido pelo PULSE (WhatsApp) — ${requesterName(number)}`, p.descricao].filter(Boolean).join('\n\n');
+    // Texto neutro (a equipe sem Pulse Plus não vê o PULSE): a origem fica no registro do assistente
+    // (assistant_log, ação executada com o id do card), que só a tela do PULSE mostra.
+    const description = [`Pedido pelo WhatsApp — ${requesterName(number)}`, p.descricao].filter(Boolean).join('\n\n');
     const { rows: [task] } = await pool.query(
       `INSERT INTO content_tasks (client_id, title, content_type, kanban_column, description, created_by, position, updated_at)
        VALUES ($1, $2, $3, 'ideias', $4, $5, (SELECT count(*) FROM content_tasks WHERE kanban_column = 'ideias'), now())
@@ -176,7 +178,7 @@ const EXECUTORS = {
       [client.id, p.titulo, p.tipo, description, number.user_id || null]
     );
     await pool.query('INSERT INTO task_history (task_id, user_id, action, details) VALUES ($1, $2, $3, $4)',
-      [task.id, number.user_id || null, '🤖 Card criado pelo PULSE (WhatsApp)', `Pedido por ${requesterName(number)}`]).catch(() => {});
+      [task.id, number.user_id || null, 'Card criado pelo WhatsApp', `Pedido por ${requesterName(number)}`]).catch(() => {});
     await linkDemand(pool, p.demanda_id, 'video', task.id);
     return { message: `✅ Card criado no Kanban de conteúdo (Ideias): '${p.titulo}' — ${client.company_name}.`, result: { content_task_id: task.id } };
   },
@@ -184,14 +186,14 @@ const EXECUTORS = {
   async criar_card_design(pool, action) {
     const p = action.payload;
     const { number, client } = await recheck(pool, action.number_id, 'criar_cards', { clientId: p.client_id });
-    const description = [`🤖 Pedido pelo PULSE (WhatsApp) — ${requesterName(number)}`, p.descricao].filter(Boolean).join('\n\n');
+    const description = [`Pedido pelo WhatsApp — ${requesterName(number)}`, p.descricao].filter(Boolean).join('\n\n');
     const { rows: [task] } = await pool.query(
       `INSERT INTO design_tasks (client_id, title, format_type, priority, copy_text, description, due_date, created_by, kanban_column, position)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'nova_tarefa', 0) RETURNING id`,
       [client.id, p.titulo, p.formato, p.prioridade, p.texto_da_arte || null, description, p.prazo ? `${p.prazo}T12:00:00-03:00` : null, number.user_id || null]
     );
     await pool.query('INSERT INTO design_task_history (task_id, action, details, user_id) VALUES ($1, $2, $3, $4)',
-      [task.id, '🤖 Card criado pelo PULSE (WhatsApp)', `Pedido por ${requesterName(number)}`, number.user_id || null]).catch(() => {});
+      [task.id, 'Card criado pelo WhatsApp', `Pedido por ${requesterName(number)}`, number.user_id || null]).catch(() => {});
     await pool.query(`SELECT notify_role('designer'::app_role, 'Nova tarefa de design', $1, 'design', '/designer')`, [`Nova tarefa: ${p.titulo}`])
       .catch((error) => console.error('[assistente] aviso aos designers:', error.message));
     await linkDemand(pool, p.demanda_id, 'design', task.id);

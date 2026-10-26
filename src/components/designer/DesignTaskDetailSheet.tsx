@@ -99,12 +99,23 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
     }
   }, [task.kanban_column]);
 
+  // "Arquivo editável" e "Observações" só vão para o banco no "Enviar p/ análise": o que a
+  // designer digitou não é sobrescrito quando a tarefa muda por outro motivo (upload de arte,
+  // mockup, prazo). Ao trocar de tarefa ou de coluna (ex.: depois de enviar), volta a sincronizar.
+  const dirtyFieldsRef = useRef({ observations: false, editableFileUrl: false });
+  const dirtyKeyRef = useRef(`${task.id}:${task.kanban_column}`);
+
   // Sync local state when task prop changes
   useEffect(() => {
-    setObservations(task.observations || '');
+    const dirtyKey = `${task.id}:${task.kanban_column}`;
+    if (dirtyKeyRef.current !== dirtyKey) {
+      dirtyKeyRef.current = dirtyKey;
+      dirtyFieldsRef.current = { observations: false, editableFileUrl: false };
+    }
+    if (!dirtyFieldsRef.current.observations) setObservations(task.observations || '');
     setAttachmentUrl(task.attachment_url || '');
     setAttachmentUrls((task as any).attachment_urls || []);
-    setEditableFileUrl(task.editable_file_url || '');
+    if (!dirtyFieldsRef.current.editableFileUrl) setEditableFileUrl(task.editable_file_url || '');
     setMockupUrl((task as any).mockup_url || '');
     setChecklist((task as any).checklist || []);
     setDueDate(task.due_date ? task.due_date.slice(0, 10) : '');
@@ -484,8 +495,19 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
   const moveActions = getMoveActions();
 
+  // Fechar com "Arquivo editável"/"Observações" digitados e não enviados pede confirmação.
+  const handleSheetOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      const unsaved =
+        (dirtyFieldsRef.current.observations && observations !== (task.observations || '')) ||
+        (dirtyFieldsRef.current.editableFileUrl && editableFileUrl !== (task.editable_file_url || ''));
+      if (unsaved && !window.confirm('O "Arquivo editável" e as "Observações" digitados só são salvos ao enviar para análise. Fechar e descartar?')) return;
+    }
+    onOpenChange(nextOpen);
+  };
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={handleSheetOpenChange}>
       <SheetContent className="!w-full !max-w-full h-full p-0 overflow-hidden flex flex-col" aria-describedby={undefined} side="right">
         <SheetTitle className="sr-only">{task.title}</SheetTitle>
         {/* Header */}
@@ -1449,11 +1471,11 @@ export default function DesignTaskDetailSheet({ task, open, onOpenChange }: Prop
 
                       <div>
                         <Label className="text-[10px] text-muted-foreground uppercase">Arquivo editável</Label>
-                        <Input value={editableFileUrl} onChange={e => setEditableFileUrl(e.target.value)} placeholder="Link do arquivo editável" className="text-xs h-9 mt-1" />
+                        <Input value={editableFileUrl} onChange={e => { dirtyFieldsRef.current.editableFileUrl = true; setEditableFileUrl(e.target.value); }} placeholder="Link do arquivo editável" className="text-xs h-9 mt-1" />
                       </div>
                       <div>
                         <Label className="text-[10px] text-muted-foreground uppercase">Observações</Label>
-                        <Textarea value={observations} onChange={e => setObservations(e.target.value)} rows={3} className="text-xs mt-1" />
+                        <Textarea value={observations} onChange={e => { dirtyFieldsRef.current.observations = true; setObservations(e.target.value); }} rows={3} className="text-xs mt-1" />
                       </div>
                     </div>
                    ) : (task.attachment_url || ((task as any).attachment_urls?.length > 0)) ? (

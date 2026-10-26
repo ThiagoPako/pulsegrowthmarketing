@@ -347,20 +347,27 @@ export default function Scripts() {
     setOpen(true);
   };
 
+  // Modelo e provedor escolhidos na tela de APIs (o servidor decide a chave)
+  const getAiIntegrationConfig = async (): Promise<{ aiModel?: string; aiProvider?: string }> => {
+    const { data: aiIntegration } = await supabase
+      .from('api_integrations')
+      .select('config')
+      .in('provider', ['ai_gemini', 'ai_openai', 'ai_claude'])
+      .eq('status', 'ativo')
+      .limit(1)
+      .single();
+    return {
+      aiModel: (aiIntegration as any)?.config?.ai_model || undefined,
+      aiProvider: (aiIntegration as any)?.config?.ai_provider || undefined,
+    };
+  };
+
   const generateCaptionFromContent = async (content: string, clientId: string): Promise<string> => {
     try {
       const client = clients.find(c => c.id === clientId);
       if (!client) return '';
       
-      const { data: aiIntegration } = await supabase
-        .from('api_integrations')
-        .select('config')
-        .in('provider', ['ai_gemini', 'ai_openai', 'ai_claude'])
-        .eq('status', 'ativo')
-        .limit(1)
-        .single();
-      const aiModel = (aiIntegration as any)?.config?.ai_model || undefined;
-      const aiProvider = (aiIntegration as any)?.config?.ai_provider || undefined;
+      const { aiModel, aiProvider } = await getAiIntegrationConfig();
 
       const { data, error } = await supabase.functions.invoke('generate-caption', {
         body: {
@@ -1189,61 +1196,74 @@ export default function Scripts() {
     const client = clients.find(c => c.id === form.clientId);
     if (!client) return;
     
-    // Collect existing scripts as examples for the AI to learn style/format
-    const exampleScripts = scripts
-      .filter(s => s.content && s.content.length > 50 && !s.recorded !== undefined)
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .slice(0, 5)
-      .map(s => ({
-        title: s.title,
-        videoType: s.videoType,
-        contentFormat: s.contentFormat || 'reels',
-        clientName: clients.find(c => c.id === s.clientId)?.companyName || '',
-        content: s.content.replace(/<[^>]*>/g, '').substring(0, 800),
-      }));
+    // Roteiros existentes como referência de estilo: primeiro os do próprio cliente
+    // (mesmo tipo de vídeo na frente), depois os de outros clientes (mesmo tipo antes).
+    const toExample = (s: Script) => ({
+      title: s.title,
+      videoType: s.videoType,
+      contentFormat: s.contentFormat || 'reels',
+      clientName: clients.find(c => c.id === s.clientId)?.companyName || '',
+      content: s.content.replace(/<[^>]*>/g, '').substring(0, 800),
+    });
+    const candidates = scripts
+      .filter(s => s.content && s.content.length > 50)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    const rank = (s: Script) => (s.clientId === form.clientId ? 0 : 2) + (s.videoType === form.videoType ? 0 : 1);
+    const orderedExamples = [...candidates]
+      .sort((a, b) => rank(a) - rank(b))
+      .slice(0, 3)
+      .map(toExample);
 
-    // Prioritize same video type examples
-    const sameTypeExamples = exampleScripts.filter(e => e.videoType === form.videoType);
-    const otherExamples = exampleScripts.filter(e => e.videoType !== form.videoType);
-    const orderedExamples = [...sameTypeExamples, ...otherExamples].slice(0, 3);
+    // O servidor não busca o cliente: a linha editorial e o pedido vão no corpo
+    const extraContext = form.content?.replace(/<[^>]*>/g, '').trim().substring(0, 300);
+    const editorial = [
+      client.editorial ? `Linha editorial: ${client.editorial}` : '',
+      form.title ? `Tema do roteiro: ${form.title}` : '',
+      extraContext ? `Contexto adicional: ${extraContext}` : '',
+    ].filter(Boolean).join('\n');
 
     setGenerating(true);
     try {
       const { invokeVpsFunction } = await import('@/services/vpsEdgeFunctions');
-      const { data, error: fnError } = await invokeVpsFunction('ai-script-generator', {
+      const { aiModel, aiProvider } = await getAiIntegrationConfig();
+      const { data, error: fnError } = await invokeVpsFunction('generate-script', {
         body: {
-          clientId: form.clientId,
-          topic: form.title || undefined,
+          clientName: client.companyName,
+          niche: client.niche || '',
+          editorial,
           videoType: form.videoType,
           contentFormat: form.contentFormat,
-          additionalContext: form.content?.replace(/<[^>]*>/g, '').substring(0, 300) || undefined,
+          exampleScripts: orderedExamples,
+          aiModel,
+          aiProvider,
         },
       });
       if (fnError) throw new Error(fnError.message || 'Falha ao gerar roteiro');
-      if (data?.script) {
-        // Content is already HTML from the edge function
-        let htmlContent = data.script;
-        // If it looks like markdown, convert
-        if (!htmlContent.includes('<p>') && !htmlContent.includes('<strong>')) {
-          htmlContent = htmlContent
-            .replace(/\n\n/g, '</p><p>')
-            .replace(/\n/g, '<br/>')
-            .replace(/^/, '<p>')
-            .replace(/$/, '</p>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>');
-        }
-        setForm(prev => ({ ...prev, content: htmlContent }));
-        if (!form.title) {
-          const autoTitle = `${SCRIPT_VIDEO_TYPE_LABELS[form.videoType]} - ${client.companyName}`;
-          setForm(prev => ({ ...prev, title: autoTitle }));
-        }
-        const ctx = data.learningContext;
-        const learnMsg = ctx?.hasLearningData
-          ? ` (aprendeu com ${ctx.usedAsReference} roteiros anteriores)`
-          : ' (sem roteiros anteriores para referência)';
-        toast.success(`Roteiro gerado com sucesso!${learnMsg}`);
-      }
+      const generated = typeof data?.content === 'string' ? data.content.trim() : '';
+      if (!generated) throw new Error('A IA não devolveu o roteiro. Tente de novo.');
+      // Texto puro da IA vira HTML do editor (escapado antes de montar as tags)
+      const escaped = generated
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      const htmlContent = escaped
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/\n/g, '<br/>')
+        .replace(/^/, '<p>')
+        .replace(/$/, '</p>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>');
+      const generatedCaption = typeof data?.caption === 'string' ? data.caption.trim() : '';
+      setForm(prev => ({
+        ...prev,
+        content: htmlContent,
+        title: prev.title || `${SCRIPT_VIDEO_TYPE_LABELS[prev.videoType]} - ${client.companyName}`,
+        caption: prev.contentFormat !== 'story' && !prev.caption.trim() && generatedCaption ? generatedCaption : prev.caption,
+      }));
+      const learnMsg = orderedExamples.length > 0
+        ? ` (usou ${orderedExamples.length} roteiro(s) anteriores como referência)`
+        : ' (sem roteiros anteriores para referência)';
+      toast.success(`Roteiro gerado com sucesso!${learnMsg}`);
     } catch (err: any) {
       console.error('Generate script error:', err);
       toast.error(err.message || 'Erro ao gerar roteiro. Tente novamente.');

@@ -4896,6 +4896,76 @@ app.post('/api/generate-caption', async (req, res) => {
   }
 });
 
+// ─── 4b. Generate Slides (Treinamento de clientes) ──────────
+// A tela chamava 'generate-slides', que só existia no Supabase antigo (404 na VPS).
+const SLIDE_LAYOUTS = new Set(['title_only', 'title_content', 'quote', 'metrics', 'closing']);
+const SLIDE_HSL = /^\d{1,3}(?:\.\d+)? \d{1,3}(?:\.\d+)?% \d{1,3}(?:\.\d+)?%$/;
+
+app.post('/api/generate-slides', async (req, res) => {
+  // Usa a chave paga da agência: só para a equipe logada.
+  if (!(await requireAiUser(req, res))) return;
+  try {
+    const content = clipAiText(req.body.content, 12000).trim();
+    const title = clipAiText(req.body.title, 200) || 'Treinamento';
+    if (content.length < 10) return res.status(400).json({ error: 'Conteúdo muito curto' });
+
+    const { aiModel, aiProvider } = req.body;
+    const admin = getAdminClient();
+    const dbApiKey = await fetchDbApiKey(admin, aiProvider);
+    const ai = await resolveAiConfig(aiProvider, dbApiKey);
+    const model = sanitizeAiModelName(aiModel, ai.provider, 'gemini-3.5-flash');
+
+    const prompt = `Você é um designer sênior de apresentações corporativas. Crie uma apresentação de treinamento com a identidade visual da agência Pulse Growth Marketing.
+
+IDENTIDADE VISUAL (cores em HSL, no formato "H S% L%"):
+- Laranja (títulos, destaques e divisões de seção): "16 82% 51%"
+- Fundo escuro: "220 15% 10%"; fundo escuro secundário: "220 13% 15%"; fundo claro: "0 0% 97%"
+- Texto branco "0 0% 100%" sobre fundo escuro; texto escuro "220 10% 20%" sobre fundo claro
+- Azul para informações: "200 80% 55%"; verde para métricas positivas: "142 71% 45%"
+
+ESTRUTURA:
+- Slide 1: capa com fundo escuro, título e subtítulo
+- Alterne fundos escuros e claros; use "title_only" com fundo laranja para separar seções
+- Último slide: encerramento ("closing") com mensagem de impacto
+
+CONTEÚDO:
+- Extraia os pontos-chave; bullets curtos começando com "•" (até 5 por slide, até 15 palavras cada)
+- Títulos de até 6 palavras; subtítulos de até 12 palavras; emojis com moderação
+- Entre 5 e 20 slides, conforme a densidade do texto
+
+LAYOUTS: "title_only", "title_content", "quote", "metrics", "closing".
+
+Título da apresentação: ${title}
+
+Conteúdo para transformar em slides:
+${content}
+
+Responda APENAS com JSON válido, sem texto antes ou depois:
+{"slides":[{"title":"...","subtitle":"...","content":"...","layout_type":"title_content","background_color":"220 15% 10%","text_color":"0 0% 100%"}]}`;
+
+    const answer = await callAi(ai, model, [{ role: 'user', content: prompt }], { temperature: 0.6, max_tokens: 8000, effort: 'low' });
+    const text = String(answer || '').replace(/```json\s*/gi, '').replace(/```/g, '');
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    let parsed = null;
+    try { parsed = start >= 0 && end > start ? JSON.parse(text.slice(start, end + 1)) : null; } catch { parsed = null; }
+    const rawSlides = Array.isArray(parsed?.slides) ? parsed.slides : [];
+    const slides = rawSlides.slice(0, 30).map((s) => ({
+      title: clipAiText(s?.title, 200),
+      subtitle: clipAiText(s?.subtitle, 300),
+      content: clipAiText(s?.content, 3000),
+      layout_type: SLIDE_LAYOUTS.has(s?.layout_type) ? s.layout_type : 'title_content',
+      background_color: SLIDE_HSL.test(String(s?.background_color || '')) ? s.background_color : '220 15% 10%',
+      text_color: SLIDE_HSL.test(String(s?.text_color || '')) ? s.text_color : '0 0% 100%',
+    })).filter((s) => s.title || s.content);
+    if (slides.length === 0) return res.status(502).json({ error: 'A IA não devolveu slides. Tente de novo.' });
+    res.json({ slides });
+  } catch (error) {
+    console.error('Generate slides error:', error);
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
 
 // ─── 5. Client Portal Auth ──────────────────────────────────
 // Senhas do portal: bcrypt. O SHA-256 salgado antigo ('pulse_portal_salt_2026')

@@ -17,6 +17,7 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('CRITICAL UNHANDLED REJECTION:', reason);
 });
 import fs from 'node:fs';
+import os from 'node:os';
 import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
@@ -7256,7 +7257,8 @@ function streamLocalPortalMedia(req, res, filePath, quality) {
 
 // Teto global de ffmpeg simultâneos: o proxy é público (portal do cliente),
 // então sem limite qualquer pessoa poderia disparar transcodes em paralelo.
-const MAX_PORTAL_TRANSCODES = 2;
+// Servidor pequeno (2 núcleos): uma conversão por vez, para não deixar a API lenta
+const MAX_PORTAL_TRANSCODES = os.cpus().length <= 2 ? 1 : 2;
 
 function hasPortalTranscodeSlot() {
   return activePortalTranscodes.size < MAX_PORTAL_TRANSCODES;
@@ -7264,7 +7266,7 @@ function hasPortalTranscodeSlot() {
 
 // Fila do ffmpeg do 480p: no máximo 2 transcodificações ao mesmo tempo. Sem ela, abrir
 // a biblioteca subia um ffmpeg por vídeo e a VPS inteira ficava lenta.
-const PORTAL_TRANSCODE_CONCURRENCY = 2;
+const PORTAL_TRANSCODE_CONCURRENCY = MAX_PORTAL_TRANSCODES;
 let portalTranscodesRunning = 0;
 const portalTranscodeQueue = [];
 function runPortalTranscodeSlot(task) {
@@ -7294,14 +7296,16 @@ function warmPortal480pCache(sourcePath, cachedFile) {
   }
 
   const tempFile = `${cachedFile}.tmp`;
-  const job = runPortalTranscodeSlot(() => execFileAsync('ffmpeg', [
+  // nice 19 + 1 thread: a prévia leve do portal nunca disputa CPU com a API e o banco
+  const job = runPortalTranscodeSlot(() => execFileAsync('nice', ['-n', '19', 'ffmpeg',
+    '-nostdin', '-threads', '1',
     '-i', sourcePath,
     '-vf', 'scale=-2:480',
-    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-threads', '1',
     '-c:a', 'aac', '-b:a', '96k',
     '-movflags', '+faststart',
     '-y', tempFile,
-  ], { timeout: 120000 }))
+  ], { timeout: 600000 }))
     .then(() => {
       fs.renameSync(tempFile, cachedFile);
       return cachedFile;

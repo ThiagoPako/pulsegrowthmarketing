@@ -110,12 +110,21 @@ fi
 
 echo "OK: botão no bundle e versão pública atualizada ($BUILD_VERSION)."
 
-# Whisper (áudio do Assistente PULSE): só quando falta o binário ou o modelo, depois do site já no ar.
-# Tag fixa do whisper.cpp, build com cmake e modelo do HuggingFace conferido por SHA-256 (scripts/install-whisper.sh).
-# Falha (ou demora mais de 20 min) só gera aviso: o deploy segue e o PULSE pede o comando por escrito.
-if [ ! -x /opt/whisper.cpp/build/bin/whisper-cli ] || [ ! -f /opt/whisper.cpp/models/ggml-small-q5_1.bin ]; then
-  timeout 1200 bash /var/www/pulsegrowthmarketing/scripts/install-whisper.sh \
-    || echo "AVISO: Whisper não instalado agora; o PULSE responde 'manda por escrito' aos áudios até o próximo deploy"
+# Ferramentas do Assistente PULSE (ffmpeg + Whisper) e da prévia leve do portal (ffmpeg): só quando faltam,
+# em segundo plano e com prioridade baixa, depois do site já no ar. O servidor tem 2 núcleos e compilar o
+# whisper.cpp leva minutos: o deploy não espera. Tag fixa e modelo conferido por SHA-256
+# (scripts/install-whisper.sh). Acompanhar em /var/log/pulse-whisper-install.log.
+if ! command -v ffmpeg >/dev/null 2>&1 || [ ! -x /opt/whisper.cpp/build/bin/whisper-cli ] || [ ! -f /opt/whisper.cpp/models/ggml-small-q5_1.bin ]; then
+  if ! pgrep -f "install-whisper.sh" >/dev/null 2>&1; then
+    nohup nice -n 19 bash -c '
+      if ! command -v ffmpeg >/dev/null 2>&1; then
+        apt-get update -q || true
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -q ffmpeg
+      fi
+      timeout 3600 bash /var/www/pulsegrowthmarketing/scripts/install-whisper.sh
+    ' > /var/log/pulse-whisper-install.log 2>&1 < /dev/null &
+    echo "Ferramentas do PULSE (ffmpeg/Whisper) instalando em segundo plano: /var/log/pulse-whisper-install.log"
+  fi
 fi
 
 pm2 status

@@ -24,6 +24,11 @@ import {
 } from 'lucide-react';
 import UserAvatar from '@/components/UserAvatar';
 import InlineVideoPlayer from '@/components/content/InlineVideoPlayer';
+import AgentWorkBadge from '@/components/kanban/AgentWorkBadge';
+import AgentReviewBadge from '@/components/kanban/AgentReviewBadge';
+import AgentReadinessBadge from '@/components/kanban/AgentReadinessBadge';
+import { useAgentIds } from '@/hooks/useAgentIds';
+import { agentReviewOf, agentWorkState } from '@/lib/agentCardStatus';
 
 import ClientLogo from '@/components/ClientLogo';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -64,6 +69,7 @@ const KANBAN_COLUMNS = [
   { id: 'captacao', label: 'Captação', icon: '📹' },
   
   { id: 'edicao', label: 'Edição de Vídeo', icon: '🎬' },
+  { id: 'pre_revisao', label: 'Análise (agentes de IA)', icon: '🤖' },
   { id: 'revisao', label: 'Revisão', icon: '👁' },
   { id: 'alteracao', label: 'Alteração', icon: '✏️' },
   { id: 'envio', label: 'Enviado p/ Cliente', icon: '📤' },
@@ -208,11 +214,20 @@ interface ContentTask {
   editing_deadline: string | null;
   created_at: string;
   updated_at: string;
+  /** Agente de IA com o card e parecer da Análise (gravados pela API dos agentes). */
+  agent_step?: string | null;
+  agent_heartbeat_at?: string | null;
+  agent_review_verdict?: string | null;
+  agent_review_notes?: string | null;
+  agent_review_at?: string | null;
+  agent_review_by?: string | null;
 }
 
 interface TaskHistory {
   id: string;
   action: string;
+  /** Texto do ajuste, motivo do agente, link… (antes não aparecia na tela) */
+  details?: string | null;
   created_at: string;
   user_id: string | null;
 }
@@ -236,7 +251,8 @@ const JOURNEY_STAGES = [
 ];
 
 function getStageIndex(column: string) {
-  if (column === 'alteracao') return 3;
+  // Análise fica na etapa de revisão (antes caía em "Criado")
+  if (column === 'alteracao' || column === 'pre_revisao') return 3;
   if (column === 'arquivado') return 7;
   const idx = JOURNEY_STAGES.findIndex(s => s.id === column);
   return idx >= 0 ? idx : 0;
@@ -411,6 +427,14 @@ function JourneyTimeline({ currentColumn, task, users, scripts, history, recordi
             Em alteração — aguardando correções do editor
           </span>
         </motion.div>
+      )}
+      {currentColumn === 'pre_revisao' && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-500/10 border border-purple-500/20">
+          <span className="text-sm">🤖</span>
+          <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
+            Em Análise — o revisor IA confere a entrega do agente antes da revisão da equipe
+          </span>
+        </div>
       )}
 
       {/* Vertical detail cards */}
@@ -660,6 +684,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
   const { user, profile } = useAuth();
   const [history, setHistory] = useState<TaskHistory[]>([]);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
+  const agentIds = useAgentIds();
 
   // Adjustment dialog state
   const [showAdjustmentForm, setShowAdjustmentForm] = useState(false);
@@ -703,7 +728,7 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
     supabase.from('task_history').select('*')
       .eq('task_id', task.id)
       .order('created_at', { ascending: false })
-      .limit(20)
+      .limit(50)
       .then(({ data }) => { if (data) setHistory(data as TaskHistory[]); });
   }, [task?.id, open]);
 
@@ -751,18 +776,37 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
 
   const client = clients.find(c => c.id === task.client_id);
   const assignedUser = task.assigned_to ? users.find(u => u.id === task.assigned_to) : null;
+  // Sem responsável (a revisão e o envio zeram), mostra quem editou o vídeo
+  const editorUser = !assignedUser && task.edited_by ? users.find(u => u.id === task.edited_by) : null;
+  const agentBusy = !!agentWorkState(task, { agentIds });
   const linkedScript = task.script_id ? scripts.find(s => s.id === task.script_id) : null;
   const typeConfig = CONTENT_TYPES.find(t => t.value === task.content_type) || CONTENT_TYPES[0];
   const TypeIcon = typeConfig.icon;
   const colConfig = KANBAN_COLUMNS.find(c => c.id === task.kanban_column);
 
-  const syncTask = async (newColumn: string, overrides?: Record<string, any>) => {
+  const syncTask = async (newColumn: string, overrides?: Record<string, any>, historyDetails?: string | null) => {
     const ctx = buildSyncContext({ ...task, ...overrides } as any, {
       userId: user?.id,
       clientName: client?.companyName,
       clientWhatsapp: client?.whatsapp,
+      historyDetails,
     });
     await syncContentTaskColumnChange(newColumn, ctx);
+  };
+
+  // Grava no card conferindo a resposta do servidor. Antes os botões não olhavam o erro: a tela
+  // mostrava sucesso e rodava o sync (portal, Social Media, avisos) mesmo sem nada gravado.
+  const saveTask = async (payload: Record<string, any>, action: string): Promise<boolean> => {
+    const { data, error } = await supabase.from('content_tasks').update(payload as any).eq('id', task.id).select('id');
+    if (error) {
+      toast.error(`Não foi possível ${action}${error.message ? `: ${error.message}` : '. Tente de novo.'}`);
+      return false;
+    }
+    if (!data || (Array.isArray(data) && data.length === 0)) {
+      toast.error('Este card não está na cidade ativa (ou foi removido). Nada foi alterado.');
+      return false;
+    }
+    return true;
   };
 
   // ─── VIDEO UPLOAD ──────────────────────────────────────────
@@ -854,12 +898,13 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
   // ─── ACTIONS ──────────────────────────────────────────────
   const handleApprove = async () => {
     const isReviewer = profile?.role === 'admin' || profile?.role === 'social_media';
-    await supabase.from('content_tasks').update({
+    const saved = await saveTask({
       kanban_column: 'envio',
       approved_at: new Date().toISOString(),
       ...(isReviewer ? { assigned_to: user?.id } : {}),
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
+    }, 'aprovar');
+    if (!saved) return;
 
     // Add video to client portal
     await addToClientPortal();
@@ -873,15 +918,18 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
   const handleRequestAdjustments = async () => {
     if (!adjustmentNotes.trim()) { toast.error('Descreva os ajustes'); return; }
     const isReviewer = profile?.role === 'admin' || profile?.role === 'social_media';
-    await supabase.from('content_tasks').update({
+    const saved = await saveTask({
       kanban_column: 'alteracao',
       adjustment_notes: adjustmentNotes.trim(),
       immediate_alteration: adjustmentImmediate,
       ...(isReviewer ? { assigned_to: user?.id } : {}),
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
-    // O pedido imediato precisa chegar ao sync (sem prazo e com aviso "IMEDIATO" ao editor)
-    await syncTask('alteracao', { immediate_alteration: adjustmentImmediate });
+    }, 'pedir os ajustes');
+    if (!saved) return;
+    // O pedido imediato precisa chegar ao sync (sem prazo e com aviso "IMEDIATO" ao editor).
+    // O texto do ajuste vai para o histórico (antes só ficava no card e se perdia na alteração seguinte).
+    await syncTask('alteracao', { immediate_alteration: adjustmentImmediate },
+      `${task.kanban_column === 'pre_revisao' ? 'Devolvido da Análise · ' : ''}Ajustes: ${adjustmentNotes.trim()}`);
     toast.success(adjustmentImmediate ? '🚨 Alteração IMEDIATA solicitada!' : '📝 Ajustes solicitados');
     onRefresh();
     onOpenChange(false);
@@ -912,11 +960,12 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
   };
 
   const handleClientApproved = async () => {
-    await supabase.from('content_tasks').update({
+    const saved = await saveTask({
       kanban_column: 'agendamentos',
       approved_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
+    }, 'registrar a aprovação');
+    if (!saved) return;
 
     await supabase.from('social_media_deliveries').update({
       status: 'entregue',
@@ -943,12 +992,13 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
 
   const handleSchedulePost = async () => {
     if (!schedDate || !schedTime) { toast.error('Preencha data e horário'); return; }
-    await supabase.from('content_tasks').update({
+    const saved = await saveTask({
       scheduled_recording_date: schedDate,
       scheduled_recording_time: schedTime,
       kanban_column: 'acompanhamento',
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
+    }, 'agendar');
+    if (!saved) return;
 
     await supabase.from('social_media_deliveries').update({
       status: 'agendado',
@@ -964,14 +1014,18 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
   };
 
   const handleConfirmPosted = async () => {
-    await supabase.from('content_tasks').update({
+    const saved = await saveTask({
       kanban_column: 'arquivado',
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
+    }, 'arquivar');
+    if (!saved) return;
     await supabase.from('social_media_deliveries').update({
       status: 'postado',
       posted_at: format(new Date(), 'yyyy-MM-dd'),
     } as any).eq('content_task_id', task.id);
+    // Mesmo efeito do "Postado" do Social Media: cancela a postagem automática pendente (senão o
+    // robô postava de novo), registra o histórico e avisa o portal
+    await syncTask('arquivado');
     toast.success('✅ Confirmado como postado e arquivado!');
     onRefresh();
     onOpenChange(false);
@@ -979,10 +1033,11 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
 
   const handleTogglePriority = async () => {
     const newPriority = !task.editing_priority;
-    await supabase.from('content_tasks').update({
+    const saved = await saveTask({
       editing_priority: newPriority,
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
+    }, 'mudar a prioridade');
+    if (!saved) return;
     if (newPriority) {
       await supabase.rpc('notify_role', {
         _role: 'editor',
@@ -1000,11 +1055,13 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
 
   const handleSaveLink = async () => {
     if (!linkValue.trim()) { toast.error('Insira um link válido'); return; }
+    if (!/^https?:\/\//i.test(linkValue.trim())) { toast.error('Cole o link completo, começando com https://'); return; }
     const field = showLinkForm === 'drive' ? 'drive_link' : 'edited_video_link';
-    await supabase.from('content_tasks').update({
+    const saved = await saveTask({
       [field]: linkValue.trim(),
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
+    }, 'salvar o link');
+    if (!saved) return;
     toast.success(showLinkForm === 'drive' ? '📁 Link do Drive salvo!' : '🎬 Link do vídeo salvo!');
     setShowLinkForm(null);
     setLinkValue('');
@@ -1016,11 +1073,12 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
       toast.error('Adicione o link do vídeo editado antes de reenviar');
       return;
     }
-    await supabase.from('content_tasks').update({
+    const saved = await saveTask({
       kanban_column: 'revisao',
       assigned_to: null,
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
+    }, 'reenviar');
+    if (!saved) return;
     await syncTask('revisao');
     toast.success('🔄 Reenviado para Revisão!');
     onRefresh();
@@ -1185,12 +1243,17 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
       toast.error('Adicione o link do vídeo editado primeiro');
       return;
     }
-    await supabase.from('content_tasks').update({
+    const saved = await saveTask({
       kanban_column: targetColumn,
       ...(targetColumn === 'revisao' ? { assigned_to: null } : {}),
       updated_at: new Date().toISOString(),
-    } as any).eq('id', task.id);
-    await syncTask(targetColumn);
+    }, 'mover o cartão');
+    if (!saved) return;
+    // Liberar da Análise fica registrado com o parecer (o mesmo que a chefe grava pelo `pulse mover`)
+    const review = agentReviewOf(task);
+    await syncTask(targetColumn, undefined, task.kanban_column === 'pre_revisao' && targetColumn === 'revisao'
+      ? `Liberado da Análise por ${profile?.name || 'equipe'}${review ? ` (parecer IA: ${review.verdict})` : ' (sem parecer da IA)'}`
+      : null);
     const label = KANBAN_COLUMNS.find(c => c.id === targetColumn)?.label;
     toast.success(`Movido para ${label}`);
     onRefresh();
@@ -1473,6 +1536,11 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                                     <span className={`text-xs leading-snug block ${idx === 0 ? 'text-foreground font-medium' : 'text-foreground/70'}`}>
                                       {h.action}
                                     </span>
+                                    {h.details && !/^https?:\/\/\S+$/.test(h.details.trim()) && (
+                                      <span className="text-[11px] leading-snug block text-muted-foreground whitespace-pre-wrap break-words mt-0.5">
+                                        {h.details}
+                                      </span>
+                                    )}
                                     <div className="flex items-center gap-1.5 mt-1">
                                       <span className="text-[10px] font-medium text-primary/70">{getUserName(h.user_id)}</span>
                                       <span className="text-[10px] text-muted-foreground/40">·</span>
@@ -1505,6 +1573,25 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                 {task.kanban_column === 'alteracao' && !task.immediate_alteration && renderDeadline(task.alteration_deadline, 'Prazo de Alteração')}
                 {task.kanban_column === 'envio' && renderDeadline(task.approval_deadline, 'Prazo de Aprovação')}
 
+                {/* Agentes de IA: quem está com o card, parecer da Análise e prontidão para a fila */}
+                <div className="rounded-lg overflow-hidden empty:hidden">
+                  <AgentWorkBadge task={task} users={users} agentIds={agentIds} />
+                  <AgentReviewBadge task={task} users={users} />
+                </div>
+                <AgentReadinessBadge task={task} agentIds={agentIds} detailed />
+
+                {editorUser && (
+                  <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-teal-500/5 border border-teal-500/20">
+                    <UserAvatar user={{ name: editorUser.name, avatarUrl: editorUser.avatarUrl }} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-teal-700/70 dark:text-teal-300/70 block">
+                        {task.kanban_column === 'alteracao' ? 'Quem corrige (editou o vídeo)' : 'Editado por'}{agentIds.has(editorUser.id) ? ' · 🤖 agente de IA' : ''}
+                      </span>
+                      <span className="text-sm font-bold text-foreground">{editorUser.name}</span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Assigned user / Editado por */}
                 {assignedUser && (
                   <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary/5 border border-primary/15">
@@ -1520,10 +1607,11 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                       <Select
                         value={task.assigned_to || ''}
                         onValueChange={async (newUserId) => {
-                          await supabase.from('content_tasks').update({
+                          const saved = await saveTask({
                             assigned_to: newUserId,
                             updated_at: new Date().toISOString(),
-                          } as any).eq('id', task.id);
+                          }, 'trocar o responsável');
+                          if (!saved) return;
                           // Sync social_media_deliveries
                           await supabase.from('social_media_deliveries').update({
                             created_by: newUserId,
@@ -1563,10 +1651,11 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                     <Select
                       value=""
                       onValueChange={async (newUserId) => {
-                        await supabase.from('content_tasks').update({
+                        const saved = await saveTask({
                           assigned_to: newUserId,
                           updated_at: new Date().toISOString(),
-                        } as any).eq('id', task.id);
+                        }, 'atribuir o responsável');
+                        if (!saved) return;
                         await supabase.from('social_media_deliveries').update({
                           created_by: newUserId,
                         } as any).eq('content_task_id', task.id);
@@ -1729,8 +1818,32 @@ export default function ContentTaskDetailSheet({ task, open, onOpenChange, onRef
                           <RocketLaunchButton label="Edição" onClick={() => handleMoveToNext('edicao')} disabled={!task.drive_link} />
                         )}
 
-                        {task.kanban_column === 'edicao' && task.edited_video_link && isEditingOperator && (
+                        {task.kanban_column === 'edicao' && task.edited_video_link && isEditingOperator && !agentBusy && (
                           <RocketLaunchButton label="Revisão" onClick={() => handleMoveToNext('revisao')} />
+                        )}
+
+                        {/* Análise: a chefe (IA) libera ou devolve pelo `pulse mover`; o admin pode fazer por aqui */}
+                        {task.kanban_column === 'pre_revisao' && isAdmin && (
+                          <>
+                            <Button size="sm" className="w-full gap-2 justify-start bg-teal-600 hover:bg-teal-700" onClick={() => handleMoveToNext('revisao')}>
+                              <CheckCircle2 size={14} /> Liberar para a Revisão da equipe
+                            </Button>
+                            <Button variant="outline" size="sm" className="w-full gap-2 justify-start text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700"
+                              onClick={() => {
+                                const review = agentReviewOf(task);
+                                setAdjustmentNotes(review?.verdict === 'ajustes' ? review.notes || '' : '');
+                                setShowAdjustmentForm(true);
+                              }}>
+                              <MessageSquareWarning size={14} /> Devolver para Alteração (mesmo editor)
+                            </Button>
+                          </>
+                        )}
+                        {task.kanban_column === 'pre_revisao' && !isAdmin && (
+                          <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                            <p className="text-xs text-muted-foreground text-center">
+                              🤖 Aguardando o parecer do revisor IA e a liberação da chefe
+                            </p>
+                          </div>
                         )}
 
                         {/* Toggle priority (edição) - admin/social media only */}

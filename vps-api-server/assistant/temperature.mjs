@@ -309,9 +309,11 @@ export function createTemperature({ pool, claude, notifyTeam, dailyHour = 7, int
   async function maybeAlert(client, row, readings, now = new Date()) {
     const last = await lastAlerts(client.id);
     const recent = readings.filter((r) => now - new Date(r.created_at) <= ALERT_RULES.repetirAposDias * DAY);
-    const after = (r, motivo) => !last[motivo] || new Date(r.created_at) > new Date(last[motivo].created_at);
+    // leitura já avisada: houve alerta do motivo depois dela (o aviso de ameaça também cobre a insatisfação da mesma leitura)
+    const after = (r, ...motivos) => motivos.every((m) => !last[m] || new Date(r.created_at) > new Date(last[m].created_at));
     const freshThreat = recent.some((r) => (r.sinais || []).includes('ameaca_cancelar') && after(r, 'ameaca_cancelar'));
-    const freshUnhappy = !freshThreat && recent.some((r) => r.nota <= ALERT_RULES.conversaInsatisfeita && (r.sinais || []).length && after(r, 'insatisfacao_grupo'));
+    const freshUnhappy = !freshThreat && recent.some((r) => r.nota <= ALERT_RULES.conversaInsatisfeita && (r.sinais || []).length
+      && after(r, 'insatisfacao_grupo', 'ameaca_cancelar'));
     const triggers = alertTriggers({ score: row.nota, variacao: row.variacao, freshThreat, freshUnhappy })
       .filter((motivo) => shouldAlert(last[motivo], row.nota, now));
     if (!triggers.length) return [];

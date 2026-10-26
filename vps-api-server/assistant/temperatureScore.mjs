@@ -164,9 +164,36 @@ export function dataScore(s = {}) {
   return { score: clamp(100 - lost), motivos };
 }
 
-/** Normaliza texto para comparar trechos (sem acento, minúsculo, espaços simples). */
-export const normText = (text) => String(text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-  .replace(/[“”"«»'‘’`]/g, '').replace(/\s+/g, ' ').trim();
+/**
+ * Texto normalizado para comparar trechos (minúsculo, sem acento, sem aspas, espaços simples) e, para cada letra
+ * dele, a posição no texto original (para devolver o trecho como o cliente escreveu).
+ */
+function normalizeWithMap(text) {
+  const source = String(text || '');
+  let out = '';
+  const map = [];
+  let space = true;
+  for (let i = 0; i < source.length; i++) {
+    let c = source[i].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    if (/[“”"«»'‘’`]/.test(c)) continue;
+    if (/\s/.test(c)) {
+      if (space) continue;
+      c = ' ';
+      space = true;
+    } else space = false;
+    for (const ch of c) {
+      out += ch;
+      map.push(i);
+    }
+  }
+  while (out.endsWith(' ')) {
+    out = out.slice(0, -1);
+    map.pop();
+  }
+  return { out, map, source };
+}
+
+export const normText = (text) => normalizeWithMap(text).out;
 
 /** Tira números de telefone (8+ dígitos, com ou sem separadores) de um texto que vai para a tela ou para o aviso. */
 export const maskPhones = (text) => String(text || '').replace(/\+?\d[\d\s().-]{6,}\d/g, (m) => (m.replace(/\D/g, '').length >= 8 ? '•••' : m));
@@ -175,16 +202,24 @@ const cleanLine = (text, max) => maskPhones(String(text || '').replace(/[\u0000-
 
 /**
  * Trechos de evidência: só os que aparecem nas mensagens do cliente (o modelo não inventa nem cita a equipe),
- * até 2, até 140 caracteres, sem telefone.
+ * devolvidos como o cliente escreveu, até 2, até 140 caracteres, sem telefone.
  */
 export function cleanExcerpts(excerpts, clientTexts) {
-  const corpus = (clientTexts || []).map(normText);
+  const corpus = (clientTexts || []).map(normalizeWithMap);
   const out = [];
   for (const raw of Array.isArray(excerpts) ? excerpts : []) {
-    const trimmed = String(raw || '').replace(/^[\s"'“”.…]+|[\s"'“”.…]+$/g, '');
-    const key = normText(trimmed);
-    if (key.length < 3 || !corpus.some((t) => t.includes(key))) continue;
-    const text = cleanLine(trimmed, 140);
+    const key = normText(String(raw || '').replace(/^[\s"'“”.…]+|[\s"'“”.…]+$/g, ''));
+    if (key.length < 3) continue;
+    let original = null;
+    for (const t of corpus) {
+      const at = t.out.indexOf(key);
+      if (at >= 0) {
+        original = t.source.slice(t.map[at], t.map[at + key.length - 1] + 1);
+        break;
+      }
+    }
+    if (!original) continue;
+    const text = cleanLine(original, 140);
     if (text && !out.includes(text)) out.push(text);
     if (out.length === 2) break;
   }

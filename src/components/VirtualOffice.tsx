@@ -18,7 +18,13 @@ import { ROOMS, shouldBeInCoffeeRoom, type OfficeMember } from './virtual-office
 import PixelRoom from './virtual-office/PixelRoom';
 import QuickChatDialog from './virtual-office/QuickChatDialog';
 
-const ONLINE_MS = 30_000; // 30s — user goes offline quickly after closing tab
+// Mesma janela do servidor (ONLINE_PRESENCE_MS): o sinal de presença sai a cada 30 s
+// (60 s com a aba escondida). Com 30 s aqui a pessoa piscava offline/online o dia todo.
+const ONLINE_MS = 120_000;
+// Volta depois de sumir por menos que isso não gera o aviso de "entrou no escritório"
+const REJOIN_SILENT_MS = 5 * 60_000;
+// Atividades (gravação, edição, artes) e agentes: a cada 30 s com a aba visível
+const ACTIVITY_REFRESH_MS = 30_000;
 
 function normalizeMsg(p: unknown): QuickMessage | null {
   if (!p || typeof p !== 'object') return null;
@@ -48,6 +54,9 @@ export default function VirtualOffice() {
   const membersRef = useRef<OfficeMember[]>([]);
   const chatRef = useRef<OfficeMember | null>(null);
   const prevOnlineRef = useRef<Set<string>>(new Set());
+  const lastOnlineAtRef = useRef<Map<string, number>>(new Map());
+  const joinSeededRef = useRef(false);
+  const presenceSyncedRef = useRef(false);
   chatRef.current = chatTarget;
 
   // Names known to be female
@@ -145,6 +154,7 @@ export default function VirtualOffice() {
         if (!next[uid] || new Date(hb).getTime() > new Date(next[uid]).getTime()) next[uid] = hb;
       });
     });
+    presenceSyncedRef.current = true;
     setPresence(next);
     setNow(Date.now());
   }, []);
@@ -175,11 +185,20 @@ export default function VirtualOffice() {
       }
     });
 
-    const iv1 = setInterval(() => void fetchActivities(), 5_000);
+    // Antes: 5 consultas a cada 5 s em cada Dashboard aberto, mesmo com a aba escondida
+    const iv1 = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      void fetchActivities();
+    }, ACTIVITY_REFRESH_MS);
     const iv2 = setInterval(() => void fetchProfiles(), 60_000);
-    const iv3 = setInterval(() => setNow(Date.now()), 5_000);
+    const iv3 = setInterval(() => setNow(Date.now()), 15_000);
+    const onVisible = () => { if (document.visibilityState === 'visible') void fetchActivities(); };
+    document.addEventListener('visibilitychange', onVisible);
 
-    return () => { unsync(); unmsg(); clearInterval(iv1); clearInterval(iv2); clearInterval(iv3); };
+    return () => {
+      unsync(); unmsg(); clearInterval(iv1); clearInterval(iv2); clearInterval(iv3);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [currentUser, fetchActivities, fetchProfiles, syncPresence, appendChat]);
 
   const sendMsg = useCallback(async (text: string) => {
@@ -219,20 +238,35 @@ export default function VirtualOffice() {
     });
     list.sort((a, b) => (a.isOnline !== b.isOnline ? (a.isOnline ? -1 : 1) : a.name.localeCompare(b.name)));
     membersRef.current = list;
+    return list;
+  }, [activities, members, now, presence, agentOffice]);
 
-    // Detect new joins
-    const currentOnline = new Set(list.filter(m => m.isOnline).map(m => m.id));
+  // Aviso de "entrou no escritório" (fora do useMemo: efeito colateral no render).
+  // A primeira lista depois de abrir só registra quem já está online (antes saía um
+  // aviso para cada pessoa), e quem volta depois de sumir por pouco tempo não avisa.
+  useEffect(() => {
+    const currentOnline = new Set(enriched.filter(m => m.isOnline).map(m => m.id));
+    const nowTs = Date.now();
+    if (!joinSeededRef.current) {
+      if (members.length === 0 || !presenceSyncedRef.current) return;
+      joinSeededRef.current = true;
+      currentOnline.forEach(id => lastOnlineAtRef.current.set(id, nowTs));
+      prevOnlineRef.current = currentOnline;
+      return;
+    }
     const prev = prevOnlineRef.current;
     const newJoins = new Set<string>();
     currentOnline.forEach(id => {
-      if (!prev.has(id) && id !== currentUser?.id) {
-        newJoins.add(id);
-        const member = list.find(m => m.id === id);
-        if (member) {
-          toast.message(`🏰 ${member.name} entrou no escritório!`, { duration: 3000 });
-        }
+      if (prev.has(id) || id === currentUser?.id) return;
+      const lastSeen = lastOnlineAtRef.current.get(id);
+      if (lastSeen && nowTs - lastSeen < REJOIN_SILENT_MS) return;
+      newJoins.add(id);
+      const member = enriched.find(m => m.id === id);
+      if (member) {
+        toast.message(`🏰 ${member.name} entrou no escritório!`, { duration: 3000 });
       }
     });
+    currentOnline.forEach(id => lastOnlineAtRef.current.set(id, nowTs));
     if (newJoins.size > 0) {
       setJoinedIds(s => {
         const next = new Set(s);
@@ -247,9 +281,7 @@ export default function VirtualOffice() {
       });
     }
     prevOnlineRef.current = currentOnline;
-
-    return list;
-  }, [activities, members, now, presence, currentUser, agentOffice]);
+  }, [enriched, members.length, currentUser?.id]);
 
   const roomAssign = useMemo(() => {
     const a: Record<string, OfficeMember[]> = {};

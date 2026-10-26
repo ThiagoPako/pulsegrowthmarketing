@@ -87,6 +87,17 @@ export default function TrainingManager() {
 
     setGenerating(true);
     try {
+      // IA antes de gravar: se ela falhar, não sobra uma apresentação vazia
+      const { data: aiData, error: aiErr } = await invokeCloudFunction('generate-slides', {
+        content: pastedContent, title: newTitle,
+      });
+
+      if (aiErr || !Array.isArray(aiData?.slides) || aiData.slides.length === 0) {
+        toast.error(`Erro ao gerar os slides${aiErr?.message ? `: ${aiErr.message}` : ''}. Nada foi criado; tente de novo.`);
+        setGenerating(false);
+        return;
+      }
+
       const { data: pres, error: presErr } = await supabase
         .from('training_presentations')
         .insert({ client_id: selectedClientId, title: newTitle, description: newDesc, cover_color: newColor, created_by: user?.id } as any)
@@ -94,18 +105,6 @@ export default function TrainingManager() {
         .single();
 
       if (presErr || !pres) throw new Error('Erro ao criar apresentação');
-
-      const { data: aiData, error: aiErr } = await invokeCloudFunction('generate-slides', {
-        content: pastedContent, title: newTitle,
-      });
-
-      if (aiErr || !aiData?.slides) {
-        toast.error('Erro ao gerar os slides. Criando apresentação vazia.');
-        setGenerating(false);
-        setShowCreate(false);
-        loadPresentations();
-        return;
-      }
 
       const slidesToInsert = aiData.slides.map((s: any, i: number) => ({
         presentation_id: (pres as any).id,
@@ -118,7 +117,14 @@ export default function TrainingManager() {
         layout_type: s.layout_type || 'title_content',
       }));
 
-      await supabase.from('training_slides').insert(slidesToInsert as any);
+      const { error: slidesErr } = await supabase.from('training_slides').insert(slidesToInsert as any);
+      if (slidesErr) {
+        toast.error('A apresentação foi criada, mas os slides não foram salvos: ' + (slidesErr.message || 'erro'));
+        setShowCreate(false);
+        loadPresentations();
+        setGenerating(false);
+        return;
+      }
 
       toast.success(`Apresentação criada com ${slidesToInsert.length} slides!`);
       setShowCreate(false);

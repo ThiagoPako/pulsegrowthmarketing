@@ -2765,14 +2765,36 @@ async function getTargetUserRoles(userId) {
  */
 async function assertCanManageUserAccount(actor, { targetUserId = null, requestedRole = null } = {}) {
   if (await isStrictAdminUser(actor)) return;
+  // Gestor de projetos (sem admin/social_media) também não cria nem mexe em outro gestor
+  const isManagerOnly = !(await isAdminUser(actor));
+  const blockedRoles = isManagerOnly ? new Set([...PRIVILEGED_USER_ROLES, 'gestor_projetos']) : PRIVILEGED_USER_ROLES;
   const forbidden = () => Object.assign(
-    new Error('Só um administrador pode criar ou alterar contas admin, social_media ou socio_gestor.'),
+    new Error(isManagerOnly
+      ? 'Só um administrador pode criar ou alterar contas admin, social_media, socio_gestor ou gestor_projetos.'
+      : 'Só um administrador pode criar ou alterar contas admin, social_media ou socio_gestor.'),
     { statusCode: 403 }
   );
-  if (requestedRole && PRIVILEGED_USER_ROLES.has(String(requestedRole))) throw forbidden();
+  if (requestedRole && blockedRoles.has(String(requestedRole))) throw forbidden();
   if (targetUserId && String(targetUserId) !== String(actor?.id || '')) {
     const roles = await getTargetUserRoles(targetUserId);
-    if (roles.some((role) => PRIVILEGED_USER_ROLES.has(role))) throw forbidden();
+    if (roles.some((role) => blockedRoles.has(role))) throw forbidden();
+  }
+}
+
+/**
+ * Criar, redefinir senha e excluir conta pela Equipe: admin, social_media ou
+ * gestor_projetos (o mesmo conjunto que a tela libera). Junto com o
+ * assertCanManageUserAccount, que impede o gestor de criar ou tomar conta privilegiada.
+ */
+async function verifyAccountManager(req) {
+  try {
+    return await verifyTeamManager(req);
+  } catch (error) {
+    if (error?.message === 'Admin access required') {
+      throw Object.assign(new Error('Só a gestão da equipe (admin, social media ou gestor de projetos) pode fazer isso.'), { statusCode: 403 });
+    }
+    if (!error?.statusCode) error.statusCode = 401;
+    throw error;
   }
 }
 
@@ -3981,7 +4003,7 @@ app.post('/api/auth/create-user', async (req, res) => {
         return res.status(429).json({ error: 'Muitos cadastros feitos daqui. Tente de novo mais tarde.' });
       }
     } else {
-      const { user: actor } = await verifyAdmin(req);
+      const { user: actor } = await verifyAccountManager(req);
       const requestedRole = role || 'editor';
       const validRoles = await getValidAppRoles();
       if (validRoles && !validRoles.has(String(requestedRole))) {
@@ -4041,7 +4063,7 @@ app.post('/api/auth/create-user', async (req, res) => {
 // ─── Admin: Reset password ──────────────────────────────────
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
-    const { user: actor } = await verifyAdmin(req);
+    const { user: actor } = await verifyAccountManager(req);
     const { userId, newPassword } = req.body;
     if (!userId || !newPassword || newPassword.length < 6) return res.status(400).json({ error: 'userId e nova senha (min 6 chars) obrigatórios' });
     await assertCanManageUserAccount(actor, { targetUserId: userId });
@@ -4155,6 +4177,96 @@ app.get('/api/team/city-members', async (req, res) => {
     res.json({ city, user_ids: rows.map(r => r.id) });
   } catch (error) {
     res.status(error.message === 'Unauthorized' ? 401 : 500).json({ error: error.message });
+  }
+});
+
+// ─── Editor menos ocupado da cidade ativa ("direto para edição" dos Roteiros) ───
+// Antes a tela buscava todos os editores (sem cidade) e contava as tarefas só da cidade
+// ativa: o editor de Uruaçu tinha 0 em Minaçu e ganhava o card que não conseguia ver.
+// Papel editor no perfil ou em user_roles; carga = cards dele em edição/revisão/alteração.
+app.get('/api/team/least-busy-editor', async (req, res) => {
+  try {
+    await ensureUserCitiesTable();
+    const { user } = await verifyUser(req);
+    const city = await resolveActiveCity(req, user.id, user);
+    const { rows } = await pool.query(
+      `SELECT p.id::text AS id, COUNT(ct.id)::int AS active_tasks
+         FROM profiles p
+         LEFT JOIN content_tasks ct
+           ON ct.assigned_to::text = p.id::text
+          AND ct.kanban_column IN ('edicao', 'revisao', 'alteracao')
+        WHERE (p.role::text = 'editor'
+               OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id::text = p.id::text AND ur.role::text = 'editor'))
+          AND ${userServesCitySql('p.id', '$1')}
+        GROUP BY p.id
+        ORDER BY active_tasks ASC, random()
+        LIMIT 1`,
+      [city]
+    );
+    res.json({ city, editor_id: rows[0]?.id || null, active_tasks: rows[0]?.active_tasks ?? null });
+  } catch (error) {
+    res.status(error.statusCode || (error.message === 'Unauthorized' ? 401 : 500)).json({ error: error.message });
+  }
+});
+
+// ─── Copy ao vivo (painel da TV) ───
+// A Copy gravava copy_active_sessions pelo /api/db/query, que recusa a tabela: a TV
+// nunca mostrava quem está escrevendo. Cada pessoa só grava e apaga a própria sessão.
+const COPY_LIVE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const copyLiveUuid = (value) => (typeof value === 'string' && COPY_LIVE_UUID.test(value) ? value : null);
+
+app.post('/api/copy-live', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    await ensureCopyActiveSessionsTable();
+    const city = await resolveActiveCity(req, user.id, user).catch(() => null);
+    const body = req.body || {};
+    const batchSize = Array.isArray(body.batchTaskIds) ? Math.min(body.batchTaskIds.length, 500) : 0;
+    const { rows: [profileRow] } = await pool.query(
+      `SELECT COALESCE(NULLIF(btrim(display_name), ''), name) AS name FROM profiles WHERE id::text = $1 LIMIT 1`,
+      [String(user.id)]
+    ).catch(() => ({ rows: [] }));
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM copy_active_sessions WHERE copywriter_id::text = $1', [String(user.id)]);
+      await client.query(
+        `INSERT INTO copy_active_sessions
+           (copywriter_id, copywriter_name, task_id, request_id, client_id, topic, content_format, batch_size, started_at, city)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), $9)`,
+        [
+          user.id,
+          String(profileRow?.name || user.name || user.email || 'Copywriter').slice(0, 200),
+          copyLiveUuid(body.taskId),
+          copyLiveUuid(body.requestId),
+          copyLiveUuid(body.clientId),
+          body.topic ? String(body.topic).slice(0, 300) : null,
+          body.contentFormat ? String(body.contentFormat).slice(0, 40) : null,
+          batchSize,
+          city,
+        ]
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => null);
+      throw error;
+    } finally {
+      client.release();
+    }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : (error.statusCode || 500)).json({ error: error.message });
+  }
+});
+
+app.delete('/api/copy-live', async (req, res) => {
+  try {
+    const { user } = await verifyUser(req);
+    await ensureCopyActiveSessionsTable();
+    await pool.query('DELETE FROM copy_active_sessions WHERE copywriter_id::text = $1', [String(user.id)]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(error.message === 'Unauthorized' ? 401 : (error.statusCode || 500)).json({ error: error.message });
   }
 });
 
@@ -5011,6 +5123,76 @@ app.post('/api/generate-caption', async (req, res) => {
     res.json({ caption });
   } catch (error) {
     console.error('Generate caption error:', error);
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+// ─── 4b. Generate Slides (Treinamento de clientes) ──────────
+// A tela chamava 'generate-slides', que só existia no Supabase antigo (404 na VPS).
+const SLIDE_LAYOUTS = new Set(['title_only', 'title_content', 'quote', 'metrics', 'closing']);
+const SLIDE_HSL = /^\d{1,3}(?:\.\d+)? \d{1,3}(?:\.\d+)?% \d{1,3}(?:\.\d+)?%$/;
+
+app.post('/api/generate-slides', async (req, res) => {
+  // Usa a chave paga da agência: só para a equipe logada.
+  if (!(await requireAiUser(req, res))) return;
+  try {
+    const content = clipAiText(req.body.content, 12000).trim();
+    const title = clipAiText(req.body.title, 200) || 'Treinamento';
+    if (content.length < 10) return res.status(400).json({ error: 'Conteúdo muito curto' });
+
+    const { aiModel, aiProvider } = req.body;
+    const admin = getAdminClient();
+    const dbApiKey = await fetchDbApiKey(admin, aiProvider);
+    const ai = await resolveAiConfig(aiProvider, dbApiKey);
+    const model = sanitizeAiModelName(aiModel, ai.provider, 'gemini-3.5-flash');
+
+    const prompt = `Você é um designer sênior de apresentações corporativas. Crie uma apresentação de treinamento com a identidade visual da agência Pulse Growth Marketing.
+
+IDENTIDADE VISUAL (cores em HSL, no formato "H S% L%"):
+- Laranja (títulos, destaques e divisões de seção): "16 82% 51%"
+- Fundo escuro: "220 15% 10%"; fundo escuro secundário: "220 13% 15%"; fundo claro: "0 0% 97%"
+- Texto branco "0 0% 100%" sobre fundo escuro; texto escuro "220 10% 20%" sobre fundo claro
+- Azul para informações: "200 80% 55%"; verde para métricas positivas: "142 71% 45%"
+
+ESTRUTURA:
+- Slide 1: capa com fundo escuro, título e subtítulo
+- Alterne fundos escuros e claros; use "title_only" com fundo laranja para separar seções
+- Último slide: encerramento ("closing") com mensagem de impacto
+
+CONTEÚDO:
+- Extraia os pontos-chave; bullets curtos começando com "•" (até 5 por slide, até 15 palavras cada)
+- Títulos de até 6 palavras; subtítulos de até 12 palavras; emojis com moderação
+- Entre 5 e 20 slides, conforme a densidade do texto
+
+LAYOUTS: "title_only", "title_content", "quote", "metrics", "closing".
+
+Título da apresentação: ${title}
+
+Conteúdo para transformar em slides:
+${content}
+
+Responda APENAS com JSON válido, sem texto antes ou depois:
+{"slides":[{"title":"...","subtitle":"...","content":"...","layout_type":"title_content","background_color":"220 15% 10%","text_color":"0 0% 100%"}]}`;
+
+    const answer = await callAi(ai, model, [{ role: 'user', content: prompt }], { temperature: 0.6, max_tokens: 8000, effort: 'low' });
+    const text = String(answer || '').replace(/```json\s*/gi, '').replace(/```/g, '');
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    let parsed = null;
+    try { parsed = start >= 0 && end > start ? JSON.parse(text.slice(start, end + 1)) : null; } catch { parsed = null; }
+    const rawSlides = Array.isArray(parsed?.slides) ? parsed.slides : [];
+    const slides = rawSlides.slice(0, 30).map((s) => ({
+      title: clipAiText(s?.title, 200),
+      subtitle: clipAiText(s?.subtitle, 300),
+      content: clipAiText(s?.content, 3000),
+      layout_type: SLIDE_LAYOUTS.has(s?.layout_type) ? s.layout_type : 'title_content',
+      background_color: SLIDE_HSL.test(String(s?.background_color || '')) ? s.background_color : '220 15% 10%',
+      text_color: SLIDE_HSL.test(String(s?.text_color || '')) ? s.text_color : '0 0% 100%',
+    })).filter((s) => s.title || s.content);
+    if (slides.length === 0) return res.status(502).json({ error: 'A IA não devolveu slides. Tente de novo.' });
+    res.json({ slides });
+  } catch (error) {
+    console.error('Generate slides error:', error);
     res.status(error.status || 500).json({ error: error.message });
   }
 });
@@ -7430,6 +7612,8 @@ function warmPortal480pCache(sourcePath, cachedFile) {
     '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-threads', '1',
     '-c:a', 'aac', '-b:a', '96k',
     '-movflags', '+faststart',
+    // O arquivo temporário termina em .tmp: sem -f o ffmpeg não escolhe o formato e falhava sempre
+    '-f', 'mp4',
     '-y', tempFile,
   ], { timeout: 600000 }))
     .then(() => {
@@ -9886,10 +10070,10 @@ app.post('/api/reset-password', async (req, res) => {
 // ─── 13. Delete User ────────────────────────────────────────
 app.post('/api/delete-user', async (req, res) => {
   try {
-    const { user } = await verifyAdmin(req);
+    const { user } = await verifyAccountManager(req);
     const { userId } = req.body;
-    if (!userId) return res.status(400).json({ error: 'Missing userId' });
-    if (userId === user.id) return res.status(400).json({ error: 'Cannot delete yourself' });
+    if (!userId) return res.status(400).json({ error: 'Informe o usuário a excluir.' });
+    if (userId === user.id) return res.status(400).json({ error: 'Você não pode excluir a si mesmo.' });
     await assertCanManageUserAccount(user, { targetUserId: userId });
 
     // Ids ligados (perfil + auth_users com o mesmo e-mail) calculados ANTES de apagar:
@@ -9899,7 +10083,7 @@ app.post('/api/delete-user', async (req, res) => {
     const { rows: profileRows } = await pool.query('SELECT email FROM profiles WHERE id::text = $1 LIMIT 1', [targetId]);
     const targetEmail = String(profileRows[0]?.email || '').trim().toLowerCase();
     const linkedIds = await getLinkedUserIds({ id: targetId, email: targetEmail });
-    if (linkedIds.includes(String(user.id))) return res.status(400).json({ error: 'Cannot delete yourself' });
+    if (linkedIds.includes(String(user.id))) return res.status(400).json({ error: 'Você não pode excluir a si mesmo.' });
 
     // Tudo numa transação: se o perfil não puder sair (ex.: gravações ligadas), nada é apagado.
     const client = await pool.connect();
@@ -11148,6 +11332,11 @@ const DB_QUERY_TABLE_RULES = {
   short_link_clicks: { read: 'admin', write: 'admin' },
   regulations: { write: 'admin' },
   regulation_clicks: { read: 'admin', write: 'admin' },
+  // Pulse Academy: trilhas, módulos e aulas só o admin cria e altera (o caminho do vídeo
+  // decide qual arquivo o stream entrega). O progresso (user_training_progress) segue aberto.
+  training_tracks: { write: 'admin' },
+  training_modules: { write: 'admin' },
+  training_lessons: { write: 'admin' },
 };
 
 // Colunas de destino de redirecionamento: só http(s) — um 'javascript:' rodaria no domínio do sistema.
@@ -13088,10 +13277,12 @@ app.put('/api/scripts/:id', async (req, res) => {
 app.delete('/api/scripts/:id', async (req, res) => {
   try {
     const { activeCity, scopeCity } = await getScopedCityContext(req, 'scripts');
-    await pool.query(
+    const { rowCount } = await pool.query(
       `DELETE FROM scripts WHERE id = $1${scopeCity ? ` AND ${cityVisibilityExpression('city', '$2')}` : ''}`,
       scopeCity ? [req.params.id, activeCity] : [req.params.id]
     );
+    // Nada apagado (outra cidade ou já removido): a tela não pode dizer que removeu
+    if (!rowCount) return res.status(404).json({ error: 'Roteiro não encontrado nesta cidade.' });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -15489,9 +15680,8 @@ app.post('/api/presence/heartbeat', async (req, res) => {
   const auth = await presenceRequestUser(req);
   if (!auth) return res.status(401).json({ error: 'Unauthorized' });
   const userId = auth.ownId(req.body?.userId) || String(auth.user.id);
-  setPresenceHeartbeat(userId);
-  // Broadcast to WebSocket clients
-  broadcastPresence();
+  // Broadcast to WebSocket clients só na entrada (o resto vai na sincronização de 30 s)
+  if (setPresenceHeartbeat(userId)) broadcastPresence();
   res.json({ ok: true });
 });
 
@@ -15531,6 +15721,7 @@ app.post('/api/quick-chat', async (req, res) => {
 //   1. nginx denies /uploads/training-videos/* (returns 403)
 //   2. /api/training/sign requires a valid logged-in user JWT
 //   3. /api/training/stream requires a short-lived (10 min) signed token bound to lessonId + user
+//      (own secret: it is never a session token)
 //   4. Stream response forces inline disposition, no-store cache, range support
 const TRAINING_VIDEO_ROOT = process.env.TRAINING_VIDEO_ROOT || '/var/www/html/uploads/training-videos';
 const TRAINING_VIDEO_ROOTS = Array.from(new Set([
@@ -15544,42 +15735,149 @@ const TRAINING_VIDEO_ROOTS = Array.from(new Set([
   path.resolve('/var/www/uploads'),
   path.resolve('/var/www/html/uploads'),
 ]));
-const TRAINING_STREAM_TTL = 60 * 10; // 10 min
+const TRAINING_STREAM_TTL = 60 * 10; // 10 min (o player pede outro token quando vence)
+// Segredo próprio do token do vídeo. Assinado com o JWT_SECRET ele valia como login da
+// equipe (verifyUser, /api/auth/refresh, WebSockets) para quem pegasse a URL da aula.
+const TRAINING_STREAM_SECRET = String(process.env.TRAINING_STREAM_SECRET || '').trim()
+  || crypto.createHmac('sha256', String(JWT_SECRET)).update('pulse:training-stream').digest('hex');
+// Só vídeo sai pelo stream (antes qualquer arquivo com o mesmo nome, até o .env).
+const TRAINING_VIDEO_EXTENSIONS = new Set(['.mp4', '.m4v', '.mov', '.qt', '.webm', '.mkv', '.avi', '.mpg', '.mpeg', '.3gp', '.ogv', '.wmv']);
+// Busca por nome (vídeo antigo com caminho errado no banco): só nas pastas de upload,
+// nunca em /var/www ou /var/www/html (onde ficam o código e o .env).
+const TRAINING_FALLBACK_SEARCH_ROOTS = Array.from(new Set([
+  path.resolve('/var/www/html/uploads'),
+  path.resolve('/var/www/uploads'),
+]));
+const TRAINING_FALLBACK_MISS_MS = 60_000;
+const TRAINING_FALLBACK_HIT_MS = 10 * 60_000;
+const trainingFallbackMisses = new Map(); // nome do arquivo -> quando não achou
+const trainingFallbackHits = new Map();   // nome do arquivo -> { abs, at }
+const trainingRootRealpaths = new Map();
+// Prévia 480p de .mov que falhou: não relança o ffmpeg a cada abertura da aula
+const TRAINING_TRANSCODE_RETRY_MS = 6 * 60 * 60_000;
+const trainingTranscodeFailures = new Map();
 
 function getTrainingStreamContentType(filePathOrUrl = '') {
   return getPortalMediaContentType(filePathOrUrl);
 }
 
-async function ensureTrainingPlayableSource(sourcePath, lessonId) {
-  const ext = path.extname(sourcePath || '').toLowerCase();
-  if (ext !== '.mov') return { filePath: sourcePath, contentType: getTrainingStreamContentType(sourcePath) };
-
-  const cacheKey = crypto.createHash('md5').update(`${lessonId}:${sourcePath}`).digest('hex');
-  const cachedFile = path.join(TRANSCODE_CACHE_DIR, `training_${cacheKey}.mp4`);
-
-  if (fs.existsSync(cachedFile)) {
-    return { filePath: cachedFile, contentType: 'video/mp4' };
-  }
-
-  // Kick off transcode in the background — do NOT block the player. Most .mov files
-  // from iPhone/macOS are H.264/AAC and browsers will play them when served as
-  // video/mp4 with byte-range support. Next play will hit the cached MP4.
-  warmPortal480pCache(sourcePath, cachedFile).catch((error) => {
-    console.error('[training] background transcode error:', error?.message || error);
-  });
-
-  return { filePath: sourcePath, contentType: 'video/mp4' };
+// A pasta onde o /api/upload grava (UPLOAD_ROOT, definida mais abaixo) também vale:
+// se ela não for /var/www/uploads, os vídeos novos ficam lá (antes só a busca por nome em
+// /var/www os achava). Lida na hora do pedido, não no carregamento do módulo.
+function trainingVideoRoots() {
+  return Array.from(new Set([...TRAINING_VIDEO_ROOTS, path.resolve(UPLOAD_ROOT, 'training-videos'), path.resolve(UPLOAD_ROOT)]));
 }
 
-function resolveTrainingFile(videoPathOrUrl) {
+function trainingFallbackRoots() {
+  return Array.from(new Set([...TRAINING_FALLBACK_SEARCH_ROOTS, path.resolve(UPLOAD_ROOT)]));
+}
+
+function isTrainingVideoName(fileName) {
+  const base = path.basename(String(fileName || ''));
+  return Boolean(base) && !base.startsWith('.') && TRAINING_VIDEO_EXTENSIONS.has(path.extname(base).toLowerCase());
+}
+
+async function statTrainingFile(abs) {
+  try {
+    const stat = await fs.promises.stat(abs);
+    return stat.isFile() ? stat : null;
+  } catch {
+    return null;
+  }
+}
+
+async function realTrainingRoot(root) {
+  if (trainingRootRealpaths.has(root)) return trainingRootRealpaths.get(root);
+  const real = await fs.promises.realpath(root).catch(() => null);
+  if (real) trainingRootRealpaths.set(root, real);
+  return real;
+}
+
+/** O arquivo (seguindo links) é vídeo e fica dentro de uma pasta de vídeo/upload conhecida. */
+async function isInsideTrainingRoots(abs) {
+  const real = await fs.promises.realpath(abs).catch(() => null);
+  if (!real || !isTrainingVideoName(real)) return false;
+  for (const root of [...trainingVideoRoots(), ...trainingFallbackRoots()]) {
+    const realRoot = await realTrainingRoot(root);
+    if (realRoot && real.startsWith(realRoot + path.sep)) return true;
+  }
+  return false;
+}
+
+async function searchTrainingFileByName(base) {
+  const hit = trainingFallbackHits.get(base);
+  if (hit && Date.now() - hit.at < TRAINING_FALLBACK_HIT_MS && await statTrainingFile(hit.abs)) return hit.abs;
+  const missAt = trainingFallbackMisses.get(base);
+  if (missAt && Date.now() - missAt < TRAINING_FALLBACK_MISS_MS) return null;
+
+  let found = null;
+  for (const r of trainingFallbackRoots()) {
+    if (found) break;
+    const stack = [r];
+    let steps = 0;
+    while (stack.length && steps < 5000 && !found) {
+      const cur = stack.pop();
+      steps++;
+      let entries;
+      try { entries = await fs.promises.readdir(cur, { withFileTypes: true }); } catch { continue; }
+      for (const e of entries) {
+        if (e.name.startsWith('.')) continue;
+        const full = path.join(cur, e.name);
+        if (e.isDirectory()) {
+          if (e.name !== 'node_modules') stack.push(full);
+        } else if (e.isFile() && e.name === base) {
+          found = full;
+          break;
+        }
+      }
+    }
+  }
+
+  if (found && await isInsideTrainingRoots(found)) {
+    trainingFallbackHits.set(base, { abs: found, at: Date.now() });
+    if (trainingFallbackHits.size > 500) trainingFallbackHits.delete(trainingFallbackHits.keys().next().value);
+    console.warn('[training] vídeo achado só pela busca por nome; vale corrigir o caminho da aula:', base, '->', found);
+    return found;
+  }
+  trainingFallbackMisses.set(base, Date.now());
+  if (trainingFallbackMisses.size > 500) trainingFallbackMisses.delete(trainingFallbackMisses.keys().next().value);
+  return null;
+}
+
+// Caminho já resolvido (chave = o caminho gravado na aula): o stream resolve a cada pedaço
+// de 1 MB, então evita refazer as dezenas de stat por pedaço.
+const TRAINING_RESOLVED_TTL_MS = 5 * 60_000;
+const trainingResolvedCache = new Map(); // caminho da aula -> { abs, at }
+
+/** Caminho absoluto do vídeo da aula (só vídeo, só dentro das pastas de upload) ou null. */
+async function resolveTrainingFile(videoPathOrUrl) {
   if (!videoPathOrUrl) return null;
+  const cacheKey = String(videoPathOrUrl);
+  const cached = trainingResolvedCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < TRAINING_RESOLVED_TTL_MS && await statTrainingFile(cached.abs)) return cached.abs;
+  const abs = await findTrainingFile(cacheKey);
+  if (abs) {
+    trainingResolvedCache.set(cacheKey, { abs, at: Date.now() });
+    if (trainingResolvedCache.size > 1000) trainingResolvedCache.delete(trainingResolvedCache.keys().next().value);
+  } else {
+    trainingResolvedCache.delete(cacheKey);
+  }
+  return abs;
+}
+
+async function findTrainingFile(videoPathOrUrl) {
   let rel = String(videoPathOrUrl).trim();
   rel = rel.replace(/^https?:\/\/[^/]+/, '');
-  rel = decodeURIComponent(rel.split('?')[0].split('#')[0] || '');
+  try {
+    rel = decodeURIComponent(rel.split('?')[0].split('#')[0] || '');
+  } catch {
+    return null;
+  }
   rel = rel.replace(/^\/+/, '');
-  if (rel.includes('..') || rel.includes('\0')) return null;
+  if (rel.includes('..') || rel.includes('\0') || rel.includes('\\')) return null;
 
   const base = path.basename(rel);
+  if (!isTrainingVideoName(base)) return null;
   const relativeCandidates = Array.from(new Set([
     rel,
     rel.replace(/^uploads\/training-videos\//, ''),
@@ -15591,45 +15889,45 @@ function resolveTrainingFile(videoPathOrUrl) {
     `training-videos/${base}`,
   ].filter(Boolean)));
 
-  for (const root of TRAINING_VIDEO_ROOTS) {
+  for (const root of trainingVideoRoots()) {
     for (const candidate of relativeCandidates) {
       const abs = path.resolve(root, candidate);
-      if (!abs.startsWith(root)) continue;
-      if (fs.existsSync(abs) && fs.statSync(abs).isFile()) return abs;
+      if (!abs.startsWith(root + path.sep)) continue;
+      if (await statTrainingFile(abs) && await isInsideTrainingRoots(abs)) return abs;
     }
   }
 
-  // Last-resort: recursive search by basename in known upload roots
-  const searchRoots = [
-    '/var/www/html/uploads',
-    '/var/www/uploads',
-    '/var/www/html',
-    '/var/www',
-  ];
-  for (const r of searchRoots) {
-    try {
-      if (!fs.existsSync(r)) continue;
-      const stack = [r];
-      let steps = 0;
-      while (stack.length && steps < 5000) {
-        const cur = stack.pop();
-        steps++;
-        let entries;
-        try { entries = fs.readdirSync(cur, { withFileTypes: true }); } catch { continue; }
-        for (const e of entries) {
-          const full = path.join(cur, e.name);
-          if (e.isDirectory()) {
-            if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
-            stack.push(full);
-          } else if (e.isFile() && e.name === base) {
-            return full;
-          }
-        }
-      }
-    } catch { /* ignore */ }
-  }
+  return searchTrainingFileByName(base);
+}
 
-  return null;
+function trainingCacheFile(sourcePath, lessonId) {
+  const cacheKey = crypto.createHash('md5').update(`${lessonId}:${sourcePath}`).digest('hex');
+  return path.join(TRANSCODE_CACHE_DIR, `training_${cacheKey}.mp4`);
+}
+
+/**
+ * Versão do arquivo que o token vai servir, decidida na assinatura e fixa durante
+ * a reprodução: antes o .mov trocava pela prévia MP4 no meio do vídeo (outros bytes
+ * e outro tamanho -> 416 ou vídeo corrompido). 'cache' = prévia 480p já pronta.
+ */
+async function chooseTrainingVariant(sourcePath, lessonId) {
+  if (path.extname(sourcePath || '').toLowerCase() !== '.mov') return 'orig';
+  const cachedFile = trainingCacheFile(sourcePath, lessonId);
+  if (await statTrainingFile(cachedFile)) return 'cache';
+
+  const failedAt = trainingTranscodeFailures.get(cachedFile);
+  if (!failedAt || Date.now() - failedAt > TRAINING_TRANSCODE_RETRY_MS) {
+    // Converte em segundo plano para a próxima vez; esta reprodução segue no original.
+    // Most .mov files from iPhone/macOS are H.264/AAC and browsers play them as video/mp4.
+    warmPortal480pCache(sourcePath, cachedFile)
+      .then(() => { trainingTranscodeFailures.delete(cachedFile); })
+      .catch((error) => {
+        // Fila cheia não é falha do arquivo: tenta de novo na próxima abertura
+        if (!/fila de transcodifica/i.test(error?.message || '')) trainingTranscodeFailures.set(cachedFile, Date.now());
+        console.error('[training] background transcode error:', error?.message || error);
+      });
+  }
+  return 'orig';
 }
 
 function getTrainingAuthTokenFromHeader(req) {
@@ -15685,12 +15983,12 @@ app.get('/api/training/verify', async (req, res) => {
       return res.json({ ok: true, external: true });
     }
 
-    const abs = resolveTrainingFile(src);
-    if (!abs || !fs.existsSync(abs)) {
+    const abs = await resolveTrainingFile(src);
+    const stat = abs ? await statTrainingFile(abs) : null;
+    if (!abs || !stat) {
       return res.status(404).json({ ok: false, error: 'file not found on disk' });
     }
-    const stat = fs.statSync(abs);
-    if (!stat.isFile() || stat.size === 0) {
+    if (stat.size === 0) {
       return res.status(404).json({ ok: false, error: 'invalid file' });
     }
     if (stat.size < 1024) {
@@ -15705,7 +16003,6 @@ app.get('/api/training/verify', async (req, res) => {
     res.json({
       ok: true,
       size: stat.size,
-      path: abs,
       durationSec: probe.durationSec ?? null,
       hasVideoStream: probe.hasVideoStream ?? null,
       probed: !probe.skipped,
@@ -15738,20 +16035,20 @@ app.get('/api/training/sign', async (req, res) => {
     }
 
     // Gate em disco: sem arquivo valido -> sem token. Evita o player abrir e dar erro.
-    const absCheck = resolveTrainingFile(src);
-    if (!absCheck || !fs.existsSync(absCheck)) {
+    const absCheck = await resolveTrainingFile(src);
+    if (!absCheck) {
       console.warn('[training/sign] arquivo nao encontrado', { lessonId, src });
       return res.status(404).json({ error: 'video file not available yet', code: 'NOT_ON_DISK' });
     }
-    let stat;
-    try { stat = fs.statSync(absCheck); } catch { stat = null; }
-    if (!stat || !stat.isFile() || stat.size < 1024) {
+    const stat = await statTrainingFile(absCheck);
+    if (!stat || stat.size < 1024) {
       return res.status(409).json({ error: 'video is still being written', code: 'INCOMPLETE', size: stat?.size || 0 });
     }
 
+    const variant = await chooseTrainingVariant(absCheck, lessonId);
     const token = jwt.sign(
-      { lessonId, sub: user.id, scope: 'training-stream' },
-      JWT_SECRET,
+      { lessonId, sub: user.id, scope: 'training-stream', v: variant },
+      TRAINING_STREAM_SECRET,
       { expiresIn: TRAINING_STREAM_TTL },
     );
     res.json({ url: `/api/training/stream/${lessonId}?token=${token}`, size: stat.size });
@@ -15769,7 +16066,7 @@ app.get('/api/training/stream/:lessonId', async (req, res) => {
     if (!token) return res.status(401).end();
     let decoded;
     try {
-      decoded = jwt.verify(token, JWT_SECRET);
+      decoded = jwt.verify(token, TRAINING_STREAM_SECRET);
     } catch {
       return res.status(401).end();
     }
@@ -15782,11 +16079,15 @@ app.get('/api/training/stream/:lessonId', async (req, res) => {
       [lessonId],
     );
     if (!rows.length) return res.status(404).end();
-    const rawFilePath = resolveTrainingFile(rows[0].video_path || rows[0].video_url);
-    if (!rawFilePath || !fs.existsSync(rawFilePath)) return res.status(404).end();
-    const { filePath, contentType } = await ensureTrainingPlayableSource(rawFilePath, lessonId);
+    const sourcePath = await resolveTrainingFile(rows[0].video_path || rows[0].video_url);
+    if (!sourcePath) return res.status(404).end();
+    // Mesma versão do arquivo durante todo o token (ver chooseTrainingVariant)
+    const isMov = path.extname(sourcePath).toLowerCase() === '.mov';
+    const filePath = isMov && decoded.v === 'cache' ? trainingCacheFile(sourcePath, lessonId) : sourcePath;
+    const contentType = isMov ? 'video/mp4' : getTrainingStreamContentType(sourcePath);
 
-    const stat = fs.statSync(filePath);
+    const stat = await statTrainingFile(filePath);
+    if (!stat) return res.status(404).end();
     const total = stat.size;
     const range = req.headers.range;
 
@@ -15808,8 +16109,9 @@ app.get('/api/training/stream/:lessonId', async (req, res) => {
         return res.end();
       }
       const start = parseInt(match[1], 10);
-      const end = match[2] ? parseInt(match[2], 10) : Math.min(start + 1024 * 1024 - 1, total - 1);
-      if (start >= total || end >= total) {
+      // Fim além do arquivo é cortado no último byte (RFC 7233), não vira 416
+      const end = Math.min(match[2] ? parseInt(match[2], 10) : start + 1024 * 1024 - 1, total - 1);
+      if (start >= total || end < start) {
         res.writeHead(416, { ...baseHeaders, 'Content-Range': `bytes */${total}` });
         return res.end();
       }
@@ -16752,7 +17054,7 @@ async function authenticateSocketToken(token) {
   if (!token || typeof token !== 'string') return null;
   try {
     const decoded = verifyToken(token);
-    if (!decoded?.sub) return null;
+    if (!decoded?.sub || decoded.scope) return null; // token de escopo não é sessão
     const user = { id: String(decoded.sub), email: decoded.email || null };
     return { user, ids: await presenceIdsForUser(user) };
   } catch {
@@ -16792,14 +17094,17 @@ function broadcastQuickMessage(payload) {
   }
 }
 
+/** Grava o sinal de presença. true quando a pessoa acabou de entrar (não estava online). */
 function setPresenceHeartbeat(userId) {
   const now = new Date().toISOString();
   const existing = presenceState.get(userId);
+  const wasOnline = Boolean(existing) && Date.now() - getPresenceHeartbeatTime(existing) < ONLINE_PRESENCE_MS;
   presenceState.set(userId, {
     userId,
     heartbeatAt: now,
-    connectedAt: existing?.connectedAt || now,
+    connectedAt: wasOnline ? (existing?.connectedAt || now) : now,
   });
+  return !wasOnline;
 }
 
 wssOffice.on('connection', (ws) => {
@@ -16835,8 +17140,9 @@ wssOffice.on('connection', (ws) => {
       const ownId = (id) => (id && ws._pulseIds?.has(String(id)) ? String(id) : null);
       if (data.type === 'heartbeat') {
         const userId = ownId(data.userId) || ws._pulseUser.id;
-        setPresenceHeartbeat(userId);
-        broadcastPresence();
+        // Só avisa todo mundo quando alguém entra; o resto vai na sincronização de 30 s
+        // (antes cada sinal mandava a lista inteira para todos: tráfego N²).
+        if (setPresenceHeartbeat(userId)) broadcastPresence();
       } else if (data.type === 'leave') {
         const userId = ownId(data.userId) || ws._pulseUser.id;
         presenceState.delete(userId);
@@ -16976,12 +17282,11 @@ function emitRealtime(channel, event, payload) {
 }
 globalThis.emitRealtime = emitRealtime;
 
-// Clean stale presence every 30s
+// A cada 30 s: limpa quem parou de dar sinal e manda a lista atualizada (com os
+// horários do último sinal) para todos. Entradas e saídas saem na hora.
 setInterval(() => {
-  const before = presenceState.size;
   collectOnlinePresenceUsers();
-  const changed = presenceState.size !== before;
-  if (changed) broadcastPresence();
+  broadcastPresence();
 }, 30_000);
 
 // ═══════════════════════════════════════════════════════════════

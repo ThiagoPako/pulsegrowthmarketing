@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
@@ -37,6 +38,17 @@ import { useAutoSave } from '@/hooks/useAutoSave';
 const VIDEO_TYPES: ScriptVideoType[] = ['vendas', 'institucional', 'reconhecimento', 'educacional', 'bastidores', 'depoimento', 'lancamento', 'evento'];
 const CONTENT_FORMATS: ScriptContentFormat[] = ['reels', 'story', 'criativo'];
 const STABLE_SCRIPT_DRAFT_KEY = 'PULSE_STABLE_NO_AUTO_RELOAD_V1';
+
+// Título e nome do cliente entram no HTML do PDF (innerHTML): texto, nunca tag
+const escapePdfText = (value: string) => String(value ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+type LinkedContentTask = { id: string; kanban_column: string; edited_video_link: string | null };
+const CONTENT_COLUMN_LABELS: Record<string, string> = {
+  ideias: 'Ideias', captacao: 'Captação', edicao: 'Edição', revisao: 'Revisão',
+  alteracao: 'Alteração', envio: 'Enviado', agendamentos: 'Agendamentos',
+  acompanhamento: 'Acompanhamento', arquivado: 'Arquivado',
+};
 
 function RichEditor({ content, onChange }: { content: string; onChange: (html: string) => void }) {
   const editor = useEditor({
@@ -148,6 +160,8 @@ export default function Scripts() {
   const [filterEndo, setFilterEndo] = useState<'all' | 'video' | 'endo'>('all');
   const [showRecorded, setShowRecorded] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ script: Script; tasks: LinkedContentTask[] } | null>(null);
+  const [deletingScript, setDeletingScript] = useState(false);
   const [scriptAlerts, setScriptAlerts] = useState(() => {
     const stored = localStorage.getItem('pulse_script_alerts');
     return stored !== null ? stored === 'true' : true;
@@ -337,20 +351,27 @@ export default function Scripts() {
     setOpen(true);
   };
 
+  // Modelo e provedor escolhidos na tela de APIs (o servidor decide a chave)
+  const getAiIntegrationConfig = async (): Promise<{ aiModel?: string; aiProvider?: string }> => {
+    const { data: aiIntegration } = await supabase
+      .from('api_integrations')
+      .select('config')
+      .in('provider', ['ai_gemini', 'ai_openai', 'ai_claude'])
+      .eq('status', 'ativo')
+      .limit(1)
+      .single();
+    return {
+      aiModel: (aiIntegration as any)?.config?.ai_model || undefined,
+      aiProvider: (aiIntegration as any)?.config?.ai_provider || undefined,
+    };
+  };
+
   const generateCaptionFromContent = async (content: string, clientId: string): Promise<string> => {
     try {
       const client = clients.find(c => c.id === clientId);
       if (!client) return '';
       
-      const { data: aiIntegration } = await supabase
-        .from('api_integrations')
-        .select('config')
-        .in('provider', ['ai_gemini', 'ai_openai', 'ai_claude'])
-        .eq('status', 'ativo')
-        .limit(1)
-        .single();
-      const aiModel = (aiIntegration as any)?.config?.ai_model || undefined;
-      const aiProvider = (aiIntegration as any)?.config?.ai_provider || undefined;
+      const { aiModel, aiProvider } = await getAiIntegrationConfig();
 
       const { data, error } = await supabase.functions.invoke('generate-caption', {
         body: {
@@ -437,31 +458,15 @@ export default function Scripts() {
         // Always go to edicao column
         kanbanColumn = 'edicao';
         
-        // Find least-busy editor
-        const { data: editors } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('role', 'editor');
-        
-        if (editors && editors.length > 0) {
-          let minTasks = Infinity;
-          let leastBusyEditor: string | null = null;
-          
-          for (const editor of editors) {
-            // Count active tasks for this editor
-            const { data: editorTasks } = await supabase
-              .from('content_tasks')
-              .select('id')
-              .eq('assigned_to', (editor as any).id)
-              .in('kanban_column', ['edicao', 'revisao', 'alteracao']);
-            
-            const count = editorTasks?.length || 0;
-            if (count < minTasks) {
-              minTasks = count;
-              leastBusyEditor = (editor as any).id;
-            }
-          }
-          assignedTo = leastBusyEditor;
+        // Editor menos ocupado que atende a cidade ativa (o servidor escolhe numa consulta só)
+        const { invokeVpsFunction } = await import('@/services/vpsEdgeFunctions');
+        const { data: pick, error: pickError } = await invokeVpsFunction('team/least-busy-editor', { method: 'GET' });
+        if (pickError) console.error('Escolha do editor falhou:', pickError);
+        assignedTo = pick?.editor_id || null;
+        if (!assignedTo) {
+          toast.warning(pickError
+            ? 'Não deu para escolher o editor agora: o card vai para Edição sem responsável.'
+            : 'Nenhum editor atende esta cidade: o card vai para Edição sem responsável.');
         }
       }
 
@@ -572,11 +577,45 @@ export default function Scripts() {
     setOpen(false);
   };
 
-  const handleDelete = async (id: string) => {
-    // Delete linked content_task first
-    await supabase.from('content_tasks').delete().eq('script_id', id);
-    deleteScript(id);
-    toast.success('Roteiro removido');
+  // Exclusão com confirmação. O card do Kanban ligado ao roteiro só é apagado se ainda
+  // estiver em "Ideias"; nas outras colunas (edição, aprovação...) ele fica e só perde o
+  // vínculo, para não sumir com o trabalho do editor (antes apagava sem perguntar).
+  const requestDelete = async (script: Script) => {
+    const { data, error } = await supabase
+      .from('content_tasks')
+      .select('id, kanban_column, edited_video_link')
+      .eq('script_id', script.id);
+    if (error) {
+      toast.error('Não foi possível conferir o card do Kanban deste roteiro. Tente de novo.');
+      return;
+    }
+    setDeleteTarget({ script, tasks: ((data as any[]) || []) as LinkedContentTask[] });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    const { script, tasks: linked } = deleteTarget;
+    setDeletingScript(true);
+    try {
+      // Roteiro primeiro: se a API recusar, o card fica como estava
+      if (!(await deleteScript(script.id))) return;
+      const ideaIds = linked.filter(t => t.kanban_column === 'ideias').map(t => t.id);
+      const keptIds = linked.filter(t => t.kanban_column !== 'ideias').map(t => t.id);
+      let cardError = false;
+      if (ideaIds.length > 0) {
+        const { error } = await supabase.from('content_tasks').delete().in('id', ideaIds);
+        if (error) cardError = true;
+      }
+      if (keptIds.length > 0) {
+        const { error } = await supabase.from('content_tasks').update({ script_id: null } as any).in('id', keptIds);
+        if (error) cardError = true;
+      }
+      if (cardError) toast.warning('Roteiro removido, mas o card do Kanban não foi atualizado. Confira no Kanban.');
+      else toast.success('Roteiro removido');
+      setDeleteTarget(null);
+    } finally {
+      setDeletingScript(false);
+    }
   };
 
   const toggleRecorded = (script: Script) => {
@@ -693,9 +732,9 @@ export default function Scripts() {
         <section data-pdf-role="script">
           <div data-pdf-role="script-header" style="padding:${i === 0 ? '20' : '24'}px ${pagePadding}px 8px;">
             ${i > 0 ? '<div style="border-top:1px solid #ddd; margin:0 0 20px;"></div>' : ''}
-            <h1 style="font-size:22px; font-weight:700; color:#000; margin:0 0 4px; line-height:1.2;">${script.title}</h1>
+            <h1 style="font-size:22px; font-weight:700; color:#000; margin:0 0 4px; line-height:1.2;">${escapePdfText(script.title)}</h1>
             <p style="font-size:12px; color:#666; margin:0 0 12px; font-weight:500; text-transform:uppercase; letter-spacing:0.02em;">
-              ${client?.companyName || 'Cliente'} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
+              ${escapePdfText(client?.companyName || 'Cliente')} · ${SCRIPT_VIDEO_TYPE_LABELS[script.videoType]} · ${new Date(script.updatedAt).toLocaleDateString('pt-BR')}
             </p>
           </div>
           <div data-pdf-role="script-body" style="font-size:${activeConfig.fontSize}px; line-height:${activeConfig.lineHeight}; text-align:left; word-break:break-word; overflow-wrap:break-word; max-width:100%; box-sizing:border-box; overflow:hidden; color:#222;">
@@ -1145,61 +1184,74 @@ export default function Scripts() {
     const client = clients.find(c => c.id === form.clientId);
     if (!client) return;
     
-    // Collect existing scripts as examples for the AI to learn style/format
-    const exampleScripts = scripts
-      .filter(s => s.content && s.content.length > 50 && !s.recorded !== undefined)
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .slice(0, 5)
-      .map(s => ({
-        title: s.title,
-        videoType: s.videoType,
-        contentFormat: s.contentFormat || 'reels',
-        clientName: clients.find(c => c.id === s.clientId)?.companyName || '',
-        content: s.content.replace(/<[^>]*>/g, '').substring(0, 800),
-      }));
+    // Roteiros existentes como referência de estilo: primeiro os do próprio cliente
+    // (mesmo tipo de vídeo na frente), depois os de outros clientes (mesmo tipo antes).
+    const toExample = (s: Script) => ({
+      title: s.title,
+      videoType: s.videoType,
+      contentFormat: s.contentFormat || 'reels',
+      clientName: clients.find(c => c.id === s.clientId)?.companyName || '',
+      content: s.content.replace(/<[^>]*>/g, '').substring(0, 800),
+    });
+    const candidates = scripts
+      .filter(s => s.content && s.content.length > 50)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    const rank = (s: Script) => (s.clientId === form.clientId ? 0 : 2) + (s.videoType === form.videoType ? 0 : 1);
+    const orderedExamples = [...candidates]
+      .sort((a, b) => rank(a) - rank(b))
+      .slice(0, 3)
+      .map(toExample);
 
-    // Prioritize same video type examples
-    const sameTypeExamples = exampleScripts.filter(e => e.videoType === form.videoType);
-    const otherExamples = exampleScripts.filter(e => e.videoType !== form.videoType);
-    const orderedExamples = [...sameTypeExamples, ...otherExamples].slice(0, 3);
+    // O servidor não busca o cliente: a linha editorial e o pedido vão no corpo
+    const extraContext = form.content?.replace(/<[^>]*>/g, '').trim().substring(0, 300);
+    const editorial = [
+      client.editorial ? `Linha editorial: ${client.editorial}` : '',
+      form.title ? `Tema do roteiro: ${form.title}` : '',
+      extraContext ? `Contexto adicional: ${extraContext}` : '',
+    ].filter(Boolean).join('\n');
 
     setGenerating(true);
     try {
       const { invokeVpsFunction } = await import('@/services/vpsEdgeFunctions');
-      const { data, error: fnError } = await invokeVpsFunction('ai-script-generator', {
+      const { aiModel, aiProvider } = await getAiIntegrationConfig();
+      const { data, error: fnError } = await invokeVpsFunction('generate-script', {
         body: {
-          clientId: form.clientId,
-          topic: form.title || undefined,
+          clientName: client.companyName,
+          niche: client.niche || '',
+          editorial,
           videoType: form.videoType,
           contentFormat: form.contentFormat,
-          additionalContext: form.content?.replace(/<[^>]*>/g, '').substring(0, 300) || undefined,
+          exampleScripts: orderedExamples,
+          aiModel,
+          aiProvider,
         },
       });
       if (fnError) throw new Error(fnError.message || 'Falha ao gerar roteiro');
-      if (data?.script) {
-        // Content is already HTML from the edge function
-        let htmlContent = data.script;
-        // If it looks like markdown, convert
-        if (!htmlContent.includes('<p>') && !htmlContent.includes('<strong>')) {
-          htmlContent = htmlContent
-            .replace(/\n\n/g, '</p><p>')
-            .replace(/\n/g, '<br/>')
-            .replace(/^/, '<p>')
-            .replace(/$/, '</p>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>');
-        }
-        setForm(prev => ({ ...prev, content: htmlContent }));
-        if (!form.title) {
-          const autoTitle = `${SCRIPT_VIDEO_TYPE_LABELS[form.videoType]} - ${client.companyName}`;
-          setForm(prev => ({ ...prev, title: autoTitle }));
-        }
-        const ctx = data.learningContext;
-        const learnMsg = ctx?.hasLearningData
-          ? ` (aprendeu com ${ctx.usedAsReference} roteiros anteriores)`
-          : ' (sem roteiros anteriores para referência)';
-        toast.success(`Roteiro gerado com sucesso!${learnMsg}`);
-      }
+      const generated = typeof data?.content === 'string' ? data.content.trim() : '';
+      if (!generated) throw new Error('A IA não devolveu o roteiro. Tente de novo.');
+      // Texto puro da IA vira HTML do editor (escapado antes de montar as tags)
+      const escaped = generated
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      const htmlContent = escaped
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/\n/g, '<br/>')
+        .replace(/^/, '<p>')
+        .replace(/$/, '</p>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>');
+      const generatedCaption = typeof data?.caption === 'string' ? data.caption.trim() : '';
+      setForm(prev => ({
+        ...prev,
+        content: htmlContent,
+        title: prev.title || `${SCRIPT_VIDEO_TYPE_LABELS[prev.videoType]} - ${client.companyName}`,
+        caption: prev.contentFormat !== 'story' && !prev.caption.trim() && generatedCaption ? generatedCaption : prev.caption,
+      }));
+      const learnMsg = orderedExamples.length > 0
+        ? ` (usou ${orderedExamples.length} roteiro(s) anteriores como referência)`
+        : ' (sem roteiros anteriores para referência)';
+      toast.success(`Roteiro gerado com sucesso!${learnMsg}`);
     } catch (err: any) {
       console.error('Generate script error:', err);
       toast.error(err.message || 'Erro ao gerar roteiro. Tente novamente.');
@@ -1413,7 +1465,7 @@ export default function Scripts() {
                   onClick={() => toggleRecorded(script)}>
                   <Check size={14} className={script.recorded ? 'text-success' : ''} />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 ml-auto" title="Excluir" onClick={() => handleDelete(script.id)}>
+                <Button variant="ghost" size="icon" className="h-7 w-7 ml-auto" title="Excluir" onClick={() => requestDelete(script)}>
                   <Trash2 size={14} />
                 </Button>
               </div>
@@ -1891,6 +1943,38 @@ export default function Scripts() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(v) => { if (!v && !deletingScript) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir roteiro?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>O roteiro <span className="font-medium text-foreground">{deleteTarget?.script.title || 'sem título'}</span> será apagado. Não dá para desfazer.</p>
+                {deleteTarget && deleteTarget.tasks.length === 0 && <p>Não há card ligado a ele no Kanban.</p>}
+                {deleteTarget?.tasks.filter(t => t.kanban_column === 'ideias').length ? (
+                  <p>O card em <strong>Ideias</strong> no Kanban também será removido.</p>
+                ) : null}
+                {deleteTarget?.tasks.filter(t => t.kanban_column !== 'ideias').map(t => (
+                  <p key={t.id}>
+                    O card em <strong>{CONTENT_COLUMN_LABELS[t.kanban_column] || t.kanban_column}</strong> continua no Kanban{t.edited_video_link ? ' (com o vídeo editado)' : ''}, só sem este roteiro de referência.
+                  </p>
+                ))}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingScript}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deletingScript}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => { e.preventDefault(); void confirmDelete(); }}
+            >
+              {deletingScript ? 'Excluindo...' : 'Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

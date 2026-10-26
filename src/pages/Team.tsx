@@ -24,7 +24,7 @@ import UserAvatar from '@/components/UserAvatar';
 import { useUserPermissions, AVAILABLE_MODULES } from '@/hooks/useUserPermissions';
 import BirthdayCountdown from '@/components/BirthdayCountdown';
 import TeamMemberStats from '@/components/TeamMemberStats';
-import { CITY_LABELS, type CityCode } from '@/contexts/CityContext';
+import { CITY_LABELS, useCity, type CityCode } from '@/contexts/CityContext';
 
 const ALL_CITIES: CityCode[] = ['minacu', 'uruacu'];
 const VPS_API_BASE = 'https://agenciapulse.tech/api';
@@ -64,8 +64,46 @@ interface PartnerInfo {
   active: boolean;
 }
 
+/** Seleção de cidades de acesso com a principal (mesmo modelo do Novo Usuário). */
+function CityAccessPicker({ cities, primary, onChange }: {
+  cities: CityCode[];
+  primary: CityCode;
+  onChange: (next: { cities: CityCode[]; primary: CityCode }) => void;
+}) {
+  return (
+    <div className="space-y-2 p-3 rounded-lg bg-muted/50 border border-border">
+      <Label className="flex items-center gap-2"><MapPin size={14} /> Cidades de acesso</Label>
+      <p className="text-[11px] text-muted-foreground">Marque as cidades que este parceiro poderá acessar. A principal é a cidade padrão ao logar.</p>
+      <div className="grid grid-cols-2 gap-2">
+        {ALL_CITIES.map(c => {
+          const checked = cities.includes(c);
+          return (
+            <label key={c} className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-colors ${checked ? 'bg-primary/5 border-primary/30' : 'bg-card border-border hover:bg-muted/50'}`}>
+              <Checkbox checked={checked} onCheckedChange={() => {
+                const next = checked ? cities.filter(x => x !== c) : [...cities, c];
+                onChange({ cities: next, primary: (next.includes(primary) ? primary : (next[0] || 'minacu')) as CityCode });
+              }} />
+              <span className="text-sm font-medium flex-1">{CITY_LABELS[c]}</span>
+              {checked && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); onChange({ cities, primary: c }); }}
+                  className={`text-[10px] px-1.5 py-0.5 rounded ${primary === c ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted-foreground/20'}`}
+                >
+                  {primary === c ? 'Principal' : 'Tornar principal'}
+                </button>
+              )}
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function Team() {
   const { currentUser } = useApp();
+  const { activeCity } = useCity();
   const canManageTeam = currentUser?.role === 'admin' || currentUser?.role === 'gestor_projetos';
   const { signUp, session } = useAuth();
   const [open, setOpen] = useState(false);
@@ -87,7 +125,8 @@ export default function Team() {
 
   const [tab, setTab] = useState<'equipe' | 'parceiros'>('equipe');
   const [partnerOpen, setPartnerOpen] = useState(false);
-  const [partnerCreateForm, setPartnerCreateForm] = useState({ name: '', email: '', password: '', serviceFunction: 'fotografo', companyName: '', fixedRate: 0, phone: '', notes: '' });
+  const emptyPartnerCreateForm = () => ({ name: '', email: '', password: '', serviceFunction: 'fotografo', companyName: '', fixedRate: 0, phone: '', notes: '', cities: [activeCity] as CityCode[], primaryCity: activeCity as CityCode });
+  const [partnerCreateForm, setPartnerCreateForm] = useState(emptyPartnerCreateForm);
 
   const [permTarget, setPermTarget] = useState<TeamMember | null>(null);
   const [permModules, setPermModules] = useState<string[]>([]);
@@ -281,29 +320,26 @@ export default function Team() {
 
     if (!form.cities.length) { toast.error('Selecione ao menos uma cidade'); return; }
     const primaryCity = form.cities.includes(form.primaryCity) ? form.primaryCity : form.cities[0];
-    const { error } = await signUp(form.email, form.password, form.name, form.role as AppRole, false, form.cities, primaryCity);
+    const { error, userId } = await signUp(form.email, form.password, form.name, form.role as AppRole, false, form.cities, primaryCity);
     if (error) {
       toast.error(error);
       return;
     }
 
-    // If creating a partner, we need to create the partner record after user is created
+    // Parceiro: o registro em partners usa o id que o cadastro devolveu (o perfil já existe)
     if (form.role === 'parceiro') {
-      // Wait a moment for profile to be created by trigger
-      setTimeout(async () => {
-        const { data: profile } = await supabase.from('profiles').select('id').eq('email', form.email).single();
-        if (profile) {
-          await supabase.from('partners').insert({
-            user_id: profile.id,
+      const { error: partnerError } = userId
+        ? await supabase.from('partners').insert({
+            user_id: userId,
             company_name: partnerForm.companyName || null,
             service_function: partnerForm.serviceFunction,
             fixed_rate: partnerForm.fixedRate,
             phone: partnerForm.phone,
             notes: partnerForm.notes,
-          } as any);
-        }
-        fetchPartners();
-      }, 1500);
+          } as any)
+        : { error: { message: 'cadastro sem id' } };
+      if (partnerError) toast.error('Usuário criado, mas os dados de parceiro não foram salvos: ' + (partnerError.message || 'erro'));
+      fetchPartners();
     }
 
     toast.success('Usuário cadastrado com sucesso!');
@@ -346,7 +382,7 @@ export default function Team() {
     if (!confirm(`Tem certeza que deseja excluir ${member.displayName || member.name}? Esta ação é irreversível.`)) return;
     try {
       const { data, error } = await supabase.functions.invoke('delete-user', { body: { userId: member.id } });
-      if (error) throw error;
+      if (error) throw new Error(typeof error === 'string' ? error : error.message || 'Erro ao excluir membro');
       if (data?.error) throw new Error(data.error);
       toast.success(`${member.displayName || member.name} removido com sucesso`);
       fetchMembers();
@@ -409,30 +445,35 @@ export default function Team() {
     if (!partnerCreateForm.name || !partnerCreateForm.email || !partnerCreateForm.password) { toast.error('Preencha todos os campos'); return; }
     if (partnerCreateForm.password.length < 6) { toast.error('Senha deve ter no mínimo 6 caracteres'); return; }
 
+    if (!partnerCreateForm.cities.length) { toast.error('Selecione ao menos uma cidade'); return; }
+    const primaryCity = partnerCreateForm.cities.includes(partnerCreateForm.primaryCity) ? partnerCreateForm.primaryCity : partnerCreateForm.cities[0];
+
     // Register with 'parceiro' role so they appear in the partners list
-    const { error } = await signUp(partnerCreateForm.email, partnerCreateForm.password, partnerCreateForm.name, 'parceiro' as AppRole);
+    const { error, userId } = await signUp(partnerCreateForm.email, partnerCreateForm.password, partnerCreateForm.name, 'parceiro' as AppRole, false, partnerCreateForm.cities, primaryCity);
     if (error) { toast.error(error); return; }
 
-    // Create partner record after profile is created by trigger
-    setTimeout(async () => {
-      const { data: profile } = await supabase.from('profiles').select('id').eq('email', partnerCreateForm.email).single();
-      if (profile) {
-        await supabase.from('partners').insert({
-          user_id: profile.id,
+    // Registro do parceiro com o id devolvido pelo cadastro (antes: setTimeout + busca por e-mail, sem checar erro)
+    const { error: partnerError } = userId
+      ? await supabase.from('partners').insert({
+          user_id: userId,
           company_name: partnerCreateForm.companyName || null,
           service_function: PARTNER_FUNCTIONS.find(f => f.value === partnerCreateForm.serviceFunction)?.label || partnerCreateForm.serviceFunction,
           fixed_rate: partnerCreateForm.fixedRate,
           phone: partnerCreateForm.phone,
           notes: partnerCreateForm.notes,
-        } as any);
-      }
-      fetchPartners();
-      fetchMembers();
-    }, 1500);
+        } as any)
+      : { error: { message: 'cadastro sem id' } };
+    fetchPartners();
+    fetchMembers();
+    fetchUserCities();
+    if (partnerError) {
+      toast.error('Conta criada, mas os dados de parceiro não foram salvos: ' + (partnerError.message || 'erro'));
+      return;
+    }
 
     toast.success('Parceiro cadastrado com sucesso!');
     setPartnerOpen(false);
-    setPartnerCreateForm({ name: '', email: '', password: '', serviceFunction: 'fotografo', companyName: '', fixedRate: 0, phone: '', notes: '' });
+    setPartnerCreateForm(emptyPartnerCreateForm());
   };
 
   const roleColors: Record<UserRole, string> = {
@@ -569,7 +610,7 @@ export default function Team() {
         {tab === 'parceiros' && canManageTeam && (
           <Dialog open={partnerOpen} onOpenChange={setPartnerOpen}>
             <DialogTrigger asChild>
-              <Button size="sm" variant="outline" onClick={() => { setPartnerCreateForm({ name: '', email: '', password: '', serviceFunction: 'fotografo', companyName: '', fixedRate: 0, phone: '', notes: '' }); }}>
+              <Button size="sm" variant="outline" onClick={() => { setPartnerCreateForm(emptyPartnerCreateForm()); }}>
                 <Plus size={16} className="mr-2" /> Novo Parceiro
               </Button>
             </DialogTrigger>
@@ -580,15 +621,20 @@ export default function Team() {
                 <div className="space-y-1"><Label>Email</Label><Input type="email" value={partnerCreateForm.email} onChange={e => setPartnerCreateForm({ ...partnerCreateForm, email: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Senha</Label><Input type="password" value={partnerCreateForm.password} onChange={e => setPartnerCreateForm({ ...partnerCreateForm, password: e.target.value })} placeholder="Mínimo 6 caracteres" /></div>
                 <div className="space-y-1">
-                  <Label>Função no Sistema</Label>
+                  <Label>Serviço prestado</Label>
                   <Select value={partnerCreateForm.serviceFunction} onValueChange={v => setPartnerCreateForm({ ...partnerCreateForm, serviceFunction: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {PARTNER_FUNCTIONS.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">O parceiro terá acesso ao sistema de acordo com esta função</p>
+                  <p className="text-xs text-muted-foreground">Identifica o serviço do parceiro. O acesso ao sistema é o de parceiro.</p>
                 </div>
+                <CityAccessPicker
+                  cities={partnerCreateForm.cities}
+                  primary={partnerCreateForm.primaryCity}
+                  onChange={({ cities, primary }) => setPartnerCreateForm({ ...partnerCreateForm, cities, primaryCity: primary })}
+                />
                 <div className="space-y-3 p-3 rounded-lg bg-muted/50 border border-border">
                   <p className="text-sm font-semibold flex items-center gap-2"><Handshake size={16} /> Dados do Parceiro</p>
                   <div className="space-y-1">
@@ -893,6 +939,15 @@ export default function Team() {
                       )}
                       {canManageTeam && (
                         <>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleOpenCities(u); }}
+                            className="h-7 px-2 rounded-md bg-secondary/50 hover:bg-secondary text-[10px] flex items-center gap-1 border border-transparent hover:border-primary/30 transition-all"
+                            title="Cidades de acesso"
+                          >
+                            <MapPin size={11} className="text-primary" />
+                            {(userCities[u.id]?.cities?.length ? userCities[u.id].cities : (['minacu'] as CityCode[])).map(c => CITY_LABELS[c as CityCode]).join(' · ')}
+                          </button>
                           <Button variant="ghost" size="icon" className="h-8 w-8" title="Redefinir senha" onClick={() => { setResetTarget(u); setResetOpen(true); }}>
                             <KeyRound size={16} />
                           </Button>

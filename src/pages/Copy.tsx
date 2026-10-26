@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { supabase } from '@/lib/vpsDb';
+import { invokeVpsFunction } from '@/services/vpsEdgeFunctions';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -258,32 +259,28 @@ export default function Copy() {
     contentFormat?: string | null;
   }) => {
     if (!user?.id) return;
+    // Rota própria (o /api/db/query recusa a tabela): o servidor grava a sessão do usuário logado
     try {
-      const copywriterName =
-        users.find(u => u.id === user.id)?.name ||
-        (user as any)?.user_metadata?.name ||
-        (user as any)?.name ||
-        (user as any)?.email ||
-        'Copywriter';
-      await supabase.from('copy_active_sessions').delete().eq('copywriter_id', user.id);
-      await supabase.from('copy_active_sessions').insert({
-        copywriter_id: user.id,
-        copywriter_name: copywriterName,
-        task_id: payload.taskId || null,
-        request_id: payload.requestId || null,
-        client_id: payload.clientId || null,
-        topic: payload.topic || null,
-        content_format: payload.contentFormat || null,
-        batch_size: payload.batchTaskIds?.length || 0,
-        started_at: new Date().toISOString(),
-      } as any);
+      const { error } = await invokeVpsFunction('copy-live', {
+        body: {
+          taskId: payload.taskId || null,
+          requestId: payload.requestId || null,
+          clientId: payload.clientId || null,
+          topic: payload.topic || null,
+          contentFormat: payload.contentFormat || null,
+          batchTaskIds: payload.batchTaskIds || [],
+        },
+      });
+      if (error) console.warn('writeCopyLive fail', error);
     } catch (e) { console.warn('writeCopyLive fail', e); }
   };
 
   const clearCopyLive = async () => {
     if (!user?.id) return;
-    try { await supabase.from('copy_active_sessions').delete().eq('copywriter_id', user.id); }
-    catch (e) { console.warn('clearCopyLive fail', e); }
+    try {
+      const { error } = await invokeVpsFunction('copy-live', { method: 'DELETE' });
+      if (error) console.warn('clearCopyLive fail', error);
+    } catch (e) { console.warn('clearCopyLive fail', e); }
   };
 
   useEffect(() => {

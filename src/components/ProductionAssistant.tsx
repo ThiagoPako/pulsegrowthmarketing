@@ -88,6 +88,17 @@ interface AssistantMessage {
 }
 
 const ASSISTANT_KEY = 'pulse_assistant_enabled';
+// Intervalo mínimo entre mensagens da IA (vale entre abas e recargas da página)
+const ASSISTANT_MIN_INTERVAL_MS = 60 * 60 * 1000;
+// Balão fechado pela pessoa: não reabre sozinho com o mesmo tipo de mensagem por 3 h
+const ASSISTANT_DISMISS_MS = 3 * 60 * 60 * 1000;
+
+function readAssistantStore(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function writeAssistantStore(key: string, value: string) {
+  try { localStorage.setItem(key, value); } catch { /* navegador sem storage */ }
+}
 
 /* ─── Main Component ─── */
 export default function ProductionAssistant() {
@@ -95,14 +106,19 @@ export default function ProductionAssistant() {
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [currentMsg, setCurrentMsg] = useState<AssistantMessage | null>(null);
   const [showBubble, setShowBubble] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [hasMessage, setHasMessage] = useState(false);
   const checkedRef = useRef(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval>>();
+  // "Em andamento" num ref: com o estado nas dependências a função era recriada a cada
+  // checagem e o efeito reagendava outra em 30 s (IA chamada sem parar).
+  const inFlightRef = useRef(false);
+  const lastAiKey = user ? `pulse_assistant_last_${user.id}` : '';
+  const dismissKey = user ? `pulse_assistant_dismissed_${user.id}` : '';
 
   const checkProduction = useCallback(async () => {
-    if (!user || !profile || loading) return;
-    setLoading(true);
+    if (!user || !profile || inFlightRef.current) return;
+    const lastAiAt = Number(readAssistantStore(lastAiKey) || 0);
+    if (lastAiAt && Date.now() - lastAiAt < ASSISTANT_MIN_INTERVAL_MS) return;
+    inFlightRef.current = true;
 
     try {
       // Fetch overdue/pending items
@@ -141,11 +157,15 @@ export default function ProductionAssistant() {
           return dl && new Date(dl) < new Date(now.getTime() + 2 * 3600000);
         });
 
-      if (!shouldSpeak && checkedRef.current) {
-        setLoading(false);
-        return;
-      }
+      if (!shouldSpeak && checkedRef.current) return;
       checkedRef.current = true;
+
+      const msgType: AssistantMessage['type'] = isFriday ? 'friday' : overdueTasks.length > 0 ? 'deadline' : 'motivation';
+      // Fechou o balão há pouco: mesma conversa não volta antes de 3 h
+      try {
+        const dismissed = JSON.parse(readAssistantStore(dismissKey) || 'null');
+        if (dismissed?.type === msgType && Date.now() - Number(dismissed.at || 0) < ASSISTANT_DISMISS_MS) return;
+      } catch { /* valor antigo/inválido: ignora */ }
 
       // Build prompt context
       const context = {
@@ -171,6 +191,7 @@ export default function ProductionAssistant() {
       const aiModel = (aiIntegration as any)?.config?.ai_model || undefined;
       const aiProvider = (aiIntegration as any)?.config?.ai_provider || undefined;
 
+      writeAssistantStore(lastAiKey, String(Date.now()));
       const { data: aiResponse } = await invokeVpsFunction('production-assistant', {
         body: { context, aiModel, aiProvider },
       });
@@ -180,7 +201,7 @@ export default function ProductionAssistant() {
           id: crypto.randomUUID(),
           text: aiResponse.message,
           timestamp: new Date(),
-          type: isFriday ? 'friday' : overdueTasks.length > 0 ? 'deadline' : 'motivation',
+          type: msgType,
         };
         setMessages(prev => [msg, ...prev].slice(0, 20));
         setCurrentMsg(msg);
@@ -190,22 +211,32 @@ export default function ProductionAssistant() {
     } catch (err) {
       console.error('Production assistant error:', err);
     } finally {
-      setLoading(false);
+      inFlightRef.current = false;
     }
-  }, [user, profile, loading]);
+  }, [user, profile, lastAiKey, dismissKey]);
 
-  // Check on mount + every 15 min (only if enabled)
+  const checkRef = useRef(checkProduction);
+  checkRef.current = checkProduction;
+
+  // Primeira checagem 30 s depois de entrar e depois a cada 1 h (só se estiver ligado).
+  // Depende só do usuário: o agendamento não é refeito a cada checagem.
   useEffect(() => {
-    if (!user) return;
-    const enabled = localStorage.getItem(ASSISTANT_KEY) !== 'false';
+    if (!user?.id) return;
+    const enabled = readAssistantStore(ASSISTANT_KEY) !== 'false';
     if (!enabled) return;
-    const timer = setTimeout(() => checkProduction(), 30000);
-    intervalRef.current = setInterval(() => checkProduction(), 60 * 60 * 1000);
+    const timer = setTimeout(() => { void checkRef.current(); }, 30000);
+    const interval = setInterval(() => { void checkRef.current(); }, ASSISTANT_MIN_INTERVAL_MS);
     return () => {
       clearTimeout(timer);
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      clearInterval(interval);
     };
-  }, [user, checkProduction]);
+  }, [user?.id]);
+
+  const dismissBubble = () => {
+    setShowBubble(false);
+    setHasMessage(false);
+    if (dismissKey && currentMsg) writeAssistantStore(dismissKey, JSON.stringify({ type: currentMsg.type, at: Date.now() }));
+  };
 
   // Auto-dismiss bubble after 30s
   useEffect(() => {
@@ -230,7 +261,7 @@ export default function ProductionAssistant() {
           >
             <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-4 pr-8">
               <button
-                onClick={() => { setShowBubble(false); setHasMessage(false); }}
+                onClick={dismissBubble}
                 className="absolute top-2 right-2 text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X size={14} />
@@ -248,8 +279,7 @@ export default function ProductionAssistant() {
       <motion.button
         onClick={() => {
           if (showBubble) {
-            setShowBubble(false);
-            setHasMessage(false);
+            dismissBubble();
           } else if (currentMsg) {
             setShowBubble(true);
           }

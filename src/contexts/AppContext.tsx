@@ -80,7 +80,8 @@ interface AppContextType {
   deleteTask: (id: string) => void;
   addScript: (script: Script) => Promise<boolean>;
   updateScript: (script: Script) => void;
-  deleteScript: (id: string) => void;
+  /** false quando a API recusa (o hook já avisa) */
+  deleteScript: (id: string) => Promise<boolean>;
   updateSettings: (settings: CompanySettings) => Promise<boolean>;
   startActiveRecording: (rec: ActiveRecording) => Promise<boolean>;
   stopActiveRecording: (recordingId: string, deliveryOverrides?: { reels_produced?: number; videos_recorded?: number; creatives_produced?: number; stories_produced?: number; arts_produced?: number; extras_produced?: number }, completedScriptIds?: string[], options?: { deferDelivery?: boolean }) => Promise<boolean>;
@@ -770,7 +771,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const deleteTask = useCallback((id: string) => { data.deleteTask(id); }, [data]);
   const addScript = useCallback(async (script: Script) => { return data.addScript(script); }, [data]);
   const updateScript = useCallback((script: Script) => { data.updateScript(script); }, [data]);
-  const deleteScript = useCallback((id: string) => { data.deleteScript(id); }, [data]);
+  const deleteScript = useCallback((id: string) => data.deleteScript(id), [data]);
   // Devolvem false quando a API recusa (o hook já avisa): quem chama só mostra sucesso com true.
   const updateSettings = useCallback((s: CompanySettings) => data.updateSettings(s), [data]);
   const startActiveRecording = useCallback((rec: ActiveRecording) => data.startActiveRecording(rec), [data]);

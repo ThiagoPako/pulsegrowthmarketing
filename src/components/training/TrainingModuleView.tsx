@@ -58,11 +58,22 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   const [uploading, setUploading] = useState<string | null>(null);
   const [uploadModalLesson, setUploadModalLesson] = useState<Lesson | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [savingProgress, setSavingProgress] = useState(false);
   const modalFileInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // Link do vídeo vale 10 min: quando vence (ou cai a rede) o player pede outro e
+  // continua do mesmo ponto, em vez de travar a aula.
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const wasPlayingRef = useRef(false);
+  const resumeRef = useRef<{ lessonId: string; time: number; play: boolean } | null>(null);
+  const renewRef = useRef<{ lessonId: string; windowStart: number; count: number; busy: boolean }>({ lessonId: '', windowStart: 0, count: 0, busy: false });
   const { profile, session } = useAuth();
   const isAdmin = profile?.role === 'admin';
   const currentVideoSource = currentVideo?.video_url || currentVideo?.video_path || '';
+  const currentVideoIdRef = useRef<string | undefined>(undefined);
+  currentVideoIdRef.current = currentVideo?.id;
+  // Status da aula aberta vem da lista da trilha (a aula aberta pelo catálogo não traz status)
+  const currentVideoStatus = lessons.find(l => l.id === currentVideo?.id)?.status ?? currentVideo?.status;
   const isExternalVideo = /youtube|vimeo/i.test(currentVideoSource);
 
   const getTrainingAuthToken = () => {
@@ -140,10 +151,28 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
     }
   }, [selectedTrack, forceUpdate]);
 
+  /** URL assinada do vídeo da aula ({ url } ou { error }). */
+  const signLessonVideo = async (lessonId: string): Promise<{ url?: string; error?: string }> => {
+    const token = getTrainingAuthToken();
+    const res = await fetch(
+      `https://agenciapulse.tech/api/training/sign?lessonId=${encodeURIComponent(lessonId)}`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.url) {
+      const reason = data?.error || `HTTP ${res.status}`;
+      console.error('[training/sign] failed:', reason, data);
+      return { error: reason };
+    }
+    return { url: data.url.startsWith('http') ? data.url : `https://agenciapulse.tech${data.url}` };
+  };
+
   // Fetch short-lived signed URL whenever the selected video changes
   useEffect(() => {
     let cancelled = false;
     setSignedVideoUrl(null);
+    resumeRef.current = null;
+    wasPlayingRef.current = false;
     if (!currentVideo?.id || !currentVideoSource) return;
     // External providers (YouTube/Vimeo) keep using iframe
     if (isExternalVideo) return;
@@ -151,20 +180,12 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
     (async () => {
       try {
         setVideoLoading(true);
-        const token = getTrainingAuthToken();
-        const res = await fetch(
-          `https://agenciapulse.tech/api/training/sign?lessonId=${encodeURIComponent(currentVideo.id)}`,
-          { headers: token ? { Authorization: `Bearer ${token}` } : {} },
-        );
-        const data = await res.json().catch(() => ({}));
+        const { url, error } = await signLessonVideo(currentVideo.id);
         if (cancelled) return;
-        if (!res.ok || !data?.url) {
-          const reason = data?.error || `HTTP ${res.status}`;
-          console.error('[training/sign] failed:', reason, data);
-          toast.error(`Não foi possível liberar o vídeo: ${reason}`);
+        if (!url) {
+          toast.error(`Não foi possível liberar o vídeo: ${error}`);
           return;
         }
-        const url = data.url.startsWith('http') ? data.url : `https://agenciapulse.tech${data.url}`;
         setSignedVideoUrl(url);
       } catch {
         if (!cancelled) toast.error('Falha ao carregar vídeo protegido.');
@@ -175,6 +196,47 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
 
     return () => { cancelled = true; };
   }, [currentVideo?.id, currentVideoSource, isExternalVideo, session?.access_token]);
+
+  // Erro no meio da aula (link vencido depois de 10 min, pausa longa, queda de rede):
+  // pede um link novo e retoma do mesmo ponto. No máximo 3 tentativas por minuto.
+  const handleVideoError = async () => {
+    const lessonId = currentVideo?.id;
+    const video = videoRef.current;
+    if (!lessonId || !video) return;
+    const renew = renewRef.current;
+    if (renew.busy) return;
+    const now = Date.now();
+    if (renew.lessonId !== lessonId || now - renew.windowStart > 60_000) {
+      renewRef.current = { lessonId, windowStart: now, count: 0, busy: false };
+    }
+    if (renewRef.current.count >= 3) {
+      toast.error('O vídeo parou de carregar. Volte ao catálogo e abra a aula de novo.');
+      return;
+    }
+    renewRef.current.count += 1;
+    renewRef.current.busy = true;
+    const time = video.currentTime || resumeRef.current?.time || 0;
+    try {
+      const { url } = await signLessonVideo(lessonId);
+      if (!url || currentVideoIdRef.current !== lessonId) return;
+      resumeRef.current = { lessonId, time, play: wasPlayingRef.current };
+      setSignedVideoUrl(url);
+    } catch {
+      /* a próxima falha tenta de novo */
+    } finally {
+      renewRef.current.busy = false;
+    }
+  };
+
+  // Depois de trocar o link: volta para o ponto em que estava (e continua tocando)
+  const handleVideoLoadedMetadata = () => {
+    const video = videoRef.current;
+    const resume = resumeRef.current;
+    if (!video || !resume || resume.lessonId !== currentVideo?.id) return;
+    resumeRef.current = null;
+    if (resume.time > 0) video.currentTime = resume.time;
+    if (resume.play) video.play().catch(() => { /* navegador pode exigir um clique */ });
+  };
 
   const loadTracks = async () => {
     try {
@@ -239,9 +301,10 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
           .select('id, module_id, title, description, video_url, video_path, methodology_name, duration, display_order, content_markdown, thumbnail_url')
           .in('module_id', moduleIds)
           .order('display_order', { ascending: true }),
+        // A tabela da VPS não tem coluna status: aula concluída = linha com completed_at
         supabase
           .from('user_training_progress')
-          .select('lesson_id, status')
+          .select('lesson_id, completed_at')
           .eq('user_id', userId),
       ]);
 
@@ -260,7 +323,9 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
         console.warn('[Academy] progress error (ignorado):', progRes.value.error);
       }
 
-      const progressMap = new Map(progressData.map(p => [p.lesson_id, p.status]));
+      const progressMap = new Map<string, Lesson['status']>(
+        progressData.map(p => [p.lesson_id, p.completed_at ? 'completed' : 'in_progress']),
+      );
       setLessons(lessData.map((l: any) => ({ ...l, status: progressMap.get(l.id) || 'not_started' })));
     } catch (error: any) {
       console.error('Error loading track details:', error);
@@ -281,9 +346,11 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
     setUploading(lessonId);
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      // A pasta vem antes do arquivo: o multer só lê os campos que chegaram antes dele. Na
+      // ordem antiga o vídeo caía na raiz de /uploads, fora do bloqueio de training-videos.
       formData.append('folder', 'training-videos');
       formData.append('path', 'training-videos');
+      formData.append('file', file);
 
       const token = getTrainingAuthToken();
       const response = await fetch('https://agenciapulse.tech/api/upload', {
@@ -344,34 +411,51 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
   };
 
   const updateProgress = async (lessonId: string, newStatus: 'not_started' | 'in_progress' | 'completed') => {
+    if (savingProgress) return;
+    setSavingProgress(true);
     try {
-      const { data: existing } = await supabase
-        .from('user_training_progress')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('lesson_id', lessonId)
-        .maybeSingle();
-
-      if (existing) {
-        await supabase
+      let error: any = null;
+      if (newStatus === 'completed') {
+        const { data: existing, error: readError } = await supabase
           .from('user_training_progress')
-          .update({ status: newStatus, completed_at: newStatus === 'completed' ? new Date().toISOString() : null } as any)
-          .eq('id', existing.id);
+          .select('id')
+          .eq('user_id', userId)
+          .eq('lesson_id', lessonId)
+          .limit(1);
+        error = readError;
+        const existingId = (existing as any[] | null)?.[0]?.id;
+        if (!error && existingId) {
+          ({ error } = await supabase
+            .from('user_training_progress')
+            .update({ completed_at: new Date().toISOString() } as any)
+            .eq('id', existingId));
+        } else if (!error) {
+          ({ error } = await supabase
+            .from('user_training_progress')
+            .insert({ user_id: userId, lesson_id: lessonId, completed_at: new Date().toISOString() } as any));
+        }
       } else {
-        await supabase
+        // Desmarcar: sem a linha a aula volta a contar como não concluída
+        ({ error } = await supabase
           .from('user_training_progress')
-          .insert({ 
-            user_id: userId, 
-            lesson_id: lessonId, 
-            status: newStatus,
-            completed_at: newStatus === 'completed' ? new Date().toISOString() : null
-          } as any);
+          .delete()
+          .eq('user_id', userId)
+          .eq('lesson_id', lessonId));
       }
-      
-      setLessons(lessons.map(l => l.id === lessonId ? { ...l, status: newStatus } : l));
-      if (newStatus === 'completed') toast.success('Aula concluída!');
+      if (error) {
+        toast.error('Não foi possível salvar o progresso: ' + (error.message || 'erro'));
+        return;
+      }
+
+      const savedStatus = newStatus === 'completed' ? 'completed' : 'not_started';
+      setLessons(prev => prev.map(l => l.id === lessonId ? { ...l, status: savedStatus } : l));
+      setCurrentVideo(prev => (prev && prev.id === lessonId ? { ...prev, status: savedStatus } : prev));
+      toast.success(savedStatus === 'completed' ? 'Aula concluída!' : 'Aula desmarcada');
     } catch (e) {
       console.error('Progress update error:', e);
+      toast.error('Não foi possível salvar o progresso.');
+    } finally {
+      setSavingProgress(false);
     }
   };
 
@@ -578,8 +662,14 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                     />
                   ) : signedVideoUrl ? (
                     <video
+                      ref={videoRef}
                       src={signedVideoUrl}
                       className="w-full h-full bg-black"
+                      onError={() => { void handleVideoError(); }}
+                      onLoadedMetadata={handleVideoLoadedMetadata}
+                      onPlay={() => { wasPlayingRef.current = true; }}
+                      onPause={() => { if (!videoRef.current?.error) wasPlayingRef.current = false; }}
+                      onEnded={() => { wasPlayingRef.current = false; }}
                       controls
                       crossOrigin="use-credentials"
                       controlsList="nodownload noremoteplayback noplaybackrate"
@@ -623,9 +713,9 @@ export default function TrainingModuleView({ userId }: { userId: string }) {
                   </div>
                 </div>
                 {currentVideo && (
-                  <Button size="sm" className={cn("rounded-full h-9 px-4 gap-1.5 font-black uppercase italic tracking-widest text-[10px] shrink-0", currentVideo.status === 'completed' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-white text-black hover:bg-zinc-200')} onClick={() => updateProgress(currentVideo.id, currentVideo.status === 'completed' ? 'in_progress' : 'completed')}>
-                    {currentVideo.status === 'completed' ? <CheckCircle2 size={14} /> : <Circle size={14} />}
-                    {currentVideo.status === 'completed' ? 'Concluído' : 'Marcar'}
+                  <Button size="sm" disabled={savingProgress} className={cn("rounded-full h-9 px-4 gap-1.5 font-black uppercase italic tracking-widest text-[10px] shrink-0", currentVideoStatus === 'completed' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-white text-black hover:bg-zinc-200')} onClick={() => updateProgress(currentVideo.id, currentVideoStatus === 'completed' ? 'not_started' : 'completed')}>
+                    {currentVideoStatus === 'completed' ? <CheckCircle2 size={14} /> : <Circle size={14} />}
+                    {currentVideoStatus === 'completed' ? 'Concluído' : 'Marcar'}
                   </Button>
                 )}
               </div>

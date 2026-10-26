@@ -331,58 +331,51 @@ export function createPulsePlus({ pool, verifyUser, getLinkedUserIds, isStrictAd
       return { data, filters };
     }
     if (referencedColumns(filters, null).some((column) => internal.has(column))) throw httpError(403, 'Sem permissão para esta operação.');
-    if (!AGENT_COLUMNS[safeTable] || (operation !== 'update' && operation !== 'upsert')) return { data, filters };
-
-    const items = Array.isArray(data) ? data : [data];
-    const keysOf = (item) => Object.keys(item || {}).map((k) => k.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase());
-    const changesOwner = items.some((item) => keysOf(item).includes('assigned_to'));
-    const changesColumn = items.some((item) => keysOf(item).includes('kanban_column'));
-
-    if (safeTable === 'content_tasks' && operation === 'update' && (changesOwner || changesColumn) && typeof buildWhere === 'function') {
-      await assertNoAgentWorking({ item: items[0] || {}, filters, buildWhere });
+    if (!AGENT_COLUMNS[safeTable] || operation !== 'update' || Array.isArray(data) || typeof buildWhere !== 'function') {
+      return { data, filters };
     }
 
-    // responsável novo (ou card devolvido à fila): a etapa do agente não fica sobrando no card
-    if (changesOwner && operation === 'update') {
-      const cleared = items.map((item) => ({ ...item, agent_step: null, agent_heartbeat_at: null }));
-      return { data: Array.isArray(data) ? cleared : cleared[0], filters };
-    }
-    return { data, filters };
-  }
-
-  async function assertNoAgentWorking({ item, filters, buildWhere }) {
-    const params = [];
-    const where = buildWhere(filters, 'content_tasks', params);
-    if (!where.length) return;
-    const agents = await activeAgentIds();
-    if (!agents.size) return;
-    params.push([...agents]);
-    const { rows } = await pool.query(
-      `SELECT content_tasks.id, content_tasks.kanban_column, content_tasks.assigned_to::text AS assigned_to, p.name
-         FROM content_tasks LEFT JOIN profiles p ON p.id = content_tasks.assigned_to
-        WHERE ${where.join(' AND ')}
-          AND content_tasks.kanban_column IN ('edicao', 'alteracao')
-          AND content_tasks.agent_step IS NOT NULL
-          AND content_tasks.agent_heartbeat_at > now() - interval '${CONTENT_LOCK_MINUTES} minutes'
-          AND content_tasks.assigned_to::text = ANY($${params.length}::text[])`,
-      params
-    ).catch((error) => {
-      logger.error('[pulse-plus] trava do card:', error?.message || error);
-      return { rows: [] };
-    });
     const value = (key) => {
-      const entry = Object.entries(item).find(([k]) => k.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase() === key);
+      const entry = Object.entries(data || {}).find(([k]) => k.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase() === key);
       return entry ? entry[1] : undefined;
     };
     const nextColumn = value('kanban_column');
     const nextOwner = value('assigned_to');
-    const busy = rows.find((row) =>
-      (nextColumn !== undefined && String(nextColumn) !== row.kanban_column)
+    if (nextColumn === undefined && nextOwner === undefined) return { data, filters };
+
+    // cards que o update vai mexer e que estão (ou estiveram) com um agente
+    const params = [];
+    const where = buildWhere(filters, safeTable, params);
+    if (!where.length) return { data, filters };
+    const { rows } = await pool.query(
+      `SELECT ${safeTable}.kanban_column, ${safeTable}.assigned_to::text AS assigned_to,
+              ${safeTable}.agent_heartbeat_at > now() - interval '${CONTENT_LOCK_MINUTES} minutes' AS recent, p.name
+         FROM ${safeTable} LEFT JOIN profiles p ON p.id = ${safeTable}.assigned_to
+        WHERE ${where.join(' AND ')} AND ${safeTable}.agent_step IS NOT NULL`,
+      params
+    ).catch((error) => {
+      logger.error('[pulse-plus] cards com agente:', error?.message || error);
+      return { rows: [] };
+    });
+    const changed = rows.filter((row) =>
+      (nextColumn !== undefined && String(nextColumn ?? '') !== String(row.kanban_column ?? ''))
       || (nextOwner !== undefined && String(nextOwner ?? '') !== String(row.assigned_to ?? '')));
-    if (busy) {
-      const first = String(busy.name || '').trim().split(/\s+/)[0] || 'Alguém';
-      throw httpError(409, `${first} está trabalhando neste card agora. Espere a entrega para mover.`, { code: 'card_em_trabalho' });
+    if (!changed.length) return { data, filters };
+
+    // Vídeo com o agente renderizando (sinal nos últimos 30 min): mover agora faria a entrega dele ser recusada.
+    // É a mesma trava que a tela de quem vê os agentes aplica; a mensagem fala da pessoa, como em qualquer card.
+    if (safeTable === 'content_tasks') {
+      const agents = await activeAgentIds();
+      const busy = changed.find((row) => row.recent && ['edicao', 'alteracao'].includes(row.kanban_column) && agents.has(row.assigned_to));
+      if (busy) {
+        const first = String(busy.name || '').trim().split(/\s+/)[0] || 'Alguém';
+        throw httpError(409, `${first} está trabalhando neste card agora. Espere a entrega para mover.`, { code: 'card_em_trabalho' });
+      }
     }
+
+    // saiu da mão do agente (outra coluna ou outro responsável): a etapa dele não fica sobrando no card,
+    // como a tela de quem tem Pulse Plus já faz ao mover
+    return { data: { ...data, agent_step: null, agent_heartbeat_at: null }, filters };
   }
 
   /** Depois da consulta: colunas internas nulas e textos sem a marca de agente para quem não tem Pulse Plus. */

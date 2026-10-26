@@ -388,6 +388,14 @@ try {
   assert.equal(r.status, 200, 'editar outro campo continua livre');
   assert.equal(r.json.data[0].agent_step, null, 'RETURNING também sem a coluna interna');
   assert.equal((await row(`SELECT agent_step FROM content_tasks WHERE id = $1`, [ids.taskWork])).agent_step, 'cortando');
+  r = await move(T.admin, ids.taskWork, { kanban_column: 'edicao', assigned_to: ids.agent, title: 'Vídeo com agente' });
+  assert.equal(r.status, 200, 'salvar o card sem mudar coluna nem dono continua livre');
+  assert.equal((await row(`SELECT agent_step FROM content_tasks WHERE id = $1`, [ids.taskWork])).agent_step, 'cortando', 'e a etapa fica');
+  // arte: quem não vê o agente move como qualquer card, e a etapa dele sai junto (como a tela de quem vê faz)
+  r = await dbq(T.admin, { table: 'design_tasks', operation: 'update', data: { kanban_column: 'em_analise' }, filters: [{ column: 'id', op: 'eq', value: ids.design }] });
+  assert.equal(r.status, 200);
+  assert.deepEqual(await row(`SELECT kanban_column, agent_step, agent_heartbeat_at FROM design_tasks WHERE id = $1`, [ids.design]),
+    { kanban_column: 'em_analise', agent_step: null, agent_heartbeat_at: null });
   // sem sinal há mais de 30 min (parada): pode destravar, e a etapa sai junto com o responsável
   await pool.query(`UPDATE content_tasks SET agent_heartbeat_at = now() - interval '2 hours' WHERE id = $1`, [ids.taskWork]);
   r = await move(T.admin, ids.taskWork, { assigned_to: null });

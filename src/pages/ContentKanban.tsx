@@ -777,6 +777,14 @@ export default function ContentKanban() {
       return;
     }
 
+    // Agente com sinal recente está renderizando: mover agora faz a entrega dele ser recusada
+    const agentBlock = agentBusyMessage(draggedTask);
+    if (agentBlock) {
+      toast.error(agentBlock);
+      setDraggedTask(null);
+      return;
+    }
+
     // ─── VALIDATION RULES ─────────────────────────────────
     const validationError = validateKanbanTransition(draggedTask, targetColumn);
     if (validationError) {
@@ -1085,10 +1093,18 @@ export default function ContentKanban() {
       `Liberado da Análise por ${profile?.name || 'equipe'}${review ? ` (parecer IA: ${review.verdict})` : ' (sem parecer da IA)'}`);
   };
 
+  // Card com agente dando sinal (menos de 30 min): não se move pela tela. Parado, pode (destravar).
+  const agentBusyMessage = (task: ContentTask): string | null => {
+    const work = agentWorkState(task, { agentIds });
+    if (work?.state !== 'working') return null;
+    const name = (users.find(u => u.id === task.assigned_to)?.name || 'Um agente').trim().split(/\s+/)[0];
+    return `🤖 ${name} está trabalhando neste card (${work.step}). Espere a entrega ou peça à chefe para liberar (pulse liberar).`;
+  };
+
   // Seta do card para papéis sem restrição (FLOW_ARROWS). Com um agente trabalhando no card não
   // há seta: ele entrega pela fila (mover no meio da renderização cancelava a entrega).
   const flowArrow = (task: ContentTask, direction: 'forward' | 'backward') => {
-    if (agentWorkState(task, { agentIds })) return null;
+    if (agentWorkState(task, { agentIds })?.state === 'working') return null;
     const target = FLOW_ARROWS[task.kanban_column]?.[direction];
     if (!target) return null;
     const label = target === 'alteracao' ? 'Pedir ajuste'
@@ -1407,7 +1423,7 @@ export default function ContentKanban() {
                             onMoveForward={(() => {
                               if (isRestricted) {
                                 // Editor: Edição → Revisão (na Alteração o card já tem "Reenviar Revisão")
-                                if (userRole === 'editor' && task.kanban_column === 'edicao' && !agentWorkState(task, { agentIds })) {
+                                if (userRole === 'editor' && task.kanban_column === 'edicao' && agentWorkState(task, { agentIds })?.state !== 'working') {
                                   return () => handleMoveToColumn(task, 'revisao');
                                 }
                                 // Videomaker: ideias→captacao (alteração de story usa "Reenviar Revisão")

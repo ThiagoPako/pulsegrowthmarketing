@@ -641,6 +641,16 @@ export default function EditorKanban() {
     setDragOverColumn(null);
     if (!draggedTask || draggedTask.kanban_column === targetColumn) { setDraggedTask(null); return; }
 
+    // Agente com sinal recente está renderizando: mover agora faz a entrega dele ser recusada.
+    // Parado (sem sinal há 30 min ou mais), pode mover para destravar.
+    const work = agentWorkState(draggedTask, { agentIds });
+    if (work?.state === 'working') {
+      const name = (users.find(u => u.id === draggedTask.assigned_to)?.name || 'Um agente').trim().split(/\s+/)[0];
+      toast.error(`🤖 ${name} está trabalhando neste card (${work.step}). Espere a entrega ou peça à chefe para liberar (pulse liberar).`);
+      setDraggedTask(null);
+      return;
+    }
+
     // Block editors/videomakers from moving a task already claimed by someone else
     if (isEditorRole && draggedTask.assigned_to && !profileOwnsUserId(profile, draggedTask.assigned_to)) {
       toast.error('🚫 Este vídeo já foi pego por outra pessoa!');

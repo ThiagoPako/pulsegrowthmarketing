@@ -25,6 +25,7 @@ import compression from 'compression';
 import { createPgClient } from './pgClient.mjs';
 import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerAgentDesignRoutes } from './agentDesignRoutes.mjs';
+import { registerSchedulingRoutes } from './scheduling.mjs';
 import { registerWhatsAppRoutes } from './whatsapp/routes.mjs';
 import { registerAssistant } from './assistant/index.mjs';
 import { enqueueWhatsApp, clientTarget, clientsForGroup } from './whatsapp/shared.mjs';
@@ -19059,6 +19060,26 @@ registerAgentDesignRoutes(app, {
   publicUploadsUrl: process.env.PUBLIC_UPLOADS_URL,
   agentApi,
   // colunas novas em design_tasks: o /api/db/query relê as colunas (senão grava sem elas por até 1 h)
+  onSchemaChange: (tables) => tables.forEach((table) => {
+    tableColumnsPromiseCache.delete(table);
+    tableJsonColumnsPromiseCache.delete(table);
+  }),
+});
+
+// ─── Agendamentos (calendário de postagem por cliente; acesso pela lista module_access) ──
+registerSchedulingRoutes(app, {
+  pool,
+  verifyUser,
+  getLinkedUserIds,
+  resolveActiveCity,
+  cityVisibilityExpression,
+  ensureSocialPostsSchema,
+  getConnectedAccounts,
+  sanitizeAccount,
+  duplicatedPlatformAccounts,
+  prepareScheduledPost,
+  publicAppUrl: process.env.PUBLIC_APP_URL,
+  // posting_at novo: o /api/db/query relê as colunas (senão grava sem elas por até 1 h)
   onSchemaChange: (tables) => tables.forEach((table) => {
     tableColumnsPromiseCache.delete(table);
     tableJsonColumnsPromiseCache.delete(table);

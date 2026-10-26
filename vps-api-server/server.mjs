@@ -15844,7 +15844,6 @@ app.get('/api/promo/public/:slug/:token', async (req, res) => {
     );
     if (!campaignRows.length) return res.status(404).json({ error: 'Sorteio não encontrado' });
     const campaign = campaignRows[0];
-    if (!campaign.is_active) return res.status(403).json({ error: 'Este sorteio está encerrado.' });
 
     const { rows: ticketRows } = await pool.query(
       `SELECT t.id, t.status, t.game_type, t.redemption_code, t.participant_name, t.revealed_at,
@@ -15855,6 +15854,11 @@ app.get('/api/promo/public/:slug/:token', async (req, res) => {
         LIMIT 1`,
       [campaign.id, token]
     );
+
+    // Sorteio encerrado: quem já ganhou continua vendo o voucher (o caixa ainda valida o
+    // código); só o bilhete que ainda não foi jogado fica bloqueado.
+    const alreadyDrawn = ticketRows[0] && (ticketRows[0].status === 'revealed' || ticketRows[0].status === 'redeemed');
+    if (!campaign.is_active && !alreadyDrawn) return res.status(403).json({ error: 'Este sorteio está encerrado.' });
 
     if (!ticketRows.length) {
       return res.json({ campaign: promoPublicCampaign(campaign), ticket: null, reason: 'not_found' });
@@ -16248,17 +16252,32 @@ app.post('/api/promo/prizes', async (req, res) => {
     const probability = Math.min(100, Math.max(0, Number(b.win_probability_percent) || 0));
 
     if (b.id) {
+      // Saldo: sem remaining_quantity, mudar o total ajusta o saldo pela diferença (o formulário
+      // trazia o saldo de quando abriu e devolvia ao estoque o que foi sorteado no meio-tempo).
+      // Ajuste manual vem com expected_remaining: só grava se o saldo ainda for o que a tela viu.
       const remaining = b.remaining_quantity === undefined || b.remaining_quantity === null
         ? null
         : Math.max(0, Number(b.remaining_quantity) || 0);
+      const expected = remaining === null || b.expected_remaining === undefined || b.expected_remaining === null
+        ? null
+        : Math.max(0, Number(b.expected_remaining) || 0);
       const { rows } = await pool.query(
         `UPDATE promo_prizes SET
             name = $2, description = $3, image_url = $4, total_quantity = $5,
-            remaining_quantity = COALESCE($6, remaining_quantity),
+            remaining_quantity = CASE WHEN $6::int IS NOT NULL THEN $6::int
+                                      ELSE GREATEST(0, remaining_quantity + ($5::int - total_quantity)) END,
             win_probability_percent = $7, is_active = $8
-          WHERE id = $1 RETURNING *`,
-        [b.id, b.name, b.description || '', b.image_url || null, total, remaining, probability, b.is_active !== false]
+          WHERE id = $1 AND ($9::int IS NULL OR remaining_quantity = $9::int) RETURNING *`,
+        [b.id, b.name, b.description || '', b.image_url || null, total, remaining, probability, b.is_active !== false, expected]
       );
+      if (!rows.length) {
+        const { rows: current } = await pool.query('SELECT remaining_quantity FROM promo_prizes WHERE id = $1', [b.id]);
+        if (!current.length) return res.status(404).json({ error: 'Prêmio não encontrado' });
+        return res.status(409).json({
+          error: `O saldo mudou enquanto você editava (agora ${current[0].remaining_quantity}). Feche, abra o prêmio de novo e ajuste.`,
+          remaining_quantity: current[0].remaining_quantity,
+        });
+      }
       return res.json({ prize: rows[0] });
     }
 

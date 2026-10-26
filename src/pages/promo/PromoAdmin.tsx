@@ -161,6 +161,8 @@ export default function PromoAdmin() {
   const [prizes, setPrizes] = useState<PromoPrize[]>([]);
   const [prizeForm, setPrizeForm] = useState<Partial<PromoPrize>>(EMPTY_PRIZE);
   const [prizeDialog, setPrizeDialog] = useState(false);
+  // Saldo do prêmio quando o diálogo abriu: só um ajuste feito à mão é enviado.
+  const [prizeOpenedRemaining, setPrizeOpenedRemaining] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
 
   const [tickets, setTickets] = useState<PromoTicket[]>([]);
@@ -244,7 +246,16 @@ export default function PromoAdmin() {
     if (!selectedId) return;
     setSaving(true);
     try {
-      await savePromoPrize({ ...prizeForm, campaign_id: selectedId });
+      // Sem mexer no saldo, ele não vai no corpo: o servidor ajusta pela diferença do total
+      // e não devolve ao estoque o que foi sorteado enquanto o diálogo estava aberto.
+      const { remaining_quantity: remaining, ...prizeFields } = prizeForm;
+      const manualRemaining = !!prizeForm.id && remaining !== undefined && prizeOpenedRemaining !== null
+        && Number(remaining) !== Number(prizeOpenedRemaining);
+      await savePromoPrize({
+        ...prizeFields,
+        campaign_id: selectedId,
+        ...(manualRemaining ? { remaining_quantity: remaining, expected_remaining: prizeOpenedRemaining } : {}),
+      });
       toast.success('Prêmio salvo!');
       setPrizeDialog(false);
       const r = await listPromoPrizes(selectedId);
@@ -442,6 +453,7 @@ export default function PromoAdmin() {
                       size="sm"
                       onClick={() => {
                         setPrizeForm(EMPTY_PRIZE);
+                        setPrizeOpenedRemaining(null);
                         setPrizeDialog(true);
                       }}
                     >
@@ -476,6 +488,7 @@ export default function PromoAdmin() {
                                 variant="outline"
                                 onClick={() => {
                                   setPrizeForm(prize);
+                                  setPrizeOpenedRemaining(Number(prize.remaining_quantity) || 0);
                                   setPrizeDialog(true);
                                 }}
                               >

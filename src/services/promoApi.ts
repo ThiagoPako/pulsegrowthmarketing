@@ -152,7 +152,8 @@ export const deletePromoCampaign = (id: string) =>
 export const listPromoPrizes = (campaignId: string) =>
   request<{ prizes: PromoPrize[] }>(`/promo/campaigns/${campaignId}/prizes`, { auth: true });
 
-export const savePromoPrize = (body: Partial<PromoPrize> & { campaign_id: string }) =>
+/** expected_remaining: saldo que a tela viu ao abrir — o servidor só aplica o ajuste manual se ainda for esse. */
+export const savePromoPrize = (body: Partial<PromoPrize> & { campaign_id: string; expected_remaining?: number | null }) =>
   request<{ prize: PromoPrize }>('/promo/prizes', { method: 'POST', auth: true, body: JSON.stringify(body) });
 
 export const deletePromoPrize = (id: string) =>

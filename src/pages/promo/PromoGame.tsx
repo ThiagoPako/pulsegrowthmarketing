@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { Gift, Loader2, ShieldCheck, Ticket, Volume2, VolumeX } from 'lucide-react';
 import RouletteWheel from '@/components/promo/RouletteWheel';
 import ScratchCard from '@/components/promo/ScratchCard';
+import { buildWheelSlices, pickWheelIndex } from '@/lib/promoWheel';
 import {
   fetchPromoTicketState,
   playPromoTicket,
@@ -66,12 +67,24 @@ export default function PromoGame() {
   // Toda a linguagem do jogo vem do nicho do cliente (posto, loja, restaurante...).
   const campaignTexts = useMemo(() => promoCampaignTexts(campaign), [campaign]);
 
-  const wheelSlices = useMemo(() => {
-    const prizes = (state?.prizes || []).map((p) => ({ id: p.id, label: p.name, imageUrl: p.image_url ? promoAssetUrl(p.image_url) : null }));
-    const filler = { id: 'retry', label: 'Tente novamente', imageUrl: null as string | null };
-    const base = prizes.length ? prizes : [filler];
-    return base.length < 6 ? [...base, ...Array.from({ length: 6 - base.length }, (_, i) => ({ ...filler, id: `retry-${i}` }))] : base;
-  }, [state?.prizes]);
+  const wheelSlices = useMemo(() => buildWheelSlices(
+    (state?.prizes || []).map((p) => ({ id: p.id, label: p.name, imageUrl: p.image_url ? promoAssetUrl(p.image_url) : null })),
+  ), [state?.prizes]);
+
+  /** Bilhete já sorteado: monta o voucher a partir do estado salvo no servidor. */
+  function showSavedVoucher(data: PromoPublicState) {
+    if (!data.ticket) return false;
+    if (data.ticket.status !== 'revealed' && data.ticket.status !== 'redeemed') return false;
+    setResult({
+      won: !!data.ticket.prize,
+      prize: data.ticket.prize
+        ? { id: '', name: data.ticket.prize.name, description: data.ticket.prize.description, image_url: data.ticket.prize.image_url }
+        : null,
+      redemption_code: data.ticket.redemption_code || null,
+    });
+    setStep('voucher');
+    return true;
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -85,15 +98,8 @@ export default function PromoGame() {
           setStep('blocked');
         } else if (data.ticket.status === 'playable') {
           setStep(data.campaign.require_lead_capture ? 'lead' : 'choose');
-        } else if (data.ticket.status === 'revealed' || data.ticket.status === 'redeemed') {
-          setResult({
-            won: !!data.ticket.prize,
-            prize: data.ticket.prize
-              ? { id: '', name: data.ticket.prize.name, description: data.ticket.prize.description, image_url: data.ticket.prize.image_url }
-              : null,
-            redemption_code: data.ticket.redemption_code || null,
-          });
-          setStep('voucher');
+        } else if (showSavedVoucher(data)) {
+          // voucher já mostrado
         } else {
           setBlockedMessage('Este QR Code já foi utilizado.');
           setStep('blocked');
@@ -124,12 +130,9 @@ export default function PromoGame() {
       });
       setResult(played);
       if (game === 'roulette') {
-        const index = played.prize
-          ? Math.max(0, wheelSlices.findIndex((s) => s.id === played.prize?.id))
-          : wheelSlices.findIndex((s) => s.id.startsWith('retry'));
         // O resultado já está decidido no servidor, mas só revelamos quando o
         // jogador clicar em "Parar" — assim ele sente que controla a roleta.
-        setPendingIndex(index >= 0 ? index : 0);
+        setPendingIndex(pickWheelIndex(wheelSlices, played.prize?.id));
         setTargetIndex(null);
         setWheelPhase('idle');
         setStep('roulette');
@@ -137,10 +140,19 @@ export default function PromoGame() {
         setStep('scratch');
       }
     } catch (error: any) {
-      toast.error(error?.message || 'Não foi possível jogar agora.');
       if (error?.status === 409) {
+        // O sorteio pode ter acontecido e a resposta se perdido (rede fraca): busca o estado
+        // salvo e mostra o voucher em vez de "QR Code já utilizado".
+        const saved = await fetchPromoTicketState(slug, token).catch(() => null);
+        if (saved && showSavedVoucher(saved)) {
+          setState(saved);
+          return;
+        }
+        toast.error(error?.message || 'Não foi possível jogar agora.');
         setBlockedMessage('Este QR Code já foi utilizado.');
         setStep('blocked');
+      } else {
+        toast.error(error?.message || 'Não foi possível jogar agora.');
       }
     } finally {
       setSubmitting(false);

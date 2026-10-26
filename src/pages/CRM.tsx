@@ -28,6 +28,8 @@ import {
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { LeadHarvester } from '@/components/crm/LeadHarvester';
 import { CRMBanner } from '@/components/crm/CRMBanner';
+import { useCity } from '@/contexts/CityContext';
+import { cityCodeFrom, hasPromo66 } from '@/services/publicPlans';
 
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -172,6 +174,8 @@ export default function CRM() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [newLeadStatus, setNewLeadStatus] = useState<LeadStatus>('lead');
+  // Lead arrastado para 'Reunião' sem data/hora: abre o diálogo de agendamento.
+  const [schedulingLead, setSchedulingLead] = useState<Lead | null>(null);
 
   useEffect(() => {
     if (isAddDialogOpen) {
@@ -209,26 +213,11 @@ export default function CRM() {
     },
   });
 
-  const incrementActivePromosIfClosed = async (leadId: string, newStatus: LeadStatus) => {
-    if (newStatus !== 'contracted') return;
-    const { data: prev } = await supabase.from('crm_leads').select('status').eq('id', leadId).maybeSingle();
-    if ((prev as any)?.status === 'contracted') return;
-    const today = new Date().toISOString().slice(0, 10);
-    const { data: promos } = await supabase
-      .from('plan_promotions' as any)
-      .select('id, max_redemptions, redemptions_count, starts_at, ends_at')
-      .eq('active', true);
-    for (const p of (promos as any[]) || []) {
-      if (p.starts_at && p.starts_at > today) continue;
-      if (p.ends_at && p.ends_at < today) continue;
-      if (p.max_redemptions != null && (p.redemptions_count ?? 0) >= p.max_redemptions) continue;
-      await supabase.rpc('increment_promotion_redemption' as any, { _promo_id: p.id });
-    }
-  };
+  // As vagas usadas das promoções ativas sobem no servidor quando o lead vira Contratado
+  // (antes o navegador contava antes de salvar, mesmo quando o servidor recusava a mudança).
 
   const updateLeadStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: LeadStatus }) => {
-      await incrementActivePromosIfClosed(id, status);
       const { error } = await supabase
         .from('crm_leads')
         .update({ status } as any)
@@ -240,12 +229,35 @@ export default function CRM() {
       setMeetingRefreshKey(prev => prev + 1);
       toast.success('Lead atualizado!');
     },
+    // O servidor recusa 'Reunião' sem data/hora e 'Contratado' sem valor ou sem permissão:
+    // o card voltava para a coluna sem nenhuma mensagem.
+    onError: (error: any) => {
+      toast.error(error?.message || 'Não foi possível mover o lead.');
+    },
+  });
+
+  // Arrastar a reunião para outro dia no calendário (o updateLead não envia meeting_date).
+  const moveMeetingDate = useMutation({
+    mutationFn: async ({ id, meetingDate }: { id: string; meetingDate: string; name: string }) => {
+      const { error } = await supabase
+        .from('crm_leads')
+        .update({ meeting_date: meetingDate, status: 'meeting' } as any)
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, { meetingDate, name }) => {
+      queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
+      setMeetingRefreshKey(prev => prev + 1);
+      toast.success(`Reunião de ${name} movida para ${format(parseISO(meetingDate), 'dd/MM', { locale: ptBR })}`);
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Não foi possível mover a reunião.');
+    },
   });
 
 
   const updateLead = useMutation({
     mutationFn: async (lead: Partial<Lead> & { id: string }) => {
-      if (lead.status) await incrementActivePromosIfClosed(lead.id, lead.status);
       const { error } = await supabase
         .from('crm_leads')
         .update({
@@ -332,6 +344,12 @@ export default function CRM() {
     if (!result.destination) return;
     const { draggableId, destination } = result;
     if (destination.droppableId === result.source.droppableId) return;
+    const lead = leads.find(l => l.id === draggableId);
+    // 'Reunião' exige data e horário: abre o agendamento em vez de mandar uma mudança que o servidor recusa.
+    if (destination.droppableId === 'meeting' && lead && (!lead.meeting_date || !lead.meeting_time)) {
+      setSchedulingLead(lead);
+      return;
+    }
     updateLeadStatus.mutate({ id: draggableId, status: destination.droppableId as LeadStatus });
   };
 
@@ -591,21 +609,22 @@ export default function CRM() {
       </header>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full flex-1 flex flex-col gap-4">
-        <div className="flex items-center justify-between bg-card/50 p-1 rounded-lg border w-fit self-center md:self-start">
+        {/* No celular a barra rola de lado em vez de passar da tela (e cortar 'Pipeline' à esquerda). */}
+        <div className="flex items-center justify-between bg-card/50 p-1 rounded-lg border max-w-full overflow-x-auto self-stretch md:self-start md:w-fit">
           <TabsList className="bg-transparent h-9">
-            <TabsTrigger value="pipeline" className="gap-2 px-6">
+            <TabsTrigger value="pipeline" className="gap-2 px-3 md:px-6 shrink-0">
               <Filter className="h-4 w-4" /> Pipeline
             </TabsTrigger>
-            <TabsTrigger value="goals" className="gap-2 px-6">
+            <TabsTrigger value="goals" className="gap-2 px-3 md:px-6 shrink-0">
               <Target className="h-4 w-4" /> Metas de Vendas
             </TabsTrigger>
-            <TabsTrigger value="calendar" className="gap-2 px-6">
+            <TabsTrigger value="calendar" className="gap-2 px-3 md:px-6 shrink-0">
               <CalendarIcon className="h-4 w-4" /> Calendário
             </TabsTrigger>
-            <TabsTrigger value="meetings" className="gap-2 px-6">
+            <TabsTrigger value="meetings" className="gap-2 px-3 md:px-6 shrink-0">
               <Clock className="h-4 w-4" /> Gestão de Reuniões
             </TabsTrigger>
-            <TabsTrigger value="harvester" className="gap-2 px-6">
+            <TabsTrigger value="harvester" className="gap-2 px-3 md:px-6 shrink-0">
               <Sprout className="h-4 w-4" /> Colheita de Leads
             </TabsTrigger>
           </TabsList>
@@ -878,12 +897,7 @@ export default function CRM() {
                         }
                       }
 
-                      updateLead.mutate({
-                        id: leadId,
-                        meeting_date: newDateStr,
-                        status: 'meeting'
-                      });
-                      toast.success(`Reunião de ${lead.name} movida para ${format(parseISO(newDateStr), 'dd/MM', { locale: ptBR })}`);
+                      moveMeetingDate.mutate({ id: leadId, meetingDate: newDateStr, name: lead.name });
                     }
                   }}>
                     {/* Exibir os próximos 7 dias como áreas de drop se quisermos Drag & Drop entre dias na lista */}
@@ -1087,6 +1101,18 @@ export default function CRM() {
           <LeadHarvester />
         </TabsContent>
       </Tabs>
+
+      {schedulingLead && (
+        <MeetingActions
+          key={schedulingLead.id}
+          lead={schedulingLead}
+          leads={leads}
+          scheduleOnly
+          onClose={() => setSchedulingLead(null)}
+          onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
+          onSetRefreshKey={setMeetingRefreshKey}
+        />
+      )}
     </div>
   );
 }
@@ -1144,6 +1170,18 @@ function LeadDetailsDialog({
   trigger?: ReactNode,
 }) {
   const [note, setNote] = useState('');
+  // Notas só carregam com o diálogo aberto: o componente fica montado em cada card do
+  // pipeline, e cada um fazia a própria consulta ao abrir o CRM.
+  const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const { activeCity } = useCity();
+  // Links da proposta: não existe plano 'mensal' (caía na lista sem lead nem cidade).
+  // Vão para a lista de planos da cidade do lead, levando o lead e a oferta 6+6.
+  const proposalLinkQuery = (() => {
+    const qs = new URLSearchParams({ city: cityCodeFrom(lead.city) || activeCity, lead: lead.id });
+    if (hasPromo66(lead)) qs.set('type', 'promo_6_6');
+    return qs.toString();
+  })();
   const { data: notes = [] } = useQuery({
     queryKey: ['lead_notes', lead.id],
     queryFn: async () => {
@@ -1154,7 +1192,8 @@ function LeadDetailsDialog({
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data;
-    }
+    },
+    enabled: open,
   });
 
   const addNote = useMutation({
@@ -1169,12 +1208,17 @@ function LeadDetailsDialog({
     onSuccess: () => {
       setNote('');
       onUpdate();
+      // a nota nova aparece no histórico na hora (antes só ao vencer o cache de 5 min)
+      queryClient.invalidateQueries({ queryKey: ['lead_notes', lead.id] });
       toast.success('Nota registrada no histórico!');
-    }
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Não foi possível registrar a nota.');
+    },
   });
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger ?? (
           <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/5" aria-label={`Gerenciar ${lead.name}`}>
@@ -1251,7 +1295,7 @@ function LeadDetailsDialog({
                       variant="outline"
                       className="h-8 text-[10px] bg-primary/5 text-primary border-primary/20 hover:bg-primary/10"
                       onClick={() => {
-                        const url = `${window.location.origin}/apresentacao/mensal?lead=${lead.id}${lead.source_tag === 'promo_6_6' ? '&type=promo_6_6' : ''}`;
+                        const url = `${window.location.origin}/apresentacao?${proposalLinkQuery}`;
                         window.open(url, '_blank');
                       }}
                     >
@@ -1262,7 +1306,7 @@ function LeadDetailsDialog({
                       variant="outline"
                       className="h-8 text-[10px] bg-primary/5 text-primary border-primary/20 hover:bg-primary/10"
                       onClick={async () => {
-                        const url = `${window.location.origin}/p/planos/mensal?lead=${lead.id}${lead.source_tag === 'promo_6_6' ? '&type=promo_6_6' : ''}`;
+                        const url = `${window.location.origin}/p/planos?${proposalLinkQuery}`;
                         await navigator.clipboard.writeText(url);
                         toast.success('Link público copiado!');
                       }}
@@ -1347,6 +1391,8 @@ function LeadDetailsDialog({
                             onUpdate();
                             if (onSetRefreshKey) onSetRefreshKey(prev => prev + 1);
                             toast.success(`Lead movido para ${s.label}`);
+                          } else {
+                            toast.error(error.message || `Não foi possível mover para ${s.label}.`);
                           }
                         }}
                       >
@@ -1412,8 +1458,21 @@ function LeadDetailsDialog({
   );
 }
 
-function MeetingActions({ lead, leads, onUpdate, onSetRefreshKey }: { lead: Lead; leads: Lead[]; onUpdate: () => void; onSetRefreshKey?: React.Dispatch<React.SetStateAction<number>> }) {
-  const [open, setOpen] = useState(false);
+function MeetingActions({ lead, leads, onUpdate, onSetRefreshKey, scheduleOnly = false, onClose }: {
+  lead: Lead;
+  leads: Lead[];
+  onUpdate: () => void;
+  onSetRefreshKey?: React.Dispatch<React.SetStateAction<number>>;
+  // Só o diálogo de agendamento, já aberto (lead arrastado para 'Reunião' sem data/hora).
+  scheduleOnly?: boolean;
+  onClose?: () => void;
+}) {
+  const [internalOpen, setInternalOpen] = useState(scheduleOnly);
+  const open = internalOpen;
+  const setOpen = (value: boolean) => {
+    setInternalOpen(value);
+    if (!value) onClose?.();
+  };
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [selectedRescheduleDate, setSelectedRescheduleDate] = useState<string>(normalizeMeetingDateInput(lead.meeting_date));
 
@@ -1440,7 +1499,7 @@ function MeetingActions({ lead, leads, onUpdate, onSetRefreshKey }: { lead: Lead
       } as any)
       .eq('id', lead.id);
     if (error) {
-      toast.error('Não foi possível reagendar.');
+      toast.error(error.message || 'Não foi possível reagendar.');
       return;
     }
     setOpen(false);
@@ -1467,11 +1526,13 @@ function MeetingActions({ lead, leads, onUpdate, onSetRefreshKey }: { lead: Lead
   return (
     <>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild>
-          <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full text-blue-600 hover:bg-blue-50" title="Reagendar reunião">
-            <Pencil size={14} />
-          </Button>
-        </DialogTrigger>
+        {!scheduleOnly && (
+          <DialogTrigger asChild>
+            <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full text-blue-600 hover:bg-blue-50" title="Reagendar reunião">
+              <Pencil size={14} />
+            </Button>
+          </DialogTrigger>
+        )}
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Agendar/Reagendar Reunião - {lead.name}</DialogTitle>
@@ -1535,7 +1596,7 @@ function MeetingActions({ lead, leads, onUpdate, onSetRefreshKey }: { lead: Lead
         </DialogContent>
       </Dialog>
 
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+      {!scheduleOnly && <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogTrigger asChild>
           <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full text-red-600 hover:bg-red-50" title="Apagar reunião">
             <Trash2 size={14} />
@@ -1553,13 +1614,23 @@ function MeetingActions({ lead, leads, onUpdate, onSetRefreshKey }: { lead: Lead
             <Button variant="destructive" onClick={handleDelete}>Apagar</Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </>
   );
 }
 
 function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Partial<Lead> & { id: string }) => void }) {
   const [open, setOpen] = useState(false);
+  // Oferta 6+6 em referral_info.promo_66: a origem (indicação, colheita...) fica em source_tag.
+  const [promo66, setPromo66] = useState(() => hasPromo66(lead));
+  const [sourceTag, setSourceTag] = useState(lead.source_tag || '');
+  const [promoValue, setPromoValue] = useState<string>(String((lead.referral_info as any)?.promo_value ?? ''));
+  useEffect(() => {
+    if (!open) return;
+    setPromo66(hasPromo66(lead));
+    setSourceTag(lead.source_tag || '');
+    setPromoValue(String((lead.referral_info as any)?.promo_value ?? ''));
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -1582,13 +1653,13 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
             email: formData.get('email') as string,
             phone: formData.get('phone') as string,
             contract_value: Number(formData.get('value')),
-            city: formData.get('city') as string,
             description: formData.get('description') as string,
             status: formData.get('status') as LeadStatus,
-            source_tag: formData.get('source_tag') as string,
+            source_tag: sourceTag || null,
             referral_info: {
               ...lead.referral_info,
-              promo_value: formData.get('promo_value') ? Number(formData.get('promo_value')) : undefined
+              promo_66: promo66,
+              promo_value: promoValue ? Number(promoValue) : undefined
             } as any
           });
           setOpen(false);
@@ -1607,15 +1678,9 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
           </div>
           <div className="grid gap-2">
             <Label htmlFor="edit-city">Cidade</Label>
-            <Select name="city" defaultValue={lead.city || 'Minaçu'}>
-              <SelectTrigger className="bg-muted/50">
-                <SelectValue placeholder="Selecione a cidade" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Minaçu">Minaçu</SelectItem>
-                <SelectItem value="Uruaçu">Uruaçu</SelectItem>
-              </SelectContent>
-            </Select>
+            {/* O servidor grava sempre a cidade ativa: a troca de cidade é pelo botão 'Transferir'. */}
+            <Input id="edit-city" value={CITY_LABELS[cityCodeFrom(lead.city) || 'minacu']} disabled className="bg-muted/50" />
+            <p className="text-[10px] text-muted-foreground">Para mudar a cidade, use o botão Transferir.</p>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="edit-description">Descrição / Observações</Label>
@@ -1660,34 +1725,30 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
                 <Button 
                   type="button"
                   size="sm"
-                  variant={lead.source_tag === 'promo_6_6' ? 'default' : 'outline'}
+                  variant={promo66 ? 'default' : 'outline'}
                   className="h-8 text-[10px]"
                   onClick={() => {
-                    const input = document.getElementById('edit-source-tag') as HTMLInputElement;
-                    const promoValueInput = document.getElementById('edit-promo-value') as HTMLInputElement;
-                    
-                    if (lead.source_tag === 'promo_6_6') {
-                      if (input) input.value = 'manual';
+                    if (promo66) {
+                      setPromo66(false);
+                      // Lead antigo guardava a oferta em source_tag: a origem real já tinha se perdido.
+                      if (sourceTag === 'promo_6_6') setSourceTag('manual');
                       toast.success('Oferta Desativada');
                     } else {
-                      if (input) input.value = 'promo_6_6';
-                      // Se não tiver valor promo ainda, sugere 50% do valor atual
-                      if (promoValueInput && !promoValueInput.value) {
+                      setPromo66(true);
+                      // Se não tiver valor promo ainda, sugere 80% do valor atual
+                      if (!promoValue) {
                         const baseVal = Number((document.getElementById('edit-value') as HTMLInputElement)?.value || 0);
-                        promoValueInput.value = (baseVal * 0.8).toFixed(2);
+                        if (baseVal > 0) setPromoValue((baseVal * 0.8).toFixed(2));
                       }
                       toast.success('Oferta 6+6 Ativada!');
                     }
-                    // Força re-render para mostrar o campo de valor se necessário (na prática o usuário verá o campo agora)
-                    const container = document.getElementById('promo-value-container');
-                    if (container) container.classList.toggle('hidden', input?.value !== 'promo_6_6');
                   }}
                 >
-                  {lead.source_tag === 'promo_6_6' ? 'Ativado' : 'Ativar'}
+                  {promo66 ? 'Ativado' : 'Ativar'}
                 </Button>
               </div>
               
-              <div id="promo-value-container" className={lead.source_tag === 'promo_6_6' ? '' : 'hidden'}>
+              <div className={promo66 ? '' : 'hidden'}>
                 <Label htmlFor="edit-promo-value" className="text-[10px] uppercase font-bold text-muted-foreground">Valor nos primeiros 6 meses</Label>
                 <div className="relative mt-1">
                   <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
@@ -1697,14 +1758,14 @@ function EditLeadDialog({ lead, onUpdate }: { lead: Lead; onUpdate: (lead: Parti
                     type="number" 
                     step="0.01" 
                     placeholder="Valor promocional"
-                    defaultValue={(lead.referral_info as any)?.promo_value || ''} 
+                    value={promoValue}
+                    onChange={(e) => setPromoValue(e.target.value)}
                     className="pl-8 h-8 text-sm bg-background" 
                   />
                 </div>
                 <p className="text-[9px] text-muted-foreground mt-1">Este valor será aplicado automaticamente nas primeiras 6 parcelas da proposta anual.</p>
               </div>
               
-              <input type="hidden" id="edit-source-tag" name="source_tag" defaultValue={lead.source_tag || ''} />
             </div>
           </div>
           <Button type="submit" className="w-full mt-4">
@@ -1745,76 +1806,37 @@ function DeleteLeadDialog({ leadName, onDelete }: { leadName: string; onDelete: 
   );
 }
 
-interface TransferPreviewRow {
-  table: string;
-  label: string;
-  count: number;
-}
-
-interface TransferPreview {
-  client: { id: string; name: string };
-  from: string;
-  to: string;
-  same_city: boolean;
-  total_records: number;
-  tables_affected: number;
-  details: TransferPreviewRow[];
-}
-
 const CITY_LABELS: Record<string, string> = { minacu: 'Minaçu', uruacu: 'Uruaçu' };
 
+// Transferir o lead para a outra cidade (rota própria do CRM; antes usava a de clientes
+// com o id do lead e sempre dava 'Cliente não encontrado').
 function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }) {
+  const currentCity = cityCodeFrom(lead.city) || 'minacu';
   const [open, setOpen] = useState(false);
-  const [targetCity, setTargetCity] = useState(lead.city?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c') === 'minacu' ? 'Uruaçu' : 'Minaçu');
+  const [targetCity, setTargetCity] = useState<'minacu' | 'uruacu'>(currentCity === 'minacu' ? 'uruacu' : 'minacu');
   const [isBusy, setIsBusy] = useState(false);
-  const [step, setStep] = useState<'confirm' | 'validating' | 'preview' | 'preparing' | 'done'>('confirm');
-  const [preview, setPreview] = useState<TransferPreview | null>(null);
+  const [step, setStep] = useState<'confirm' | 'preparing' | 'done'>('confirm');
 
   const resetState = () => {
     setStep('confirm');
-    setPreview(null);
+    setTargetCity(currentCity === 'minacu' ? 'uruacu' : 'minacu');
   };
 
-  // Etapa 1: pré-validação (dry-run) — apenas contagem, nada é alterado no banco.
-  const handleValidate = async () => {
-    setIsBusy(true);
-    setStep('validating');
-    try {
-      const normalizedCity = targetCity.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c');
-      const res = await vpsAuthedFetch(
-        `/api/clients/${lead.id}/transfer-preview?city=${encodeURIComponent(normalizedCity)}`
-      );
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Erro ao validar a transferência');
-      }
-      const data: TransferPreview = await res.json();
-      setPreview(data);
-      setStep('preview');
-    } catch (error: any) {
-      toast.error(error.message);
-      setStep('confirm');
-    } finally {
-      setIsBusy(false);
-    }
-  };
-
-  // Etapa 2: execução real da transferência (cascata atômica no backend).
   const handleTransfer = async () => {
     setIsBusy(true);
     setStep('preparing');
     try {
-      const res = await vpsAuthedFetch(`/api/clients/${lead.id}`, {
-        method: 'PUT',
+      const res = await vpsAuthedFetch(`/crm/leads/${lead.id}/city`, {
+        method: 'PATCH',
         body: JSON.stringify({ city: targetCity }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Erro ao transferir cliente');
-      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Erro ao transferir o lead');
 
       setStep('done');
-      toast.success(`Cliente ${lead.name} transferido para ${targetCity} com sucesso!`);
+      toast.success(data.same_city
+        ? `${lead.name} já está em ${CITY_LABELS[targetCity]}.`
+        : `Lead ${lead.name} transferido para ${CITY_LABELS[targetCity]}!`);
       setTimeout(() => {
         setOpen(false);
         onUpdate();
@@ -1822,7 +1844,7 @@ function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => 
       }, 1500);
     } catch (error: any) {
       toast.error(error.message);
-      setStep('preview');
+      setStep('confirm');
     } finally {
       setIsBusy(false);
     }
@@ -1853,13 +1875,13 @@ function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => 
           {step === 'confirm' && (
             <>
               <div className="p-3 bg-orange-50 border border-orange-100 rounded-lg text-xs text-orange-800 space-y-2">
-                <p><strong>Atenção:</strong> Ao transferir este cliente, todos os dados vinculados (histórico, tarefas, roteiros, financeiro) serão movidos para a cidade selecionada.</p>
-                <p>O card sairá da pipeline de <strong>{lead.city}</strong> e aparecerá apenas em <strong>{targetCity}</strong>.</p>
+                <p><strong>Atenção:</strong> O lead e o histórico de notas dele vão para a cidade selecionada.</p>
+                <p>O card sairá da pipeline de <strong>{CITY_LABELS[currentCity]}</strong> e aparecerá apenas em <strong>{CITY_LABELS[targetCity]}</strong>.</p>
               </div>
 
               <div className="space-y-2">
                 <Label>Cidade de Destino</Label>
-                <Select value={targetCity} onValueChange={setTargetCity}>
+                <Select value={targetCity} onValueChange={(v) => setTargetCity(v as 'minacu' | 'uruacu')}>
                   <SelectTrigger className="bg-muted/50">
                     <SelectValue />
                   </SelectTrigger>
@@ -1874,70 +1896,10 @@ function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => 
                 <Button variant="outline" onClick={() => setOpen(false)} disabled={isBusy}>Cancelar</Button>
                 <Button
                   className="bg-orange-500 hover:bg-orange-600 text-white"
-                  onClick={handleValidate}
-                  disabled={isBusy}
-                >
-                  Validar transferência
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-
-          {step === 'validating' && (
-            <div className="flex flex-col items-center justify-center py-10 space-y-4">
-              <Loader2 className="h-10 w-10 text-orange-500 animate-spin" />
-              <div className="text-center space-y-1">
-                <p className="font-bold">Analisando registros...</p>
-                <p className="text-xs text-muted-foreground">Nenhum dado foi alterado ainda</p>
-              </div>
-            </div>
-          )}
-
-          {step === 'preview' && preview && (
-            <>
-              <div className="flex items-center justify-center gap-3 text-sm font-bold">
-                <Badge variant="outline">{CITY_LABELS[preview.from.toLowerCase()] || preview.from}</Badge>
-                <ArrowRightLeft className="h-4 w-4 text-orange-500" />
-                <Badge className="bg-orange-500 text-white border-none">{CITY_LABELS[preview.to.toLowerCase()] || preview.to}</Badge>
-              </div>
-
-              {preview.same_city && (
-                <div className="p-3 rounded-lg bg-muted text-xs text-muted-foreground">
-                  Este cliente já pertence a esta cidade. Nenhuma mudança será feita.
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-lg border bg-muted/40 text-center">
-                  <p className="text-2xl font-bold text-orange-500">{preview.total_records}</p>
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Registros afetados</p>
-                </div>
-                <div className="p-3 rounded-lg border bg-muted/40 text-center">
-                  <p className="text-2xl font-bold text-orange-500">{preview.tables_affected}</p>
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Módulos envolvidos</p>
-                </div>
-              </div>
-
-              <div className="max-h-52 overflow-y-auto rounded-lg border divide-y">
-                {preview.details.length === 0 && (
-                  <p className="p-3 text-xs text-muted-foreground">Nenhum registro vinculado encontrado além do cadastro do cliente.</p>
-                )}
-                {preview.details.map((row) => (
-                  <div key={row.table} className="flex items-center justify-between px-3 py-2 text-xs">
-                    <span className="font-medium">{row.label}</span>
-                    <Badge variant="secondary" className="text-[10px]">{row.count}</Badge>
-                  </div>
-                ))}
-              </div>
-
-              <DialogFooter className="pt-2">
-                <Button variant="outline" onClick={resetState} disabled={isBusy}>Voltar</Button>
-                <Button
-                  className="bg-orange-500 hover:bg-orange-600 text-white"
                   onClick={handleTransfer}
-                  disabled={isBusy || preview.same_city}
+                  disabled={isBusy || targetCity === currentCity}
                 >
-                  OK, transferir agora
+                  Transferir agora
                 </Button>
               </DialogFooter>
             </>
@@ -1947,8 +1909,8 @@ function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => 
             <div className="flex flex-col items-center justify-center py-10 space-y-4">
               <Loader2 className="h-10 w-10 text-orange-500 animate-spin" />
               <div className="text-center space-y-1">
-                <p className="font-bold">Organizando dados...</p>
-                <p className="text-xs text-muted-foreground">Movendo histórico e registros para {targetCity}</p>
+                <p className="font-bold">Transferindo...</p>
+                <p className="text-xs text-muted-foreground">Movendo o lead e as notas para {CITY_LABELS[targetCity]}</p>
               </div>
             </div>
           )}
@@ -1960,7 +1922,7 @@ function TransferClientDialog({ lead, onUpdate }: { lead: Lead; onUpdate: () => 
               </div>
               <div className="text-center space-y-1">
                 <p className="font-bold text-green-600">Transferência Concluída!</p>
-                <p className="text-xs text-muted-foreground">O cliente agora pertence à unidade {targetCity}</p>
+                <p className="text-xs text-muted-foreground">O lead agora pertence à unidade {CITY_LABELS[targetCity]}</p>
               </div>
             </div>
           )}

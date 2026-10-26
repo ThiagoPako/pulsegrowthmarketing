@@ -23,13 +23,18 @@ export default function Apresentacao() {
     (queryCity === 'minacu' || queryCity === 'uruacu') ? queryCity : activeCity;
 
   const changeCity = (city: CityCode) => {
-    setSearchParams({ city });
+    const next = new URLSearchParams(searchParams);
+    next.set('city', city);
+    setSearchParams(next);
   };
 
   const openPlan = (key: string) => {
-    const promo = searchParams.get('promo');
     const qs = new URLSearchParams({ city: presentationCity });
-    if (promo) qs.set('promo', promo);
+    // promo exclusiva e oferta 6+6 do lead (links do CRM) seguem para o plano escolhido
+    for (const param of ['promo', 'lead', 'type']) {
+      const value = searchParams.get(param);
+      if (value) qs.set(param, value);
+    }
     window.open(`${baseRoute}/${key}?${qs.toString()}`, '_blank', 'noopener,noreferrer');
   };
 

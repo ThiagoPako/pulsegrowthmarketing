@@ -26,6 +26,7 @@ import { registerAgentRoutes } from './agentRoutes.mjs';
 import { registerWhatsAppRoutes } from './whatsapp/routes.mjs';
 import { enqueueWhatsApp, clientTarget, clientsForGroup } from './whatsapp/shared.mjs';
 import { createPortalSession, effectiveClientId, itemScopeClientId, pickBackupOption } from './lib/portalSession.mjs';
+import { buildProposalRevenueSchedule, stripRevenueMark } from './lib/proposalRevenues.mjs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -591,6 +592,39 @@ ensureProposalTables().catch((error) => {
   console.error('Failed to ensure proposal tables:', error);
 });
 
+// Receitas previstas geradas uma vez só por proposta aceita (ver generateProposalRevenues).
+// Separado do ensure acima: se falhar, a proposta pública continua funcionando.
+let proposalRevenueColumnPromise = null;
+function ensureProposalRevenueColumn() {
+  if (!proposalRevenueColumnPromise) {
+    proposalRevenueColumnPromise = (async () => {
+      await ensureProposalTables();
+      await pool.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='commercial_proposals' AND column_name='revenues_generated_at') THEN
+            ALTER TABLE commercial_proposals ADD COLUMN revenues_generated_at TIMESTAMPTZ;
+          END IF;
+        END $$;
+      `);
+      // Propostas que já geraram receitas pelo navegador (marca antiga em observations): não gerar de novo.
+      await pool.query(`
+        UPDATE commercial_proposals
+           SET revenues_generated_at = COALESCE(client_response_at, now())
+         WHERE revenues_generated_at IS NULL AND observations LIKE '%[RECEITAS GERADAS%'
+      `);
+    })().catch((error) => {
+      proposalRevenueColumnPromise = null;
+      throw error;
+    });
+  }
+  return proposalRevenueColumnPromise;
+}
+
+ensureProposalRevenueColumn().catch((error) => {
+  console.error('Failed to ensure commercial_proposals.revenues_generated_at:', error?.message || error);
+});
+
 // ═══════════════════════════════════════════════════════════════
 // PLAN PROMOTIONS TABLE
 // ═══════════════════════════════════════════════════════════════
@@ -623,6 +657,8 @@ async function ensurePlanPromotionsTable() {
         const alter = [];
         if (!columns.has('duration_months')) alter.push('ADD COLUMN duration_months INTEGER DEFAULT 12');
         if (!columns.has('applies_to')) alter.push('ADD COLUMN applies_to TEXT DEFAULT \'anual\'');
+        if (!columns.has('max_redemptions')) alter.push('ADD COLUMN max_redemptions INTEGER');
+        if (!columns.has('redemptions_count')) alter.push('ADD COLUMN redemptions_count INTEGER DEFAULT 0');
         if (alter.length > 0) {
           await pool.query(`ALTER TABLE plan_promotions ${alter.join(', ')}`).catch(() => {});
         }
@@ -636,6 +672,159 @@ async function ensurePlanPromotionsTable() {
 }
 
 ensurePlanPromotionsTable();
+
+// Lead que vira Contratado ocupa uma vaga de cada promoção ativa da cidade dele (ou sem cidade).
+// Antes o navegador chamava increment_promotion_redemption por rpc, que a VPS recusa (e a
+// função nem existe aqui), então as vagas usadas nunca subiam.
+async function incrementPromotionsForClosedLead(lead) {
+  try {
+    await ensurePlanPromotionsTable();
+    const city = normalizeCityValue(lead?.city) || 'minacu';
+    await pool.query(
+      `UPDATE plan_promotions SET redemptions_count = COALESCE(redemptions_count, 0) + 1
+        WHERE active = true
+          AND (starts_at IS NULL OR starts_at <= $1::date)
+          AND (ends_at IS NULL OR ends_at >= $1::date)
+          AND (max_redemptions IS NULL OR COALESCE(redemptions_count, 0) < max_redemptions)
+          AND (city IS NULL OR btrim(city::text) = '' OR ${cityScopeExpression('city')} = $2)`,
+      [brtDateString(), city]
+    );
+  } catch (error) {
+    console.warn('[crm] vagas das promoções não atualizadas:', error?.message || error);
+  }
+}
+
+// ─── Promoções e oferta 6+6 na apresentação pública de planos (/p/planos) ───
+// A página é pública e lia plan_promotions/crm_leads pelo /api/db/query, que exige login:
+// o cliente nunca via a promoção, o link exclusivo nem o valor combinado no CRM.
+const PUBLIC_PROMO_COLUMNS = `id, title, discount_percent, duration_months, applies_to, plan_key, city,
+  active, exclusive, starts_at, ends_at, max_redemptions, redemptions_count`;
+const PUBLIC_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function publicPlanKey(value) {
+  const key = String(value || '').trim().toLowerCase();
+  return /^[a-z0-9_-]{1,40}$/.test(key) ? key : null;
+}
+
+// Promoções gerais (não exclusivas) ativas, no período e com vaga, da cidade e do plano.
+app.get('/api/public/plan-promotions', async (req, res) => {
+  try {
+    await ensurePlanPromotionsTable();
+    const city = assertValidCity(req.query.city || 'minacu');
+    const planKey = publicPlanKey(req.query.plan);
+    const { rows } = await pool.query(
+      `SELECT ${PUBLIC_PROMO_COLUMNS} FROM plan_promotions
+        WHERE active = true AND COALESCE(exclusive, false) = false
+          AND (starts_at IS NULL OR starts_at <= $1::date)
+          AND (ends_at IS NULL OR ends_at >= $1::date)
+          AND (max_redemptions IS NULL OR COALESCE(redemptions_count, 0) < max_redemptions)
+          AND (city IS NULL OR btrim(city::text) = '' OR ${cityScopeExpression('city')} = $2)
+          AND ($3::text IS NULL OR plan_key IS NULL OR plan_key = $3)
+        ORDER BY discount_percent DESC`,
+      [brtDateString(), city, planKey]
+    );
+    res.json({ promotions: rows });
+  } catch (e) {
+    console.error('[public plan-promotions] error:', e?.message || e);
+    res.status(500).json({ error: 'Erro ao carregar promoções' });
+  }
+});
+
+// Link exclusivo (?promo=<id>): vale pelo id mesmo sendo exclusiva, mas confere período, vagas e plano.
+app.get('/api/public/plan-promotions/:id', async (req, res) => {
+  try {
+    const id = String(req.params.id || '');
+    if (!PUBLIC_UUID_RE.test(id)) return res.json({ promotion: null });
+    await ensurePlanPromotionsTable();
+    const planKey = publicPlanKey(req.query.plan);
+    const { rows } = await pool.query(
+      `SELECT ${PUBLIC_PROMO_COLUMNS} FROM plan_promotions
+        WHERE id = $1
+          AND (starts_at IS NULL OR starts_at <= $2::date)
+          AND (ends_at IS NULL OR ends_at >= $2::date)
+          AND (max_redemptions IS NULL OR COALESCE(redemptions_count, 0) < max_redemptions)
+          AND ($3::text IS NULL OR plan_key IS NULL OR plan_key = $3)
+        LIMIT 1`,
+      [id, brtDateString(), planKey]
+    );
+    res.json({ promotion: rows[0] || null });
+  } catch (e) {
+    console.error('[public plan-promotion] error:', e?.message || e);
+    res.status(500).json({ error: 'Erro ao carregar a promoção' });
+  }
+});
+
+// Oferta 6+6 combinada no CRM (link com ?lead=<id>): devolve só o valor promocional,
+// nunca os dados do lead.
+app.get('/api/public/plan-offer/:leadId', async (req, res) => {
+  try {
+    const id = String(req.params.leadId || '');
+    if (!PUBLIC_UUID_RE.test(id)) return res.json({ offer: null });
+    await ensureCrmLeadsColumns();
+    const { rows } = await pool.query(
+      'SELECT source_tag, referral_info FROM crm_leads WHERE id = $1 LIMIT 1',
+      [id]
+    );
+    const lead = rows[0];
+    let info = lead?.referral_info || {};
+    if (typeof info === 'string') {
+      try { info = JSON.parse(info); } catch { info = {}; }
+    }
+    // promo_66 é o campo novo; leads antigos marcavam a oferta em source_tag.
+    const active = info?.promo_66 === true || (info?.promo_66 === undefined && lead?.source_tag === 'promo_6_6');
+    if (!lead || !active) return res.json({ offer: null });
+    const promoValue = Number(info?.promo_value);
+    res.json({ offer: { promo_value: Number.isFinite(promoValue) && promoValue > 0 ? promoValue : null } });
+  } catch (e) {
+    console.error('[public plan-offer] error:', e?.message || e);
+    res.status(500).json({ error: 'Erro ao carregar a oferta' });
+  }
+});
+
+// CRM: transferir um lead (e as notas dele) para a outra cidade. O botão 'Transferir' usava a
+// rota de clientes com o id do lead ('Cliente não encontrado') e o update genérico força a
+// cidade ativa, então não havia como mudar a cidade de um lead. Só admin/social_media.
+app.patch('/api/crm/leads/:id/city', async (req, res) => {
+  try {
+    await verifyAdmin(req);
+  } catch (e) {
+    const forbidden = e.message === 'Admin access required';
+    return res.status(forbidden ? 403 : 401).json({ error: forbidden ? 'Apenas admin ou social_media podem transferir leads.' : e.message });
+  }
+  const id = String(req.params.id || '');
+  if (!PUBLIC_UUID_RE.test(id)) return res.status(400).json({ error: 'Lead inválido' });
+  const target = normalizeCityValue(req.body?.city);
+  if (!target || !ALLOWED_CITIES.has(target)) return res.status(400).json({ error: 'Cidade de destino inválida' });
+  let db;
+  try {
+    await ensureCrmLeadsColumns();
+    const notesHaveCity = await tableHasCityColumn('crm_notes');
+    db = await pool.connect();
+    await db.query('BEGIN');
+    const { rows } = await db.query('SELECT id, city FROM crm_leads WHERE id = $1 FOR UPDATE', [id]);
+    if (!rows.length) {
+      await db.query('ROLLBACK');
+      return res.status(404).json({ error: 'Lead não encontrado' });
+    }
+    const from = normalizeCityValue(rows[0].city) || 'minacu';
+    if (from === target) {
+      await db.query('ROLLBACK');
+      return res.json({ ok: true, same_city: true, from, to: target, notes_moved: 0 });
+    }
+    await db.query('UPDATE crm_leads SET city = $2 WHERE id = $1', [id, target]);
+    const notes = notesHaveCity
+      ? await db.query('UPDATE crm_notes SET city = $2 WHERE lead_id = $1', [id, target])
+      : { rowCount: 0 };
+    await db.query('COMMIT');
+    res.json({ ok: true, from, to: target, notes_moved: notes.rowCount || 0 });
+  } catch (e) {
+    if (db) await db.query('ROLLBACK').catch(() => {});
+    console.error('[crm] transfer lead error:', e?.message || e);
+    res.status(500).json({ error: e.message || 'Erro ao transferir o lead' });
+  } finally {
+    db?.release();
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════
 // LINK SHORTENER TABLES
@@ -5162,6 +5351,89 @@ app.get('/api/briefing-versions', async (req, res) => {
     res.status(err?.status || 500).json({ error: err.message || 'Server error' });
   }
 });
+// ─── Receitas previstas da proposta aceita ───
+// Geradas no servidor, uma vez só por proposta: o UPDATE ... WHERE revenues_generated_at IS NULL
+// reserva a proposta dentro da transação, então dois cliques, duas abas ou o aceite repetido
+// não duplicam as receitas. Antes o navegador de quem abrisse /propostas gerava (e duplicava)
+// e gravava a marca em observations, que o cliente via na página pública.
+async function generateProposalRevenues(proposalId) {
+  await ensureProposalRevenueColumn();
+  await ensureRecurringRevenuesTables();
+  const revenuesHaveCity = await tableHasCityColumn('revenues');
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const { rows } = await db.query(
+      `UPDATE commercial_proposals SET revenues_generated_at = now()
+        WHERE id = $1 AND status = 'aceita' AND revenues_generated_at IS NULL
+          AND COALESCE(observations, '') NOT LIKE '%[RECEITAS GERADAS%'
+        RETURNING *`,
+      [proposalId]
+    );
+    if (!rows.length) {
+      await db.query('ROLLBACK');
+      return { created: 0, reason: 'already_generated_or_not_accepted' };
+    }
+    const proposal = rows[0];
+    const startDate = brtDateString(proposal.client_response_at ? new Date(proposal.client_response_at) : new Date());
+    const schedule = buildProposalRevenueSchedule(proposal, startDate);
+    if (!schedule.length) {
+      // Sem valor: não marca, para dar para gerar depois de corrigir a proposta.
+      await db.query('ROLLBACK');
+      return { created: 0, reason: 'no_value' };
+    }
+    // revenues é separada por cidade: vale a cidade da proposta.
+    const city = assertValidCity(proposal.city || 'minacu');
+    for (const item of schedule) {
+      if (revenuesHaveCity) {
+        await db.query(
+          `INSERT INTO revenues (client_id, contract_id, reference_month, amount, due_date, status, description, city)
+           VALUES (NULL, NULL, $1, $2, $3, 'prevista', $4, $5)`,
+          [item.reference_month, item.amount, item.due_date, item.description, city]
+        );
+      } else {
+        await db.query(
+          `INSERT INTO revenues (client_id, contract_id, reference_month, amount, due_date, status, description)
+           VALUES (NULL, NULL, $1, $2, $3, 'prevista', $4)`,
+          [item.reference_month, item.amount, item.due_date, item.description]
+        );
+      }
+    }
+    await db.query('COMMIT');
+    return {
+      created: schedule.length,
+      total: Math.round(schedule.reduce((sum, item) => sum + item.amount, 0) * 100) / 100,
+      first_amount: schedule[0].amount,
+    };
+  } catch (error) {
+    await db.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    db.release();
+  }
+}
+
+// Botão "Gerar Receitas" da tela de propostas (proposta aceita cujas receitas ainda não saíram).
+// Mesmo nível do lançamento de receitas no /api/db/query (revenues: 'team').
+app.post('/api/commercial-proposals/:id/generate-revenues', async (req, res) => {
+  try {
+    await verifyTeamManager(req);
+  } catch (e) {
+    return res.status(e.message === 'Admin access required' ? 403 : 401).json({ error: e.message });
+  }
+  try {
+    const id = String(req.params.id || '');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return res.status(400).json({ error: 'Proposta inválida' });
+    }
+    const result = await generateProposalRevenues(id);
+    res.json(result);
+  } catch (e) {
+    console.error('[generate-revenues] error:', e);
+    res.status(e?.statusCode || 500).json({ error: e.message || 'Erro ao gerar receitas' });
+  }
+});
+
 app.post('/api/public-proposal', async (req, res) => {
   try {
     await ensureProposalTables();
@@ -5170,7 +5442,13 @@ app.post('/api/public-proposal', async (req, res) => {
     if (action === 'get_proposal') {
       if (!token) return res.status(400).json({ error: 'token required' });
       const { rows } = await pool.query('SELECT * FROM commercial_proposals WHERE token = $1 LIMIT 1', [token]);
-      return res.json({ proposal: rows[0] || null });
+      const proposal = rows[0] || null;
+      if (proposal) {
+        // Controle interno das receitas: o cliente não vê a marca antiga nem a data.
+        proposal.observations = stripRevenueMark(proposal.observations);
+        delete proposal.revenues_generated_at;
+      }
+      return res.json({ proposal });
     }
 
     if (action === 'get_clients') {
@@ -5201,10 +5479,27 @@ app.post('/api/public-proposal', async (req, res) => {
     if (action === 'respond') {
       if (!token || !status) return res.status(400).json({ error: 'token, status required' });
       if (status !== 'aceita' && status !== 'recusada') return res.status(400).json({ error: 'invalid status' });
-      await pool.query(
-        'UPDATE commercial_proposals SET status = $1, client_response_at = NOW(), client_response_note = $2 WHERE token = $3',
+      // Só responde proposta pendente (a página só mostra os botões nesse caso): uma aba antiga
+      // não troca uma resposta já dada.
+      const { rows: updated } = await pool.query(
+        `UPDATE commercial_proposals SET status = $1, client_response_at = NOW(), client_response_note = $2
+          WHERE token = $3 AND status = 'pendente' RETURNING id`,
         [status, response_note || null, token]
       );
+      if (!updated.length) {
+        const { rows: existing } = await pool.query('SELECT status FROM commercial_proposals WHERE token = $1 LIMIT 1', [token]);
+        if (!existing.length) return res.status(404).json({ error: 'Proposta não encontrada' });
+        if (existing[0].status === status) return res.json({ ok: true, already: true });
+        return res.status(409).json({ error: `Esta proposta já foi ${existing[0].status === 'aceita' ? 'aceita' : 'respondida'}.`, status: existing[0].status });
+      }
+      if (status === 'aceita') {
+        // A falha aqui não desfaz o aceite: a equipe gera pelo botão "Gerar Receitas".
+        try {
+          await generateProposalRevenues(updated[0].id);
+        } catch (e) {
+          console.error('[public-proposal] generate revenues failed:', e?.message || e);
+        }
+      }
       return res.json({ ok: true });
     }
 
@@ -10262,6 +10557,12 @@ app.post('/api/db/query', async (req, res) => {
       await ensurePlanPromotionsTable();
     }
 
+    if (safeTable === 'client_testimonials') {
+      await ensureTestimonialsTable().catch((error) => {
+        console.warn('Could not ensure client_testimonials table:', error?.message || error);
+      });
+    }
+
     if (safeTable === 'scheduled_recordings') {
 
       await ensureScheduledRecordingsTable();
@@ -10566,6 +10867,7 @@ app.post('/api/db/query', async (req, res) => {
           ? { ...data, city: assertValidCity(activeCity) }
           : (data && data.city !== undefined ? { ...data, city: assertValidCity(data.city) } : data);
 
+        let crmResetReminder = false;
         if (safeTable === 'crm_leads' && (scopedData.meeting_date || scopedData.meeting_time || scopedData.status === 'meeting')) {
           const leadId = filters?.find(f => f.column === 'id' && f.op === 'eq')?.value;
           const { rows: currentLead } = await pool.query(`SELECT meeting_date, meeting_time, status FROM crm_leads WHERE id = $1`, [leadId]);
@@ -10577,10 +10879,19 @@ app.post('/api/db/query', async (req, res) => {
           if (status === 'meeting') {
             await validateMeetingConflict(mDate, mTime, leadId);
           }
+
+          // Reunião reagendada: o lembrete de 24h volta a valer para a data/hora nova.
+          if (currentLead[0]) {
+            const dateChanged = scopedData.meeting_date !== undefined
+              && String(scopedData.meeting_date || '').slice(0, 10) !== String(currentLead[0].meeting_date || '').slice(0, 10);
+            const timeChanged = scopedData.meeting_time !== undefined
+              && String(scopedData.meeting_time || '').slice(0, 5) !== String(currentLead[0].meeting_time || '').slice(0, 5);
+            crmResetReminder = dateChanged || timeChanged;
+          }
         }
 
         const existingColumns = await getExistingColumns(safeTable);
-        const entries = Object.entries(scopedData)
+        const entries = Object.entries(crmResetReminder ? { ...scopedData, reminder_sent_24h: false } : scopedData)
           .map(([key, value]) => [sanitizeIdentifier(key), value])
           .filter(([key]) => !existingColumns || existingColumns.has(key));
         if (entries.length === 0) {
@@ -10635,6 +10946,7 @@ app.post('/api/db/query', async (req, res) => {
           for (const lead of rows) {
             if (crmPreviousStatus.get(String(lead.id)) === lead.status) continue;
             if (lead.status === 'contracted') {
+              await incrementPromotionsForClosedLead(lead);
               broadcastToAll({
                 type: 'broadcast',
                 event: 'crm:new_client',
@@ -11871,6 +12183,209 @@ app.put('/api/landing-settings/facebook-pixel', async (req, res) => {
     );
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Landing pública: depoimentos aprovados, vídeos dos planos e logos de clientes ───
+// A landing é anônima e lia essas tabelas pelo /api/db/query (exige login): os depoimentos
+// aprovados nunca apareciam (no lugar entravam 3 depoimentos inventados) e os vídeos e logos
+// não carregavam. O link de depoimento (/feedback) também gravava pelo /api/db/query.
+let testimonialsTableReady = null;
+function ensureTestimonialsTable() {
+  if (!testimonialsTableReady) {
+    testimonialsTableReady = (async () => {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS client_testimonials (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          client_name TEXT NOT NULL DEFAULT '',
+          client_role TEXT NOT NULL DEFAULT '',
+          message TEXT NOT NULL DEFAULT '',
+          rating INTEGER NOT NULL DEFAULT 5,
+          token TEXT NOT NULL DEFAULT encode(gen_random_bytes(32), 'hex'),
+          status TEXT NOT NULL DEFAULT 'pending',
+          approved_at TIMESTAMPTZ,
+          city TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      // Ajustes opcionais (tabela antiga vinda do Supabase): sem permissão, seguem como estão.
+      await pool.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='client_testimonials' AND column_name='updated_at') THEN
+            ALTER TABLE client_testimonials ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+          END IF;
+        END $$;
+      `).catch((e) => console.warn('client_testimonials.updated_at:', e?.message || e));
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_client_testimonials_token ON client_testimonials (token)')
+        .catch((e) => console.warn('idx_client_testimonials_token:', e?.message || e));
+    })().catch((error) => {
+      testimonialsTableReady = null;
+      throw error;
+    });
+  }
+  return testimonialsTableReady;
+}
+
+// Planos que têm vídeo na landing (mesmos nomes da seção de planos).
+const LANDING_PLAN_VIDEO_NAMES = ['Starter', 'Boost', 'Premium', 'Elite', 'Endomarketing'];
+let planVideosTableReady = null;
+function ensurePlanVideosTable() {
+  if (!planVideosTableReady) {
+    planVideosTableReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS plan_videos (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        plan_name TEXT NOT NULL UNIQUE,
+        video_url TEXT,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `).catch((error) => {
+      planVideosTableReady = null;
+      throw error;
+    });
+  }
+  return planVideosTableReady;
+}
+
+let publicLandingCache = null; // { at, data } — cache curto, a landing é aberta por qualquer visitante
+const PUBLIC_LANDING_CACHE_MS = 60_000;
+
+app.get('/api/public/landing', async (_req, res) => {
+  try {
+    if (publicLandingCache && Date.now() - publicLandingCache.at < PUBLIC_LANDING_CACHE_MS) {
+      return res.json(publicLandingCache.data);
+    }
+    await Promise.all([
+      ensureTestimonialsTable().catch((e) => console.warn('ensureTestimonialsTable:', e?.message || e)),
+      ensurePlanVideosTable().catch((e) => console.warn('ensurePlanVideosTable:', e?.message || e)),
+    ]);
+    // Depoimentos das duas cidades: a landing é da agência inteira.
+    const [testimonials, planVideos, clientLogos] = await Promise.all([
+      pool.query(
+        `SELECT client_name, client_role, message, rating FROM client_testimonials
+          WHERE status = 'approved' AND btrim(message) <> '' AND btrim(client_name) <> ''
+          ORDER BY approved_at DESC NULLS LAST LIMIT 6`
+      ).then((r) => r.rows).catch(() => []),
+      pool.query(
+        `SELECT plan_name, video_url FROM plan_videos WHERE video_url IS NOT NULL AND btrim(video_url) <> ''`
+      ).then((r) => r.rows).catch(() => []),
+      // Mesma vitrine da proposta pública: clientes ativos com logo.
+      pool.query(
+        `SELECT company_name, logo_url, color FROM clients
+          WHERE status = 'ativo' AND logo_url IS NOT NULL AND btrim(logo_url) <> ''
+          ORDER BY company_name`
+      ).then((r) => r.rows).catch(() => []),
+    ]);
+    const data = { testimonials, plan_videos: planVideos, client_logos: clientLogos };
+    publicLandingCache = { at: Date.now(), data };
+    res.json(data);
+  } catch (e) {
+    console.error('[public landing] error:', e?.message || e);
+    res.status(500).json({ error: 'Erro ao carregar a landing' });
+  }
+});
+
+function cleanFeedbackToken(value) {
+  return String(value || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 128);
+}
+
+// Link de depoimento (/feedback?token=): confere se ainda está pendente.
+app.get('/api/public/testimonials/:token', async (req, res) => {
+  try {
+    const token = cleanFeedbackToken(req.params.token);
+    if (!token) return res.json({ valid: false });
+    await ensureTestimonialsTable().catch((e) => console.warn('ensureTestimonialsTable:', e?.message || e));
+    const { rows } = await pool.query('SELECT status FROM client_testimonials WHERE token = $1 LIMIT 1', [token]);
+    res.json({ valid: rows[0]?.status === 'pending' });
+  } catch (e) {
+    console.error('[public testimonials] check error:', e?.message || e);
+    res.status(500).json({ error: 'Erro ao conferir o link' });
+  }
+});
+
+// Envio do depoimento: só pending -> submitted, uma vez; o admin aprova em /depoimentos.
+app.post('/api/public/testimonials/:token', async (req, res) => {
+  try {
+    const ip = req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || 'unknown';
+    if (promoRateLimited(`testimonial:${ip}`, 10)) {
+      return res.status(429).json({ error: 'Muitas tentativas. Aguarde um instante.' });
+    }
+    const token = cleanFeedbackToken(req.params.token);
+    const name = String(req.body?.client_name ?? '').trim();
+    const role = String(req.body?.client_role ?? '').trim();
+    const message = String(req.body?.message ?? '').trim();
+    const rating = Number(req.body?.rating);
+    if (!token) return res.status(400).json({ error: 'Link inválido' });
+    if (!name || !message) return res.status(400).json({ error: 'Preencha seu nome e depoimento' });
+    if (name.length > 120 || role.length > 120) return res.status(400).json({ error: 'Nome ou cargo muito longo' });
+    if (message.length > 2000) return res.status(400).json({ error: 'Depoimento muito longo (máx. 2000 caracteres)' });
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) return res.status(400).json({ error: 'Nota inválida' });
+    await ensureTestimonialsTable().catch((e) => console.warn('ensureTestimonialsTable:', e?.message || e));
+    const { rows } = await pool.query(
+      `UPDATE client_testimonials
+          SET client_name = $2, client_role = $3, message = $4, rating = $5, status = 'submitted', updated_at = now()
+        WHERE token = $1 AND status = 'pending'
+        RETURNING id`,
+      [token, name, role, message, rating]
+    );
+    if (!rows.length) return res.status(409).json({ error: 'Link inválido ou já utilizado' });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[public testimonials] submit error:', e?.message || e);
+    res.status(500).json({ error: 'Erro ao enviar o depoimento' });
+  }
+});
+
+function cleanLandingVideoUrl(value) {
+  const url = String(value ?? '').trim();
+  if (!url) return null;
+  if (url.length > 2000 || !/^https?:\/\//i.test(url)) {
+    throw Object.assign(new Error('Endereço do vídeo inválido'), { statusCode: 400 });
+  }
+  return url;
+}
+
+// Admin da landing: vídeo/título/descrição do "Quem somos".
+app.put('/api/landing-settings/quem-somos', async (req, res) => {
+  if (!(await requireAdminRoute(req, res))) return;
+  try {
+    const videoUrl = cleanLandingVideoUrl(req.body?.video_url);
+    const title = String(req.body?.title ?? '').slice(0, 300);
+    const description = String(req.body?.description ?? '').slice(0, 3000);
+    await ensureLandingSettingsTable();
+    const { rows } = await pool.query(
+      `INSERT INTO landing_page_settings (section, video_url, title, description, updated_at)
+       VALUES ('quem_somos', $1, $2, $3, now())
+       ON CONFLICT (section) DO UPDATE SET video_url = EXCLUDED.video_url, title = EXCLUDED.title,
+         description = EXCLUDED.description, updated_at = now()
+       RETURNING section, video_url, title, description, updated_at`,
+      [videoUrl, title, description]
+    );
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(e?.statusCode || 500).json({ error: e.message });
+  }
+});
+
+// Admin da landing: vídeo de explicação de cada plano.
+app.put('/api/landing-settings/plan-video', async (req, res) => {
+  if (!(await requireAdminRoute(req, res))) return;
+  try {
+    const planName = String(req.body?.plan_name ?? '');
+    if (!LANDING_PLAN_VIDEO_NAMES.includes(planName)) return res.status(400).json({ error: 'Plano inválido' });
+    const videoUrl = cleanLandingVideoUrl(req.body?.video_url);
+    await ensurePlanVideosTable();
+    const { rows } = await pool.query(
+      `INSERT INTO plan_videos (plan_name, video_url, updated_at) VALUES ($1, $2, now())
+       ON CONFLICT (plan_name) DO UPDATE SET video_url = EXCLUDED.video_url, updated_at = now()
+       RETURNING plan_name, video_url`,
+      [planName, videoUrl]
+    );
+    publicLandingCache = null;
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(e?.statusCode || 500).json({ error: e.message });
+  }
 });
 
 // ─── Company Settings ───────────────────────────────────────
@@ -17159,6 +17674,13 @@ async function enrichCompanies(companies, maxItems = 400, concurrency = 10, opts
 }
 
 
+// Elementos brutos do Overpass por área + estado + nicho + limite (15 min): Anterior/Próxima e
+// os filtros de contato/termo/completude não refazem as duas consultas (até 30 s cada, com
+// risco de rate limit). Os filtros continuam rodando a cada chamada.
+const HARVEST_ELEMENTS_CACHE = new Map();
+const HARVEST_ELEMENTS_TTL_MS = 15 * 60 * 1000;
+const HARVEST_ELEMENTS_MAX = 20;
+
 app.post('/api/crm/harvest/search', async (req, res) => {
   try {
     await verifyUser(req);
@@ -17192,24 +17714,39 @@ app.post('/api/crm/harvest/search', async (req, res) => {
 
     // Combina a área administrativa com o bounding box. Algumas cidades têm relações OSM
     // incompletas; consultar somente uma das fontes pode devolver apenas poucos registros.
+    const elementsKey = [normalizeText(areaName), normalizeText(String(state || '')), String(niche || 'all'), cap].join('|');
+    const cachedElements = HARVEST_ELEMENTS_CACHE.get(elementsKey);
     let elements = [];
-    try {
-      const json = await runOverpass(buildQuery('(area.searchArea)'));
-      elements = Array.isArray(json?.elements) ? json.elements : [];
-    } catch (err) {
-      console.warn('[crm:harvest] area query falhou:', err.message);
-    }
-
-    if (bbox) {
+    if (cachedElements && Date.now() - cachedElements.at < HARVEST_ELEMENTS_TTL_MS) {
+      elements = cachedElements.elements;
+    } else {
       try {
-        const scope = `(${bbox.south},${bbox.west},${bbox.north},${bbox.east})`;
-        const json = await runOverpass(buildQuery(scope));
-        const bboxEls = Array.isArray(json?.elements) ? json.elements : [];
-        const byOsmId = new Map(elements.map(element => [`${element.type}/${element.id}`, element]));
-        bboxEls.forEach(element => byOsmId.set(`${element.type}/${element.id}`, element));
-        elements = Array.from(byOsmId.values());
+        const json = await runOverpass(buildQuery('(area.searchArea)'));
+        elements = Array.isArray(json?.elements) ? json.elements : [];
       } catch (err) {
-        console.warn('[crm:harvest] bbox query falhou:', err.message);
+        console.warn('[crm:harvest] area query falhou:', err.message);
+      }
+
+      if (bbox) {
+        try {
+          const scope = `(${bbox.south},${bbox.west},${bbox.north},${bbox.east})`;
+          const json = await runOverpass(buildQuery(scope));
+          const bboxEls = Array.isArray(json?.elements) ? json.elements : [];
+          const byOsmId = new Map(elements.map(element => [`${element.type}/${element.id}`, element]));
+          bboxEls.forEach(element => byOsmId.set(`${element.type}/${element.id}`, element));
+          elements = Array.from(byOsmId.values());
+        } catch (err) {
+          console.warn('[crm:harvest] bbox query falhou:', err.message);
+        }
+      }
+
+      // Só guarda resultado de verdade (consulta que falhou não fica no cache).
+      if (elements.length > 0) {
+        HARVEST_ELEMENTS_CACHE.delete(elementsKey);
+        HARVEST_ELEMENTS_CACHE.set(elementsKey, { at: Date.now(), elements });
+        while (HARVEST_ELEMENTS_CACHE.size > HARVEST_ELEMENTS_MAX) {
+          HARVEST_ELEMENTS_CACHE.delete(HARVEST_ELEMENTS_CACHE.keys().next().value);
+        }
       }
     }
 
@@ -17349,10 +17886,13 @@ app.post('/api/crm/harvest/enrich', async (req, res) => {
 // Cron-like task for CRM meeting reminders
 setInterval(async () => {
   try {
-    // Busca reuniões agendadas para amanhã (24h de antecedência) que ainda não tiveram lembrete enviado
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+    // Busca reuniões agendadas para amanhã (24h de antecedência) que ainda não tiveram lembrete enviado.
+    // "Amanhã" no fuso de Brasília: o toISOString é UTC e, das 21h em diante, já pegava a reunião
+    // de depois de amanhã com o texto "nossa reunião de amanhã". Como o job roda de hora em hora
+    // desde a subida, só envia em horário comercial (9h às 19h59 de Brasília).
+    const nowBrtMinutes = brtMinutesNow();
+    if (nowBrtMinutes < 9 * 60 || nowBrtMinutes >= 20 * 60) return;
+    const tomorrowStr = addDaysToDateString(brtDateString(), 1);
 
     const { rows: pendingReminders } = await pool.query(
       `SELECT id, name, phone, meeting_date, meeting_time, company 

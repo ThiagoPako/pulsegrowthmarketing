@@ -8,7 +8,7 @@ import {
   Menu, X, Sparkles, Target, Megaphone, Camera, Film, PenTool, Gift, LogIn,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/lib/vpsDb';
+import { getPublicLanding, getLandingSection, type PublicTestimonial } from '@/services/landingSettings';
 import FacebookPixel from '@/components/FacebookPixel';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -145,8 +145,16 @@ function Navbar() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [activeSection, setActiveSection] = useState('');
+  // A seção de depoimentos só existe quando há depoimento real aprovado.
+  const [hasTestimonials, setHasTestimonials] = useState(false);
   const navigate = useNavigate();
   const goToTeamArea = useGoToTeamArea();
+
+  useEffect(() => {
+    let alive = true;
+    getPublicLanding().then((data) => { if (alive) setHasTestimonials(data.testimonials.length > 0); });
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -170,7 +178,7 @@ function Navbar() {
       if (el) observer.observe(el);
     });
     return () => observer.disconnect();
-  }, []);
+  }, [hasTestimonials]);
 
   // Close mobile menu on body scroll
   useEffect(() => {
@@ -185,7 +193,7 @@ function Navbar() {
     { label: 'Processo', href: '#portal', id: 'portal' },
     
     { label: 'Cases', href: '#cases', id: 'cases' },
-    { label: 'Depoimentos', href: '#depoimentos', id: 'depoimentos' },
+    ...(hasTestimonials ? [{ label: 'Depoimentos', href: '#depoimentos', id: 'depoimentos' }] : []),
     { label: 'FAQ', href: '#faq', id: 'faq' },
     { label: 'Contato', href: '#contato', id: 'contato' },
   ];
@@ -491,18 +499,9 @@ function Sobre() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadVideo() {
-      try {
-        const { supabase: sb } = await import('@/lib/vpsDb');
-        const { data } = await sb
-          .from('landing_page_settings')
-          .select('video_url')
-          .eq('section', 'quem_somos')
-          .maybeSingle();
-        if (data?.video_url) setVideoUrl(data.video_url);
-      } catch {}
-    }
-    loadVideo();
+    getLandingSection('quem_somos').then((data) => {
+      if (data?.video_url) setVideoUrl(data.video_url);
+    });
   }, []);
 
   return (
@@ -798,16 +797,11 @@ function Planos() {
   const [activeVideo, setActiveVideo] = useState<{ name: string; url: string } | null>(null);
 
   useEffect(() => {
-    supabase
-      .from('plan_videos')
-      .select('plan_name, video_url')
-      .then(({ data }) => {
-        if (data) {
-          const map: Record<string, string> = {};
-          data.forEach((r: any) => { if (r.video_url) map[r.plan_name] = r.video_url; });
-          setPlanVideos(map);
-        }
-      });
+    getPublicLanding().then(({ plan_videos }) => {
+      const map: Record<string, string> = {};
+      plan_videos.forEach((r) => { if (r.video_url) map[r.plan_name] = r.video_url; });
+      setPlanVideos(map);
+    });
   }, []);
 
   const plans = [
@@ -1130,29 +1124,13 @@ function Cases() {
 
 // ─── Depoimentos ────────────────────────────────────────────
 function Depoimentos() {
-  const [testimonials, setTestimonials] = useState<Array<{ client_name: string; client_role: string; message: string; rating: number }>>([]);
+  const [testimonials, setTestimonials] = useState<PublicTestimonial[]>([]);
   const [current, setCurrent] = useState(0);
 
+  // Só depoimentos reais aprovados em /depoimentos. Sem nenhum, a seção some
+  // (antes entravam 3 depoimentos inventados como se fossem de clientes).
   useEffect(() => {
-    import('@/lib/vpsDb').then(({ supabase }) => {
-      supabase
-        .from('client_testimonials')
-        .select('client_name, client_role, message, rating')
-        .eq('status', 'approved')
-        .order('approved_at', { ascending: false })
-        .limit(6)
-        .then(({ data }) => {
-          if (data && data.length > 0) {
-            setTestimonials(data);
-          } else {
-            setTestimonials([
-              { client_name: 'Maria Clara', client_role: 'Dona de restaurante', message: 'A Pulse transformou minha presença no Instagram. Em 3 meses, triplicamos as reservas online. O conteúdo é impecável!', rating: 5 },
-              { client_name: 'Carlos Eduardo', client_role: 'Empresário automotivo', message: 'Profissionalismo e pontualidade. Os vídeos são de altíssima qualidade e o portal do cliente é incrível.', rating: 5 },
-              { client_name: 'Juliana Mendes', client_role: 'Dona de clínica estética', message: 'Nunca imaginei que marketing digital pudesse trazer tanto resultado. A equipe é atenciosa e entende do nosso negócio.', rating: 5 },
-            ]);
-          }
-        });
-    });
+    getPublicLanding().then((data) => setTestimonials(data.testimonials));
   }, []);
 
   // Auto-rotate
@@ -1161,6 +1139,8 @@ function Depoimentos() {
     const timer = setInterval(() => setCurrent(c => (c + 1) % testimonials.length), 5000);
     return () => clearInterval(timer);
   }, [testimonials.length]);
+
+  if (testimonials.length === 0) return null;
 
   return (
     <section id="depoimentos" className="py-16 sm:py-24 bg-card border-y border-border/50 relative overflow-hidden">
@@ -1397,18 +1377,11 @@ function Footer() {
 
 // ─── Client Logos Marquee ────────────────────────────────────
 function ClientLogos() {
-  const [clients, setClients] = useState<{ id: string; company_name: string; logo_url: string; color: string }[]>([]);
+  const [clients, setClients] = useState<{ company_name: string; logo_url: string; color: string | null }[]>([]);
 
   useEffect(() => {
-    // Use the public view (no auth required) instead of the clients table
-    supabase
-      .from('clients_public_logos' as any)
-      .select('id, company_name, logo_url, color')
-      .then(({ data }: any) => {
-        if (data && data.length > 0) {
-          setClients(data.filter((c: any) => c.logo_url));
-        }
-      });
+    // Rota pública da landing (a view antiga do Supabase não existe na VPS)
+    getPublicLanding().then(({ client_logos }) => setClients(client_logos.filter((c) => c.logo_url)));
   }, []);
 
   if (clients.length === 0) return null;
@@ -1448,7 +1421,7 @@ function ClientLogos() {
         >
           {doubled.map((client, i) => (
             <div
-              key={`${client.id}-${i}`}
+              key={`${client.company_name}-${i}`}
               className="flex-shrink-0 flex items-center justify-center group"
             >
               <div className="w-24 h-16 sm:w-32 sm:h-20 md:w-36 md:h-24 flex items-center justify-center rounded-xl border border-border/40 bg-card/60 backdrop-blur-sm p-3 sm:p-4 transition-all duration-300 group-hover:border-primary/30 group-hover:shadow-lg group-hover:shadow-primary/5 group-hover:scale-105">

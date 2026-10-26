@@ -5,7 +5,7 @@ import { Star, Rocket, Send, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { supabase } from '@/lib/vpsDb';
+import { checkFeedbackToken, submitFeedback } from '@/services/landingSettings';
 import { toast } from 'sonner';
 
 export default function ClientFeedback() {
@@ -19,16 +19,14 @@ export default function ClientFeedback() {
   const [message, setMessage] = useState('');
   const [rating, setRating] = useState(5);
 
+  // Rota pública: o cliente abre o link sem login (o /api/db/query exige login e o
+  // link aparecia sempre como inválido).
   useEffect(() => {
     if (!token) { setValid(false); return; }
-    supabase
-      .from('client_testimonials')
-      .select('id, status')
-      .eq('token', token)
-      .maybeSingle()
-      .then(({ data }) => {
-        setValid(!!data && data.status === 'pending');
-      });
+    checkFeedbackToken(token).then((ok) => {
+      if (ok === null) toast.error('Não foi possível conferir o link. Verifique sua conexão.');
+      setValid(!!ok);
+    });
   }, [token]);
 
   const handleSubmit = async () => {
@@ -37,20 +35,15 @@ export default function ClientFeedback() {
       return;
     }
     setLoading(true);
-    const { error } = await supabase
-      .from('client_testimonials')
-      .update({
-        client_name: name.trim(),
-        client_role: role.trim(),
-        message: message.trim(),
-        rating,
-        status: 'submitted',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('token', token!);
+    const { error } = await submitFeedback(token!, {
+      client_name: name.trim(),
+      client_role: role.trim(),
+      message: message.trim(),
+      rating,
+    });
 
     if (error) {
-      toast.error('Erro ao enviar feedback');
+      toast.error(error);
     } else {
       setSubmitted(true);
     }
@@ -103,11 +96,11 @@ export default function ClientFeedback() {
         <div className="space-y-4 p-6 rounded-2xl border border-border/60 bg-card">
           <div>
             <label className="text-sm font-medium text-foreground">Seu nome *</label>
-            <Input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Maria Clara" className="mt-1" />
+            <Input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Maria Clara" maxLength={120} className="mt-1" />
           </div>
           <div>
             <label className="text-sm font-medium text-foreground">Seu cargo/empresa</label>
-            <Input value={role} onChange={e => setRole(e.target.value)} placeholder="Ex: Dona de restaurante" className="mt-1" />
+            <Input value={role} onChange={e => setRole(e.target.value)} placeholder="Ex: Dona de restaurante" maxLength={120} className="mt-1" />
           </div>
           <div>
             <label className="text-sm font-medium text-foreground">Avaliação</label>
@@ -125,6 +118,7 @@ export default function ClientFeedback() {
               value={message}
               onChange={e => setMessage(e.target.value)}
               placeholder="Conte como a Pulse ajudou sua empresa..."
+              maxLength={2000}
               rows={4}
               className="mt-1"
             />

@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/vpsDb';
+import { fetchPublicPromotions, fetchPublicPromotion, fetchPublicPlanOffer } from '@/services/publicPlans';
 import { getPlan, PLANS, getPlansForCity } from '@/data/plans';
 import { useSearchParams } from 'react-router-dom';
 import { useCity } from '@/contexts/CityContext';
@@ -66,7 +67,8 @@ export default function ApresentacaoPlano() {
   const [semPromo, setSemPromo] = useState<any | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const isMobile = useIsMobile();
-  const [leadData, setLeadData] = useState<any | null>(null);
+  // Oferta 6+6 combinada no CRM para o lead do link (?lead=): só o valor promocional.
+  const [leadOffer, setLeadOffer] = useState<{ promo_value: number | null } | null>(null);
 
   const toggleFullscreen = async () => {
     try {
@@ -94,47 +96,33 @@ export default function ApresentacaoPlano() {
 
   useEffect(() => { setStage(0); }, [plano]);
 
+  const offerType = searchParams.get('type');
+  // Promoções pela rota pública (a página /p/planos é aberta pelo cliente sem login).
+  // A cidade é a da apresentação (?city=), não a cidade ativa de quem abre.
   useEffect(() => {
     if (!plan) return;
+    let cancelled = false;
     (async () => {
       try {
-        const today = new Date().toISOString().slice(0, 10);
+        // Se tiver leadId, carrega a oferta combinada no CRM (só o valor, sem dados do lead)
+        const offer = leadIdParam ? await fetchPublicPlanOffer(leadIdParam) : null;
+        if (cancelled) return;
+        setLeadOffer(offer);
 
-        // Se tiver leadId, tenta carregar dados do lead (promo personalizada)
-        if (leadIdParam) {
-          const { data: lead } = await supabase
-            .from('crm_leads')
-            .select('*')
-            .eq('id', leadIdParam)
-            .maybeSingle();
-          if (lead) setLeadData(lead);
-        }
-
-        // Modo link exclusivo: carrega a promo pelo id, ignorando active/city/plan
+        // Modo link exclusivo: carrega a promo pelo id (o servidor confere período, vagas e plano)
         if (promoIdParam) {
-          const { data: exact } = await supabase
-            .from('plan_promotions' as any)
-            .select('*')
-            .eq('id', promoIdParam)
-            .maybeSingle();
-          const p: any = exact;
+          const p: any = await fetchPublicPromotion(promoIdParam, plan.key);
+          if (cancelled) return;
           if (p) {
-            const valid =
-              (!p.starts_at || p.starts_at <= today) &&
-              (!p.ends_at || p.ends_at >= today) &&
-              (!p.plan_key || p.plan_key === plan.key);
-            if (valid) {
-              const isSem = p.applies_to === 'semestral' || p.applies_to === 'ambos';
-              setPromo(p);
-              setSemPromo(isSem ? p : null);
-              return;
-            }
+            const isSem = p.applies_to === 'semestral' || p.applies_to === 'ambos';
+            setPromo(p);
+            setSemPromo(isSem ? p : null);
+            return;
           }
         }
 
-        // Caso especial: Lead com tag de promoção 6+6 manual
-        const isPromoManual = searchParams.get('type') === 'promo_6_6';
-        if (isPromoManual || (leadData?.source_tag === 'promo_6_6')) {
+        // Caso especial: Lead com a oferta 6+6 manual
+        if (offerType === 'promo_6_6' || offer) {
           const mockPromo = {
             id: 'manual-6-6',
             title: 'Oferta Especial 6+6',
@@ -145,25 +133,13 @@ export default function ApresentacaoPlano() {
             exclusive: true
           };
           setPromo(mockPromo);
+          setSemPromo(null);
           return;
         }
 
-        const { data } = await supabase
-          .from('plan_promotions' as any)
-          .select('*')
-          .eq('active', true)
-          .eq('exclusive', false)
-          .or(`plan_key.is.null,plan_key.eq.${plan.key}`)
-          .or(`city.is.null,city.eq.${activeCity}`)
-          .order('discount_percent', { ascending: false });
-        const matches = (data || []).filter((p: any) => {
-          if (p.starts_at && p.starts_at > today) return false;
-          if (p.ends_at && p.ends_at < today) return false;
-          if (p.plan_key && p.plan_key !== plan.key) return false;
-          if (p.city && p.city !== activeCity) return false;
-          if (p.max_redemptions != null && (p.redemptions_count ?? 0) >= p.max_redemptions) return false;
-          return true;
-        });
+        // O servidor já filtra ativa, não exclusiva, período, vagas, cidade e plano
+        const matches = await fetchPublicPromotions(effectiveCity, plan.key);
+        if (cancelled) return;
         // Promo principal: prioriza anual/ambos (banner/storytelling)
         const main = matches.find((p: any) => p.applies_to === 'anual' || p.applies_to === 'ambos') || matches[0] || null;
         // Promo do semestral: pode coexistir com a principal
@@ -173,19 +149,21 @@ export default function ApresentacaoPlano() {
         setSemPromo(sem && sem !== main ? sem : (mainAny && (mainAny.applies_to === 'semestral' || mainAny.applies_to === 'ambos') ? mainAny : null));
       } catch (err) { console.warn('promo error', err); }
     })();
-  }, [plan, activeCity, promoIdParam]);
+    return () => { cancelled = true; };
+  }, [plan?.key, effectiveCity, promoIdParam, leadIdParam, offerType]);
 
 
   // Realtime: atualiza vagas automaticamente quando redemptions_count mudar
   useEffect(() => {
-    if (!promo?.id) return;
+    // Sem login (link público) o tempo real não autentica: as vagas vêm na carga da página.
+    if (!promo?.id || isPublic || promo.id === 'manual-6-6') return;
     const channel = supabase
       .channel(`promo-${promo.id}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'plan_promotions', filter: `id=eq.${promo.id}` },
         (payload) => { setPromo((prev: any) => prev ? { ...prev, ...payload.new } : prev); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [promo?.id]);
+  }, [promo?.id, isPublic]);
 
 
   const currentIndex = plano ? PRESENTATION_ORDER.indexOf(plano as any) : -1;
@@ -194,11 +172,17 @@ export default function ApresentacaoPlano() {
     ? PRESENTATION_ORDER[currentIndex + 1]
     : null;
 
-  const buildPlanUrl = (key: string) => {
+  // Parâmetros do link que acompanham a troca de plano (cidade, promo exclusiva e oferta do lead)
+  const carriedParams = (alwaysCity: boolean) => {
     const qs = new URLSearchParams();
-    if (queryCity) qs.set('city', queryCity);
+    if (alwaysCity || queryCity) qs.set('city', alwaysCity ? effectiveCity : queryCity!);
     if (promoIdParam) qs.set('promo', promoIdParam);
-    const q = qs.toString();
+    if (leadIdParam) qs.set('lead', leadIdParam);
+    if (offerType) qs.set('type', offerType);
+    return qs.toString();
+  };
+  const buildPlanUrl = (key: string) => {
+    const q = carriedParams(false);
     return `${baseRoute}/${key}${q ? `?${q}` : ''}`;
   };
   const goPrevPlan = () => { if (prevKey) navigate(buildPlanUrl(prevKey)); };
@@ -208,7 +192,8 @@ export default function ApresentacaoPlano() {
   const prevStage = () => setStage((s) => Math.max(s - 1, 0));
 
   const copyPublicLink = async () => {
-    const url = `${window.location.origin}/p/planos/${plano}`;
+    // Sempre com a cidade: sem ?city= o cliente (sem login) via a tabela de Minaçu.
+    const url = `${window.location.origin}/p/planos/${plano}?${carriedParams(true)}`;
     try {
       await navigator.clipboard.writeText(url);
       toast.success('Link público copiado!');
@@ -250,7 +235,7 @@ export default function ApresentacaoPlano() {
     const durationPromo = promo?.duration_months || 12;
     
     // Se for a promo 6+6 do CRM, usamos o valor manual se existir
-    const leadPromoVal = (leadData as any)?.referral_info?.promo_value;
+    const leadPromoVal = leadOffer?.promo_value;
     const promoAnualMes = promoTargetAnnual ? (leadPromoVal || (an * (1 - Number(promo.discount_percent) / 100))) : null;
     
     const promoSemMes = semSource ? sem * (1 - Number(semSource.discount_percent) / 100) : null;
@@ -261,9 +246,10 @@ export default function ApresentacaoPlano() {
       durationPromo 
     };
 
-  }, [plan, promo, semPromo]);
+  }, [plan, promo, semPromo, leadOffer]);
 
-  if (!plan) return <Navigate to={isPublic ? '/p/planos' : '/apresentacao'} replace />;
+  // Plano desconhecido: volta para a lista mantendo cidade, lead e oferta do link.
+  if (!plan) return <Navigate to={`${isPublic ? '/p/planos' : '/apresentacao'}${location.search}`} replace />;
 
   const Icon = plan.icon;
   const categories = categorizeFeatures(plan.features);
@@ -303,13 +289,7 @@ export default function ApresentacaoPlano() {
       .map((k) => sidebarPlans.find((p) => p.key === k))
       .filter(Boolean) as typeof sidebarPlans;
 
-    const goToPlan = (key: string) => {
-      const qs = new URLSearchParams();
-      if (queryCity) qs.set('city', queryCity);
-      if (promoIdParam) qs.set('promo', promoIdParam);
-      const query = qs.toString();
-      navigate(`${baseRoute}/${key}${query ? `?${query}` : ''}`);
-    };
+    const goToPlan = (key: string) => navigate(buildPlanUrl(key));
 
     return (
       <div className="min-h-screen w-full bg-background text-foreground relative scroll-smooth">

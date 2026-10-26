@@ -63,6 +63,17 @@ const emptyForm = {
   notes: '',
 };
 
+/** Menor início e maior fim das metas (datas AAAA-MM-DD), para filtrar receitas e despesas. */
+function goalsDateRange(list: Goal[]) {
+  const starts = list.map(g => g.start_date).filter(Boolean).sort();
+  const ends = list.map(g => g.end_date || g.start_date).filter(Boolean).sort();
+  return { from: starts[0], to: ends[ends.length - 1] };
+}
+
+// Cliente que conta na meta: não interno e não cancelado/inativo (status vazio = ativo)
+const isActiveClientRow = (r: any) =>
+  r?.is_admin_client !== true && !['cancelado', 'inativo'].includes(String(r?.status || 'ativo').toLowerCase());
+
 export default function Goals() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,11 +86,13 @@ export default function Goals() {
     const revenueGoals = allGoals.filter(g => g.type === 'faturamento' && g.status === 'em_andamento');
     if (revenueGoals.length === 0) return allGoals;
 
+    const range = goalsDateRange(revenueGoals);
     const { data: revenues } = await supabase
       .from('revenues')
       .select('amount, paid_at')
       .eq('status', 'paga')
-      .not('paid_at', 'is', null);
+      .gte('paid_at', range.from)
+      .lte('paid_at', range.to);
 
     if (!revenues) return allGoals;
 
@@ -102,10 +115,10 @@ export default function Goals() {
     const clientGoals = allGoals.filter(g => g.type === 'clients' && g.status === 'em_andamento');
     if (clientGoals.length === 0) return allGoals;
 
-    // Clientes internos (admin global) não contam como cliente real
-    const { data: clientRows } = await supabase.from('clients').select('id, is_admin_client');
+    // Clientes internos (admin global) e cancelados/inativos não contam como cliente real
+    const { data: clientRows } = await supabase.from('clients').select('id, is_admin_client, status');
     if (!Array.isArray(clientRows)) return allGoals;
-    const count = clientRows.filter((r: any) => r?.is_admin_client !== true).length;
+    const count = clientRows.filter(isActiveClientRow).length;
 
     const updated = [...allGoals];
     for (const goal of clientGoals) {
@@ -122,9 +135,10 @@ export default function Goals() {
     const profitGoals = allGoals.filter(g => g.type === 'lucro' && g.status === 'em_andamento');
     if (profitGoals.length === 0) return allGoals;
 
+    const range = goalsDateRange(profitGoals);
     const [{ data: revenues }, { data: expenses }] = await Promise.all([
-      supabase.from('revenues').select('amount, paid_at').eq('status', 'paga').not('paid_at', 'is', null),
-      supabase.from('expenses').select('amount, date'),
+      supabase.from('revenues').select('amount, paid_at').eq('status', 'paga').gte('paid_at', range.from).lte('paid_at', range.to),
+      supabase.from('expenses').select('amount, date').gte('date', range.from).lte('date', range.to),
     ]);
 
     if (!revenues || !expenses) return allGoals;
@@ -151,7 +165,12 @@ export default function Goals() {
   const fetchGoals = useCallback(async () => {
     const { data, error } = await supabase.from('goals').select('*').order('created_at', { ascending: false });
     if (error) { toast.error('Erro ao carregar metas'); return; }
-    const allGoals = (data as Goal[]) || [];
+    // numeric chega do banco como texto ("12.50"): somas e toFixed precisam de número
+    const allGoals = ((data as Goal[]) || []).map(g => ({
+      ...g,
+      target_value: Number(g.target_value) || 0,
+      current_value: Number(g.current_value) || 0,
+    }));
     let synced = await syncRevenueGoals(allGoals);
     synced = await syncClientGoals(synced);
     synced = await syncProfitGoals(synced);
@@ -184,11 +203,13 @@ export default function Goals() {
 
   const handleSave = async () => {
     if (!form.title || !form.target_value) { toast.error('Preencha título e valor alvo'); return; }
+    // Valor atual é calculado na abertura da tela (clientes, receitas e despesas):
+    // a edição não sobrescreve; a meta nova começa em 0 e é calculada em seguida.
     const payload = {
       type: activeTab,
       title: form.title,
       target_value: Number(form.target_value),
-      current_value: Number(form.current_value) || 0,
+      ...(editingGoal ? {} : { current_value: 0 }),
       period: form.period,
       start_date: form.start_date,
       end_date: form.end_date || form.start_date,
@@ -350,8 +371,9 @@ export default function Goals() {
                 <Input type="number" value={form.target_value} onChange={e => setForm(f => ({ ...f, target_value: e.target.value }))} placeholder={activeTab === 'lucro' ? 'Ex: 25' : ''} />
               </div>
               <div>
-                <Label>Valor Atual {activeTab === 'faturamento' ? '(R$)' : activeTab === 'lucro' ? '(%) auto' : ''}</Label>
-                <Input type="number" value={form.current_value} onChange={e => setForm(f => ({ ...f, current_value: e.target.value }))} disabled={activeTab === 'lucro'} />
+                <Label>Valor Atual {activeTab === 'faturamento' ? '(R$)' : activeTab === 'lucro' ? '(%)' : ''}</Label>
+                <Input type="number" value={form.current_value} disabled placeholder="0" />
+                <p className="text-[11px] text-muted-foreground mt-1">Calculado automaticamente</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">

@@ -9,16 +9,25 @@ async function publicProposalAction(body: Record<string, any>): Promise<any> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       console.error('[publicProposal] error:', data);
-      return { error: data.error || `HTTP ${response.status}` };
+      return { error: data.error || `HTTP ${response.status}`, status: response.status };
     }
     return data;
   } catch (error: any) {
     console.error('[publicProposal] network error:', error);
-    return { error: error.message || 'Network error' };
+    return { error: error.message || 'Network error', network: true };
   }
+}
+
+// validity_date chega como 'YYYY-MM-DD' (DATE). new Date('2026-10-25') é meia-noite UTC,
+// ou seja, 24/10 às 21h no Brasil: a data aparecia um dia antes e a proposta vencia na véspera.
+function validityDay(value: string) {
+  return new Date(`${String(value).slice(0, 10)}T00:00:00`);
+}
+function validityEnd(value: string) {
+  return new Date(`${String(value).slice(0, 10)}T23:59:59`);
 }
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -113,6 +122,7 @@ export default function ProposalViewer() {
   const [sending, setSending] = useState(false);
   const [responding, setResponding] = useState(false);
   const [responseNote, setResponseNote] = useState('');
+  const [loadError, setLoadError] = useState(false);
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -132,7 +142,13 @@ export default function ProposalViewer() {
 
   const loadProposal = async () => {
     const res = await publicProposalAction({ action: 'get_proposal', token });
-    setProposal(res.proposal || null);
+    if (res.error) {
+      // Falha de conexão não é "proposta não encontrada": mantém o que já está na tela.
+      setLoadError(true);
+    } else {
+      setLoadError(false);
+      setProposal(res.proposal || null);
+    }
     setLoading(false);
   };
 
@@ -145,7 +161,15 @@ export default function ProposalViewer() {
   const sendComment = async () => {
     if (!commentMsg.trim() || !commentName.trim() || !proposal) return;
     setSending(true);
-    await publicProposalAction({ action: 'add_comment', token, author_name: commentName, message: commentMsg });
+    const res = await publicProposalAction({ action: 'add_comment', token, author_name: commentName, message: commentMsg });
+    if (res.error) {
+      // O texto fica no campo para tentar de novo.
+      setSending(false);
+      toast.error(res.network
+        ? 'Não foi possível enviar o comentário. Verifique sua conexão e tente de novo.'
+        : `Não foi possível enviar o comentário: ${res.error}`);
+      return;
+    }
     setCommentMsg('');
     await loadComments();
     setSending(false);
@@ -155,7 +179,16 @@ export default function ProposalViewer() {
   const respondProposal = async (status: 'aceita' | 'recusada') => {
     if (!proposal) return;
     setResponding(true);
-    await publicProposalAction({ action: 'respond', token, status, response_note: responseNote || null });
+    const res = await publicProposalAction({ action: 'respond', token, status, response_note: responseNote || null });
+    if (res.error) {
+      // Só confirma quando o servidor gravou: no 4G a falha aparecia como "aceita com sucesso".
+      if (res.status === 409) await loadProposal();
+      setResponding(false);
+      toast.error(res.network
+        ? 'Não foi possível enviar sua resposta. Verifique sua conexão e tente de novo.'
+        : `Não foi possível registrar sua resposta: ${res.error}`);
+      return;
+    }
     await loadProposal();
     setResponding(false);
     toast.success(status === 'aceita' ? '🎉 Proposta aceita com sucesso!' : 'Proposta recusada.');
@@ -168,6 +201,19 @@ export default function ProposalViewer() {
           <img src={pulseLogo} alt="Pulse" className="h-16 animate-pulse" />
           <div className="w-8 h-8 border-2 border-orange-300 border-t-orange-600 rounded-full animate-spin" />
         </motion.div>
+      </div>
+    );
+  }
+
+  if (!proposal && loadError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="text-center space-y-3">
+          <FileText className="h-12 w-12 mx-auto text-gray-300" />
+          <h2 className="text-xl font-bold text-gray-700">Não foi possível carregar a proposta</h2>
+          <p className="text-gray-500">Verifique sua conexão e tente de novo.</p>
+          <Button onClick={() => { setLoading(true); loadProposal(); }} variant="outline">Tentar de novo</Button>
+        </div>
       </div>
     );
   }
@@ -214,7 +260,7 @@ export default function ProposalViewer() {
   const bonusTotal = bonus.reduce((s: number, b: any) => s + (b.value || 0), 0);
   const monthlyTotal = planPrice + bonusTotal;
   const discount = proposal.custom_discount || 0;
-  const isExpired = new Date(proposal.validity_date) < new Date();
+  const isExpired = validityEnd(proposal.validity_date) < new Date();
   const isResolved = proposal.status === 'aceita' || proposal.status === 'recusada';
   const headerTitle = proposalType === 'sistema' ? 'Proposta de Sistema' : proposalType === 'endomarketing' ? 'Proposta de Endomarketing' : proposalType === 'personalizada' ? 'Proposta Personalizada' : proposalType === 'cronograma' ? 'Cronograma Completo' : proposalType === 'videos' ? 'Proposta de Vídeos' : 'Proposta Comercial';
 
@@ -1101,7 +1147,7 @@ export default function ProposalViewer() {
       )}
       {isExpired && proposal.status === 'pendente' && (
         <div className="bg-yellow-500 text-white text-center py-2.5 text-sm font-semibold flex items-center justify-center gap-2">
-          <Clock className="h-4 w-4" /> Proposta expirou em {format(new Date(proposal.validity_date), "dd/MM/yyyy")}
+          <Clock className="h-4 w-4" /> Proposta expirou em {format(validityDay(proposal.validity_date), "dd/MM/yyyy")}
         </div>
       )}
 
@@ -1145,7 +1191,7 @@ export default function ProposalViewer() {
               </motion.div>
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="mt-4 flex gap-4 text-xs text-white/60">
                 <span>📅 {format(new Date(proposal.created_at), "dd/MM/yyyy")}</span>
-                <span>⏰ Válida até {format(new Date(proposal.validity_date), "dd/MM/yyyy")}</span>
+                <span>⏰ Válida até {format(validityDay(proposal.validity_date), "dd/MM/yyyy")}</span>
               </motion.div>
             </div>
           </div>
@@ -1170,7 +1216,7 @@ export default function ProposalViewer() {
                   <Gift className="h-5 w-5" style={{ color: accentColor }} /> Bônus Exclusivos
                 </h3>
                 <p className="text-[10px] text-gray-500 mb-3">
-                  ⚠️ Válidos até {format(new Date(proposal.validity_date), "dd/MM/yyyy")}
+                  ⚠️ Válidos até {format(validityDay(proposal.validity_date), "dd/MM/yyyy")}
                 </p>
                 <div className="space-y-1.5">
                   {bonus.map((b: any, i: number) => (
@@ -1235,7 +1281,7 @@ export default function ProposalViewer() {
             <motion.div animate={{ rotate: 360 }} transition={{ duration: 60, repeat: Infinity, ease: 'linear' }} className="absolute -top-10 -right-10 w-32 h-32 rounded-full border-[20px] border-white/5" />
             <img src={pulseLogo} alt="Pulse Growth Marketing" className="h-14 mx-auto mb-3 drop-shadow-lg" style={{ mixBlendMode: 'screen' }} />
             <p className="text-white/80 text-xs">Transformando marcas em movimentos.</p>
-            <p className="text-white/50 text-[10px] mt-1">Válida até {format(new Date(proposal.validity_date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</p>
+            <p className="text-white/50 text-[10px] mt-1">Válida até {format(validityDay(proposal.validity_date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</p>
             <p className="text-white/40 text-[10px] mt-0.5">© {new Date().getFullYear()} Pulse Growth Marketing</p>
           </div>
         </motion.div>

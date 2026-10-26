@@ -203,7 +203,7 @@ continuam iguais. O que mudou é o caminho até eles (menos atalho perigoso, mai
 | Kanban de Conteúdo | Setas seguem o fluxo (`FLOW_ARROWS`): Ideias ▶ Captação; Captação ◀ Ideias; Edição ◀ Captação / ▶ Revisão; Alteração ▶ Revisão (só para quem não tem "Reenviar Revisão"); Enviado ◀ Pedir ajuste; Agendamentos ◀ Enviado; Acompanhamento ◀ Agendamentos. Onde a coluna tem botão próprio, a seta não repete. Card com agente trabalhando não tem seta | P4 |
 | Kanbans (seta, arrastar, diálogo Editar) | Toda ida para **Alteração** abre o pedido de ajuste (texto obrigatório; no "Devolver" da Análise já vem o parecer do revisor IA). Ida para **Enviado p/ Cliente** pede confirmação ("o cliente recebe o aviso pelo WhatsApp"). Arrastar para **Acompanhamento** abre o agendamento (data e hora) | P2, P3 |
 | Kanbans (arrastar, setas) | Card com agente dando sinal (menos de 30 min) não se move pela tela: aparece o aviso "Beatriz está trabalhando neste card… peça à chefe para liberar". Parado (sem sinal), pode ser movido para destravar | entrega do agente recusada no meio da renderização |
-| Kanban de Conteúdo | Coluna Análise com aviso do que acontece nela; card com parecer do revisor IA e, para o admin, **Liberar p/ Revisão** e **Devolver** | P13 |
+| Kanban de Conteúdo | Coluna Análise com aviso do que acontece nela; card com parecer do revisor IA e, para admin e social media, **Liberar p/ Revisão** e **Devolver** | P13 |
 | Kanban de Conteúdo | Card: cliente uma vez (e o nome do não cadastrado), tipo só no selo, rótulo do avatar ("Editado por", "Quem corrige", "Responsável", "· 🤖 IA"), sem a bolinha "online" falsa, link dos brutos também na Análise e na Alteração, "Aprovar e enviar" (deixa claro que vai ao cliente) | P19 |
 | Kanban de Conteúdo | "Organizar" (não fazia nada) virou **Ordem: recentes / prazo** (imediatas e prioridades no topo, depois o prazo da etapa) | P1 |
 | Kanbans e detalhes | Erros com o motivo do servidor ("Não foi possível mover o cartão: …"); o detalhe confere a resposta antes de mostrar sucesso e rodar o sync; link precisa começar com https:// | P10 |
@@ -211,7 +211,7 @@ continuam iguais. O que mudou é o caminho até eles (menos atalho perigoso, mai
 | Celular (Kanban de Conteúdo e de Edição) | Faixa de atalho para cada coluna (com contagem); colunas com 85% da tela; Editar/Excluir sempre visíveis; filtros ocupam a largura | P6 |
 | Kanban de Edição | Clique no card abre o detalhe (histórico, comentários, upload, pacote de stories); coluna "Concluído" agora é **Enviado p/ Cliente**; card mostra quem editou na Análise/Revisão/Enviado; "Reenviar para Revisão" com o mesmo nome do outro quadro | P8, P9, P14 |
 | Kanban de Edição | Liberar card (clique na bandeira) e "Ops! Volta aqui" pedem confirmação; arrastar para Alteração pede o ajuste; para Enviado, confirmação | P2, P3, P6 |
-| Detalhe do editor | "Marcar como Finalizado" (mandava ao cliente) virou **Aprovar e enviar ao cliente**, só para admin/social media e com confirmação; status "Análise" e "Enviado ao cliente" | P9 |
+| Detalhe do editor | "Marcar como Finalizado" (mandava ao cliente) virou **Aprovar e enviar ao cliente**, só para a gestão (admin, social media, gestor de projetos) e com confirmação; status "Análise" e "Enviado ao cliente" | P9 |
 | Detalhe do card | Análise com nome e etapa certa na jornada; histórico mostra o detalhe (texto do ajuste, motivo) e guarda 50 itens; "Editado por" quando não há responsável | P11, P12, P14 |
 | Sync | O texto do ajuste vai para o histórico ("Ajustes: …", como a API dos agentes grava); "Enviado para Análise" no lugar de "Movido para pre_revisao" | P11, P15 |
 | Bancada | Alteração com o prazo de alteração (selo e ordem da fila) e o "o que mudar" no card da fila | P17 |
@@ -269,37 +269,76 @@ O CLI não foi alterado (outro trabalho cuida dele). Sugestões para quem for me
 - Fichas do `uriel.md` e `marcely.md`: incluir o `pulse parecer` no passo da Análise (a pasta dos agentes não foi
   alterada).
 
-## 6. Sugestões que dependem do dono
+## 6. Decisões do dono (26/10/2026) e o que ainda depende dele
 
-1. **Regra "responsável obrigatório para entrar em Edição"** (P5): no Kanban de Conteúdo, mover para Edição exige
-   responsável, e quem é escolhido vira dono — o card sai da fila dos editores e dos agentes. Sugestão: exigir o link
-   dos brutos (como já é de Captação para Edição) e deixar o card entrar livre na fila.
-2. **Quem move cards no Kanban de Conteúdo** (P23): hoje todo papel que não é editor/videomaker move qualquer card
-   para qualquer coluna (inclusive mandar ao cliente). Sugestão: só admin e social media movem de Revisão em diante.
-3. **Quem libera da Análise**: deixei Liberar/Devolver só para o admin (a regra é a Marcely decidir). Se a social
-   media também deve poder, é uma linha (`userRole === 'admin'` nos dois botões do card e `isAdmin` no detalhe).
-4. **Controle de Edição** (P18): editores e videomakers acessam e podem tirar card de colega. Sugestão: só admin e
-   gestor de projetos reatribuem; editor só devolve o próprio.
-5. **"Aprovar e enviar" com confirmação**: mandar ao cliente pelo botão da Revisão continua com um clique (é a ação
+### 6.1 Decisões aplicadas
+
+As regras ficam em `src/lib/contentKanbanRules.ts` (com testes) e valem nos dois Kanbans, nos detalhes do card e no
+Controle de Edição.
+
+1. **Para entrar em Edição, só o link dos brutos é obrigatório** (P5). O responsável deixou de ser exigido e o card
+   entra livre na fila (humanos e agentes pegam):
+   - Kanban de Conteúdo (arrastar, setas, "→ Edição", "Editar", card novo direto em Edição), Kanban de Edição e
+     detalhe: sem brutos, recusa com "O card precisa do link dos brutos (Drive) para entrar em Edição"; ao entrar,
+     `assigned_to` vai para nulo. Exceção: quem leva o card para Edição e pega na hora (editor arrastando para si),
+     e o "Responsável" escolhido de propósito no diálogo "Editar".
+   - Servidor: `POST /api/agent/tasks/:id/move` (chefe) recusa Edição sem brutos (409) e já soltava o card;
+     `/api/fix-content-task` (brutos que chegam depois) solta o responsável que sobrou de Ideias/Captação.
+   - O sync não mudou: ele não exige responsável e o timer só começa quando alguém pega.
+   - Fica como estava: no fim de gravação de **evento** (Videomaker), a opção "automático" ainda escolhe o editor humano
+     menos ocupado; gravação comum com "automático" já entra livre. Para o evento entrar livre também, trocar a escolha
+     automática por `null` em `VideomakerDashboard.tsx`.
+2. **Só a gestão (admin, social media, gestor de projetos) move qualquer card e manda para "Enviado p/ Cliente"**
+   (P23). Editor e videomaker movem só nas colunas deles; os outros papéis só visualizam.
+   - Tela: validação do arrastar/setas/"Editar" (`validateKanbanTransition` e `validateTransition`), botões do card
+     (Aprovar e enviar, Ajustes, → Agendamentos, Agendar, Confirmar Postagem) e do detalhe (Aprovar e Enviar ao
+     Portal, Cliente Aprovou, Agendar, Confirmar Postagem; "Aprovar e enviar ao cliente" do detalhe do editor) agora
+     usam a gestão. Coluna em que o papel não atua não mostra ação nenhuma. O gestor de projetos passou a ter os botões
+     de aprovar e de envio (antes só arrastava).
+   - Videomaker: além de Ideias/Captação e alteração de stories, pode entregar Captação → Edição com os brutos (o
+     detalhe do card já deixava; o Kanban mostrava o botão e recusava).
+   - Servidor: o `/api/db/query` recusa (403) update, insert ou upsert de `content_tasks` com `kanban_column = 'envio'`
+     de quem não é da gestão (`isTeamManagerUser`). Caminhos legítimos que gravam `envio` conferidos: Kanban de
+     Conteúdo (Aprovar, setas, arrastar), detalhe do card (Aprovar), detalhe do editor (Aprovar e enviar), Kanban de
+     Edição (arrastar), Social Media (aprovar revisão, convidar pelo WhatsApp, arrastar). Todos já eram só da gestão,
+     exceto o papel **revisor_meta** (conta de revisão do app da Meta), que via a tela Social e agora recebe 403 ao
+     mandar ao cliente — de propósito: não é da equipe. As rotas do servidor (portal, agentes, prazo de aprovação)
+     não passam pelo `/api/db/query` e não mudaram.
+3. **Liberar da Análise para a revisão humana e Devolver: admin e social media** (e a chefe IA pela API). Na tela,
+   também o arrastar e as setas para fora da Análise; o gestor de projetos, mesmo sendo da gestão, não libera.
+   Sem trava no servidor (precisaria ler a coluna atual em cada update do genérico).
+4. **Controle de Edição: editor não tira card de colega** (P18). Fora da gestão, só os próprios cards e os livres
+   da fila podem ser arrastados (os outros ficam sem arrastar, com aviso); dá para devolver o próprio à fila ou pegar
+   um livre para si. Tirar ou passar para outro editor fica com admin, social media e gestor de projetos. Sem trava
+   no servidor (o update do genérico não sabe quem era o dono antes).
+
+### 6.2 Ainda dependem do dono
+
+1. **"Aprovar e enviar" com confirmação**: mandar ao cliente pelo botão da Revisão continua com um clique (é a ação
    mais frequente). Se houver muito clique errado, pôr a mesma confirmação do arrastar.
-6. **Confirmar Postagem**: continua com um clique; agora cancela a postagem automática. Se preferir, um "Desfazer"
+2. **Confirmar Postagem**: continua com um clique; agora cancela a postagem automática. Se preferir, um "Desfazer"
    no aviso por alguns segundos.
-7. **Recado automático no parecer**: o `POST …/review` poderia mandar o recado para a chefe (hoje o Uriel manda pelo
+3. **Recado automático no parecer**: o `POST …/review` poderia mandar o recado para a chefe (hoje o Uriel manda pelo
    `pulse mandar`). Não fiz para não duplicar recados enquanto o CLI não usa a rota.
-8. **Fila humana x fila dos agentes**: a Bancada ordena imediata → prioridade → atrasado → prazo; a fila dos agentes
+4. **Fila humana x fila dos agentes**: a Bancada ordena imediata → prioridade → atrasado → prazo; a fila dos agentes
    põe toda alteração primeiro. Vale alinhar uma regra só.
-9. **"Ops! Volta aqui"** não roda o sync: o conteúdo do portal fica em "revisão interna" enquanto o card volta para
+5. **Evento com editor "automático"** (ver 6.1, item 1): entrar livre na fila em vez de ir para o editor menos ocupado.
+6. **"Ops! Volta aqui"** não roda o sync: o conteúdo do portal fica em "revisão interna" enquanto o card volta para
    a Edição. Sugestão: sync da coluna Edição (sem aviso ao cliente, que já é o comportamento da volta).
 
 ## 7. Testes
 
 - `npx tsc --noEmit -p tsconfig.app.json`: 0 erros.
-- `npx vitest run`: 119 testes (88 antes). Novos: `agentCardStatus.test.ts` (prontidão, estado do agente, filtro,
-  parecer), `kanbanAgentBadges.test.tsx` (selos), `contentKanbanFlow.test.tsx` e `editorKanbanFlow.test.tsx`
-  (fumaça das páginas com servidor simulado: setas pelo fluxo, Análise, pedido de ajuste ao devolver, detalhe em
-  qualquer card, confirmação ao aprovar).
+- `npx vitest run`: 125 testes (88 antes). Novos: `agentCardStatus.test.ts` (prontidão, estado do agente, filtro,
+  parecer), `contentKanbanRules.test.ts` (decisões do dono), `kanbanAgentBadges.test.tsx` (selos),
+  `contentKanbanFlow.test.tsx` e `editorKanbanFlow.test.tsx` (fumaça das páginas com servidor simulado: setas pelo
+  fluxo, Análise, pedido de ajuste ao devolver, detalhe em qualquer card, confirmação ao aprovar, botões por papel:
+  admin, editor, gestor de projetos).
 - `npx vite build`: ok.
-- `node --check vps-api-server/agentRoutes.mjs`: ok.
+- `node --check` em `vps-api-server/agentRoutes.mjs` e `server.mjs`: ok.
 - Ponta a ponta contra Postgres (banco `pulse_conteudo`): o teste de agentes existente passa inteiro; um teste novo
   cobre readiness na fila, histórico de ajustes no claim, parecer (papéis, validação, coluna, histórico, não move),
-  card completo (permissões, versões) e a entrega apagando o parecer.
+  card completo (permissões, versões), a entrega apagando o parecer e o `/move` para Edição (exige brutos, entra
+  livre). Com a API inteira rodando localmente (porta 4347): o `/api/db/query` recusa o envio ao cliente de editor e
+  videomaker (403, card não muda), deixa social media e gestor de projetos, não afeta outros campos e colunas, e o
+  `/api/fix-content-task` solta o card que entra em Edição.

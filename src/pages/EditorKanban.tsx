@@ -66,6 +66,8 @@ interface EditorTask {
   approval_deadline: string | null;
   approval_sent_at: string | null;
   immediate_alteration: boolean;
+  adjustment_notes?: string | null;
+  script_alteration_notes?: string | null;
   position: number;
   created_at: string;
   updated_at: string;
@@ -226,11 +228,11 @@ function TaskCard({ task, clients, onOpenScript, onSendToReview, onAddVideoLink,
           </div>
         )}
 
-        {/* Alteration notes */}
-        {task.kanban_column === 'alteracao' && task.description && (
+        {/* Alteration notes: o pedido de ajuste fica em adjustment_notes (a descrição é a do card) */}
+        {task.kanban_column === 'alteracao' && task.adjustment_notes && (
           <div className="bg-warning/10 border border-warning/20 rounded-md p-2">
             <p className="text-[10px] font-semibold text-warning mb-0.5">📝 Notas de alteração:</p>
-            <p className="text-[10px] text-foreground/80 whitespace-pre-wrap">{task.description}</p>
+            <p className="text-[10px] text-foreground/80 whitespace-pre-wrap">{task.adjustment_notes}</p>
           </div>
         )}
 

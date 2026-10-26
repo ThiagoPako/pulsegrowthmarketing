@@ -44,13 +44,26 @@ const EMPTY_CAMPAIGN: Partial<PromoCampaign> = {
   require_document: false,
   accent_color: '#E11D48',
   code_prefix: 'PULSE',
-  validation_pin: '1234',
+  validation_pin: '',
   business_segment: 'generico',
   earn_ticket_text: '',
   redeem_instruction_text: '',
   operator_label: '',
   is_active: true,
 };
+
+/** PIN do caixa sorteado para o sorteio novo (antes vinha sempre '1234'). */
+function randomCashierPin() {
+  const values = new Uint32Array(1);
+  crypto.getRandomValues(values);
+  return String(100000 + (values[0] % 900000));
+}
+
+/** Mesma regra do servidor: 6 caracteres ou mais e nada óbvio. */
+function isWeakCashierPin(pin: string | undefined) {
+  const value = String(pin || '').trim();
+  return value.length < 6 || /^(.)\1+$/.test(value) || ['123456', '654321', '123123', '1234567', '12345678'].includes(value);
+}
 
 const EMPTY_PRIZE: Partial<PromoPrize> = {
   name: '',
@@ -368,7 +381,7 @@ export default function PromoAdmin() {
         <Button
           className="hidden sm:inline-flex"
           onClick={() => {
-            setCampaignForm(EMPTY_CAMPAIGN);
+            setCampaignForm({ ...EMPTY_CAMPAIGN, validation_pin: randomCashierPin() });
             setCampaignDialog(true);
           }}
         >
@@ -381,7 +394,7 @@ export default function PromoAdmin() {
         size="lg"
         className="fixed bottom-4 left-3 right-3 z-40 h-12 shadow-lg sm:hidden"
         onClick={() => {
-          setCampaignForm(EMPTY_CAMPAIGN);
+          setCampaignForm({ ...EMPTY_CAMPAIGN, validation_pin: randomCashierPin() });
           setCampaignDialog(true);
         }}
       >
@@ -818,7 +831,12 @@ export default function PromoAdmin() {
               </div>
               <div>
                 <Label>PIN do caixa</Label>
-                <Input value={campaignForm.validation_pin || ''} onChange={(e) => setCampaignForm((f) => ({ ...f, validation_pin: e.target.value }))} placeholder="1234" />
+                <Input value={campaignForm.validation_pin || ''} onChange={(e) => setCampaignForm((f) => ({ ...f, validation_pin: e.target.value }))} placeholder="6 dígitos ou mais" />
+                {isWeakCashierPin(campaignForm.validation_pin) ? (
+                  <p className="mt-1 text-xs text-amber-500">
+                    PIN fraco: use 6 caracteres ou mais. Ao trocar, avise o caixa do PIN novo.
+                  </p>
+                ) : null}
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">

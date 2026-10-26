@@ -15919,6 +15919,36 @@ function promoRateLimited(key, limit = 30, windowMs = 60_000) {
   bucket.count += 1;
   return bucket.count > limit;
 }
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, bucket] of promoRateBuckets) {
+    if (now > bucket.reset) promoRateBuckets.delete(key);
+  }
+}, 5 * 60_000).unref?.();
+
+// PIN do caixa: 6 caracteres ou mais e nada óbvio (antes o padrão era '1234').
+const PROMO_WEAK_PINS = new Set(['123456', '654321', '000000', '111111', '123123', '12345678', '1234567']);
+function promoPinProblem(pin) {
+  const value = String(pin || '').trim();
+  if (value.length < 6) return 'O PIN do caixa precisa ter pelo menos 6 caracteres.';
+  if (PROMO_WEAK_PINS.has(value) || /^(.)\1+$/.test(value)) return 'Escolha um PIN menos óbvio para o caixa.';
+  return null;
+}
+
+// Erros de PIN e de código no caixa: contam por sorteio + IP (getClientIp usa o X-Real-IP /
+// último X-Forwarded-For posto pelo nginx; antes o primeiro valor vinha do próprio cliente).
+const PROMO_PIN_FAILURE_LIMIT = 10;
+const PROMO_CODE_FAILURE_LIMIT = 30;
+function promoValidateKeys(req, slug) {
+  const ip = getClientIp(req);
+  const local = isLoopbackIp(ip);
+  return {
+    pin: `promo-pin:${slug}:${local ? 'local' : ip}`,
+    code: `promo-code:${slug}:${local ? 'local' : ip}`,
+    // sem o IP real (proxy sem X-Real-IP), todo mundo cai no mesmo balde: teto maior
+    factor: local ? 5 : 1,
+  };
+}
 
 /** GET /api/promo/public/:slug — dados públicos da campanha (usado pela tela de validação) */
 app.get('/api/promo/public/:slug', async (req, res) => {
@@ -16017,8 +16047,8 @@ app.post('/api/promo/play', async (req, res) => {
   const client = await pool.connect();
   try {
     await ensurePromoTables();
-    const ip = req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || 'unknown';
-    if (promoRateLimited(`play:${ip}`)) {
+    const ip = getClientIp(req);
+    if (!isLoopbackIp(ip) && promoRateLimited(`play:${ip}`)) {
       return res.status(429).json({ error: 'Muitas tentativas. Aguarde um instante.' });
     }
 
@@ -16102,15 +16132,17 @@ app.post('/api/promo/play', async (req, res) => {
     }
     if (winner) {
       const prefix = (campaign.code_prefix || 'A3P').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'A3P';
+      // 6 caracteres do alfabeto sem ambíguos (antes 4 dígitos: dava para chutar no balcão).
+      // Os códigos antigos de 4 dígitos continuam valendo (a busca é por igualdade).
       for (let attempt = 0; attempt < 12 && !redemptionCode; attempt += 1) {
-        const candidate = `${prefix}-${String(crypto.randomInt(1000, 9999))}`;
+        const candidate = `${prefix}-${promoRandomToken(6)}`;
         const { rows: exists } = await client.query(
           'SELECT 1 FROM promo_tickets WHERE redemption_code = $1 LIMIT 1',
           [candidate]
         );
         if (!exists.length) redemptionCode = candidate;
       }
-      if (!redemptionCode) redemptionCode = `${prefix}-${promoRandomToken(6)}`;
+      if (!redemptionCode) redemptionCode = `${prefix}-${promoRandomToken(8)}`;
     }
 
     await client.query(
@@ -16159,21 +16191,29 @@ async function promoFindCampaignBySlug(slug) {
 app.post('/api/promo/validate', async (req, res) => {
   try {
     await ensurePromoTables();
-    const ip = req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || 'unknown';
-    if (promoRateLimited(`validate:${ip}`, 60)) {
+    const ip = getClientIp(req);
+    if (!isLoopbackIp(ip) && promoRateLimited(`validate:${ip}`, 60)) {
       return res.status(429).json({ error: 'Muitas tentativas. Aguarde um instante.' });
     }
 
     const campaign = await promoFindCampaignBySlug(req.body?.slug);
     if (!campaign) return res.status(404).json({ error: 'Sorteio não encontrado' });
 
+    const limits = promoValidateKeys(req, String(campaign.slug || '').toLowerCase());
+    if (authAttemptCount(limits.pin) >= PROMO_PIN_FAILURE_LIMIT * limits.factor) {
+      return res.status(429).json({ error: 'Muitas tentativas de PIN. Aguarde 15 minutos.' });
+    }
     const pin = String(req.body?.pin || '');
     if (pin !== String(campaign.validation_pin || '')) {
+      registerAuthAttempt(limits.pin);
       return res.status(401).json({ error: 'PIN incorreto' });
     }
 
     const code = String(req.body?.code || '').trim().toUpperCase();
     if (!code) return res.status(400).json({ error: 'Informe o código de resgate' });
+    if (authAttemptCount(limits.code) >= PROMO_CODE_FAILURE_LIMIT * limits.factor) {
+      return res.status(429).json({ error: 'Muitos códigos inválidos. Aguarde 15 minutos.' });
+    }
 
     const { rows } = await pool.query(
       `SELECT t.*, p.name AS prize_name, p.description AS prize_description, p.image_url AS prize_image_url
@@ -16183,13 +16223,17 @@ app.post('/api/promo/validate', async (req, res) => {
         LIMIT 1`,
       [campaign.id, code]
     );
-    if (!rows.length) return res.status(404).json({ error: 'Código inválido' });
+    if (!rows.length) {
+      registerAuthAttempt(limits.code);
+      return res.status(404).json({ error: 'Código inválido' });
+    }
     const ticket = rows[0];
 
     const payload = {
       code: ticket.redemption_code,
       participant_name: ticket.participant_name,
-      participant_phone: ticket.participant_phone,
+      // O caixa confere pelos 4 últimos dígitos; o número inteiro fica só no admin (Leads).
+      participant_phone: ticket.participant_phone ? maskClaimPhone(ticket.participant_phone) : null,
       prize: ticket.prize_name
         ? { name: ticket.prize_name, description: ticket.prize_description, image_url: ticket.prize_image_url }
         : null,
@@ -16286,12 +16330,26 @@ app.post('/api/promo/campaigns', async (req, res) => {
     const slug = String(b.slug || '').toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
     if (!b.title || !slug) return res.status(400).json({ error: 'Informe título e slug' });
 
+    // PIN do caixa: obrigatório e forte no sorteio novo e quando for trocado. Sorteio antigo com
+    // PIN fraco continua salvando sem trocar (o caixa já usa esse PIN); a tela avisa.
+    const newPin = String(b.validation_pin || '').trim();
+    let pinChanged = true;
+    if (b.id) {
+      const { rows: [current] } = await pool.query('SELECT validation_pin FROM promo_campaigns WHERE id = $1', [b.id]);
+      if (!current) return res.status(404).json({ error: 'Sorteio não encontrado' });
+      pinChanged = newPin !== String(current.validation_pin || '');
+    }
+    if (pinChanged) {
+      const pinProblem = promoPinProblem(newPin);
+      if (pinProblem) return res.status(400).json({ error: pinProblem });
+    }
+
     // Colunas novas só entram se existirem na tabela (sem ser dono, o ALTER não roda).
     const values = {
       title: b.title, slug, rules_text: b.rules_text || '', require_lead_capture: !!b.require_lead_capture,
       require_document: !!b.require_document, lgpd_terms_text: b.lgpd_terms_text || '',
       banner_url: b.banner_url || null, logo_url: b.logo_url || null, accent_color: b.accent_color || '#E11D48',
-      code_prefix: b.code_prefix || 'A3P', validation_pin: String(b.validation_pin || '1234'), is_active: b.is_active !== false,
+      code_prefix: b.code_prefix || 'A3P', validation_pin: newPin, is_active: b.is_active !== false,
     };
     const extras = {
       business_segment: b.business_segment || 'generico', earn_ticket_text: b.earn_ticket_text || '',

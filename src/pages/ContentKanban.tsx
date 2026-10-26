@@ -222,6 +222,8 @@ export default function ContentKanban() {
   const [formSchedTime, setFormSchedTime] = useState('');
   const [formDriveLink, setFormDriveLink] = useState('');
   const [formVideoLink, setFormVideoLink] = useState('');
+  // Coluna em que o diálogo abriu (card novo): base da validação de editor/videomaker
+  const [dialogInitialColumn, setDialogInitialColumn] = useState<string>('ideias');
 
   // Quick link dialog
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
@@ -503,6 +505,7 @@ export default function ContentKanban() {
   const openNew = (column?: KanbanColumnId) => {
     resetForm();
     if (column) setFormColumn(column);
+    setDialogInitialColumn(column || 'ideias');
     setDialogOpen(true);
   };
 
@@ -557,6 +560,15 @@ export default function ContentKanban() {
         payload.kanban_column = 'acompanhamento';
       }
       const columnChanged = editingTask.kanban_column !== payload.kanban_column;
+      // Editor/videomaker: trocar a coluna pelo "Editar" passa pelas mesmas regras do arrastar.
+      // Antes dava para levar o card direto para "Enviado p/ Cliente" pulando a revisão.
+      if (columnChanged && isRestricted) {
+        const transitionError = validateKanbanTransition(
+          { ...editingTask, ...payload, kanban_column: editingTask.kanban_column } as ContentTask,
+          payload.kanban_column
+        );
+        if (transitionError) { toast.error(transitionError); return; }
+      }
       const { error } = await supabase.from('content_tasks').update(payload).eq('id', editingTask.id);
       if (error) { toast.error('Erro ao atualizar'); return; }
       toast.success(payload.kanban_column === 'acompanhamento' && editingTask.kanban_column === 'agendamentos'
@@ -579,6 +591,14 @@ export default function ContentKanban() {
         await supabase.from('scripts').update({ recorded: true } as any).eq('id', formScriptId);
       }
     } else {
+      // Card novo de editor/videomaker fora da coluna em que o diálogo abriu: mesmas regras do arrastar
+      if (isRestricted && payload.kanban_column !== dialogInitialColumn) {
+        const transitionError = validateKanbanTransition(
+          { ...payload, kanban_column: dialogInitialColumn } as ContentTask,
+          payload.kanban_column
+        );
+        if (transitionError) { toast.error(transitionError); return; }
+      }
       payload.created_by = user?.id || null;
       payload.position = tasksByColumn[formColumn]?.length || 0;
       const { data: inserted, error } = await supabase.from('content_tasks').insert(payload).select().single();
@@ -1338,7 +1358,11 @@ export default function ContentKanban() {
                 <Select value={formColumn} onValueChange={v => setFormColumn(v as KanbanColumnId)}>
                   <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {visibleColumns.map(c => (
+                    {/* Editor/videomaker só escolhem as colunas em que atuam (mais a de origem) */}
+                    {(isRestricted
+                      ? visibleColumns.filter(c => interactiveColumns.includes(c.id) || c.id === (editingTask?.kanban_column ?? dialogInitialColumn))
+                      : visibleColumns
+                    ).map(c => (
                       <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
                     ))}
                   </SelectContent>

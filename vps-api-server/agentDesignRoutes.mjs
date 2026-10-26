@@ -713,14 +713,14 @@ export function registerAgentDesignRoutes(app, { pool, uploadRoot, verifyUser, i
             WHERE id = $1`,
           [task.id, attachmentUrlsIsJson ? JSON.stringify(urls) : urls, urls[0], editableUrl, agent.userId, version]
         );
-        await addHistory(db, task.id, agent.userId, `Arte entregue pelo agente (v${version}) → Análise IA`,
+        await addHistory(db, task.id, agent.userId, `Arte entregue pelo agente (v${version}) → Pré-análise`,
           [`${urls.length} arquivo(s)${editableUrl ? ' + editável' : ''}`, note, warnings.length ? `Avisos: ${warnings.join(' ')}` : null].filter(Boolean).join(' · '),
           urls[0]);
         await db.query('COMMIT');
         await setActivity(agent.userId, `🎨 entregou "${task.title}" (v${version})`);
         const reviewers = await activeAgentsByRole('revisor_arte');
         await messageAgents(agent.userId, reviewers.map((r) => r.user_id),
-          `Arte ${task.id.slice(0, 8)} "${task.title}" (v${version}) entregue por ${String(agent.name || '').trim()} e aguardando a Análise IA. Rode \`pulse arte analise\`.`);
+          `Arte ${task.id.slice(0, 8)} "${task.title}" (v${version}) entregue por ${String(agent.name || '').trim()} e aguardando a Pré-análise. Rode \`pulse arte analise\`.`);
         res.json({ ok: true, version, column: 'analise_ia', files: urls, editable_url: editableUrl, warnings });
       } catch (error) {
         await db.query('ROLLBACK').catch(() => {});
@@ -786,7 +786,7 @@ export function registerAgentDesignRoutes(app, { pool, uploadRoot, verifyUser, i
       await db.query('BEGIN');
       const { rows } = await db.query('SELECT * FROM design_tasks WHERE id = $1 FOR UPDATE', [taskId]);
       task = rows[0];
-      if (task.kanban_column !== 'analise_ia') throw httpError(409, `A arte está em "${task.kanban_column}", não em Análise IA`);
+      if (task.kanban_column !== 'analise_ia') throw httpError(409, `A arte está em "${task.kanban_column}", não na Pré-análise`);
       const designerId = task.designed_by || task.assigned_to || null;
       const { rows: rv } = await db.query(
         `INSERT INTO design_reviews (task_id, client_id, version, reviewer_id, designer_id, verdict, notes, error_count, city)
@@ -808,7 +808,7 @@ export function registerAgentDesignRoutes(app, { pool, uploadRoot, verifyUser, i
             WHERE id = $1`,
           [task.id]
         );
-        await addHistory(db, task.id, agent.userId, 'Aprovada na Análise IA → revisão da equipe',
+        await addHistory(db, task.id, agent.userId, 'Aprovada na Pré-análise → revisão da equipe',
           [notes, errorLines ? `Observações:\n${errorLines}` : null].filter(Boolean).join('\n') || null);
       } else {
         const text = [notes, errorLines].filter(Boolean).join('\n\n');
@@ -816,10 +816,10 @@ export function registerAgentDesignRoutes(app, { pool, uploadRoot, verifyUser, i
           `UPDATE design_tasks SET kanban_column = 'ajustes', observations = $2,
                   assigned_to = COALESCE(designed_by, assigned_to), agent_step = NULL, agent_heartbeat_at = NULL, updated_at = now()
             WHERE id = $1`,
-          [task.id, `🤖 Análise IA (v${Number(task.version) || 1}):\n${text}`]
+          [task.id, `Pré-análise (v${Number(task.version) || 1}):\n${text}`]
         );
         // "Ajustes solicitados" = mesma ação do front: aparece no "Histórico de Ajustes" do card
-        await addHistory(db, task.id, agent.userId, 'Ajustes solicitados', `🤖 Análise IA (v${Number(task.version) || 1}):\n${text}`);
+        await addHistory(db, task.id, agent.userId, 'Ajustes solicitados', `Pré-análise (v${Number(task.version) || 1}):\n${text}`);
       }
       await db.query('COMMIT');
     } catch (error) {
@@ -833,9 +833,9 @@ export function registerAgentDesignRoutes(app, { pool, uploadRoot, verifyUser, i
     const designerId = task.designed_by || task.assigned_to || null;
     if (verdict === 'aprovado') {
       await pool.query(`SELECT notify_role('social_media'::app_role, $1, $2, 'design', '/designer')`,
-        ['Arte para revisão', `"${task.title}" passou na Análise IA e está em Em Análise`]).catch(() => {});
+        ['Arte para revisão', `"${task.title}" passou na Pré-análise e está em Em Análise`]).catch(() => {});
       if (designerId) {
-        await messageAgents(agent.userId, [designerId], `✅ Arte ${task.id.slice(0, 8)} "${task.title}" aprovada na Análise IA; foi para a revisão da equipe.${notes ? ` Nota: ${notes}` : ''}`);
+        await messageAgents(agent.userId, [designerId], `✅ Arte ${task.id.slice(0, 8)} "${task.title}" aprovada na Pré-análise; foi para a revisão da equipe.${notes ? ` Nota: ${notes}` : ''}`);
       }
     } else if (designerId) {
       await messageAgents(agent.userId, [designerId],
@@ -972,7 +972,7 @@ export function registerAgentDesignRoutes(app, { pool, uploadRoot, verifyUser, i
 
   const CHEFE_MOVABLE = {
     nova_tarefa: 'Nova Tarefa', fila_baixa_prioridade: 'Fila Baixa Prioridade', ajustes: 'Ajustes Solicitados',
-    analise_ia: 'Análise IA', em_analise: 'Em Análise (equipe)',
+    analise_ia: 'Pré-análise', em_analise: 'Em Análise (equipe)',
   };
   app.post('/api/agent/design/tasks/:id/move', async (req, res) => {
     try {

@@ -6225,7 +6225,8 @@ app.post('/api/portal-actions', async (req, res) => {
                 created_at, completed_at, client_approved_at,
                 CASE WHEN internal_ai THEN NULL ELSE observations END AS observations
          FROM (SELECT dt.*, (dt.kanban_column = 'analise_ia'
-                 OR (dt.kanban_column = 'ajustes' AND COALESCE(dt.observations, '') LIKE '🤖 Análise IA%')) AS internal_ai
+                 OR (dt.kanban_column = 'ajustes' AND (COALESCE(dt.observations, '') LIKE '🤖 Análise IA%'
+                     OR COALESCE(dt.observations, '') LIKE 'Pré-análise (v%'))) AS internal_ai
                  FROM design_tasks dt WHERE dt.client_id = $1) x
          ORDER BY created_at DESC`,
         [client_id]
@@ -11489,13 +11490,14 @@ app.post('/api/db/query', async (req, res) => {
           // Um roteiro novo (card em "ideias" com script_id) ocupa a vaga gerada pela demanda
           // semanal da Copy (mesmo cliente + tipo, sem script e sem gravação) em vez de criar
           // outro card. Evita cópias fantasmas na Zona de Ideias.
-          // Só vale para os placeholders automáticos (descrição "🤖 Gerado automaticamente" /
+          // Só vale para os placeholders automáticos (descrição "⚙️/🤖 Gerado automaticamente" /
           // "🎯 Gerado manualmente"). Antes qualquer insert (ideia manual, divisão de otimização,
           // story, gravação finalizada) sobrescrevia a ideia mais antiga do cliente, e os N
           // placeholders da Copy viravam 1. Insert com id próprio também não reaproveita:
           // quem manda o id usa ele logo depois (entregas, portal).
           const isCopyPlaceholder = (description) => typeof description === 'string'
-            && (description.startsWith('🤖 Gerado automaticamente') || description.startsWith('🎯 Gerado manualmente'));
+            && (description.startsWith('🤖 Gerado automaticamente') || description.startsWith('⚙️ Gerado automaticamente')
+              || description.startsWith('🎯 Gerado manualmente'));
           if (
             safeTable === 'content_tasks' &&
             itemScoped &&
@@ -11515,7 +11517,7 @@ app.post('/api/db/query', async (req, res) => {
                   AND kanban_column = 'ideias'
                   AND script_id IS NULL
                   AND recording_id IS NULL
-                  AND (description LIKE '🤖 Gerado automaticamente%' OR description LIKE '🎯 Gerado manualmente%')
+                  AND (description LIKE '🤖 Gerado automaticamente%' OR description LIKE '⚙️ Gerado automaticamente%' OR description LIKE '🎯 Gerado manualmente%')
                   ${cityClause}
                 ORDER BY created_at ASC
                 LIMIT 1

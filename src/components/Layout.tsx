@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { LanguageToggle } from '@/lib/i18n';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
@@ -26,13 +26,19 @@ import MentionsIndicator from '@/components/MentionsIndicator';
 import BirthdayOverlay from '@/components/BirthdayOverlay';
 import ClientAnniversaryAlert from '@/components/ClientAnniversaryAlert';
 
-import ProductionAssistant from '@/components/ProductionAssistant';
-import WelcomeRocket from '@/components/WelcomeRocket';
-import VirtualOffice from '@/components/VirtualOffice';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import QuickShortcutsBar from '@/components/QuickShortcutsBar';
 import CitySwitcher from '@/components/CitySwitcher';
 import { CATEGORY_TINT, CATEGORY_RGB, getTintForPath, type TintKey } from '@/lib/navTint';
 import type { Profile } from '@/hooks/useAuth';
+
+// Mascote (react-markdown), foguete de boas-vindas e escritório virtual em chunks próprios:
+// carregam junto com a página, sem pesar no chunk do menu. Se um deles falhar (chunk de
+// versão antiga), some só ele, sem derrubar a tela.
+const ProductionAssistant = lazy(() => import('@/components/ProductionAssistant'));
+const WelcomeRocket = lazy(() => import('@/components/WelcomeRocket'));
+const VirtualOffice = lazy(() => import('@/components/VirtualOffice'));
+const NO_WIDGET = <></>;
 
 type NavCategory = {
   label: string;
@@ -220,6 +226,17 @@ export function isAdminOnlyPath(pathname: string): boolean {
     }
   }
   return !!match && match.roles.length === 1 && match.roles[0] === 'admin';
+}
+
+function ContentLoader() {
+  return (
+    <div className="flex items-center justify-center py-24">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+        <p className="text-sm text-muted-foreground">Carregando...</p>
+      </div>
+    </div>
+  );
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -786,7 +803,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </button>
               </DialogTrigger>
               <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto p-0 gap-0">
-                <VirtualOffice />
+                <ErrorBoundary>
+                  <Suspense fallback={<ContentLoader />}>
+                    <VirtualOffice />
+                  </Suspense>
+                </ErrorBoundary>
               </DialogContent>
             </Dialog>
             {/* Theme toggle */}
@@ -856,15 +877,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             }}
             data-tint={getTintForPath(location.pathname)}
           >
-            {children}
+            {/* Página nova carregando: o spinner fica só no conteúdo, menu e cabeçalho continuam */}
+            <Suspense fallback={<ContentLoader />}>
+              {children}
+            </Suspense>
           </div>
         </main>
       </div>
 
 
       {/* Production Assistant Mascot */}
-      <ProductionAssistant />
-      <WelcomeRocket />
+      <ErrorBoundary fallback={NO_WIDGET}>
+        <Suspense fallback={null}><ProductionAssistant /></Suspense>
+      </ErrorBoundary>
+      <ErrorBoundary fallback={NO_WIDGET}>
+        <Suspense fallback={null}><WelcomeRocket /></Suspense>
+      </ErrorBoundary>
       <MentionPopupListener />
       <MentionsIndicator />
     </div>

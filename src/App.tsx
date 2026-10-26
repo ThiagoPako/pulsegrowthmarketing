@@ -6,7 +6,6 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import { AppProvider, useApp } from "@/contexts/AppContext";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { CityProvider } from "@/contexts/CityContext";
-import Layout, { isAdminOnlyPath } from "@/components/Layout";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Login from "@/pages/Login";
 import PrivacyPolicy from "@/pages/legal/PrivacyPolicy";
@@ -133,6 +132,25 @@ const PromoAdmin = lazy(() => import("@/pages/promo/PromoAdmin"));
 
 
 
+// Menu, cabeçalho e widgets da equipe num chunk próprio: portal, bio link, sorteio e as
+// outras páginas públicas não baixam esse código. A regra de área só de admin usa a lista
+// do menu, então vem do mesmo módulo.
+const loadLayoutModule = () => import("@/components/Layout");
+const Layout = lazy(loadLayoutModule);
+const AdminAreaGuard = lazy(() =>
+  loadLayoutModule().then(({ isAdminOnlyPath }) => ({
+    default: function AdminAreaGuard({ enforce, pathname, children }: { enforce: boolean; pathname: string; children: React.ReactNode }) {
+      if (enforce && isAdminOnlyPath(pathname)) return <Navigate to="/dashboard" replace />;
+      return <>{children}</>;
+    },
+  })),
+);
+/** Com sessão, a Layout começa a baixar junto com a checagem do login. */
+function prefetchLayout() {
+  loadLayoutModule().catch(() => { /* o lazy mostra o erro se a tela precisar dela */ });
+}
+if (typeof window !== 'undefined' && localStorage.getItem('pulse_jwt')) prefetchLayout();
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -221,16 +239,16 @@ function ProtectedRoute({
     return <Navigate to={META_REVIEWER_HOME} replace />;
   }
 
-  // Área só de admin no menu (financeiro, agentes...): digitar o endereço não abre a tela.
-  if (currentUser && !roles.includes('admin') && isAdminOnlyPath(location.pathname)) {
-    return <Navigate to="/dashboard" replace />;
-  }
   if (currentUser && allowedRoles && !allowedRoles.some(r => (roles as string[]).includes(r))) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  if (noLayout) return <>{children}</>;
-  return <Layout>{children}</Layout>;
+  // Área só de admin no menu (financeiro, agentes...): digitar o endereço não abre a tela.
+  return (
+    <AdminAreaGuard enforce={!!currentUser && !roles.includes('admin')} pathname={location.pathname}>
+      {noLayout ? <>{children}</> : <Layout>{children}</Layout>}
+    </AdminAreaGuard>
+  );
 }
 
 function AppRoutes() {
@@ -241,6 +259,9 @@ function AppRoutes() {
     : currentUser
       ? [currentUser.role]
       : [];
+
+  // Login feito nesta aba: a Layout já vai baixando enquanto o perfil carrega.
+  useEffect(() => { if (user) prefetchLayout(); }, [user]);
 
   if (loading) return <PageLoader />;
 

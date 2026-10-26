@@ -72,6 +72,13 @@ export default defineConfig(({ mode }) => ({
         entryFileNames: "assets/[name]-[hash].js",
         chunkFileNames: "assets/[name]-[hash].js",
         assetFileNames: "assets/[name]-[hash][extname]",
+        // React e o roteador quase nunca mudam: num chunk próprio, o navegador reaproveita
+        // o arquivo entre deploys (só o código do sistema é baixado de novo).
+        manualChunks(id) {
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom|@remix-run[\\/]router)[\\/]/.test(id)) {
+            return "vendor-react";
+          }
+        },
       },
     },
   },

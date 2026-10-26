@@ -25,13 +25,13 @@ export function StoryLinkPreview({ item, buttonText, className }: {
   item: Props['item']; buttonText: string; className?: string;
 }) {
   return (
-    <div className={cn('relative aspect-[9/16] w-24 shrink-0 overflow-hidden rounded-xl border border-border bg-muted shadow-sm', className)}>
+    <div className={cn('relative aspect-[9/16] w-28 shrink-0 overflow-hidden rounded-xl border border-border bg-muted shadow-sm', className)}>
       <MaterialThumb item={item} videoFrame className="absolute inset-0 h-full w-full rounded-none" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/45 to-transparent" />
       <div className="absolute inset-x-1.5 bottom-[12%] flex justify-center">
-        <span className="inline-flex max-w-full items-center gap-1 truncate rounded-md bg-white px-1.5 py-1 text-[8px] font-bold uppercase tracking-wide text-sky-600 shadow-md">
+        <span className="inline-flex max-w-full items-center gap-1 rounded-md bg-white px-1.5 py-1 text-center text-[8px] font-bold uppercase leading-tight tracking-wide text-sky-600 shadow-md">
           <Link2 size={9} className="shrink-0" aria-hidden="true" />
-          <span className="truncate">{buttonText || DEFAULT_BUTTON_TEXTS[0]}</span>
+          <span className="line-clamp-2 break-words">{buttonText || DEFAULT_BUTTON_TEXTS[0]}</span>
         </span>
       </div>
     </div>

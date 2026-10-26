@@ -5,30 +5,30 @@ import {
 import type { SchedulingClient, SchedulingState, SchedulingType } from '@/lib/postingSchedule';
 
 /** Cor de cada tipo de material (borda do item, ponto da legenda e fundo da miniatura). */
-export const TYPE_STYLES: Record<SchedulingType, { label: string; icon: LucideIcon; border: string; dot: string; soft: string; text: string }> = {
+export const TYPE_STYLES: Record<SchedulingType, { label: string; icon: LucideIcon; border: string; top: string; dot: string; soft: string; text: string }> = {
   reels: {
     label: 'Reels', icon: Film,
-    border: 'border-l-blue-500', dot: 'bg-blue-500',
+    border: 'border-l-blue-500', top: 'border-t-blue-500', dot: 'bg-blue-500',
     soft: 'bg-blue-500/10', text: 'text-blue-700 dark:text-blue-300',
   },
   story: {
     label: 'Story', icon: CircleDashed,
-    border: 'border-l-pink-500', dot: 'bg-pink-500',
+    border: 'border-l-pink-500', top: 'border-t-pink-500', dot: 'bg-pink-500',
     soft: 'bg-pink-500/10', text: 'text-pink-700 dark:text-pink-300',
   },
   carrossel: {
     label: 'Carrossel', icon: Layers,
-    border: 'border-l-violet-500', dot: 'bg-violet-500',
+    border: 'border-l-violet-500', top: 'border-t-violet-500', dot: 'bg-violet-500',
     soft: 'bg-violet-500/10', text: 'text-violet-700 dark:text-violet-300',
   },
   arte: {
     label: 'Arte', icon: Palette,
-    border: 'border-l-amber-500', dot: 'bg-amber-500',
+    border: 'border-l-amber-500', top: 'border-t-amber-500', dot: 'bg-amber-500',
     soft: 'bg-amber-500/10', text: 'text-amber-700 dark:text-amber-300',
   },
   feed: {
     label: 'Feed', icon: Square,
-    border: 'border-l-emerald-500', dot: 'bg-emerald-500',
+    border: 'border-l-emerald-500', top: 'border-t-emerald-500', dot: 'bg-emerald-500',
     soft: 'bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-300',
   },
 };

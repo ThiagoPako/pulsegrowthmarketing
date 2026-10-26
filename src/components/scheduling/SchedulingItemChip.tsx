@@ -31,7 +31,7 @@ function PlatformIcons({ item }: { item: SchedulingItem }) {
 
 interface Props extends HTMLAttributes<HTMLDivElement> {
   item: SchedulingItem;
-  variant?: 'compact' | 'card';
+  variant?: 'compact' | 'card' | 'tile';
   dragging?: boolean;
 }
 
@@ -64,6 +64,32 @@ const SchedulingItemChip = forwardRef<HTMLDivElement, Props>(({ item, variant = 
             {item.mode === 'manual' && item.state !== 'publicado' && <span>manual</span>}
             {locked && item.state === 'publicado' && <Lock size={9} aria-hidden="true" />}
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === 'tile') {
+    return (
+      <div
+        ref={ref}
+        {...rest}
+        className={cn(
+          'group w-full min-w-0 overflow-hidden rounded-lg border border-t-4 border-border/70 bg-card text-left shadow-sm transition-shadow',
+          type.top,
+          item.ghost && 'opacity-55',
+          dragging ? 'shadow-xl ring-2 ring-primary/40' : 'hover:shadow-md',
+          className,
+        )}
+      >
+        <MaterialThumb item={item} videoFrame className="h-20 w-full rounded-none" />
+        <div className="space-y-1 p-1.5">
+          <div className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground">
+            <span className="text-xs font-bold tabular-nums text-foreground">{time}</span>
+            <PlatformIcons item={item} />
+          </div>
+          <div className={cn('line-clamp-2 text-[11px] font-semibold leading-snug text-foreground', item.ghost && 'line-through')}>{item.title}</div>
+          <StateBadge state={item.state} />
         </div>
       </div>
     );

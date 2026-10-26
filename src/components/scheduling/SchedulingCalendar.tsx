@@ -23,8 +23,10 @@ interface Props {
   onShowWeek: (day: string) => void;
 }
 
+type ChipVariant = 'compact' | 'card' | 'tile';
+
 function DraggableItem({ item, index, variant, onItemClick }: {
-  item: SchedulingItem; index: number; variant: 'compact' | 'card'; onItemClick: (item: SchedulingItem) => void;
+  item: SchedulingItem; index: number; variant: ChipVariant; onItemClick: (item: SchedulingItem) => void;
 }) {
   return (
     <Draggable draggableId={item.key} index={index} isDragDisabled={!canDrag(item)}>
@@ -48,7 +50,7 @@ function DraggableItem({ item, index, variant, onItemClick }: {
   );
 }
 
-function cloneRenderer(byKey: Map<string, SchedulingItem>, variant: 'compact' | 'card') {
+function cloneRenderer(byKey: Map<string, SchedulingItem>, variant: ChipVariant) {
   // O item arrastado vai para fora da célula (a célula corta o que passa da borda)
   return (provided: DraggableProvided, _snapshot: unknown, rubric: { draggableId: string }) => {
     const item = byKey.get(rubric.draggableId);
@@ -104,7 +106,7 @@ export default function SchedulingCalendar({
                   <DayNumber day={day} today={today} />
                 </div>
               </header>
-              <Droppable droppableId={`day:${day}`} renderClone={cloneRenderer(byKey, 'card')}>
+              <Droppable droppableId={`day:${day}`} renderClone={cloneRenderer(byKey, compact ? 'card' : 'tile')}>
                 {(provided, snapshot) => (
                   <div
                     ref={provided.innerRef}
@@ -116,7 +118,7 @@ export default function SchedulingCalendar({
                     )}
                   >
                     {list.map((item, index) => (
-                      <DraggableItem key={item.key} item={item} index={index} variant="card" onItemClick={onItemClick} />
+                      <DraggableItem key={item.key} item={item} index={index} variant={compact ? 'card' : 'tile'} onItemClick={onItemClick} />
                     ))}
                     {provided.placeholder}
                   </div>

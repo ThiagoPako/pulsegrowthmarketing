@@ -249,10 +249,11 @@ export function formatDayLabel(dateKey: string): string {
   return `${weekday} ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
 }
 
-/** "novembro de 2026" */
+/** "Novembro de 2026" */
 export function formatMonthLabel(monthKey: string): string {
   const [y, m] = monthKey.split('-').map(Number);
-  return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, 15)));
+  const label = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, 15)));
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 /** Miniatura de vídeo do Drive sem baixar o arquivo (imagem pequena gerada pelo próprio Drive). */

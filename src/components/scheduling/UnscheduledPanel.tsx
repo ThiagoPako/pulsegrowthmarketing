@@ -10,7 +10,10 @@ import { TYPE_STYLES } from './schedulingStyles';
 interface Props {
   items: SchedulingItem[];
   onPick: (item: SchedulingItem) => void;
-  /** Arrastar para o calendário (só no computador: no celular a lista fica numa aba) */
+  /**
+   * Arrastar para o calendário (só no computador: no celular a lista fica numa aba).
+   * A lista não tem rolagem própria: o arrastar só aceita um nível de rolagem (a da página).
+   */
   draggable: boolean;
   className?: string;
 }
@@ -113,7 +116,7 @@ export default function UnscheduledPanel({ items, onPick, draggable, className }
           }}
         >
           {(provided) => (
-            <div ref={provided.innerRef} {...provided.droppableProps} className="flex-1 space-y-1.5 overflow-y-auto p-2">
+            <div ref={provided.innerRef} {...provided.droppableProps} className="flex-1 space-y-1.5 p-2">
               {filtered.map((item, index) => (
                 <Draggable key={item.key} draggableId={item.key} index={index}>
                   {(drag) => (
@@ -128,7 +131,7 @@ export default function UnscheduledPanel({ items, onPick, draggable, className }
           )}
         </Droppable>
       ) : (
-        <div className="flex-1 space-y-1.5 overflow-y-auto p-2">
+        <div className="flex-1 space-y-1.5 p-2">
           {filtered.map((item) => <Row key={item.key} item={item} onPick={onPick} />)}
         </div>
       )}

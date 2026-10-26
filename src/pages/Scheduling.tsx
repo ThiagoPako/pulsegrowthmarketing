@@ -307,7 +307,7 @@ export default function Scheduling() {
             <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => step(-1)} aria-label="Anterior">
               <ChevronLeft size={16} />
             </Button>
-            <h2 className="min-w-[150px] text-center text-base font-bold capitalize text-foreground sm:min-w-[190px]">
+            <h2 className="min-w-[150px] text-center text-base font-bold text-foreground sm:min-w-[190px]">
               {view === 'month' ? formatMonthLabel(monthKey) : weekLabel(anchor)}
             </h2>
             <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => step(1)} aria-label="Próximo">
@@ -382,7 +382,7 @@ export default function Scheduling() {
               items={unscheduled}
               onPick={(item) => setDialog({ item })}
               draggable
-              className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-7rem)]"
+              className="self-start"
             />
           </div>
         )}

@@ -419,8 +419,10 @@ export function inspectMp4Container(filePath) {
 /**
  * entries: [{ url, status, igUrl?, check? }] com status:
  * 'ready' (.ig.mp4 pronta), 'original' (cumpre), 'pending' (na fila ou convertendo), 'failed' (conversão
- * falhou), 'disabled', 'unfixable' (duração), 'unknown' (sem ffprobe) ou 'external' (fora de /uploads).
+ * falhou), 'disabled', 'unavailable' (sem disco, fila cheia ou ffmpeg ausente), 'unfixable' (duração),
+ * 'unknown' (sem ffprobe) ou 'external' (fora de /uploads).
  * Com vídeo pendente e menos de maxWaitMs de atraso: espera. Depois disso vai o original, com o motivo.
+ * Desligada ou sem como converter: o original vai na hora, como antes (com as novas tentativas de sempre).
  */
 export function planPostMedia(entries, { delayMs = 0, maxWaitMs = 30 * 60_000 } = {}) {
   const pending = entries.filter((e) => e.status === 'pending');
@@ -428,7 +430,6 @@ export function planPostMedia(entries, { delayMs = 0, maxWaitMs = 30 * 60_000 } 
     return { wait: true, urls: entries.map((e) => e.url), changed: false, fallback: null, pending: pending.map((e) => e.relative || e.url) };
   }
   const urls = entries.map((e) => (e.status === 'ready' && e.igUrl ? e.igUrl : e.url));
-  // desligado (IG_VIDEO_DISABLED): o original vai como antes, com as novas tentativas de sempre
   const notReady = entries.filter((e) => ['pending', 'failed'].includes(e.status));
   let fallback = null;
   if (notReady.length) {
@@ -454,14 +455,18 @@ export function postMediaUrls(post) {
   return post?.media_url ? [post.media_url] : [];
 }
 
-/** A .ig.mp4 pronta (não mais velha que o original), ou null. */
-function readyVariantPath(localPath) {
+/**
+ * A .ig.mp4 pronta (não mais velha que o original), ou null. Com o tipo do post, só conta a que cabe no
+ * tamanho máximo dele: uma cópia de reels acima de 100 MB não serve para story (é refeita para o story).
+ */
+export function readyVariantPath(localPath, kind = null) {
   const dest = igVariantPath(localPath);
   if (!dest) return null;
   try {
     const out = fs.statSync(dest);
     const src = fs.statSync(localPath);
-    if (out.isFile() && out.size > 0 && out.mtimeMs >= src.mtimeMs - 1000) return dest;
+    const maxBytes = (kind && META_LIMITS[kind]?.maxBytes) || 0;
+    if (out.isFile() && out.size > 0 && out.mtimeMs >= src.mtimeMs - 1000 && (!maxBytes || out.size <= maxBytes)) return dest;
   } catch {}
   return null;
 }
@@ -470,11 +475,11 @@ function readyVariantPath(localPath) {
  * URL para postar (lembrete de story, "baixar para postar"...): a da .ig.mp4 quando ela existe;
  * senão o original. Só olha o disco; não põe nada na fila.
  */
-export function instagramUrlFor(url, { roots = [], allowedOrigins = DEFAULT_ORIGINS } = {}) {
+export function instagramUrlFor(url, { roots = [], allowedOrigins = DEFAULT_ORIGINS, kind = null } = {}) {
   const original = String(url || '').trim();
   const resolved = resolveUploadFile(original, typeof roots === 'function' ? roots() : roots, { allowedOrigins });
   if (!resolved || !isConvertibleVideoName(resolved.localPath)) return original;
-  if (!readyVariantPath(resolved.localPath)) return original;
+  if (!readyVariantPath(resolved.localPath, kind)) return original;
   return igVariantUrl(original) || original;
 }
 
@@ -496,6 +501,10 @@ function readSettings(env, base) {
     maxWaitMs: n(env.IG_VIDEO_MAX_WAIT_MS, 30 * 60_000),
     recheckMs: n(env.IG_VIDEO_RECHECK_MS, 30_000),
     scheduleProbeTimeoutMs: n(env.IG_VIDEO_SCHEDULE_PROBE_MS, 15_000),
+    // .ig.mp4 de post publicado sai depois disso (a Meta já baixou; o Facebook baixa depois de responder)
+    keepAfterPublishMs: n(env.IG_VIDEO_KEEP_AFTER_PUBLISH_MS, 60 * 60_000),
+    // ffmpeg/ffprobe ausente: não tenta converter nesse intervalo (o original vai na hora)
+    toolRetryMs: n(env.IG_VIDEO_TOOL_RETRY_MS, 5 * 60_000),
     ffmpeg: base.ffmpeg || 'ffmpeg',
     ffprobe: base.ffprobe || 'ffprobe',
     threads: base.threads || 1,
@@ -509,9 +518,10 @@ function readSettings(env, base) {
  * deps:
  * - pool: Postgres (posts agendados);
  * - webVideo: instância de createWebVideo (fila, fila global de ffmpeg, nice/ionice, disco);
- * - allowedOrigins: origens aceitas em URLs completas.
+ * - allowedOrigins: origens aceitas em URLs completas;
+ * - probeFile(caminho, timeoutMs): saída do ffprobe em JSON (os testes trocam; o padrão roda o ffprobe).
  */
-export function createInstagramVideo({ pool, webVideo, logger = console, env = process.env, allowedOrigins = DEFAULT_ORIGINS } = {}) {
+export function createInstagramVideo({ pool, webVideo, logger = console, env = process.env, allowedOrigins = DEFAULT_ORIGINS, probeFile = null } = {}) {
   const infra = webVideo.infra;
   const settings = readSettings(env, infra.settings || {});
   const roots = () => infra.roots().filter(Boolean);
@@ -524,6 +534,8 @@ export function createInstagramVideo({ pool, webVideo, logger = console, env = p
   let scanning = false;
   let rescan = false;
   let scanSoonTimer = null;
+  let toolDownUntil = 0; // ffmpeg/ffprobe ausente: até quando não tenta converter
+  const unavailableNoted = new Set(); // motivo já avisado no log (avisa uma vez até voltar a converter)
 
   const log = (msg) => logger.log(`[video-instagram] ${msg}`);
   const warn = (msg) => logger.warn(`[video-instagram] ${msg}`);
@@ -568,6 +580,7 @@ export function createInstagramVideo({ pool, webVideo, logger = console, env = p
   }
 
   async function probeRaw(file, timeoutMs) {
+    if (typeof probeFile === 'function') return probeFile(file, timeoutMs);
     const { out } = await runProcess(settings.ffprobe,
       ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', file], { timeoutMs });
     return JSON.parse(out || '{}');
@@ -592,17 +605,30 @@ export function createInstagramVideo({ pool, webVideo, logger = console, env = p
 
   /**
    * Situação de uma mídia para um tipo de post; põe a conversão na fila quando precisa.
-   * status: 'external' | 'ready' | 'original' | 'unfixable' | 'unknown' | 'failed' | 'disabled' | 'pending'.
+   * status: 'external' | 'ready' | 'original' | 'unfixable' | 'unknown' | 'failed' | 'disabled' |
+   * 'unavailable' (sem disco, fila cheia ou ffmpeg ausente: vai o original na hora) | 'pending'.
    */
   async function prepare(url, kind, { priority = QUEUE_PRIORITY.instagram, reason = 'instagram' } = {}) {
     const found = localVideoFor(url);
     if (!found) return { url, status: 'external' };
     const { localPath, relative } = found;
-    if (readyVariantPath(localPath)) return { url, status: 'ready', relative };
+    if (readyVariantPath(localPath, kind)) return { url, status: 'ready', relative };
+    // Conversão impossível agora: o original vai na hora, com as novas tentativas normais (avisa uma vez)
+    const unavailable = (why, message, check = null) => {
+      if (!unavailableNoted.has(why)) {
+        unavailableNoted.add(why);
+        warn(`${message}: os vídeos fora da especificação vão com o original até voltar a converter`);
+      }
+      return { url, status: 'unavailable', relative, check, why };
+    };
     let analysis;
     try {
       analysis = await analyze(localPath);
     } catch (error) {
+      if (toolUnavailable(error)) {
+        toolDownUntil = Date.now() + settings.toolRetryMs;
+        return unavailable('ffmpeg', `ffprobe indisponível (${error.message})`);
+      }
       warn(`ffprobe não leu ${relative}: ${error?.message || error}`);
       return { url, status: 'unknown', relative };
     }
@@ -618,10 +644,20 @@ export function createInstagramVideo({ pool, webVideo, logger = console, env = p
     if (decision.action === 'skip') return { url, status: 'unfixable', relative, check };
     if (failed.has(analysis.key)) return { url, status: 'failed', relative, check };
     if (settings.disabled) return { url, status: 'disabled', relative, check };
+    const key = `ig:${localPath}`;
+    if (!webVideo.taskState?.(key)) {
+      if (Date.now() < toolDownUntil) return unavailable('ffmpeg', 'ffmpeg indisponível', check);
+      const room = infra.diskHasRoom(found.root, analysis.size);
+      if (!room.ok) return unavailable('disco', `pouco espaço livre (${fmtMb(room.free)})`, check);
+    }
     const wanted = wantKind.get(localPath);
     if (!wanted || KIND_RANK[kind] > KIND_RANK[wanted]) wantKind.set(localPath, kind);
-    const state = webVideo.enqueueTask({ ...found, key: `ig:${localPath}`, priority, reason, run: runConversion });
-    if (state === 'queued') log(`na fila: ${relative} (${reason === 'urgent' ? 'post na hora de sair' : 'post agendado'}; ${check.reason})`);
+    const state = webVideo.enqueueTask({ ...found, key, priority, reason, run: runConversion });
+    if (state === 'full') return unavailable('fila', 'fila de conversão cheia', check);
+    if (state === 'queued') {
+      unavailableNoted.clear();
+      log(`na fila: ${relative} (${reason === 'urgent' ? 'post na hora de sair' : 'post agendado'}; ${check.reason})`);
+    }
     return { url, status: 'pending', relative, check, queue: state };
   }
 
@@ -667,15 +703,19 @@ export function createInstagramVideo({ pool, webVideo, logger = console, env = p
     } catch {
       return false; // apagado enquanto esperava
     }
-    if (readyVariantPath(localPath)) return false;
-    const dest = igVariantPath(localPath);
     const kind = wantKind.get(localPath) || 'reels';
+    // .ig.mp4 que já serve para o tipo mais exigente pedido; senão (ex.: cópia de reels acima de 100 MB
+    // para um story) é refeita e substitui a anterior no fim
+    if (readyVariantPath(localPath, kind)) return false;
+    const dest = igVariantPath(localPath);
     let analysis;
     try {
       analysis = await analyze(localPath);
     } catch (error) {
-      if (toolUnavailable(error)) warn(`ffprobe indisponível (${error.message}): ${relative} fica para depois`);
-      else markFailed(`${localPath}|${stat.size}|${Math.round(stat.mtimeMs)}`, relative, new Error(`ffprobe: ${error.message}`));
+      if (toolUnavailable(error)) {
+        toolDownUntil = Date.now() + settings.toolRetryMs;
+        warn(`ffprobe indisponível (${error.message}): ${relative} fica para depois`);
+      } else markFailed(`${localPath}|${stat.size}|${Math.round(stat.mtimeMs)}`, relative, new Error(`ffprobe: ${error.message}`));
       return false;
     }
     if (failed.has(analysis.key)) return false;
@@ -716,6 +756,7 @@ export function createInstagramVideo({ pool, webVideo, logger = console, env = p
       try { fs.rmSync(tmp, { force: true }); } catch {}
       if (error?.quiet) log(`descartado: ${relative} (${error.message})`);
       else if (toolUnavailable(error)) {
+        toolDownUntil = Date.now() + settings.toolRetryMs;
         infra.resetTools?.();
         warn(`ffmpeg indisponível (${error.message}): ${relative} fica para depois`);
       } else markFailed(analysis.key, relative, error);
@@ -725,7 +766,64 @@ export function createInstagramVideo({ pool, webVideo, logger = console, env = p
 
   // ── Posts agendados (tarefa periódica) ──
 
-  /** Uma passada: posts 'agendado' até daqui a 48 h (inclusive os atrasados); vídeo fora da especificação vai para a fila. */
+  /**
+   * SELECT da tarefa: posts 'agendado' que o robô publica no Instagram, de 1 dia atrás até daqui a 48 h.
+   * Fora: lembrete de story (a equipe posta pelo app; fica 'agendado' até alguém marcar "Postado") e post
+   * só do Facebook (não precisa da .ig.mp4).
+   */
+  const SCAN_SQL = `SELECT id, publish_type, media_url, media_items, scheduled_at FROM scheduled_posts
+     WHERE status = 'agendado'
+       AND scheduled_at <= now() + make_interval(hours => $1::int)
+       AND scheduled_at >= now() - interval '1 day'
+       AND story_mode IS DISTINCT FROM 'lembrete'
+       AND platform IS DISTINCT FROM 'facebook'
+     ORDER BY scheduled_at ASC LIMIT 300`;
+
+  /**
+   * .ig.mp4 de post publicado há mais de keepAfterPublishMs que nenhum outro post agendado (ou publicando)
+   * usa: a Meta já baixou o arquivo. Se outro post usar a mídia depois, a conversão é feita de novo.
+   */
+  async function cleanupPublished() {
+    const { rows } = await pool.query(
+      `SELECT id, media_url, media_items FROM scheduled_posts
+        WHERE status = 'publicado'
+          AND published_at <= now() - make_interval(secs => $1::double precision)
+          AND published_at > now() - interval '14 days'`,
+      [settings.keepAfterPublishMs / 1000]
+    );
+    let removed = 0;
+    let bytes = 0;
+    for (const post of rows) {
+      for (const url of postMediaUrls(post)) {
+        const found = localVideoFor(url);
+        if (!found) continue;
+        const ig = igVariantPath(found.localPath);
+        if (!ig || !fs.existsSync(ig) || webVideo.taskState?.(`ig:${found.localPath}`)) continue;
+        // o nome do arquivo (<timestamp>_<hex>) é único: qualquer post pendente que o cite segura a cópia
+        const name = path.basename(found.localPath);
+        const { rows: inUse } = await pool.query(
+          `SELECT 1 FROM scheduled_posts
+            WHERE id <> $1 AND status IN ('agendado', 'publicando')
+              AND (coalesce(media_url, '') LIKE $2 OR coalesce(media_items::text, '') LIKE $2)
+            LIMIT 1`,
+          [post.id, `%${name}%`]
+        );
+        if (inUse.length) continue;
+        try {
+          const size = fs.statSync(ig).size;
+          fs.unlinkSync(ig);
+          removed += 1;
+          bytes += size;
+        } catch (error) {
+          warn(`não apagou ${ig}: ${error?.message || error}`);
+        }
+      }
+    }
+    if (removed) log(`apagada(s) ${removed} .ig.mp4 de posts já publicados (${fmtMb(bytes)} liberados)`);
+    return { removed, bytes };
+  }
+
+  /** Uma passada: posts que vão para a API do Instagram nas próximas 48 h; vídeo fora da especificação vai para a fila. */
   async function scan() {
     if (settings.disabled || !pool) return { queued: 0 };
     if (scanning) {
@@ -735,12 +833,7 @@ export function createInstagramVideo({ pool, webVideo, logger = console, env = p
     scanning = true;
     const counts = { videos: 0, pending: 0, ready: 0, original: 0, other: 0 };
     try {
-      const { rows } = await pool.query(
-        `SELECT id, publish_type, media_url, media_items, scheduled_at FROM scheduled_posts
-          WHERE status = 'agendado' AND scheduled_at <= now() + make_interval(hours => $1::int)
-          ORDER BY scheduled_at ASC LIMIT 300`,
-        [Math.ceil(settings.horizonHours)]
-      );
+      const { rows } = await pool.query(SCAN_SQL, [Math.ceil(settings.horizonHours)]);
       const soonMs = settings.soonHours * 3_600_000;
       for (const post of rows) {
         const kind = metaKindFor(post.publish_type);
@@ -758,7 +851,13 @@ export function createInstagramVideo({ pool, webVideo, logger = console, env = p
       if (counts.videos) {
         log(`posts das próximas ${settings.horizonHours} h: ${counts.videos} vídeo(s); ${counts.pending} na fila, ${counts.ready} prontos, ${counts.original} já cumprem`);
       }
-      return { queued: counts.pending, ...counts };
+      let cleaned = { removed: 0, bytes: 0 };
+      try {
+        cleaned = await cleanupPublished();
+      } catch (error) {
+        warn(`limpeza das .ig.mp4 publicadas falhou: ${error?.message || error}`);
+      }
+      return { queued: counts.pending, ...counts, cleaned };
     } catch (error) {
       warn(`tarefa dos posts agendados falhou: ${error?.message || error}`);
       return { queued: 0, error: error?.message };
@@ -872,7 +971,7 @@ export function createInstagramVideo({ pool, webVideo, logger = console, env = p
     deferPost,
     deferredPostIds,
     durationProblem,
-    instagramUrlFor: (url) => instagramUrlFor(url, { roots, allowedOrigins }),
+    instagramUrlFor: (url, kind = null) => instagramUrlFor(url, { roots, allowedOrigins, kind }),
     status: () => ({ failed: failed.size, deferred: deferred.size, analyses: analyses.size }),
   };
 }

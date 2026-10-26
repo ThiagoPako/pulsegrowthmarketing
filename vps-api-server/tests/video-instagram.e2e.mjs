@@ -6,11 +6,14 @@
 // Postgres de teste e um UPLOAD_ROOT temporário, e confere:
 // - post na hora sem a .ig.mp4 pronta: adiado sem erro e publicado depois com a .ig.mp4;
 // - 30 min de atraso: vai o original e, com a Meta recusando, o post fica 'erro' com o motivo;
-// - story de 70 s e reels de 2 s recusados ao agendar;
+// - story de 70 s e reels de 2 s recusados ao agendar (só quando o robô publica no Instagram: lembrete de
+//   story e post só do Facebook não passam pelos limites da API);
+// - post só do Facebook: original na hora, sem esperar a versão Instagram; varredura sem lembrete nem Facebook;
 // - reels com original de 40 Mbps: a tarefa gera a .ig.mp4 dentro da especificação e o robô usa a .ig.mp4;
 // - original que cumpre: vai o original e nada é convertido;
 // - a fila da versão leve e a da versão Instagram não se misturam; uma conversão por vez;
-// - limpeza diária, DELETE do upload e auditoria de órfãos apagam a .ig.mp4 junto com o original.
+// - limpeza diária, DELETE do upload e auditoria de órfãos apagam a .ig.mp4 junto com o original;
+// - .ig.mp4 de post publicado (há mais de 1 h) sai quando nenhum outro post pendente usa a mídia.
 //
 // Uso (do diretório vps-api-server):
 //   TEST_DATABASE_URL=postgres://postgres:teste@localhost:55432/pulse_videoig node tests/video-instagram.e2e.mjs
@@ -28,6 +31,7 @@ import pg from 'pg';
 import jwt from 'jsonwebtoken';
 import { mp4HasFaststart, webVariantPath, igVariantPath, igVariantUrl } from '../lib/webVideo.mjs';
 import { checkMetaSpec, inspectMp4Container } from '../lib/instagramVideo.mjs';
+import { brtParts } from '../lib/postingTime.mjs';
 
 const API_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DB_NAME = 'pulse_videoig';
@@ -51,6 +55,8 @@ const ids = {
   admin: '00000000-0000-0000-0000-0000000e1001',
   client: '00000000-0000-0000-0000-0000000e1101',
   task: '00000000-0000-0000-0000-0000000e1201',
+  storyLong: '00000000-0000-0000-0000-0000000e1202', // story de 70 s em lembrete
+  storyHeavy: '00000000-0000-0000-0000-0000000e1203', // story pesado em lembrete (não converte)
 };
 
 // ── Banco ──────────────────────────────────────────────────────
@@ -146,6 +152,11 @@ const late = place(src.heavy, folder(2), '.mp4'); // 30 min de atraso: vai o ori
 const story70 = place(src.story70, folder(3), '.mp4');
 const short = place(src.short, folder(4), '.mp4');
 const compliant = place(src.compliant, folder(5), '.mp4');
+const lembreteLong = place(src.story70, folder(6), '.mp4');
+const lembreteHeavy = place(src.heavy, folder(7), '.mp4');
+const fbStory = place(src.story70, folder(8), '.mp4');
+const fbHeavy = place(src.heavy, folder(9), '.mp4');
+const fbHevc = place(src.hevc, `content/${ids.client}/facebook`, '.mov');
 // versões de edição com a .ig.mp4 ao lado: a limpeza diária apaga a versão 1 e a .ig.mp4 dela
 const versions = [1, 2, 3].map(() => place(src.short, `content/${ids.client}/${ids.task}`, '.mp4', 3));
 for (const v of versions) fs.copyFileSync(src.short, v.ig);
@@ -157,12 +168,17 @@ fs.mkdirSync(path.dirname(orphanIg), { recursive: true });
 fs.copyFileSync(src.short, orphanIg);
 
 const USERS = [ids.admin];
+const TASKS = [ids.task, ids.storyLong, ids.storyHeavy];
 await pool.query(`DELETE FROM scheduled_posts WHERE client_id = $1`, [ids.client]);
+await pool.query(`DELETE FROM social_media_deliveries WHERE client_id = $1`, [ids.client]).catch(() => {});
+await pool.query(`DELETE FROM task_history WHERE task_id = ANY($1)`, [TASKS]).catch(() => {});
+await pool.query(`DELETE FROM client_portal_notifications WHERE client_id = $1`, [ids.client]).catch(() => {});
+await pool.query(`DELETE FROM module_access WHERE user_id = $1`, [ids.admin]).catch(() => {});
 // Banco de teste: posts agendados de outras suítes não disputam a vez do robô com os deste teste
 await pool.query(`UPDATE scheduled_posts SET status = 'cancelado' WHERE status IN ('agendado', 'publicando')`);
 await pool.query(`DELETE FROM social_accounts WHERE client_id = $1`, [ids.client]);
 await pool.query(`DELETE FROM edit_versions WHERE task_id = $1`, [ids.task]).catch(() => {});
-await pool.query(`DELETE FROM content_tasks WHERE id = $1`, [ids.task]);
+await pool.query(`DELETE FROM content_tasks WHERE id = ANY($1)`, [TASKS]);
 await pool.query(`DELETE FROM clients WHERE id = $1`, [ids.client]);
 await pool.query(`DELETE FROM user_roles WHERE user_id = ANY($1)`, [USERS]);
 await pool.query(`DELETE FROM profiles WHERE id = ANY($1)`, [USERS]);
@@ -173,6 +189,18 @@ await pool.query(
   `INSERT INTO social_accounts (client_id, platform, account_name, username, instagram_business_id, access_token, status, api_base)
    VALUES ($1, 'instagram', 'Perfil Teste', 'perfil.teste', 'ig-teste-1', 'token-falso', 'connected', 'facebook')`,
   [ids.client]
+);
+await pool.query(
+  `INSERT INTO social_accounts (client_id, platform, account_name, username, facebook_page_id, access_token, status, api_base)
+   VALUES ($1, 'facebook', 'Página Teste', 'pagina.teste', 'pagina-teste-1', 'token-falso', 'connected', 'facebook')`,
+  [ids.client]
+);
+// stories aprovados no kanban de conteúdo, para agendar em lembrete pelo módulo Agendamentos
+await pool.query(
+  `INSERT INTO content_tasks (id, client_id, title, content_type, kanban_column, edited_video_link, approved_at) VALUES
+     ($1, $3, 'Story de 70 s', 'story', 'agendamentos', $4, now() - interval '1 day'),
+     ($2, $3, 'Story pesado', 'story', 'agendamentos', $5, now() - interval '1 day')`,
+  [ids.storyLong, ids.storyHeavy, ids.client, lembreteLong.url, lembreteHeavy.url]
 );
 await pool.query(
   `INSERT INTO content_tasks (id, client_id, title, content_type, kanban_column, edited_video_link, created_at, updated_at)
@@ -226,16 +254,21 @@ async function waitFor(fn, label, timeout = 120_000) {
     await sleep(300);
   }
 }
+// Agendamentos (módulo com Pulse Plus): a tabela module_access nasce na subida
+await waitFor(async () => (await pool.query(`SELECT to_regclass('public.module_access') AS t, to_regclass('public.story_series') AS s`)).rows
+  .every((r) => r.t && r.s), 'esquema dos Agendamentos', 60_000);
+await pool.query(`INSERT INTO module_access (module, user_id, created_by) VALUES ('pulse_plus', $1, 'teste') ON CONFLICT DO NOTHING`, [ids.admin]);
 const igLines = () => serverLog.split('\n').filter((l) => l.includes('[video-instagram]'));
 const webLines = () => serverLog.split('\n').filter((l) => l.includes('[video-leve]'));
 const metaCalls = () => (fs.existsSync(META_LOG) ? fs.readFileSync(META_LOG, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
 const containers = (marker) => metaCalls().filter((c) => c.kind === 'meta' && c.method === 'POST' && c.path.endsWith('/media') && String(c.params.caption || '').includes(marker));
+const fbVideos = (marker) => metaCalls().filter((c) => c.kind === 'meta' && c.method === 'POST' && c.path.endsWith('/videos') && String(c.params.description || '').includes(marker));
 const postRow = async (id) => (await pool.query(`SELECT * FROM scheduled_posts WHERE id = $1`, [id])).rows[0];
-async function insertPost({ url, caption, minutesAgo, type = 'reels' }) {
+async function insertPost({ url, caption, minutesAgo, type = 'reels', platform = 'instagram' }) {
   const { rows: [row] } = await pool.query(
     `INSERT INTO scheduled_posts (client_id, platform, publish_type, media_url, caption, scheduled_at)
-     VALUES ($1, 'instagram', $2, $3, $4, now() - make_interval(mins => $5::int)) RETURNING id`,
-    [ids.client, type, url, caption, minutesAgo]
+     VALUES ($1, $6, $2, $3, $4, now() - make_interval(mins => $5::int)) RETURNING id`,
+    [ids.client, type, url, caption, minutesAgo, platform]
   );
   return row.id;
 }
@@ -248,6 +281,28 @@ async function schedule(body) {
     body: JSON.stringify({ client_id: ids.client, platform: 'instagram', scheduled_at: new Date(Date.now() + 3_600_000).toISOString(), ...body }),
   });
   return { status: res.status, body: await res.json() };
+}
+// Agendamentos (scheduling.mjs): agenda um story do kanban de conteúdo para amanhã às 09:00 (Brasília)
+const tomorrow = (() => { const d = new Date(`${brtParts(new Date()).date}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })();
+async function scheduleStory(taskId, storyMode) {
+  const res = await fetch(`${BASE}/scheduling/schedule`, {
+    method: 'POST', headers: { ...asTeam, 'Content-Type': 'application/json', 'x-pulse-city': 'minacu' },
+    body: JSON.stringify({
+      client_id: ids.client, kind: 'conteudo', id: taskId, date: tomorrow, time: '09:00', mode: 'auto',
+      platform: 'instagram', publish_type: 'stories', story_mode: storyMode,
+      ...(storyMode === 'lembrete' ? { story_link: 'https://wa.me/5562999990000', story_link_text: 'Fale conosco' } : {}),
+    }),
+  });
+  return { status: res.status, body: await res.json().catch(() => null) };
+}
+const scanLogs = () => igLines().filter((l) => l.includes('posts das próximas')).length;
+/** A varredura roda logo depois de um agendamento pela API: agenda um reels e cancela. */
+async function runScan() {
+  const before = scanLogs();
+  const res = await schedule({ publish_type: 'reels', media_url: compliant.url, caption: 'só para a varredura' });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  await waitFor(() => scanLogs() > before, 'varredura', 30_000);
+  await pool.query(`UPDATE scheduled_posts SET status = 'cancelado' WHERE id = $1`, [res.body.post.id]);
 }
 async function upload(file, uploadFolder) {
   const form = new FormData();
@@ -266,6 +321,7 @@ const heavy = await upload(src.heavy, `content/${ids.client}/upload-pesado`);
 assert.ok(heavy.url.startsWith(`${PUBLIC}/content/`), heavy.url);
 const deferredId = await insertPost({ url: hevc.url, caption: 'Post na hora #post-adiado', minutesAgo: 1 });
 const lateId = await insertPost({ url: late.url, caption: 'Post atrasado #post-atrasado #recusa-original', minutesAgo: 31 });
+const fbPostId = await insertPost({ url: fbHevc.url, caption: 'Só Facebook #post-facebook', minutesAgo: 1, type: 'feed', platform: 'facebook' });
 await waitFor(() => igLines().some((l) => l.includes(`post ${deferredId} adiado`)), 'post adiado', 60_000);
 let row = await postRow(deferredId);
 assert.ok(['agendado', 'publicando'].includes(row.status), `adiado continua agendado (${row.status})`);
@@ -296,6 +352,17 @@ assert.equal(sent.length, 1);
 assert.equal(sent[0].params.video_url, late.url, 'foi o original');
 ok(`30 min de atraso: foi o original e, com a Meta recusando, ficou 'erro': "${row.last_error.slice(0, 110)}…"`);
 
+// ── 2b. Post só do Facebook: vai o original na hora, sem esperar a versão Instagram ──
+row = await waitFor(async () => { const r = await postRow(fbPostId); return r.status === 'publicado' ? r : null; }, 'post só do Facebook publicado', 60_000);
+assert.equal(row.attempts, 1);
+assert.equal(row.last_error, null);
+const fbSent = fbVideos('#post-facebook');
+assert.equal(fbSent.length, 1);
+assert.equal(fbSent[0].params.file_url, fbHevc.url, 'o Facebook recebeu o original');
+assert.ok(!igLines().some((l) => l.includes(fbPostId) || l.includes(fbHevc.rel)), 'nada de versão Instagram nem adiamento');
+assert.equal(fs.existsSync(fbHevc.ig), false);
+ok('post só do Facebook: foi o original na hora, sem adiar nem converter');
+
 // ── 3. Validação ao agendar: story de 70 s e reels de 2 s ──
 let r = await schedule({ publish_type: 'stories', media_url: story70.url });
 assert.equal(r.status, 400, JSON.stringify(r.body));
@@ -307,7 +374,30 @@ r = await schedule({ publish_type: 'reels', media_url: story70.url, caption: 're
 assert.equal(r.status, 200, JSON.stringify(r.body));
 await pool.query(`UPDATE scheduled_posts SET status = 'cancelado' WHERE id = $1`, [r.body.post.id]);
 assert.equal((await pool.query(`SELECT count(*)::int AS n FROM scheduled_posts WHERE client_id = $1 AND media_url = ANY($2)`, [ids.client, [short.url]])).rows[0].n, 0);
-ok('ao agendar: story de 70 s e reels de 2 s recusados com mensagem clara; reels de 70 s aceito');
+// só o que o robô publica no Instagram passa pelos limites da API
+r = await schedule({ publish_type: 'stories', media_url: story70.url, platform: 'both' });
+assert.equal(r.status, 400, 'com Instagram e Facebook vale o limite do Instagram');
+r = await schedule({ publish_type: 'stories', media_url: fbStory.url, platform: 'facebook' });
+assert.equal(r.status, 200, `story de 70 s só no Facebook: ${JSON.stringify(r.body)}`);
+const fbStoryPostId = r.body.post.id;
+r = await schedule({ publish_type: 'feed', media_url: short.url, platform: 'facebook', caption: 'feed de 2 s no Facebook' });
+assert.equal(r.status, 200, `feed de 2 s só no Facebook: ${JSON.stringify(r.body)}`);
+await pool.query(`UPDATE scheduled_posts SET status = 'cancelado' WHERE id = ANY($1::uuid[])`, [[fbStoryPostId, r.body.post.id]]);
+r = await schedule({ publish_type: 'feed', media_url: fbHeavy.url, platform: 'facebook', caption: 'feed pesado no Facebook' });
+assert.equal(r.status, 200, JSON.stringify(r.body));
+const fbHeavyPostId = r.body.post.id;
+r = await scheduleStory(ids.storyLong, 'auto');
+assert.equal(r.status, 400, `story de 70 s para o robô publicar: ${JSON.stringify(r.body)}`);
+assert.match(String(r.body?.error), /Story em vídeo aceita no máximo 60 s/);
+r = await scheduleStory(ids.storyLong, 'lembrete');
+assert.equal(r.status, 200, `story de 70 s em lembrete: ${JSON.stringify(r.body)}`);
+r = await scheduleStory(ids.storyHeavy, 'lembrete');
+assert.equal(r.status, 200, JSON.stringify(r.body));
+const { rows: lembretes } = await pool.query(
+  `SELECT media_url, story_mode FROM scheduled_posts WHERE content_task_id = ANY($1) AND status = 'agendado'`, [[ids.storyLong, ids.storyHeavy]]
+);
+assert.deepEqual(lembretes.map((l) => l.story_mode), ['lembrete', 'lembrete']);
+ok('ao agendar: story de 70 s e reels de 2 s recusados com mensagem clara; reels de 70 s aceito; lembrete e só Facebook sem o limite da API');
 
 // ── 4. Reels com original de 40 Mbps: a tarefa gera a .ig.mp4 dentro da especificação ──
 r = await schedule({ publish_type: 'reels', media_url: heavy.url, caption: 'Reels pesado #post-pesado' });
@@ -380,6 +470,28 @@ for (const line of serverLog.split('\n').filter((l) => /\[video-(leve|instagram)
 assert.equal(maxActive, 1, 'nunca duas conversões ao mesmo tempo');
 ok('filas: a .ig.mp4 não entra na versão leve, a .web.mp4 não entra na versão Instagram; uma conversão por vez');
 
+// ── 7b. Varredura: lembrete de story e post só do Facebook não são convertidos ──
+await runScan();
+for (const f of [lembreteHeavy, fbHeavy, lembreteLong]) {
+  assert.equal(fs.existsSync(f.ig), false, `sem .ig.mp4 para ${f.rel}`);
+  assert.ok(!igLines().some((l) => l.includes(f.rel)), `${f.rel} não passa pela versão Instagram`);
+}
+await pool.query(`UPDATE scheduled_posts SET status = 'cancelado' WHERE id = $1`, [fbHeavyPostId]);
+ok('varredura: lembrete de story (mesmo pesado) e post só do Facebook ficam de fora');
+
+// ── 7c. Depois de publicado: a .ig.mp4 sai quando nenhum outro post pendente usa a mídia ──
+const otherId = await insertPost({ url: heavy.url, caption: 'outro post com o mesmo vídeo', minutesAgo: -120 });
+await pool.query(`UPDATE scheduled_posts SET published_at = now() - interval '2 hours' WHERE id = $1`, [heavyPostId]);
+await runScan();
+assert.ok(fs.existsSync(heavy.ig), 'outro post agendado usa a mídia: a .ig.mp4 fica');
+await pool.query(`UPDATE scheduled_posts SET status = 'cancelado' WHERE id = $1`, [otherId]);
+await runScan();
+await waitFor(() => !fs.existsSync(heavy.ig), '.ig.mp4 do post publicado apagada', 20_000);
+assert.ok(igLines().some((l) => /apagada\(s\) 1 \.ig\.mp4 de posts já publicados/.test(l)));
+assert.ok(fs.existsSync(heavy.full) && fs.existsSync(heavy.web), 'o original e a versão leve ficam');
+assert.ok(fs.existsSync(hevc.ig), 'post publicado há menos de 1 h: a .ig.mp4 fica');
+ok('depois de publicado (1 h): a .ig.mp4 sai quando nenhum post pendente usa a mídia; com outro post agendado ela fica');
+
 // ── 8. Limpeza: diária, DELETE do upload e auditoria de órfãos ──
 await waitFor(async () => (await pool.query(`SELECT 1 FROM pulse_job_runs WHERE job = 'limpeza_versoes_video_v2' AND result IS NOT NULL`)).rowCount, 'limpeza diária', 60_000);
 assert.equal(fs.existsSync(versions[0].full), false, 'versão 1 apagada');
@@ -405,12 +517,16 @@ assert.equal(res.status, 200);
 assert.equal(fs.existsSync(unused.full), false);
 assert.equal(fs.existsSync(unused.ig), false, 'apagar o original pela auditoria leva a .ig.mp4 junto');
 
-res = await fetch(`${BASE}/upload`, { method: 'DELETE', headers: { ...asTeam, 'Content-Type': 'application/json' }, body: JSON.stringify({ path: `/uploads/${heavy.rel}` }) });
+const deleteUpload = (rel) => fetch(`${BASE}/upload`, { method: 'DELETE', headers: { ...asTeam, 'Content-Type': 'application/json' }, body: JSON.stringify({ path: `/uploads/${rel}` }) });
+res = await deleteUpload(heavy.rel);
 assert.equal(res.status, 200, await res.text());
 assert.equal(fs.existsSync(heavy.full), false);
-assert.equal(fs.existsSync(heavy.ig), false, 'DELETE leva a .ig.mp4 junto');
-assert.equal(fs.existsSync(heavy.web), false, 'e a .web.mp4');
-assert.ok(fs.existsSync(hevc.ig), 'a .ig.mp4 de outro original fica');
+assert.equal(fs.existsSync(heavy.web), false, 'DELETE leva a .web.mp4 junto');
+res = await deleteUpload(hevc.rel);
+assert.equal(res.status, 200, await res.text());
+assert.equal(fs.existsSync(hevc.full), false);
+assert.equal(fs.existsSync(hevc.ig), false, 'DELETE leva a .ig.mp4 junto');
+assert.ok(fs.existsSync(late.ig), 'a .ig.mp4 de outro original fica');
 assert.equal(fs.readdirSync(path.join(UPLOAD_ROOT, '.web-tmp')).length, 0, 'sem temporário largado');
 ok('limpeza diária, DELETE do upload e auditoria de órfãos apagam a .ig.mp4 junto com o original; com o original no lugar ela fica');
 
@@ -419,6 +535,8 @@ assert.ok(metaCalls().every((c) => c.kind === 'media' || /facebook\.com|instagra
 assert.ok(!/ENOTFOUND graph\./.test(serverLog));
 ok(`Meta falsa: ${metaCalls().filter((c) => c.kind === 'meta').length} chamadas simuladas, nenhuma para a Meta de verdade`);
 
+await pool.query(`UPDATE scheduled_posts SET status = 'cancelado' WHERE client_id = $1 AND status = 'agendado'`, [ids.client]);
+await pool.query(`DELETE FROM module_access WHERE user_id = $1`, [ids.admin]).catch(() => {});
 await pool.end();
 stop();
 console.log('video-instagram.e2e: tudo certo');

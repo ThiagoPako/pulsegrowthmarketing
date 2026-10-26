@@ -630,6 +630,8 @@ async function ensurePlanPromotionsTable() {
         const alter = [];
         if (!columns.has('duration_months')) alter.push('ADD COLUMN duration_months INTEGER DEFAULT 12');
         if (!columns.has('applies_to')) alter.push('ADD COLUMN applies_to TEXT DEFAULT \'anual\'');
+        if (!columns.has('max_redemptions')) alter.push('ADD COLUMN max_redemptions INTEGER');
+        if (!columns.has('redemptions_count')) alter.push('ADD COLUMN redemptions_count INTEGER DEFAULT 0');
         if (alter.length > 0) {
           await pool.query(`ALTER TABLE plan_promotions ${alter.join(', ')}`).catch(() => {});
         }
@@ -643,6 +645,27 @@ async function ensurePlanPromotionsTable() {
 }
 
 ensurePlanPromotionsTable();
+
+// Lead que vira Contratado ocupa uma vaga de cada promoção ativa da cidade dele (ou sem cidade).
+// Antes o navegador chamava increment_promotion_redemption por rpc, que a VPS recusa (e a
+// função nem existe aqui), então as vagas usadas nunca subiam.
+async function incrementPromotionsForClosedLead(lead) {
+  try {
+    await ensurePlanPromotionsTable();
+    const city = normalizeCityValue(lead?.city) || 'minacu';
+    await pool.query(
+      `UPDATE plan_promotions SET redemptions_count = COALESCE(redemptions_count, 0) + 1
+        WHERE active = true
+          AND (starts_at IS NULL OR starts_at <= $1::date)
+          AND (ends_at IS NULL OR ends_at >= $1::date)
+          AND (max_redemptions IS NULL OR COALESCE(redemptions_count, 0) < max_redemptions)
+          AND (city IS NULL OR btrim(city::text) = '' OR ${cityScopeExpression('city')} = $2)`,
+      [brtDateString(), city]
+    );
+  } catch (error) {
+    console.warn('[crm] vagas das promoções não atualizadas:', error?.message || error);
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════
 // LINK SHORTENER TABLES
@@ -10415,6 +10438,7 @@ app.post('/api/db/query', async (req, res) => {
           for (const lead of rows) {
             if (crmPreviousStatus.get(String(lead.id)) === lead.status) continue;
             if (lead.status === 'contracted') {
+              await incrementPromotionsForClosedLead(lead);
               broadcastToAll({
                 type: 'broadcast',
                 event: 'crm:new_client',

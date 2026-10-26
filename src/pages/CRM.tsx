@@ -172,6 +172,8 @@ export default function CRM() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [newLeadStatus, setNewLeadStatus] = useState<LeadStatus>('lead');
+  // Lead arrastado para 'Reunião' sem data/hora: abre o diálogo de agendamento.
+  const [schedulingLead, setSchedulingLead] = useState<Lead | null>(null);
 
   useEffect(() => {
     if (isAddDialogOpen) {
@@ -209,26 +211,11 @@ export default function CRM() {
     },
   });
 
-  const incrementActivePromosIfClosed = async (leadId: string, newStatus: LeadStatus) => {
-    if (newStatus !== 'contracted') return;
-    const { data: prev } = await supabase.from('crm_leads').select('status').eq('id', leadId).maybeSingle();
-    if ((prev as any)?.status === 'contracted') return;
-    const today = new Date().toISOString().slice(0, 10);
-    const { data: promos } = await supabase
-      .from('plan_promotions' as any)
-      .select('id, max_redemptions, redemptions_count, starts_at, ends_at')
-      .eq('active', true);
-    for (const p of (promos as any[]) || []) {
-      if (p.starts_at && p.starts_at > today) continue;
-      if (p.ends_at && p.ends_at < today) continue;
-      if (p.max_redemptions != null && (p.redemptions_count ?? 0) >= p.max_redemptions) continue;
-      await supabase.rpc('increment_promotion_redemption' as any, { _promo_id: p.id });
-    }
-  };
+  // As vagas usadas das promoções ativas sobem no servidor quando o lead vira Contratado
+  // (antes o navegador contava antes de salvar, mesmo quando o servidor recusava a mudança).
 
   const updateLeadStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: LeadStatus }) => {
-      await incrementActivePromosIfClosed(id, status);
       const { error } = await supabase
         .from('crm_leads')
         .update({ status } as any)
@@ -240,12 +227,35 @@ export default function CRM() {
       setMeetingRefreshKey(prev => prev + 1);
       toast.success('Lead atualizado!');
     },
+    // O servidor recusa 'Reunião' sem data/hora e 'Contratado' sem valor ou sem permissão:
+    // o card voltava para a coluna sem nenhuma mensagem.
+    onError: (error: any) => {
+      toast.error(error?.message || 'Não foi possível mover o lead.');
+    },
+  });
+
+  // Arrastar a reunião para outro dia no calendário (o updateLead não envia meeting_date).
+  const moveMeetingDate = useMutation({
+    mutationFn: async ({ id, meetingDate }: { id: string; meetingDate: string; name: string }) => {
+      const { error } = await supabase
+        .from('crm_leads')
+        .update({ meeting_date: meetingDate, status: 'meeting' } as any)
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, { meetingDate, name }) => {
+      queryClient.invalidateQueries({ queryKey: ['crm_leads'] });
+      setMeetingRefreshKey(prev => prev + 1);
+      toast.success(`Reunião de ${name} movida para ${format(parseISO(meetingDate), 'dd/MM', { locale: ptBR })}`);
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Não foi possível mover a reunião.');
+    },
   });
 
 
   const updateLead = useMutation({
     mutationFn: async (lead: Partial<Lead> & { id: string }) => {
-      if (lead.status) await incrementActivePromosIfClosed(lead.id, lead.status);
       const { error } = await supabase
         .from('crm_leads')
         .update({
@@ -332,6 +342,12 @@ export default function CRM() {
     if (!result.destination) return;
     const { draggableId, destination } = result;
     if (destination.droppableId === result.source.droppableId) return;
+    const lead = leads.find(l => l.id === draggableId);
+    // 'Reunião' exige data e horário: abre o agendamento em vez de mandar uma mudança que o servidor recusa.
+    if (destination.droppableId === 'meeting' && lead && (!lead.meeting_date || !lead.meeting_time)) {
+      setSchedulingLead(lead);
+      return;
+    }
     updateLeadStatus.mutate({ id: draggableId, status: destination.droppableId as LeadStatus });
   };
 
@@ -878,12 +894,7 @@ export default function CRM() {
                         }
                       }
 
-                      updateLead.mutate({
-                        id: leadId,
-                        meeting_date: newDateStr,
-                        status: 'meeting'
-                      });
-                      toast.success(`Reunião de ${lead.name} movida para ${format(parseISO(newDateStr), 'dd/MM', { locale: ptBR })}`);
+                      moveMeetingDate.mutate({ id: leadId, meetingDate: newDateStr, name: lead.name });
                     }
                   }}>
                     {/* Exibir os próximos 7 dias como áreas de drop se quisermos Drag & Drop entre dias na lista */}
@@ -1087,6 +1098,18 @@ export default function CRM() {
           <LeadHarvester />
         </TabsContent>
       </Tabs>
+
+      {schedulingLead && (
+        <MeetingActions
+          key={schedulingLead.id}
+          lead={schedulingLead}
+          leads={leads}
+          scheduleOnly
+          onClose={() => setSchedulingLead(null)}
+          onUpdate={() => queryClient.invalidateQueries({ queryKey: ['crm_leads'] })}
+          onSetRefreshKey={setMeetingRefreshKey}
+        />
+      )}
     </div>
   );
 }
@@ -1347,6 +1370,8 @@ function LeadDetailsDialog({
                             onUpdate();
                             if (onSetRefreshKey) onSetRefreshKey(prev => prev + 1);
                             toast.success(`Lead movido para ${s.label}`);
+                          } else {
+                            toast.error(error.message || `Não foi possível mover para ${s.label}.`);
                           }
                         }}
                       >
@@ -1412,8 +1437,21 @@ function LeadDetailsDialog({
   );
 }
 
-function MeetingActions({ lead, leads, onUpdate, onSetRefreshKey }: { lead: Lead; leads: Lead[]; onUpdate: () => void; onSetRefreshKey?: React.Dispatch<React.SetStateAction<number>> }) {
-  const [open, setOpen] = useState(false);
+function MeetingActions({ lead, leads, onUpdate, onSetRefreshKey, scheduleOnly = false, onClose }: {
+  lead: Lead;
+  leads: Lead[];
+  onUpdate: () => void;
+  onSetRefreshKey?: React.Dispatch<React.SetStateAction<number>>;
+  // Só o diálogo de agendamento, já aberto (lead arrastado para 'Reunião' sem data/hora).
+  scheduleOnly?: boolean;
+  onClose?: () => void;
+}) {
+  const [internalOpen, setInternalOpen] = useState(scheduleOnly);
+  const open = internalOpen;
+  const setOpen = (value: boolean) => {
+    setInternalOpen(value);
+    if (!value) onClose?.();
+  };
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [selectedRescheduleDate, setSelectedRescheduleDate] = useState<string>(normalizeMeetingDateInput(lead.meeting_date));
 
@@ -1440,7 +1478,7 @@ function MeetingActions({ lead, leads, onUpdate, onSetRefreshKey }: { lead: Lead
       } as any)
       .eq('id', lead.id);
     if (error) {
-      toast.error('Não foi possível reagendar.');
+      toast.error(error.message || 'Não foi possível reagendar.');
       return;
     }
     setOpen(false);
@@ -1467,11 +1505,13 @@ function MeetingActions({ lead, leads, onUpdate, onSetRefreshKey }: { lead: Lead
   return (
     <>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild>
-          <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full text-blue-600 hover:bg-blue-50" title="Reagendar reunião">
-            <Pencil size={14} />
-          </Button>
-        </DialogTrigger>
+        {!scheduleOnly && (
+          <DialogTrigger asChild>
+            <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full text-blue-600 hover:bg-blue-50" title="Reagendar reunião">
+              <Pencil size={14} />
+            </Button>
+          </DialogTrigger>
+        )}
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Agendar/Reagendar Reunião - {lead.name}</DialogTitle>
@@ -1535,7 +1575,7 @@ function MeetingActions({ lead, leads, onUpdate, onSetRefreshKey }: { lead: Lead
         </DialogContent>
       </Dialog>
 
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+      {!scheduleOnly && <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogTrigger asChild>
           <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full text-red-600 hover:bg-red-50" title="Apagar reunião">
             <Trash2 size={14} />
@@ -1553,7 +1593,7 @@ function MeetingActions({ lead, leads, onUpdate, onSetRefreshKey }: { lead: Lead
             <Button variant="destructive" onClick={handleDelete}>Apagar</Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </>
   );
 }

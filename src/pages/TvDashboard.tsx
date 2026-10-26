@@ -10,7 +10,7 @@ import {
   ClipboardList, PenTool, Share2, RefreshCw
 } from 'lucide-react';
 import { fetchAISeasonalAlerts, AISeasonalAlert } from '@/lib/seasonalDates';
-import { fetchLatestCommand, fetchTvSettings, TvRemoteCommand, VISIBILITY_KEYS, VisibilityKey } from '@/lib/tvRemote';
+import { fetchTvRemoteState, saveTvPlaylist, TvRemoteCommand, VISIBILITY_KEYS, VisibilityKey } from '@/lib/tvRemote';
 
 const VPS = 'https://agenciapulse.tech/api';
 
@@ -1351,6 +1351,21 @@ function YouTubePlayer({ url, command }: { url: string; command: TvRemoteCommand
 }
 
 /* ─── Playlist Editor ───────────────────────────────────── */
+/** Relógio do topo: só ele redesenha a cada segundo (antes era a tela inteira). */
+function HeaderClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const iv = window.setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(iv);
+  }, []);
+  return (
+    <div className="text-right">
+      <div className="text-xl font-mono font-bold tabular-nums text-white/85">{now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>
+      <div className="text-[10px] text-white/25 capitalize">{now.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}</div>
+    </div>
+  );
+}
+
 function PlaylistEditor({ url, onSave }: { url: string; onSave: (url: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(url);
@@ -1694,6 +1709,8 @@ export default function TvDashboard() {
   const [storyEditingSessions, setStoryEditingSessions] = useState<Array<{ id: string; videomakerId: string; videomakerName: string | null; videomakerAvatar: string | null; startedAt: string; storiesCount: number }>>([]);
   const [copyActiveSessions, setCopyActiveSessions] = useState<Array<{ id: string; copywriterId: string; copywriterName: string; copywriterAvatar: string | null; topic: string | null; contentFormat: string | null; clientName: string | null; clientLogo: string | null; clientColor: string | null; batchSize: number; startedAt: string; requestId: string | null; taskId: string | null }>>([]);
   const [connected, setConnected] = useState(true);
+  // Hora da agenda (marcador "agora"): muda a cada 30 s. O relógio de segundos do topo
+  // fica no HeaderClock, para a tela inteira não redesenhar a cada segundo.
   const [clock, setClock] = useState(new Date());
   const [playlistUrl, setPlaylistUrl] = useState('');
   const [seasonalSlides, setSeasonalSlides] = useState<SeasonalSlide[]>([]);
@@ -1706,6 +1723,12 @@ export default function TvDashboard() {
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const lastCommandIdRef = useRef<number>(0);
+  // Primeira leitura do controle remoto já feita (o último comando salvo é anterior à abertura da TV)
+  const commandsPrimedRef = useRef(false);
+  // Timer do aviso na tela: um aviso novo cancela o timer do anterior
+  const alertTimerRef = useRef<number | null>(null);
+  // Última playlist vinda do servidor: só troca a desta TV quando o painel muda a playlist
+  const lastServerPlaylistRef = useRef<string | null>(null);
   const isFirstLoad = useRef(true);
 
   const fetchData = useCallback(async (opts?: { force?: boolean }) => {
@@ -1745,32 +1768,19 @@ export default function TvDashboard() {
 
   const fetchPlaylist = useCallback(async () => {
     const DEFAULT_RADIO = 'https://www.youtube.com/watch?v=sNd2wRqdgvg&list=RDsNd2wRqdgvg&start_radio=1';
-    // Always load from localStorage first for instant playback
+    // localStorage primeiro para tocar na hora; a playlist do painel chega no pollRemote (applySettings)
     const saved = localStorage.getItem('pulse_radio_url');
     setPlaylistUrl(saved || DEFAULT_RADIO);
-    try {
-      const res = await fetch(`${VPS}/data/tv_settings?key=eq.youtube_playlist_url`);
-      if (res.ok) {
-        const rows = await res.json();
-        if (rows.length > 0 && rows[0].value) {
-          setPlaylistUrl(rows[0].value);
-          localStorage.setItem('pulse_radio_url', rows[0].value);
-        } else {
-          localStorage.setItem('pulse_radio_url', DEFAULT_RADIO);
-        }
-      }
-    } catch {}
   }, []);
 
   const savePlaylist = useCallback(async (url: string) => {
     setPlaylistUrl(url);
     localStorage.setItem('pulse_radio_url', url);
     try {
-      await fetch(`${VPS}/data/tv_settings?key=eq.youtube_playlist_url`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value: url, updated_at: new Date().toISOString() }),
-      });
-    } catch {}
+      // Com o login de admin no navegador vale para todas as TVs; sem ele, só para esta
+      await saveTvPlaylist(url);
+      lastServerPlaylistRef.current = url;
+    } catch { /* sem permissão: fica só nesta TV */ }
   }, []);
 
   const fetchSeasonal = useCallback(async () => {
@@ -1816,7 +1826,8 @@ export default function TvDashboard() {
       }
       return next;
     });
-    if (settings.youtube_playlist_url) {
+    if (settings.youtube_playlist_url && settings.youtube_playlist_url !== lastServerPlaylistRef.current) {
+      lastServerPlaylistRef.current = settings.youtube_playlist_url;
       setPlaylistUrl(settings.youtube_playlist_url);
       localStorage.setItem('pulse_radio_url', settings.youtube_playlist_url);
     }
@@ -1835,18 +1846,32 @@ export default function TvDashboard() {
     } else if (cmd.action === 'show_alert' && cmd.payload?.message) {
       setAlert({ message: cmd.payload.message, tone: cmd.payload.tone || 'info' });
       const dur = cmd.payload.durationMs || 15000;
-      window.setTimeout(() => setAlert(null), dur);
+      if (alertTimerRef.current) window.clearTimeout(alertTimerRef.current);
+      alertTimerRef.current = window.setTimeout(() => { alertTimerRef.current = null; setAlert(null); }, dur);
     } else if (cmd.action === 'clear_alert') {
+      if (alertTimerRef.current) { window.clearTimeout(alertTimerRef.current); alertTimerRef.current = null; }
       setAlert(null);
     } else if (cmd.action === 'reload') {
       window.location.reload();
     }
   }, []);
 
-  // Poll commands + settings
+  // Poll commands + settings (uma leitura só traz os dois)
   const pollRemote = useCallback(async () => {
-    const [settings, cmd] = await Promise.all([fetchTvSettings(), fetchLatestCommand()]);
-    applySettings(settings);
+    const state = await fetchTvRemoteState();
+    if (!state) return;
+    applySettings(state.settings);
+    const cmd = state.command;
+    if (!commandsPrimedRef.current) {
+      // Primeira leitura: o último comando salvo foi dado antes de a TV abrir. Só registra
+      // o id (para não repetir aviso, pausa ou mudo a cada recarga), a não ser que seja
+      // de agora há pouco. 'reload' nunca roda aqui, para não recarregar em loop.
+      commandsPrimedRef.current = true;
+      const ageMs = cmd?.ts ? Date.now() - new Date(cmd.ts).getTime() : Infinity;
+      if (cmd && cmd.action !== 'reload' && ageMs >= 0 && ageMs < 30_000) executeCommand(cmd);
+      else if (cmd && cmd.id > lastCommandIdRef.current) lastCommandIdRef.current = cmd.id;
+      return;
+    }
     if (cmd) executeCommand(cmd);
   }, [applySettings, executeCommand]);
 
@@ -1884,16 +1909,14 @@ export default function TvDashboard() {
   }, [fetchData, fetchPlaylist, fetchSeasonal, pollRemote]);
 
   useEffect(() => {
-    const iv = window.setInterval(() => setClock(new Date()), 1000);
-    return () => clearInterval(iv);
+    const iv = window.setInterval(() => setClock(new Date()), 30_000);
+    return () => { clearInterval(iv); if (alertTimerRef.current) window.clearTimeout(alertTimerRef.current); };
   }, []);
 
   const onlineMembers = members.filter(m => m.isOnline);
   const offlineMembers = members.filter(m => !m.isOnline);
   const designerMembers = members.filter(m => m.role === 'designer');
   const hasAnyData = members.length > 0 || schedule.length > 0 || editingPipeline.length > 0 || designPipeline.length > 0 || todayPosts.length > 0 || seasonalSlides.length > 0;
-  const timeStr = clock.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const dateStr = clock.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 
   return (
     <div className="h-screen text-white overflow-hidden relative flex flex-col p-2" style={{ fontFamily: `${SPACE}, 'Inter', sans-serif`, backgroundColor: PULSE_DARK }}>
@@ -1933,10 +1956,7 @@ export default function TvDashboard() {
               ) : <WifiOff className="w-3.5 h-3.5 text-red-400" />}
               <span className="text-[9px] text-white/25 font-medium">{connected ? 'LIVE' : 'OFF'}</span>
             </motion.div>
-            <div className="text-right">
-              <div className="text-xl font-mono font-bold tabular-nums text-white/85">{timeStr}</div>
-              <div className="text-[10px] text-white/25 capitalize">{dateStr}</div>
-            </div>
+            <HeaderClock />
           </div>
         </motion.div>
 

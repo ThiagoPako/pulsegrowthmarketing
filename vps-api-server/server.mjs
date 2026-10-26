@@ -14553,7 +14553,8 @@ function buildTvSeasonalSlides(clients = [], referenceDate = new Date()) {
 
 async function loadSeasonalClients(clientIds = []) {
   const params = [];
-  const conditions = ["niche IS NOT NULL", "btrim(niche) <> ''"];
+  // Cliente cancelado não entra (a TV chama sem ids); status vazio conta como ativo, como no front
+  const conditions = ["niche IS NOT NULL", "btrim(niche) <> ''", "COALESCE(status, 'ativo') <> 'cancelado'"];
 
   if (Array.isArray(clientIds) && clientIds.length > 0) {
     params.push(clientIds);
@@ -14581,8 +14582,9 @@ async function fetchSystemSeasonalAlerts({ clientIds = [], fallbackClients = nul
 }
 
 // ─── TV Dashboard endpoint ──────────────────────────────────
-app.get('/api/tv-dashboard', async (req, res) => {
-  if (!(await tvAccessAllowed(req))) return res.status(401).json({ error: 'Unauthorized' });
+// Monta o painel da TV. Lança erro quando o banco não responde (a rota devolve 500 e a
+// TV mantém os últimos dados com o selo OFF, em vez de apagar tudo com "LIVE").
+async function loadTvDashboardPayload() {
   let stage = 'init';
   try {
     const safeQuery = async (label, sql, params = []) => {
@@ -14597,9 +14599,9 @@ app.get('/api/tv-dashboard', async (req, res) => {
 
     stage = 'profiles';
 
-    // 1. Get all team profiles
-    const profiles = await safeQuery('profiles', `
-      SELECT p.id, p.name, p.role, p.avatar_url, p.monthly_salary
+    // 1. Get all team profiles (base do painel: se falhar, o banco está fora)
+    const { rows: profiles } = await pool.query(`
+      SELECT p.id, p.name, p.role, p.avatar_url
       FROM profiles p
       WHERE p.role IS NOT NULL
       ORDER BY p.name
@@ -14646,7 +14648,13 @@ app.get('/api/tv-dashboard', async (req, res) => {
 
     // Content tasks
     for (const t of contentTasks) {
-      const userId = t?.edited_by || t?.assigned_to || t?.reviewing_by;
+      // Dono da atividade pela coluna: em revisão é quem revisa (o editor que entregou
+      // continua em edited_by, mas não está mais no card); em edição/alteração é o editor.
+      // Alteração ainda na fila (sem "Iniciar Alteração") não é trabalho de ninguém.
+      if (t?.kanban_column === 'alteracao' && !t?.editing_started_at) continue;
+      const userId = t?.kanban_column === 'revisao'
+        ? t?.reviewing_by
+        : (t?.assigned_to || t?.edited_by);
       if (!userId) continue;
 
       let activity = 'editing';
@@ -14657,13 +14665,6 @@ app.get('/api/tv-dashboard', async (req, res) => {
         if (t?.reviewing_at) {
           const reviewedAt = new Date(t.reviewing_at).getTime();
           timeOnTask = Number.isFinite(reviewedAt) ? Math.floor((Date.now() - reviewedAt) / 1000) : 0;
-        }
-      } else if (t?.kanban_column === 'alteracao') {
-        activity = 'editing';
-        if (t?.editing_started_at && !t?.editing_paused_at) {
-          const startedAt = new Date(t.editing_started_at).getTime();
-          const elapsed = Number.isFinite(startedAt) ? Math.floor((Date.now() - startedAt) / 1000) : 0;
-          timeOnTask = elapsed - (t?.editing_paused_seconds || 0);
         }
       } else {
         if (t?.editing_started_at && !t?.editing_paused_at) {
@@ -15040,10 +15041,119 @@ app.get('/api/tv-dashboard', async (req, res) => {
       console.warn('[tv-dashboard] Failed to load copy_active_sessions:', error?.message || error);
     }
 
-    res.json({ members, todaySchedule, editingPipeline, designPipeline, todayPosts, weekPosts, seasonalSlides, activeRecordingIds, storyEditingSessions, copyActiveSessions, updatedAt: new Date().toISOString() });
+    return { members, todaySchedule, editingPipeline, designPipeline, todayPosts, weekPosts, seasonalSlides, activeRecordingIds, storyEditingSessions, copyActiveSessions, updatedAt: new Date().toISOString() };
   } catch (err) {
     console.error('[tv-dashboard] Error at stage:', stage, err);
-    res.json({ members: [], todaySchedule: [], editingPipeline: [], designPipeline: [], todayPosts: [], weekPosts: [], seasonalSlides: [], activeRecordingIds: [], updatedAt: new Date().toISOString(), error: 'fallback' });
+    throw err;
+  }
+}
+
+// Cada TV pede o painel a cada 10 s: a mesma resposta serve todas as TVs por alguns
+// segundos (e pedidos simultâneos dividem uma consulta só). TTL curto para os
+// cronômetros não atrasarem. O "Atualizar" da TV manda ?_= e pula o cache.
+const TV_DASHBOARD_CACHE_MS = 5000;
+let tvDashboardCache = null;
+let tvDashboardPending = null;
+function loadTvDashboardShared() {
+  if (!tvDashboardPending) {
+    tvDashboardPending = loadTvDashboardPayload()
+      .then((payload) => { tvDashboardCache = { at: Date.now(), payload }; return payload; })
+      .finally(() => { tvDashboardPending = null; });
+  }
+  return tvDashboardPending;
+}
+
+app.get('/api/tv-dashboard', async (req, res) => {
+  if (!(await tvAccessAllowed(req))) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const force = req.query?._ !== undefined;
+    if (!force && tvDashboardCache && Date.now() - tvDashboardCache.at < TV_DASHBOARD_CACHE_MS) {
+      return res.json(tvDashboardCache.payload);
+    }
+    res.json(await loadTvDashboardShared());
+  } catch {
+    res.status(500).json({ error: 'Não foi possível carregar o painel da TV.' });
+  }
+});
+
+// ─── Controle remoto da TV (tabela tv_settings) ─────────────
+// O /painel-tv grava (só admin) e as TVs leem a cada poucos segundos (com o tv_token
+// quando TV_ACCESS_TOKEN existe). Antes o front chamava /api/data/tv_settings, que
+// não existe: nada chegava às TVs e o painel dizia "enviado".
+const TV_SETTING_KEYS = new Set([
+  'remote_command', 'youtube_playlist_url',
+  'show_radio', 'show_schedule', 'show_pipeline', 'show_banners', 'show_team', 'show_posts',
+]);
+let tvSettingsTableReady = null;
+function ensureTvSettingsTable() {
+  if (!tvSettingsTableReady) {
+    // Mesmo formato da tabela que já existe na VPS (sem chave única: a gravação faz update e depois insert)
+    tvSettingsTableReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS tv_settings (
+        key text,
+        value text,
+        updated_at timestamptz DEFAULT now(),
+        city text
+      )
+    `).catch((error) => { tvSettingsTableReady = null; throw error; });
+  }
+  return tvSettingsTableReady;
+}
+
+app.get('/api/tv/settings', async (req, res) => {
+  if (!(await tvAccessAllowed(req))) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    await ensureTvSettingsTable();
+    // Linha repetida da mesma chave: vale a mais recente
+    const { rows } = await pool.query(
+      `SELECT DISTINCT ON (key) key, value FROM tv_settings
+        WHERE key = ANY($1::text[])
+        ORDER BY key, updated_at DESC NULLS LAST`,
+      [[...TV_SETTING_KEYS]]
+    );
+    const settings = {};
+    for (const row of rows) settings[row.key] = row.value ?? '';
+    res.json({ settings });
+  } catch (error) {
+    console.error('[tv/settings] leitura:', error?.message || error);
+    res.status(500).json({ error: 'Não foi possível ler as configurações da TV.' });
+  }
+});
+
+app.put('/api/tv/settings/:key', async (req, res) => {
+  let user;
+  try {
+    ({ user } = await verifyUser(req));
+  } catch {
+    return res.status(401).json({ error: 'Sessão expirada. Faça login novamente.' });
+  }
+  // O Painel TV é só de admin (menu e rota)
+  if (!(await isStrictAdminUser(user))) return res.status(403).json({ error: 'Só o administrador comanda a TV.' });
+  const key = String(req.params.key || '');
+  if (!TV_SETTING_KEYS.has(key)) return res.status(400).json({ error: 'Configuração da TV desconhecida.' });
+  const value = req.body?.value;
+  if (typeof value !== 'string' || value.length > 4000) {
+    return res.status(400).json({ error: 'Valor inválido para a TV.' });
+  }
+  let db;
+  try {
+    await ensureTvSettingsTable();
+    db = await pool.connect();
+    await db.query('BEGIN');
+    // Trava por chave: dois admins salvando juntos não criam linha repetida
+    await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`tv_settings:${key}`]);
+    const updated = await db.query('UPDATE tv_settings SET value = $2, updated_at = now() WHERE key = $1', [key, value]);
+    if (updated.rowCount === 0) {
+      await db.query('INSERT INTO tv_settings (key, value, updated_at) VALUES ($1, $2, now())', [key, value]);
+    }
+    await db.query('COMMIT');
+    res.json({ ok: true, key, value });
+  } catch (error) {
+    if (db) await db.query('ROLLBACK').catch(() => {});
+    console.error('[tv/settings] gravação:', error?.message || error);
+    res.status(500).json({ error: 'Não foi possível salvar na TV.' });
+  } finally {
+    db?.release();
   }
 });
 

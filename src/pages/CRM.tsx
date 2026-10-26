@@ -609,21 +609,22 @@ export default function CRM() {
       </header>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full flex-1 flex flex-col gap-4">
-        <div className="flex items-center justify-between bg-card/50 p-1 rounded-lg border w-fit self-center md:self-start">
+        {/* No celular a barra rola de lado em vez de passar da tela (e cortar 'Pipeline' à esquerda). */}
+        <div className="flex items-center justify-between bg-card/50 p-1 rounded-lg border max-w-full overflow-x-auto self-stretch md:self-start md:w-fit">
           <TabsList className="bg-transparent h-9">
-            <TabsTrigger value="pipeline" className="gap-2 px-6">
+            <TabsTrigger value="pipeline" className="gap-2 px-3 md:px-6 shrink-0">
               <Filter className="h-4 w-4" /> Pipeline
             </TabsTrigger>
-            <TabsTrigger value="goals" className="gap-2 px-6">
+            <TabsTrigger value="goals" className="gap-2 px-3 md:px-6 shrink-0">
               <Target className="h-4 w-4" /> Metas de Vendas
             </TabsTrigger>
-            <TabsTrigger value="calendar" className="gap-2 px-6">
+            <TabsTrigger value="calendar" className="gap-2 px-3 md:px-6 shrink-0">
               <CalendarIcon className="h-4 w-4" /> Calendário
             </TabsTrigger>
-            <TabsTrigger value="meetings" className="gap-2 px-6">
+            <TabsTrigger value="meetings" className="gap-2 px-3 md:px-6 shrink-0">
               <Clock className="h-4 w-4" /> Gestão de Reuniões
             </TabsTrigger>
-            <TabsTrigger value="harvester" className="gap-2 px-6">
+            <TabsTrigger value="harvester" className="gap-2 px-3 md:px-6 shrink-0">
               <Sprout className="h-4 w-4" /> Colheita de Leads
             </TabsTrigger>
           </TabsList>

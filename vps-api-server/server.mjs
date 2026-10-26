@@ -9793,10 +9793,12 @@ function dbQueryError(message, statusCode = 400) {
   return err;
 }
 
-// Colunas que nunca saem pelo /api/db/query (hash de senha da equipe e do portal).
+// Colunas que nunca saem pelo /api/db/query (hash de senha da equipe e do portal e o
+// token de publicação das contas sociais dos clientes, que só o servidor usa).
 const DB_QUERY_HIDDEN_COLUMNS = {
   profiles: ['password_hash', 'profile_password_hash', 'auth_password_hash'],
   clients: ['client_password_hash'],
+  social_accounts: ['access_token'],
 };
 
 // Colunas que só quem gerencia a equipe enxerga (a pessoa sempre vê a própria linha).
@@ -10047,6 +10049,9 @@ const DB_QUERY_TABLE_RULES = {
   whatsapp_config: { read: 'team', write: 'team' }, // o front usa /api/whatsapp/config
   whatsapp_messages: { read: 'team', write: 'team' }, // telefones e valores de cobrança
   api_integrations: { write: 'admin' }, // Financeiro → APIs e Configurações → integrações
+  // Contas sociais: só Clientes (admin, social_media, gestor_projetos) grava pelo genérico;
+  // a conexão de verdade (com token) é feita pelas rotas da Meta.
+  social_accounts: { write: 'team' },
   api_integration_logs: { read: 'admin', write: 'admin' },
   plans: { write: 'admin' },
   commercial_proposals: { write: 'admin' },
@@ -10172,6 +10177,15 @@ async function enforceDbQueryRules({ safeTable, operation, data, filters, user, 
 
   if (operation === 'upsert' && DB_QUERY_STRICT_UPSERT_TABLES.has(safeTable) && !(await isStrictAdminUser(user))) {
     throw forbidden();
+  }
+
+  // Token de publicação só entra pelas rotas da Meta (que validam a conta); pelo genérico
+  // dava para trocar a conta de um cliente pela de outra pessoa.
+  if (safeTable === 'social_accounts' && isWrite) {
+    const items = Array.isArray(data) ? data : [data];
+    if (items.some((item) => dbQueryRowKeys(item).includes('access_token'))) {
+      throw forbidden('O token da conta social só é gravado pela conexão com a Meta.');
+    }
   }
 
   if (safeTable === 'user_roles' && isWrite && !(await isStrictAdminUser(user))) {
@@ -10700,7 +10714,16 @@ app.post('/api/db/query', async (req, res) => {
         }
 
         let paramIdx = 1;
-        const setClauses = keys.map(k => `${k} = $${paramIdx++}`);
+        const setClauses = keys.map(k => {
+          const placeholder = `$${paramIdx++}`;
+          // api_integrations: os secrets (*_encrypted) que não vierem no config novo continuam.
+          // A tela de APIs regravava o config só com App ID e notas e apagava o App Secret da Meta.
+          if (safeTable === 'api_integrations' && k === 'config') {
+            return `config = COALESCE((SELECT jsonb_object_agg(e.key, e.value) FROM jsonb_each(COALESCE(api_integrations.config, '{}'::jsonb)) e
+                       WHERE right(e.key, 10) = '_encrypted'), '{}'::jsonb) || COALESCE(${placeholder}::jsonb, '{}'::jsonb)`;
+          }
+          return `${k} = ${placeholder}`;
+        });
 
         let query = `UPDATE ${safeTable} SET ${setClauses.join(', ')}`;
         const params = [...values];
